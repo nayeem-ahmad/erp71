@@ -10,6 +10,9 @@ const DIR = __dirname;
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const OUT = path.resolve(DIR, '../../docs/user-manual/videos/sales-entry.mp4');
 const W = 1440, H = 900;
+// Voice-over from narrate.py. Absent means a silent recording.
+const VOICE_FILE = path.join(DIR, '.audio', 'durations.json');
+const voice = fs.existsSync(VOICE_FILE) ? JSON.parse(fs.readFileSync(VOICE_FILE, 'utf8')) : null;
 
 (async () => {
   const font = 'data:font/woff2;base64,' + fs.readFileSync(path.join(DIR, 'caveat.woff2')).toString('base64');
@@ -19,6 +22,8 @@ const W = 1440, H = 900;
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   await ctx.addInitScript(overlay);
   const page = await ctx.newPage();
+  page.setDefaultTimeout(120000);
+  page.setDefaultNavigationTimeout(180000);
 
   // ── login (not recorded) ───────────────────────────────────────────────
   await page.goto(BASE + '/login', { waitUntil: 'networkidle' });
@@ -28,7 +33,12 @@ const W = 1440, H = 900;
   await page.click('text=Dhaka Retail Co.');
   await page.waitForURL('**/dashboard');
   await page.waitForLoadState('networkidle');
-  page.setDefaultTimeout(120000);
+  // Visit every page once before recording, so a dev server compiles them
+  // now rather than leaving dead air in the middle of the video.
+  for (const warm of ['/sales/list', '/sales/new']) {
+    await page.goto(BASE + warm, { waitUntil: 'load' });
+    await page.waitForTimeout(3000);
+  }
   await page.goto(BASE + '/sales', { waitUntil: 'load' });
   await page.waitForTimeout(6000);
   await page.evaluate(() => { __ov.ensure(); __ov.showCursor(false); });
@@ -78,8 +88,22 @@ const W = 1440, H = 900;
     await l.pressSequentially(text, { delay: opts.delay ?? 110 });
     await wait(opts.after ?? 600);
   };
-  const say = async (n, title, body, hold = 0) => { await ov('caption', n, title, body); await wait(hold); };
-  const clear = () => ov('clear');
+  // Each spoken line starts only once the previous one has finished, and the
+  // wall-clock start of each is kept so the clips can be laid onto the video.
+  const cues = [];
+  let voiceEnd = 0;
+  const holdVoice = async () => { const left = voiceEnd - Date.now(); if (left > 0) await wait(left); };
+  const narrate = async (key) => {
+    if (!voice) return;
+    if (!voice[key]) throw new Error(`narration.json has no line for "${key}"`);
+    await holdVoice();
+    cues.push({ ...voice[key], t: Date.now() / 1000 });
+    voiceEnd = Date.now() + voice[key].dur * 1000 + 400;
+  };
+  const say = async (n, title, body, hold = 0) => { await narrate(title); await ov('caption', n, title, body); await wait(hold); };
+  // Scene-ending clear: keeps the drawings up until the voice has finished
+  // talking about them. Mid-scene tidying uses ov('clear') directly.
+  const clear = async () => { await holdVoice(); await ov('clear'); };
 
   const cardHtml = (k, h, p, extra = '') => `<div class="k">${k}</div><h1>${h}</h1><p>${p}</p>${extra}`;
 
@@ -88,7 +112,9 @@ const W = 1440, H = 900;
     'How sales entry works',
     'Record a sale from start to finish — customer, products, discounts, payment and invoice — on one screen.',
     `<ol><li>Open New Sale</li><li>Pick the customer</li><li>Add products</li><li>Check totals &amp; take payment</li><li>Create the sale &amp; print</li></ol>`));
+  await narrate('intro');
   await wait(6500);
+  await holdVoice();
   await ov('card', null);
   await wait(700);
 
@@ -101,7 +127,7 @@ const W = 1440, H = 900;
   await click(listLink, { after: 0 });
   await page.waitForURL('**/sales/list');
   await page.waitForLoadState('networkidle');
-  await clear();
+  await ov('clear');
   const newSale = page.locator('a:visible, button:visible', { hasText: /New Sales? Entry|New Sale/ }).first();
   await ov('box', await box(newSale), 'start a new sale', { pos: 'below', pad: 5 });
   await wait(1800);
@@ -175,7 +201,7 @@ const W = 1440, H = 900;
   const dd = await box(page.getByText('SKU: GRN-001').locator('xpath=ancestor::*[self::li or self::button or self::div][2]'));
   await ov('box', dd, 'price & stock', { pos: 'right', pad: 4 });
   await wait(3000);
-  await clear();
+  await ov('clear');
   await product.press('Enter');
   await wait(900);
 
@@ -239,7 +265,7 @@ const W = 1440, H = 900;
     'Enter what was paid in each method. Here the customer pays ৳500 by <b>mobile wallet</b> (bKash / Nagad) and the rest in <b>cash</b>.');
   await type('input[aria-label="Mobile Wallet amount"]', '500', { clear: true, after: 900 });
   const due = await box(page.getByText(/^Due /).first()).catch(() => null);
-  if (due) { await ov('box', due, 'still owed', { pos: 'below', pad: 4 }); await wait(2200); await clear(); }
+  if (due) { await ov('box', due, 'still owed', { pos: 'below', pad: 4 }); await wait(2200); await ov('clear'); }
   await type('input[aria-label="Cash amount"]', String(Math.round((total - 500) * 100) / 100), { clear: true, after: 900 });
   const settled = await box(page.getByText('✓ Settled').first());
   await ov('box', settled, 'fully paid ✓', { pos: 'below', pad: 5, color: '#059669' });
@@ -270,7 +296,7 @@ const W = 1440, H = 900;
   const dlg = page.getByText('Print the invoice now?').locator('xpath=ancestor::div[contains(@class,"bg-white")][1]');
   await dlg.waitFor();
   await ov('box', await box(dlg), 'sale saved!', { pos: 'above', pad: 6, color: '#059669' });
-  await wait(6500);
+  await wait(voice ? 2500 : 6500);
   await clear();
   // Dismiss the prompt without opening a print window.
   await click(page.getByRole('button', { name: 'No, thanks' }), { after: 900 });
@@ -294,7 +320,10 @@ const W = 1440, H = 900;
   await ov('showCursor', false);
   await ov('card', cardHtml('Recap', 'A sale in five steps',
     '', `<ol><li>Sales → New Sale</li><li>Search &amp; pick the customer (or walk-in)</li><li>Add products, adjust qty / price / discount</li><li>Check totals, split the payment</li><li>Create Sale → print the invoice</li></ol><div class="hand">That's it — happy selling!</div>`));
-  await wait(7500);
+  await narrate('outro');
+  await wait(voice ? 1500 : 7500);
+  await holdVoice();
+  if (voice) await wait(1200);
 
   await cdp.send('Page.stopScreencast');
   const end = Date.now() / 1000;
@@ -309,8 +338,22 @@ const W = 1440, H = 900;
   console.log('frames', frames.length, 'seconds', (end - frames[0].t).toFixed(1));
   await browser.close();
 
+  // Each voice clip is delayed to the moment its caption appeared, then all
+  // are mixed into one track (clips never overlap; see narrate()).
+  const audioArgs = [];
+  if (cues.length) {
+    const t0 = frames[0].t;
+    cues.forEach((c) => audioArgs.push('-i', c.file));
+    const delays = cues.map((c, i) => {
+      const ms = Math.max(0, Math.round((c.t - t0) * 1000));
+      return `[${i + 1}:a]adelay=${ms}:all=1[v${i}]`;
+    });
+    const mix = cues.map((_, i) => `[v${i}]`).join('') + `amix=inputs=${cues.length}:normalize=0,aresample=48000,loudnorm=I=-16:TP=-1.5:LRA=11[aout]`;
+    audioArgs.push('-filter_complex', [...delays, mix].join(';'), '-map', '0:v', '-map', '[aout]', '-c:a', 'aac', '-b:a', '160k');
+  }
   execFileSync(process.env.FFMPEG || 'ffmpeg', [
     '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', path.join(frameDir, 'list.txt'),
+    ...audioArgs,
     '-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-movflags', '+faststart', OUT,
   ], { stdio: 'inherit' });
   fs.rmSync(frameDir, { recursive: true, force: true });
