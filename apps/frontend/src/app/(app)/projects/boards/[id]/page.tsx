@@ -49,6 +49,7 @@ import {
     CARD_ATTR,
     COLUMN_ATTR,
     columnAtPoint,
+    LANE_ATTR,
     movedFar,
     resolveDropTarget,
     toFullIndex,
@@ -79,6 +80,13 @@ import {
     type ProjectLabel,
 } from '@/components/projects/board-tasks';
 import { useBoardFilters } from '@/components/projects/use-board-filters';
+import {
+    groupIntoLanes,
+    laneKeyOf,
+    NO_LANE,
+    UNSORTED_CELL,
+    type BoardLane,
+} from '@/components/projects/board-lanes';
 import { useIsTimerRunningFor } from '@/components/projects/TimerChip';
 import { useTimerElapsed } from '@/components/projects/use-timer-elapsed';
 import { formatElapsed } from '@/components/projects/hour-log-day';
@@ -155,8 +163,13 @@ export default function BoardPage() {
     const { view } = boardView;
     const widthClass = columnWidthClass(view.columnWidth);
     const d = density(view);
+    /** Rows across the columns, one per person or story — see `board-lanes.ts`. */
+    const grouped = view.swimlanes !== 'none';
     // Where this board's height goes — the page's scroll, or each column's.
-    const sc = scrollClasses(view);
+    // A grouped board always scrolls the page: a column there is a stack of
+    // cells, one per lane, and a scroller inside every cell would be dozens of
+    // little windows onto a few cards each.
+    const sc = scrollClasses(grouped ? { ...view, scroll: 'page' } : view);
 
     const [board, setBoard] = useState<BoardSummary | null>(null);
     const [columns, setColumns] = useState<BoardColumn[]>([]);
@@ -232,6 +245,11 @@ export default function BoardPage() {
     const visibleUnsorted = useMemo(
         () => unsorted.filter((task) => matchesFilters(task, filters)),
         [unsorted, filters],
+    );
+    /** Grouped after filtering, so a filter that empties a lane hides it. */
+    const lanes = useMemo(
+        () => groupIntoLanes(visibleColumns, visibleUnsorted, view.swimlanes),
+        [visibleColumns, visibleUnsorted, view.swimlanes],
     );
 
     /** Every card on the board, columns and Unsorted alike. */
@@ -598,6 +616,29 @@ export default function BoardPage() {
         });
     };
 
+    /**
+     * On a grouped board a drop only counts inside the card's own lane. Into
+     * another lane it would mean reassigning the card or moving it to another
+     * story, which the board does not do yet — and a move that quietly snapped
+     * back to the card's own row would read as the board ignoring the drop.
+     * A column's header cell carries no lane, so it is never a target either.
+     */
+    const withinOwnLane = (target: DropTarget | null, taskId: string): DropTarget | null => {
+        if (!grouped || !target) return target;
+        const task = boardTasks.find((candidate) => candidate.id === taskId);
+        if (!task || target.laneKey !== laneKeyOf(task, view.swimlanes)) return null;
+        return target;
+    };
+
+    /**
+     * The cards the drop index counts among: the column as filtered, or on a
+     * grouped board just the lane's cell of it.
+     */
+    const visibleAt = (target: DropTarget): BoardTask[] =>
+        grouped
+            ? (lanes.find((lane) => lane.key === target.laneKey)?.cells[target.columnId] ?? [])
+            : (visibleColumns.find((column) => column.id === target.columnId)?.tasks ?? []);
+
     const continueDrag = (e: React.PointerEvent) => {
         if (!drag || e.pointerId !== drag.pointerId) return;
 
@@ -613,7 +654,7 @@ export default function BoardPage() {
             ...drag,
             point,
             active: true,
-            target: resolveDropTarget(point, drag.taskId, document),
+            target: withinOwnLane(resolveDropTarget(point, drag.taskId, document), drag.taskId),
         });
     };
 
@@ -632,9 +673,13 @@ export default function BoardPage() {
         const sourceColumn = columns.find((column) =>
             column.tasks.some((task) => task.id === drag.taskId),
         );
+        const visible = visibleAt(target);
+        // Measured among the cards the reader can see, which is what the drop
+        // index counts: against the whole column, a filtered or grouped board
+        // would take a card dropped back where it was for a move.
         const sameSpot =
             sourceColumn?.id === target.columnId &&
-            sourceColumn?.tasks.findIndex((task) => task.id === drag.taskId) === target.index;
+            visible.findIndex((task) => task.id === drag.taskId) === target.index;
         if (sameSpot) return;
 
         move(
@@ -642,7 +687,7 @@ export default function BoardPage() {
             target.columnId,
             toFullIndex(
                 columns.find((column) => column.id === target.columnId),
-                visibleColumns.find((column) => column.id === target.columnId)?.tasks ?? [],
+                visible,
                 target.index,
                 drag.taskId,
             ),
@@ -756,6 +801,129 @@ export default function BoardPage() {
         );
     }
 
+    // ── Pieces shared by the plain board and the grouped one ────────────────
+
+    const cardFor = (task: BoardTask, index: number) => (
+        <TaskCard
+            key={task.id}
+            task={task}
+            view={view}
+            index={index}
+            selecting={selection.length > 0}
+            selected={selection.includes(task.id)}
+            onToggleSelected={() => toggleSelected(task.id)}
+            dragging={drag?.active === true && drag.taskId === task.id}
+            onPointerDownBody={(e) => beginDrag(e, task, { fromHandle: false })}
+            onPointerDownHandle={(e) => beginDrag(e, task, { fromHandle: true })}
+            onPointerMove={continueDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={cancelDrag}
+            onOpen={() => setOpenTaskId(task.id)}
+            onRemove={() => setPendingRemoval({ taskIds: [task.id], title: task.title })}
+        />
+    );
+
+    /**
+     * The column the pointer is over while another is being dragged: where it
+     * lands if released now. Marked on the target rather than by a gap opening
+     * up, because a board wide enough to need reordering is a board where the
+     * gap would be off screen.
+     */
+    const columnRing = (columnId: string) =>
+        columnDrag?.active && columnDrag.targetId === columnId
+            ? 'border-blue-400 ring-2 ring-blue-200'
+            : 'border-gray-200';
+
+    /** The stage rule, the heading and the WIP meter — a column's head, in either layout. */
+    const columnHeadFor = (column: BoardColumn, columnIndex: number) => {
+        const remaining = column.tasks.reduce((sum, task) => sum + num(task.remaining_hours), 0);
+        // Against the whole column, not the filtered view: a filter must not
+        // make an over-limit column look fine.
+        const full = columns.find((c) => c.id === column.id);
+        const overWip = isOverWip(full);
+        const held = full?.tasks.length ?? column.tasks.length;
+        const tint = tintOf(view, column.category);
+        const draggingColumn = columnDrag?.active === true && columnDrag.columnId === column.id;
+        return (
+            <>
+                {/* The column's stage, as a rule across its head. Colour is
+                    the fastest way to tell three stages apart at a glance, and
+                    it costs no row height. */}
+                <div aria-hidden className={`h-1 w-full ${tint.bar}`} />
+                <BoardColumnHead
+                    columnId={column.id}
+                    name={column.name}
+                    category={column.category}
+                    view={view}
+                    held={held}
+                    shown={column.tasks.length}
+                    wipLimit={column.wip_limit}
+                    overWip={overWip}
+                    remaining={remaining}
+                    remainingLabel={bm.columnTotal}
+                    dragging={draggingColumn}
+                    busy={busy}
+                    onRename={(name) => renameColumn(column.id, name)}
+                    onMoveLeft={columnIndex > 0 ? () => moveColumn(column.id, -1) : undefined}
+                    onMoveRight={
+                        columnIndex < visibleColumns.length - 1
+                            ? () => moveColumn(column.id, 1)
+                            : undefined
+                    }
+                    onSort={(by) => sortColumn(column.id, by)}
+                    targets={targetsFor(column.id)}
+                    onMoveAllCards={(targetId) =>
+                        moveCards(
+                            column.tasks.map((task) => task.id),
+                            targetId,
+                        )
+                    }
+                    onSelectAll={() => selectAllIn(column.id)}
+                    onPointerDownHead={(e) => beginColumnDrag(e, column, { fromHandle: false })}
+                    onPointerDownHandle={(e) => beginColumnDrag(e, column, { fromHandle: true })}
+                    onPointerMove={continueColumnDrag}
+                    onPointerUp={endColumnDrag}
+                    onPointerCancel={cancelColumnDrag}
+                />
+
+                {/* How full the column is, as a bar rather than a number to
+                    read. It grows into place so a card dropped here shows its
+                    cost immediately. */}
+                {column.wip_limit ? (
+                    <div aria-hidden className="h-1 w-full bg-gray-200">
+                        <div
+                            className={`h-full transition-all duration-500 ease-out ${
+                                overWip ? 'bg-red-500' : tint.meter
+                            }`}
+                            style={{
+                                width: `${Math.min(100, Math.round((held / column.wip_limit) * 100))}%`,
+                            }}
+                        />
+                    </div>
+                ) : null}
+            </>
+        );
+    };
+
+    const composerFor = (columnId: string) => (
+        <BoardCardComposer
+            boardId={boardId}
+            columnId={columnId}
+            projects={projects}
+            projectId={composerProject}
+            onProjectChange={setComposerProject}
+            defaultAssignee={composerAssignee}
+            defaultAssigneeLabel={composerAssigneeLabel}
+            assignees={projectMeta.peek(composerProject)?.assignees ?? []}
+            onAssigneeMenuOpen={() => void projectMeta.load(composerProject)}
+            onCreated={loadBoard}
+        />
+    );
+
+    /** A lane's heading. The catch-all lane is named here, not in `board-lanes.ts`, because it is words. */
+    const laneName = (lane: BoardLane) =>
+        lane.title ?? (view.swimlanes === 'story' ? bm.laneNoStory : bm.laneUnassigned);
+
     return (
         <PageShell contentClassName={sc.shell}>
             {/* The background is painted here rather than on the column
@@ -837,6 +1005,109 @@ export default function BoardPage() {
                 {/* Columns scroll inside their own container so the page body
                     never scrolls sideways on a phone. Sideways always; whether
                     they scroll downwards in here too is `sc` — see `SCROLL`. */}
+                {grouped ? (
+                    <div className="overflow-x-auto pb-2">
+                        <div className="flex min-w-max flex-col gap-3">
+                            {/* The column heads, once, above every lane. Each
+                                carries the column marker, so a column can still
+                                be dragged by its head and dropped over any of
+                                its cells further down. It carries no lane, which
+                                is what keeps it from being a place to drop a
+                                card — see `withinOwnLane`. */}
+                            <div className="flex items-start gap-3">
+                                {unsorted.length > 0 && (
+                                    <div
+                                        className={`flex ${widthClass} shrink-0 flex-col overflow-hidden rounded-lg border border-amber-300 bg-amber-50 ${lift}`}
+                                    >
+                                        <div aria-hidden className="h-1 w-full bg-amber-400" />
+                                        <div className="bg-white/60 px-3 py-2">
+                                            <p className="text-sm font-semibold text-amber-800">{m.unsorted}</p>
+                                            <p className="text-xs text-gray-500">{m.unsortedHint}</p>
+                                        </div>
+                                    </div>
+                                )}
+                                {visibleColumns.map((column, columnIndex) => (
+                                    <div
+                                        key={column.id}
+                                        {...{ [COLUMN_ATTR]: column.id }}
+                                        className={`group/column flex ${widthClass} shrink-0 flex-col overflow-hidden rounded-lg border bg-gray-50 ${lift} ${columnRing(column.id)}`}
+                                    >
+                                        {columnHeadFor(column, columnIndex)}
+                                        <div className={d.columnPad}>{composerFor(column.id)}</div>
+                                    </div>
+                                ))}
+                                <BoardColumnComposer
+                                    boardId={boardId}
+                                    widthClass={widthClass}
+                                    onCreated={loadBoard}
+                                />
+                            </div>
+
+                            {lanes.length === 0 && (
+                                <p className="rounded-md border border-dashed border-gray-200 bg-white/60 px-1 py-4 text-center text-xs text-gray-400">
+                                    {filtered ? bm.noMatches : bm.emptyColumn}
+                                </p>
+                            )}
+
+                            {lanes.map((lane, laneIndex) => (
+                                <section
+                                    key={lane.key}
+                                    aria-label={laneName(lane)}
+                                    className={motionClass(view, 'column')}
+                                    style={{ animationDelay: staggerDelay(view, laneIndex) }}
+                                >
+                                    <LaneHeading
+                                        lane={lane}
+                                        name={laneName(lane)}
+                                        story={view.swimlanes === 'story'}
+                                        count={bm.laneCards.replace('{count}', String(lane.count))}
+                                    />
+                                    <div className="mt-1.5 flex items-stretch gap-3">
+                                        {unsorted.length > 0 && (
+                                            <div
+                                                className={`flex ${widthClass} shrink-0 flex-col ${d.columnGap} ${d.columnPad} rounded-lg border border-amber-300 bg-amber-50 ${lift}`}
+                                            >
+                                                {(lane.cells[UNSORTED_CELL] ?? []).map((task, index) =>
+                                                    cardFor(task, index),
+                                                )}
+                                            </div>
+                                        )}
+                                        {visibleColumns.map((column) => {
+                                            const cell = lane.cells[column.id] ?? [];
+                                            const dropIndex =
+                                                drag?.active &&
+                                                drag.target?.columnId === column.id &&
+                                                drag.target.laneKey === lane.key
+                                                    ? drag.target.index
+                                                    : null;
+                                            return (
+                                                <div
+                                                    key={column.id}
+                                                    {...{ [COLUMN_ATTR]: column.id, [LANE_ATTR]: lane.key }}
+                                                    className={`flex min-h-12 ${widthClass} shrink-0 flex-col ${d.columnGap} ${d.columnPad} rounded-lg border bg-gray-50 ${lift} ${
+                                                        dropIndex !== null ? 'border-blue-300' : 'border-gray-200'
+                                                    }`}
+                                                >
+                                                    {cell.map((task, index) => (
+                                                        <Fragment key={task.id}>
+                                                            {dropIndex === index && (
+                                                                <DropIndicator animate={view.animate} />
+                                                            )}
+                                                            {cardFor(task, index)}
+                                                        </Fragment>
+                                                    ))}
+                                                    {dropIndex === cell.length && (
+                                                        <DropIndicator animate={view.animate} />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
                 <div className={`overflow-x-auto pb-2 ${sc.strip}`}>
                     <div className={`flex min-w-max gap-3 ${sc.row}`}>
                     {unsorted.length > 0 && (
@@ -854,128 +1125,24 @@ export default function BoardPage() {
                                         {bm.noMatches}
                                     </p>
                                 )}
-                                {visibleUnsorted.map((task, index) => (
-                                    <TaskCard
-                                        key={task.id}
-                                        task={task}
-                                        view={view}
-                                        index={index}
-                                        selecting={selection.length > 0}
-                                        selected={selection.includes(task.id)}
-                                        onToggleSelected={() => toggleSelected(task.id)}
-                                        dragging={drag?.active === true && drag.taskId === task.id}
-                                        onPointerDownBody={(e) =>
-                                            beginDrag(e, task, { fromHandle: false })
-                                        }
-                                        onPointerDownHandle={(e) =>
-                                            beginDrag(e, task, { fromHandle: true })
-                                        }
-                                        onPointerMove={continueDrag}
-                                        onPointerUp={endDrag}
-                                        onPointerCancel={cancelDrag}
-                                        onOpen={() => setOpenTaskId(task.id)}
-                                        onRemove={() => setPendingRemoval({ taskIds: [task.id], title: task.title })}
-                                    />
-                                ))}
+                                {visibleUnsorted.map((task, index) => cardFor(task, index))}
                             </div>
                         </div>
                     )}
 
                     {visibleColumns.map((column, columnIndex) => {
-                        const remaining = column.tasks.reduce(
-                            (total, task) => total + num(task.remaining_hours),
-                            0,
-                        );
                         const dropIndex =
                             drag?.active && drag.target?.columnId === column.id
                                 ? drag.target.index
                                 : null;
-                        // Against the whole column, not the filtered view: a
-                        // filter must not make an over-limit column look fine.
-                        const full = columns.find((c) => c.id === column.id);
-                        const overWip = isOverWip(full);
-                        const held = full?.tasks.length ?? column.tasks.length;
-                        const tint = tintOf(view, column.category);
-                        const draggingColumn =
-                            columnDrag?.active === true && columnDrag.columnId === column.id;
                         return (
                             <div
                                 key={column.id}
                                 {...{ [COLUMN_ATTR]: column.id }}
-                                className={`group/column flex ${widthClass} flex-col overflow-hidden rounded-lg border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${
-                                    // The column the pointer is over while another
-                                    // is being dragged: where it lands if released
-                                    // now. Marked on the target rather than by a
-                                    // gap opening up, because a board wide enough
-                                    // to need reordering is a board where the gap
-                                    // would be off screen.
-                                    columnDrag?.active && columnDrag.targetId === column.id
-                                        ? 'border-blue-400 ring-2 ring-blue-200'
-                                        : 'border-gray-200'
-                                }`}
+                                className={`group/column flex ${widthClass} flex-col overflow-hidden rounded-lg border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${columnRing(column.id)}`}
                                 style={{ animationDelay: staggerDelay(view, columnIndex) }}
                             >
-                                {/* The column's stage, as a rule across its head.
-                                    Colour is the fastest way to tell three lanes
-                                    apart at a glance, and it costs no row height. */}
-                                <div aria-hidden className={`h-1 w-full ${tint.bar}`} />
-                                <BoardColumnHead
-                                    columnId={column.id}
-                                    name={column.name}
-                                    category={column.category}
-                                    view={view}
-                                    held={held}
-                                    shown={column.tasks.length}
-                                    wipLimit={column.wip_limit}
-                                    overWip={overWip}
-                                    remaining={remaining}
-                                    remainingLabel={bm.columnTotal}
-                                    dragging={draggingColumn}
-                                    busy={busy}
-                                    onRename={(name) => renameColumn(column.id, name)}
-                                    onMoveLeft={
-                                        columnIndex > 0 ? () => moveColumn(column.id, -1) : undefined
-                                    }
-                                    onMoveRight={
-                                        columnIndex < visibleColumns.length - 1
-                                            ? () => moveColumn(column.id, 1)
-                                            : undefined
-                                    }
-                                    onSort={(by) => sortColumn(column.id, by)}
-                                    targets={targetsFor(column.id)}
-                                    onMoveAllCards={(targetId) =>
-                                        moveCards(
-                                            column.tasks.map((task) => task.id),
-                                            targetId,
-                                        )
-                                    }
-                                    onSelectAll={() => selectAllIn(column.id)}
-                                    onPointerDownHead={(e) =>
-                                        beginColumnDrag(e, column, { fromHandle: false })
-                                    }
-                                    onPointerDownHandle={(e) =>
-                                        beginColumnDrag(e, column, { fromHandle: true })
-                                    }
-                                    onPointerMove={continueColumnDrag}
-                                    onPointerUp={endColumnDrag}
-                                    onPointerCancel={cancelColumnDrag}
-                                />
-
-                                {/* How full the column is, as a bar rather than a
-                                    number to read. It grows into place so a card
-                                    dropped here shows its cost immediately. */}
-                                {column.wip_limit ? (
-                                    <div aria-hidden className="h-1 w-full bg-gray-200">
-                                        <div
-                                            className={`h-full transition-all duration-500 ease-out ${
-                                                overWip ? 'bg-red-500' : tint.meter
-                                            }`}
-                                            style={{
-                                                width: `${Math.min(100, Math.round((held / column.wip_limit) * 100))}%`,
-                                            }}
-                                        />
-                                    </div>
-                                ) : null}
+                                {columnHeadFor(column, columnIndex)}
 
                                 <div className="flex min-h-0 flex-1 flex-col">
                                     {/* The cards. In column-scroll mode this is
@@ -993,26 +1160,7 @@ export default function BoardPage() {
                                         {column.tasks.map((task, index) => (
                                             <Fragment key={task.id}>
                                                 {dropIndex === index && <DropIndicator animate={view.animate} />}
-                                                <TaskCard
-                                                    task={task}
-                                                    view={view}
-                                                    index={index}
-                                                    selecting={selection.length > 0}
-                                                    selected={selection.includes(task.id)}
-                                                    onToggleSelected={() => toggleSelected(task.id)}
-                                                    dragging={drag?.active === true && drag.taskId === task.id}
-                                                    onPointerDownBody={(e) =>
-                                                        beginDrag(e, task, { fromHandle: false })
-                                                    }
-                                                    onPointerDownHandle={(e) =>
-                                                        beginDrag(e, task, { fromHandle: true })
-                                                    }
-                                                    onPointerMove={continueDrag}
-                                                    onPointerUp={endDrag}
-                                                    onPointerCancel={cancelDrag}
-                                                    onOpen={() => setOpenTaskId(task.id)}
-                                                    onRemove={() => setPendingRemoval({ taskIds: [task.id], title: task.title })}
-                                                />
+                                                {cardFor(task, index)}
                                             </Fragment>
                                         ))}
                                         {dropIndex === column.tasks.length && (
@@ -1027,24 +1175,7 @@ export default function BoardPage() {
                                         looking for. `pt-0` because the list
                                         above it already ends in the column's own
                                         padding. */}
-                                    <div className={`${d.columnPad} pt-0`}>
-                                        <BoardCardComposer
-                                            boardId={boardId}
-                                            columnId={column.id}
-                                            projects={projects}
-                                            projectId={composerProject}
-                                            onProjectChange={setComposerProject}
-                                            defaultAssignee={composerAssignee}
-                                            defaultAssigneeLabel={composerAssigneeLabel}
-                                            assignees={
-                                                projectMeta.peek(composerProject)?.assignees ?? []
-                                            }
-                                            onAssigneeMenuOpen={() =>
-                                                void projectMeta.load(composerProject)
-                                            }
-                                            onCreated={loadBoard}
-                                        />
-                                    </div>
+                                    <div className={`${d.columnPad} pt-0`}>{composerFor(column.id)}</div>
                                 </div>
                             </div>
                         );
@@ -1061,6 +1192,7 @@ export default function BoardPage() {
                     />
                     </div>
                 </div>
+                )}
             </div>
 
             {/* Follows the finger, because on touch there is no cursor to tell
@@ -1147,6 +1279,42 @@ export default function BoardPage() {
                 />
             )}
         </PageShell>
+    );
+}
+
+/**
+ * A swimlane's heading. Sticky to the start edge, so the name stays in view
+ * while the board is scrolled sideways to its later columns — a row of cards
+ * with its owner scrolled off screen is a row nobody can place.
+ */
+function LaneHeading({
+    lane,
+    name,
+    story,
+    count,
+}: {
+    lane: BoardLane;
+    name: string;
+    story: boolean;
+    count: string;
+}) {
+    return (
+        <h2 className="sticky start-0 flex w-max max-w-xs items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-sm font-medium text-gray-800 shadow-sm md:max-w-md">
+            {story
+                ? lane.code && <span className="shrink-0 font-mono text-xs text-blue-700">{lane.code}</span>
+                : lane.key !== NO_LANE && (
+                      <span
+                          aria-hidden
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-medium text-blue-700"
+                      >
+                          {initialsOf(name)}
+                      </span>
+                  )}
+            <span className="truncate">{name}</span>
+            <span className="shrink-0 rounded bg-gray-100 px-1.5 text-xs font-normal text-gray-600">
+                {count}
+            </span>
+        </h2>
     );
 }
 

@@ -18,11 +18,19 @@ export const DRAG_THRESHOLD_PX = 6;
 
 export const COLUMN_ATTR = 'data-board-column';
 export const CARD_ATTR = 'data-board-card';
+/**
+ * On a swimlane cell, beside `COLUMN_ATTR`: which row the cell belongs to. A
+ * column's cards are split across one cell per lane, so the column alone no
+ * longer says where a card was dropped.
+ */
+export const LANE_ATTR = 'data-board-lane';
 
 export interface DropTarget {
     columnId: string;
     /** Insertion point among the *visible* cards, the dragged one excluded. */
     index: number;
+    /** The swimlane the drop is in. Absent on an ungrouped board. */
+    laneKey?: string;
 }
 
 export function movedFar(
@@ -52,12 +60,15 @@ export function resolveDropTarget(
     const cards = Array.from(columnEl.querySelectorAll(`[${CARD_ATTR}]`)).filter(
         (card) => card.getAttribute(CARD_ATTR) !== draggingTaskId,
     );
+    const laneKey = columnEl.getAttribute(LANE_ATTR);
+    const at = (index: number): DropTarget =>
+        laneKey === null ? { columnId, index } : { columnId, index, laneKey };
 
     for (let index = 0; index < cards.length; index += 1) {
         const rect = cards[index].getBoundingClientRect();
-        if (point.y < rect.top + rect.height / 2) return { columnId, index };
+        if (point.y < rect.top + rect.height / 2) return at(index);
     }
-    return { columnId, index: cards.length };
+    return at(cards.length);
 }
 
 /**

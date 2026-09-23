@@ -29,6 +29,9 @@ const CARD_TASK_INCLUDE = {
     project: { select: { id: true, code: true, name: true, short_name: true } },
     assignee: { select: { id: true, name: true, email: true } },
     assigneeEmployee: { select: { id: true, name: true } },
+    // For the story swimlanes. The code and title are what a lane is headed
+    // with; the board has no other way to name a story it only holds an id of.
+    userStory: { select: { id: true, code: true, title: true } },
     labels: { include: { label: true } },
     checklistItems: { select: { id: true, is_done: true } },
     _count: { select: { subtasks: true, comments: true } },
