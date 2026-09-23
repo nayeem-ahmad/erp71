@@ -5113,6 +5113,12 @@ export const api = {
     /** The tasks under it are detached, never deleted with it. */
     deleteProjectStory: (storyId: string) =>
         fetchWithAuth(`/project-stories/${storyId}`, { method: 'DELETE' }),
+    importProjectStories: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/project-stories/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
 
     getProjectTypes: (includeInactive = false) =>
         fetchWithAuth(`/projects/types${includeInactive ? '?includeInactive=true' : ''}`),

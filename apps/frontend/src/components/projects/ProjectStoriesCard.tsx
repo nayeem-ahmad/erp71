@@ -28,6 +28,8 @@ export interface StoryTask {
 export interface UserStory {
     id: string;
     reference: number;
+    /** The editable ID people see — `OTB-3`. */
+    code: string;
     title: string;
     as_a?: string | null;
     i_want?: string | null;
@@ -52,6 +54,8 @@ const STATUS_TONE: Record<string, StatusBadgeTone> = {
 };
 
 const EMPTY_FORM = {
+    projectId: '',
+    code: '',
     title: '',
     asA: '',
     iWant: '',
@@ -65,6 +69,8 @@ const EMPTY_FORM = {
 type StoryForm = typeof EMPTY_FORM;
 
 const formOf = (story: UserStory): StoryForm => ({
+    projectId: '',
+    code: story.code,
     title: story.title,
     asA: story.as_a ?? '',
     iWant: story.i_want ?? '',
@@ -87,6 +93,7 @@ const formOf = (story: UserStory): StoryForm => ({
  */
 export default function ProjectStoriesCard({
     projectId,
+    projectCode,
     stories,
     onStoriesChanged,
     onTasksChanged,
@@ -94,6 +101,8 @@ export default function ProjectStoriesCard({
     openStoryId,
 }: {
     projectId: string;
+    /** Prefix of a new story's default ID — `OTB` for `OTB-4`. */
+    projectCode?: string;
     /** The project's backlog, or null while it is still being read. */
     stories: UserStory[] | null;
     /** Re-read the backlog: a story was written, or its task counts moved. */
@@ -177,6 +186,7 @@ export default function ProjectStoriesCard({
             {editing && (
                 <StoryFormModal
                     projectId={projectId}
+                    projectCode={projectCode}
                     story={editing === 'new' ? null : editing}
                     onClose={() => setEditing(null)}
                     onSaved={async () => {
@@ -281,7 +291,7 @@ function StoryRow({
                         aria-hidden
                     />
                     <span className="shrink-0 text-xs tabular-nums text-gray-500">
-                        {fmt(m.stories.reference, { number: story.reference })}
+                        {story.code}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm" title={story.title}>
                         {story.title}
@@ -397,37 +407,77 @@ function StoryRow({
     );
 }
 
-function StoryFormModal({
+/** A project the modal can file a new story under, when it is not opened from one. */
+export interface StoryProjectOption {
+    id: string;
+    code: string;
+    name: string;
+}
+
+type FormErrors = Partial<Record<'projectId' | 'code' | 'title', string>>;
+
+/**
+ * Write or edit one story. Opened from a project's card it is already filed
+ * under that project; opened from the cross-project list it asks which one.
+ */
+export function StoryFormModal({
     projectId,
+    projectCode,
+    projects,
+    initialProjectId,
     story,
     onClose,
     onSaved,
 }: {
-    projectId: string;
+    /** The project a new story goes into. Omit to show a project picker. */
+    projectId?: string;
+    /** That project's code, for the default-ID hint. */
+    projectCode?: string;
+    /** The picker's options, when `projectId` is omitted. */
+    projects?: StoryProjectOption[];
+    /** Pre-selects the picker. */
+    initialProjectId?: string;
     /** Null for a new story. */
     story: UserStory | null;
     onClose: () => void;
     onSaved: () => void | Promise<void>;
 }) {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.projects;
 
-    const [form, setForm] = useState<StoryForm>(story ? formOf(story) : EMPTY_FORM);
-    const [error, setError] = useState<string | null>(null);
+    const [form, setForm] = useState<StoryForm>(
+        story ? formOf(story) : { ...EMPTY_FORM, projectId: initialProjectId ?? '' },
+    );
+    const [errors, setErrors] = useState<FormErrors>({});
     const [saving, setSaving] = useState(false);
 
     const set = (patch: Partial<StoryForm>) => setForm((previous) => ({ ...previous, ...patch }));
+    const clearError = (field: keyof FormErrors) =>
+        setErrors((previous) => ({ ...previous, [field]: undefined }));
+
+    const pickProject = !story && !projectId;
+    const targetProjectId = projectId ?? form.projectId;
+    const prefix = projectCode ?? projects?.find((project) => project.id === targetProjectId)?.code;
 
     const save = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!form.title.trim()) {
-            setError(m.stories.titleRequired);
+        const code = form.code.trim();
+        const next: FormErrors = {};
+        if (pickProject && !form.projectId) next.projectId = m.stories.projectRequired;
+        if (!form.title.trim()) next.title = m.stories.titleRequired;
+        // Editing can change the ID but not remove it; a new story may leave it
+        // blank and be numbered by the server.
+        if (story && !code) next.code = m.stories.codeRequired;
+        else if (/\s/.test(code)) next.code = m.stories.codeNoSpaces;
+        if (Object.values(next).some(Boolean)) {
+            setErrors(next);
             return;
         }
         setSaving(true);
         try {
             const payload = {
                 title: form.title.trim(),
+                ...(code ? { code } : {}),
                 asA: form.asA.trim(),
                 iWant: form.iWant.trim(),
                 soThat: form.soThat.trim(),
@@ -439,83 +489,142 @@ function StoryFormModal({
                 storyPoints: form.storyPoints === '' ? null : Number(form.storyPoints),
             };
             if (story) await api.updateProjectStory(story.id, payload);
-            else await api.createProjectStory({ ...payload, projectId });
+            else await api.createProjectStory({ ...payload, projectId: targetProjectId });
             toast.success(story ? m.stories.updated : m.stories.created);
             await onSaved();
         } catch (saveError) {
-            toast.error(saveError instanceof Error ? saveError.message : m.stories.saveFailed);
+            const message = saveError instanceof Error ? saveError.message : m.stories.saveFailed;
+            // A taken ID is the one server refusal with a field to point at.
+            if (/story id/i.test(message)) setErrors({ code: message });
+            else toast.error(message);
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <ModalShell onBackdropClick={onClose} size="md">
-            <form onSubmit={save}>
+        <ModalShell onBackdropClick={onClose} dismissOnBackdrop={false} size="lg">
+            <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
                 <ModalHeader
                     title={story ? m.stories.edit : m.stories.add}
                     onClose={onClose}
                 />
                 <div className="space-y-3 overflow-y-auto p-4">
-                    <Field
-                        label={m.task.titleField}
-                        htmlFor="story-title"
-                        required
-                        error={error ?? undefined}
-                    >
-                        <Input
-                            id="story-title"
-                            value={form.title}
-                            error={Boolean(error)}
-                            autoFocus
-                            onChange={(e) => {
-                                setError(null);
-                                set({ title: e.target.value });
-                            }}
-                        />
-                    </Field>
+                    {pickProject && (
+                        <Field
+                            label={m.fields.project}
+                            htmlFor="story-project"
+                            required
+                            error={errors.projectId}
+                        >
+                            <Select
+                                id="story-project"
+                                value={form.projectId}
+                                error={Boolean(errors.projectId)}
+                                onChange={(e) => {
+                                    clearError('projectId');
+                                    set({ projectId: e.target.value });
+                                }}
+                            >
+                                <option value="">{m.stories.pickProject}</option>
+                                {(projects ?? []).map((project) => (
+                                    <option key={project.id} value={project.id}>
+                                        {project.code} · {project.name}
+                                    </option>
+                                ))}
+                            </Select>
+                        </Field>
+                    )}
 
-                    {/* Three fields rather than one paragraph: a story missing
-                        its *why* is the one worth noticing, and a single blob
-                        hides that it is missing. */}
-                    <div className="grid gap-3 md:grid-cols-3">
-                        <Field label={m.stories.asA} htmlFor="story-as-a">
+                    <div className="grid gap-3 md:grid-cols-[12rem_1fr]">
+                        <Field
+                            label={m.stories.code}
+                            htmlFor="story-code"
+                            required={Boolean(story)}
+                            error={errors.code}
+                            hint={
+                                story || errors.code
+                                    ? undefined
+                                    : fmt(m.stories.codeHint, { example: `${prefix ?? 'OTB'}-1` })
+                            }
+                        >
                             <Input
-                                id="story-as-a"
-                                value={form.asA}
-                                placeholder={m.stories.asAPlaceholder}
-                                onChange={(e) => set({ asA: e.target.value })}
+                                id="story-code"
+                                value={form.code}
+                                maxLength={40}
+                                error={Boolean(errors.code)}
+                                placeholder={prefix ? `${prefix}-…` : m.stories.codeAuto}
+                                onChange={(e) => {
+                                    clearError('code');
+                                    set({ code: e.target.value });
+                                }}
                             />
                         </Field>
-                        <Field label={m.stories.iWant} htmlFor="story-i-want">
+                        <Field
+                            label={m.task.titleField}
+                            htmlFor="story-title"
+                            required
+                            error={errors.title}
+                        >
                             <Input
-                                id="story-i-want"
-                                value={form.iWant}
-                                placeholder={m.stories.iWantPlaceholder}
-                                onChange={(e) => set({ iWant: e.target.value })}
-                            />
-                        </Field>
-                        <Field label={m.stories.soThat} htmlFor="story-so-that">
-                            <Input
-                                id="story-so-that"
-                                value={form.soThat}
-                                placeholder={m.stories.soThatPlaceholder}
-                                onChange={(e) => set({ soThat: e.target.value })}
+                                id="story-title"
+                                value={form.title}
+                                maxLength={300}
+                                error={Boolean(errors.title)}
+                                autoFocus={!pickProject}
+                                onChange={(e) => {
+                                    clearError('title');
+                                    set({ title: e.target.value });
+                                }}
                             />
                         </Field>
                     </div>
 
+                    {/* Three fields rather than one paragraph: a story missing
+                        its *why* is the one worth noticing, and a single blob
+                        hides that it is missing. Stacked and multi-line, because
+                        "I want" is rarely one short phrase. */}
+                    <Field label={m.stories.asA} htmlFor="story-as-a">
+                        <Textarea
+                            id="story-as-a"
+                            rows={2}
+                            maxLength={500}
+                            value={form.asA}
+                            placeholder={m.stories.asAPlaceholder}
+                            onChange={(e) => set({ asA: e.target.value })}
+                        />
+                    </Field>
+                    <Field label={m.stories.iWant} htmlFor="story-i-want">
+                        <Textarea
+                            id="story-i-want"
+                            rows={4}
+                            maxLength={2000}
+                            value={form.iWant}
+                            placeholder={m.stories.iWantPlaceholder}
+                            onChange={(e) => set({ iWant: e.target.value })}
+                        />
+                    </Field>
+                    <Field label={m.stories.soThat} htmlFor="story-so-that">
+                        <Textarea
+                            id="story-so-that"
+                            rows={3}
+                            maxLength={2000}
+                            value={form.soThat}
+                            placeholder={m.stories.soThatPlaceholder}
+                            onChange={(e) => set({ soThat: e.target.value })}
+                        />
+                    </Field>
+
                     <Field label={m.stories.acceptance} htmlFor="story-acceptance">
                         <Textarea
                             id="story-acceptance"
-                            rows={4}
+                            rows={8}
                             maxLength={5000}
                             value={form.acceptanceCriteria}
                             placeholder={m.stories.acceptancePlaceholder}
                             onChange={(e) => set({ acceptanceCriteria: e.target.value })}
                         />
                     </Field>
-
                     <div className="grid gap-3 md:grid-cols-3">
                         <Field label={m.fields.status} htmlFor="story-status">
                             <Select

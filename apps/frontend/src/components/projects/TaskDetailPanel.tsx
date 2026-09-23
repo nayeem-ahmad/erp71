@@ -106,7 +106,7 @@ interface Task {
     // Phase 2 made an employee without a login assignable, so "who holds this"
     // is two columns and anything that reads one has to read the other.
     assigneeEmployee?: { id: string; name?: string | null } | null;
-    userStory?: { id: string; reference: number; title: string } | null;
+    userStory?: { id: string; reference: number; code: string; title: string } | null;
     /** Both come from `TASK_INCLUDE` and were previously discarded here. */
     sprint?: { id: string; name: string; status?: string } | null;
     milestone?: { id: string; name: string } | null;
@@ -129,6 +129,7 @@ interface SprintOption {
 interface StoryOption {
     id: string;
     reference: number;
+    code: string;
     title: string;
 }
 
@@ -1343,7 +1344,7 @@ function UserStoryField({
     /** Fires when the picker is first touched, so the backlog loads then. */
     onWanted: () => void;
 }) {
-    const { t, fmt } = useI18n();
+    const { t } = useI18n();
     const m = t.projects;
     const [saving, setSaving] = useState(false);
 
@@ -1370,8 +1371,7 @@ function UserStoryField({
         }
     };
 
-    const reference = (story: StoryOption) =>
-        fmt(m.stories.reference, { number: story.reference });
+    const reference = (story: StoryOption) => story.code;
 
     return (
         <ChipPopover

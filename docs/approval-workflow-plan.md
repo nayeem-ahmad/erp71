@@ -729,10 +729,21 @@ save. Derive the fixtures from the registry rather than restating it.
 Production applies the schema with `prisma db push`, never `prisma migrate
 deploy` — `deploy.yaml:68` and `deploy.yaml:168`, `scripts/deploy-erp71.sh:99`, and the
 backend `Dockerfile`, which says so outright and then chains one `sync:*` step
-for every migration the deploy skips. That chain only grows — nineteen steps in
-the `Dockerfile` as of 2026-09-23, against the twenty `sync:*` scripts
-`packages/database/package.json` defines — so read the `CMD` line rather than
-trusting a count written down here.
+for every migration the deploy skips.
+
+Do not trust a count of those steps — not from this document, and not from a
+commit message. The number has drifted four times in three days: this section
+said seventeen, `#702`'s commit message and its `TODO.md` entry both said
+sixteen, and a corrected "nineteen" written here on the morning of 2026-09-23
+was wrong again by that afternoon. Read the chain instead:
+
+```bash
+grep '^CMD' apps/backend/Dockerfile | tr '&' '\n' | grep -n 'sync:\|db push'
+```
+
+That prints every step in order with `db push` among them, which is the only
+shape of the answer that matters — because where a step sits relative to
+`db push` decides what it is allowed to do.
 
 So `db push` adds a new column and nothing fills it. Any back-fill this plan
 needs — Phase 2 turning `require_voucher_approval` into an `ApprovalPolicy` row
@@ -765,22 +776,30 @@ That case supplies the half of the rule `#696` does not: **where** in the chain 
 `sync:` step belongs depends on what `db push` is about to do.
 
 - A back-fill that fills a column `db push` has *already added* runs **after**
-  it, because the column has to exist first. Fourteen of the nineteen steps are
-  this kind, and getting one wrong leaves a null column — bad data, live site.
+  it, because the column has to exist first. This is most of the chain, and
+  getting one wrong leaves a null column — bad data, live site.
 - A back-fill that has to make existing rows *satisfy a constraint* `db push` is
   about to create — a NOT NULL column, or a unique index — runs **before** it.
   `db push` precedes `main.js` in the same `&&` chain, so when Postgres refuses
   the DDL the container never reaches the backend at all: a full outage, not bad
-  data. Five steps are this kind — `sync:user-mobile-unique`,
-  `sync:store-name-unique`, `sync:warehouse-name-unique`, and `#702`'s two.
-  (The Dockerfile comment introducing the first of them still calls it "the one
-  step that runs BEFORE db push"; four more have joined it since, so the comment
-  is stale even though the `CMD` line is correct.)
+  data. This is the short run of steps at the head of the chain. (The Dockerfile
+  comment introducing the first of them still calls it "the one step that runs
+  BEFORE db push". It has had company for a while, so the comment is stale even
+  though the `CMD` line is correct.)
+
+The rule earned its keep the same day it was written. `60d306a` ("user stories
+get New/Import, an editable ID, and bigger text boxes") adds
+`ProjectUserStory.code` as a NOT NULL `String` *and* `@@unique([project_id,
+code])` — both constraint kinds at once, on a populated table — and puts
+`sync:story-code` ahead of `db push` accordingly, backfilling `US-3` to `OTB-3`
+from each story's project code. It also moved the count in the paragraph above
+from nineteen to twenty within hours of that paragraph being written, which is
+why the paragraph no longer carries one.
 
 For this plan that settles Phase 2's placement, and both halves land on the
 safe side. The back-fill reads `require_voucher_approval` and writes rows into
 `ApprovalPolicy` — a table `db push` has just created — so it belongs **after**
-`db push`, with the other fourteen. And the outage half does not arise here at
+`db push`, with the rest. And the outage half does not arise here at
 all: §2 adds no column and no unique index to any *existing* table, so there are
 no rows for a NOT NULL or a `@@unique` to be refused over. All four tables are
 new and therefore empty, `ApprovalRequest`'s two `@@unique`s included. That is a

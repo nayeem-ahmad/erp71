@@ -141,10 +141,16 @@ export const projectsMessages = {
      */
     stories: {
         title: 'User stories',
-        add: 'New story',
+        add: "New user story",
         edit: 'Edit story',
         empty: 'No user stories yet. Write one to say what this project is being asked for.',
-        reference: 'US-{number}',
+        code: "Story ID",
+        codeHint: "Leave blank to number it automatically, e.g. {example}.",
+        codeAuto: "Automatic",
+        codeRequired: "Give the story an ID.",
+        codeNoSpaces: "A story ID cannot contain spaces.",
+        projectRequired: "Pick a project.",
+        pickProject: "Choose a project",
         asA: 'As a',
         iWant: 'I want',
         soThat: 'So that',
@@ -188,7 +194,7 @@ export const projectsMessages = {
     storyList: {
         title: 'User stories',
         subtitle: 'Every story across every project',
-        empty: 'No user stories yet. Open a project to write the first one.',
+        empty: "No user stories yet. Write one, or import a backlog from a spreadsheet.",
         emptyFiltered: 'No stories match these filters.',
         searchPlaceholder: 'Search a story title or what it asks for',
         allProjects: 'All projects',
