@@ -728,9 +728,11 @@ save. Derive the fixtures from the registry rather than restating it.
 
 Production applies the schema with `prisma db push`, never `prisma migrate
 deploy` — `deploy.yaml:68` and `deploy.yaml:168`, `scripts/deploy-erp71.sh:99`, and the
-backend `Dockerfile`, which says so outright and then carries seventeen
-`sync:*` steps that exist only to do what the skipped migrations would have
-done (`packages/database/package.json` defines eighteen).
+backend `Dockerfile`, which says so outright and then chains one `sync:*` step
+for every migration the deploy skips. That chain only grows — nineteen steps in
+the `Dockerfile` as of 2026-09-23, against the twenty `sync:*` scripts
+`packages/database/package.json` defines — so read the `CMD` line rather than
+trusting a count written down here.
 
 So `db push` adds a new column and nothing fills it. Any back-fill this plan
 needs — Phase 2 turning `require_voucher_approval` into an `ApprovalPolicy` row
@@ -749,6 +751,43 @@ how to pay for your first period" instead of dunning. That is precisely the
 outcome the commit message says the backfill exists to prevent. Filed in
 `TODO.md`; it is not this plan's to fix, but it is the clearest possible warning
 against Phase 2 doing the same thing.
+
+It recurred two days later, and that time it was caught before the deploy rather
+than after. `#702` ("backfill board slugs and task references before db push")
+added `Board.slug` and `Task.reference` as NOT NULL, and its commit message
+reconstructs this section from first principles — production "never runs `prisma
+migrate deploy`", so `db push` "would go straight to NOT NULL. Postgres refuses,
+and because db push sits at the head of the container's && chain the backend
+never boots" — reproduced on a scratch database as `ERROR: column "slug" of
+relation "boards" contains null values`.
+
+That case supplies the half of the rule `#696` does not: **where** in the chain a
+`sync:` step belongs depends on what `db push` is about to do.
+
+- A back-fill that fills a column `db push` has *already added* runs **after**
+  it, because the column has to exist first. Fourteen of the nineteen steps are
+  this kind, and getting one wrong leaves a null column — bad data, live site.
+- A back-fill that has to make existing rows *satisfy a constraint* `db push` is
+  about to create — a NOT NULL column, or a unique index — runs **before** it.
+  `db push` precedes `main.js` in the same `&&` chain, so when Postgres refuses
+  the DDL the container never reaches the backend at all: a full outage, not bad
+  data. Five steps are this kind — `sync:user-mobile-unique`,
+  `sync:store-name-unique`, `sync:warehouse-name-unique`, and `#702`'s two.
+  (The Dockerfile comment introducing the first of them still calls it "the one
+  step that runs BEFORE db push"; four more have joined it since, so the comment
+  is stale even though the `CMD` line is correct.)
+
+For this plan that settles Phase 2's placement, and both halves land on the
+safe side. The back-fill reads `require_voucher_approval` and writes rows into
+`ApprovalPolicy` — a table `db push` has just created — so it belongs **after**
+`db push`, with the other fourteen. And the outage half does not arise here at
+all: §2 adds no column and no unique index to any *existing* table, so there are
+no rows for a NOT NULL or a `@@unique` to be refused over. All four tables are
+new and therefore empty, `ApprovalRequest`'s two `@@unique`s included. That is a
+consequence of the §5.1 seam — a module keeps its own status column and gains no
+schema change by adopting the engine — rather than luck, and it is worth
+defending: the day this design reaches for a NOT NULL column on `vouchers`, its
+back-fill moves in front of `db push`.
 
 ---
 

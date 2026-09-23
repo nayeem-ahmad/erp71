@@ -181,6 +181,20 @@ ENV GIT_SHA=$GIT_SHA
 # index a formality. Idempotent, and a no-op on a fresh database with no
 # Warehouse table yet. See prisma/sync-warehouse-name-unique.ts.
 #
+# sync:board-slug and sync:task-reference run BEFORE db push for the same
+# reason, and are REQUIRED for the readable-project-URL work to deploy at all.
+# Both add a NOT NULL column with no default to a table that already has rows
+# (boards.slug, project_tasks.reference). Migrations 20260922120000 and
+# 20260922130000 do this safely — add nullable, backfill, then set NOT NULL —
+# but production never runs `prisma migrate deploy`, so that sequencing never
+# happens here. db push would go straight to NOT NULL, Postgres would refuse,
+# and the backend would never boot. Filling the columns first makes the NOT NULL
+# and its unique index a formality. Both are idempotent (they fill NULLs only,
+# never rewriting a slug an owner has since edited) and no-ops on a fresh
+# database with no boards/project_tasks table yet. They also create the two
+# history tables the same migrations add. See prisma/sync-board-slug.ts and
+# prisma/sync-task-reference.ts.
+#
 # sync:tenant-role-templates creates the per-module role templates (Sales
 # Manager, Sales User, ... plus Tenant Admin) for tenants that predate them, and
 # gives existing members and pending invitations their TenantUserRole /
@@ -207,4 +221,4 @@ ENV GIT_SHA=$GIT_SHA
 # both people; this is the half a code change cannot reach. Never rewrites an
 # existing row, so a deliberate removal is not undone on the next boot. See
 # prisma/sync-project-members.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:store-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:warehouse-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:project-members --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:store-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:warehouse-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:board-slug --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:task-reference --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:project-members --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
