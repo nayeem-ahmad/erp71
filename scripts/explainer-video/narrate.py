@@ -1,10 +1,10 @@
-"""Synthesise the voice-over for one language into .audio/<lang>/ for record.js.
+"""Synthesise one video's voice-over into .audio/<video>/<lang>/ for record.js.
 
-    python3 narrate.py [lang]          # lang defaults to en
+    python3 narrate.py <video> [lang]      # e.g. sales-entry; lang defaults to en
 
-The spoken lines are the "narration" block of lang/<lang>.json, keyed by
-caption title (plus intro/outro). Writes one WAV per line and
-.audio/<lang>/durations.json. record.js reads that file to hold each scene
+The spoken lines are the "narration" block of lang/<video>.<lang>.json, keyed
+by caption title (plus intro/outro). Writes one WAV per line and
+.audio/<video>/<lang>/durations.json. record.js reads that file to hold each scene
 until its line has been spoken and to place every clip on the soundtrack.
 Without it, record.js records a silent video on its default pacing.
 
@@ -23,7 +23,7 @@ Engines (TTS env var; the default depends on the language):
             Bangla automatically when no Azure key is set.
 
 To use human recordings instead, run with TTS=estimate, drop the recordings
-into .audio/<lang>/ under the file names durations.json would use (NN.wav, in
+into .audio/<video>/<lang>/ under the file names durations.json would use (NN.wav, in
 the order of the narration block), and run with TTS=files to measure them.
 """
 import json
@@ -85,8 +85,11 @@ def measure(file):
 
 
 def main() -> None:
-    lang = sys.argv[1] if len(sys.argv) > 1 else "en"
-    spec = json.loads((HERE / "lang" / f"{lang}.json").read_text())
+    if len(sys.argv) < 2:
+        sys.exit("usage: narrate.py <video> [lang]")
+    video = sys.argv[1]
+    lang = sys.argv[2] if len(sys.argv) > 2 else "en"
+    spec = json.loads((HERE / "lang" / f"{video}.{lang}.json").read_text())
     lines = spec["narration"]
 
     engine = os.environ.get("TTS") or (
@@ -95,7 +98,7 @@ def main() -> None:
     if engine == "estimate":
         print("no voice engine: writing estimated timings only (silent video)", file=sys.stderr)
 
-    out = HERE / ".audio" / lang
+    out = HERE / ".audio" / video / lang
     out.mkdir(parents=True, exist_ok=True)
     speak = {
         "kokoro": lambda: kokoro_engine(),

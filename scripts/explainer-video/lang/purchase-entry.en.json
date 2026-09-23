@@ -1,0 +1,20 @@
+{
+  "_comment": "English voice-over for the purchase entry video. Captions, labels and cards are inline in videos/purchase-entry.js; this file only holds what the voice says, keyed by caption title (plus intro/outro). Written for the ear: ERP71 is spelled out.",
+  "narration": {
+    "intro": "Welcome to E R P seventy-one. In this video, you'll see how to record a purchase: the stock you bought from a supplier, what it cost, the freight, and what you paid. All on one screen.",
+    "Open the Record Purchase screen": "Open Purchase in the sidebar, and go to the purchase list. Then click Record Purchase, at the top right.",
+    "One screen, three areas": "It works just like a sale. At the top, the purchase details. On the left, who you bought from, and what. And on the right, the totals and the payment.",
+    "A · Purchase details": "The purchase number is generated automatically. The warehouse is where the goods arrive. If different lines go to different warehouses, tick per-line warehouse.",
+    "B · Pick the supplier": "Now pick the supplier. Search by name, or phone number. The card shows their phone, address, and payable, which is what you already owe them. The plus button adds a new supplier on the spot.",
+    "Add products": "Next, add the products you received. Type part of the name or code, and press Enter to pick it. The list shows how much is in stock right now.",
+    "Enter what the supplier charged": "Careful here. The unit cost starts at the product's selling price, so always change it to what the supplier actually charged. The previous purchase rates underneath show what you paid last time. Here, eighty-eight taka, for fifty packs.",
+    "Keep adding lines": "Keep going. For each product, pick it, type the cost and the quantity, and press Enter. Here we add forty packs of lentils at forty-eight taka, and thirty packs of chickpeas at fifty-eight. Watch the subtotal and the supplier due grow as each line goes in.",
+    "Review and edit the lines": "In Stock shows what you had before this purchase. You can edit the cost or the quantity right in the table. Here, the chickpeas are changed from thirty to thirty-six, and the line total follows.",
+    "C · Freight, tax and discount": "On the right, add the supplier's freight, which is their delivery charge, any tax on the bill, and any discount they gave you. The purchase total updates as you type.",
+    "Pay now, or owe the supplier": "Now the payment. Enter what you paid, by method. Here, we pay five thousand taka in cash, and the rest stays as supplier due on their account. You can pay it off later, from Supplier Payment.",
+    "Add a note (optional)": "The note is a good place for the supplier's invoice or challan number, so you can match the paperwork later.",
+    "Post it": "When everything matches, click Post Purchase. This adds the stock, records the payment and the amount you owe, and posts the accounting entry.",
+    "Done — it’s in the purchase list": "Done! You're back on the purchase list, with the new purchase on top. The stock is already added, and the voucher column shows the accounting entry was posted.",
+    "outro": "So, to recap. Open Record Purchase, pick the supplier, add the products at the supplier's cost, add freight, tax, or discount, then pay now or keep it due, and post the purchase. Stock in, and your books are up to date."
+  }
+}
