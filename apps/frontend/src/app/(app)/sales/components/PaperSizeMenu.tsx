@@ -5,6 +5,7 @@ import { ChevronDown, Printer } from 'lucide-react';
 import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
+import { useI18n } from '@/lib/i18n';
 
 interface PaperSizeMenuProps {
     /** The size the split button prints at when its main half is clicked. */
@@ -37,8 +38,10 @@ export default function PaperSizeMenu({
     onPaperSizeChange,
     onPrint,
     label,
-    triggerLabel = 'Choose paper size',
+    triggerLabel: triggerLabelProp,
 }: PaperSizeMenuProps) {
+    const { t } = useI18n();
+    const triggerLabel = triggerLabelProp ?? t.sales.entry.choosePaperSize;
     const [open, setOpen] = useState(false);
     const wrapRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);

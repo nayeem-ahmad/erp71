@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import AnchoredDropdown from './AnchoredDropdown';
 import RateHistory, { type RateHistoryType } from './RateHistory';
+import { useI18n } from '@/lib/i18n';
 
 interface RateHistoryPopoverProps {
     /** The box the panel hangs off — the entry bar's product field. */
@@ -21,11 +22,6 @@ interface RateHistoryPopoverProps {
     onPickRate?: (rate: number) => void;
     onClose: () => void;
 }
-
-const HEADINGS: Record<RateHistoryType, string> = {
-    sale: 'Previous sale rates',
-    purchase: 'Previous purchase rates',
-};
 
 /**
  * Previous rates for the staged product, hung directly under the entry bar's
@@ -46,6 +42,9 @@ export default function RateHistoryPopover({
     onPickRate,
     onClose,
 }: RateHistoryPopoverProps) {
+    const { t } = useI18n();
+    const copy = t.components.documentEntry.rateHistory;
+    const heading = copy[type].heading;
     const panelRef = useRef<HTMLDivElement>(null);
 
     const isInside = useCallback(
@@ -77,18 +76,18 @@ export default function RateHistoryPopover({
             matchAnchorWidth={false}
             maxHeight={420}
             role="dialog"
-            aria-label={HEADINGS[type]}
+            aria-label={heading}
             className="w-[min(34rem,calc(100vw-1.5rem))]"
         >
             <div className="flex items-start justify-between gap-2 border-b px-3 py-2">
                 <div className="min-w-0">
-                    <div className="text-xs font-semibold text-gray-900">{HEADINGS[type]}</div>
+                    <div className="text-xs font-semibold text-gray-900">{heading}</div>
                     {subtitle && <div className="truncate text-[11px] text-gray-400">{subtitle}</div>}
                 </div>
                 <button
                     type="button"
                     onClick={onClose}
-                    aria-label="Close"
+                    aria-label={copy.close}
                     className="-me-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                 >
                     <X className="w-4 h-4" />

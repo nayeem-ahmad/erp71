@@ -64,7 +64,8 @@ export default function VoiceEntryInput({
     disabled = false,
 }: VoiceEntryInputProps) {
     const { voice } = usePlatformFeatures();
-    const { locale } = useI18n();
+    const { locale, t } = useI18n();
+    const copy = t.components.documentEntry.voice;
     const [supported, setSupported] = useState(false);
     const [recording, setRecording] = useState(false);
     const [processing, setProcessing] = useState(false);
@@ -98,13 +99,13 @@ export default function VoiceEntryInput({
 
     const processAudio = useCallback(async (blob: Blob) => {
         if (blob.size < 1000) {
-            setError('Recording too short. Hold the button and speak your items.');
+            setError(copy.recordingTooShort);
             return;
         }
 
         setProcessing(true);
         setError(null);
-        setStatus('Transcribing…');
+        setStatus(copy.transcribing);
 
         try {
             const audioBase64 = await blobToBase64(blob);
@@ -120,20 +121,20 @@ export default function VoiceEntryInput({
             }
 
             if (result.items.length === 0) {
-                setError('Could not understand any products. Try speaking more clearly.');
+                setError(copy.notUnderstood);
                 return;
             }
 
             onResult(result);
             setStatus(null);
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to parse voice entry';
+            const message = err instanceof Error ? err.message : copy.parseFailed;
             setError(message);
             setStatus(null);
         } finally {
             setProcessing(false);
         }
-    }, [entryType, locale, onResult]);
+    }, [entryType, locale, onResult, copy]);
 
     const stopRecording = useCallback(() => {
         const recorder = recorderRef.current;
@@ -144,8 +145,8 @@ export default function VoiceEntryInput({
         }
         recorder.stop();
         setRecording(false);
-        setStatus('Processing…');
-    }, [cleanupStream]);
+        setStatus(copy.processing);
+    }, [cleanupStream, copy]);
 
     const startRecording = useCallback(async () => {
         setError(null);
@@ -168,7 +169,7 @@ export default function VoiceEntryInput({
             };
 
             recorder.onerror = () => {
-                setError('Recording failed. Please try again.');
+                setError(copy.recordingFailed);
                 setRecording(false);
                 cleanupStream();
             };
@@ -181,7 +182,7 @@ export default function VoiceEntryInput({
 
             recorder.start(250);
             setRecording(true);
-            setStatus('Recording… speak your items, then tap Stop');
+            setStatus(copy.recordingStatus);
 
             stopTimerRef.current = setTimeout(() => {
                 stopRecording();
@@ -189,12 +190,12 @@ export default function VoiceEntryInput({
         } catch (err: unknown) {
             cleanupStream();
             if (err instanceof DOMException && err.name === 'NotAllowedError') {
-                setError('Microphone permission denied. Allow mic access in your browser settings.');
+                setError(copy.micDenied);
             } else {
-                setError('Could not access microphone. Check browser permissions.');
+                setError(copy.micUnavailable);
             }
         }
-    }, [cleanupStream, processAudio, stopRecording]);
+    }, [cleanupStream, processAudio, stopRecording, copy]);
 
     const handleToggle = () => {
         if (processing || disabled) return;
@@ -217,7 +218,7 @@ export default function VoiceEntryInput({
             type="button"
             onClick={handleToggle}
             disabled={processing || disabled}
-            title={recording ? 'Stop and add items' : 'Record items by voice'}
+            title={recording ? copy.stopTitle : copy.recordTitle}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-sm font-medium transition-colors disabled:opacity-50 flex-shrink-0 ${
                 recording
                     ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
@@ -231,7 +232,7 @@ export default function VoiceEntryInput({
             ) : (
                 <Mic className="w-4 h-4" />
             )}
-            <span className="hidden sm:inline">{processing ? 'Parsing…' : recording ? 'Stop' : 'Voice'}</span>
+            <span className="hidden sm:inline">{processing ? copy.parsing : recording ? copy.stop : copy.voice}</span>
         </button>
     );
 
@@ -258,7 +259,7 @@ export default function VoiceEntryInput({
                     </div>
                 </div>
                 {recording && (
-                    <span className="text-[11px] text-red-600 animate-pulse px-0.5">Recording…</span>
+                    <span className="text-[11px] text-red-600 animate-pulse px-0.5">{copy.recording}</span>
                 )}
                 {statusLine}
             </div>
@@ -270,7 +271,7 @@ export default function VoiceEntryInput({
             <div className="flex items-center gap-2">
                 {voiceButton}
                 {recording && (
-                    <span className="text-xs text-red-600 animate-pulse">Recording…</span>
+                    <span className="text-xs text-red-600 animate-pulse">{copy.recording}</span>
                 )}
             </div>
             {statusLine}

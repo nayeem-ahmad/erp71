@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { routes } from '@/lib/routes';
+import { useI18n, formatMessage } from '@/lib/i18n';
 
 export type RateHistoryType = 'sale' | 'purchase';
 
@@ -215,30 +216,24 @@ function byDateDesc(a: RateHistoryRow, b: RateHistoryRow) {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
 }
 
-const LABELS = {
-    sale: {
-        heading: 'Previous sale rates',
-        partyless: 'Walk-in',
-        thisParty: 'This customer',
-        others: 'Other customers',
-        empty: 'No previous sales of this item.',
-        emptyForParty: 'No previous sales of this item to this customer.',
-        partyOnly: 'This customer only',
-        noParty: 'Select a customer to narrow the list',
-        docHref: (id: string) => routes.sales.detail(id),
-    },
-    purchase: {
-        heading: 'Previous purchase rates',
-        partyless: 'No supplier',
-        thisParty: 'This supplier',
-        others: 'Other suppliers',
-        empty: 'No previous purchases of this item.',
-        emptyForParty: 'No previous purchases of this item from this supplier.',
-        partyOnly: 'This supplier only',
-        noParty: 'Select a supplier to narrow the list',
-        docHref: (id: string) => routes.purchases.purchaseDetail(id),
-    },
-} as const;
+/** Where a row's document number links to. The wording lives in the catalog. */
+const DOC_HREF: Record<RateHistoryType, (id: string) => string> = {
+    sale: (id) => routes.sales.detail(id),
+    purchase: (id) => routes.purchases.purchaseDetail(id),
+};
+
+type RateHistoryLabels = {
+    heading: string;
+    partyless: string;
+    thisParty: string;
+    others: string;
+    empty: string;
+    emptyForParty: string;
+    partyOnly: string;
+    noParty: string;
+    useRate: string;
+    docHref: (id: string) => string;
+};
 
 function RateRow({
     row,
@@ -246,7 +241,7 @@ function RateRow({
     onPickRate,
 }: {
     row: RateHistoryRow;
-    labels: (typeof LABELS)[RateHistoryType];
+    labels: RateHistoryLabels;
     onPickRate?: (rate: number) => void;
 }) {
     const rate = (
@@ -263,7 +258,7 @@ function RateRow({
                     type="button"
                     onClick={() => onPickRate(row.rate)}
                     className="text-blue-600 hover:underline min-h-touch sm:min-h-0"
-                    title="Use this rate"
+                    title={labels.useRate}
                 >
                     {rate}
                 </button>
@@ -301,7 +296,9 @@ export default function RateHistory({
 }: RateHistoryProps) {
     const { data, loading } = useRateHistory(productId, type, partyId);
     const [partyOnlyChecked, setPartyOnlyChecked] = useRateHistoryPartyOnly();
-    const labels = LABELS[type];
+    const { t, locale } = useI18n();
+    const copy = t.components.documentEntry.rateHistory;
+    const labels: RateHistoryLabels = { ...copy[type], useRate: copy.useRate, docHref: DOC_HREF[type] };
     const checkboxId = useId();
     const inline = variant === 'inline';
 
@@ -333,7 +330,7 @@ export default function RateHistory({
     if (loading) {
         return (
             <div className="text-[11px] text-gray-400 py-1" role="status">
-                Loading previous rates…
+                {copy.loading}
             </div>
         );
     }
@@ -359,7 +356,7 @@ export default function RateHistory({
                 )}
                 {data?.summary && (
                     <span className="text-gray-400">
-                        avg {formatBDT(data.summary.avgRate)}
+                        {formatMessage(copy.average, { amount: formatBDT(data.summary.avgRate) }, locale)}
                         {data.summary.minRate !== data.summary.maxRate && (
                             <> · {formatBDT(data.summary.minRate)}–{formatBDT(data.summary.maxRate)}</>
                         )}

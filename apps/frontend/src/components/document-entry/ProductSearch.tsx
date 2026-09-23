@@ -5,6 +5,7 @@ import { Search, Plus, X, History } from 'lucide-react';
 import AnchoredDropdown from './AnchoredDropdown';
 import RateHistoryPopover from './RateHistoryPopover';
 import RateHistory, { lastRateFrom, useRateHistory, type RateHistoryType } from './RateHistory';
+import { useI18n, formatMessage } from '@/lib/i18n';
 
 interface ProductSearchProps {
     onProductSelect: (
@@ -46,14 +47,21 @@ export function availableQtyOf(product: any): number {
 
 export default function ProductSearch({
     onProductSelect,
-    priceLabel = 'Unit Price',
-    placeholder = 'Add product — search by name, SKU, or code…',
+    priceLabel: priceLabelProp,
+    placeholder: placeholderProp,
     initialPriceOf,
     historyType,
     seedPriceFromHistory = false,
     historyPartyId,
     historyPartyName,
 }: ProductSearchProps) {
+    const { t, locale } = useI18n();
+    const copy = t.components.documentEntry.productSearch;
+    const fmt = (template: string, values: Record<string, string | number>) =>
+        formatMessage(template, values, locale);
+    // Callers that word the fields keep their wording; the rest follow the locale.
+    const priceLabel = priceLabelProp ?? copy.unitPrice;
+    const placeholder = placeholderProp ?? copy.placeholder;
     const [query, setQuery] = useState('');
     const [products, setProducts] = useState<any[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -221,7 +229,7 @@ export default function ProductSearch({
                     stopping short of it on a wide screen. */}
                 <div className="w-full sm:w-auto sm:grow sm:shrink sm:basis-[180px] sm:min-w-[180px]">
                     <label htmlFor={productInputId} className="block text-[11px] text-gray-500 mb-0.5">
-                        Product
+                        {copy.product}
                     </label>
                     {/* The overlay icons and both panels hang off the input alone —
                         measured against the label as well they sat a caption's
@@ -243,7 +251,7 @@ export default function ProductSearch({
                             onFocus={() => { if (!staged) setShowDropdown(true); }}
                             onKeyDown={handleSearchKeyDown}
                             placeholder={placeholder}
-                            aria-label="Product"
+                            aria-label={copy.product}
                             className={`w-full ps-8 ${staged ? 'pe-8' : 'pe-3'} py-1.5 border rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent ${staged ? 'bg-blue-50 border-blue-200 font-medium text-gray-900' : ''}`}
                         />
                         {staged && (
@@ -251,8 +259,8 @@ export default function ProductSearch({
                                 type="button"
                                 onClick={() => { clearStaged(); inputRef.current?.focus(); }}
                                 className="absolute end-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                                title="Clear product"
-                                aria-label="Clear product"
+                                title={copy.clearProduct}
+                                aria-label={copy.clearProduct}
                             >
                                 <X className="w-4 h-4" />
                             </button>
@@ -262,14 +270,14 @@ export default function ProductSearch({
                         {showDropdown && !staged && (
                             <AnchoredDropdown anchorRef={inputRef} panelRef={dropdownRef} maxHeight={320}>
                                 {loading ? (
-                                    <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
+                                    <div className="p-3 text-center text-gray-500 text-sm">{copy.searching}</div>
                                 ) : products.length === 0 ? (
-                                    <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
+                                    <div className="p-3 text-center text-gray-500 text-sm">{copy.noProducts}</div>
                                 ) : (
                                     <>
                                         {!query.trim() && (
                                             <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b sticky top-0">
-                                                Popular products
+                                                {copy.popular}
                                             </div>
                                         )}
                                         {products.map((product, index) => {
@@ -285,12 +293,12 @@ export default function ProductSearch({
                                                     <div className="flex-1 min-w-0">
                                                         <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
                                                         <div className="text-xs text-gray-600">
-                                                            SKU: {product.sku || 'N/A'} | ৳{Number(product.price).toFixed(2)}
+                                                            {fmt(copy.sku, { sku: product.sku || copy.notAvailable })} | ৳{Number(product.price).toFixed(2)}
                                                             <span className={`ms-2 ${stock > 0 ? 'text-gray-500' : 'text-red-600'}`}>
-                                                                Avail: {stock}
+                                                                {fmt(copy.avail, { count: stock })}
                                                             </span>
                                                             {product.qty_sold > 0 && (
-                                                                <span className="text-emerald-600 ms-2">{product.qty_sold} sold</span>
+                                                                <span className="text-emerald-600 ms-2">{fmt(copy.sold, { count: product.qty_sold })}</span>
                                                             )}
                                                             {product.subgroup && (
                                                                 <span className="text-gray-400 ms-2">{product.group?.name} → {product.subgroup.name}</span>
@@ -350,7 +358,7 @@ export default function ProductSearch({
                     </label>
 
                     <label className="flex flex-col gap-0.5">
-                        <span className="text-[11px] text-gray-500">Qty</span>
+                        <span className="text-[11px] text-gray-500">{copy.qty}</span>
                         <input
                             type="number"
                             min="0"
@@ -359,7 +367,7 @@ export default function ProductSearch({
                             disabled={!staged}
                             onChange={(e) => setStagedQty(e.target.value)}
                             onKeyDown={handleStagedKeyDown}
-                            aria-label="Qty"
+                            aria-label={copy.qty}
                             className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && stagedQtyNum > stagedAvailable ? 'border-amber-400 text-amber-700' : ''}`}
                         />
                     </label>
@@ -370,7 +378,7 @@ export default function ProductSearch({
                         disabled={!staged}
                         className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 min-h-touch sm:min-h-0"
                     >
-                        Add
+                        {copy.add}
                     </button>
 
                     {historyType && (
@@ -379,8 +387,8 @@ export default function ProductSearch({
                             type="button"
                             onClick={() => setShowHistory((open) => !open)}
                             disabled={!staged}
-                            title={staged ? 'Previous rates' : 'Pick a product to see its previous rates'}
-                            aria-label="Previous rates"
+                            title={staged ? copy.previousRates : copy.pickProductForRates}
+                            aria-label={copy.previousRates}
                             className="px-2 py-1.5 rounded border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 disabled:text-gray-300 disabled:border-gray-200 disabled:hover:bg-transparent min-h-touch sm:min-h-0"
                         >
                             <History className="w-4 h-4" />
@@ -419,14 +427,14 @@ export default function ProductSearch({
                 three inputs stay on one line at every width. */}
             {staged && (
                 <div className="text-[11px] text-gray-600">
-                    SKU: {staged.sku || 'N/A'}
+                    {fmt(copy.sku, { sku: staged.sku || copy.notAvailable })}
                     <span className="mx-1.5 text-gray-300">·</span>
                     <span className={stagedAvailable > 0 ? '' : 'text-red-600'}>
-                        Available {stagedAvailable}
+                        {fmt(copy.available, { count: stagedAvailable })}
                     </span>
                     {stagedQtyNum > stagedAvailable && (
                         <span className="ms-1.5 text-amber-600">
-                            — entering more than is in stock
+                            {copy.overStock}
                         </span>
                     )}
                 </div>

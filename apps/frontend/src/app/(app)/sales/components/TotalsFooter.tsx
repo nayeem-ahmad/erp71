@@ -1,4 +1,5 @@
 import type { DiscountMode } from './SaleEntryLayout';
+import { useI18n } from '@/lib/i18n';
 
 interface TotalsFooterProps {
     totals: {
@@ -54,9 +55,14 @@ export default function TotalsFooter({
     previousDue = 0,
     readOnly = false,
     showAdjustments = true,
-    totalLabel = 'Total',
-    roundingLabel = 'Rounding',
+    totalLabel: totalLabelProp,
+    roundingLabel: roundingLabelProp,
 }: TotalsFooterProps) {
+    const { t, fmt } = useI18n();
+    const copy = t.sales.entry.totals;
+    // Explicit labels still win; the defaults follow the active locale.
+    const totalLabel = totalLabelProp ?? copy.total;
+    const roundingLabel = roundingLabelProp ?? copy.rounding;
     const inputClass = 'w-16 px-1.5 py-0.5 border rounded text-xs text-end';
     const amount = (value: number) => `৳${value.toFixed(2)}`;
     const percent = (value: number) => `${value.toFixed(2)}%`;
@@ -85,21 +91,21 @@ export default function TotalsFooter({
         if (Math.abs(totals.discount) > 0.005) {
             rows.push({
                 label: totals.discountPercent > 0.005
-                    ? `Discount (${percent(totals.discountPercent)})`
-                    : 'Discount',
+                    ? fmt(copy.discountWithPercent, { percent: percent(totals.discountPercent) })
+                    : copy.discount,
                 value: -totals.discount,
                 className: 'text-red-600',
             });
         }
-        if (Math.abs(totals.transportCost) > 0.005) rows.push({ label: 'Transport', value: totals.transportCost });
-        if (Math.abs(totals.laborCost) > 0.005) rows.push({ label: 'Labor', value: totals.laborCost });
+        if (Math.abs(totals.transportCost) > 0.005) rows.push({ label: copy.transport, value: totals.transportCost });
+        if (Math.abs(totals.laborCost) > 0.005) rows.push({ label: copy.labor, value: totals.laborCost });
         if (Math.abs(totals.rounding) > 0.005) rows.push({ label: roundingLabel, value: totals.rounding });
     }
 
     return (
         <div className="space-y-1.5 text-sm">
             <div className="flex justify-between items-center">
-                <span className="text-gray-500">Subtotal</span>
+                <span className="text-gray-500">{copy.subtotal}</span>
                 <span className="font-medium">{amount(totals.subtotal)}</span>
             </div>
 
@@ -119,9 +125,9 @@ export default function TotalsFooter({
                         row, so both figures are on screen at all times. */}
                     <div>
                         <div className="flex justify-between items-center gap-2">
-                            <span className="text-gray-500 whitespace-nowrap">Discount</span>
+                            <span className="text-gray-500 whitespace-nowrap">{copy.discount}</span>
                             <div className="flex items-center gap-2">
-                                <div className="flex items-center rounded border overflow-hidden" role="group" aria-label="Discount unit">
+                                <div className="flex items-center rounded border overflow-hidden" role="group" aria-label={copy.discountUnit}>
                                     {(['PERCENT', 'AMOUNT'] as const).map((mode) => {
                                         const isActive = mode === (byAmount ? 'AMOUNT' : 'PERCENT');
                                         return (
@@ -129,7 +135,7 @@ export default function TotalsFooter({
                                                 key={mode}
                                                 type="button"
                                                 aria-pressed={isActive}
-                                                title={mode === 'PERCENT' ? 'Discount by percentage' : 'Discount by amount'}
+                                                title={mode === 'PERCENT' ? copy.discountByPercent : copy.discountByAmount}
                                                 onClick={() => switchDiscountMode(mode)}
                                                 className={`px-2 py-1 text-xs leading-none ${
                                                     isActive ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'
@@ -145,7 +151,7 @@ export default function TotalsFooter({
                                         type="number"
                                         min="0"
                                         step="0.01"
-                                        aria-label="Discount amount"
+                                        aria-label={copy.discountAmount}
                                         value={totals.discountAmount ?? 0}
                                         onChange={(e) => onTotalsChange({ discountAmount: Math.max(0, parseFloat(e.target.value) || 0) })}
                                         className={inputClass}
@@ -156,7 +162,7 @@ export default function TotalsFooter({
                                         min="0"
                                         max="100"
                                         step="0.01"
-                                        aria-label="Discount percent"
+                                        aria-label={copy.discountPercent}
                                         value={totals.discountPercent}
                                         onChange={(e) => onTotalsChange({ discountPercent: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
                                         className={inputClass}
@@ -171,13 +177,13 @@ export default function TotalsFooter({
                         </div>
                         {discountCapped && (
                             <p className="mt-1 text-xs text-red-600 text-end">
-                                Capped at the {amount(totals.subtotal)} subtotal.
+                                {fmt(copy.discountCapped, { amount: amount(totals.subtotal) })}
                             </p>
                         )}
                     </div>
 
                     <div className="flex justify-between items-center gap-2">
-                        <span className="text-gray-500 whitespace-nowrap">Transport</span>
+                        <span className="text-gray-500 whitespace-nowrap">{copy.transport}</span>
                         <input
                             type="number"
                             min="0"
@@ -189,7 +195,7 @@ export default function TotalsFooter({
                     </div>
 
                     <div className="flex justify-between items-center gap-2">
-                        <span className="text-gray-500 whitespace-nowrap">Labor</span>
+                        <span className="text-gray-500 whitespace-nowrap">{copy.labor}</span>
                         <input
                             type="number"
                             min="0"
@@ -223,7 +229,7 @@ export default function TotalsFooter({
                 grey, so it cannot be read as one more thing being charged. */}
             {showAdjustments && totals.vat > 0.005 && (
                 <div className="flex justify-between items-center text-xs text-gray-500">
-                    <span>Incl. VAT</span>
+                    <span>{copy.inclVat}</span>
                     <span>{amount(totals.vat)}</span>
                 </div>
             )}
@@ -232,7 +238,7 @@ export default function TotalsFooter({
                 only; it is never rolled into the sale total. */}
             {previousDue > 0.005 && (
                 <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Previous Due</span>
+                    <span className="text-gray-500">{copy.previousDue}</span>
                     <span className="font-medium text-amber-600">{amount(previousDue)}</span>
                 </div>
             )}

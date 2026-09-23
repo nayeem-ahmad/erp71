@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useId, type ReactNode } from 
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { X, Search } from 'lucide-react';
 import AnchoredDropdown from './AnchoredDropdown';
+import { useI18n } from '@/lib/i18n';
 
 export interface PartyOption {
     id: string;
@@ -60,12 +61,18 @@ export default function PartySearchSelect({
     summary,
     subtitle = defaultSubtitle,
     action,
-    emptyLabel = 'Start typing to search',
-    noMatchLabel = 'No matches found',
-    clearLabel = 'Clear selection',
+    emptyLabel: emptyLabelProp,
+    noMatchLabel: noMatchLabelProp,
+    clearLabel: clearLabelProp,
     readOnly = false,
     readOnlyFallback = '—',
 }: PartySearchSelectProps) {
+    const { t } = useI18n();
+    const copy = t.components.documentEntry.partySearch;
+    // Callers that word these keep their wording; the rest follow the locale.
+    const emptyLabel = emptyLabelProp ?? copy.startTyping;
+    const noMatchLabel = noMatchLabelProp ?? copy.noMatches;
+    const clearLabel = clearLabelProp ?? copy.clearSelection;
     const [query, setQuery] = useState('');
     const [filtered, setFiltered] = useState<PartyOption[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -192,7 +199,7 @@ export default function PartySearchSelect({
                         {showDropdown && (
                             <AnchoredDropdown anchorRef={inputRef} panelRef={dropdownRef} maxHeight={256}>
                                 {loading ? (
-                                    <div className="p-3 text-center text-gray-500 text-sm">Loading...</div>
+                                    <div className="p-3 text-center text-gray-500 text-sm">{copy.loading}</div>
                                 ) : filtered.length === 0 ? (
                                     <div className="p-3 text-center text-gray-500 text-sm">
                                         {query ? noMatchLabel : emptyLabel}

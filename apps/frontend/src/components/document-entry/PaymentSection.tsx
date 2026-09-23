@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import type { Payment, PaymentInstrument } from '@/lib/hooks/useNewSaleCart';
 import { instrumentSummary, paymentInstrumentSummary, pickInstrument } from '@/lib/payment-instrument';
+import { useI18n } from '@/lib/i18n';
 
 /**
  * The tender strip shared by sale and purchase entry: one amount box per
@@ -60,6 +61,14 @@ const GENERIC_METHODS = [
 ];
 
 const canonicalFor = (type: string) => TYPE_TO_CANONICAL[type] ?? 'Cash';
+
+/** Catalog key naming each generic fallback method on screen. */
+const GENERIC_METHOD_LABEL: Record<string, 'cash' | 'mobileWallet' | 'card' | 'bank'> = {
+    'Cash': 'cash',
+    'Mobile Wallet': 'mobileWallet',
+    'Card': 'card',
+    'Bank': 'bank',
+};
 
 type PickMethod = { key: string; name: string; type: string; account_id?: string; inactive?: boolean };
 
@@ -197,6 +206,7 @@ export interface PaymentSectionLabels {
     instrumentPaymentDate: string;
 }
 
+/** The English wording. On screen the active locale's catalog replaces it. */
 export const DEFAULT_PAYMENT_SECTION_LABELS: PaymentSectionLabels = {
     title: 'Payment',
     settled: '✓ Settled',
@@ -264,7 +274,22 @@ export default function PaymentSection({
     const [openInstruments, setOpenInstruments] = useState<string[]>([]); // keys whose panel is expanded
     const [added, setAdded] = useState<string[]>([]); // ids explicitly added via picker
 
-    const copy = useMemo(() => ({ ...DEFAULT_PAYMENT_SECTION_LABELS, ...labels }), [labels]);
+    const { t } = useI18n();
+    const catalog = t.components.documentEntry.payment;
+    // Explicit labels win, then the active locale, then the English defaults.
+    const copy = useMemo(() => {
+        const { methods: _methods, ...localized } = catalog;
+        return { ...DEFAULT_PAYMENT_SECTION_LABELS, ...localized, ...labels };
+    }, [catalog, labels]);
+    /**
+     * What a method is called on screen. Only the generic fallbacks are
+     * translated: a tenant's own method names are theirs, and `m.name` itself
+     * is what matches a saved payment back to its row, so it never changes.
+     */
+    const methodName = (m: PickMethod) => {
+        const key = m.key.startsWith('generic-') ? GENERIC_METHOD_LABEL[m.type] : undefined;
+        return key ? catalog.methods[key] : m.name;
+    };
 
     useEffect(() => {
         // Read-only renders the recorded payments verbatim — no picker to fill.
@@ -381,8 +406,8 @@ export default function PaymentSection({
         return (
             <div key={m.key} className="space-y-1.5">
                 <div className="flex items-center gap-2">
-                    <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700" title={m.name}>
-                        {m.name}
+                    <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-700" title={methodName(m)}>
+                        {methodName(m)}
                         {m.inactive ? <span className="text-gray-400 font-normal text-xs ms-1">{copy.inactive}</span> : null}
                     </span>
                     <input
@@ -392,7 +417,7 @@ export default function PaymentSection({
                         value={amounts[m.key] || ''}
                         onChange={(e) => updateAmount(m.key, parseFloat(e.target.value) || 0)}
                         placeholder="0.00"
-                        aria-label={copy.amount.replace('{method}', m.name)}
+                        aria-label={copy.amount.replace('{method}', methodName(m))}
                         className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end"
                     />
                 </div>
@@ -416,7 +441,7 @@ export default function PaymentSection({
                                             type={field.type ?? 'text'}
                                             value={detail?.[field.key] ?? ''}
                                             onChange={(e) => updateInstrument(m.key, field.key, e.target.value)}
-                                            aria-label={`${m.name} ${copy[field.label]}`}
+                                            aria-label={`${methodName(m)} ${copy[field.label]}`}
                                             className="mt-0.5 w-full rounded border px-2 py-1 text-sm text-gray-900 max-md:min-h-touch"
                                         />
                                     </label>

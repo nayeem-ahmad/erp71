@@ -14,6 +14,7 @@ import PaymentSection from './PaymentSection';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import type { VoiceEntryResult } from '@/lib/voice-entry';
 import { lineNetTotal, netUnitPrice, type LineItem, type Payment } from '@/lib/hooks/useNewSaleCart';
+import { useI18n } from '@/lib/i18n';
 
 /**
  * Which of the two discount figures the user is typing. Shops that negotiate
@@ -230,6 +231,7 @@ export default function SaleEntryLayout({
     headerActions,
     onSubmit,
 }: SaleEntryLayoutProps) {
+    const { t } = useI18n();
     // Only meaningful while a rate is still being decided, and the customer is
     // what puts their own past rates at the top of the list.
     const history = showRateHistory && !readOnly
@@ -308,15 +310,15 @@ export default function SaleEntryLayout({
             note={
                 readOnly ? (
                     <p className="w-full rounded border bg-white px-2 py-1.5 text-sm text-gray-600 flex-shrink-0">
-                        {description || <span className="text-gray-400">No note added</span>}
+                        {description || <span className="text-gray-400">{t.shared.empty.noNote}</span>}
                     </p>
                 ) : (
                     <input
                         type="text"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Note (optional)…"
-                        aria-label="Note"
+                        placeholder={t.sales.entry.notePlaceholder}
+                        aria-label={t.sales.entry.note}
                         className="w-full border rounded px-2 py-1.5 text-sm flex-shrink-0"
                     />
                 )
