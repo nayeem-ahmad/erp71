@@ -13,6 +13,7 @@ import {
     type StatusBadgeTone,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { EpicBadge, type EpicChip } from '@/components/projects/ProjectEpicsCard';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -38,6 +39,10 @@ export interface UserStory {
     status: string;
     priority: string;
     story_points?: number | null;
+    project_id?: string;
+    epic_id?: string | null;
+    /** The epic it is filed under, as the list returns it for the chip. */
+    epic?: EpicChip | null;
     progress?: { taskCount: number; doneTaskCount: number; percentComplete: number };
     tasks?: StoryTask[];
 }
@@ -64,6 +69,7 @@ const EMPTY_FORM = {
     status: 'BACKLOG',
     priority: 'MEDIUM',
     storyPoints: '',
+    epicId: '',
 };
 
 type StoryForm = typeof EMPTY_FORM;
@@ -79,6 +85,7 @@ const formOf = (story: UserStory): StoryForm => ({
     status: story.status,
     priority: story.priority,
     storyPoints: story.story_points == null ? '' : String(story.story_points),
+    epicId: story.epic_id ?? story.epic?.id ?? '',
 });
 
 /**
@@ -99,6 +106,7 @@ export default function ProjectStoriesCard({
     onTasksChanged,
     onOpenTask,
     openStoryId,
+    epics,
 }: {
     projectId: string;
     /** Prefix of a new story's default ID — `OTB` for `OTB-4`. */
@@ -118,6 +126,8 @@ export default function ProjectStoriesCard({
      * opens a story rather than pinning one open.
      */
     openStoryId?: string | null;
+    /** The project's epics, for the story form's picker. */
+    epics?: EpicChip[];
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -188,6 +198,7 @@ export default function ProjectStoriesCard({
                     projectId={projectId}
                     projectCode={projectCode}
                     story={editing === 'new' ? null : editing}
+                    epics={epics}
                     onClose={() => setEditing(null)}
                     onSaved={async () => {
                         setEditing(null);
@@ -297,6 +308,7 @@ function StoryRow({
                         {story.title}
                     </span>
                 </button>
+                {story.epic && <EpicBadge epic={story.epic} className="hidden md:inline-flex" />}
                 {story.story_points != null && (
                     <span className="hidden shrink-0 text-xs text-gray-500 md:inline">
                         {fmt(m.stories.pointsShort, { points: story.story_points })}
@@ -426,6 +438,7 @@ export function StoryFormModal({
     projects,
     initialProjectId,
     story,
+    epics,
     onClose,
     onSaved,
 }: {
@@ -439,6 +452,11 @@ export function StoryFormModal({
     initialProjectId?: string;
     /** Null for a new story. */
     story: UserStory | null;
+    /**
+     * The epics the story can be filed under. Omit and the modal reads the
+     * target project's own — the cross-project list does not have them.
+     */
+    epics?: EpicChip[];
     onClose: () => void;
     onSaved: () => void | Promise<void>;
 }) {
@@ -458,6 +476,28 @@ export function StoryFormModal({
     const pickProject = !story && !projectId;
     const targetProjectId = projectId ?? form.projectId;
     const prefix = projectCode ?? projects?.find((project) => project.id === targetProjectId)?.code;
+
+    // An epic is per project, so the picker follows the project the story is in.
+    const [fetchedEpics, setFetchedEpics] = useState<EpicChip[]>([]);
+    const epicProjectId = story?.project_id ?? targetProjectId;
+    useEffect(() => {
+        if (epics || !epicProjectId) {
+            setFetchedEpics([]);
+            return;
+        }
+        let live = true;
+        api.getProjectEpics({ projectId: epicProjectId })
+            .then((rows: unknown) => {
+                if (live) setFetchedEpics(Array.isArray(rows) ? (rows as EpicChip[]) : []);
+            })
+            .catch(() => {
+                if (live) setFetchedEpics([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [epics, epicProjectId]);
+    const epicOptions = epics ?? fetchedEpics;
 
     const save = async (event: React.FormEvent) => {
         event.preventDefault();
@@ -487,6 +527,8 @@ export function StoryFormModal({
                 // `null`, not `''`: an empty string would arrive as a genuine
                 // zero — a story sized at nothing rather than one nobody sized.
                 storyPoints: form.storyPoints === '' ? null : Number(form.storyPoints),
+                // `''` takes an edited story out of its epic; a new one just has none.
+                ...(story || form.epicId ? { epicId: form.epicId } : {}),
             };
             if (story) await api.updateProjectStory(story.id, payload);
             else await api.createProjectStory({ ...payload, projectId: targetProjectId });
@@ -528,7 +570,8 @@ export function StoryFormModal({
                                     error={Boolean(errors.projectId)}
                                     onChange={(e) => {
                                         clearError('projectId');
-                                        set({ projectId: e.target.value });
+                                        // The chosen epic belonged to the old project.
+                                        set({ projectId: e.target.value, epicId: '' });
                                     }}
                                 >
                                     <option value="">{m.stories.pickProject}</option>
@@ -663,10 +706,26 @@ export function StoryFormModal({
                             to four lines and pushed the whole column down. */}
                         <p className="-mt-1 text-xs text-gray-500">{m.stories.pointsHint}</p>
 
+                        <Field label={m.epics.field} htmlFor="story-epic">
+                            <Select
+                                id="story-epic"
+                                value={form.epicId}
+                                disabled={!epicProjectId}
+                                onChange={(e) => set({ epicId: e.target.value })}
+                            >
+                                <option value="">{m.epics.none}</option>
+                                {epicOptions.map((epic) => (
+                                    <option key={epic.id} value={epic.id}>
+                                        {epic.code} · {epic.title}
+                                    </option>
+                                ))}
+                            </Select>
+                        </Field>
+
                         <Field label={m.stories.acceptance} htmlFor="story-acceptance">
                             <Textarea
                                 id="story-acceptance"
-                                rows={pickProject ? 16 : 11}
+                                rows={pickProject ? 12 : 8}
                                 maxLength={5000}
                                 value={form.acceptanceCriteria}
                                 placeholder={m.stories.acceptancePlaceholder}

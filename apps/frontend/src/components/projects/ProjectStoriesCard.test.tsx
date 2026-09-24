@@ -6,6 +6,7 @@ const createProjectStory = jest.fn().mockResolvedValue({});
 const updateProjectStory = jest.fn().mockResolvedValue({});
 const createProjectTask = jest.fn().mockResolvedValue({});
 const deleteProjectStory = jest.fn().mockResolvedValue({ success: true });
+const getProjectEpics = jest.fn().mockResolvedValue([]);
 const onStoriesChanged = jest.fn();
 
 jest.mock('@/lib/api', () => ({
@@ -15,6 +16,7 @@ jest.mock('@/lib/api', () => ({
         updateProjectStory: (...args: unknown[]) => updateProjectStory(...args),
         deleteProjectStory: (...args: unknown[]) => deleteProjectStory(...args),
         createProjectTask: (...args: unknown[]) => createProjectTask(...args),
+        getProjectEpics: (...args: unknown[]) => getProjectEpics(...args),
     },
 }));
 
@@ -130,6 +132,39 @@ describe('ProjectStoriesCard', () => {
         expect(createProjectStory).toHaveBeenCalledWith(
             expect.objectContaining({ projectId: 'p1', title: 'Refunds', storyPoints: null }),
         );
+    });
+
+    it('files a new story under the epic picked from the page’s own list', async () => {
+        renderCard({
+            stories: [],
+            epics: [{ id: 'epic-1', code: 'OTB-E1', title: 'Online payments', color: 'BLUE' }],
+        });
+
+        fireEvent.click(await screen.findByText('New user story'));
+        fireEvent.change(screen.getByLabelText(/Title/), { target: { value: 'Refunds' } });
+        fireEvent.change(screen.getByLabelText('Epic'), { target: { value: 'epic-1' } });
+        fireEvent.click(screen.getByText('Save'));
+
+        await waitFor(() => expect(createProjectStory).toHaveBeenCalled());
+        expect(createProjectStory).toHaveBeenCalledWith(
+            expect.objectContaining({ projectId: 'p1', epicId: 'epic-1' }),
+        );
+        // Handed the list, the form does not fetch a second copy.
+        expect(getProjectEpics).not.toHaveBeenCalled();
+    });
+
+    it('takes an edited story out of its epic with an empty epic', async () => {
+        const epic = { id: 'epic-1', code: 'OTB-E1', title: 'Online payments', color: 'BLUE' };
+        renderCard({ stories: [story({ epic_id: 'epic-1', epic })], epics: [epic] });
+
+        // The chip says which epic the story is in, without opening it.
+        expect(await screen.findByText('OTB-E1')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Edit story' }));
+        fireEvent.change(screen.getByLabelText('Epic'), { target: { value: '' } });
+        fireEvent.click(screen.getByText('Save'));
+
+        await waitFor(() => expect(updateProjectStory).toHaveBeenCalled());
+        expect(updateProjectStory).toHaveBeenCalledWith('story-1', expect.objectContaining({ epicId: '' }));
     });
 
     it('refuses to save a story with no title', async () => {
