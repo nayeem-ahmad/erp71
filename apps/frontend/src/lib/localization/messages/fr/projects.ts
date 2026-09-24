@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: "Démarrer",
         stop: "Arrêter",
         elsewhere: "Un minuteur tourne déjà sur une autre tâche",
+        idleHint: "Rien en cours. Cliquez pour démarrer un minuteur ou saisir du temps.",
+        startedAt: "Démarré à",
+        clickToOpen: "Cliquez pour ouvrir le suivi",
     },
 
     remaining: {

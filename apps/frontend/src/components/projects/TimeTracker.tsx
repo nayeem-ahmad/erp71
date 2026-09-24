@@ -16,6 +16,7 @@ import TimeTrackerForm, {
     type ManualLogInput,
 } from './TimeTrackerForm';
 import { useProjectTimerActions } from './use-project-timer';
+import { findTimerAnchor } from './TimerChip';
 
 /** Where the panel's position is remembered. Changing it forgets everybody's. */
 const POSITION_KEY = 'time-tracker';
@@ -37,8 +38,10 @@ const errorText = (error: unknown, fallback: string): string =>
  * writing a note, attaching tags, and logging time by hand, none of which fits
  * in a header.
  *
- * So it is shown on request and hidden otherwise, running or not. It can still
- * be dragged wherever it is least in the way and collapsed to its header.
+ * So it is shown on request and hidden otherwise, running or not. It opens
+ * just below the chip — the header's other actions step aside while it is
+ * open — and can still be dragged wherever it is least in the way and
+ * collapsed to its header.
  */
 export default function TimeTracker() {
     const { t } = useI18n();
@@ -78,6 +81,18 @@ export default function TimeTracker() {
     useEffect(() => {
         load();
     }, [load]);
+
+    // Escape closes it: with the header's other actions stepped aside while it
+    // is open, the way back to them should not depend on finding the X. Not
+    // while the overlap question is up — Escape there answers the dialog.
+    useEffect(() => {
+        if (!visible || pendingOverlap) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && !event.defaultPrevented) setOpen(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [visible, pendingOverlap, setOpen]);
 
     // A panel folded away and then closed should not come back folded: the next
     // person to open it asked for the tracker, not for its title bar.
@@ -195,6 +210,7 @@ export default function TimeTracker() {
         <>
             <FloatingPanel
                 storageKey={POSITION_KEY}
+                anchor={findTimerAnchor}
                 title={hl.tracker}
                 collapsed={collapsed}
                 onToggleCollapse={() => setCollapsed((value) => !value)}

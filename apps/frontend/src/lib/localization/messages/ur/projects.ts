@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: "شروع",
         stop: "روکیں",
         elsewhere: "کسی اور کام پر ٹائمر پہلے سے چل رہا ہے",
+        idleHint: "کچھ نہیں چل رہا۔ ٹائمر شروع کرنے یا وقت درج کرنے کے لیے کلک کریں۔",
+        startedAt: "شروع ہوا",
+        clickToOpen: "ٹریکر کھولنے کے لیے کلک کریں",
     },
 
     remaining: {

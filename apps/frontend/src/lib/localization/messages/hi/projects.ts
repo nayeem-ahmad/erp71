@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: "शुरू करें",
         stop: "रोकें",
         elsewhere: "किसी अन्य कार्य पर टाइमर पहले से चल रहा है",
+        idleHint: "कुछ नहीं चल रहा। टाइमर शुरू करने या समय लॉग करने के लिए क्लिक करें।",
+        startedAt: "शुरू हुआ",
+        clickToOpen: "ट्रैकर खोलने के लिए क्लिक करें",
     },
 
     remaining: {

@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: 'Mula',
         stop: 'Henti',
         elsewhere: 'Pemasa sedang berjalan pada tugasan lain',
+        idleHint: 'Tiada yang berjalan. Klik untuk memulakan pemasa atau log masa.',
+        startedAt: 'Bermula pada',
+        clickToOpen: 'Klik untuk membuka penjejak',
     },
 
     remaining: {
