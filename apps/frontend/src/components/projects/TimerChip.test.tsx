@@ -110,6 +110,22 @@ describe('TimerChip', () => {
         expect(useProjectTimerStore.getState().open).toBe(true);
     });
 
+    it('resyncs with the server when the tab becomes visible again', async () => {
+        // The local half of the clock drifts if the device clock moves (sleep,
+        // an OS time correction); coming back to the tab puts it right without
+        // a reload.
+        useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
+        getProjectTimer.mockResolvedValue(running({ elapsed_seconds: 7200 }));
+        render(<TimerChip />);
+        expect(getProjectTimer).not.toHaveBeenCalled();
+
+        act(() => {
+            document.dispatchEvent(new Event('visibilitychange'));
+        });
+
+        await waitFor(() => expect(screen.getByText('2:00:00')).toBeInTheDocument());
+    });
+
     it('asks the server once when the store has not loaded yet', async () => {
         useProjectTimerStore.setState({ timer: null, loaded: false });
         render(<TimerChip />);
