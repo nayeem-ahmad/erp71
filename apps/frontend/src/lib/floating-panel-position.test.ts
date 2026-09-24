@@ -1,4 +1,5 @@
 import {
+    anchoredPanelPosition,
     clampPanelPosition,
     defaultPanelPosition,
     readPanelPosition,
@@ -42,6 +43,23 @@ describe('defaultPanelPosition', () => {
 
     it('opens in the bottom-left corner when the document reads the other way', () => {
         expect(defaultPanelPosition(panel, viewport, { rtl: true })).toEqual({ x: 8, y: 552 });
+    });
+});
+
+describe('anchoredPanelPosition', () => {
+    const chip = { left: 1000, right: 1100, bottom: 48 };
+
+    it('opens just below the control, its end edge lined up with the control', () => {
+        expect(anchoredPanelPosition(chip, panel, viewport)).toEqual({ x: 1100 - 352, y: 52 });
+    });
+
+    it('lines up the start edges when the document reads the other way', () => {
+        expect(anchoredPanelPosition({ left: 40, right: 140, bottom: 48 }, panel, viewport, { rtl: true }))
+            .toEqual({ x: 40, y: 52 });
+    });
+
+    it('slides back on screen rather than hanging off the edge', () => {
+        expect(anchoredPanelPosition({ left: 20, right: 60, bottom: 48 }, panel, viewport)).toEqual({ x: 8, y: 52 });
     });
 });
 

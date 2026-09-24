@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: 'শুরু',
         stop: 'থামান',
         elsewhere: 'অন্য একটি কাজে টাইমার চলছে',
+        idleHint: 'কিছু চলছে না। টাইমার শুরু বা সময় লগ করতে ক্লিক করুন।',
+        startedAt: 'শুরু',
+        clickToOpen: 'ট্র্যাকার খুলতে ক্লিক করুন',
     },
 
     remaining: {

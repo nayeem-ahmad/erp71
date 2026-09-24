@@ -203,6 +203,42 @@ describe('The floating time tracker', () => {
             await waitFor(() => expect(panel).toHaveStyle({ left: '120px', top: '80px' }));
         });
 
+        /**
+         * Opened from the header chip, it drops out of the chip rather than
+         * appearing wherever it was last left — and remembers nothing, because
+         * the next opening belongs under the chip again.
+         */
+        it('opens just below the header chip when the chip is on screen', async () => {
+            const chip = document.createElement('div');
+            chip.setAttribute('data-timer-anchor', '');
+            document.body.appendChild(chip);
+            try {
+                jest.spyOn(chip, 'getBoundingClientRect').mockReturnValue({
+                    left: 900, right: 1000, top: 12, bottom: 48, width: 100, height: 36, x: 900, y: 12,
+                    toJSON: () => ({}),
+                } as DOMRect);
+                givePanelABox({ left: 0, top: 0, width: 384, height: 240 });
+                window.localStorage.setItem('floating-panel:time-tracker', '{"x":120,"y":80}');
+                openTracker();
+                render(<TimeTracker />);
+
+                const panel = await screen.findByRole('region', { name: 'Time tracker' });
+                await waitFor(() => expect(panel).toHaveStyle({ left: '616px', top: '52px' }));
+            } finally {
+                chip.remove();
+            }
+        });
+
+        it('closes on Escape', async () => {
+            openTracker();
+            render(<TimeTracker />);
+            await screen.findByRole('region', { name: 'Time tracker' });
+
+            fireEvent.keyDown(window, { key: 'Escape' });
+
+            expect(useProjectTimerStore.getState().open).toBe(false);
+        });
+
         it('follows a pointer dragging its header, and remembers where it was dropped', async () => {
             givePanelABox({ left: 100, top: 100, width: 352, height: 240 });
             openTracker();
