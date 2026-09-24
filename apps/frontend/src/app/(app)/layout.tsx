@@ -48,12 +48,19 @@ import {
     getLoginContexts,
     isShopWorkspacePath,
 } from '@/lib/auth-session';
+import {
+    SESSION_CONFIRM_MAX_RETRIES,
+    handleUnconfirmedSession,
+    isUnconfirmedSessionError,
+    sessionConfirmRetryDelayMs,
+} from '@/lib/session-expiry';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { clampLocaleToTenant } from '@/lib/tenant-locales';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { isPosEnabled } from '@/lib/sales-settings';
+import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { getLastTenantId, getWorkspaceItem, removeWorkspaceItem, setWorkspaceItem } from '@/lib/session-store';
 
 type DashboardLayoutProps = Readonly<{ children: React.ReactNode }>;
@@ -152,7 +159,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }, [hasResolvedUser, pathname, router, user]);
 
     useEffect(() => {
-        api.getMe().then((me) => {
+        let cancelled = false;
+        let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const loadMe = (attempt: number) => api.getMe().then((me) => {
+            if (cancelled) return;
+            setHasResolvedUser(true);
             // A tab that resumed from `last_tenant_id` may be pointing at a shop
             // this account no longer belongs to. Correct it against the real
             // membership list rather than letting the header carry a stale id.
@@ -186,8 +198,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             if (me?.is_demo) {
                 localStorage.setItem('demo_session', '1');
             }
-        }).catch(() => null)
-            .finally(() => setHasResolvedUser(true));
+        }, (error) => {
+            if (cancelled) return;
+            // No verdict on the session (rate limit, 5xx, network). Rendering on
+            // regardless draws a signed-out-looking shell with no way forward,
+            // so re-ask a few times, then hand over to the login page with this
+            // page as the return path.
+            if (isUnconfirmedSessionError(error)) {
+                if (attempt < SESSION_CONFIRM_MAX_RETRIES) {
+                    retryTimer = setTimeout(() => void loadMe(attempt + 1), sessionConfirmRetryDelayMs(error));
+                } else {
+                    handleUnconfirmedSession();
+                }
+                return;
+            }
+            setHasResolvedUser(true);
+        }).catch(() => null);
+
+        void loadMe(0);
+        return () => {
+            cancelled = true;
+            clearTimeout(retryTimer);
+        };
     }, []);
 
     const useCompactChrome = !pathname.startsWith(routes.sales.pos);
@@ -373,6 +405,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         && !inPlatformAdminMode
         && !inRefereeMode
         && (owner || hasPermission(perms, 'LOG_PROJECT_TIME'));
+    // While the tracker is open it hangs just below its header chip, and the
+    // rest of the header's actions step aside so the chip and the panel read as
+    // one thing. Hidden rather than unmounted: the bells keep their polling and
+    // their counts, and come back exactly as they were when the panel closes.
+    const trackerOpen = useProjectTimerStore((state) => state.open) && canTrackTime && canRenderChildren;
+    const headerActionsClass = trackerOpen ? 'hidden' : 'contents';
     const canAccessVoice = platformFeatures.voice && hasPlanEntitlement(planFeatures, 'premiumVoice');
     // Same two gates as every other AI feature: the platform kill switch and the
     // plan entitlement. Tool-level permissions are enforced server-side.
@@ -651,40 +689,44 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     </div>
 
                     <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
-                        <div className="hidden md:contents">
-                            {canAccessVoice ? <VoiceNavWidget /> : null}
-                            {canAccessVoice ? <div className="h-8 w-px bg-gray-200 hidden sm:block" /> : null}
-                            <LanguageSwitcher />
+                        <div className={headerActionsClass}>
+                            <div className="hidden md:contents">
+                                {canAccessVoice ? <VoiceNavWidget /> : null}
+                                {canAccessVoice ? <div className="h-8 w-px bg-gray-200 hidden sm:block" /> : null}
+                                <LanguageSwitcher />
+                            </div>
+                            <AppHeaderMobileMenu />
                         </div>
-                        <AppHeaderMobileMenu />
                         {canTrackTime && canRenderChildren ? <TimerChip /> : null}
-                        {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
-                        {canAccessAiChat ? <AiChatWidget /> : null}
-                        <ChatBell />
-                        <NotificationBell />
-                        <div className="h-8 w-px bg-gray-200 hidden sm:block" />
-                        <AvatarDropdown
-                            userName={user?.name || '—'}
-                            roleLabel={
-                                inPlatformAdminMode
-                                    ? 'Platform Admin'
-                                    : inRefereeMode
-                                        ? t.referralPortal.workspace.title
-                                        // The role the member actually holds, not the
-                                        // coarse `UserRole` bucket it collapses into:
-                                        // every module role maps to CASHIER, so the
-                                        // enum shows "CASHIER" for a Sales User and a
-                                        // Project User alike and never changes when
-                                        // one is swapped for the other. `tenant_role`
-                                        // is null for an owner by design, whose bucket
-                                        // (OWNER) is the right label.
-                                        : (activeTenant?.tenant_role?.name
-                                            || activeTenant?.role
-                                            || t.dashboardLayout.userFallbackRole)
-                            }
-                            avatarUrl={user?.avatar_url}
-                            canSwitchAccount={canSwitchAccount}
-                        />
+                        <div className={headerActionsClass}>
+                            {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
+                            {canAccessAiChat ? <AiChatWidget /> : null}
+                            <ChatBell />
+                            <NotificationBell />
+                            <div className="h-8 w-px bg-gray-200 hidden sm:block" />
+                            <AvatarDropdown
+                                userName={user?.name || '—'}
+                                roleLabel={
+                                    inPlatformAdminMode
+                                        ? 'Platform Admin'
+                                        : inRefereeMode
+                                            ? t.referralPortal.workspace.title
+                                            // The role the member actually holds, not the
+                                            // coarse `UserRole` bucket it collapses into:
+                                            // every module role maps to CASHIER, so the
+                                            // enum shows "CASHIER" for a Sales User and a
+                                            // Project User alike and never changes when
+                                            // one is swapped for the other. `tenant_role`
+                                            // is null for an owner by design, whose bucket
+                                            // (OWNER) is the right label.
+                                            : (activeTenant?.tenant_role?.name
+                                                || activeTenant?.role
+                                                || t.dashboardLayout.userFallbackRole)
+                                }
+                                avatarUrl={user?.avatar_url}
+                                canSwitchAccount={canSwitchAccount}
+                            />
+                        </div>
                     </div>
                 </header>
 

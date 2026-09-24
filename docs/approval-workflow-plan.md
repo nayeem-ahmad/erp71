@@ -30,17 +30,17 @@ them so the count is honest rather than convenient.
 
 | Entry | Where | Approval state | Permission | Routing |
 |---|---|---|---|---|
-| Voucher | `schema.prisma:3619` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
-| Leave request | `schema.prisma:5547` | `status`, `approved_by`, `approved_at`, `approver_note`, `approvals_given`, `LeaveRequestApproval[]` (`:5586`, its own `approver_id`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4835`), anyone holding the permission |
-| Expense claim | `schema.prisma:5148` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
-| Warehouse transfer | `schema.prisma:1796` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
-| Product demand | `schema.prisma:1974` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single reviewer |
-| CRM activity | `schema.prisma:3249` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
-| Payroll run | `schema.prisma:5230` | `status`, `approved_by`, `approved_at` | `MANAGE_HR` | single approver |
-| Overtime record | `schema.prisma:5457` | `status` (`PENDING \| APPROVED \| REJECTED`), `approved_by`, `approved_at` | **none** — `JwtAuthGuard` only | single reviewer, who may approve *fewer* minutes than were recorded |
-| Stock take | `InventorySettings`, `schema.prisma:1768` | `discrepancy_approval_threshold`; `StockTakeSession.status` (`:1922`) | — | a threshold, hard-coded in shape |
-| Warranty claim | `schema.prisma:4389` | `status` includes `APPROVED`, but **no approver column** | **none** — `JwtAuthGuard` only | unrecorded — nobody is stored as having approved it |
-| Fund transfer | `schema.prisma:4357` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
+| Voucher | `schema.prisma:3621` | `approval_status`, `approved_by`, `approved_at`, `rejection_reason` | `APPROVE_VOUCHER` | tenant-wide on/off flag, anyone holding the permission |
+| Leave request | `schema.prisma:5549` | `status`, `approved_by`, `approved_at`, `approver_note`, `approvals_given`, `LeaveRequestApproval[]` (`:5586`, its own `approver_id`) | `MANAGE_HR` | N levels from `LeaveType.approval_levels` (`:4835`), anyone holding the permission |
+| Expense claim | `schema.prisma:5150` | `status`, `approved_by`, `approved_at`, `approver_note` | `MANAGE_HR` | single approver |
+| Warehouse transfer | `schema.prisma:1798` | `requires_approval`, `approved_by`, `approval_date` | `APPROVE_GOODS_TRANSFER` | single approver |
+| Product demand | `schema.prisma:1976` | `reviewed_by`, `reviewed_at`, per-line `quantity_approved` | `APPROVE_PRODUCT_DEMAND` | single reviewer |
+| CRM activity | `schema.prisma:3251` | `is_approved`, `approved_by`, `approved_at` | `APPROVE_CRM_ACTIVITY` | single approver |
+| Payroll run | `schema.prisma:5232` | `status`, `approved_by`, `approved_at` | `MANAGE_HR` | single approver |
+| Overtime record | `schema.prisma:5459` | `status` (`PENDING \| APPROVED \| REJECTED`), `approved_by`, `approved_at` | **none** — `JwtAuthGuard` only | single reviewer, who may approve *fewer* minutes than were recorded |
+| Stock take | `InventorySettings`, `schema.prisma:1770` | `discrepancy_approval_threshold`; `StockTakeSession.status` (`:1922`) | — | a threshold, hard-coded in shape |
+| Warranty claim | `schema.prisma:4391` | `status` includes `APPROVED`, but **no approver column** | **none** — `JwtAuthGuard` only | unrecorded — nobody is stored as having approved it |
+| Fund transfer | `schema.prisma:4359` | *none* | `APPROVE_FUND_TRANSFER` — **granted but never enforced**, see below | none |
 
 Eleven columns record who signed: seven `approved_by` (voucher, leave request,
 expense claim, warehouse transfer, CRM activity, payroll run, overtime record),
@@ -119,7 +119,7 @@ Three lessons from it that the generic engine must inherit, not relitigate:
 1. **Off by default, and off must be free.** No new query on the hot path for a
    tenant with no policy.
 2. **Never queue machine-generated documents behind a human by default.**
-   `auto_approve_system_vouchers` (`schema.prisma:3558`) exists because holding
+   `auto_approve_system_vouchers` (`schema.prisma:3560`) exists because holding
    back auto-posted vouchers stalls sales, purchases and payroll.
 3. **Pure util + spec, service on top.** `voucher-approval.util.ts`,
    `leave-policy.util.ts`, `posting-status.util.ts` are all pure functions with
@@ -159,10 +159,10 @@ legacy approval behaviour to preserve.
 Also missing, and needed for people-based routing:
 
 - **`Employee.manager_id`** — there is no reporting line on `Employee`
-  (`schema.prisma:4738`). `hiring_manager_id` on `JobPost` and `manager_id` on
+  (`schema.prisma:4740`). `hiring_manager_id` on `JobPost` and `manager_id` on
   `Project` are the only manager fields in the schema, and neither is a
   hierarchy.
-- **`Department.head_employee_id`** — `Department` (`schema.prisma:4708`) is a
+- **`Department.head_employee_id`** — `Department` (`schema.prisma:4710`) is a
   name and nothing else.
 
 ---
@@ -209,7 +209,7 @@ model ApprovalPolicy {
   allow_self_approval Boolean @default(false)
 
   /// Reports and lists default to approved-only. Generalises
-  /// `AccountingSettings.reports_approved_only` (schema.prisma:3561).
+  /// `AccountingSettings.reports_approved_only` (schema.prisma:3563).
   reports_approved_only Boolean @default(false)
 
   created_at DateTime  @default(now())
@@ -339,7 +339,7 @@ model ApprovalAction {
   /// APPROVED | REJECTED | DELEGATED | COMMENTED | AUTO_APPROVED | SUPERSEDED
   decision    String
   /// User id, not a relation — the rest of the schema records actors this way
-  /// (see the note at schema.prisma:1990) and a deleted user must not take the
+  /// (see the note at schema.prisma:1992) and a deleted user must not take the
   /// history with them.
   approver_id String?
   /// Snapshot of who they were at the time, for the same reason.
@@ -451,8 +451,8 @@ with `conditions: null` matching everything, which is how the catch-all row at
 
 | Type | Resolves to | Source |
 |---|---|---|
-| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4318`) — the existing matrix |
-| `TENANT_ROLE` | everyone holding that tenant role | `TenantUser.tenant_role_id` → `TenantRole`, **and** `TenantUser.roles[]` — *not* `TenantUser.role` (`schema.prisma:1263`); see below |
+| `PERMISSION` | everyone holding `approver_ref` on the entry's store | `UserStorePermission` (`schema.prisma:4320`) — the existing matrix |
+| `TENANT_ROLE` | everyone holding that tenant role | `TenantUser.tenant_role_id` → `TenantRole`, **and** `TenantUser.roles[]` — *not* `TenantUser.role` (`schema.prisma:1265`); see below |
 | `USER` | one named user | `approver_ref` is the user id |
 | `EMPLOYEE_MANAGER` | the submitter's manager | **needs new `Employee.manager_id`**; resolves to an `Employee`, see below |
 | `DEPARTMENT_HEAD` | head of the entry's department | **needs new `Department.head_employee_id`**; same |
@@ -593,7 +593,7 @@ into `AttendanceRecord`.
 `ApprovalRequest` to answer "is this approved?"**
 
 `Voucher.approval_status` stays exactly where it is, means exactly what it
-means, and keeps its index (`schema.prisma:3660`). Every existing report, filter
+means, and keeps its index (`schema.prisma:3662`). Every existing report, filter
 and `approvalVoucherFilter()` call keeps working untouched. `ApprovalRequest`
 holds only the *process* — which step, who is waiting, what was decided and why.
 
@@ -660,7 +660,7 @@ purchase. Convert at fact-extraction time, store the original alongside as
 
 ### 6.4 Deleted approvers
 `approver_id` is a plain string, not a relation — matching how the schema
-already handles actors (`schema.prisma:1990`) — plus `approver_name` snapshotted
+already handles actors (`schema.prisma:1992`) — plus `approver_name` snapshotted
 on the action, so the history survives the user row.
 
 ### 6.5 Performance

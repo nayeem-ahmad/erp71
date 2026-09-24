@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TimerChip from './TimerChip';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 
@@ -24,6 +24,9 @@ const running = (overrides: Record<string, unknown> = {}) => ({
     ...overrides,
 });
 
+/** The chip itself, as opposed to the hover card that repeats what it says. */
+const chip = () => within(screen.getByRole('button', { expanded: false }));
+
 describe('TimerChip', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -45,14 +48,14 @@ describe('TimerChip', () => {
         render(<TimerChip />);
 
         // 65s seeded from the server.
-        expect(screen.getByText('1:05')).toBeInTheDocument();
+        expect(chip().getByText('1:05')).toBeInTheDocument();
     });
 
     it('names the task the clock belongs to', () => {
         useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
         render(<TimerChip />);
 
-        expect(screen.getByText('Wire the tracker')).toBeInTheDocument();
+        expect(chip().getByText('Wire the tracker')).toBeInTheDocument();
     });
 
     it('ticks while it runs', () => {
@@ -61,11 +64,11 @@ describe('TimerChip', () => {
             useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
             render(<TimerChip />);
 
-            expect(screen.getByText('1:05')).toBeInTheDocument();
+            expect(chip().getByText('1:05')).toBeInTheDocument();
             act(() => {
                 jest.advanceTimersByTime(3000);
             });
-            expect(screen.getByText('1:08')).toBeInTheDocument();
+            expect(chip().getByText('1:08')).toBeInTheDocument();
         } finally {
             jest.useRealTimers();
         }
@@ -84,7 +87,7 @@ describe('TimerChip', () => {
             });
             render(<TimerChip />);
 
-            expect(screen.getByText('1:01:05')).toBeInTheDocument();
+            expect(chip().getByText('1:01:05')).toBeInTheDocument();
         } finally {
             jest.useRealTimers();
         }
@@ -105,9 +108,25 @@ describe('TimerChip', () => {
         useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true, open: false });
         render(<TimerChip />);
 
-        fireEvent.click(screen.getByText('1:05'));
+        fireEvent.click(chip().getByText('1:05'));
 
         expect(useProjectTimerStore.getState().open).toBe(true);
+    });
+
+    it('resyncs with the server when the tab becomes visible again', async () => {
+        // The local half of the clock drifts if the device clock moves (sleep,
+        // an OS time correction); coming back to the tab puts it right without
+        // a reload.
+        useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true });
+        getProjectTimer.mockResolvedValue(running({ elapsed_seconds: 7200 }));
+        render(<TimerChip />);
+        expect(getProjectTimer).not.toHaveBeenCalled();
+
+        act(() => {
+            document.dispatchEvent(new Event('visibilitychange'));
+        });
+
+        await waitFor(() => expect(chip().getByText('2:00:00')).toBeInTheDocument());
     });
 
     it('asks the server once when the store has not loaded yet', async () => {
@@ -124,10 +143,46 @@ describe('TimerChip', () => {
         expect(getProjectTimer).not.toHaveBeenCalled();
     });
 
+    it('says more on hover: the project, when it started and the note', () => {
+        useProjectTimerStore.setState({
+            timer: running({
+                start_time: '09:30',
+                note: 'Wiring the chip',
+                project: { id: 'p1', code: 'ERP', name: 'ERP71' },
+            }) as never,
+            receivedAt: Date.now(),
+            loaded: true,
+        });
+        render(<TimerChip />);
+
+        const card = within(screen.getByRole('tooltip', { hidden: true }));
+        expect(card.getByText('Wire the tracker')).toBeInTheDocument();
+        expect(card.getByText('ERP · ERP71')).toBeInTheDocument();
+        expect(card.getByText('09:30')).toBeInTheDocument();
+        expect(card.getByText('Wiring the chip')).toBeInTheDocument();
+    });
+
+    it('explains itself on hover when nothing is running', () => {
+        render(<TimerChip />);
+
+        expect(
+            within(screen.getByRole('tooltip', { hidden: true })).getByText(/nothing running/i),
+        ).toBeInTheDocument();
+    });
+
+    it('drops the hover card while the tracker is open, and closes it on a second click', () => {
+        useProjectTimerStore.setState({ timer: running() as never, receivedAt: Date.now(), loaded: true, open: true });
+        render(<TimerChip />);
+
+        expect(screen.queryByRole('tooltip', { hidden: true })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { expanded: true }));
+        expect(useProjectTimerStore.getState().open).toBe(false);
+    });
+
     it('survives a clock with no task attached', () => {
         useProjectTimerStore.setState({ timer: running({ task: null }) as never, receivedAt: Date.now(), loaded: true });
         render(<TimerChip />);
 
-        expect(screen.getByText('1:05')).toBeInTheDocument();
+        expect(chip().getByText('1:05')).toBeInTheDocument();
     });
 });

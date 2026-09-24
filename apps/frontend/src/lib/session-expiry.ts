@@ -138,6 +138,27 @@ export function handleExpiredSession(): void {
  * workspace pointer out from under whatever else the user had open.
  */
 export function handleMissingSession(): void {
+    redirectToLoginKeepingSession();
+}
+
+/**
+ * Send a tab whose session could not be confirmed to the login page.
+ *
+ * For when `GET /auth/me` never got a verdict — the renewal was rate-limited,
+ * the API answered 5xx, or the connection dropped — and retrying did not help.
+ * Leaving the shell up in that state draws a signed-out-looking app (user "—",
+ * empty tables) with no way forward, which is what a bookmark opened into a
+ * busy or restarting API used to show.
+ *
+ * Like `handleMissingSession` it clears nothing and claims no expiry: the
+ * refresh token may well still be good, and signing in again replaces it
+ * anyway. The page travels as `?redirect=` so login lands back on it.
+ */
+export function handleUnconfirmedSession(): void {
+    redirectToLoginKeepingSession();
+}
+
+function redirectToLoginKeepingSession(): void {
     if (typeof window === 'undefined') return;
     if (!claimExpiredSessionRedirect()) return;
 
@@ -147,6 +168,40 @@ export function handleMissingSession(): void {
         { expired: false },
     );
     if (target) window.location.replace(target);
+}
+
+/** How many times the app shell re-asks `/auth/me` before giving up on a tab. */
+export const SESSION_CONFIRM_MAX_RETRIES = 3;
+
+/** Fallback wait between those attempts, and the ceiling on a server-suggested one. */
+const SESSION_CONFIRM_RETRY_MS = 3_000;
+const SESSION_CONFIRM_MAX_RETRY_MS = 15_000;
+
+/**
+ * True when a failed `/auth/me` said nothing about whether the session is good.
+ *
+ * A 401 is a verdict and is already handled — the API layer is navigating to
+ * /login by the time the caller sees it. Other 4xx answers are the server
+ * judging the request, and redirecting on them could loop. What is left — a
+ * renewal that could not be asked, a 429, a 5xx, or a request that never got a
+ * response at all — is worth another try, then a trip to the login page.
+ *
+ * Duck-typed rather than `instanceof ApiError`: this module must not import
+ * `api.ts` (see the header comment).
+ */
+export function isUnconfirmedSessionError(error: unknown): boolean {
+    const status = (error as { status?: unknown } | null)?.status;
+    if (typeof status !== 'number') return true;
+    return status === 429 || status >= 500;
+}
+
+/** How long to wait before re-asking, honouring a server-suggested wait. */
+export function sessionConfirmRetryDelayMs(error: unknown): number {
+    const retryAfter = (error as { retryAfter?: unknown } | null)?.retryAfter;
+    if (typeof retryAfter === 'number' && Number.isFinite(retryAfter) && retryAfter > 0) {
+        return Math.min(retryAfter * 1000, SESSION_CONFIRM_MAX_RETRY_MS);
+    }
+    return SESSION_CONFIRM_RETRY_MS;
 }
 
 /** Test-only: clear the once-per-page-load redirect latch between cases. */

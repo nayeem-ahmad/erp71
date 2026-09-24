@@ -115,3 +115,31 @@ export function writePanelPosition(key: string, point: PanelPoint): void {
         // Not remembering where it was put is better than failing to move it.
     }
 }
+
+/** The gap between a panel and the control it opened from. */
+export const PANEL_ANCHOR_GAP = 4;
+
+/**
+ * Where a panel opened from a control sits: just below it, its end edge lined
+ * up with the control's, so it reads as dropping out of the thing that was
+ * pressed. Clamped like any other position, which is what flips the alignment
+ * in practice for a control near the start edge — the panel slides back on
+ * screen instead of hanging off it.
+ */
+export function anchoredPanelPosition(
+    anchor: { left: number; right: number; bottom: number },
+    panel: PanelBox,
+    viewport: PanelBox,
+    options: { rtl?: boolean; gap?: number; margin?: number } = {},
+): PanelPoint {
+    const gap = options.gap ?? PANEL_ANCHOR_GAP;
+    return clampPanelPosition(
+        {
+            x: options.rtl ? anchor.left : anchor.right - panel.width,
+            y: anchor.bottom + gap,
+        },
+        panel,
+        viewport,
+        options.margin,
+    );
+}

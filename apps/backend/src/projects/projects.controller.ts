@@ -76,6 +76,12 @@ export class ProjectsController {
         return this.settings.removeProjectType(tenant.tenantId, id);
     }
 
+    @Get('code-suggestion')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECTS)
+    suggestCode(@Tenant() tenant: TenantContext, @Query('name') name?: string) {
+        return this.projects.suggestCode(tenant.tenantId, name ?? '');
+    }
+
     @Get('task-statuses')
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     listTaskStatuses(

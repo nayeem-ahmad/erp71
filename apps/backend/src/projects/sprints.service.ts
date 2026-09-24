@@ -2,8 +2,13 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { SprintSnapshotService } from './sprint-snapshot.service';
-import { buildBurndownSeries, toDateKey } from './burndown.util';
-import { AssignTasksToSprintDto, CreateSprintDto, UpdateSprintDto } from './project.dto';
+import { buildBurndownSeries, eachDate, replayDailyByTask, toDateKey } from './burndown.util';
+import {
+    AssignStoriesToSprintDto,
+    AssignTasksToSprintDto,
+    CreateSprintDto,
+    UpdateSprintDto,
+} from './project.dto';
 
 @Injectable()
 export class SprintsService {
@@ -224,6 +229,79 @@ export class SprintsService {
             data: { sprint_id: sprintId },
         });
         return { assigned: result.count };
+    }
+
+    /**
+     * Commits a story by committing its open work: every task filed under it
+     * that is not DONE and not already promised to another sprint. A story has
+     * no hours of its own (see `ProjectUserStory`), so there is nothing else a
+     * sprint could hold of it. Tasks in another sprint are left where they are —
+     * taking them would silently shrink a plan somebody else made.
+     */
+    async assignStories(viewer: ProjectViewer, sprintId: string, dto: AssignStoriesToSprintDto) {
+        const tenantId = viewer.tenantId;
+        await this.findOne(tenantId, sprintId);
+        if (dto.storyIds.length === 0) return { assigned: 0 };
+        const result = await this.db.projectTask.updateMany({
+            where: {
+                tenant_id: tenantId,
+                user_story_id: { in: dto.storyIds },
+                sprint_id: null,
+                deleted_at: null,
+                status: { category: { not: 'DONE' } },
+                ...(await this.access.taskFilter(viewer)),
+            } as never,
+            data: { sprint_id: sprintId },
+        });
+        return { assigned: result.count };
+    }
+
+    /**
+     * Every committed task's remaining hours as at the end of each sprint day,
+     * for the day columns of the sprint table.
+     *
+     * Read from the task's whole log, not just rows stamped with this sprint:
+     * a task pulled in mid-sprint was estimated before it arrived, and its
+     * opening figure is what the first day it sat here should show.
+     */
+    async dailyRemaining(viewer: ProjectViewer, sprintId: string, today = new Date()) {
+        const tenantId = viewer.tenantId;
+        const sprint = await this.findOne(tenantId, sprintId);
+        const days = eachDate(sprint.start_date, sprint.end_date);
+
+        const tasks = await this.db.projectTask.findMany({
+            where: {
+                tenant_id: tenantId,
+                sprint_id: sprintId,
+                deleted_at: null,
+                ...(await this.access.taskFilter(viewer)),
+            } as never,
+            select: { id: true },
+        });
+        if (tasks.length === 0 || days.length === 0) return { days, tasks: {} };
+
+        const end = new Date(`${days[days.length - 1]}T00:00:00.000Z`);
+        end.setUTCDate(end.getUTCDate() + 1);
+        const logs = await this.db.projectTaskRemainingLog.findMany({
+            where: {
+                tenant_id: tenantId,
+                task_id: { in: tasks.map((task) => task.id) },
+                changed_at: { lt: end },
+            },
+            orderBy: { changed_at: 'asc' },
+            select: { task_id: true, new_hours: true, changed_at: true },
+        });
+
+        const byTask = replayDailyByTask(
+            logs.map((log) => ({
+                taskId: log.task_id,
+                hours: Number(log.new_hours),
+                changedAt: log.changed_at,
+            })),
+            days,
+            toDateKey(today),
+        );
+        return { days, tasks: Object.fromEntries(byTask) };
     }
 
     async removeTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {

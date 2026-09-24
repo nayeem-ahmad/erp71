@@ -181,3 +181,46 @@ export function replayDailyTotals(
 
     return totals;
 }
+
+/**
+ * Each task's remaining hours as at the end of every day, from its log.
+ *
+ * The per-row counterpart of `replayDailyTotals`: the sprint table shows one
+ * figure per task per day, and summing a row of these gives what the burndown
+ * would draw for that task alone. A day before the task's first log row, or
+ * after `todayKey`, is `null` — not yet known, and a table cell reading `0`
+ * there would say the work was finished.
+ */
+export function replayDailyByTask(
+    entries: RemainingLogEntry[],
+    days: string[],
+    todayKey: string,
+): Map<string, (number | null)[]> {
+    const byTask = new Map<string, RemainingLogEntry[]>();
+    for (const entry of entries) {
+        const list = byTask.get(entry.taskId) ?? [];
+        list.push(entry);
+        byTask.set(entry.taskId, list);
+    }
+
+    const out = new Map<string, (number | null)[]>();
+    for (const [taskId, list] of byTask) {
+        const ordered = [...list].sort((a, b) => a.changedAt.getTime() - b.changedAt.getTime());
+        let cursor = 0;
+        let latest: number | null = null;
+        out.set(
+            taskId,
+            days.map((day) => {
+                if (day > todayKey) return null;
+                const end = fromDateKey(day);
+                end.setUTCDate(end.getUTCDate() + 1);
+                while (cursor < ordered.length && ordered[cursor].changedAt.getTime() < end.getTime()) {
+                    latest = ordered[cursor].hours;
+                    cursor += 1;
+                }
+                return latest == null ? null : round2(latest);
+            }),
+        );
+    }
+    return out;
+}

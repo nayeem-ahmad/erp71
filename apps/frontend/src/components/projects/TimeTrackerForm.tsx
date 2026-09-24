@@ -109,8 +109,8 @@ function todayKey(): string {
  *
  * Laid out down the panel rather than across a bar. The tracker used to be a
  * row in the hour log's page header, where it could only be seen from the one
- * screen; now that it floats over every screen it is 22rem wide, and a row of
- * six controls does not fit in 22rem.
+ * screen; now that it floats over every screen it is 24rem wide, and a row of
+ * six controls does not fit in 24rem.
  */
 export default function TimeTrackerForm({
     labels,
@@ -328,31 +328,17 @@ export default function TimeTrackerForm({
             />
 
             {mode === 'manual' && !running ? (
+                // Two rows rather than one: four controls across a 24rem panel
+                // left each time box too narrow for its own value, and a
+                // clipped "10:3" is a time nobody can check before logging it.
                 <div className="space-y-2">
-                    <Input
-                        type="date"
-                        value={workDate}
-                        onChange={(e) => setWorkDate(e.target.value)}
-                        aria-label={labels.date}
-                        className="w-full"
-                    />
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
                         <Input
-                            type="time"
-                            value={startTime}
-                            onChange={(e) => setStartTime(e.target.value)}
-                            aria-label={labels.startTime}
-                            className="flex-1"
-                        />
-                        <span className="text-gray-400" aria-hidden="true">
-                            –
-                        </span>
-                        <Input
-                            type="time"
-                            value={endTime}
-                            onChange={(e) => setEndTime(e.target.value)}
-                            aria-label={labels.endTime}
-                            className="flex-1"
+                            type="date"
+                            value={workDate}
+                            onChange={(e) => setWorkDate(e.target.value)}
+                            aria-label={labels.date}
+                            className="min-w-0 flex-1"
                         />
                         <Input
                             type="number"
@@ -363,7 +349,26 @@ export default function TimeTrackerForm({
                             onChange={(e) => setHours(e.target.value)}
                             placeholder={labels.hours}
                             aria-label={labels.hours}
-                            className="w-20"
+                            className="w-24"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Input
+                            type="time"
+                            value={startTime}
+                            onChange={(e) => setStartTime(e.target.value)}
+                            aria-label={labels.startTime}
+                            className="min-w-0 flex-1 tabular-nums"
+                        />
+                        <span className="text-gray-400" aria-hidden="true">
+                            –
+                        </span>
+                        <Input
+                            type="time"
+                            value={endTime}
+                            onChange={(e) => setEndTime(e.target.value)}
+                            aria-label={labels.endTime}
+                            className="min-w-0 flex-1 tabular-nums"
                         />
                     </div>
                 </div>
@@ -377,12 +382,12 @@ export default function TimeTrackerForm({
                         value={runningStart}
                         onChange={(e) => commitStart(e.target.value)}
                         aria-label={labels.startedAt}
-                        className="w-28"
+                        className="w-36 tabular-nums"
                     />
                 </div>
             ) : null}
 
-            {/* Inline rather than a dropdown: a popover anchored inside a 22rem
+            {/* Inline rather than a dropdown: a popover anchored inside a 24rem
                 panel is clipped by the panel's own scroll box. */}
             <div>
                 <button

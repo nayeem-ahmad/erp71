@@ -7,6 +7,11 @@ import { useIsMdUp } from '@/hooks/useMediaQuery';
 interface Props {
     /** Names the remembered position. One key per panel, stable across releases. */
     storageKey: string;
+    /**
+     * The control the panel opens from. Given one, it opens just below it —
+     * on a phone too, across the full width — rather than where it was left.
+     */
+    anchor?: () => HTMLElement | null;
     title: string;
     /** Sits in the header beside the title, so it survives a collapse. */
     headerAccessory?: React.ReactNode;
@@ -42,6 +47,7 @@ const headerButtonClass =
  */
 export default function FloatingPanel({
     storageKey,
+    anchor,
     title,
     headerAccessory,
     collapsed = false,
@@ -54,18 +60,21 @@ export default function FloatingPanel({
     const { panelRef, position, dragging, dragProps, onKeyDown, style } = useFloatingPanel(
         storageKey,
         isMdUp,
+        anchor,
     );
 
     return (
         <section
             ref={panelRef}
             aria-label={title}
-            style={isMdUp ? style : undefined}
+            style={isMdUp ? style : position ? { top: position.y } : undefined}
             // Deliberately below the modal layer, the mobile nav drawer and its
             // scrim: a panel that floats over everything is a panel that floats
             // over the dialog asking whether to keep both entries.
             className={`fixed z-20 flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg ${
-                isMdUp ? `w-[22rem] ${position ? '' : 'bottom-3 end-3'}` : 'inset-x-2 bottom-safe'
+                isMdUp
+                    ? `w-[24rem] ${position ? '' : 'bottom-3 end-3'}`
+                    : `inset-x-2 ${position ? '' : 'bottom-safe'}`
             }`}
         >
             <header
