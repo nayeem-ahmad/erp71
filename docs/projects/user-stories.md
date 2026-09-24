@@ -164,3 +164,31 @@ seen flat.
 
 Nothing was added to the sidebar. A story belongs to one project, and a
 cross-project backlog page would be a second place to look for the same rows.
+
+## Epics (added 2026-09-24)
+
+An epic is the parent of stories: **epic → story → task**. It follows the same
+rules as a story, one level up:
+
+- **Per project.** `ProjectEpic.project_id`, with visibility inherited from the
+  project. A story can only join an epic in its own project
+  (`ProjectUserStory.epic_id`, checked in `ProjectStoriesService`).
+- **An ID people can say.** `reference` is the internal counter; `code` is
+  editable and defaults to `<project.code>-E<n>` (`OTB-E2`), so it can never be
+  confused with story `OTB-2`.
+- **No work of its own.** Progress is counted on every read: stories done out of
+  stories (the headline percentage), points done out of points, and the tasks
+  under those stories (through `taskFilter`, so a narrow viewer's counts match
+  their task list). Nothing is stored that could drift.
+- **Status is set by hand** — OPEN, IN_PROGRESS, DONE, CANCELLED. An epic whose
+  stories are all accepted may still be open because more scope is coming;
+  CANCELLED keeps dropped scope on record without deleting its stories.
+- **Deleting an epic detaches its stories**, exactly as deleting a story
+  detaches its tasks.
+
+Surfaces: the Epics card above the stories card on the project page (expand to
+see the stories, quick-add a story into the epic, `?epic=<id>` opens one), the
+cross-project list at `/projects/epics` (filters, New, Import), an Epic picker in
+the story form, an epic chip on story rows, and an Epic column and filter on
+`/projects/stories`. The story import accepts an `epic` column (ID or title,
+within the row's project).

@@ -17,6 +17,7 @@ jest.mock('@/lib/api', () => ({
         getProjects: jest.fn(),
         createProjectStory: jest.fn(),
         importProjectStories: jest.fn(),
+        getProjectEpics: jest.fn(),
     },
 }));
 
@@ -46,6 +47,9 @@ const story = (overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
     (api.createProjectStory as jest.Mock).mockReset();
     (api.getProjectStories as jest.Mock).mockReset().mockResolvedValue([story()]);
+    (api.getProjectEpics as jest.Mock)
+        .mockReset()
+        .mockResolvedValue([{ id: 'epic-1', code: 'PRJ-0001-E1', title: 'Online payments', color: 'BLUE' }]);
     (api.getProjects as jest.Mock)
         .mockReset()
         .mockResolvedValue({ items: [{ id: 'p1', code: 'PRJ-0001', name: 'Till rebuild' }] });
@@ -132,7 +136,35 @@ describe('Cross-project user stories page', () => {
                 projectId: undefined,
                 status: undefined,
                 priority: 'URGENT',
+                epicId: undefined,
+                noEpic: undefined,
             }),
+        );
+    });
+
+    it('shows each story’s epic and filters to one epic, or to stories under none', async () => {
+        (api.getProjectStories as jest.Mock).mockResolvedValue([
+            story({ epic: { id: 'epic-1', code: 'PRJ-0001-E1', title: 'Online payments', color: 'BLUE' } }),
+        ]);
+        render(<ProjectStoriesPage />);
+        await screen.findByText('Shopper pays with bKash');
+        // The chip in the row, beside the same code in the filter's option.
+        expect(screen.getAllByText('PRJ-0001-E1').length).toBeGreaterThan(0);
+
+        fireEvent.change(screen.getByDisplayValue('Any epic'), { target: { value: 'epic-1' } });
+        await waitFor(() =>
+            expect(api.getProjectStories).toHaveBeenLastCalledWith(
+                expect.objectContaining({ epicId: 'epic-1', noEpic: undefined }),
+            ),
+        );
+
+        fireEvent.change(screen.getByDisplayValue('PRJ-0001-E1 · Online payments'), {
+            target: { value: 'none' },
+        });
+        await waitFor(() =>
+            expect(api.getProjectStories).toHaveBeenLastCalledWith(
+                expect.objectContaining({ epicId: undefined, noEpic: true }),
+            ),
         );
     });
 
