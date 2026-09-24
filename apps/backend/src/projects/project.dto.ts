@@ -956,6 +956,12 @@ export class AssignTasksToSprintDto {
     taskIds!: string[];
 }
 
+export class AssignStoriesToSprintDto {
+    @IsArray()
+    @IsUUID('4', { each: true })
+    storyIds!: string[];
+}
+
 export class CreateProjectTypeDto {
     @IsString() @MinLength(1) @MaxLength(100)
     name!: string;
