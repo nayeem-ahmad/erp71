@@ -48,6 +48,12 @@ import {
     getLoginContexts,
     isShopWorkspacePath,
 } from '@/lib/auth-session';
+import {
+    SESSION_CONFIRM_MAX_RETRIES,
+    handleUnconfirmedSession,
+    isUnconfirmedSessionError,
+    sessionConfirmRetryDelayMs,
+} from '@/lib/session-expiry';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { clampLocaleToTenant } from '@/lib/tenant-locales';
 import { routes } from '@/lib/routes';
@@ -152,7 +158,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }, [hasResolvedUser, pathname, router, user]);
 
     useEffect(() => {
-        api.getMe().then((me) => {
+        let cancelled = false;
+        let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const loadMe = (attempt: number) => api.getMe().then((me) => {
+            if (cancelled) return;
+            setHasResolvedUser(true);
             // A tab that resumed from `last_tenant_id` may be pointing at a shop
             // this account no longer belongs to. Correct it against the real
             // membership list rather than letting the header carry a stale id.
@@ -186,8 +197,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             if (me?.is_demo) {
                 localStorage.setItem('demo_session', '1');
             }
-        }).catch(() => null)
-            .finally(() => setHasResolvedUser(true));
+        }, (error) => {
+            if (cancelled) return;
+            // No verdict on the session (rate limit, 5xx, network). Rendering on
+            // regardless draws a signed-out-looking shell with no way forward,
+            // so re-ask a few times, then hand over to the login page with this
+            // page as the return path.
+            if (isUnconfirmedSessionError(error)) {
+                if (attempt < SESSION_CONFIRM_MAX_RETRIES) {
+                    retryTimer = setTimeout(() => void loadMe(attempt + 1), sessionConfirmRetryDelayMs(error));
+                } else {
+                    handleUnconfirmedSession();
+                }
+                return;
+            }
+            setHasResolvedUser(true);
+        }).catch(() => null);
+
+        void loadMe(0);
+        return () => {
+            cancelled = true;
+            clearTimeout(retryTimer);
+        };
     }, []);
 
     const useCompactChrome = !pathname.startsWith(routes.sales.pos);

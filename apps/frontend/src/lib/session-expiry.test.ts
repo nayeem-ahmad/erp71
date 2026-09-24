@@ -14,8 +14,10 @@
 import {
     claimExpiredSessionRedirect,
     clearStoredSession,
+    isUnconfirmedSessionError,
     resetSessionExpiryGuard,
     resolveExpiredSessionRedirect,
+    sessionConfirmRetryDelayMs,
 } from './session-expiry';
 import { getWorkspaceItem, setWorkspaceItem } from './session-store';
 
@@ -122,5 +124,46 @@ describe('claimExpiredSessionRedirect', () => {
         expect(claimExpiredSessionRedirect()).toBe(true);
         expect(claimExpiredSessionRedirect()).toBe(false);
         expect(claimExpiredSessionRedirect()).toBe(false);
+    });
+});
+
+describe('isUnconfirmedSessionError', () => {
+    // Regression: a bookmark opened while `/auth/refresh` was rate-limited left
+    // the shell up with user "—" and empty tables, and nothing ever retried.
+    it('treats a renewal that could not be asked as no verdict', () => {
+        expect(isUnconfirmedSessionError({ status: 503, code: 'SESSION_RENEWAL_UNAVAILABLE' })).toBe(true);
+    });
+
+    it('treats rate limits and server errors as no verdict', () => {
+        expect(isUnconfirmedSessionError({ status: 429 })).toBe(true);
+        expect(isUnconfirmedSessionError({ status: 500 })).toBe(true);
+        expect(isUnconfirmedSessionError({ status: 502 })).toBe(true);
+    });
+
+    it('treats a request that never got a response as no verdict', () => {
+        expect(isUnconfirmedSessionError(new TypeError('Failed to fetch'))).toBe(true);
+    });
+
+    it('leaves a 401 to the API layer, which is already navigating to /login', () => {
+        expect(isUnconfirmedSessionError({ status: 401 })).toBe(false);
+    });
+
+    it('does not bounce on a 4xx the server judged, which could loop', () => {
+        expect(isUnconfirmedSessionError({ status: 403 })).toBe(false);
+        expect(isUnconfirmedSessionError({ status: 404 })).toBe(false);
+    });
+});
+
+describe('sessionConfirmRetryDelayMs', () => {
+    it('waits as long as the server asked', () => {
+        expect(sessionConfirmRetryDelayMs({ status: 503, retryAfter: 5 })).toBe(5_000);
+    });
+
+    it('caps a large server-suggested wait', () => {
+        expect(sessionConfirmRetryDelayMs({ status: 429, retryAfter: 600 })).toBe(15_000);
+    });
+
+    it('falls back to a fixed wait when none was suggested', () => {
+        expect(sessionConfirmRetryDelayMs(new TypeError('Failed to fetch'))).toBe(3_000);
     });
 });
