@@ -1,9 +1,34 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { PageShell, PageHeader, Button, Select, Checkbox, StatusBadge } from '@/components/ui';
+import { Eye, Pencil, Plus, Trash2, Undo2 } from 'lucide-react';
+import {
+    PageShell,
+    PageHeader,
+    Button,
+    Select,
+    StatusBadge,
+    CompactStat,
+    ConfirmDialog,
+} from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
+import SprintBacklogModal from '@/components/projects/SprintBacklogModal';
+import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import {
+    NO_LANE,
+    SPRINT_LANE_MODES,
+    assigneeNameOf,
+    dayTotals,
+    groupSprintTasks,
+    hours,
+    sprintStats,
+    sumHours,
+    todayKey,
+    type SprintLaneMode,
+    type SprintTask,
+} from '@/components/projects/sprint-table';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -19,91 +44,105 @@ interface Sprint {
     end_date: string;
 }
 
-interface Task {
-    id: string;
-    title: string;
-    estimate_hours?: string | null;
-    remaining_hours?: string | null;
-    status?: { id: string; name: string; category: string };
-    project?: { id: string; code: string; name: string };
+interface DailyRemaining {
+    days: string[];
+    tasks: Record<string, (number | null)[]>;
 }
 
-const num = (value: unknown): number => (value == null ? 0 : Number(value));
+/** Per viewer and per browser, like the board's swimlanes: how one person reads the table. */
+const LANE_STORAGE_KEY = 'erp71.sprint.swimlanes';
 
-export default function SprintPlanningPage() {
+function readLaneMode(): SprintLaneMode {
+    try {
+        const raw = localStorage.getItem(LANE_STORAGE_KEY);
+        return SPRINT_LANE_MODES.includes(raw as SprintLaneMode) ? (raw as SprintLaneMode) : 'none';
+    } catch {
+        return 'none';
+    }
+}
+
+function writeLaneMode(mode: SprintLaneMode) {
+    try {
+        localStorage.setItem(LANE_STORAGE_KEY, mode);
+    } catch {
+        // Storage blocked — the choice just does not survive a reload.
+    }
+}
+
+/** A day's column heading: weekday over day-of-month, read in UTC like the API's keys. */
+function dayHeading(key: string, locale: string) {
+    const date = new Date(`${key}T00:00:00.000Z`);
+    return {
+        weekday: date.toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' }),
+        day: key.slice(5).replace('-', '/'),
+        // Bangladesh works Sunday–Thursday; the burndown shades the same days.
+        weekend: [5, 6].includes(date.getUTCDay()),
+    };
+}
+
+const cellNum = (value: number | null | undefined) =>
+    value == null ? '' : String(Math.round(value * 100) / 100);
+
+export default function SprintDetailPage() {
     const params = useParams<{ id: string }>();
     const sprintId = params.id;
-    const { t } = useI18n();
+    const { t, fmt, locale } = useI18n();
     const m = t.projects;
 
     const [sprint, setSprint] = useState<Sprint | null>(null);
-    const [backlog, setBacklog] = useState<Task[]>([]);
-    const [inSprint, setInSprint] = useState<Task[]>([]);
-    const [projects, setProjects] = useState<{ id: string; code: string; name: string }[]>([]);
-    // A tenant-level sprint draws from every project, so this filter is what
-    // keeps the left pane usable once there is more than a handful.
-    const [projectId, setProjectId] = useState('');
-    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [tasks, setTasks] = useState<SprintTask[]>([]);
+    const [daily, setDaily] = useState<DailyRemaining>({ days: [], tasks: {} });
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
+    const [laneMode, setLaneMode] = useState<SprintLaneMode>('none');
+    const [adding, setAdding] = useState(false);
+    const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<SprintTask | null>(null);
     const [busy, setBusy] = useState(false);
+
+    useEffect(() => setLaneMode(readLaneMode()), []);
 
     const load = useCallback(async () => {
         try {
-            const [detail, backlogPage, sprintPage] = await Promise.all([
+            const [detail, sprintPage, dailyRes, burndownRes] = await Promise.all([
                 api.getSprint(sprintId),
-                api.getProjectTasks({
-                    backlogOnly: 'true',
-                    limit: 200,
-                    ...(projectId ? { projectId } : {}),
-                }),
                 api.getProjectTasks({ sprintId, limit: 200 }),
+                api.getSprintDailyRemaining(sprintId).catch(() => null),
+                api.getSprintBurndown(sprintId).catch(() => null),
             ]);
             setSprint(detail as Sprint);
-            setBacklog((backlogPage?.items ?? []) as Task[]);
-            setInSprint((sprintPage?.items ?? []) as Task[]);
-            setSelected(new Set());
+            setTasks((sprintPage?.items ?? []) as SprintTask[]);
+            setDaily((dailyRes as DailyRemaining | null) ?? { days: [], tasks: {} });
+            setBurndown((burndownRes as { series?: BurndownPoint[] } | null)?.series ?? []);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.sprint.loadFailed);
         }
-    }, [sprintId, projectId, m.sprint.loadFailed]);
+    }, [sprintId, m.sprint.loadFailed]);
 
     useEffect(() => {
-        load();
+        void load();
     }, [load]);
 
-    useEffect(() => {
-        api.getProjects({ limit: 100 })
-            .then((res) => setProjects((res?.items ?? []) as { id: string; code: string; name: string }[]))
-            .catch(() => setProjects([]));
-    }, []);
+    const changeLaneMode = (mode: SprintLaneMode) => {
+        setLaneMode(mode);
+        writeLaneMode(mode);
+    };
 
-    useEffect(() => {
-        api.getSprintBurndown(sprintId)
-            .then((res: unknown) => setBurndown((res as { series?: BurndownPoint[] })?.series ?? []))
-            .catch(() => setBurndown([]));
-    }, [sprintId]);
-
-    const toggle = (id: string) =>
-        setSelected((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-
-    const selectedHours = useMemo(
-        () =>
-            backlog
-                .filter((task) => selected.has(task.id))
-                .reduce((sum, task) => sum + num(task.remaining_hours), 0),
-        [backlog, selected],
+    const today = todayKey();
+    const days = daily.days;
+    const lanes = useMemo(() => groupSprintTasks(tasks, laneMode), [tasks, laneMode]);
+    const totals = useMemo(() => sumHours(tasks), [tasks]);
+    const totalByDay = useMemo(
+        () => dayTotals(tasks, daily.tasks, days.length),
+        [tasks, daily.tasks, days.length],
     );
+    const stats = useMemo(() => sprintStats(tasks, burndown ?? [], today), [tasks, burndown, today]);
+    const headings = useMemo(() => days.map((day) => dayHeading(day, locale)), [days, locale]);
 
-    const move = async (fn: () => Promise<unknown>, success: string) => {
+    const returnToBacklog = async (task: SprintTask) => {
         setBusy(true);
         try {
-            await fn();
-            toast.success(success);
+            await api.removeTasksFromSprint(sprintId, [task.id]);
+            toast.success(m.sprint.removed);
             await load();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.sprint.saveFailed);
@@ -112,7 +151,52 @@ export default function SprintPlanningPage() {
         }
     };
 
-    const committed = inSprint.reduce((sum, task) => sum + num(task.remaining_hours), 0);
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setBusy(true);
+        try {
+            await api.deleteProjectTask(pendingDelete.id);
+            toast.success(m.task.deleted);
+            setPendingDelete(null);
+            await load();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.deleteFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const dayCellClass = (i: number) => {
+        if (days[i] === today) return 'bg-blue-50';
+        return headings[i]?.weekend ? 'bg-gray-50' : '';
+    };
+
+    const iconButton =
+        'min-h-touch min-w-touch rounded-md p-1.5 transition-colors disabled:opacity-50';
+
+    const laneTitle = (lane: (typeof lanes)[number]) => {
+        if (lane.key !== NO_LANE) return lane.code ? `${lane.code} · ${lane.title ?? ''}` : (lane.title ?? '');
+        return laneMode === 'story' ? m.board.laneNoStory : m.board.laneUnassigned;
+    };
+
+    /** The figures row shared by a lane heading and the table footer. */
+    const figureCells = (group: SprintTask[], byDay: (number | null)[]) => {
+        const sum = sumHours(group);
+        return (
+            <>
+                <td className="px-2 py-2 text-end tabular-nums">{cellNum(sum.estimate)}</td>
+                <td className="hidden px-2 py-2 text-end tabular-nums md:table-cell">{cellNum(sum.spent)}</td>
+                <td className="px-2 py-2 text-end tabular-nums">{cellNum(sum.remaining)}</td>
+                <td className="hidden px-2 py-2 md:table-cell" />
+                <td className="px-2 py-2" />
+                {byDay.map((value, i) => (
+                    <td key={days[i]} className={`px-2 py-2 text-end tabular-nums ${dayCellClass(i)}`}>
+                        {cellNum(value)}
+                    </td>
+                ))}
+            </>
+        );
+    };
 
     return (
         <PageShell>
@@ -128,125 +212,292 @@ export default function SprintPlanningPage() {
                 )}
                 actions={
                     sprint ? (
-                        <StatusBadge tone={sprint.status === 'ACTIVE' ? 'info' : 'neutral'}>
-                            {(m.sprint[sprint.status.toLowerCase() as keyof typeof m.sprint] as string)
-                                ?? sprint.status}
-                        </StatusBadge>
+                        <div className="flex items-center gap-2">
+                            <StatusBadge tone={sprint.status === 'ACTIVE' ? 'info' : 'neutral'}>
+                                {(m.sprint[sprint.status.toLowerCase() as keyof typeof m.sprint] as string)
+                                    ?? sprint.status}
+                            </StatusBadge>
+                            {sprint.status !== 'COMPLETED' && (
+                                <Button className="min-h-touch" onClick={() => setAdding(true)}>
+                                    <Plus className="h-4 w-4" />
+                                    {m.sprint.addWork}
+                                </Button>
+                            )}
+                        </div>
                     ) : null
                 }
             />
 
-            <section className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-md border border-gray-200 bg-white">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <section className="min-w-0 rounded-md border border-gray-200 bg-white">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-2">
-                        <h2 className="text-sm font-medium">{m.sprint.backlog}</h2>
-                        <Select
-                            value={projectId}
-                            onChange={(e) => setProjectId(e.target.value)}
-                            className="w-44"
-                        >
-                            <option value="">{m.tasks.allProjects}</option>
-                            {projects.map((project) => (
-                                <option key={project.id} value={project.id}>
-                                    {project.code}
-                                </option>
-                            ))}
-                        </Select>
+                        <div className="min-w-0">
+                            <h2 className="text-sm font-medium">
+                                {m.sprint.committed}
+                                <span className="ms-2 text-xs font-normal text-gray-500">
+                                    {tasks.length} · {totals.remaining}h
+                                </span>
+                            </h2>
+                            <p className="text-xs text-gray-500">{m.sprint.dayHint}</p>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                            {m.board.view.swimlanes}
+                            <Select
+                                value={laneMode}
+                                onChange={(e) => changeLaneMode(e.target.value as SprintLaneMode)}
+                                className="w-36"
+                                data-testid="sprint-swimlanes"
+                            >
+                                <option value="none">{m.board.view.swimlanesNone}</option>
+                                <option value="assignee">{m.board.view.swimlanesAssignee}</option>
+                                <option value="story">{m.board.view.swimlanesStory}</option>
+                            </Select>
+                        </label>
                     </div>
 
-                    {backlog.length === 0 ? (
-                        <p className="p-3 text-sm text-gray-500">{m.sprint.emptyBacklog}</p>
-                    ) : (
-                        <ul className="divide-y divide-gray-200">
-                            {backlog.map((task) => (
-                                <li key={task.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                                    <Checkbox
-                                        checked={selected.has(task.id)}
-                                        onChange={() => toggle(task.id)}
-                                    />
-                                    <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                                    {/* The project has to be on the row: this list mixes them. */}
-                                    <span className="shrink-0 text-xs text-gray-500">
-                                        {task.project?.code ?? '—'}
-                                    </span>
-                                    <span className="w-12 shrink-0 text-end text-xs text-gray-500">
-                                        {num(task.remaining_hours)}h
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-
-                    <div className="flex items-center justify-between border-t border-gray-200 px-3 py-2">
-                        <span className="text-xs text-gray-500">
-                            {selected.size} · {selectedHours}h
-                        </span>
-                        <Button
-                            className="min-h-touch"
-                            disabled={busy || selected.size === 0}
-                            onClick={() =>
-                                move(
-                                    () => api.assignTasksToSprint(sprintId, [...selected]),
-                                    m.sprint.addToSprint,
-                                )
-                            }
-                        >
-                            {m.sprint.addToSprint}
-                        </Button>
-                    </div>
-                </div>
-
-                <div className="rounded-md border border-gray-200 bg-white">
-                    <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
-                        <h2 className="text-sm font-medium">{m.sprint.committed}</h2>
-                        <span className="text-xs text-gray-500">{committed}h</span>
-                    </div>
-                    {inSprint.length === 0 ? (
+                    {tasks.length === 0 ? (
                         <p className="p-3 text-sm text-gray-500">{m.sprint.emptySprint}</p>
                     ) : (
-                        <ul className="divide-y divide-gray-200">
-                            {inSprint.map((task) => (
-                                <li key={task.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                                    <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                                    <span className="shrink-0 text-xs text-gray-500">
-                                        {task.project?.code ?? '—'}
-                                    </span>
-                                    <span className="w-12 shrink-0 text-end text-xs text-gray-500">
-                                        {num(task.remaining_hours)}h
-                                    </span>
-                                    <button
-                                        type="button"
-                                        disabled={busy}
-                                        onClick={() =>
-                                            move(
-                                                () => api.removeTasksFromSprint(sprintId, [task.id]),
-                                                m.sprint.removeFromSprint,
-                                            )
-                                        }
-                                        className="shrink-0 text-xs text-blue-600 hover:underline"
-                                    >
-                                        {m.sprint.removeFromSprint}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs">
+                                <thead className="bg-gray-50 text-gray-600">
+                                    <tr className="border-b border-gray-200">
+                                        <th className="sticky start-0 z-10 min-w-48 bg-gray-50 px-3 py-2 text-start font-medium">
+                                            {m.sprint.colTask}
+                                        </th>
+                                        <th className="whitespace-nowrap px-2 py-2 text-end font-medium">
+                                            {m.sprint.colEstimate}
+                                        </th>
+                                        <th className="hidden whitespace-nowrap px-2 py-2 text-end font-medium md:table-cell">
+                                            {m.sprint.colSpent}
+                                        </th>
+                                        <th className="whitespace-nowrap px-2 py-2 text-end font-medium">
+                                            {m.sprint.colRemaining}
+                                        </th>
+                                        <th className="hidden px-2 py-2 text-start font-medium md:table-cell">
+                                            {m.fields.assignee}
+                                        </th>
+                                        <th className="px-2 py-2 text-center font-medium">{m.fields.actions}</th>
+                                        {headings.map((heading, i) => (
+                                            <th
+                                                key={days[i]}
+                                                className={`whitespace-nowrap px-2 py-2 text-end font-medium ${dayCellClass(i)} ${
+                                                    days[i] === today ? 'text-blue-600' : ''
+                                                }`}
+                                            >
+                                                <span className="block text-[10px] font-normal">{heading.weekday}</span>
+                                                {heading.day}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {lanes.map((lane) => (
+                                        <Fragment key={lane.key}>
+                                            {laneMode !== 'none' && (
+                                                <tr
+                                                    className="border-b border-gray-200 bg-gray-100 font-medium text-gray-700"
+                                                    data-testid="sprint-lane"
+                                                >
+                                                    <td className="sticky start-0 z-10 max-w-xs truncate bg-gray-100 px-3 py-2">
+                                                        {laneTitle(lane)}
+                                                        <span className="ms-2 font-normal text-gray-500">
+                                                            {lane.tasks.length}
+                                                        </span>
+                                                    </td>
+                                                    {figureCells(
+                                                        lane.tasks,
+                                                        dayTotals(lane.tasks, daily.tasks, days.length),
+                                                    )}
+                                                </tr>
+                                            )}
+                                            {lane.tasks.map((task) => {
+                                                const done = task.status?.category === 'DONE';
+                                                const row = daily.tasks[task.id] ?? [];
+                                                return (
+                                                    <tr
+                                                        key={task.id}
+                                                        className="group border-b border-gray-100 hover:bg-gray-50"
+                                                        data-testid="sprint-task-row"
+                                                    >
+                                                        <td className="sticky start-0 z-10 max-w-xs bg-white px-3 py-2 group-hover:bg-gray-50">
+                                                            <span
+                                                                className={`block truncate text-sm ${
+                                                                    done ? 'text-gray-500 line-through' : 'text-gray-900'
+                                                                }`}
+                                                                title={task.title}
+                                                            >
+                                                                {task.title}
+                                                            </span>
+                                                            <span className="block truncate text-gray-500">
+                                                                {[task.project?.code, task.userStory?.code, task.status?.name]
+                                                                    .filter(Boolean)
+                                                                    .join(' · ')}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-end tabular-nums">
+                                                            {cellNum(hours(task.estimate_hours))}
+                                                        </td>
+                                                        <td className="hidden px-2 py-2 text-end tabular-nums md:table-cell">
+                                                            {cellNum(hours(task.logged_hours))}
+                                                        </td>
+                                                        <td className="px-2 py-2 text-end font-medium tabular-nums">
+                                                            {cellNum(hours(task.remaining_hours))}
+                                                        </td>
+                                                        <td className="hidden max-w-40 truncate px-2 py-2 md:table-cell">
+                                                            {assigneeNameOf(task) ?? (
+                                                                <span className="text-gray-400">{m.task.unassigned}</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-1 py-1">
+                                                            <div className="flex items-center justify-center">
+                                                                <Link
+                                                                    href={routes.projects.taskDetail(task.id)}
+                                                                    aria-label={t.common.view}
+                                                                    title={t.common.view}
+                                                                    className={`${iconButton} text-gray-600 hover:bg-gray-100`}
+                                                                >
+                                                                    <Eye className="mx-auto h-4 w-4" />
+                                                                </Link>
+                                                                <button
+                                                                    type="button"
+                                                                    aria-label={t.common.edit}
+                                                                    title={t.common.edit}
+                                                                    onClick={() => setOpenTaskId(task.id)}
+                                                                    className={`${iconButton} text-blue-600 hover:bg-blue-50`}
+                                                                >
+                                                                    <Pencil className="mx-auto h-4 w-4" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    aria-label={m.sprint.removeFromSprint}
+                                                                    title={m.sprint.removeFromSprint}
+                                                                    disabled={busy}
+                                                                    onClick={() => void returnToBacklog(task)}
+                                                                    className={`${iconButton} text-amber-600 hover:bg-amber-50`}
+                                                                >
+                                                                    <Undo2 className="mx-auto h-4 w-4" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    aria-label={t.common.delete}
+                                                                    title={m.task.deleteTask}
+                                                                    disabled={busy}
+                                                                    onClick={() => setPendingDelete(task)}
+                                                                    className={`${iconButton} text-red-600 hover:bg-red-50`}
+                                                                >
+                                                                    <Trash2 className="mx-auto h-4 w-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        {days.map((day, i) => (
+                                                            <td
+                                                                key={day}
+                                                                className={`px-2 py-2 text-end tabular-nums ${dayCellClass(i)} ${
+                                                                    row[i] === 0 ? 'text-emerald-700' : 'text-gray-700'
+                                                                }`}
+                                                            >
+                                                                {cellNum(row[i])}
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </Fragment>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="border-t border-gray-300 bg-gray-50 font-medium text-gray-800">
+                                        <td className="sticky start-0 z-10 bg-gray-50 px-3 py-2">{m.sprint.total}</td>
+                                        {figureCells(tasks, totalByDay)}
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
                     )}
-                </div>
-            </section>
+                </section>
 
-            <section className="rounded-md border border-gray-200 bg-white p-3">
-                <div className="mb-2 flex items-center justify-between">
-                    <h2 className="text-sm font-medium">{m.burndown.title}</h2>
-                    {/* The chart now spans every project in the sprint, so saying
-                        so keeps it from reading as one project's progress. */}
-                    <span className="text-xs text-gray-500">{m.burndown.tenantScope}</span>
-                </div>
-                {burndown && burndown.length > 0 ? (
-                    <BurndownChart series={burndown} />
-                ) : (
-                    <p className="text-sm text-gray-500">{m.burndown.noData}</p>
-                )}
-            </section>
+                <aside className="space-y-4">
+                    <section className="rounded-md border border-gray-200 bg-white p-3">
+                        <h2 className="mb-2 text-sm font-medium">{m.sprint.stats}</h2>
+                        <div className="grid grid-cols-2 gap-2">
+                            <CompactStat label={m.sprint.colEstimate} value={stats.estimate} />
+                            <CompactStat label={m.sprint.colSpent} value={stats.spent} />
+                            <CompactStat label={m.sprint.colRemaining} value={stats.remaining} tone="info" />
+                            <CompactStat label={m.sprint.statProgress} value={`${stats.progress}%`} />
+                            <CompactStat
+                                label={m.sprint.statTasksDone}
+                                value={`${stats.doneCount}/${stats.taskCount}`}
+                                tone={stats.taskCount > 0 && stats.doneCount === stats.taskCount ? 'positive' : 'default'}
+                            />
+                            <CompactStat label={m.sprint.statDaysLeft} value={stats.workingDaysLeft} />
+                            <CompactStat
+                                className="col-span-2"
+                                label={m.sprint.statVariance}
+                                value={
+                                    stats.variance == null
+                                        ? '—'
+                                        : stats.variance > 0
+                                          ? fmt(m.sprint.ahead, { hours: stats.variance })
+                                          : stats.variance < 0
+                                            ? fmt(m.sprint.behind, { hours: -stats.variance })
+                                            : m.sprint.onTrack
+                                }
+                                tone={
+                                    stats.variance == null
+                                        ? 'default'
+                                        : stats.variance >= 0
+                                          ? 'positive'
+                                          : 'warning'
+                                }
+                            />
+                        </div>
+                    </section>
+
+                    <section className="rounded-md border border-gray-200 bg-white p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <h2 className="text-sm font-medium">{m.burndown.title}</h2>
+                            {/* The chart spans every project in the sprint, so saying
+                                so keeps it from reading as one project's progress. */}
+                            <span className="text-xs text-gray-500">{m.burndown.tenantScope}</span>
+                        </div>
+                        {burndown && burndown.length > 0 ? (
+                            <BurndownChart series={burndown} compact />
+                        ) : (
+                            <p className="text-sm text-gray-500">{m.burndown.noData}</p>
+                        )}
+                    </section>
+                </aside>
+            </div>
+
+            {adding && sprint && (
+                <SprintBacklogModal
+                    sprintId={sprintId}
+                    sprintName={sprint.name}
+                    onClose={() => setAdding(false)}
+                    onAdded={() => void load()}
+                />
+            )}
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                title={m.task.deleteTask}
+                prompt={fmt(m.task.deletePrompt, { title: pendingDelete?.title ?? '' })}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={busy}
+                danger
+                onConfirm={confirmDelete}
+                onCancel={() => setPendingDelete(null)}
+            />
+
+            {openTaskId && (
+                <TaskDetailPanel
+                    taskId={openTaskId}
+                    onClose={() => setOpenTaskId(null)}
+                    onChanged={() => void load()}
+                />
+            )}
         </PageShell>
     );
 }

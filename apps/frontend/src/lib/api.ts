@@ -5617,6 +5617,15 @@ export const api = {
             body: JSON.stringify({ taskIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /** Commits every open task under the stories that is not already in a sprint. */
+    assignStoriesToSprint: (id: string, storyIds: string[]) =>
+        fetchWithAuth(`/sprints/${id}/stories`, {
+            method: 'POST',
+            body: JSON.stringify({ storyIds }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** `tasks[taskId][i]` is that task's remaining hours at the end of `days[i]`. */
+    getSprintDailyRemaining: (id: string) => fetchWithAuth(`/sprints/${id}/daily-remaining`),
     removeTasksFromSprint: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/sprints/${id}/tasks`, {
             method: 'DELETE',
