@@ -11,8 +11,12 @@ export interface BurndownPoint {
     isWorkingDay: boolean;
 }
 
-const WIDTH = 720;
-const HEIGHT = 260;
+const FULL = { width: 720, height: 260 };
+/**
+ * For a side column a few hundred pixels wide. A narrower viewBox rather than
+ * the full one scaled down, so the axis text stays the size it is written at.
+ */
+const COMPACT = { width: 340, height: 220 };
 const PAD = { top: 16, right: 16, bottom: 34, left: 44 };
 
 /**
@@ -26,8 +30,11 @@ const PAD = { top: 16, right: 16, bottom: 34, left: 44 };
 export default function BurndownChart({
     series,
     hideIdeal,
+    compact,
 }: {
     series: BurndownPoint[];
+    /** Draws for a narrow side column instead of a full-width section. */
+    compact?: boolean;
     /**
      * A project's `target_end_date` is optional where a sprint's dates are not,
      * so a project without one has no ideal to draw and no legend entry for it
@@ -37,6 +44,8 @@ export default function BurndownChart({
 }) {
     const { t } = useI18n();
     const m = t.projects.burndown;
+
+    const { width: WIDTH, height: HEIGHT } = compact ? COMPACT : FULL;
 
     const geometry = useMemo(() => {
         if (series.length === 0) return null;
@@ -83,7 +92,7 @@ export default function BurndownChart({
                 .filter((p) => !p.isWorkingDay),
             stepX,
         };
-    }, [series]);
+    }, [series, WIDTH, HEIGHT]);
 
     if (!geometry) {
         return <p className="text-sm text-gray-500">{m.noData}</p>;
@@ -97,7 +106,7 @@ export default function BurndownChart({
             <div className="overflow-x-auto">
                 <svg
                     viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-                    className="h-64 w-full min-w-[560px]"
+                    className={compact ? 'h-56 w-full' : 'h-64 w-full min-w-[560px]'}
                     role="img"
                     aria-label={m.title}
                 >
@@ -181,8 +190,8 @@ export default function BurndownChart({
                     )}
 
                     {series.map((point, i) =>
-                        // Label roughly six dates, whatever the sprint length.
-                        i % Math.max(1, Math.ceil(series.length / 6)) === 0 ? (
+                        // Label roughly six dates (four when compact), whatever the sprint length.
+                        i % Math.max(1, Math.ceil(series.length / (compact ? 4 : 6))) === 0 ? (
                             <text
                                 key={`label-${point.date}`}
                                 x={x(i)}

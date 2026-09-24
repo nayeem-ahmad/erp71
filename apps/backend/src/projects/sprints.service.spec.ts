@@ -52,6 +52,7 @@ describe('SprintsService', () => {
                 groupBy: jest.fn().mockResolvedValue([]),
             },
             sprintSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
+            projectTaskRemainingLog: { findMany: jest.fn().mockResolvedValue([]) },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -228,6 +229,84 @@ describe('SprintsService', () => {
         // match, which is the same answer a made-up id gets.
         expect(db.projectTask.updateMany.mock.calls[0][0].where).toMatchObject({
             AND: [{ project: { OR: visibilityOr('user-7') } }],
+        });
+    });
+    describe('assignStories', () => {
+        it('commits only open, unplanned tasks under the stories', async () => {
+            db.projectTask.updateMany.mockResolvedValue({ count: 3 });
+
+            const result = await service.assignStories(OWNER, 'sprint-1', {
+                storyIds: ['story-a', 'story-b'],
+            } as never);
+
+            expect(result).toEqual({ assigned: 3 });
+            const call = db.projectTask.updateMany.mock.calls[0][0];
+            expect(call.where).toMatchObject({
+                tenant_id: 'tenant-1',
+                user_story_id: { in: ['story-a', 'story-b'] },
+                // A task already in another sprint stays there.
+                sprint_id: null,
+                deleted_at: null,
+                status: { category: { not: 'DONE' } },
+            });
+            expect(call.data).toEqual({ sprint_id: 'sprint-1' });
+        });
+
+        it('scopes the stories\' tasks to what the viewer can reach', async () => {
+            await service.assignStories(staff('user-7'), 'sprint-1', { storyIds: ['story-a'] } as never);
+
+            expect(db.projectTask.updateMany.mock.calls[0][0].where).toMatchObject({
+                AND: [{ project: { OR: visibilityOr('user-7') } }],
+            });
+        });
+
+        it('refuses a sprint that does not exist', async () => {
+            db.sprint.findFirst.mockResolvedValue(null);
+            await expect(
+                service.assignStories(OWNER, 'missing', { storyIds: ['story-a'] } as never),
+            ).rejects.toBeInstanceOf(NotFoundException);
+        });
+    });
+
+    describe('dailyRemaining', () => {
+        it('gives each task its end-of-day remaining for every sprint day', async () => {
+            db.sprint.findFirst.mockResolvedValue(
+                sprint({
+                    start_date: new Date('2026-08-02T00:00:00.000Z'),
+                    end_date: new Date('2026-08-05T00:00:00.000Z'),
+                }),
+            );
+            db.projectTask.findMany.mockResolvedValue([{ id: 'task-a' }, { id: 'task-b' }]);
+            db.projectTaskRemainingLog.findMany.mockResolvedValue([
+                // Estimated before the sprint began — the opening figure.
+                { task_id: 'task-a', new_hours: 10, changed_at: new Date('2026-07-30T09:00:00Z') },
+                { task_id: 'task-a', new_hours: 6, changed_at: new Date('2026-08-03T10:00:00Z') },
+                { task_id: 'task-a', new_hours: 4, changed_at: new Date('2026-08-03T16:00:00Z') },
+                // Pulled in mid-sprint.
+                { task_id: 'task-b', new_hours: 5, changed_at: new Date('2026-08-04T08:00:00Z') },
+            ]);
+
+            const result = await service.dailyRemaining(
+                OWNER,
+                'sprint-1',
+                new Date('2026-08-04T12:00:00Z'),
+            );
+
+            expect(result.days).toEqual(['2026-08-02', '2026-08-03', '2026-08-04', '2026-08-05']);
+            // The last write of a day wins; days after today are unknown.
+            expect(result.tasks['task-a']).toEqual([10, 4, 4, null]);
+            expect(result.tasks['task-b']).toEqual([null, null, 5, null]);
+            expect(db.projectTaskRemainingLog.findMany.mock.calls[0][0].where).toMatchObject({
+                tenant_id: 'tenant-1',
+                task_id: { in: ['task-a', 'task-b'] },
+            });
+        });
+
+        it('skips the log query when the sprint holds nothing', async () => {
+            const result = await service.dailyRemaining(OWNER, 'sprint-1');
+
+            expect(result.tasks).toEqual({});
+            expect(db.projectTaskRemainingLog.findMany).not.toHaveBeenCalled();
         });
     });
 });

@@ -227,6 +227,8 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // and always will — this is the same rows read the other way round, for
   // whoever grooms scope across every project at once rather than one.
   'projects.stories': { id: 'projects.stories', kind: 'link', icon: 'ScrollText', labelKey: 'sidebar.items.projectsStories', href: '/projects/stories' },
+  // The parent of a story, read across every project like the backlog above.
+  'projects.epics': { id: 'projects.epics', kind: 'link', icon: 'Layers', labelKey: 'sidebar.items.projectsEpics', href: '/projects/epics' },
   'projects.sprints': { id: 'projects.sprints', kind: 'link', icon: 'Timer', labelKey: 'sidebar.items.projectsSprints', href: '/projects/sprints' },
   // `exact` because the report sits under /projects/hour-logs; without it both entries light up at once.
   'projects.hour-logs': { id: 'projects.hour-logs', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.projectsHourLogs', href: '/projects/hour-logs', exact: true },
@@ -396,6 +398,9 @@ function layoutNode(id: string, parentId: string | null, sortOrder: number, visi
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.stories`
  * and needs no reset — the `sortOrder` shuffle below only reorders this default,
  * and a saved layout keeps whatever order its admin arranged.
+ *
+ * The 2026-09-24 epics added `projects.epics` the same way:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.epics`.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -533,11 +538,12 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.list', 'projects', 0),
   layoutNode('projects.boards', 'projects', 1),
   layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.stories', 'projects', 3),
-  layoutNode('projects.sprints', 'projects', 4),
-  layoutNode('projects.hour-logs', 'projects', 5),
-  layoutNode('projects.hour-log-report', 'projects', 6),
-  layoutNode('projects.setup', 'projects', 7),
+  layoutNode('projects.epics', 'projects', 3),
+  layoutNode('projects.stories', 'projects', 4),
+  layoutNode('projects.sprints', 'projects', 5),
+  layoutNode('projects.hour-logs', 'projects', 6),
+  layoutNode('projects.hour-log-report', 'projects', 7),
+  layoutNode('projects.setup', 'projects', 8),
 
   layoutNode('manufacturing', null, 10),
   layoutNode('manufacturing.boms', 'manufacturing', 0),
@@ -621,7 +627,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
  * seven links here. For a saved layout:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects,projects.list,projects.boards,projects.tasks,projects.sprints,projects.hour-logs,projects.hour-log-report,projects.setup`
  * and, from 2026-09-20, `projects.stories` alongside them — the same one node
- * the tenant layout takes, since one set of pages serves both consoles.
+ * the tenant layout takes, since one set of pages serves both consoles. Likewise
+ * `projects.epics` from 2026-09-24.
  */
 export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin', null, 0),
@@ -681,11 +688,12 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('projects.list', 'projects', 0),
   layoutNode('projects.boards', 'projects', 1),
   layoutNode('projects.tasks', 'projects', 2),
-  layoutNode('projects.stories', 'projects', 3),
-  layoutNode('projects.sprints', 'projects', 4),
-  layoutNode('projects.hour-logs', 'projects', 5),
-  layoutNode('projects.hour-log-report', 'projects', 6),
-  layoutNode('projects.setup', 'projects', 7),
+  layoutNode('projects.epics', 'projects', 3),
+  layoutNode('projects.stories', 'projects', 4),
+  layoutNode('projects.sprints', 'projects', 5),
+  layoutNode('projects.hour-logs', 'projects', 6),
+  layoutNode('projects.hour-log-report', 'projects', 7),
+  layoutNode('projects.setup', 'projects', 8),
 
   layoutNode('whats-new', null, 2),
   layoutNode('help', null, 3),

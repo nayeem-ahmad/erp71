@@ -75,6 +75,13 @@ export enum UserStoryStatusDto {
     DONE = 'DONE',
 }
 
+export enum EpicStatusDto {
+    OPEN = 'OPEN',
+    IN_PROGRESS = 'IN_PROGRESS',
+    DONE = 'DONE',
+    CANCELLED = 'CANCELLED',
+}
+
 export class ListProjectsDto {
     @IsOptional() @Type(() => Number) @IsInt() @Min(1)
     page?: number;
@@ -239,6 +246,17 @@ export class ListUserStoriesDto {
     @IsOptional() @IsEnum(ProjectPriorityDto)
     priority?: ProjectPriorityDto;
 
+    /** Only the stories under this epic. */
+    @IsOptional() @IsUUID()
+    epicId?: string;
+
+    /**
+     * `true` returns only stories under no epic — the leftovers once a backlog
+     * has been carved up. Separate from `epicId`, like `ListTasksDto.noUserStory`.
+     */
+    @IsOptional() @IsIn(['true', 'false'])
+    noEpic?: string;
+
     @IsOptional() @IsString() @MaxLength(200)
     search?: string;
 }
@@ -294,6 +312,13 @@ class UserStoryFieldsDto {
     @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(999)
     storyPoints?: number | null;
 
+    /**
+     * The epic this story is part of. Must be in the story's project. `''`
+     * takes the story out of its epic — PATCH reads undefined as "leave alone".
+     */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
+    epicId?: string;
+
     @IsOptional() @Type(() => Number) @IsInt() @Min(0)
     sortOrder?: number;
 }
@@ -304,6 +329,65 @@ export class CreateUserStoryDto extends UserStoryFieldsDto {
 }
 
 export class UpdateUserStoryDto extends UserStoryFieldsDto {
+    @IsOptional() @IsString() @MinLength(1) @MaxLength(300)
+    declare title: string;
+}
+
+export class ListEpicsDto {
+    /** Optional, as for stories: omitted lists every epic the viewer can reach. */
+    @IsOptional() @IsUUID()
+    projectId?: string;
+
+    @IsOptional() @IsEnum(EpicStatusDto)
+    status?: EpicStatusDto;
+
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
+    @IsOptional() @IsString() @MaxLength(200)
+    search?: string;
+}
+
+/** Everything an epic carries except its project — see `UserStoryFieldsDto`. */
+class EpicFieldsDto {
+    @IsString() @MinLength(1) @MaxLength(300)
+    title!: string;
+
+    /** The epic's ID, e.g. `OTB-E2`. Optional on create, editable after. */
+    @IsOptional() @IsString() @MaxLength(40)
+    @Matches(/^\S+$/, { message: 'Epic ID cannot contain spaces' })
+    code?: string;
+
+    /** `''` clears it; the service stores `trim() || null`. */
+    @IsOptional() @IsString() @MaxLength(5000)
+    description?: string;
+
+    @IsOptional() @IsEnum(EpicStatusDto)
+    status?: EpicStatusDto;
+
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
+    @IsOptional() @IsEnum(ProjectLabelColorDto)
+    color?: ProjectLabelColorDto;
+
+    /** `''` clears the date, as on a task. */
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
+    startDate?: string;
+
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
+    targetDate?: string;
+
+    @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+    sortOrder?: number;
+}
+
+export class CreateEpicDto extends EpicFieldsDto {
+    @IsUUID()
+    projectId!: string;
+}
+
+export class UpdateEpicDto extends EpicFieldsDto {
     @IsOptional() @IsString() @MinLength(1) @MaxLength(300)
     declare title: string;
 }
@@ -870,6 +954,12 @@ export class AssignTasksToSprintDto {
     @IsArray()
     @IsUUID('4', { each: true })
     taskIds!: string[];
+}
+
+export class AssignStoriesToSprintDto {
+    @IsArray()
+    @IsUUID('4', { each: true })
+    storyIds!: string[];
 }
 
 export class CreateProjectTypeDto {

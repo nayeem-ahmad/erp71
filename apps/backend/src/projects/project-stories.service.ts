@@ -27,6 +27,7 @@ import {
 const STORY_INCLUDE = {
     project: { select: { id: true, code: true, name: true, short_name: true } },
     creator: { select: { id: true, name: true, email: true } },
+    epic: { select: { id: true, code: true, title: true, color: true } },
 } as const;
 
 /**
@@ -69,6 +70,8 @@ export class ProjectStoriesService {
             ...(query.projectId ? { project_id: query.projectId } : {}),
             ...(query.status ? { status: query.status } : {}),
             ...(query.priority ? { priority: query.priority } : {}),
+            ...(query.epicId ? { epic_id: query.epicId } : {}),
+            ...(query.noEpic === 'true' ? { epic_id: null } : {}),
             // A soft-deleted project keeps its rows; its stories must not keep
             // showing up in a cross-project list.
             project: { deleted_at: null },
@@ -131,6 +134,7 @@ export class ProjectStoriesService {
         const sortOrder = dto.sortOrder ?? (await this.nextSortOrder(tenantId, dto.projectId));
         const typedCode = dto.code?.trim() || null;
         if (typedCode) await this.assertCodeFree(dto.projectId, typedCode);
+        if (dto.epicId) await this.assertEpicInProject(tenantId, dto.epicId, dto.projectId);
 
         for (let attempt = 0; attempt < REFERENCE_ATTEMPTS; attempt += 1) {
             try {
@@ -149,6 +153,7 @@ export class ProjectStoriesService {
                         status: (dto.status ?? 'BACKLOG') as never,
                         priority: (dto.priority ?? 'MEDIUM') as never,
                         story_points: dto.storyPoints ?? null,
+                        epic_id: dto.epicId || null,
                         sort_order: sortOrder,
                         created_by: viewer.userId,
                     },
@@ -174,6 +179,9 @@ export class ProjectStoriesService {
             if (!code) throw new BadRequestException('Story ID cannot be empty');
             if (code !== story.code) await this.assertCodeFree(story.project_id as string, code, storyId);
         }
+        if (dto.epicId) {
+            await this.assertEpicInProject(viewer.tenantId, dto.epicId, story.project_id as string);
+        }
 
         return this.db.projectUserStory.update({
             where: { id: storyId },
@@ -189,6 +197,7 @@ export class ProjectStoriesService {
                 ...(dto.status !== undefined ? { status: dto.status as never } : {}),
                 ...(dto.priority !== undefined ? { priority: dto.priority as never } : {}),
                 ...(dto.storyPoints !== undefined ? { story_points: dto.storyPoints ?? null } : {}),
+                ...(dto.epicId !== undefined ? { epic_id: dto.epicId || null } : {}),
                 ...(dto.sortOrder !== undefined ? { sort_order: dto.sortOrder } : {}),
             },
             include: STORY_INCLUDE,
@@ -224,6 +233,23 @@ export class ProjectStoriesService {
             (project) => [project.code, project.short_name, project.name],
             (project) => project.id,
         );
+        // An epic is named by its ID or its title, and only means anything
+        // within its own project — so the index is keyed per project.
+        const epics = await this.db.projectEpic.findMany({
+            where: { tenant_id: tenantId, project_id: { in: projects.map((project) => project.id) } },
+            select: { id: true, project_id: true, code: true, title: true },
+        });
+        const epicIndex = new Map<string, Map<string, string>>();
+        for (const project of projects) {
+            epicIndex.set(
+                project.id,
+                nameIndex(
+                    epics.filter((epic) => epic.project_id === project.id),
+                    (epic) => [epic.code, epic.title],
+                    (epic) => epic.id,
+                ),
+            );
+        }
 
         return runImport<StoryImportRow>(rows, mode, tenantId, {
             requiredFields: ['project', 'title'],
@@ -235,8 +261,13 @@ export class ProjectStoriesService {
                 if (points !== null && (!Number.isInteger(points) || points < 0 || points > 999)) {
                     throw new Error(`Story points must be a whole number from 0 to 999 (got "${points}")`);
                 }
+                const projectId = lookup(projectIndex, requiredText(raw.project, 'Project'), 'no project matches');
+                const epicText = importText(raw.epic);
                 return {
-                    projectId: lookup(projectIndex, requiredText(raw.project, 'Project'), 'no project matches'),
+                    projectId,
+                    epicId: epicText
+                        ? lookup(epicIndex.get(projectId) ?? new Map(), epicText, 'no epic in that project matches')
+                        : null,
                     code,
                     title: requiredText(raw.title, 'Title'),
                     asA: importText(raw.asA),
@@ -416,6 +447,21 @@ export class ProjectStoriesService {
     }
 
     /**
+     * An epic groups one project's stories, so a story can only join an epic in
+     * its own project — the rule `assertUserStory` applies one level down.
+     */
+    private async assertEpicInProject(tenantId: string, epicId: string, projectId: string) {
+        const epic = await this.db.projectEpic.findFirst({
+            where: { id: epicId, tenant_id: tenantId },
+            select: { project_id: true },
+        });
+        if (!epic) throw new NotFoundException('Epic not found');
+        if (epic.project_id !== projectId) {
+            throw new BadRequestException('That epic belongs to a different project.');
+        }
+    }
+
+    /**
      * Exists, is in this tenant, and hangs off a project this viewer can open.
      * One check rather than three, so a story on a private project is
      * indistinguishable from one that was never there.
@@ -437,6 +483,7 @@ export class ProjectStoriesService {
 
 interface StoryImportRow {
     projectId: string;
+    epicId: string | null;
     code: string | null;
     title: string;
     asA: string | null;
@@ -458,6 +505,7 @@ function storyFieldsFrom(row: StoryImportRow) {
         ...(row.status !== null ? { status: row.status } : {}),
         ...(row.priority !== null ? { priority: row.priority } : {}),
         ...(row.storyPoints !== null ? { storyPoints: row.storyPoints } : {}),
+        ...(row.epicId !== null ? { epicId: row.epicId } : {}),
     };
 }
 

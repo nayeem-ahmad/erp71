@@ -17,7 +17,12 @@ import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { SprintsService } from './sprints.service';
-import { AssignTasksToSprintDto, CreateSprintDto, UpdateSprintDto } from './project.dto';
+import {
+    AssignStoriesToSprintDto,
+    AssignTasksToSprintDto,
+    CreateSprintDto,
+    UpdateSprintDto,
+} from './project.dto';
 
 @Controller('sprints')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
@@ -48,6 +53,13 @@ export class SprintsController {
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     burndown(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.sprints.burndown(tenant.tenantId, id);
+    }
+
+    /** Each committed task's end-of-day remaining hours, for the sprint table. */
+    @Get(':id/daily-remaining')
+    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
+    dailyRemaining(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.sprints.dailyRemaining(tenant, id);
     }
 
     /**
@@ -94,6 +106,17 @@ export class SprintsController {
         @Body() dto: AssignTasksToSprintDto,
     ) {
         return this.sprints.assignTasks(tenant, id, dto);
+    }
+
+    /** Commits every open, unplanned task under the given stories. */
+    @Post(':id/stories')
+    @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
+    assignStories(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: AssignStoriesToSprintDto,
+    ) {
+        return this.sprints.assignStories(tenant, id, dto);
     }
 
     @Delete(':id/tasks')
