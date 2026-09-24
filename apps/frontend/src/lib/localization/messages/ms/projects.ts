@@ -16,6 +16,8 @@ export const projectsMessages = {
 
     fields: {
         code: 'Kod',
+        codeHint: "Kunci tugas dibina daripadanya — {code}-14. Dicadangkan daripada nama; ubah jika mahu.",
+        codeEditHint: "Menukarnya mengekalkan kunci tugas lama — ia dialihkan ke kod baharu.",
         name: 'Nama',
         shortName: 'Nama ringkas',
         shortNameHint: 'Dipaparkan pada kad papan apabila nama penuh tidak muat.',
@@ -67,6 +69,7 @@ export const projectsMessages = {
 
     validation: {
         nameRequired: "Berikan nama kepada projek ini.",
+        codeInvalid: "2–12 aksara: huruf besar, digit dan tanda sempang, bermula dengan huruf.",
     },
 
     statusCategory: {

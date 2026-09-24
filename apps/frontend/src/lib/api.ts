@@ -5034,6 +5034,9 @@ export const api = {
         return fetchPaginated(`/projects?${query}`);
     },
     getProject: (id: string) => fetchWithAuth(`/projects/${id}`),
+    /** A free code proposed from a project name — the create form prefills it. */
+    suggestProjectCode: (name: string): Promise<{ code: string }> =>
+        fetchWithAuth(`/projects/code-suggestion?name=${encodeURIComponent(name)}`),
     createProject: (data: Record<string, unknown>) =>
         fetchWithAuth('/projects', {
             method: 'POST',

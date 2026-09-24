@@ -16,6 +16,8 @@ export const projectsMessages = {
 
     fields: {
         code: "Code",
+        codeHint: "Aufgabenschlüssel werden daraus gebildet — {code}-14. Aus dem Namen vorgeschlagen; gern ändern.",
+        codeEditHint: "Eine Änderung lässt alte Aufgabenschlüssel weiter funktionieren — sie leiten zum neuen Code um.",
         name: "Name",
         shortName: "Kurzname",
         shortNameHint: "Wird auf Board-Karten angezeigt, wenn der volle Name nicht passt.",
@@ -67,6 +69,7 @@ export const projectsMessages = {
 
     validation: {
         nameRequired: "Geben Sie dem Projekt einen Namen.",
+        codeInvalid: "2–12 Zeichen: Großbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben.",
     },
 
     statusCategory: {

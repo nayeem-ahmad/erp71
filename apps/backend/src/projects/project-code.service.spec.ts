@@ -91,3 +91,38 @@ describe('retiring a project code', () => {
         expect(db.projectCodeHistory.create).not.toHaveBeenCalled();
     });
 });
+
+describe('proposing a project code', () => {
+    let db: ReturnType<typeof makeDb> & {
+        project: { findMany: jest.Mock };
+    };
+    let service: ProjectsService;
+
+    beforeEach(() => {
+        const base = makeDb();
+        db = { ...base, project: { ...base.project, findMany: jest.fn().mockResolvedValue([]) } };
+        service = new ProjectsService(db as never, {} as never, {} as never);
+    });
+
+    it('abbreviates the name when the abbreviation is free', async () => {
+        await expect(service.suggestCode('t1', 'Warehouse Management System')).resolves.toEqual({ code: 'WMS' });
+    });
+
+    it('appends a digit past codes held by live projects and by history', async () => {
+        db.project.findMany.mockResolvedValue([{ code: 'WMS' }]);
+        db.projectCodeHistory.findMany.mockResolvedValue([{ code: 'WMS2' }]);
+        await expect(service.suggestCode('t1', 'Warehouse Management System')).resolves.toEqual({ code: 'WMS3' });
+    });
+
+    it('falls back to a numbered code when the name cannot be abbreviated', async () => {
+        db.project.count.mockResolvedValue(4);
+        await expect(service.suggestCode('t1', 'গুদাম')).resolves.toEqual({ code: 'PRJ-0005' });
+    });
+
+    it('scopes the lookup to the tenant', async () => {
+        await service.suggestCode('t1', 'Mobile');
+        expect(db.project.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ where: expect.objectContaining({ tenant_id: 't1' }) }),
+        );
+    });
+});

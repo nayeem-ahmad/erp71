@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
-import { isValidProjectCode } from './url-keys/project-code';
+import { isValidProjectCode, suggestProjectCode } from './url-keys/project-code';
 import { ProjectSettingsService } from './project-settings.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
@@ -99,6 +99,28 @@ export class ProjectsService {
         await this.db.projectCodeHistory.create({
             data: { tenant_id: tenantId, project_id: projectId, code: previous },
         });
+    }
+
+    /**
+     * A free code for the create form to prefill — the name's abbreviation, with
+     * a digit appended while that is taken (`WMS`, `WMS2`, …). Advisory only:
+     * `create` still checks the code it is given, so a race between two forms
+     * proposing the same code ends in a conflict, not a duplicate.
+     */
+    async suggestCode(tenantId: string, name: string): Promise<{ code: string }> {
+        const base = suggestProjectCode(name);
+        if (!base) return { code: await this.nextCode(tenantId) };
+
+        const candidates = [base, ...Array.from({ length: 98 }, (_, i) => `${base}${i + 2}`)]
+            .filter(isValidProjectCode);
+        const where = { tenant_id: tenantId, code: { in: candidates } };
+        const [live, retired] = await Promise.all([
+            this.db.project.findMany({ where, select: { code: true } }),
+            this.db.projectCodeHistory.findMany({ where, select: { code: true } }),
+        ]);
+        const taken = new Set([...live, ...retired].map((row: { code: string }) => row.code));
+        const free = candidates.find((code) => !taken.has(code));
+        return { code: free ?? (await this.nextCode(tenantId)) };
     }
 
     private async nextCode(tenantId: string): Promise<string> {
