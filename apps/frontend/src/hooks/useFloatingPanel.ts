@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
     PANEL_KEYBOARD_STEP,
+    anchoredPanelPosition,
     clampPanelPosition,
     readPanelPosition,
     writePanelPosition,
@@ -25,6 +26,10 @@ export interface FloatingPanelDragProps {
     onPointerCancel: (event: React.PointerEvent<HTMLElement>) => void;
 }
 
+// Placing a panel under its anchor has to happen before paint, or it flashes in
+// its default corner first. The server has no layout to wait for.
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 /** The grip is a button, so pressing it must not be mistaken for pressing a control. */
 export const DRAG_HANDLE_ATTR = 'data-panel-grip';
 
@@ -39,8 +44,18 @@ export const DRAG_HANDLE_ATTR = 'data-panel-grip';
  * `position` stays null until someone moves the panel or a remembered position
  * comes back, which is what lets the default corner be plain CSS — nothing has
  * to measure the window to open the panel where it belongs.
+ *
+ * `getAnchor` names the control the panel opens from. When given, the panel
+ * opens just below it every time instead of where it was last left — it reads
+ * as dropping out of the thing that was pressed — and follows it on resize
+ * until somebody drags it elsewhere. Nothing is remembered then: the next
+ * opening belongs under the anchor again.
  */
-export function useFloatingPanel(storageKey: string, draggable: boolean) {
+export function useFloatingPanel(
+    storageKey: string,
+    draggable: boolean,
+    getAnchor?: () => HTMLElement | null,
+) {
     const panelRef = useRef<HTMLDivElement | null>(null);
     const [position, setPosition] = useState<PanelPoint | null>(null);
     const [dragging, setDragging] = useState(false);
@@ -49,6 +64,14 @@ export function useFloatingPanel(storageKey: string, draggable: boolean) {
     // Mirrors `position` for the handlers: an updater that also writes to
     // storage would write twice under StrictMode's double-invoked renders.
     const positionRef = useRef<PanelPoint | null>(null);
+    // A ref, so a caller passing an inline function does not re-place the
+    // panel on every render.
+    const getAnchorRef = useRef(getAnchor);
+    getAnchorRef.current = getAnchor;
+    /** True when the panel opened under its anchor, so there is nothing to remember. */
+    const usesAnchorRef = useRef(false);
+    /** True while the panel still sits where its anchor put it. */
+    const anchoredRef = useRef(false);
 
     const applyPosition = useCallback((next: PanelPoint | null) => {
         positionRef.current = next;
@@ -65,10 +88,28 @@ export function useFloatingPanel(storageKey: string, draggable: boolean) {
         return rect ? { width: rect.width, height: rect.height } : null;
     };
 
+    const anchorPosition = (): PanelPoint | null => {
+        const anchor = getAnchorRef.current?.();
+        const size = measure();
+        if (!anchor || !size) return null;
+        return anchoredPanelPosition(anchor.getBoundingClientRect(), size, viewport(), {
+            rtl: document.documentElement.dir === 'rtl',
+        });
+    };
+
     // Restore. A window narrower than the one the position was saved in — a
     // laptop undocked from a monitor — would otherwise put the panel off
     // screen, where it can never be dragged back.
-    useEffect(() => {
+    useIsomorphicLayoutEffect(() => {
+        // No anchor on screen — a page without the header chip — falls back to
+        // the remembered position, as if none had been asked for.
+        const anchored = anchorPosition();
+        usesAnchorRef.current = anchored !== null;
+        anchoredRef.current = anchored !== null;
+        if (anchored) {
+            applyPosition(anchored);
+            return;
+        }
         if (!draggable) {
             applyPosition(null);
             return;
@@ -77,13 +118,23 @@ export function useFloatingPanel(storageKey: string, draggable: boolean) {
         if (!stored) return;
         const size = measure();
         applyPosition(size ? clampPanelPosition(stored, size, viewport()) : stored);
+        // `anchorPosition` reads refs only.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draggable, storageKey, applyPosition]);
 
     // The same hazard arriving the other way round: the window shrinking while
     // the panel is open.
     useEffect(() => {
-        if (!draggable) return;
+        if (!draggable && !usesAnchorRef.current) return;
         const onResize = () => {
+            if (anchoredRef.current) {
+                const anchored = anchorPosition();
+                if (anchored) {
+                    applyPosition(anchored);
+                    return;
+                }
+            }
+            if (!draggable) return;
             const current = positionRef.current;
             const size = measure();
             if (!current || !size) return;
@@ -91,6 +142,7 @@ export function useFloatingPanel(storageKey: string, draggable: boolean) {
         };
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draggable, applyPosition]);
 
     const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
@@ -107,6 +159,7 @@ export function useFloatingPanel(storageKey: string, draggable: boolean) {
         if (!rect) return;
 
         grabOffset.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        anchoredRef.current = false;
         applyPosition({ x: rect.left, y: rect.top });
         setDragging(true);
         event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -137,7 +190,9 @@ export function useFloatingPanel(storageKey: string, draggable: boolean) {
         } catch {
             // The capture is already gone; nothing to release.
         }
-        if (positionRef.current) writePanelPosition(storageKey, positionRef.current);
+        if (positionRef.current && !usesAnchorRef.current) {
+            writePanelPosition(storageKey, positionRef.current);
+        }
     };
 
     /** Arrow keys move it too — a panel only a pointer can move is a panel some people cannot move. */
@@ -157,8 +212,9 @@ export function useFloatingPanel(storageKey: string, draggable: boolean) {
             { width: rect.width, height: rect.height },
             viewport(),
         );
+        anchoredRef.current = false;
         applyPosition(next);
-        writePanelPosition(storageKey, next);
+        if (!usesAnchorRef.current) writePanelPosition(storageKey, next);
     };
 
     const dragProps: FloatingPanelDragProps = {

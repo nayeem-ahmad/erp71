@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: "Iniciar",
         stop: "Detener",
         elsewhere: "Ya hay un temporizador en otra tarea",
+        idleHint: "Nada en curso. Haz clic para iniciar un temporizador o registrar tiempo.",
+        startedAt: "Iniciado a las",
+        clickToOpen: "Haz clic para abrir el registro",
     },
 
     remaining: {

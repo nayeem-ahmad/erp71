@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: "Start",
         stop: "Stopp",
         elsewhere: "Für eine andere Aufgabe läuft bereits ein Timer",
+        idleHint: "Nichts läuft. Klicken, um einen Timer zu starten oder Zeit zu erfassen.",
+        startedAt: "Gestartet um",
+        clickToOpen: "Klicken, um den Tracker zu öffnen",
     },
 
     remaining: {

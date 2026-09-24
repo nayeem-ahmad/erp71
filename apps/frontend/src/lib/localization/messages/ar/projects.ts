@@ -401,6 +401,9 @@ export const projectsMessages = {
         start: "بدء",
         stop: "إيقاف",
         elsewhere: "هناك مؤقّت يعمل بالفعل على مهمة أخرى",
+        idleHint: "لا شيء قيد التشغيل. انقر لبدء مؤقّت أو تسجيل الوقت.",
+        startedAt: "بدأ في",
+        clickToOpen: "انقر لفتح المتتبّع",
     },
 
     remaining: {
