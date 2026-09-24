@@ -63,6 +63,12 @@ describe('ProjectStoriesService', () => {
                 findMany: jest.fn().mockResolvedValue([]),
                 updateMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
+            projectEpic: {
+                findFirst: jest.fn().mockResolvedValue({ project_id: 'project-1' }),
+                findMany: jest.fn().mockResolvedValue([
+                    { id: 'epic-1', project_id: 'project-1', code: 'OTB-E1', title: 'Online payments' },
+                ]),
+            },
             $transaction: jest.fn().mockResolvedValue([]),
         };
 
@@ -419,6 +425,65 @@ describe('ProjectStoriesService', () => {
             );
             expect(updated).toMatchObject({ updated: 1 });
             expect(db.projectUserStory.update.mock.calls[0][0].data).toEqual({ title: 'Renamed' });
+        });
+    });
+
+    describe('epics', () => {
+        it('files a new story under an epic in the same project', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue(null);
+            db.projectUserStory.findMany.mockResolvedValue([]);
+
+            const created: any = await service.create(OWNER, {
+                projectId: 'project-1',
+                title: 'Pay with bKash',
+                epicId: 'epic-1',
+            } as never);
+
+            expect(created.epic_id).toBe('epic-1');
+        });
+
+        it('refuses an epic from another project', async () => {
+            db.projectEpic.findFirst.mockResolvedValue({ project_id: 'project-2' });
+
+            await expect(
+                service.update(OWNER, 'story-1', { epicId: 'epic-9' } as never),
+            ).rejects.toThrow('different project');
+            expect(db.projectUserStory.update).not.toHaveBeenCalled();
+        });
+
+        it('takes a story out of its epic with an empty string', async () => {
+            await service.update(OWNER, 'story-1', { epicId: '' } as never);
+
+            expect(db.projectEpic.findFirst).not.toHaveBeenCalled();
+            expect(db.projectUserStory.update.mock.calls[0][0].data).toEqual({ epic_id: null });
+        });
+
+        it('filters the list to one epic, or to stories under none', async () => {
+            await service.list(OWNER, { epicId: 'epic-1' } as never);
+            expect(db.projectUserStory.findMany.mock.calls[0][0].where).toMatchObject({ epic_id: 'epic-1' });
+
+            await service.list(OWNER, { noEpic: 'true' } as never);
+            expect(db.projectUserStory.findMany.mock.calls[1][0].where).toMatchObject({ epic_id: null });
+        });
+
+        it('imports the epic column by ID or title, within the row’s project', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue(null);
+            db.projectUserStory.findMany.mockResolvedValue([]);
+
+            const result = await service.importRows(
+                OWNER,
+                [
+                    { project: 'OTB', title: 'Pay with bKash', epic: 'otb-e1' },
+                    { project: 'OTB', title: 'Pay with Nagad', epic: 'online payments' },
+                    { project: 'OTB', title: 'Pay with cash', epic: 'Nope' },
+                ],
+                'skip',
+            );
+
+            expect(result.created).toBe(2);
+            expect(result.errors[0]).toContain('no epic in that project matches "Nope"');
+            const created = db.projectUserStory.create.mock.calls.map((call: any) => call[0].data);
+            expect(created.map((row: any) => row.epic_id)).toEqual(['epic-1', 'epic-1']);
         });
     });
 

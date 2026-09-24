@@ -17,6 +17,7 @@ import {
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import ProjectStoriesCard, { type UserStory } from '@/components/projects/ProjectStoriesCard';
+import ProjectEpicsCard, { type Epic } from '@/components/projects/ProjectEpicsCard';
 import ProjectTeamCard from '@/components/projects/ProjectTeamCard';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import { api } from '@/lib/api';
@@ -94,7 +95,10 @@ export default function ProjectDetailPage() {
     const projectId = params.id;
     // Set by a link from the cross-project backlog, so the story that was
     // clicked there is already open when the project page paints.
-    const openStoryId = useSearchParams().get('story');
+    const searchParams = useSearchParams();
+    const openStoryId = searchParams.get('story');
+    // Likewise from the cross-project epic list.
+    const openEpicId = searchParams.get('epic');
     const { t } = useI18n();
     const m = t.projects;
 
@@ -114,6 +118,7 @@ export default function ProjectDetailPage() {
     const [saving, setSaving] = useState(false);
     /** Null until the backlog has been read, so the card can say "loading". */
     const [stories, setStories] = useState<UserStory[] | null>(null);
+    const [epics, setEpics] = useState<Epic[] | null>(null);
 
     const load = useCallback(async () => {
         try {
@@ -150,6 +155,20 @@ export default function ProjectDetailPage() {
     useEffect(() => {
         loadStories();
     }, [loadStories]);
+
+    /** Read here for the same reason: the epic card and the story form's picker. */
+    const loadEpics = useCallback(async () => {
+        try {
+            const rows = await api.getProjectEpics({ projectId });
+            setEpics((Array.isArray(rows) ? rows : []) as Epic[]);
+        } catch {
+            setEpics([]);
+        }
+    }, [projectId]);
+
+    useEffect(() => {
+        loadEpics();
+    }, [loadEpics]);
 
     // Loads on its own, after the page: a project whose burndown cannot be read
     // still opens, it simply has no chart.
@@ -269,12 +288,26 @@ export default function ProjectDetailPage() {
                     {/* Above the task table rather than beside it: the stories
                         are what the tasks are *for*, and the table below is the
                         same work seen flat. */}
+                    <ProjectEpicsCard
+                        projectId={projectId}
+                        projectCode={project?.code}
+                        epics={epics}
+                        openEpicId={openEpicId}
+                        onEpicsChanged={loadEpics}
+                        onStoriesChanged={loadStories}
+                    />
+
                     <ProjectStoriesCard
                         projectId={projectId}
                         projectCode={project?.code}
                         stories={stories}
+                        epics={epics ?? undefined}
                         openStoryId={openStoryId}
-                        onStoriesChanged={loadStories}
+                        onStoriesChanged={async () => {
+                            await loadStories();
+                            // An epic's progress is counted from its stories.
+                            await loadEpics();
+                        }}
                         onTasksChanged={load}
                         onOpenTask={setOpenTaskId}
                     />

@@ -30,6 +30,7 @@ export type VoiceNavTargetId =
     | 'crm-campaigns'
     | 'projects'
     | 'user-stories'
+    | 'epics'
     | 'tasks'
     | 'sprints'
     | 'project-boards'
@@ -266,6 +267,11 @@ export const VOICE_NAV_ROUTES: VoiceNavRoute[] = [
         id: 'sprints',
         path: '/projects/sprints',
         aliases: ['sprints', 'sprint', 'স্প্রিন্ট'],
+    },
+    {
+        id: 'epics',
+        path: '/projects/epics',
+        aliases: ['epics', 'epic', 'এপিক', 'epik'],
     },
     {
         id: 'user-stories',

@@ -15,6 +15,7 @@ import {
 import DataTable from '@/components/data-table/DataTable';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { StoryFormModal, type StoryProjectOption } from '@/components/projects/ProjectStoriesCard';
+import { EpicBadge, type EpicChip } from '@/components/projects/ProjectEpicsCard';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -42,6 +43,7 @@ interface StoryRow {
     priority: string;
     story_points?: number | null;
     project?: { id: string; code: string; name: string; short_name?: string | null } | null;
+    epic?: EpicChip | null;
     progress?: { taskCount: number; doneTaskCount: number; percentComplete: number };
 }
 
@@ -68,6 +70,7 @@ const PRIORITY_TONE: Record<string, StatusBadgeTone> = {
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'project', label: 'Project (code or name)', required: true },
     { key: 'code', label: 'Story ID', required: false },
+    { key: 'epic', label: 'Epic (ID or title, same project)', required: false },
     { key: 'title', label: 'Title', required: true },
     { key: 'asA', label: 'As a', required: false },
     { key: 'iWant', label: 'I want', required: false },
@@ -87,6 +90,7 @@ export default function ProjectStoriesPage() {
 
     const [stories, setStories] = useState<StoryRow[]>([]);
     const [projects, setProjects] = useState<StoryProjectOption[]>([]);
+    const [epics, setEpics] = useState<(EpicChip & { project?: { code: string } | null })[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
@@ -100,8 +104,10 @@ export default function ProjectStoriesPage() {
         projectId: '',
         status: '',
         priority: '',
+        /** `''` any, `'none'` stories under no epic, otherwise an epic id. */
+        epic: '',
     });
-    const { search, projectId, status, priority } = filters;
+    const { search, projectId, status, priority, epic } = filters;
 
     const load = useCallback(async () => {
         // Nothing is asked for until the remembered filters are in, or a return
@@ -117,6 +123,8 @@ export default function ProjectStoriesPage() {
                 projectId: projectId || undefined,
                 status: status || undefined,
                 priority: priority || undefined,
+                epicId: epic && epic !== 'none' ? epic : undefined,
+                noEpic: epic === 'none' || undefined,
             });
             setStories(Array.isArray(list) ? (list as StoryRow[]) : []);
         } catch (error) {
@@ -124,11 +132,19 @@ export default function ProjectStoriesPage() {
         } finally {
             setLoading(false);
         }
-    }, [filtersReady, m.stories.loadFailed, priority, projectId, status]);
+    }, [epic, filtersReady, m.stories.loadFailed, priority, projectId, status]);
 
     useEffect(() => {
         load();
     }, [load]);
+
+    // The epic filter's options follow the project filter: an epic belongs to
+    // one project, so across all of them the list is grouped by project code.
+    useEffect(() => {
+        api.getProjectEpics({ projectId: projectId || undefined })
+            .then((rows: unknown) => setEpics(Array.isArray(rows) ? (rows as typeof epics) : []))
+            .catch(() => setEpics([]));
+    }, [projectId]);
 
     useEffect(() => {
         api.getProjects({ limit: 100 })
@@ -212,6 +228,18 @@ export default function ProjectStoriesPage() {
                 },
             },
             {
+                id: 'epic',
+                header: m.epics.field,
+                accessorFn: (row: StoryRow) => row.epic?.code ?? '',
+                meta: { hideOnMobile: true },
+                cell: ({ row }: { row: { original: StoryRow } }) =>
+                    row.original.epic ? (
+                        <EpicBadge epic={row.original.epic} />
+                    ) : (
+                        <span className="text-gray-400">—</span>
+                    ),
+            },
+            {
                 id: 'status',
                 header: m.fields.status,
                 accessorKey: 'status',
@@ -272,7 +300,7 @@ export default function ProjectStoriesPage() {
         [fmt, m],
     );
 
-    const anyFilter = Boolean(search.trim() || projectId || status || priority);
+    const anyFilter = Boolean(search.trim() || projectId || status || priority || epic);
 
     return (
         <PageShell>
@@ -312,13 +340,26 @@ export default function ProjectStoriesPage() {
                 />
                 <Select
                     value={projectId}
-                    onChange={(e) => setFilter('projectId', e.target.value)}
+                    onChange={(e) => {
+                        setFilter('projectId', e.target.value);
+                        // A picked epic may not be in the newly chosen project.
+                        if (epic && epic !== 'none') setFilter('epic', '');
+                    }}
                     className="md:w-52"
                 >
                     <option value="">{m.storyList.allProjects}</option>
                     {projects.map((project) => (
                         <option key={project.id} value={project.id}>
                             {project.code} · {project.name}
+                        </option>
+                    ))}
+                </Select>
+                <Select value={epic} onChange={(e) => setFilter('epic', e.target.value)} className="md:w-52">
+                    <option value="">{m.storyList.anyEpic}</option>
+                    <option value="none">{m.storyList.noEpic}</option>
+                    {epics.map((option) => (
+                        <option key={option.id} value={option.id}>
+                            {option.code} · {option.title}
                         </option>
                     ))}
                 </Select>
