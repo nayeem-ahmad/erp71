@@ -5090,7 +5090,14 @@ export const api = {
      * `/projects/stories` asks for; the card on a project page always passes one.
      */
     getProjectStories: (
-        params: { projectId?: string; status?: string; priority?: string; search?: string } = {},
+        params: {
+            projectId?: string;
+            status?: string;
+            priority?: string;
+            search?: string;
+            epicId?: string;
+            noEpic?: boolean;
+        } = {},
     ) => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params)) {
@@ -5118,6 +5125,44 @@ export const api = {
         fetchWithAuth(`/project-stories/${storyId}`, { method: 'DELETE' }),
     importProjectStories: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
         fetchWithAuth('/project-stories/import', {
+            method: 'POST',
+            body: JSON.stringify({ rows, mode }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+
+    /**
+     * Epics — the parent of user stories. Same shape as the story calls: the
+     * list's `projectId` is optional, and omitted reads across every project.
+     */
+    getProjectEpics: (
+        params: { projectId?: string; status?: string; priority?: string; search?: string } = {},
+    ) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value) query.set(key, String(value));
+        }
+        const suffix = query.toString();
+        return fetchWithAuth(`/project-epics${suffix ? `?${suffix}` : ''}`);
+    },
+    /** One epic with the stories filed under it. */
+    getProjectEpic: (epicId: string) => fetchWithAuth(`/project-epics/${epicId}`),
+    createProjectEpic: (data: Record<string, unknown>) =>
+        fetchWithAuth('/project-epics', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updateProjectEpic: (epicId: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/project-epics/${epicId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** The stories under it are detached, never deleted with it. */
+    deleteProjectEpic: (epicId: string) =>
+        fetchWithAuth(`/project-epics/${epicId}`, { method: 'DELETE' }),
+    importProjectEpics: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+        fetchWithAuth('/project-epics/import', {
             method: 'POST',
             body: JSON.stringify({ rows, mode }),
             headers: { 'Content-Type': 'application/json' },

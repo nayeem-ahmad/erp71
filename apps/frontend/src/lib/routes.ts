@@ -214,6 +214,11 @@ export const routes = {
          */
         storyInProject: (projectId: string, storyId: string) =>
             `/projects/${projectId}?story=${storyId}` as const,
+        // Every project's epics on one screen; like stories, an epic is edited
+        // on the page of the project that owns it.
+        epics: '/projects/epics',
+        epicInProject: (projectId: string, epicId: string) =>
+            `/projects/${projectId}?epic=${epicId}` as const,
         sprints: '/projects/sprints',
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',
