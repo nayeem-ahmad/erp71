@@ -36,6 +36,24 @@ export default function TimerChip() {
         if (!loaded) load();
     }, [loaded, load]);
 
+    // Coming back to the tab re-asks the server. The clock on screen is the
+    // server's count plus local time since, and the local half is only as good
+    // as the device clock: a laptop waking from sleep or an OS time correction
+    // moves it, and until now only a reload put it right. It also catches a
+    // timer started or stopped on another device while this tab sat hidden.
+    // The chip is on every `(app)` page, so this is the one place that listens.
+    useEffect(() => {
+        const resync = () => {
+            if (document.visibilityState === 'visible') load();
+        };
+        document.addEventListener('visibilitychange', resync);
+        window.addEventListener('online', resync);
+        return () => {
+            document.removeEventListener('visibilitychange', resync);
+            window.removeEventListener('online', resync);
+        };
+    }, [load]);
+
     const elapsed = useTimerElapsed();
 
     if (!timer) {
