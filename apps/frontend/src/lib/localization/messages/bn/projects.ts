@@ -16,6 +16,8 @@ export const projectsMessages = {
 
     fields: {
         code: 'কোড',
+        codeHint: "টাস্ক কী এটি দিয়েই তৈরি হয় — {code}-14। নাম থেকে প্রস্তাবিত; চাইলে বদলাতে পারেন।",
+        codeEditHint: "বদলালেও পুরনো টাস্ক কী কাজ করবে — সেগুলো নতুন কোডে চলে যাবে।",
         name: 'নাম',
         shortName: 'সংক্ষিপ্ত নাম',
         shortNameHint: 'পুরো নাম না আঁটলে বোর্ড কার্ডে এটি দেখানো হয়।',
@@ -67,6 +69,7 @@ export const projectsMessages = {
 
     validation: {
         nameRequired: "প্রকল্পের একটি নাম দিন।",
+        codeInvalid: "২–১২ অক্ষর: বড় হাতের অক্ষর, সংখ্যা ও হাইফেন, শুরুতে একটি অক্ষর।",
     },
 
     statusCategory: {

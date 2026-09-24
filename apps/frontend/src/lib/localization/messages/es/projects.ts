@@ -16,6 +16,8 @@ export const projectsMessages = {
 
     fields: {
         code: "Código",
+        codeHint: "Las claves de tarea se forman con él — {code}-14. Sugerido a partir del nombre; cámbialo si quieres.",
+        codeEditHint: "Cambiarlo mantiene válidas las claves antiguas — redirigen al nuevo código.",
         name: "Nombre",
         shortName: "Nombre corto",
         shortNameHint: "Se muestra en las tarjetas del tablero cuando el nombre completo no cabe.",
@@ -67,6 +69,7 @@ export const projectsMessages = {
 
     validation: {
         nameRequired: "Ponga un nombre al proyecto.",
+        codeInvalid: "2–12 caracteres: mayúsculas, dígitos y guiones, empezando por una letra.",
     },
 
     statusCategory: {

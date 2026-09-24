@@ -16,6 +16,8 @@ export const projectsMessages = {
 
     fields: {
         code: 'Code',
+        codeHint: "Task keys are built from it — {code}-14. Suggested from the name; change it if you like.",
+        codeEditHint: "Changing it keeps old task keys working — they redirect to the new code.",
         name: 'Name',
         shortName: 'Short name',
         shortNameHint: 'Shown on board cards where the full name will not fit.',
@@ -67,6 +69,7 @@ export const projectsMessages = {
 
     validation: {
         nameRequired: 'Give the project a name.',
+        codeInvalid: "2–12 characters: capital letters, digits and hyphens, starting with a letter.",
     },
 
     statusCategory: {

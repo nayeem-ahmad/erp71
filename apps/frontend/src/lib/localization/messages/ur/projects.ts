@@ -16,6 +16,8 @@ export const projectsMessages = {
 
     fields: {
         code: "کوڈ",
+        codeHint: "ٹاسک کلیدیں اسی سے بنتی ہیں — {code}-14۔ نام سے تجویز کردہ؛ چاہیں تو بدلیں۔",
+        codeEditHint: "بدلنے پر پرانی ٹاسک کلیدیں کام کرتی رہیں گی — وہ نئے کوڈ پر جائیں گی۔",
         name: "نام",
         shortName: "مختصر نام",
         shortNameHint: "بورڈ کارڈز پر دکھایا جاتا ہے جہاں پورا نام نہ سما سکے۔",
@@ -67,6 +69,7 @@ export const projectsMessages = {
 
     validation: {
         nameRequired: "پروجیکٹ کو ایک نام دیں۔",
+        codeInvalid: "2–12 حروف: بڑے حروف، ہندسے اور ہائفن، شروع میں ایک حرف۔",
     },
 
     statusCategory: {

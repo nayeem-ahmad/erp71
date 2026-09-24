@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Select, Textarea, Field, FormGrid, FormFooter } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 
 export interface ProjectFormValues {
+    code: string;
     name: string;
     shortName: string;
     description: string;
@@ -23,6 +24,7 @@ export interface ProjectFormValues {
 }
 
 const EMPTY: ProjectFormValues = {
+    code: '',
     name: '',
     shortName: '',
     description: '',
@@ -36,12 +38,19 @@ const EMPTY: ProjectFormValues = {
     budgetAmount: '',
 };
 
+/** Mirrors the backend's `PROJECT_CODE_PATTERN`, so a bad code is caught inline. */
+const PROJECT_CODE_PATTERN = /^[A-Z][A-Z0-9-]{1,11}$/;
+
+/** Upper-cases as the user types and drops what a code can never hold. */
+const normaliseCode = (value: string): string => value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+
 /** `2026-08-02T00:00:00.000Z` → `2026-08-02`, which is what `<input type="date">` wants. */
 const toDateInput = (value?: string | null): string => (value ? String(value).slice(0, 10) : '');
 
 export function toFormValues(project: Record<string, unknown> | null): ProjectFormValues {
     if (!project) return { ...EMPTY };
     return {
+        code: (project.code as string) ?? '',
         name: (project.name as string) ?? '',
         shortName: (project.short_name as string) ?? '',
         description: (project.description as string) ?? '',
@@ -60,8 +69,10 @@ export function toFormValues(project: Record<string, unknown> | null): ProjectFo
  * One form for create and edit. Extracted from the new-project page in Phase 2
  * rather than copied, so the two cannot drift a field apart.
  *
- * `code` is deliberately absent in both modes: it is allocated server-side and
- * is printed on documents, so it must not change under an existing project.
+ * `code` is editable in both modes. On create it follows the name — the server
+ * proposes a free abbreviation — until the user types a code of their own. On
+ * edit a change retires the old code to history server-side, so task keys
+ * already shared keep resolving.
  */
 export default function ProjectForm({
     mode,
@@ -73,14 +84,18 @@ export default function ProjectForm({
     initial?: ProjectFormValues;
 }) {
     const router = useRouter();
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.projects;
 
     const [types, setTypes] = useState<{ id: string; name: string }[]>([]);
     const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
     const [saving, setSaving] = useState(false);
     const [nameError, setNameError] = useState<string | null>(null);
+    const [codeError, setCodeError] = useState<string | null>(null);
     const [form, setForm] = useState<ProjectFormValues>(initial ?? EMPTY);
+    // Once the user edits the code by hand, the name stops driving it.
+    const [codeTouched, setCodeTouched] = useState(false);
+    const suggestSeq = useRef(0);
 
     // `initial` arrives after the edit page's fetch resolves, so the form has to
     // adopt it rather than only seeding from it once.
@@ -100,6 +115,38 @@ export default function ProjectForm({
             .catch(() => setCustomers([]));
     }, []);
 
+    // Propose a code from the name while the user has not chosen one. Debounced,
+    // and sequenced so a slow response for an older name cannot overwrite a
+    // newer proposal.
+    useEffect(() => {
+        if (mode !== 'create' || codeTouched) return;
+        const name = form.name.trim();
+        if (!name) {
+            setForm((prev) => ({ ...prev, code: '' }));
+            return;
+        }
+        const seq = ++suggestSeq.current;
+        const timer = setTimeout(() => {
+            api.suggestProjectCode(name)
+                .then((res) => {
+                    if (seq !== suggestSeq.current || !res?.code) return;
+                    setForm((prev) => ({ ...prev, code: res.code }));
+                    setCodeError(null);
+                })
+                // A failed proposal leaves the field blank, and a blank code is
+                // numbered server-side — nothing is lost.
+                .catch(() => undefined);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [mode, codeTouched, form.name]);
+
+    const onCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const code = normaliseCode(e.target.value);
+        setCodeTouched(code !== '');
+        setCodeError(null);
+        setForm((prev) => ({ ...prev, code }));
+    };
+
     const set = (key: keyof ProjectFormValues) => (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
     ) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
@@ -111,6 +158,13 @@ export default function ProjectForm({
             return;
         }
         setNameError(null);
+        // Blank is allowed on create (the server numbers it) but not on edit,
+        // where it would mean "remove the code".
+        if ((form.code || mode === 'edit') && !PROJECT_CODE_PATTERN.test(form.code)) {
+            setCodeError(m.validation.codeInvalid);
+            return;
+        }
+        setCodeError(null);
         setSaving(true);
 
         // Edit sends '' rather than undefined for the optional links, because
@@ -118,6 +172,7 @@ export default function ProjectForm({
         // customer has to be expressible.
         const clearable = (value: string) => (mode === 'edit' ? value : value || undefined);
         const payload = {
+            code: form.code || undefined,
             name: form.name.trim(),
             shortName: clearable(form.shortName.trim()),
             description: clearable(form.description.trim()),
@@ -149,6 +204,11 @@ export default function ProjectForm({
                 router.push(routes.projects.detail((created as { id: string }).id));
             }
         } catch (error) {
+            // A taken code is the user's to fix in the field, not a toast.
+            if (error instanceof ApiError && error.status === 409) {
+                setCodeError(error.message);
+                return;
+            }
             toast.error(error instanceof Error ? error.message : m.saveFailed);
         } finally {
             setSaving(false);
@@ -160,6 +220,26 @@ export default function ProjectForm({
             <FormGrid>
                 <Field label={m.fields.name} required error={nameError ?? undefined}>
                     <Input value={form.name} onChange={set('name')} autoFocus />
+                </Field>
+                <Field
+                    label={m.fields.code}
+                    hint={
+                        mode === 'edit'
+                            ? m.fields.codeEditHint
+                            : fmt(m.fields.codeHint, { code: form.code || 'PRJ' })
+                    }
+                    error={codeError ?? undefined}
+                    htmlFor="project-code"
+                >
+                    <Input
+                        id="project-code"
+                        value={form.code}
+                        onChange={onCodeChange}
+                        maxLength={12}
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        className="font-mono"
+                    />
                 </Field>
                 <Field label={m.fields.shortName} hint={m.fields.shortNameHint}>
                     <Input value={form.shortName} onChange={set('shortName')} maxLength={20} />
