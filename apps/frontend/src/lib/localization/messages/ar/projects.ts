@@ -16,6 +16,8 @@ export const projectsMessages = {
 
     fields: {
         code: "الرمز",
+        codeHint: "تُبنى مفاتيح المهام منه — {code}-14. مقترح من الاسم؛ يمكنك تغييره.",
+        codeEditHint: "تغييره يُبقي مفاتيح المهام القديمة صالحة — فهي تُحوَّل إلى الرمز الجديد.",
         name: "الاسم",
         shortName: "الاسم المختصر",
         shortNameHint: "يظهر على بطاقات اللوحة حيث لا يتّسع الاسم الكامل.",
@@ -67,6 +69,7 @@ export const projectsMessages = {
 
     validation: {
         nameRequired: "أعطِ المشروع اسمًا.",
+        codeInvalid: "من 2 إلى 12 حرفًا: أحرف كبيرة وأرقام وشرطات، تبدأ بحرف.",
     },
 
     statusCategory: {
