@@ -84,6 +84,8 @@ describe('ProjectTasksService', () => {
             sprint: { findFirst: jest.fn().mockResolvedValue({ id: 'sprint-1', project_id: 'project-1' }) },
             projectUserStory: {
                 findFirst: jest.fn().mockResolvedValue({ id: 'story-1', project_id: 'project-1' }),
+                findMany: jest.fn().mockResolvedValue([]),
+                update: jest.fn().mockResolvedValue({}),
             },
             userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             // Both forms: the interactive callback move() uses, and the array of
@@ -241,6 +243,20 @@ describe('ProjectTasksService', () => {
     });
 
     describe('update', () => {
+        it("moves its story along when a task's column changes", async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ user_story_id: 'story-1' }));
+            db.projectTaskStatus.findFirst.mockResolvedValue(done);
+            db.projectUserStory.findMany.mockResolvedValue([{ id: 'story-1', status: 'READY' }]);
+            db.projectTask.findMany.mockResolvedValue([{ user_story_id: 'story-1', status: done }]);
+
+            await service.update(OWNER, 'task-1', { statusId: done.id } as never);
+
+            expect(db.projectUserStory.update).toHaveBeenCalledWith({
+                where: { id: 'story-1' },
+                data: { status: 'DONE' },
+            });
+        });
+
         it('burns remaining to zero when a task reaches a Done column', async () => {
             db.projectTaskStatus.findFirst.mockResolvedValue(done);
 
@@ -283,6 +299,43 @@ describe('ProjectTasksService', () => {
             );
         });
 
+        describe('estimating a task that has no remaining hours yet', () => {
+            it('opens remaining at the estimate when nothing is logged', async () => {
+                db.projectTask.findFirst.mockResolvedValue(task({ estimate_hours: null, remaining_hours: null }));
+                db.projectTimeEntry.aggregate.mockResolvedValue({ _sum: { hours: null } });
+
+                await service.update(OWNER, 'task-1', { estimateHours: 6 } as never);
+
+                expect(remaining.write).toHaveBeenCalledWith(
+                    expect.objectContaining({ previousHours: null, newHours: 6, source: 'RE_ESTIMATED' }),
+                );
+            });
+
+            it('takes off hours already logged, as a reopen does', async () => {
+                db.projectTask.findFirst.mockResolvedValue(task({ estimate_hours: null, remaining_hours: null }));
+
+                await service.update(OWNER, 'task-1', { estimateHours: 8 } as never);
+
+                // 3h logged in the fixture.
+                expect(remaining.write).toHaveBeenCalledWith(expect.objectContaining({ newHours: 5 }));
+            });
+
+            it('opens a done task at zero', async () => {
+                db.projectTask.findFirst.mockResolvedValue(
+                    task({ status: done, status_id: done.id, estimate_hours: null, remaining_hours: null }),
+                );
+
+                await service.update(OWNER, 'task-1', { estimateHours: 8 } as never);
+
+                expect(remaining.write).toHaveBeenCalledWith(expect.objectContaining({ newHours: 0 }));
+            });
+
+            it('leaves a task that already has remaining hours alone', async () => {
+                await service.update(OWNER, 'task-1', { estimateHours: 20 } as never);
+                expect(remaining.write).not.toHaveBeenCalled();
+            });
+        });
+
         it('does not touch remaining hours for an ordinary edit', async () => {
             await service.update(OWNER, 'task-1', { title: 'Renamed' } as never);
             expect(remaining.write).not.toHaveBeenCalled();
@@ -295,16 +348,6 @@ describe('ProjectTasksService', () => {
 
             expect(remaining.write).toHaveBeenCalledWith(
                 expect.objectContaining({ previousHours: 8, newHours: 12, source: 'RE_ESTIMATED' }),
-            );
-        });
-
-        it('opens remaining at the estimate when a task first gets one', async () => {
-            db.projectTask.findFirst.mockResolvedValue(task({ estimate_hours: null, remaining_hours: null }));
-
-            await service.update(OWNER, 'task-1', { estimateHours: 6 } as never);
-
-            expect(remaining.write).toHaveBeenCalledWith(
-                expect.objectContaining({ previousHours: null, newHours: 6 }),
             );
         });
 

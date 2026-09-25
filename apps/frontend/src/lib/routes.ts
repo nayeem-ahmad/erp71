@@ -198,6 +198,7 @@ export const routes = {
         boardDetail: (id: string) => `/projects/boards/${id}` as const,
         boardColumns: (id: string) => `/projects/boards/${id}/columns` as const,
         columns: (id: string) => `/projects/${id}/columns` as const,
+        backlog: (id: string) => `/projects/${id}/backlog` as const,
         edit: (id: string) => `/projects/${id}/edit` as const,
         tasks: '/projects/tasks',
         // A card is normally a modal opened from a list or a board. This is the

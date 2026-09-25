@@ -3,37 +3,53 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Eye, Pencil, Plus, Trash2, Undo2 } from 'lucide-react';
+import { Eye, LayoutGrid, Pencil, Plus, Search, Table2, Trash2, Undo2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
     Button,
     Select,
     StatusBadge,
-    CompactStat,
     ConfirmDialog,
+    Input,
 } from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import SprintBacklogModal from '@/components/projects/SprintBacklogModal';
+import SprintCardBoard from '@/components/projects/SprintCardBoard';
+import SprintLaneHeading from '@/components/projects/SprintLaneHeading';
+import {
+    laneStorageId,
+    readCollapsedLanes,
+    writeCollapsedLanes,
+} from '@/components/projects/board-lane-storage';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import {
     NO_LANE,
     SPRINT_LANE_MODES,
     assigneeNameOf,
-    dayTotals,
+    assigneeOptions,
     groupSprintTasks,
     hours,
+    laneKeyOf,
     sprintStats,
+    sprintTimeline,
     sumHours,
     todayKey,
     type SprintLaneMode,
     type SprintTask,
 } from '@/components/projects/sprint-table';
+import {
+    buildStatusColumns,
+    matchesSprintSearch,
+    type ProjectStatusColumn,
+    type SprintCardTask,
+} from '@/components/projects/sprint-cards';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { formatCalendarDate } from '@/lib/format';
 
 interface Sprint {
     id: string;
@@ -44,40 +60,27 @@ interface Sprint {
     end_date: string;
 }
 
-interface DailyRemaining {
-    days: string[];
-    tasks: Record<string, (number | null)[]>;
-}
-
-/** Per viewer and per browser, like the board's swimlanes: how one person reads the table. */
+/** Per viewer and per browser, like the board's swimlanes: how one person reads the page. */
 const LANE_STORAGE_KEY = 'erp71.sprint.swimlanes';
+const VIEW_STORAGE_KEY = 'erp71.sprint.view';
 
-function readLaneMode(): SprintLaneMode {
+type SprintViewMode = 'table' | 'cards';
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
     try {
-        const raw = localStorage.getItem(LANE_STORAGE_KEY);
-        return SPRINT_LANE_MODES.includes(raw as SprintLaneMode) ? (raw as SprintLaneMode) : 'none';
+        const raw = localStorage.getItem(key);
+        return allowed.includes(raw as T) ? (raw as T) : fallback;
     } catch {
-        return 'none';
+        return fallback;
     }
 }
 
-function writeLaneMode(mode: SprintLaneMode) {
+function writeStored(key: string, value: string) {
     try {
-        localStorage.setItem(LANE_STORAGE_KEY, mode);
+        localStorage.setItem(key, value);
     } catch {
         // Storage blocked — the choice just does not survive a reload.
     }
-}
-
-/** A day's column heading: weekday over day-of-month, read in UTC like the API's keys. */
-function dayHeading(key: string, locale: string) {
-    const date = new Date(`${key}T00:00:00.000Z`);
-    return {
-        weekday: date.toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' }),
-        day: key.slice(5).replace('-', '/'),
-        // Bangladesh works Sunday–Thursday; the burndown shades the same days.
-        weekend: [5, 6].includes(date.getUTCDay()),
-    };
 }
 
 const cellNum = (value: number | null | undefined) =>
@@ -90,28 +93,39 @@ export default function SprintDetailPage() {
     const m = t.projects;
 
     const [sprint, setSprint] = useState<Sprint | null>(null);
-    const [tasks, setTasks] = useState<SprintTask[]>([]);
-    const [daily, setDaily] = useState<DailyRemaining>({ days: [], tasks: {} });
+    const [tasks, setTasks] = useState<SprintCardTask[]>([]);
+    const [projectColumns, setProjectColumns] = useState<Record<string, ProjectStatusColumn[]>>({});
+    const [search, setSearch] = useState('');
+    const [viewMode, setViewMode] = useState<SprintViewMode>('table');
+    // `all`, or an assignee key as `laneKeyOf(task, 'assignee')` gives it.
+    const [assignee, setAssignee] = useState('all');
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
     const [laneMode, setLaneMode] = useState<SprintLaneMode>('none');
+    // Folded lanes, as `laneStorageId(mode, key)`, remembered per sprint in
+    // this browser. The board's lane store, under a `sprint:` key.
+    const [collapsedLanes, setCollapsedLanes] = useState<string[]>([]);
     const [adding, setAdding] = useState(false);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<SprintTask | null>(null);
     const [busy, setBusy] = useState(false);
 
-    useEffect(() => setLaneMode(readLaneMode()), []);
+    useEffect(() => {
+        setLaneMode(readStored(LANE_STORAGE_KEY, SPRINT_LANE_MODES, 'none'));
+        setViewMode(readStored<SprintViewMode>(VIEW_STORAGE_KEY, ['table', 'cards'], 'table'));
+    }, []);
+
+    const laneStoreKey = `sprint:${sprintId}`;
+    useEffect(() => setCollapsedLanes(readCollapsedLanes(laneStoreKey)), [laneStoreKey]);
 
     const load = useCallback(async () => {
         try {
-            const [detail, sprintPage, dailyRes, burndownRes] = await Promise.all([
+            const [detail, sprintPage, burndownRes] = await Promise.all([
                 api.getSprint(sprintId),
                 api.getProjectTasks({ sprintId, limit: 200 }),
-                api.getSprintDailyRemaining(sprintId).catch(() => null),
                 api.getSprintBurndown(sprintId).catch(() => null),
             ]);
             setSprint(detail as Sprint);
-            setTasks((sprintPage?.items ?? []) as SprintTask[]);
-            setDaily((dailyRes as DailyRemaining | null) ?? { days: [], tasks: {} });
+            setTasks((sprintPage?.items ?? []) as SprintCardTask[]);
             setBurndown((burndownRes as { series?: BurndownPoint[] } | null)?.series ?? []);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.sprint.loadFailed);
@@ -122,21 +136,86 @@ export default function SprintDetailPage() {
         void load();
     }, [load]);
 
+    // Each project's own board columns, for the card view's status columns.
+    // Keyed by the set of projects so adding a task from a new project fetches
+    // that project's columns, and nothing is refetched otherwise.
+    const projectIds = useMemo(
+        () => [...new Set(tasks.map((task) => task.project?.id).filter(Boolean) as string[])].sort(),
+        [tasks],
+    );
+    const projectKey = projectIds.join(',');
+    useEffect(() => {
+        if (!projectKey) return;
+        let cancelled = false;
+        void Promise.all(
+            projectKey.split(',').map(async (id) => {
+                const columns = await api.getProjectColumns(id).catch(() => []);
+                return [id, (Array.isArray(columns) ? columns : []) as ProjectStatusColumn[]] as const;
+            }),
+        ).then((entries) => {
+            if (!cancelled) setProjectColumns(Object.fromEntries(entries));
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [projectKey]);
+
     const changeLaneMode = (mode: SprintLaneMode) => {
         setLaneMode(mode);
-        writeLaneMode(mode);
+        writeStored(LANE_STORAGE_KEY, mode);
+    };
+
+    const changeViewMode = (mode: SprintViewMode) => {
+        setViewMode(mode);
+        writeStored(VIEW_STORAGE_KEY, mode);
+    };
+
+    const moveCard = async (task: SprintCardTask, statusId: string, sortOrder: number) => {
+        const column = statusColumns.find((candidate) =>
+            Object.values(candidate.statusIds).includes(statusId),
+        );
+        // Moved on screen first, so the card does not snap back while the
+        // server answers; the reload that follows puts every figure right.
+        if (column) {
+            setTasks((prev) =>
+                prev.map((candidate) =>
+                    candidate.id === task.id
+                        ? { ...candidate, status: { id: statusId, name: column.name, category: column.category } }
+                        : candidate,
+                ),
+            );
+        }
+        setBusy(true);
+        try {
+            await api.moveProjectTask(task.id, { statusId, sortOrder });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.board.moveFailed);
+        } finally {
+            setBusy(false);
+            await load();
+        }
     };
 
     const today = todayKey();
-    const days = daily.days;
-    const lanes = useMemo(() => groupSprintTasks(tasks, laneMode), [tasks, laneMode]);
-    const totals = useMemo(() => sumHours(tasks), [tasks]);
-    const totalByDay = useMemo(
-        () => dayTotals(tasks, daily.tasks, days.length),
-        [tasks, daily.tasks, days.length],
+    const people = useMemo(() => assigneeOptions(tasks), [tasks]);
+    // A person who has since left the sprint would filter it to nothing.
+    const assigneeFilter = people.some((option) => option.key === assignee) ? assignee : 'all';
+    // Search and the assignee filter narrow both views and their totals; the
+    // stats and the charts beside them stay whole, because they describe the sprint.
+    const visibleTasks = useMemo(
+        () =>
+            tasks.filter(
+                (task) =>
+                    matchesSprintSearch(task, search) &&
+                    (assigneeFilter === 'all' || laneKeyOf(task, 'assignee') === assigneeFilter),
+            ),
+        [tasks, search, assigneeFilter],
     );
+    const lanes = useMemo(() => groupSprintTasks(visibleTasks, laneMode), [visibleTasks, laneMode]);
+    const statusColumns = useMemo(() => buildStatusColumns(tasks, projectColumns), [tasks, projectColumns]);
+    const totals = useMemo(() => sumHours(visibleTasks), [visibleTasks]);
     const stats = useMemo(() => sprintStats(tasks, burndown ?? [], today), [tasks, burndown, today]);
-    const headings = useMemo(() => days.map((day) => dayHeading(day, locale)), [days, locale]);
+    const timeline = sprint ? sprintTimeline(sprint.start_date, sprint.end_date, today) : null;
 
     const returnToBacklog = async (task: SprintTask) => {
         setBusy(true);
@@ -166,13 +245,44 @@ export default function SprintDetailPage() {
         }
     };
 
-    const dayCellClass = (i: number) => {
-        if (days[i] === today) return 'bg-blue-50';
-        return headings[i]?.weekend ? 'bg-gray-50' : '';
-    };
-
     const iconButton =
         'min-h-touch min-w-touch rounded-md p-1.5 transition-colors disabled:opacity-50';
+
+    const saveCollapsed = (next: string[]) => {
+        setCollapsedLanes(next);
+        writeCollapsedLanes(laneStoreKey, next);
+    };
+    const isCollapsed = (key: string) =>
+        laneMode !== 'none' && collapsedLanes.includes(laneStorageId(laneMode, key));
+    const openLanes = lanes.filter((lane) => !isCollapsed(lane.key));
+    const collapsedCount = lanes.length - openLanes.length;
+    /** The one lane left open while the others are folded. */
+    const isFocused = (key: string) => lanes.length > 1 && openLanes.length === 1 && openLanes[0].key === key;
+    // Entries for the other grouping are kept: folding "Rahim" must not
+    // unfold a story folded while grouped by story.
+    const otherModes = () => collapsedLanes.filter((id) => !id.startsWith(`${laneMode}|`));
+    const toggleLane = (key: string) => {
+        const id = laneStorageId(laneMode, key);
+        saveCollapsed(collapsedLanes.includes(id) ? collapsedLanes.filter((x) => x !== id) : [...collapsedLanes, id]);
+    };
+    const expandAllLanes = () => saveCollapsed(otherModes());
+    /** Folds every other lane — or, pressed on the lane already in focus, opens them all again. */
+    const focusLane = (key: string) => {
+        if (isFocused(key)) {
+            expandAllLanes();
+            return;
+        }
+        saveCollapsed([
+            ...otherModes(),
+            ...lanes.filter((lane) => lane.key !== key).map((lane) => laneStorageId(laneMode, lane.key)),
+        ]);
+    };
+    const laneControls = {
+        isCollapsed,
+        isFocused,
+        onToggle: toggleLane,
+        onFocus: focusLane,
+    };
 
     const laneTitle = (lane: (typeof lanes)[number]) => {
         if (lane.key !== NO_LANE) return lane.code ? `${lane.code} · ${lane.title ?? ''}` : (lane.title ?? '');
@@ -180,7 +290,7 @@ export default function SprintDetailPage() {
     };
 
     /** The figures row shared by a lane heading and the table footer. */
-    const figureCells = (group: SprintTask[], byDay: (number | null)[]) => {
+    const figureCells = (group: SprintTask[]) => {
         const sum = sumHours(group);
         return (
             <>
@@ -189,11 +299,6 @@ export default function SprintDetailPage() {
                 <td className="px-2 py-2 text-end tabular-nums">{cellNum(sum.remaining)}</td>
                 <td className="hidden px-2 py-2 md:table-cell" />
                 <td className="px-2 py-2" />
-                {byDay.map((value, i) => (
-                    <td key={days[i]} className={`px-2 py-2 text-end tabular-nums ${dayCellClass(i)}`}>
-                        {cellNum(value)}
-                    </td>
-                ))}
             </>
         );
     };
@@ -228,35 +333,115 @@ export default function SprintDetailPage() {
                 }
             />
 
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
+                <div className="relative min-w-0 flex-1 basis-64">
+                    <Search
+                        className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                        aria-hidden
+                    />
+                    <Input
+                        type="search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder={m.sprint.searchTasks}
+                        aria-label={m.sprint.searchTasks}
+                        className="ps-8"
+                    />
+                </div>
+                <div
+                    role="group"
+                    aria-label={m.sprint.viewLabel}
+                    className="inline-flex overflow-hidden rounded-md border border-gray-200"
+                >
+                    {(
+                        [
+                            { key: 'table', label: m.sprint.viewTable, Icon: Table2 },
+                            { key: 'cards', label: m.sprint.viewCards, Icon: LayoutGrid },
+                        ] as const
+                    ).map(({ key, label, Icon }) => (
+                        <button
+                            key={key}
+                            type="button"
+                            aria-pressed={viewMode === key}
+                            onClick={() => changeViewMode(key)}
+                            className={`inline-flex min-h-touch items-center gap-1.5 px-3 text-xs font-medium transition-colors md:min-h-0 md:py-1.5 ${
+                                viewMode === key ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Icon className="h-4 w-4" aria-hidden />
+                            {label}
+                        </button>
+                    ))}
+                </div>
+                <label className="flex items-center gap-2 text-xs text-gray-600">
+                    {m.fields.assignee}
+                    <Select
+                        value={assigneeFilter}
+                        onChange={(e) => setAssignee(e.target.value)}
+                        className="w-40"
+                        data-testid="sprint-assignee-filter"
+                    >
+                        <option value="all">{m.sprint.everyone}</option>
+                        {people.map((option) => (
+                            <option key={option.key} value={option.key}>
+                                {option.label ?? m.board.laneUnassigned}
+                            </option>
+                        ))}
+                    </Select>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-600">
+                    {m.board.view.swimlanes}
+                    <Select
+                        value={laneMode}
+                        onChange={(e) => changeLaneMode(e.target.value as SprintLaneMode)}
+                        className="w-36"
+                        data-testid="sprint-swimlanes"
+                    >
+                        <option value="none">{m.board.view.swimlanesNone}</option>
+                        <option value="assignee">{m.board.view.swimlanesAssignee}</option>
+                        <option value="story">{m.board.view.swimlanesStory}</option>
+                    </Select>
+                </label>
+            </div>
+
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
                 <section className="min-w-0 rounded-md border border-gray-200 bg-white">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-2">
-                        <div className="min-w-0">
-                            <h2 className="text-sm font-medium">
-                                {m.sprint.committed}
-                                <span className="ms-2 text-xs font-normal text-gray-500">
-                                    {tasks.length} · {totals.remaining}h
-                                </span>
-                            </h2>
-                            <p className="text-xs text-gray-500">{m.sprint.dayHint}</p>
-                        </div>
-                        <label className="flex items-center gap-2 text-xs text-gray-600">
-                            {m.board.view.swimlanes}
-                            <Select
-                                value={laneMode}
-                                onChange={(e) => changeLaneMode(e.target.value as SprintLaneMode)}
-                                className="w-36"
-                                data-testid="sprint-swimlanes"
+                        <h2 className="text-sm font-medium">
+                            {m.sprint.committed}
+                            <span className="ms-2 text-xs font-normal text-gray-500">
+                                {visibleTasks.length === tasks.length
+                                    ? tasks.length
+                                    : `${visibleTasks.length}/${tasks.length}`}{' '}
+                                · {totals.remaining}h
+                            </span>
+                        </h2>
+                        {laneMode !== 'none' && collapsedCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={expandAllLanes}
+                                className="min-h-touch text-xs text-blue-600 hover:underline md:min-h-0"
                             >
-                                <option value="none">{m.board.view.swimlanesNone}</option>
-                                <option value="assignee">{m.board.view.swimlanesAssignee}</option>
-                                <option value="story">{m.board.view.swimlanesStory}</option>
-                            </Select>
-                        </label>
+                                {fmt(m.sprint.lanesCollapsed, { count: collapsedCount })} · {m.sprint.expandAllLanes}
+                            </button>
+                        )}
                     </div>
 
                     {tasks.length === 0 ? (
                         <p className="p-3 text-sm text-gray-500">{m.sprint.emptySprint}</p>
+                    ) : visibleTasks.length === 0 ? (
+                        <p className="p-3 text-sm text-gray-500">{m.sprint.noMatches}</p>
+                    ) : viewMode === 'cards' ? (
+                        <SprintCardBoard
+                            lanes={lanes}
+                            laneMode={laneMode}
+                            columns={statusColumns}
+                            busy={busy}
+                            onOpen={setOpenTaskId}
+                            onReturn={(task) => void returnToBacklog(task)}
+                            onMove={(task, statusId, sortOrder) => void moveCard(task, statusId, sortOrder)}
+                            laneControls={laneControls}
+                        />
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-xs">
@@ -278,17 +463,6 @@ export default function SprintDetailPage() {
                                             {m.fields.assignee}
                                         </th>
                                         <th className="px-2 py-2 text-center font-medium">{m.fields.actions}</th>
-                                        {headings.map((heading, i) => (
-                                            <th
-                                                key={days[i]}
-                                                className={`whitespace-nowrap px-2 py-2 text-end font-medium ${dayCellClass(i)} ${
-                                                    days[i] === today ? 'text-blue-600' : ''
-                                                }`}
-                                            >
-                                                <span className="block text-[10px] font-normal">{heading.weekday}</span>
-                                                {heading.day}
-                                            </th>
-                                        ))}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -299,21 +473,21 @@ export default function SprintDetailPage() {
                                                     className="border-b border-gray-200 bg-gray-100 font-medium text-gray-700"
                                                     data-testid="sprint-lane"
                                                 >
-                                                    <td className="sticky start-0 z-10 max-w-xs truncate bg-gray-100 px-3 py-2">
-                                                        {laneTitle(lane)}
-                                                        <span className="ms-2 font-normal text-gray-500">
-                                                            {lane.tasks.length}
-                                                        </span>
+                                                    <td className="sticky start-0 z-10 max-w-xs bg-gray-100 px-3 py-1">
+                                                        <SprintLaneHeading
+                                                            title={laneTitle(lane)}
+                                                            count={lane.tasks.length}
+                                                            collapsed={isCollapsed(lane.key)}
+                                                            focused={isFocused(lane.key)}
+                                                            onToggle={() => toggleLane(lane.key)}
+                                                            onFocus={() => focusLane(lane.key)}
+                                                        />
                                                     </td>
-                                                    {figureCells(
-                                                        lane.tasks,
-                                                        dayTotals(lane.tasks, daily.tasks, days.length),
-                                                    )}
+                                                    {figureCells(lane.tasks)}
                                                 </tr>
                                             )}
-                                            {lane.tasks.map((task) => {
+                                            {!isCollapsed(lane.key) && lane.tasks.map((task) => {
                                                 const done = task.status?.category === 'DONE';
-                                                const row = daily.tasks[task.id] ?? [];
                                                 return (
                                                     <tr
                                                         key={task.id}
@@ -390,16 +564,6 @@ export default function SprintDetailPage() {
                                                                 </button>
                                                             </div>
                                                         </td>
-                                                        {days.map((day, i) => (
-                                                            <td
-                                                                key={day}
-                                                                className={`px-2 py-2 text-end tabular-nums ${dayCellClass(i)} ${
-                                                                    row[i] === 0 ? 'text-emerald-700' : 'text-gray-700'
-                                                                }`}
-                                                            >
-                                                                {cellNum(row[i])}
-                                                            </td>
-                                                        ))}
                                                     </tr>
                                                 );
                                             })}
@@ -409,7 +573,7 @@ export default function SprintDetailPage() {
                                 <tfoot>
                                     <tr className="border-t border-gray-300 bg-gray-50 font-medium text-gray-800">
                                         <td className="sticky start-0 z-10 bg-gray-50 px-3 py-2">{m.sprint.total}</td>
-                                        {figureCells(tasks, totalByDay)}
+                                        {figureCells(visibleTasks)}
                                     </tr>
                                 </tfoot>
                             </table>
@@ -418,42 +582,6 @@ export default function SprintDetailPage() {
                 </section>
 
                 <aside className="space-y-4">
-                    <section className="rounded-md border border-gray-200 bg-white p-3">
-                        <h2 className="mb-2 text-sm font-medium">{m.sprint.stats}</h2>
-                        <div className="grid grid-cols-2 gap-2">
-                            <CompactStat label={m.sprint.colEstimate} value={stats.estimate} />
-                            <CompactStat label={m.sprint.colSpent} value={stats.spent} />
-                            <CompactStat label={m.sprint.colRemaining} value={stats.remaining} tone="info" />
-                            <CompactStat label={m.sprint.statProgress} value={`${stats.progress}%`} />
-                            <CompactStat
-                                label={m.sprint.statTasksDone}
-                                value={`${stats.doneCount}/${stats.taskCount}`}
-                                tone={stats.taskCount > 0 && stats.doneCount === stats.taskCount ? 'positive' : 'default'}
-                            />
-                            <CompactStat label={m.sprint.statDaysLeft} value={stats.workingDaysLeft} />
-                            <CompactStat
-                                className="col-span-2"
-                                label={m.sprint.statVariance}
-                                value={
-                                    stats.variance == null
-                                        ? '—'
-                                        : stats.variance > 0
-                                          ? fmt(m.sprint.ahead, { hours: stats.variance })
-                                          : stats.variance < 0
-                                            ? fmt(m.sprint.behind, { hours: -stats.variance })
-                                            : m.sprint.onTrack
-                                }
-                                tone={
-                                    stats.variance == null
-                                        ? 'default'
-                                        : stats.variance >= 0
-                                          ? 'positive'
-                                          : 'warning'
-                                }
-                            />
-                        </div>
-                    </section>
-
                     <section className="rounded-md border border-gray-200 bg-white p-3">
                         <div className="mb-2 flex items-center justify-between gap-2">
                             <h2 className="text-sm font-medium">{m.burndown.title}</h2>
@@ -466,6 +594,108 @@ export default function SprintDetailPage() {
                         ) : (
                             <p className="text-sm text-gray-500">{m.burndown.noData}</p>
                         )}
+                    </section>
+
+                    {sprint && timeline && (
+                        <section
+                            className="space-y-3 rounded-md border border-gray-200 bg-white p-3"
+                            data-testid="sprint-info"
+                        >
+                            <h2 className="text-sm font-medium">{m.sprint.info}</h2>
+                            <dl className="space-y-2 text-sm">
+                                <div>
+                                    <dt className="text-xs text-gray-500">{m.sprint.goal}</dt>
+                                    <dd className={sprint.goal ? 'text-gray-900' : 'text-gray-400'}>
+                                        {sprint.goal || m.sprint.noGoal}
+                                    </dd>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <dt className="text-xs text-gray-500">{m.sprint.startDate}</dt>
+                                        <dd className="tabular-nums text-gray-900">
+                                            {formatCalendarDate(sprint.start_date.slice(0, 10), locale)}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-gray-500">{m.sprint.endDate}</dt>
+                                        <dd className="tabular-nums text-gray-900">
+                                            {formatCalendarDate(sprint.end_date.slice(0, 10), locale)}
+                                        </dd>
+                                    </div>
+                                </div>
+                            </dl>
+                            <div>
+                                <div className="mb-1 flex items-center justify-between text-xs text-gray-600">
+                                    <span>{m.sprint.timeElapsed}</span>
+                                    <span className="tabular-nums">
+                                        {fmt(m.sprint.dayOf, { day: timeline.day, total: timeline.total })} ·{' '}
+                                        {timeline.percent}%
+                                    </span>
+                                </div>
+                                <div
+                                    role="progressbar"
+                                    aria-label={m.sprint.timeElapsed}
+                                    aria-valuemin={0}
+                                    aria-valuemax={100}
+                                    aria-valuenow={timeline.percent}
+                                    className="h-2 overflow-hidden rounded-full bg-gray-100"
+                                >
+                                    <div
+                                        className="h-full rounded-full bg-blue-600 transition-[width]"
+                                        style={{ width: `${timeline.percent}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </section>
+                    )}
+
+                    <section className="rounded-md border border-gray-200 bg-white p-3" data-testid="sprint-stats">
+                        <h2 className="mb-1.5 text-sm font-medium">{m.sprint.stats}</h2>
+                        {/* Label and figure on one line each, two to a row: seven
+                            figures in the height the tiles took for three. */}
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            {(
+                                [
+                                    [m.sprint.colEstimate, stats.estimate, ''],
+                                    [m.sprint.colSpent, stats.spent, ''],
+                                    [m.sprint.colRemaining, stats.remaining, 'text-blue-600'],
+                                    [m.sprint.statProgress, `${stats.progress}%`, ''],
+                                    [
+                                        m.sprint.statTasksDone,
+                                        `${stats.doneCount}/${stats.taskCount}`,
+                                        stats.taskCount > 0 && stats.doneCount === stats.taskCount
+                                            ? 'text-emerald-700'
+                                            : '',
+                                    ],
+                                    [m.sprint.statDaysLeft, stats.workingDaysLeft, ''],
+                                ] as const
+                            ).map(([label, value, tone]) => (
+                                <div key={label} className="flex items-baseline justify-between gap-2">
+                                    <dt className="truncate text-gray-500">{label}</dt>
+                                    <dd className={`font-semibold tabular-nums text-gray-900 ${tone}`}>{value}</dd>
+                                </div>
+                            ))}
+                            <div className="col-span-2 flex items-baseline justify-between gap-2 border-t border-gray-100 pt-1">
+                                <dt className="text-gray-500">{m.sprint.statVariance}</dt>
+                                <dd
+                                    className={`font-semibold tabular-nums ${
+                                        stats.variance == null
+                                            ? 'text-gray-900'
+                                            : stats.variance >= 0
+                                              ? 'text-emerald-700'
+                                              : 'text-amber-600'
+                                    }`}
+                                >
+                                    {stats.variance == null
+                                        ? '—'
+                                        : stats.variance > 0
+                                          ? fmt(m.sprint.ahead, { hours: stats.variance })
+                                          : stats.variance < 0
+                                            ? fmt(m.sprint.behind, { hours: -stats.variance })
+                                            : m.sprint.onTrack}
+                                </dd>
+                            </div>
+                        </dl>
                     </section>
                 </aside>
             </div>

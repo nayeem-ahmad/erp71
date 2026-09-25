@@ -164,6 +164,31 @@ docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml ru
 > **Important:** Run migrations during low-traffic windows. Back up first
 > (`docs/ops/vps-backups.md`).
 
+## One-off Data Backfills
+
+Scripts in `packages/database/prisma/backfill-*.ts` fix existing data once. Unlike
+the `sync:*` steps, they do **not** run on container start. Each one reports by
+default and writes only with `--apply`. Run them inside the running backend
+container, which already has the database URL and the workspace:
+
+```bash
+ssh root@66.116.236.127
+cd /opt/erp71
+# 1. Report — read what it would change
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml exec backend \
+  npm run backfill:task-remaining --workspace=@erp71/database
+# 2. Back up (docs/ops/vps-backups.md), then write
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml exec backend \
+  npm run backfill:task-remaining --workspace=@erp71/database -- --apply
+```
+
+Add `--tenant=<id>` to either command to limit it to one workspace. The script must
+already be deployed (it ships in the backend image), so merge and deploy first.
+
+| Script | What it fixes |
+|--------|---------------|
+| `backfill:task-remaining` | Open tasks with an estimate, no remaining hours and no time logged get remaining = estimate, with a remaining-hours log row. Done tasks, tasks with time logged, and tasks with no estimate are counted and left alone. |
+
 ---
 
 ## Rollback Procedure

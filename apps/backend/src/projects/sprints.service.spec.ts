@@ -52,7 +52,6 @@ describe('SprintsService', () => {
                 groupBy: jest.fn().mockResolvedValue([]),
             },
             sprintSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
-            projectTaskRemainingLog: { findMany: jest.fn().mockResolvedValue([]) },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -181,13 +180,17 @@ describe('SprintsService', () => {
                     snapshot_date: new Date('2026-08-03T00:00:00.000Z'),
                     remaining_hours: 34,
                     committed_hours: 40,
+                    task_count: 6,
+                    done_task_count: 2,
                 },
             ]);
 
             const result = await service.burndown('tenant-1', 'sprint-1');
 
             expect(result.series[0]).toMatchObject({ date: '2026-08-02', actual: 40, ideal: 40 });
-            expect(result.series[1]).toMatchObject({ date: '2026-08-03', actual: 34 });
+            expect(result.series[1]).toMatchObject({ date: '2026-08-03', actual: 34, open: 4 });
+            // A day without a snapshot says nothing about open tasks either.
+            expect(result.series[2]).toMatchObject({ date: '2026-08-04', open: null });
             expect(result.current.remaining_hours).toBe(12);
         });
 
@@ -268,45 +271,4 @@ describe('SprintsService', () => {
         });
     });
 
-    describe('dailyRemaining', () => {
-        it('gives each task its end-of-day remaining for every sprint day', async () => {
-            db.sprint.findFirst.mockResolvedValue(
-                sprint({
-                    start_date: new Date('2026-08-02T00:00:00.000Z'),
-                    end_date: new Date('2026-08-05T00:00:00.000Z'),
-                }),
-            );
-            db.projectTask.findMany.mockResolvedValue([{ id: 'task-a' }, { id: 'task-b' }]);
-            db.projectTaskRemainingLog.findMany.mockResolvedValue([
-                // Estimated before the sprint began — the opening figure.
-                { task_id: 'task-a', new_hours: 10, changed_at: new Date('2026-07-30T09:00:00Z') },
-                { task_id: 'task-a', new_hours: 6, changed_at: new Date('2026-08-03T10:00:00Z') },
-                { task_id: 'task-a', new_hours: 4, changed_at: new Date('2026-08-03T16:00:00Z') },
-                // Pulled in mid-sprint.
-                { task_id: 'task-b', new_hours: 5, changed_at: new Date('2026-08-04T08:00:00Z') },
-            ]);
-
-            const result = await service.dailyRemaining(
-                OWNER,
-                'sprint-1',
-                new Date('2026-08-04T12:00:00Z'),
-            );
-
-            expect(result.days).toEqual(['2026-08-02', '2026-08-03', '2026-08-04', '2026-08-05']);
-            // The last write of a day wins; days after today are unknown.
-            expect(result.tasks['task-a']).toEqual([10, 4, 4, null]);
-            expect(result.tasks['task-b']).toEqual([null, null, 5, null]);
-            expect(db.projectTaskRemainingLog.findMany.mock.calls[0][0].where).toMatchObject({
-                tenant_id: 'tenant-1',
-                task_id: { in: ['task-a', 'task-b'] },
-            });
-        });
-
-        it('skips the log query when the sprint holds nothing', async () => {
-            const result = await service.dailyRemaining(OWNER, 'sprint-1');
-
-            expect(result.tasks).toEqual({});
-            expect(db.projectTaskRemainingLog.findMany).not.toHaveBeenCalled();
-        });
-    });
 });

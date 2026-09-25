@@ -2,7 +2,6 @@ import {
     buildBurndownSeries,
     eachDate,
     isWorkingDay,
-    replayDailyByTask,
     workingDays,
 } from './burndown.util';
 
@@ -151,43 +150,5 @@ describe('buildBurndownSeries', () => {
         expect(series).toHaveLength(2);
         expect(series.every((p) => p.isWorkingDay === false)).toBe(true);
         expect(series.every((p) => p.ideal === null)).toBe(true);
-    });
-});
-
-describe('replayDailyByTask', () => {
-    const days = ['2026-08-02', '2026-08-03', '2026-08-04'];
-    const at = (iso: string) => new Date(iso);
-
-    it('carries a task\'s last figure forward until it changes', () => {
-        const out = replayDailyByTask(
-            [
-                { taskId: 't', hours: 8, changedAt: at('2026-08-02T09:00:00Z') },
-                { taskId: 't', hours: 3, changedAt: at('2026-08-04T23:50:00Z') },
-            ],
-            days,
-            '2026-08-04',
-        );
-        expect(out.get('t')).toEqual([8, 8, 3]);
-    });
-
-    it('leaves days before the first reading and after today blank', () => {
-        const out = replayDailyByTask(
-            [{ taskId: 't', hours: 2, changedAt: at('2026-08-03T10:00:00Z') }],
-            days,
-            '2026-08-03',
-        );
-        expect(out.get('t')).toEqual([null, 2, null]);
-    });
-
-    it('does not depend on the order entries arrive in', () => {
-        const out = replayDailyByTask(
-            [
-                { taskId: 't', hours: 1, changedAt: at('2026-08-03T10:00:00Z') },
-                { taskId: 't', hours: 5, changedAt: at('2026-08-02T10:00:00Z') },
-            ],
-            days,
-            '2026-08-04',
-        );
-        expect(out.get('t')).toEqual([5, 1, 1]);
     });
 });

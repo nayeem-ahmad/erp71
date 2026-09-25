@@ -1,4 +1,12 @@
-import { NO_LANE, dayTotals, groupSprintTasks, sprintStats, sumHours, type SprintTask } from './sprint-table';
+import {
+    NO_LANE,
+    assigneeOptions,
+    groupSprintTasks,
+    sprintStats,
+    sprintTimeline,
+    sumHours,
+    type SprintTask,
+} from './sprint-table';
 
 const task = (id: string, overrides: Partial<SprintTask> = {}): SprintTask => ({
     id,
@@ -53,15 +61,6 @@ describe('sums', () => {
             remaining: 4,
         });
     });
-
-    it('leaves a day nobody has a reading for blank rather than zero', () => {
-        const totals = dayTotals(
-            [task('a'), task('b')],
-            { a: [8, 6, null], b: [null, 2, null] },
-            3,
-        );
-        expect(totals).toEqual([8, 8, null]);
-    });
 });
 
 describe('sprintStats', () => {
@@ -81,5 +80,36 @@ describe('sprintStats', () => {
         expect(stats.workingDaysLeft).toBe(2);
         // Two hours more left than the ideal says — behind.
         expect(stats.variance).toBe(-2);
+    });
+});
+
+describe('sprintTimeline', () => {
+    it('counts calendar days, today included', () => {
+        expect(sprintTimeline('2026-08-02', '2026-08-11', '2026-08-04')).toEqual({ day: 3, total: 10, percent: 30 });
+    });
+
+    it('holds at zero before the start and at the end afterwards', () => {
+        expect(sprintTimeline('2026-08-02', '2026-08-11', '2026-07-30').percent).toBe(0);
+        expect(sprintTimeline('2026-08-02T00:00:00.000Z', '2026-08-11T00:00:00.000Z', '2026-09-01')).toEqual({
+            day: 10,
+            total: 10,
+            percent: 100,
+        });
+    });
+});
+
+describe('assigneeOptions', () => {
+    it('lists each person once by name, reading both assignee columns, with Unassigned last', () => {
+        const options = assigneeOptions([
+            task('a'),
+            task('b', { assignee: { id: 'u2', name: 'Zara', email: 'z@x' } }),
+            task('c', { assigneeEmployee: { id: 'e1', name: 'Arif' } }),
+            task('d', { assignee: { id: 'u2', name: 'Zara', email: 'z@x' } }),
+        ]);
+        expect(options).toEqual([
+            { key: 'employee:e1', label: 'Arif' },
+            { key: 'user:u2', label: 'Zara' },
+            { key: NO_LANE, label: null },
+        ]);
     });
 });

@@ -22,6 +22,7 @@ import {
     nameIndex,
     requiredText,
 } from './project-import.util';
+import { assertStoryStatusAllowed, type StoryStatus, type TaskCategory } from './story-status.util';
 
 /** What a story shows beside its title wherever it is listed. */
 const STORY_INCLUDE = {
@@ -45,10 +46,10 @@ const REFERENCE_ATTEMPTS = 5;
  * A story holds no work of its own. Its progress is counted from its tasks on
  * every read rather than stored, for the reason `ProjectsService.progress`
  * gives: a stored copy drifts the moment a card moves and nobody recalculates
- * it. Its `status` is the *grooming* state somebody sets by hand (is this ready
- * to be picked up, has it been accepted) and is deliberately not derived from
- * those counts — a story whose tasks are all done is still not accepted until
- * someone says so, which is the whole point of acceptance criteria.
+ * it. Its `status` follows its tasks once it has any — see `deriveStoryStatus`
+ * — and is stored rather than computed only so the list can filter on it;
+ * `syncStoryStatuses` rewrites it whenever a task joins, leaves or changes
+ * column. Only BACKLOG ↔ READY, the grooming call, is ever set by hand.
  *
  * Visibility comes from the project, like everything else in this module: a
  * story on a private project is invisible to anyone who cannot open the project
@@ -181,6 +182,16 @@ export class ProjectStoriesService {
         }
         if (dto.epicId) {
             await this.assertEpicInProject(viewer.tenantId, dto.epicId, story.project_id as string);
+        }
+        if (dto.status !== undefined && dto.status !== story.status) {
+            const tasks = await this.db.projectTask.findMany({
+                where: { tenant_id: viewer.tenantId, user_story_id: storyId, deleted_at: null },
+                select: { status: { select: { category: true } } },
+            });
+            assertStoryStatusAllowed(
+                dto.status as StoryStatus,
+                tasks.map((task) => task.status?.category as TaskCategory),
+            );
         }
 
         return this.db.projectUserStory.update({

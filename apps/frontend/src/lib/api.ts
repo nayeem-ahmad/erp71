@@ -5144,6 +5144,8 @@ export const api = {
         const suffix = query.toString();
         return fetchWithAuth(`/project-epics${suffix ? `?${suffix}` : ''}`);
     },
+    /** A project's epics, stories and tasks as flat rows, for the Backlog tree. */
+    getProjectBacklog: (projectId: string) => fetchWithAuth(`/project-backlog/${projectId}`),
     /** One epic with the stories filed under it. */
     getProjectEpic: (epicId: string) => fetchWithAuth(`/project-epics/${epicId}`),
     createProjectEpic: (data: Record<string, unknown>) =>
@@ -5672,8 +5674,6 @@ export const api = {
             body: JSON.stringify({ storyIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
-    /** `tasks[taskId][i]` is that task's remaining hours at the end of `days[i]`. */
-    getSprintDailyRemaining: (id: string) => fetchWithAuth(`/sprints/${id}/daily-remaining`),
     removeTasksFromSprint: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/sprints/${id}/tasks`, {
             method: 'DELETE',

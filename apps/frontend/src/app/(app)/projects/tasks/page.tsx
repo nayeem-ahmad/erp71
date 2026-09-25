@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Pencil, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import { Link2, Pencil, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -21,6 +21,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import type { BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import { copyTaskLink } from '@/components/projects/task-link';
 import TaskQuickAdd from '@/components/projects/TaskQuickAdd';
 import TaskRowSelect, {
     assigneeOptions,
@@ -623,7 +624,7 @@ export default function TasksPage() {
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 90,
+                size: 130,
                 cell: ({ row }: { row: { original: TaskRow } }) => (
                     <div className="flex items-center justify-end gap-1">
                         <button
@@ -634,6 +635,15 @@ export default function TasksPage() {
                             className="min-h-touch min-w-touch rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-blue-50"
                         >
                             <Pencil className="mx-auto h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            aria-label={m.task.copyLink}
+                            title={m.task.copyLink}
+                            onClick={() => void copyTaskLink(row.original.id, m.task)}
+                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+                        >
+                            <Link2 className="mx-auto h-4 w-4" />
                         </button>
                         <button
                             type="button"
