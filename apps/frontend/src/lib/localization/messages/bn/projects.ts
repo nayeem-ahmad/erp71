@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: 'শেষ তারিখ',
         milestone: 'মাইলফলক',
         estimate: 'প্রাক্কলন (ঘণ্টা)',
-        remaining: 'বাকি (ঘণ্টা)',
-        logged: 'লগকৃত (ঘণ্টা)',
         subtasks: 'সাব-টাস্ক',
         noTasks: 'এখনও কোনো টাস্ক নেই।',
         deleted: 'টাস্ক মুছে ফেলা হয়েছে',
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: 'এই প্রকল্পের দলে এখনো কেউ নেই।',
         assigneeAddTeam: 'দলের সদস্য যোগ করুন',
         assigneeLoadFailed: 'এই প্রকল্পের দল পড়া যায়নি।',
+        copyKey: "টাস্ক কী কপি করুন",
+        keyCopied: "টাস্ক কী কপি হয়েছে",
+        copyKeyFailed: "টাস্ক কী কপি করা যায়নি",
+        moreActions: "আরও অপশন",
+        openProject: "প্রজেক্ট খুলুন",
+        createdBy: "{date} তারিখে {name} তৈরি করেছেন",
+        createdOn: "{date} তারিখে তৈরি",
+        updatedAt: "শেষ আপডেট {when}",
+        unavailableTitle: "এই টাস্কটি পাওয়া যাচ্ছে না",
+        unavailableBody: "এটি মুছে ফেলা হয়ে থাকতে পারে, অথবা এটি এমন একটি প্রাইভেট প্রজেক্টের অংশ যার আপনি সদস্য নন।",
+        loadFailed: "টাস্কটি লোড করা যায়নি।",
+        goToTasks: "টাস্ক তালিকায় যান",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: 'এখনও কোনো বিবরণ নেই।',
         placeholder: 'যে কাজটি করবে তার যা জানা দরকার।',
         saveFailed: 'বিবরণ সংরক্ষণ করা যায়নি',
+        addHint: "কী দরকার, আর কখন কাজটি শেষ বলে ধরা হবে। মার্কডাউন ও পেস্ট করা স্ক্রিনশট দুটোই চলে।",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: 'শেষ তারিখ',
         inverted: 'শুরুর তারিখ শেষ তারিখের পরে।',
         saveFailed: 'তারিখ সংরক্ষণ করা যায়নি',
+        none: "শেষ তারিখ নেই",
+        clear: "শেষ তারিখ মুছুন",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: 'রং',
         saveFailed: 'লেবেল হালনাগাদ করা যায়নি',
         untagged: '{count}টি টাস্ক থেকে সরানো হয়েছে।',
+        coverNote: "প্রথম লেবেলটি কার্ডের রং ঠিক করে।",
+        manage: "লেবেল পরিচালনা করুন",
         colors: {
             GRAY: 'ধূসর',
             BLUE: 'নীল',
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: 'মন্তব্য',
             activity: 'কার্যক্রম',
             time: 'ঘণ্টার লগ',
-            remaining: 'অবশিষ্ট ঘণ্টার ইতিহাস',
+            remaining: 'বাকি',
             attachments: 'সংযুক্তি',
         },
         record: 'টাস্ক রেকর্ড',
         addChecklistItem: 'আইটেম যোগ করুন',
         logTime: 'সময় লগ করুন',
+        timeTitle: 'ঘণ্টা',
         spark: {
             title: 'অবশিষ্ট',
             hover: 'বিস্তারিত দেখতে হোভার করুন',
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: 'সময় লগ হয়েছে',
         deleted: 'সময় এন্ট্রি মুছে ফেলা হয়েছে',
         totalHours: 'মোট ঘণ্টা',
+        deleteEntryTitle: "এই সময়ের এন্ট্রিটি মুছবেন?",
+        deleteEntryPrompt: "{date} তারিখের {hours} ঘণ্টা লগ করা মোট থেকে বাদ যাবে।",
     },
 
     hourLogs: {

@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Field, Input } from '@/components/ui';
+import { Pencil, X } from 'lucide-react';
+import Avatar from '@/components/Avatar';
 import {
+    dueStateOf,
     labelClass,
     type ProjectLabel,
     type ProjectLabelColor,
 } from '@/components/projects/board-tasks';
-import CollapsibleSection from '@/components/projects/CollapsibleSection';
 import ChipPopover from '@/components/projects/ChipPopover';
+import { formatCalendarDate } from '@/lib/format';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -17,6 +19,7 @@ import { useI18n } from '@/lib/i18n';
 import {
     dateInputValue,
     num,
+    relativeDay,
     type AssigneeOption,
     type ProjectMemberRow,
     type StoryOption,
@@ -138,11 +141,25 @@ export function AssigneeField({
 
     return (
         <ChipPopover
+            variant="field"
             label={m.task.assignee}
             value={assigneeValueOf(task)}
-            display={holder?.label ?? m.task.unassigned}
+            display={
+                holder ? (
+                    <span className="flex min-w-0 items-center gap-1.5">
+                        <Avatar name={holder.label} size="xs" />
+                        <span className="truncate">{holder.label}</span>
+                    </span>
+                ) : (
+                    m.task.unassigned
+                )
+            }
             tone={holder ? 'default' : 'muted'}
-            options={options.map((option) => ({ value: option.value, label: option.label }))}
+            options={options.map((option) => ({
+                value: option.value,
+                label: option.label,
+                leading: <Avatar name={option.label} size="xs" />,
+            }))}
             disabled={saving}
             onOpen={onWanted}
             onPick={change}
@@ -183,7 +200,7 @@ export function UserStoryField({
     // loaded — without it the select would fall back to its first option and the
     // card would read as filed under a story it is not.
     const options = useMemo(() => {
-        const rows = [...stories];
+        const rows: StoryOption[] = [...stories];
         if (task.userStory && !rows.some((row) => row.id === task.userStory?.id)) {
             rows.unshift(task.userStory);
         }
@@ -202,17 +219,27 @@ export function UserStoryField({
         }
     };
 
-    const reference = (story: StoryOption) => story.code;
-
     return (
         <ChipPopover
+            variant="field"
             label={m.stories.field}
             value={task.userStory?.id ?? ''}
-            display={task.userStory ? reference(task.userStory) : m.stories.none}
+            display={
+                task.userStory ? (
+                    // The code is the handle people say; the title is what makes
+                    // it recognisable, so it gets whatever room is left.
+                    <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="shrink-0 font-medium">{task.userStory.code}</span>
+                        <span className="truncate text-gray-600">{task.userStory.title}</span>
+                    </span>
+                ) : (
+                    m.stories.none
+                )
+            }
             tone={task.userStory ? 'default' : 'muted'}
             options={options.map((story) => ({
                 value: story.id,
-                label: reference(story),
+                label: story.code,
                 subtitle: story.title,
             }))}
             disabled={saving}
@@ -232,18 +259,19 @@ export function UserStoryField({
  * Blank puts the stored figure back. The field has no way to say "no estimate"
  * (the DTO takes a number), and silently reading an emptied box as zero would
  * throw the burndown off without anyone asking for it.
+ *
+ * Drawn as one of the Time card's three figures, and marked as the one of them
+ * that can be typed into: a pencil beside its name, and a dash rather than an
+ * empty box when nothing has been estimated yet.
  */
 export function EstimateField({
     task,
     taskId,
     onSaved,
-    compact = false,
 }: {
     task: Task;
     taskId: string;
     onSaved: (updated: unknown) => Promise<unknown>;
-    /** Render as one of the three figures rather than as a labelled form field. */
-    compact?: boolean;
 }) {
     const { t } = useI18n();
     const m = t.projects;
@@ -272,48 +300,25 @@ export function EstimateField({
         }
     };
 
-    // `compact` puts it in the three-across row beside Logged and Remaining,
-    // where it has to read as one of three figures rather than as a form field
-    // — same control, same id, borrowing `Metric`'s frame so the row is even.
-    if (compact) {
-        return (
-            <div className="rounded-md border border-gray-200 px-1.5 py-1 text-center">
-                <label htmlFor="task-estimate" className="block text-xs text-gray-500">
-                    {m.task.estimate}
-                </label>
-                <input
-                    id="task-estimate"
-                    type="number"
-                    min="0"
-                    step="0.25"
-                    value={value}
-                    disabled={saving}
-                    onChange={(e) => setValue(e.target.value)}
-                    onBlur={commit}
-                    onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                            event.preventDefault();
-                            commit();
-                        }
-                        if (event.key === 'Escape') {
-                            event.stopPropagation();
-                            setValue(current);
-                        }
-                    }}
-                    className="w-full border-0 bg-transparent p-0 text-center text-sm font-medium tabular-nums text-gray-900 focus:outline-none focus:ring-0"
-                />
-            </div>
-        );
-    }
-
     return (
-        <Field label={m.task.estimate} htmlFor="task-estimate">
-            <Input
+        <div className="rounded-md border border-gray-200 px-1.5 py-1.5 text-center transition-colors focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/20 hover:border-gray-300">
+            {/* The same three words the project page's figures use. The unit is
+                the card's title, which is why this is not `task.estimate`'s
+                "Estimate (h)" — that caption wrapped at this width. */}
+            <label
+                htmlFor="task-estimate"
+                className="flex items-center justify-center gap-1 text-xs text-gray-500"
+            >
+                {m.overview.estimated}
+                <Pencil className="h-3 w-3 shrink-0 text-gray-400" aria-hidden />
+            </label>
+            <input
                 id="task-estimate"
                 type="number"
                 min="0"
                 step="0.25"
                 value={value}
+                placeholder="—"
                 disabled={saving}
                 onChange={(e) => setValue(e.target.value)}
                 onBlur={commit}
@@ -329,17 +334,26 @@ export function EstimateField({
                         setValue(current);
                     }
                 }}
+                className="mt-0.5 w-full border-0 bg-transparent p-0 text-center text-sm font-semibold tabular-nums text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0"
             />
-        </Field>
+        </div>
     );
 }
 
 /**
- * Start and due, saved on change rather than behind a Save button — there are
- * two fields and no validation to batch, so a button would only be one more
- * click between the user and the thing they came here to do.
+ * The due date, as one row of the Details list rather than a card of its own.
+ *
+ * Start date came off the card on 2026-09-14 (the first hour logged already says
+ * when work began), which is what lets the due date be a single field: 3P
+ * deferred a dates chip because start and due shared a cross-field check.
+ *
+ * The native date input stays — it is the one control that knows every
+ * locale's calendar — but out of sight: an empty one reads `dd/mm/yyyy`, which
+ * is what made the old section look unfinished. The visible button opens it
+ * through `showPicker()`, and the input keeps its label, so a screen reader
+ * still reaches a real date field.
  */
-export function DatesSection({
+export function DueDateField({
     task,
     taskId,
     onSaved,
@@ -348,16 +362,17 @@ export function DatesSection({
     taskId: string;
     onSaved: (updated: unknown) => Promise<unknown>;
 }) {
-    const { t } = useI18n();
+    const { t, localeInfo } = useI18n();
     const m = t.projects;
     const [saving, setSaving] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-    const save = async (field: 'startDate' | 'dueDate', value: string) => {
+    const save = async (value: string) => {
         setSaving(true);
         try {
             // Sends '' rather than undefined to clear: PATCH reads undefined as
             // "leave alone", so only the empty string can mean "no date".
-            await onSaved(await api.updateProjectTask(taskId, { [field]: value }));
+            await onSaved(await api.updateProjectTask(taskId, { dueDate: value }));
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.dates.saveFailed);
         } finally {
@@ -365,46 +380,115 @@ export function DatesSection({
         }
     };
 
-    const start = dateInputValue(task.start_date);
+    const openPicker = () => {
+        const input = inputRef.current;
+        if (!input) return;
+        // Chrome 99+, Safari 16+, Firefox 101+. Anything older gets the input
+        // focused, where the date can be typed or its own picker opened.
+        try {
+            if (typeof input.showPicker === 'function') {
+                input.showPicker();
+                return;
+            }
+        } catch {
+            // Refused outside a user gesture in some engines; fall through.
+        }
+        input.focus();
+    };
+
     const due = dateInputValue(task.due_date);
+    const start = dateInputValue(task.start_date);
     const inverted = start !== '' && due !== '' && start > due;
+    const state = dueStateOf(task.due_date, task.completed_at);
+    const tone =
+        state === 'overdue'
+            ? 'text-red-700'
+            : state === 'today' || state === 'soon'
+              ? 'text-amber-700'
+              : due
+                ? 'text-gray-900'
+                : 'text-gray-400';
 
     return (
-        <section className="rounded-md border border-gray-200 p-3">
-            <h3 className="mb-2 text-sm font-medium">{m.dates.title}</h3>
-            {/* Due only. The start date came off the card deliberately: it was
-                a second date to keep in step with the first hour logged, which
-                already says when work began, and two sources for one fact is
-                how they drift. The column is untouched — `start_date` is still
-                written by whatever sets it and still read by the Gantt; this
-                card just stopped asking someone to type it.
-
-                `Field` only ties its label to the control when given htmlFor —
-                without the matching id these inputs have no accessible name. */}
-            <div className="grid gap-2">
-                <Field
-                    label={m.dates.due}
-                    htmlFor="task-due-date"
-                    error={inverted ? m.dates.inverted : undefined}
+        <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 items-center">
+                <button
+                    type="button"
+                    onClick={openPicker}
+                    disabled={saving}
+                    className={`inline-flex min-w-0 items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-start text-sm transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-60 max-md:min-h-touch ${tone}`}
                 >
-                    <Input
-                        id="task-due-date"
-                        type="date"
-                        value={due}
+                    {due ? (
+                        <>
+                            <span className="tabular-nums">{formatCalendarDate(due)}</span>
+                            {/* Nothing relative once the work is done: "3 days
+                                ago" on a finished task reads as a warning. */}
+                            {state !== 'done' && (
+                                <span
+                                    className={
+                                        state === 'overdue'
+                                            ? 'rounded-full bg-red-50 px-1.5 text-xs font-medium'
+                                            : 'text-xs text-gray-500'
+                                    }
+                                >
+                                    {relativeDay(due, localeInfo.dateLocale)}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        m.dates.none
+                    )}
+                </button>
+                {due && (
+                    <button
+                        type="button"
+                        aria-label={m.dates.clear}
+                        title={m.dates.clear}
                         disabled={saving}
-                        onChange={(e) => save('dueDate', e.target.value)}
-                    />
-                </Field>
+                        onClick={() => save('')}
+                        className="inline-flex shrink-0 items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-60 max-md:min-h-touch max-md:min-w-touch"
+                    >
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                )}
+                <input
+                    ref={inputRef}
+                    id="task-due-date"
+                    type="date"
+                    aria-label={m.dates.due}
+                    // Off the tab order: the button above is how the keyboard
+                    // reaches it, and a second stop would be the same field twice.
+                    tabIndex={-1}
+                    value={due}
+                    disabled={saving}
+                    onChange={(e) => save(e.target.value)}
+                    className="sr-only"
+                />
             </div>
-        </section>
+            {inverted && <p className="px-2 text-xs text-danger">{m.dates.inverted}</p>}
+        </div>
     );
 }
 
+/** A label's colour at swatch strength, for the picker's rows. */
+const SWATCH: Record<ProjectLabelColor, string> = {
+    GRAY: 'bg-gray-400',
+    BLUE: 'bg-blue-500',
+    EMERALD: 'bg-emerald-500',
+    AMBER: 'bg-amber-500',
+    RED: 'bg-red-500',
+    PURPLE: 'bg-purple-500',
+};
+
 /**
- * Toggles rather than a multi-select: a label set is small and visual, and the
- * chip you tap is the chip you will see on the card.
+ * The labels a task wears, shown as themselves — the chips the board draws —
+ * with the picker a click on them away.
+ *
+ * This was a collapsed section, so a card's labels could not be seen without
+ * opening it. The catalogue is still fetched only on first open: the chips a
+ * task already wears come with the task.
  */
-export function LabelsSection({
+export function LabelsField({
     task,
     taskId,
     all,
@@ -417,26 +501,25 @@ export function LabelsSection({
     all: ProjectLabel[];
     selected: ProjectLabel[];
     onSaved: (updated: unknown) => Promise<unknown>;
-    /** Fires when the section is first opened, so the catalogue loads then. */
+    /** Fires when the picker is first opened, so the catalogue loads then. */
     onWanted: () => void;
 }) {
     const { t } = useI18n();
     const m = t.projects.labels;
     const [saving, setSaving] = useState(false);
 
-    const selectedIds = new Set(selected.map((label) => label.id));
+    const selectedIds = selected.map((label) => label.id);
 
     /**
      * The cover follows the first label, and is written in the same PATCH.
      *
-     * This is what merging the two controls actually means: the cover was a
-     * colour chosen with no relation to the labels beside it, so a card could
-     * carry a red "Bug" chip and a purple stripe. Deriving it removes the
-     * second, independent choice rather than hiding it — and the board still
-     * reads `cover_color`, so nothing downstream changes.
+     * The cover was a colour chosen with no relation to the labels beside it,
+     * so a card could carry a red "Bug" chip and a purple stripe. Deriving it
+     * removes the second, independent choice rather than hiding it — and the
+     * board still reads `cover_color`, so nothing downstream changes.
      *
-     * A task with no labels has no cover, which is `''` — the same clear
-     * convention the dates and the old cover picker used.
+     * A task with no labels has no cover, which is `''` — the PATCH-clearing
+     * convention every other field here uses.
      */
     const coverFor = (ids: string[]): ProjectLabelColor | '' => {
         const first = ids[0];
@@ -469,37 +552,60 @@ export function LabelsSection({
         }
     };
 
-    // The chips a task already wears come with the task; the catalogue is only
-    // needed to offer the ones it does not, so it is fetched on first open.
+    const pool = all.length > 0 ? all : selected;
+
     return (
-        <CollapsibleSection title={m.title} count={selected.length} onFirstOpen={onWanted}>
-            <div className="flex flex-wrap gap-1.5">
-                {all.length === 0 && selected.length === 0 && (
-                    <p className="text-sm text-gray-500">{m.empty}</p>
-                )}
-                {(all.length > 0 ? all : selected).map((label) => {
-                    const on = selectedIds.has(label.id);
-                    const isCover = task.cover_color != null && on && selected[0]?.id === label.id;
-                    return (
-                        <button
-                            key={label.id}
-                            type="button"
-                            disabled={saving}
-                            aria-pressed={on}
-                            onClick={() => toggle(label.id)}
-                            className={`max-md:min-h-touch rounded px-2 py-1 text-xs font-medium disabled:opacity-60 ${labelClass(label.color)} ${
-                                on ? 'ring-2 ring-blue-600' : 'opacity-50'
-                            }`}
-                        >
-                            {label.name}
-                            {/* The one that is also the card's cover. Marked so
-                                the rule is visible rather than something the
-                                board reveals later. */}
-                            {isCover && <span className="ms-1 opacity-70">●</span>}
-                        </button>
-                    );
-                })}
-            </div>
-        </CollapsibleSection>
+        <ChipPopover
+            variant="field"
+            multiple
+            label={m.title}
+            value=""
+            values={selectedIds}
+            display={
+                selected.length === 0 ? (
+                    m.add
+                ) : (
+                    <span className="flex min-w-0 flex-wrap gap-1">
+                        {selected.map((label) => (
+                            <span
+                                key={label.id}
+                                className={`rounded px-1.5 py-0.5 text-xs font-medium ${labelClass(label.color)}`}
+                            >
+                                {label.name}
+                            </span>
+                        ))}
+                    </span>
+                )
+            }
+            tone={selected.length > 0 ? 'default' : 'muted'}
+            options={pool.map((label) => ({
+                value: label.id,
+                label: label.name,
+                leading: (
+                    <span
+                        aria-hidden
+                        className={`h-2.5 w-2.5 shrink-0 rounded-sm ${SWATCH[label.color as ProjectLabelColor] ?? SWATCH.GRAY}`}
+                    />
+                ),
+            }))}
+            disabled={saving}
+            onOpen={onWanted}
+            onToggle={toggle}
+            note={m.empty}
+            footer={
+                <span className="flex items-center justify-between gap-2">
+                    {/* Said where the choice is made, rather than left for the
+                        board to reveal later. */}
+                    <span>{task.cover_color || selected.length > 0 ? m.coverNote : null}</span>
+                    <Link
+                        href={routes.projects.settings}
+                        className="shrink-0 font-medium text-blue-600 hover:underline"
+                    >
+                        {m.manage}
+                    </Link>
+                </span>
+            }
+            filterable
+        />
     );
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
+import Avatar from '@/components/Avatar';
 import { Button, RichTextEditor } from '@/components/ui';
 import {
     actorName,
@@ -14,13 +15,31 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { Markdown } from './lazy-markdown';
+import { relativeTime } from './model';
 import { useTaskImageUpload } from './task-image-upload';
 
 /**
- * Comments and the change log in one timeline, because "what happened to this
- * task" is one question. Loads independently of the panel: the feed is the
- * heaviest part of the card and the least urgent, and a failure here must not
- * cost you the hours form above it.
+ * When something happened: "2 hours ago", with the exact time on hover. A
+ * feed read top to bottom is read in relative time; the timestamp is for the
+ * reader who needs it.
+ */
+function When({ at, locale }: { at: string; locale: string }) {
+    return (
+        <time dateTime={at} title={formatDateTime(at)}>
+            {relativeTime(at, locale)}
+        </time>
+    );
+}
+
+/**
+ * A task's comments, or its change log, as one tab of the card's record.
+ *
+ * Loads independently of the card: the feed is the heaviest part of it and the
+ * least urgent, and a failure here must not cost the hours form. It draws no
+ * box or heading of its own — the tab it sits in already names it, and the box
+ * it used to draw inside the tab panel was a box in a box, headed "Activity"
+ * even on the Comments tab. Watching moved to the card's header with it: it is
+ * the task that is watched, not its comments.
  */
 export default function ActivitySection({
     taskId,
@@ -42,11 +61,11 @@ export default function ActivitySection({
      */
     show?: 'all' | 'comments' | 'activity';
 }) {
-    const { t } = useI18n();
+    const { t, localeInfo } = useI18n();
     const m = t.projects.activity;
+    const locale = localeInfo.dateLocale;
 
     const [feed, setFeed] = useState<FeedEntry[]>([]);
-    const [watching, setWatching] = useState(false);
     const [me, setMe] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -68,23 +87,19 @@ export default function ActivitySection({
 
     const load = useCallback(async () => {
         try {
-            const [comments, activity, watchers, user] = await Promise.all([
+            // The watcher list is no longer read here: whether the viewer
+            // watches the task comes with the task itself now.
+            const [comments, activity, user] = await Promise.all([
                 api.getTaskComments(taskId),
                 api.getTaskActivity(taskId),
-                api.getTaskWatchers(taskId),
                 api.getMe(),
             ]);
-            const userId = (user as { id?: string } | null)?.id ?? null;
-            setMe(userId);
+            setMe((user as { id?: string } | null)?.id ?? null);
             setFeed(
                 mergeFeed(
                     Array.isArray(comments) ? comments : [],
                     Array.isArray(activity) ? activity : [],
                 ),
-            );
-            setWatching(
-                Array.isArray(watchers) &&
-                    watchers.some((w: { user_id?: string }) => w.user_id === userId),
             );
             setFailed(false);
         } catch {
@@ -135,33 +150,11 @@ export default function ActivitySection({
     };
 
     return (
-        <section className="rounded-md border border-gray-200 p-3">
-            <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">{m.title}</h3>
-                <Button
-                    type="button"
-                    variant={watching ? 'secondary' : 'ghost'}
-                    className="max-md:min-h-touch"
-                    disabled={saving}
-                    aria-pressed={watching}
-                    onClick={() =>
-                        run(() => (watching ? api.unwatchTask(taskId) : api.watchTask(taskId)))
-                    }
-                >
-                    {watching ? (
-                        <Eye className="me-1 h-4 w-4" />
-                    ) : (
-                        <EyeOff className="me-1 h-4 w-4" />
-                    )}
-                    {watching ? m.watching : m.watch}
-                </Button>
-            </div>
-            <p className="mt-0.5 text-xs text-gray-500">{m.watchHint}</p>
-
+        <div>
             {/* Nothing to write on an activity log — it records what the
                 system saw, not what anyone wants to say about it. */}
             {show !== 'activity' && (
-                <form onSubmit={submit} className="mt-2 space-y-2">
+                <form onSubmit={submit} className="space-y-2">
                     {/* The same editor the description uses, for the same
                         reason: a screenshot is half of what anyone wants to say
                         about a bug, and describing one in words is the long way
@@ -178,29 +171,57 @@ export default function ActivitySection({
                         onSubmit={post}
                         uploadImage={uploadImage}
                     />
-                    <Button
-                        type="submit"
-                        className="max-md:min-h-touch"
-                        disabled={saving || draft.trim() === ''}
-                    >
-                        {m.comment}
-                    </Button>
+                    <div className="flex justify-end">
+                        <Button type="submit" disabled={saving || draft.trim() === ''}>
+                            {m.comment}
+                        </Button>
+                    </div>
                 </form>
             )}
 
             {failed ? (
                 <p className="mt-3 text-sm text-danger">{m.loadFailed}</p>
             ) : shown.length === 0 ? (
-                <p className="mt-3 text-sm text-gray-500">{m.empty}</p>
-            ) : (
-                <ul className="mt-3 space-y-2">
+                <div className="mt-4 flex flex-col items-center gap-1 py-4 text-center">
+                    <MessageSquare className="h-6 w-6 text-gray-300" aria-hidden />
+                    <p className="text-sm text-gray-500">{m.empty}</p>
+                </div>
+            ) : show === 'activity' ? (
+                /* The log as a thin timeline: who, what, when, one line each.
+                   A status move is not worth a card of its own. */
+                <ol className="mt-1 space-y-2.5 border-s border-gray-200 ps-4">
                     {shown.map((entry) => (
-                        <li key={`${entry.kind}-${entry.id}`} className="text-sm">
-                            {entry.kind === 'comment' ? (
-                                <div className="rounded-md bg-gray-50 p-2">
+                        <li key={`${entry.kind}-${entry.id}`} className="relative text-sm">
+                            <span
+                                aria-hidden
+                                className="absolute -start-[1.3125rem] top-1.5 h-2 w-2 rounded-full border-2 border-white bg-gray-300"
+                            />
+                            <span className="font-medium text-gray-900">
+                                {actorName(entry.kind === 'activity' ? entry.actor : entry.user) ?? m.someone}
+                            </span>{' '}
+                            <span className="text-gray-600">
+                                {entry.kind === 'activity'
+                                    ? describeActivity(entry, m.types as Record<string, string>)
+                                    : entry.body}
+                            </span>
+                            <span className="ms-1.5 text-xs text-gray-400">
+                                <When at={entry.created_at} locale={locale} />
+                            </span>
+                        </li>
+                    ))}
+                </ol>
+            ) : (
+                <ul className="mt-4 space-y-4">
+                    {shown.map((entry) =>
+                        entry.kind === 'comment' ? (
+                            <li key={`${entry.kind}-${entry.id}`} className="flex gap-2.5 text-sm">
+                                <Avatar name={actorName(entry.user) ?? m.someone} size="md" />
+                                <div className="min-w-0 flex-1">
                                     <p className="text-xs text-gray-500">
-                                        {actorName(entry.user) ?? m.someone} ·{' '}
-                                        {formatDateTime(entry.created_at)}
+                                        <span className="font-semibold text-gray-900">
+                                            {actorName(entry.user) ?? m.someone}
+                                        </span>{' '}
+                                        · <When at={entry.created_at} locale={locale} />
                                     </p>
                                     {editingId === entry.id ? (
                                         <div className="mt-1 space-y-2">
@@ -219,7 +240,6 @@ export default function ActivitySection({
                                             <div className="flex gap-2">
                                                 <Button
                                                     type="button"
-                                                    className="max-md:min-h-touch"
                                                     disabled={saving}
                                                     onClick={() => commitEdit(entry)}
                                                 >
@@ -228,7 +248,6 @@ export default function ActivitySection({
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
-                                                    className="max-md:min-h-touch"
                                                     onClick={() => setEditingId(null)}
                                                 >
                                                     {t.common.cancel}
@@ -241,7 +260,7 @@ export default function ActivitySection({
                                            a markdown image — rendered as the
                                            literal `![…](…)` it would be the one
                                            part of a comment nobody can read. */
-                                        <div className="mt-0.5">
+                                        <div className="mt-0.5 leading-relaxed text-gray-700">
                                             <Suspense
                                                 fallback={
                                                     <p className="whitespace-pre-wrap">{entry.body}</p>
@@ -255,10 +274,10 @@ export default function ActivitySection({
                                     {/* Only your own — an audit trail nobody
                                         else can rewrite. */}
                                     {me && entry.user?.id === me && editingId !== entry.id && (
-                                        <div className="mt-1 flex gap-2 text-xs">
+                                        <div className="mt-1 flex gap-3 text-xs">
                                             <button
                                                 type="button"
-                                                className="max-md:min-h-touch text-blue-600"
+                                                className="max-md:min-h-touch text-blue-600 hover:underline"
                                                 onClick={() => {
                                                     setEditingId(entry.id);
                                                     setEditBody(entry.body);
@@ -268,7 +287,7 @@ export default function ActivitySection({
                                             </button>
                                             <button
                                                 type="button"
-                                                className="max-md:min-h-touch text-red-600"
+                                                className="max-md:min-h-touch text-red-600 hover:underline"
                                                 disabled={saving}
                                                 onClick={() =>
                                                     run(() => api.deleteTaskComment(entry.id))
@@ -279,21 +298,19 @@ export default function ActivitySection({
                                         </div>
                                     )}
                                 </div>
-                            ) : (
-                                <p className="text-gray-600">
-                                    <span className="text-gray-900">
-                                        {actorName(entry.actor) ?? m.someone}
-                                    </span>{' '}
-                                    {describeActivity(entry, m.types as Record<string, string>)}
-                                    <span className="ms-1 text-xs text-gray-400">
-                                        {formatDateTime(entry.created_at)}
-                                    </span>
-                                </p>
-                            )}
-                        </li>
-                    ))}
+                            </li>
+                        ) : (
+                            <li key={`${entry.kind}-${entry.id}`} className="text-sm text-gray-600">
+                                <span className="text-gray-900">{actorName(entry.actor) ?? m.someone}</span>{' '}
+                                {describeActivity(entry, m.types as Record<string, string>)}
+                                <span className="ms-1 text-xs text-gray-400">
+                                    <When at={entry.created_at} locale={locale} />
+                                </span>
+                            </li>
+                        ),
+                    )}
                 </ul>
             )}
-        </section>
+        </div>
     );
 }

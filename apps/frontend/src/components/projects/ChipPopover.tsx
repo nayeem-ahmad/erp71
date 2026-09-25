@@ -56,6 +56,11 @@ export default function ChipPopover({
     filterable,
     emptyLabel,
     note,
+    variant = 'pill',
+    multiple = false,
+    values,
+    onToggle,
+    footer,
 }: {
     /** Names the field, for the trigger's accessible name. */
     label: string;
@@ -64,8 +69,27 @@ export default function ChipPopover({
     /** What the chip reads when closed — usually the option's label. */
     display: ReactNode;
     options: ChipOption[];
-    /** Given '' when the "none" row is picked. */
-    onPick: (value: string) => void;
+    /** Given '' when the "none" row is picked. Unused when `multiple`. */
+    onPick?: (value: string) => void;
+    /**
+     * `pill` is the coloured chip. `field` is a quiet value in a property list:
+     * no border until hover and grey when empty, because a column of set fields
+     * drawn as pills reads as a column of identical badges — the task card's
+     * status, priority and sprint were all the same blue.
+     */
+    variant?: 'pill' | 'field';
+    /**
+     * Several values at once. The panel stays open and each row toggles,
+     * reported through `onToggle`; there is no "none" row, since unticking
+     * everything is how nothing is chosen.
+     */
+    multiple?: boolean;
+    /** The chosen values, when `multiple`. */
+    values?: string[];
+    /** The row that was toggled, when `multiple`. */
+    onToggle?: (value: string) => void;
+    /** Under the rows, always: a rule worth knowing, or a link out to manage the list. */
+    footer?: ReactNode;
     /** Fires on first open, so a lazily-fetched list loads then. */
     onOpen?: () => void;
     disabled?: boolean;
@@ -119,7 +143,8 @@ export default function ChipPopover({
     useDismissOnClickOutside(open, isInside, close);
 
     const rows = useMemo(() => {
-        const all = emptyLabel != null ? [{ value: '', label: emptyLabel }, ...options] : options;
+        const all =
+            emptyLabel != null && !multiple ? [{ value: '', label: emptyLabel }, ...options] : options;
         const needle = query.trim().toLowerCase();
         if (!needle) return all;
         // The empty row is never filtered out: "clear this" has to stay
@@ -130,7 +155,7 @@ export default function ChipPopover({
                 row.label.toLowerCase().includes(needle) ||
                 (row.subtitle ?? '').toLowerCase().includes(needle),
         );
-    }, [options, emptyLabel, query]);
+    }, [options, emptyLabel, multiple, query]);
 
     useEffect(() => {
         if (!open) return;
@@ -142,10 +167,19 @@ export default function ChipPopover({
     }, [open, filterable]);
 
     const pick = (next: string) => {
+        // A multi-select stays open: ticking three labels is three clicks, not
+        // three trips back to the trigger.
+        if (multiple) {
+            onToggle?.(next);
+            return;
+        }
         close();
         chipRef.current?.focus();
-        if (next !== value) onPick(next);
+        if (next !== value) onPick?.(next);
     };
+
+    const isOn = (row: ChipOption) =>
+        multiple ? (values ?? []).includes(row.value) : row.value === value;
 
     const onKeyDown = (event: React.KeyboardEvent) => {
         if (event.key === 'Escape') {
@@ -179,8 +213,18 @@ export default function ChipPopover({
               ? 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
               : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100';
 
+    const fieldToneClass =
+        tone === 'warning' ? 'text-amber-700' : tone === 'muted' ? 'text-gray-400' : 'text-gray-900';
+
+    const triggerClass =
+        variant === 'field'
+            ? // One per row in a property list, so the 44px floor costs nothing
+              // here that the pill had to trade away.
+              `inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-start text-sm transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-60 aria-expanded:bg-gray-100 max-md:min-h-touch ${fieldToneClass}`
+            : `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${toneClass}`;
+
     return (
-        <div ref={boxRef} className="inline-flex">
+        <div ref={boxRef} className={variant === 'field' ? 'inline-flex min-w-0 max-w-full' : 'inline-flex'}>
             <button
                 ref={chipRef}
                 type="button"
@@ -199,10 +243,13 @@ export default function ChipPopover({
                 // more sidebar height than the selects this replaced. The floor
                 // belongs on the popover's option rows, which are what a finger
                 // actually lands on to make a change — those keep theirs below.
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${toneClass}`}
+                className={triggerClass}
             >
                 {display}
-                <ChevronDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
+                <ChevronDown
+                    className={`h-3 w-3 shrink-0 ${variant === 'field' ? 'text-gray-400' : 'opacity-60'}`}
+                    aria-hidden
+                />
             </button>
 
             {open && (
@@ -213,6 +260,7 @@ export default function ChipPopover({
                     className="min-w-56 border-gray-200 p-1"
                     role="listbox"
                     aria-label={label}
+                    aria-multiselectable={multiple || undefined}
                 >
                     {filterable && (
                         <input
@@ -230,7 +278,7 @@ export default function ChipPopover({
                         <p className="px-2 py-1.5 text-xs text-gray-500">{t.common.noData}</p>
                     ) : (
                         rows.map((row, index) => {
-                            const on = row.value === value;
+                            const on = isOn(row);
                             return (
                                 <button
                                     key={row.value || '__none__'}
@@ -243,6 +291,20 @@ export default function ChipPopover({
                                         index === active ? 'bg-blue-50' : ''
                                     } ${row.value === '' ? 'text-gray-500' : 'text-gray-900'}`}
                                 >
+                                    {/* A box that ticks, in a multi-select: a
+                                        check mark at the far end reads as "the
+                                        one chosen", which is the single-select's
+                                        meaning. */}
+                                    {multiple && (
+                                        <span
+                                            aria-hidden
+                                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                                on ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                                            }`}
+                                        >
+                                            {on && <Check className="h-3 w-3" />}
+                                        </span>
+                                    )}
                                     {row.leading}
                                     <span className="min-w-0 flex-1">
                                         <span className="block truncate">{row.label}</span>
@@ -252,7 +314,7 @@ export default function ChipPopover({
                                             </span>
                                         )}
                                     </span>
-                                    {on && (
+                                    {on && !multiple && (
                                         <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden />
                                     )}
                                 </button>
@@ -267,6 +329,12 @@ export default function ChipPopover({
                         <p className="border-t border-gray-100 px-2 py-1.5 text-xs text-gray-500">
                             {note}
                         </p>
+                    )}
+
+                    {footer && (
+                        <div className="mt-1 border-t border-gray-100 px-2 pb-0.5 pt-1.5 text-xs text-gray-500">
+                            {footer}
+                        </div>
                     )}
                 </AnchoredDropdown>
             )}

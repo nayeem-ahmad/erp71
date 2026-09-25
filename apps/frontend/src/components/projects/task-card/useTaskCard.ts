@@ -62,9 +62,33 @@ export function useTaskCard(
         setHistory(Array.isArray(log) ? log : []);
     }, [taskId]);
 
-    useEffect(() => {
-        loadTask().catch(() => setTask(null));
+    /**
+     * Why the card has nothing to show, once the read has failed. These used to
+     * be one state with "still loading": a pasted link to a deleted task, or to
+     * a private project the reader is not on, said "Loading…" for ever.
+     *
+     * `unavailable` is the 404/403 the API answers for both of those — the
+     * task's access filter hides the row, so the two cannot be told apart, and
+     * the message has to cover both. Anything else is `failed`, which is worth
+     * retrying.
+     */
+    const [loadError, setLoadError] = useState<'unavailable' | 'failed' | null>(null);
+
+    const firstLoad = useCallback(() => {
+        setLoadError(null);
+        loadTask().catch((error: unknown) => {
+            setTask(null);
+            // Read off the error rather than `instanceof ApiError`: it is the
+            // same field either way, and a test that mocks `@/lib/api` wholesale
+            // has no `ApiError` class to test against.
+            const status = (error as { status?: unknown } | null)?.status;
+            setLoadError(status === 404 || status === 403 ? 'unavailable' : 'failed');
+        });
     }, [loadTask]);
+
+    useEffect(() => {
+        firstLoad();
+    }, [firstLoad]);
 
     /**
      * The tenant's label catalogue, fetched the first time somebody wants to
@@ -263,9 +287,10 @@ export function useTaskCard(
      * logging an afternoon and re-estimating it were two saves with two notes.
      * With no hours to log, what is left is a plain re-estimate.
      */
-    const saveWork = async (e: React.FormEvent) => {
+    /** Resolves true once the write landed, so a form can fold itself away. */
+    const saveWork = async (e: React.FormEvent): Promise<boolean> => {
         e.preventDefault();
-        if (!canSaveWork) return;
+        if (!canSaveWork) return false;
         const note = timeForm.note.trim() || undefined;
         setBusy(true);
         try {
@@ -293,8 +318,10 @@ export function useTaskCard(
                 setTimeForm(EMPTY_TIME_FORM);
                 await applyWithLog(updated);
             }
+            return true;
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+            return false;
         } finally {
             setBusy(false);
         }
@@ -353,10 +380,47 @@ export function useTaskCard(
     };
 
 
+    /**
+     * Watching belongs to the task, not to its comment feed, so it is driven
+     * from here and shown in the card's header. The flag comes with the task
+     * read (`findOne`'s `viewer_watching`), which keeps opening a card at three
+     * requests — the feed's own watcher fetch was one of the six 4F removed.
+     */
+    const [watchBusy, setWatchBusy] = useState(false);
+    const watching = Boolean(task?.viewer_watching);
+    const toggleWatch = async () => {
+        if (!task) return;
+        setWatchBusy(true);
+        try {
+            if (watching) await api.unwatchTask(taskId);
+            else await api.watchTask(taskId);
+            // Neither endpoint answers with the task, and a re-read would cost
+            // the round trip `apply` exists to avoid, so the flag and the count
+            // are set from what was just done.
+            setTask((current) =>
+                current
+                    ? {
+                          ...current,
+                          viewer_watching: !watching,
+                          _count: {
+                              ...current._count,
+                              watchers: Math.max(0, (current._count?.watchers ?? 0) + (watching ? -1 : 1)),
+                          },
+                      }
+                    : current,
+            );
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.activity.saveFailed);
+        } finally {
+            setWatchBusy(false);
+        }
+    };
+
     const hoursLeftAfter = Math.max(num(task?.remaining_hours) - hours, 0);
 
     return {
-        task, statuses, history, busy, timeForm, setTimeForm,
+        task, loadError, retry: firstLoad, statuses, history, busy, timeForm, setTimeForm,
+        watching, watchBusy, toggleWatch,
         hours, canSaveWork, hoursLeftAfter,
         allLabels, members, membersFailed, stories, sprints, localeInfo,
         apply, refresh, markChanged, close,
@@ -367,3 +431,6 @@ export function useTaskCard(
         onSprintsWanted: () => setSprintsWanted(true),
     };
 }
+
+/** Everything `useTaskCard` hands a presentation. */
+export type TaskCard = ReturnType<typeof useTaskCard>;

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from 'lucide-react';
-import { Button, Checkbox, Input } from '@/components/ui';
+import { Button, Checkbox, CompactSection, Input } from '@/components/ui';
 import { movedFar } from '@/components/projects/board-drag';
 import { reorderByDrag } from '@/components/projects/checklist-reorder';
 import { api } from '@/lib/api';
@@ -139,9 +139,10 @@ export default function ChecklistSection({
     };
 
     return (
-        <section className="rounded-md border border-gray-200 p-3">
-            <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">
+        <CompactSection
+            titleStyle="heading"
+            title={
+                <>
                     {m.title}
                     {items.length > 0 && (
                         <span className="ms-2 text-xs font-normal text-gray-500">
@@ -152,22 +153,23 @@ export default function ChecklistSection({
                                       .replace('{total}', String(items.length))}
                         </span>
                     )}
-                </h3>
+                </>
+            }
+            actions={
                 <Button
                     type="button"
                     variant="secondary"
-                    className="max-md:min-h-touch"
                     aria-expanded={adding}
                     onClick={() => setAdding((open) => !open)}
                 >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-4 w-4" aria-hidden />
                     {t.projects.card.addChecklistItem}
                 </Button>
-            </div>
-
+            }
+        >
             {items.length > 0 && (
                 <div
-                    className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200"
+                    className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200"
                     role="progressbar"
                     aria-valuenow={percent}
                     aria-valuemin={0}
@@ -182,14 +184,16 @@ export default function ChecklistSection({
             )}
 
             {items.length === 0 ? (
-                <p className="mt-2 text-sm text-gray-500">{m.empty}</p>
+                <p className="text-sm text-gray-500">{m.empty}</p>
             ) : (
-                <ul className="mt-2 space-y-0.5">
+                <ul className="-mx-2 mt-2 space-y-0.5">
                     {items.map((item, index) => (
                         <li
                             key={item.id}
                             {...{ [CHECKLIST_ITEM_ATTR]: item.id }}
-                            className={`flex items-center gap-2 rounded ${
+                            // `group` so a row's own controls can wait for the
+                            // pointer or the keyboard to arrive (below).
+                            className={`group flex items-center gap-2 rounded-md px-2 py-0.5 hover:bg-gray-50 ${
                                 dragging === item.id ? 'opacity-40' : ''
                             } ${over === item.id ? 'ring-2 ring-blue-400' : ''}`}
                         >
@@ -254,33 +258,39 @@ export default function ChecklistSection({
                                 </button>
                             )}
 
-                            <button
-                                type="button"
-                                aria-label={m.moveUp}
-                                className="px-1 text-gray-400 disabled:opacity-30"
-                                disabled={saving || index === 0}
-                                onClick={() => moveBy(index, -1)}
-                            >
-                                <ArrowUp className="h-4 w-4" />
-                            </button>
-                            <button
-                                type="button"
-                                aria-label={m.moveDown}
-                                className="px-1 text-gray-400 disabled:opacity-30"
-                                disabled={saving || index === items.length - 1}
-                                onClick={() => moveBy(index, 1)}
-                            >
-                                <ArrowDown className="h-4 w-4" />
-                            </button>
-                            <button
-                                type="button"
-                                aria-label={m.deleteItem}
-                                className="px-1 text-red-600"
-                                disabled={saving}
-                                onClick={() => run(() => api.deleteTaskChecklistItem(item.id))}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </button>
+                            {/* Four icons on every row made a five-item list
+                                read as a toolbar. From md up they wait for the
+                                pointer or the keyboard to reach the row; on a
+                                phone, where there is no hover, they stay. */}
+                            <span className="flex shrink-0 items-center transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+                                <button
+                                    type="button"
+                                    aria-label={m.moveUp}
+                                    className="rounded px-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                                    disabled={saving || index === 0}
+                                    onClick={() => moveBy(index, -1)}
+                                >
+                                    <ArrowUp className="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-label={m.moveDown}
+                                    className="rounded px-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                                    disabled={saving || index === items.length - 1}
+                                    onClick={() => moveBy(index, 1)}
+                                >
+                                    <ArrowDown className="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-label={m.deleteItem}
+                                    className="rounded px-1 text-red-600 hover:text-red-700"
+                                    disabled={saving}
+                                    onClick={() => run(() => api.deleteTaskChecklistItem(item.id))}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </span>
                         </li>
                     ))}
                 </ul>
@@ -291,7 +301,7 @@ export default function ChecklistSection({
                 open input under the last item made every read scroll past a
                 field nobody was filling. */}
             {adding && (
-                <form onSubmit={add} className="mt-2 flex gap-2">
+                <form onSubmit={add} className="mt-3 flex gap-2">
                     <Input
                         value={newText}
                         placeholder={m.placeholder}
@@ -309,6 +319,6 @@ export default function ChecklistSection({
                     </Button>
                 </form>
             )}
-        </section>
+        </CompactSection>
     );
 }

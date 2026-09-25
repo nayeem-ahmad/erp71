@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: 'Tarikh akhir',
         milestone: 'Pencapaian',
         estimate: 'Anggaran (j)',
-        remaining: 'Baki (j)',
-        logged: 'Direkod (j)',
         subtasks: 'Sub-tugasan',
         noTasks: 'Tiada tugasan lagi.',
         deleted: 'Tugasan dipadam',
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: 'Belum ada sesiapa dalam pasukan projek ini.',
         assigneeAddTeam: 'Tambah ahli pasukan',
         assigneeLoadFailed: 'Pasukan projek ini tidak dapat dibaca.',
+        copyKey: "Salin kunci tugasan",
+        keyCopied: "Kunci tugasan disalin",
+        copyKeyFailed: "Tidak dapat menyalin kunci tugasan",
+        moreActions: "Lagi tindakan",
+        openProject: "Buka projek",
+        createdBy: "Dicipta {date} oleh {name}",
+        createdOn: "Dicipta {date}",
+        updatedAt: "Dikemas kini {when}",
+        unavailableTitle: "Tugasan ini tidak tersedia",
+        unavailableBody: "Tugasan ini mungkin telah dipadam, atau ia milik projek persendirian yang anda bukan ahlinya.",
+        loadFailed: "Tidak dapat memuatkan tugasan ini.",
+        goToTasks: "Pergi ke Tugasan",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: 'Tiada penerangan lagi.',
         placeholder: 'Apa-apa yang perlu diketahui oleh orang yang membuatnya.',
         saveFailed: 'Penerangan tidak dapat disimpan',
+        addHint: "Apa yang diperlukan, dan bagaimana anda tahu ia selesai. Markdown dan tangkapan skrin yang ditampal boleh digunakan.",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: 'Tarikh tamat',
         inverted: 'Tarikh mula selepas tarikh tamat.',
         saveFailed: 'Tarikh tidak dapat disimpan',
+        none: "Tiada tarikh tamat",
+        clear: "Kosongkan tarikh tamat",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: 'Warna',
         saveFailed: 'Label tidak dapat dikemas kini',
         untagged: 'Dibuang daripada {count} tugasan.',
+        coverNote: "Label pertama menentukan warna kad.",
+        manage: "Urus label",
         colors: {
             GRAY: 'Kelabu',
             BLUE: 'Biru',
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: 'Komen',
             activity: 'Aktiviti',
             time: 'Log Jam',
-            remaining: 'Sejarah Baki Jam',
+            remaining: 'Baki',
             attachments: 'Lampiran',
         },
         record: 'Rekod tugasan',
         addChecklistItem: 'Tambah item',
         logTime: 'Log masa',
+        timeTitle: 'Jam',
         spark: {
             title: 'Baki',
             hover: 'tuding untuk perincian',
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: 'Masa direkod',
         deleted: 'Entri masa dipadam',
         totalHours: 'Jumlah jam',
+        deleteEntryTitle: "Padam catatan masa ini?",
+        deleteEntryPrompt: "{hours} jam pada {date} akan ditolak daripada jumlah yang direkod.",
     },
 
     hourLogs: {

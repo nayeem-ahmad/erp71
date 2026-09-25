@@ -7,19 +7,21 @@ import { Button } from '@/components/ui';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
 import { copyTaskLink } from './task-link';
+import { taskKeyOf } from './task-card/model';
 import { TaskCardBody } from './task-card/TaskCardBody';
+import TaskCardSkeleton from './task-card/TaskCardSkeleton';
+import TaskUnavailable from './task-card/TaskUnavailable';
 import { useTaskCard } from './task-card/useTaskCard';
 import TitleField from './task-card/TitleField';
+import WatchButton from './task-card/WatchButton';
 
-/*
- * The card's sections live in `./task-card/`, one file each. This file is the
- * modal shell around them, kept at its old path and default export so every
- * caller — the board, the task list, the project page — mounts it unchanged.
- * The page at `/projects/tasks/<id>` imports the body and the hook from here
- * too, for the same reason.
+/**
+ * A task, as a modal — how every list and board opens a card, because opening
+ * one from a board is usually a peek. The page at `/projects/tasks/<id>` is the
+ * other presentation of the same body; the sections live in `./task-card/`,
+ * and this file is kept at its old path and default export so every caller
+ * mounts it unchanged.
  */
-export { TaskCardBody, useTaskCard };
-
 export default function TaskDetailPanel({
     taskId,
     onClose,
@@ -32,35 +34,9 @@ export default function TaskDetailPanel({
     const { t } = useI18n();
     const m = t.projects;
     const card = useTaskCard(taskId, { onClose, onChanged });
-    const {
-        task,
-        close,
-        statuses,
-        history,
-        busy,
-        timeForm,
-        setTimeForm,
-        hours,
-        canSaveWork,
-        allLabels,
-        members,
-        membersFailed,
-        stories,
-        localeInfo,
-        apply,
-        refresh,
-        markChanged,
-        changeStatus,
-        changePriority,
-        saveWork,
-        deleteEntry,
-        onLabelsWanted,
-        onMembersWanted,
-        onStoriesWanted,
-        onSprintsWanted,
-        sprints,
-        changeSprint,
-    } = card;
+    const { task, close } = card;
+    const taskKey = task ? taskKeyOf(task.reference, task.project) : null;
+
     return (
         /* `dismissOnBackdrop={false}`: nearly every field on this card saves on
            blur, so a click beside the panel used to close it mid-edit and the
@@ -70,14 +46,19 @@ export default function TaskDetailPanel({
             <ModalHeader
                 title={
                     task ? (
-                        <TitleField title={task.title} taskId={taskId} onSaved={apply} />
+                        <TitleField title={task.title} taskId={taskId} onSaved={card.apply} />
                     ) : (
                         m.task.title
                     )
                 }
-                subtitle={task?.project ? `${task.project.code} · ${task.project.name}` : undefined}
+                subtitle={
+                    task?.project
+                        ? `${taskKey ?? task.project.code} · ${task.project.name}`
+                        : undefined
+                }
                 onClose={close}
             >
+                {task && <WatchButton card={card} iconOnly />}
                 <button
                     type="button"
                     onClick={() => void copyTaskLink(taskId, m.task)}
@@ -99,39 +80,15 @@ export default function TaskDetailPanel({
                 </Link>
             </ModalHeader>
 
-            <div className="max-h-[70vh] overflow-y-auto p-3 md:p-4">
-                {!task ? (
-                    <p className="text-sm text-gray-500">{t.common.loading}</p>
+            {/* The canvas grey the page has, so the card's sections read as
+                cards here too rather than as outlines on white. */}
+            <div className="max-h-[70vh] overflow-y-auto bg-canvas p-3 md:p-4">
+                {task ? (
+                    <TaskCardBody task={task} card={card} presentation="modal" />
+                ) : card.loadError ? (
+                    <TaskUnavailable kind={card.loadError} onRetry={card.retry} />
                 ) : (
-                    <TaskCardBody
-                        task={task}
-                        taskId={taskId}
-                        statuses={statuses}
-                        history={history}
-                        busy={busy}
-                        timeForm={timeForm}
-                        setTimeForm={setTimeForm}
-                        hours={hours}
-                        canSaveWork={canSaveWork}
-                        allLabels={allLabels}
-                        members={members}
-                        membersFailed={membersFailed}
-                        stories={stories}
-                        localeInfo={localeInfo}
-                        apply={apply}
-                        refresh={refresh}
-                        markChanged={markChanged}
-                        changeStatus={changeStatus}
-                        changePriority={changePriority}
-                        saveWork={saveWork}
-                        deleteEntry={deleteEntry}
-                        onLabelsWanted={onLabelsWanted}
-                        onMembersWanted={onMembersWanted}
-                        onStoriesWanted={onStoriesWanted}
-                        onSprintsWanted={onSprintsWanted}
-                        sprints={sprints}
-                        changeSprint={changeSprint}
-                    />
+                    <TaskCardSkeleton presentation="modal" />
                 )}
             </div>
 

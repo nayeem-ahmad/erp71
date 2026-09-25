@@ -78,33 +78,35 @@ export default function AttachmentsSection({ taskId }: { taskId: string }) {
     };
 
     return (
-        <section className="rounded-md border border-gray-200 p-3">
-            <h3 className="text-sm font-medium">{m.title}</h3>
-            <p className="mt-0.5 text-xs text-gray-500">{m.hint}</p>
-
-            <label className="mt-2 inline-flex max-md:min-h-touch cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                <Paperclip className="h-4 w-4" />
-                {m.add}
-                <input
-                    type="file"
-                    className="sr-only"
-                    aria-label={m.add}
-                    accept={ACCEPTED_TYPES.join(',')}
-                    disabled={busy}
-                    onChange={(e) => {
-                        upload(e.target.files?.[0]);
-                        // Clear it, or picking the same file twice fires nothing.
-                        e.target.value = '';
-                    }}
-                />
-            </label>
+        // No box or heading of its own: the tab it sits in names it, and the
+        // one it used to draw was a second "Attachments" inside that tab.
+        <div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <label className="inline-flex max-md:min-h-touch cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                    <Paperclip className="h-4 w-4" aria-hidden />
+                    {m.add}
+                    <input
+                        type="file"
+                        className="sr-only"
+                        aria-label={m.add}
+                        accept={ACCEPTED_TYPES.join(',')}
+                        disabled={busy}
+                        onChange={(e) => {
+                            upload(e.target.files?.[0]);
+                            // Clear it, or picking the same file twice fires nothing.
+                            e.target.value = '';
+                        }}
+                    />
+                </label>
+                <p className="text-xs text-gray-500">{m.hint}</p>
+            </div>
 
             {failed ? (
-                <p className="mt-2 text-sm text-danger">{m.loadFailed}</p>
+                <p className="mt-3 text-sm text-danger">{m.loadFailed}</p>
             ) : items.length === 0 ? (
-                <p className="mt-2 text-sm text-gray-500">{m.empty}</p>
+                <p className="mt-3 text-sm text-gray-500">{m.empty}</p>
             ) : (
-                <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                     {items.map((item, at) => (
                         <li key={item.id} className="group relative">
                             <button
@@ -172,6 +174,6 @@ export default function AttachmentsSection({ taskId }: { taskId: string }) {
                     onClose={() => setPreviewAt(null)}
                 />
             )}
-        </section>
+        </div>
     );
 }

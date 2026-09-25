@@ -38,6 +38,7 @@ export function Tabs<K extends string>({
     onChange,
     idPrefix,
     label,
+    bordered = true,
 }: {
     tabs: readonly TabDef<K>[];
     /**
@@ -52,6 +53,12 @@ export function Tabs<K extends string>({
     idPrefix: string;
     /** Names the strip for a screen reader. */
     label: string;
+    /**
+     * The rule under the strip. A strip that is the header of a card with
+     * nothing open turns it off, or it draws a second line right on top of the
+     * card's own bottom edge.
+     */
+    bordered?: boolean;
 }) {
     // Arrow keys move between tabs, which is what the tab role promises; without
     // it a keyboard user tabs into the strip and cannot reach the other tabs
@@ -83,7 +90,7 @@ export function Tabs<K extends string>({
             role="tablist"
             aria-label={label}
             onKeyDown={onKeyDown}
-            className="flex gap-1 overflow-x-auto border-b border-gray-200"
+            className={`flex gap-1 overflow-x-auto ${bordered ? 'border-b border-gray-200' : ''}`}
         >
             {tabs.map((tab, index) => {
                 const selected = tab.key === value;
