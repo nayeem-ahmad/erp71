@@ -1539,6 +1539,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #733) — reset links no longer open as expired (#732), purchase payment details (#731), task page redesign (#730).** Merge commit `26d457d2`, 2026-09-25, pinned to the tested head `1d49760e`. #730 landed on `dev` after the release was first scoped and went out with explicit approval. PR checks green; CI/CD Pipeline run 36158033509 green; Deploy to VPS run 36159147998 green, health endpoint reported live commit `26d457d2` with `db: ok`, app HTTP 200. The one schema change, #731's new `PurchasePayment` table, is additive and went out through the backend's startup `db push`; nothing to backfill.
+
 - [x] **Task page redesign — built: the full-page task view looks finished, and the modal got the same card** — asked as "go, implement it" against the plan and mockup below (all six open decisions taken as recommended: page capped at 1200px, Log time in the sidebar card for both presentations, Back dropped, the page opens on Comments, subtasks read-only, split first). Seven commits' worth on one branch, in the plan's order.
 
   **Phase 0 — the split.** `TaskDetailPanel.tsx` (2,815 lines) moved into `components/projects/task-card/`, one file per component, by line-range copy so each moved block was byte-identical; its own commit, proved at 128/128 before anything changed. That also closes the standing "`TaskDetailPanel.tsx` is 1,900 lines" item. `TaskCardBody` went from 27 props to `task` + `card` + `presentation`.
