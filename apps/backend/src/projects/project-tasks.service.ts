@@ -651,6 +651,25 @@ export class ProjectTasksService {
                 source: RemainingSource.TASK_REOPENED,
                 userId,
             });
+        } else if (previous == null && dto.estimateHours != null) {
+            // Estimated after it was created: `create` only opens remaining
+            // when an estimate arrives with the task, so a task estimated later
+            // (on the form, or by an import updating it) sat with no remaining
+            // at all — invisible to the burndown and the sprint's totals. It
+            // opens now, on the reopen rule: the estimate less what is already
+            // logged, and nothing left on a task that is done.
+            const done = task.status?.category === 'DONE';
+            const logged = done ? 0 : await this.loggedHours(tenantId, taskId);
+            await this.remaining.write({
+                tenantId,
+                taskId,
+                projectId: task.project_id,
+                sprintId,
+                previousHours: null,
+                newHours: done ? 0 : Math.max(dto.estimateHours - logged, 0),
+                source: RemainingSource.RE_ESTIMATED,
+                userId,
+            });
         }
 
         return this.findOne(viewer, taskId);
