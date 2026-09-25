@@ -283,4 +283,61 @@ describe('Sprint detail page', () => {
         // Seven figures as label/value pairs, not tiles.
         expect(within(stats).getAllByRole('term')).toHaveLength(7);
     });
+
+    describe('folding swimlanes', () => {
+        const groupByAssignee = async () => {
+            render(<SprintDetailPage />);
+            await screen.findByText('Wire the bKash callback');
+            fireEvent.change(screen.getByTestId('sprint-swimlanes'), { target: { value: 'assignee' } });
+        };
+
+        it('folds a lane in the table, keeping its heading and totals, and remembers it per sprint', async () => {
+            await groupByAssignee();
+
+            fireEvent.click(screen.getByRole('button', { name: /rahim/i, expanded: true }));
+
+            expect(screen.queryByText('Wire the bKash callback')).not.toBeInTheDocument();
+            expect(screen.getByText('Receipt email')).toBeInTheDocument();
+            const lane = screen.getAllByTestId('sprint-lane')[0];
+            expect(within(lane).getAllByRole('cell')[1]).toHaveTextContent('8');
+            expect(JSON.parse(localStorage.getItem('board-lanes:sprint:s1')!).collapsed).toEqual([
+                'assignee|user:u1',
+            ]);
+            expect(screen.getByRole('button', { name: /1 collapsed/i })).toBeInTheDocument();
+        });
+
+        it('shows only one lane on focus, and opens them all again from the same button', async () => {
+            await groupByAssignee();
+
+            fireEvent.click(screen.getAllByRole('button', { name: /show only this lane/i })[1]);
+            expect(screen.queryByText('Wire the bKash callback')).not.toBeInTheDocument();
+            expect(screen.getByText('Receipt email')).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: /expand all lanes/i, pressed: true }));
+            expect(screen.getByText('Wire the bKash callback')).toBeInTheDocument();
+            expect(localStorage.getItem('board-lanes:sprint:s1')).toBeNull();
+        });
+
+        it('opens with the lanes folded last time', async () => {
+            localStorage.setItem(
+                'board-lanes:sprint:s1',
+                JSON.stringify({ collapsed: ['assignee|none'], savedAt: 1 }),
+            );
+            await groupByAssignee();
+
+            expect(screen.getByText('Wire the bKash callback')).toBeInTheDocument();
+            expect(screen.queryByText('Receipt email')).not.toBeInTheDocument();
+        });
+
+        it('folds the same lane in the card view', async () => {
+            await groupByAssignee();
+            fireEvent.click(screen.getByRole('button', { name: /^cards$/i }));
+
+            fireEvent.click(screen.getByRole('button', { name: /unassigned/i, expanded: true }));
+
+            const lanes = screen.getAllByTestId('sprint-card-lane');
+            expect(within(lanes[1]).queryAllByTestId('sprint-card-column')).toHaveLength(0);
+            expect(within(lanes[0]).getAllByTestId('sprint-card-column').length).toBeGreaterThan(0);
+        });
+    });
 });

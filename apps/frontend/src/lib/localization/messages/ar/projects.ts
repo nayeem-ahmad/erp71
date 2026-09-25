@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'تعذّر حذف القصة',
         loadFailed: 'تعذّر تحميل قصص المستخدم',
         titleRequired: 'أعطِ القصة عنوانًا.',
+        statusDerived: "تتبع مهامها بمجرد بدء أي منها.",
     },
 
     /**
@@ -253,6 +254,32 @@ export const projectsMessages = {
         deleteFailed: "تعذّر حذف الملحمة",
         loadFailed: "تعذّر تحميل الملاحم",
         titleRequired: "أعطِ الملحمة عنوانًا.",
+    },
+
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "قائمة المهام المتراكمة",
+        subtitle: "الملاحم وقصص المستخدمين ومهامها في شجرة واحدة",
+        open: "قائمة المهام المتراكمة",
+        searchPlaceholder: "ابحث بالمعرّف أو العنوان أو المكلَّف",
+        hideDone: "إخفاء المكتمل",
+        expand: "توسيع",
+        expandEpics: "الملاحم فقط",
+        expandStories: "الملاحم والقصص",
+        expandAll: "كل شيء",
+        noEpic: "بلا ملحمة",
+        unplanned: "مهام بلا قصة",
+        empty: "لا شيء في هذه القائمة بعد. ابدأ بملحمة، أو اكتب قصة مباشرة.",
+        emptyFiltered: "لا شيء يطابق عوامل التصفية هذه.",
+        addStory: "إضافة قصة",
+        addTask: "إضافة مهمة",
+        subtasks: "{count} مهام فرعية",
+        hours: "{logged}/{estimate} س",
+        unassigned: "غير مكلَّف",
+        expandRow: "توسيع",
+        collapseRow: "طي",
+        loadFailed: "تعذّر تحميل القائمة",
+        createFailed: "تعذّرت الإضافة",
     },
 
     epicList: {
@@ -794,6 +821,9 @@ export const projectsMessages = {
         noGoal: "لم يُحدَّد هدف",
         timeElapsed: "الوقت المنقضي",
         dayOf: "اليوم {day} من {total}",
+        focusLane: "إظهار هذا المسار فقط",
+        expandAllLanes: "توسيع كل المسارات",
+        lanesCollapsed: "{count} مطوية",
     },
 
     burndown: {

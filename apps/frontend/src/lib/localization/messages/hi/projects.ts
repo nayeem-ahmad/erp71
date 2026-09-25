@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'स्टोरी हटाई नहीं जा सकी',
         loadFailed: 'यूज़र स्टोरी लोड नहीं हो सकीं',
         titleRequired: 'स्टोरी को एक शीर्षक दें।',
+        statusDerived: "कोई टास्क शुरू होते ही स्थिति टास्क के अनुसार चलती है।",
     },
 
     /**
@@ -253,6 +254,32 @@ export const projectsMessages = {
         deleteFailed: "एपिक हटाया नहीं जा सका",
         loadFailed: "एपिक लोड नहीं हो सके",
         titleRequired: "एपिक को एक शीर्षक दें।",
+    },
+
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "बैकलॉग",
+        subtitle: "एपिक, यूज़र स्टोरी और उनके टास्क एक ट्री में",
+        open: "बैकलॉग",
+        searchPlaceholder: "आईडी, शीर्षक या असाइनी खोजें",
+        hideDone: "पूरे हुए छिपाएँ",
+        expand: "फैलाएँ",
+        expandEpics: "केवल एपिक",
+        expandStories: "एपिक और स्टोरी",
+        expandAll: "सब कुछ",
+        noEpic: "कोई एपिक नहीं",
+        unplanned: "बिना स्टोरी के टास्क",
+        empty: "इस बैकलॉग में अभी कुछ नहीं है। किसी एपिक से शुरू करें, या सीधे एक स्टोरी लिखें।",
+        emptyFiltered: "इन फ़िल्टर से कुछ मेल नहीं खाता।",
+        addStory: "स्टोरी जोड़ें",
+        addTask: "टास्क जोड़ें",
+        subtasks: "{count} सबटास्क",
+        hours: "{logged}/{estimate} घं",
+        unassigned: "असाइन नहीं",
+        expandRow: "फैलाएँ",
+        collapseRow: "समेटें",
+        loadFailed: "बैकलॉग लोड नहीं हो सका",
+        createFailed: "जोड़ा नहीं जा सका",
     },
 
     epicList: {
@@ -794,6 +821,9 @@ export const projectsMessages = {
         noGoal: "कोई लक्ष्य तय नहीं",
         timeElapsed: "बीता समय",
         dayOf: "{total} में से दिन {day}",
+        focusLane: "सिर्फ़ यह लेन दिखाएँ",
+        expandAllLanes: "सभी लेन खोलें",
+        lanesCollapsed: "{count} बंद",
     },
 
     burndown: {

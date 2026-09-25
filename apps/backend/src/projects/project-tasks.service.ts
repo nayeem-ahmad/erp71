@@ -10,6 +10,7 @@ import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { ActivityType, ProjectActivityService } from './project-activity.service';
+import { syncStoryStatuses } from './story-status.util';
 import {
     CreateChecklistItemDto,
     CreateTaskDto,
@@ -396,6 +397,7 @@ export class ProjectTasksService {
         });
 
         if (dto.labelIds?.length) await this.setLabels(tenantId, task.id, dto.labelIds);
+        await syncStoryStatuses(this.db as never, tenantId, [dto.userStoryId]);
 
         await this.activity.record({
             tenantId,
@@ -604,6 +606,10 @@ export class ProjectTasksService {
         });
 
         if (dto.labelIds !== undefined) await this.setLabels(tenantId, taskId, dto.labelIds);
+        if (statusId !== task.status_id || dto.userStoryId !== undefined) {
+            // Both ends: the story it left loses a task, the one it joined gains one.
+            await syncStoryStatuses(this.db as never, tenantId, [task.user_story_id, dto.userStoryId]);
+        }
 
         await this.recordUpdateActivity(tenantId, userId, task, dto, statusId);
 
@@ -649,6 +655,25 @@ export class ProjectTasksService {
                 previousHours: previous,
                 newHours: Math.max((estimate ?? 0) - logged, 0),
                 source: RemainingSource.TASK_REOPENED,
+                userId,
+            });
+        } else if (previous == null && dto.estimateHours != null) {
+            // Estimated after it was created: `create` only opens remaining
+            // when an estimate arrives with the task, so a task estimated later
+            // (on the form, or by an import updating it) sat with no remaining
+            // at all — invisible to the burndown and the sprint's totals. It
+            // opens now, on the reopen rule: the estimate less what is already
+            // logged, and nothing left on a task that is done.
+            const done = task.status?.category === 'DONE';
+            const logged = done ? 0 : await this.loggedHours(tenantId, taskId);
+            await this.remaining.write({
+                tenantId,
+                taskId,
+                projectId: task.project_id,
+                sprintId,
+                previousHours: null,
+                newHours: done ? 0 : Math.max(dto.estimateHours - logged, 0),
+                source: RemainingSource.RE_ESTIMATED,
                 userId,
             });
         }
@@ -707,6 +732,7 @@ export class ProjectTasksService {
         });
 
         if (status.id !== task.status_id) {
+            await syncStoryStatuses(this.db as never, tenantId, [task.user_story_id]);
             await this.activity.record({
                 tenantId,
                 taskId,
@@ -758,11 +784,12 @@ export class ProjectTasksService {
     }
 
     async remove(viewer: ProjectViewer, taskId: string) {
-        await this.assertTask(viewer, taskId);
+        const task = await this.assertTask(viewer, taskId);
         await this.db.projectTask.update({
             where: { id: taskId },
             data: { deleted_at: new Date() },
         });
+        await syncStoryStatuses(this.db as never, viewer.tenantId, [task.user_story_id]);
         return { success: true };
     }
 
@@ -792,10 +819,19 @@ export class ProjectTasksService {
             await this.access.taskFilter(viewer),
         );
 
+        const affected = await this.db.projectTask.findMany({
+            where: where as never,
+            select: { user_story_id: true },
+        });
         const { count } = await this.db.projectTask.updateMany({
             where: where as never,
             data: { deleted_at: new Date() },
         });
+        await syncStoryStatuses(
+            this.db as never,
+            viewer.tenantId,
+            affected.map((row) => row.user_story_id),
+        );
 
         return { success: true, deleted: count, skipped: ids.length - count };
     }

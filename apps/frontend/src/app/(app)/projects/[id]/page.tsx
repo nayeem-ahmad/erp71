@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Lock, Plus } from 'lucide-react';
+import { ListTree, Lock, Plus } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -235,6 +235,12 @@ export default function ProjectDetailPage() {
                 )}
                 actions={
                     <div className="flex flex-wrap gap-2">
+                        <Link href={routes.projects.backlog(projectId)}>
+                            <Button variant="secondary" className="min-h-touch">
+                                <ListTree className="h-4 w-4" />
+                                {m.backlog.open}
+                            </Button>
+                        </Link>
                         <Link href={routes.projects.edit(projectId)}>
                             <Button variant="secondary" className="min-h-touch">
                                 {m.editProject}

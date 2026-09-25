@@ -745,11 +745,35 @@ That prints every step in order with `db push` among them, which is the only
 shape of the answer that matters — because where a step sits relative to
 `db push` decides what it is allowed to do.
 
+Read it for *membership* as well as order, because the script's name does not
+tell you. There are three categories and only the middle one is in the chain:
+
+- **`backfill:*`** — a one-off correction of historical data, run by hand from
+  the runbook's "One-off Data Backfills" section, report-only unless `--apply`.
+  Never in the chain. Three exist.
+- **`sync:*` in the chain** — what the migration the deploy skipped would have
+  done. These are the ones the rest of this section is about.
+- **`sync:*` deliberately outside the chain** — `sync:nav-layout` is the one,
+  and its header says why: it appends newly-registered nav nodes to a saved
+  layout, and "a boot-time *append everything missing* would silently override"
+  a layout that dropped a node on purpose, so each addition is an explicit,
+  argument-taking call instead.
+
+So `backfill:` reliably means outside the chain, `sync:` does not reliably mean
+inside it, and the `CMD` line is the only authority. The test that decides the
+category is whether the deploy that ships the schema change *needs* the script:
+if the app would be wrong the moment that deploy completes, it belongs in the
+chain; if it is fixing data an earlier release left behind, or if running it
+unattended could overwrite a deliberate choice, it does not.
+
 So `db push` adds a new column and nothing fills it. Any back-fill this plan
 needs — Phase 2 turning `require_voucher_approval` into an `ApprovalPolicy` row
 for every tenant that has it set — has to be an idempotent `sync:` script wired
 into the `Dockerfile` chain, and a migration written alongside it is for local
-development only.
+development only. It passes the test above: a tenant with
+`require_voucher_approval` set and no `ApprovalPolicy` row would lose its
+approval step the moment Phase 2 deploys, so the script is required by that
+deploy rather than cleaning up after it.
 
 This is not a hypothetical either, and the example is a day old. `#696` added
 `TenantSubscription.activated_at` with the backfill in
