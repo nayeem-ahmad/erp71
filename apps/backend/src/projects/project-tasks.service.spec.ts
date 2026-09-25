@@ -283,6 +283,43 @@ describe('ProjectTasksService', () => {
             );
         });
 
+        describe('estimating a task that has no remaining hours yet', () => {
+            it('opens remaining at the estimate when nothing is logged', async () => {
+                db.projectTask.findFirst.mockResolvedValue(task({ estimate_hours: null, remaining_hours: null }));
+                db.projectTimeEntry.aggregate.mockResolvedValue({ _sum: { hours: null } });
+
+                await service.update(OWNER, 'task-1', { estimateHours: 6 } as never);
+
+                expect(remaining.write).toHaveBeenCalledWith(
+                    expect.objectContaining({ previousHours: null, newHours: 6, source: 'RE_ESTIMATED' }),
+                );
+            });
+
+            it('takes off hours already logged, as a reopen does', async () => {
+                db.projectTask.findFirst.mockResolvedValue(task({ estimate_hours: null, remaining_hours: null }));
+
+                await service.update(OWNER, 'task-1', { estimateHours: 8 } as never);
+
+                // 3h logged in the fixture.
+                expect(remaining.write).toHaveBeenCalledWith(expect.objectContaining({ newHours: 5 }));
+            });
+
+            it('opens a done task at zero', async () => {
+                db.projectTask.findFirst.mockResolvedValue(
+                    task({ status: done, status_id: done.id, estimate_hours: null, remaining_hours: null }),
+                );
+
+                await service.update(OWNER, 'task-1', { estimateHours: 8 } as never);
+
+                expect(remaining.write).toHaveBeenCalledWith(expect.objectContaining({ newHours: 0 }));
+            });
+
+            it('leaves a task that already has remaining hours alone', async () => {
+                await service.update(OWNER, 'task-1', { estimateHours: 20 } as never);
+                expect(remaining.write).not.toHaveBeenCalled();
+            });
+        });
+
         it('does not touch remaining hours for an ordinary edit', async () => {
             await service.update(OWNER, 'task-1', { title: 'Renamed' } as never);
             expect(remaining.write).not.toHaveBeenCalled();
