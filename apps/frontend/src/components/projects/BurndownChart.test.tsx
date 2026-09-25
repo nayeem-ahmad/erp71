@@ -49,4 +49,34 @@ describe('BurndownChart', () => {
 
         expect(screen.getByText(/no snapshots yet/i)).toBeInTheDocument();
     });
+
+    describe('open tasks line', () => {
+        const withOpen = [
+            point('2026-09-01', { open: 6 }),
+            point('2026-09-02', { actual: 6, ideal: 5, open: 3 }),
+            point('2026-09-03', { actual: null, committed: null, open: null }),
+        ];
+
+        it('draws open tasks against a right-hand axis in tasks, with its own key', () => {
+            const { container } = render(<BurndownChart series={withOpen} compact />);
+
+            expect(screen.getAllByTestId('open-task-point')).toHaveLength(2);
+            expect(screen.getByText('Open tasks (right axis)')).toBeInTheDocument();
+            expect(screen.getByText('tasks')).toBeInTheDocument();
+            // Max of 6 rounds up to 8, so the right axis reads 0/2/4/6/8 and
+            // every hours gridline lands on a whole number of tasks.
+            const right = [...container.querySelectorAll('text[text-anchor="start"]')].map(
+                (node) => node.textContent,
+            );
+            expect(right).toEqual(expect.arrayContaining(['0', '2', '4', '6', '8']));
+        });
+
+        it('leaves it out, key and axis, when the series has no open counts', () => {
+            render(<BurndownChart series={series} />);
+
+            expect(screen.queryAllByTestId('open-task-point')).toHaveLength(0);
+            expect(screen.queryByText('Open tasks (right axis)')).not.toBeInTheDocument();
+            expect(screen.queryByText('tasks')).not.toBeInTheDocument();
+        });
+    });
 });

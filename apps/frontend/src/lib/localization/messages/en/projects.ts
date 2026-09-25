@@ -798,8 +798,6 @@ export const projectsMessages = {
         noGoal: "No goal set",
         timeElapsed: "Time elapsed",
         dayOf: "Day {day} of {total}",
-        openTasksChart: "Open tasks chart",
-        openTasksNoData: "No snapshots yet. The chart fills in once the sprint has run for a day.",
     },
 
     burndown: {
@@ -814,6 +812,10 @@ export const projectsMessages = {
         rebuilt: 'Rebuilt {written} day(s), kept {skipped}',
         weekendNote: 'The ideal line skips Fri/Sat.',
         tenantScope: 'All projects in this sprint',
+        hoursUnit: "h",
+        tasksUnit: "tasks",
+        openTasks: "Open tasks",
+        openTasksRightAxis: "Open tasks (right axis)",
     },
 
     settings: {

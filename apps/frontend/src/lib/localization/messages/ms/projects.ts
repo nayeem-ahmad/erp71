@@ -794,8 +794,6 @@ export const projectsMessages = {
         noGoal: "Tiada matlamat ditetapkan",
         timeElapsed: "Masa berlalu",
         dayOf: "Hari {day} daripada {total}",
-        openTasksChart: "Carta tugas terbuka",
-        openTasksNoData: "Belum ada petikan. Carta akan terisi selepas sprint berjalan sehari.",
     },
 
     burndown: {
@@ -810,6 +808,10 @@ export const projectsMessages = {
         rebuilt: 'Dibina semula {written} hari, dikekalkan {skipped}',
         weekendNote: 'Garis unggul melangkau Jum/Sab.',
         tenantScope: "Semua projek dalam sprint ini",
+        hoursUnit: "j",
+        tasksUnit: "tugas",
+        openTasks: "Tugas terbuka",
+        openTasksRightAxis: "Tugas terbuka (paksi kanan)",
     },
 
     settings: {

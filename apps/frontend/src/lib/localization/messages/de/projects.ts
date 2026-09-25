@@ -794,8 +794,6 @@ export const projectsMessages = {
         noGoal: "Kein Ziel festgelegt",
         timeElapsed: "Verstrichene Zeit",
         dayOf: "Tag {day} von {total}",
-        openTasksChart: "Diagramm offener Aufgaben",
-        openTasksNoData: "Noch keine Snapshots. Das Diagramm füllt sich, sobald der Sprint einen Tag läuft.",
     },
 
     burndown: {
@@ -810,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "{written} Tag(e) neu aufgebaut, {skipped} beibehalten",
         weekendNote: "Die Ideallinie überspringt Fr./Sa.",
         tenantScope: "Alle Projekte in diesem Sprint",
+        hoursUnit: "h",
+        tasksUnit: "Aufgaben",
+        openTasks: "Offene Aufgaben",
+        openTasksRightAxis: "Offene Aufgaben (rechte Achse)",
     },
 
     settings: {

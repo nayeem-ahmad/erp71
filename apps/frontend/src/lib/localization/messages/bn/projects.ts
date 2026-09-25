@@ -794,8 +794,6 @@ export const projectsMessages = {
         noGoal: "কোনো লক্ষ্য নির্ধারিত নেই",
         timeElapsed: "অতিবাহিত সময়",
         dayOf: "{total} দিনের মধ্যে {day}তম দিন",
-        openTasksChart: "খোলা টাস্কের চার্ট",
-        openTasksNoData: "এখনও কোনো স্ন্যাপশট নেই। স্প্রিন্ট এক দিন চললে চার্ট পূর্ণ হবে।",
     },
 
     burndown: {
@@ -810,6 +808,10 @@ export const projectsMessages = {
         rebuilt: '{written} দিন পুনর্গঠিত, {skipped} অপরিবর্তিত',
         weekendNote: 'আদর্শ রেখা শুক্র/শনি বাদ দেয়।',
         tenantScope: "এই স্প্রিন্টের সব প্রকল্প",
+        hoursUnit: "ঘ",
+        tasksUnit: "টাস্ক",
+        openTasks: "খোলা টাস্ক",
+        openTasksRightAxis: "খোলা টাস্ক (ডান অক্ষ)",
     },
 
     settings: {
