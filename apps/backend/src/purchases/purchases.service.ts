@@ -13,6 +13,7 @@ import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../a
 import { resolveInlineSupplier } from '../suppliers/resolve-inline-supplier.util';
 import { nextSupplierPaymentNumber } from '../suppliers/supplier-payment-number.util';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
+import { paymentInstrumentData } from '../common/payment-instrument.util';
 import { purchasePaymentStatus } from './purchase-status';
 
 const PURCHASE_SORTABLE: SortableMap = {
@@ -164,6 +165,24 @@ export class PurchasesService {
                 });
             }
 
+            // One row per tender, with the cheque, transfer or wallet details
+            // typed against it. `paid_amount` above is only the total, and the
+            // supplier ledger's PAYMENT line below lumps every method into one,
+            // so without these a bill paid half by cheque and half by bKash
+            // keeps no trace of either. Written for a supplier-less cash buy
+            // too: there is no ledger line at all, and the bill is the only
+            // record of what went out.
+            if (payments.length > 0) {
+                await tx.purchasePayment.createMany({
+                    data: payments.map((payment) => ({
+                        purchase_id: purchase.id,
+                        payment_method: payment.paymentMethod,
+                        amount: payment.amount,
+                        ...paymentInstrumentData(payment),
+                    })),
+                });
+            }
+
             if (supplierId) {
                 const supplier = await tx.supplier.findFirst({
                     where: { id: supplierId, tenant_id: tenantId },
@@ -306,6 +325,7 @@ export class PurchasesService {
                     items: {
                         include: { product: true, returnItems: true },
                     },
+                    payments: true,
                 },
             });
 
@@ -604,6 +624,7 @@ export class PurchasesService {
                     supplier: true,
                     store: { select: { name: true } },
                     items: { include: { product: true } },
+                    payments: true,
                 },
             }),
             this.db.tenant.findUnique({
@@ -632,6 +653,7 @@ export class PurchasesService {
                 items: {
                     include: { product: true, returnItems: true },
                 },
+                payments: true,
             },
         });
 

@@ -241,8 +241,9 @@ interface PaymentSectionProps {
     /**
      * Offer the bank / cheque / transaction details panel on every non-cash
      * tender. Opt-in because the details have to reach a table that stores
-     * them: sale entry does, so it turns this on; purchase entry has nowhere
-     * to put them yet and would silently drop whatever was typed.
+     * them, and a screen whose document has none would silently drop whatever
+     * was typed. Sale entry stores them on `PaymentRecord`, purchase entry on
+     * `PurchasePayment`, so both turn it on.
      */
     captureInstrument?: boolean;
 }

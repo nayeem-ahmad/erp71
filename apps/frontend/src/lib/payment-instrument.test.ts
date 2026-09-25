@@ -1,4 +1,4 @@
-import { instrumentSummary, paymentInstrumentSummary } from './payment-instrument';
+import { instrumentFromRecord, instrumentSummary, paymentInstrumentSummary } from './payment-instrument';
 
 describe('instrumentSummary', () => {
     it('leads with the cheque number, then the bank and the date', () => {
@@ -32,5 +32,37 @@ describe('instrumentSummary', () => {
 
     it('says nothing about a cash payment', () => {
         expect(paymentInstrumentSummary({ method: 'Cash', amount: 500 })).toBe('');
+    });
+});
+
+describe('instrumentFromRecord', () => {
+    it('reads a stored cheque back into the shape the form edits', () => {
+        expect(instrumentFromRecord({
+            bank_name: 'City Bank',
+            bank_branch: 'Gulshan',
+            bank_account_number: '1234567890',
+            reference_no: 'CHQ-100231',
+            // A DATE column comes back as midnight UTC; the day is all of it.
+            instrument_date: '2026-10-05T00:00:00.000Z',
+        })).toEqual({
+            bankName: 'City Bank',
+            bankBranch: 'Gulshan',
+            bankAccountNumber: '1234567890',
+            referenceNo: 'CHQ-100231',
+            instrumentDate: '2026-10-05',
+        });
+    });
+
+    it('turns the NULLs of a cash row into nothing at all', () => {
+        const instrument = instrumentFromRecord({
+            bank_name: null,
+            bank_branch: null,
+            bank_account_number: null,
+            reference_no: null,
+            instrument_date: null,
+        });
+
+        expect(instrumentSummary(instrument)).toBe('');
+        expect(Object.values(instrument).every((value) => value === undefined)).toBe(true);
     });
 });

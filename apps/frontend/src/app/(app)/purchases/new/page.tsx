@@ -18,6 +18,7 @@ import type { PartyOption } from '@/components/document-entry/PartySearchSelect'
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
+import { pickInstrument } from '@/lib/payment-instrument';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import SupplierSelection, { type NewSupplierDraft } from '../components/SupplierSelection';
 import PurchasePaymentSection from '../components/PurchasePaymentSection';
@@ -269,6 +270,9 @@ function NewPurchasePageContent() {
                           paymentMethod: payment.method,
                           amount: payment.amount,
                           accountId: payment.accountId,
+                          // The cheque / transfer details typed against this
+                          // tender — only the boxes that were filled in.
+                          ...pickInstrument(payment),
                       }))
                     : undefined,
             });

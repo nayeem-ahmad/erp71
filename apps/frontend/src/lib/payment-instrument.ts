@@ -42,3 +42,28 @@ export function instrumentSummary(detail: PaymentInstrument | undefined): string
 
 /** `instrumentSummary` straight off a payment, for callers holding the whole row. */
 export const paymentInstrumentSummary = (p: Payment): string => instrumentSummary(pickInstrument(p));
+
+/** The instrument columns of a stored payment row — a sale's `PaymentRecord` or a purchase's `PurchasePayment`. */
+export interface PaymentInstrumentRecord {
+    bank_name?: string | null;
+    bank_branch?: string | null;
+    bank_account_number?: string | null;
+    reference_no?: string | null;
+    instrument_date?: string | null;
+}
+
+/**
+ * A stored payment row's instrument, in the shape the entry form and
+ * `instrumentSummary` work in. The date column is a DATE, so the first ten
+ * characters of what the API sends are the whole of it — and exactly what the
+ * form's date box takes.
+ */
+export function instrumentFromRecord(record: PaymentInstrumentRecord): PaymentInstrument {
+    return {
+        bankName: record.bank_name ?? undefined,
+        bankBranch: record.bank_branch ?? undefined,
+        bankAccountNumber: record.bank_account_number ?? undefined,
+        referenceNo: record.reference_no ?? undefined,
+        instrumentDate: record.instrument_date ? String(record.instrument_date).slice(0, 10) : undefined,
+    };
+}

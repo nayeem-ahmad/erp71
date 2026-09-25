@@ -91,6 +91,9 @@ describe('PurchasesService', () => {
             purchaseItem: {
                 create: jest.fn(),
             },
+            purchasePayment: {
+                createMany: jest.fn(),
+            },
             inventoryMovement: {
                 findMany: jest.fn().mockResolvedValue([]),
             },
@@ -195,6 +198,7 @@ describe('PurchasesService', () => {
                 items: {
                     include: { product: true, returnItems: true },
                 },
+                payments: true,
             },
         });
         expect(result.id).toBe('purchase-1');
@@ -495,6 +499,7 @@ describe('PurchasesService', () => {
             });
             expect(tx.supplierCreditTransaction.create).toHaveBeenCalledTimes(1);
             expect(tx.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+            expect(tx.purchasePayment.createMany).not.toHaveBeenCalled();
             expect(autoPostFromRules).toHaveBeenCalledTimes(1);
         });
 
@@ -505,6 +510,65 @@ describe('PurchasesService', () => {
                 data: expect.objectContaining({ paid_amount: 0, payment_status: 'UNPAID' }),
             });
             expect(tx.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+            expect(tx.purchasePayment.createMany).not.toHaveBeenCalled();
+        });
+
+        it('keeps the cheque each tender was paid with, one row per method', async () => {
+            await cashBill([
+                {
+                    paymentMethod: 'Bank',
+                    amount: 600,
+                    bankName: 'City Bank',
+                    bankBranch: ' Gulshan ',
+                    bankAccountNumber: '1234567890',
+                    referenceNo: 'CHQ-100231',
+                    instrumentDate: '2026-10-05',
+                },
+                { paymentMethod: 'Cash', amount: 400 },
+            ]);
+
+            // Trimmed, blank-as-null and UTC-dated exactly as a sale's payment
+            // rows are; cash carries no instrument at all.
+            expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
+                data: [
+                    {
+                        purchase_id: 'purchase-1',
+                        payment_method: 'Bank',
+                        amount: 600,
+                        bank_name: 'City Bank',
+                        bank_branch: 'Gulshan',
+                        bank_account_number: '1234567890',
+                        reference_no: 'CHQ-100231',
+                        instrument_date: new Date(Date.UTC(2026, 9, 5)),
+                    },
+                    {
+                        purchase_id: 'purchase-1',
+                        payment_method: 'Cash',
+                        amount: 400,
+                        bank_name: null,
+                        bank_branch: null,
+                        bank_account_number: null,
+                        reference_no: null,
+                        instrument_date: null,
+                    },
+                ],
+            });
+        });
+
+        it('stores only the tenders that carried money, details and all', async () => {
+            await cashBill([
+                { paymentMethod: 'Cash', amount: 0 },
+                { paymentMethod: 'Mobile Wallet', amount: 250, bankAccountNumber: '01711000000', referenceNo: 'TRX9A7' },
+            ]);
+
+            expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
+                data: [expect.objectContaining({
+                    payment_method: 'Mobile Wallet',
+                    amount: 250,
+                    bank_account_number: '01711000000',
+                    reference_no: 'TRX9A7',
+                })],
+            });
         });
 
         it('adds up every tender on the bill', async () => {
@@ -531,6 +595,9 @@ describe('PurchasesService', () => {
 
             expect(tx.purchase.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({ paid_amount: 1000, payment_status: 'PAID' }),
+            });
+            expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
+                data: [expect.objectContaining({ payment_method: 'Cash', amount: 1000 })],
             });
             expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
             expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({

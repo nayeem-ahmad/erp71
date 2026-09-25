@@ -2156,6 +2156,8 @@ model Purchase {
   supplier           Supplier?                   @relation(fields: [supplier_id], references: [id])
   warehouse          Warehouse?                  @relation("PurchaseWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   items              PurchaseItem[]
+  /// What was handed over when the bill was recorded, one row per tender.
+  payments           PurchasePayment[]
   returns            PurchaseReturn[]
   paymentAllocations SupplierPaymentAllocation[]
   importShipment     ImportShipment?
@@ -2188,6 +2190,47 @@ model PurchaseItem {
   @@index([purchase_id])
   /// Purchase entry looks up "what did we last pay for this, and to whom?".
   @@index([product_id])
+}
+
+/// One tender handed over at the counter when a purchase was recorded — the
+/// purchase-side twin of `PaymentRecord`. `Purchase.paid_amount` is still the
+/// figure every balance reads; these rows say what it was paid *with*.
+///
+/// They exist for the instrument columns. A shop paying a supplier by cheque
+/// has to be able to say afterwards which bank it was drawn on, from which
+/// account, what number is written on it and what date it carries — the same
+/// set a sale records, and for the same reasons: a cheque that bounces, or a
+/// statement line that has to be matched to a bill. A wallet transfer fills its
+/// wallet number and transaction id, a card its issuer and approval code, and
+/// cash none of them.
+///
+/// Only entry-time payments land here. Money paid against the bill later goes
+/// through the supplier-payments screen and its allocations, not this table.
+model PurchasePayment {
+  id             String  @id @default(uuid())
+  purchase_id    String
+  /// The canonical method the posting classifies on: Cash, Bank, Mobile
+  /// Wallet, Card — not the tenant's friendly name for it.
+  payment_method String
+  amount         Decimal @db.Decimal(12, 2)
+
+  /// The bank a cheque is drawn on, or the card's issuer.
+  bank_name           String?
+  bank_branch         String?
+  /// The account or wallet number on the instrument, as written — for a cheque
+  /// the shop writes, its own account.
+  bank_account_number String?
+  /// Cheque number, wallet transaction id, or card approval code.
+  reference_no        String?
+  /// The date written on the instrument — a post-dated cheque's is later than
+  /// the bill's.
+  instrument_date     DateTime? @db.Date
+
+  created_at DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
+
+  @@index([purchase_id])
 }
 
 model PurchaseReturn {
