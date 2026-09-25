@@ -449,6 +449,8 @@ export const salesMessages = {
             amountPaid: "भुगतान राशि",
             change: "बाकी",
             balanceDue: "शेष बकाया",
+            previousDue: "पिछला बकाया",
+            totalDue: "कुल बकाया",
             paymentDetails: "भुगतान विवरण",
             notePrefix: "नोट: ",
             binVatReg: "BIN (VAT पंजी.):",

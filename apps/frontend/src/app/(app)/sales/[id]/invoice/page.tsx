@@ -9,6 +9,7 @@ import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
+import { invoiceDues } from '@/lib/customer-credit';
 import SalePrintMenu from '../../components/SalePrintMenu';
 import { useSalePrinting } from '@/lib/hooks/useSalePrinting';
 
@@ -47,6 +48,11 @@ interface InvoiceData {
             payment_method: string;
             amount: string;
         }[];
+        /**
+         * What the customer owed before this sale. Null for a walk-in or a
+         * cancelled sale, and then no dues are shown.
+         */
+        previous_due?: number | null;
     };
     tenant: {
         name: string;
@@ -91,6 +97,7 @@ export default function InvoicePage() {
             customer: data.sale.customer,
             items: data.sale.items,
             payments: data.sale.payments,
+            previous_due: data.sale.previous_due ?? null,
         };
     }, [data]);
 
@@ -155,6 +162,7 @@ export default function InvoicePage() {
     const grandTotal = parseFloat(sale.total_amount);
     const amountPaid = parseFloat(sale.amount_paid);
     const balance = amountPaid - grandTotal;
+    const dues = invoiceDues(grandTotal, amountPaid, sale.previous_due);
 
     const hasVat = totalVat > 0.005;
 
@@ -371,6 +379,22 @@ export default function InvoicePage() {
                                         <span>{balance >= 0 ? t.sales.invoice.change : t.sales.invoice.balanceDue}</span>
                                         <span>{formatBDT(Math.abs(balance))}</span>
                                     </div>
+                                )}
+                                {/* What the customer owed before this invoice, and
+                                    with it — the lines a memo closes on. */}
+                                {dues && (
+                                    <>
+                                        <div className="flex justify-between text-gray-600">
+                                            <span>{t.sales.invoice.previousDue}</span>
+                                            <span>{formatBDT(dues.previousDue, { locale })}</span>
+                                        </div>
+                                        <div className="flex justify-between font-bold pt-2 border-t border-gray-200">
+                                            <span>{t.sales.invoice.totalDue}</span>
+                                            <span className={dues.totalDue > 0.005 ? 'text-red-600' : undefined}>
+                                                {formatBDT(dues.totalDue, { locale })}
+                                            </span>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </div>

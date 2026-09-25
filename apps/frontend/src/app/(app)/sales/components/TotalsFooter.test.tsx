@@ -170,3 +170,62 @@ describe('TotalsFooter — discount unit toggle', () => {
         expect(screen.getByText('৳-250.00')).toBeInTheDocument();
     });
 });
+
+describe('TotalsFooter — customer dues', () => {
+    /** The ৳1,000 cart, read-only, for a customer with the given dues. */
+    const renderDues = (previousDue: number | null | undefined, amountPaid?: number) =>
+        render(
+            <TotalsFooter
+                totals={totalsFor({})}
+                onTotalsChange={jest.fn()}
+                tenantVatRate={0}
+                previousDue={previousDue}
+                amountPaid={amountPaid}
+                readOnly
+            />,
+        );
+
+    /** The amount printed beside a label, e.g. "Total Due" → "৳900.00". */
+    const amountBeside = (label: string) => screen.getByText(label).nextElementSibling?.textContent;
+
+    it('adds what this sale leaves unpaid to what was owed before it', () => {
+        renderDues(500, 600);
+
+        expect(amountBeside('Previous Due')).toBe('৳500.00');
+        expect(amountBeside('Total Due')).toBe('৳900.00');
+    });
+
+    it('carries the previous due alone when the sale is paid in full', () => {
+        renderDues(500, 1000);
+
+        expect(amountBeside('Total Due')).toBe('৳500.00');
+    });
+
+    it('shows an advance as a negative previous due that the sale draws down', () => {
+        renderDues(-300, 0);
+
+        expect(amountBeside('Previous Due')).toBe('৳-300.00');
+        expect(amountBeside('Total Due')).toBe('৳700.00');
+    });
+
+    it('stays out of the way when the customer owed nothing before', () => {
+        // The payment strip already says what this sale leaves unpaid.
+        renderDues(0, 600);
+
+        expect(screen.queryByText('Previous Due')).not.toBeInTheDocument();
+        expect(screen.queryByText('Total Due')).not.toBeInTheDocument();
+    });
+
+    it('shows nothing without a customer', () => {
+        renderDues(null, 600);
+
+        expect(screen.queryByText('Previous Due')).not.toBeInTheDocument();
+    });
+
+    it('shows the previous due alone to a screen with no payments to add', () => {
+        renderDues(500);
+
+        expect(amountBeside('Previous Due')).toBe('৳500.00');
+        expect(screen.queryByText('Total Due')).not.toBeInTheDocument();
+    });
+});

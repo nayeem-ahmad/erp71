@@ -449,6 +449,8 @@ export const salesMessages = {
             amountPaid: 'المبلغ المدفوع',
             change: 'الباقي',
             balanceDue: 'الرصيد المستحق',
+            previousDue: 'الرصيد السابق',
+            totalDue: 'إجمالي المستحق',
             paymentDetails: 'تفاصيل الدفع',
             notePrefix: 'ملاحظة: ',
             binVatReg: 'رقم التسجيل الضريبي (BIN):',

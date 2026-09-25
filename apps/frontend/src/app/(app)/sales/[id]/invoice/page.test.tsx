@@ -458,3 +458,76 @@ describe('InvoicePage', () => {
         });
     });
 });
+
+describe('InvoicePage — customer dues', () => {
+    const { formatBDT } = require('@/lib/format');
+    const money = (value: number) => formatBDT(value, { locale: 'en' });
+
+    /** ৳11,500 billed, ৳8,000 paid, to a customer who already owed ৳2,000. */
+    const creditInvoice = {
+        ...mockInvoiceData,
+        sale: { ...mockInvoiceData.sale, amount_paid: '8000', previous_due: 2000 },
+    };
+
+    /** The amount shown beside a label in the totals. */
+    const amountBeside = (label: string) => screen.getByText(label).nextElementSibling?.textContent;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        getApi().getSaleInvoice.mockResolvedValue(creditInvoice);
+    });
+
+    it('shows what was owed before and the total due with this invoice added', async () => {
+        render(<InvoicePage />);
+
+        await waitFor(() => expect(screen.getByText('Total Due')).toBeInTheDocument());
+        expect(amountBeside('Balance Due')).toBe(money(3500));
+        expect(amountBeside('Previous Due')).toBe(money(2000));
+        expect(amountBeside('Total Due')).toBe(money(5500));
+    });
+
+    it('prints the same dues on the invoice document', async () => {
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        render(<InvoicePage />);
+        await waitFor(() => expect(screen.getByTitle('Print Invoice')).toBeInTheDocument());
+        fireEvent.click(screen.getByTitle('Print Invoice'));
+
+        await waitFor(() => expect(write).toHaveBeenCalled());
+        const html = write.mock.calls[0][0] as string;
+        expect(html).toContain(`<td>Previous Due</td><td>${formatBDT(2000)}</td>`);
+        expect(html).toContain(`<td>Total Due</td><td>${formatBDT(5500)}</td>`);
+
+        open.mockRestore();
+    });
+
+    it('shows no dues on a walk-in sale', async () => {
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: { ...mockInvoiceData.sale, customer: null, previous_due: null },
+        });
+        render(<InvoicePage />);
+
+        await waitFor(() => expect(screen.getAllByText('Walk-in Customer').length).toBeGreaterThan(0));
+        expect(screen.queryByText('Previous Due')).not.toBeInTheDocument();
+        expect(screen.queryByText('Total Due')).not.toBeInTheDocument();
+    });
+
+    it('shows no dues when the customer owes nothing either way', async () => {
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: { ...mockInvoiceData.sale, previous_due: 0 },
+        });
+        render(<InvoicePage />);
+
+        await waitFor(() => expect(screen.getByText('Mohammed Rahman')).toBeInTheDocument());
+        expect(screen.queryByText('Total Due')).not.toBeInTheDocument();
+    });
+});

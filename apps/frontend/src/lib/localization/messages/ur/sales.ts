@@ -449,6 +449,8 @@ export const salesMessages = {
             amountPaid: 'ادا شدہ رقم',
             change: 'واپس رقم',
             balanceDue: 'واجب الادا بیلنس',
+            previousDue: 'سابقہ بقایا',
+            totalDue: 'کل بقایا',
             paymentDetails: 'ادائیگی کی تفصیلات',
             notePrefix: 'نوٹ: ',
             binVatReg: 'بی آئی این (ویٹ رجسٹریشن):',

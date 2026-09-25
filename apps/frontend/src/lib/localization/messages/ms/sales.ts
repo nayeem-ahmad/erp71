@@ -449,6 +449,8 @@ export const salesMessages = {
                 amountPaid: "Jumlah Paid",
                 change: "Change",
                 balanceDue: "Balance Due",
+                previousDue: "Baki Tertunggak Terdahulu",
+                totalDue: "Jumlah Baki Tertunggak",
                 paymentDetails: "Bayaran Butiran",
                 notePrefix: "Nota: ",
                 binVatReg: "BIN (VAT Reg):",

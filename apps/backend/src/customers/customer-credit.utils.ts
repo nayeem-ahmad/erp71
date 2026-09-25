@@ -9,6 +9,30 @@ export function creditDueAmount(totalAmount: number, amountPaid: number): number
     return Math.max(0, totalAmount - amountPaid);
 }
 
+/**
+ * How one customer-ledger row moves what the customer owes: a credit sale or a
+ * payout raises it, a payment or a write-off settles it (a write-off lands the
+ * other leg in expense rather than cash, but the due falls the same way), and
+ * an adjustment carries its own sign.
+ *
+ * The single place that knows this, so the customer's statement, the due-aging
+ * report and an invoice's previous due cannot disagree about what a row means.
+ */
+export function customerLedgerDueDelta(type: string, amount: number): number {
+    switch (type) {
+        case 'CREDIT_SALE':
+        case 'PAYOUT':
+            return amount;
+        case 'PAYMENT':
+        case 'WRITE_OFF':
+            return -amount;
+        case 'ADJUSTMENT':
+            return amount;
+        default:
+            return 0;
+    }
+}
+
 export function assertCustomerCreditForSale(
     customer: CustomerCreditSnapshot | null | undefined,
     creditDue: number,

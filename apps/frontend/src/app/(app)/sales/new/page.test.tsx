@@ -700,6 +700,44 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
+    it('prints the previous due the server worked out when it posted the sale', async () => {
+        // The picker's balance may be minutes old by now; the posted figure is
+        // what the customer's ledger actually moved on from.
+        (api.createNewSale as jest.Mock).mockResolvedValue({
+            serial_number: 'S-00001',
+            previous_due: 750,
+        });
+        await sellOneItem();
+        await screen.findByRole('dialog');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
+        });
+
+        expect(printSalesInvoice).toHaveBeenCalledWith(
+            expect.objectContaining({ total: 100, amountPaid: 100, previousDue: 750 }),
+            'A4',
+        );
+    });
+
+    it('prints no previous due for a walk-in, who has no account to owe on', async () => {
+        (api.createNewSale as jest.Mock).mockResolvedValue({
+            serial_number: 'S-00001',
+            previous_due: null,
+        });
+        await sellOneItem();
+        await screen.findByRole('dialog');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
+        });
+
+        expect(printSalesInvoice).toHaveBeenCalledWith(
+            expect.objectContaining({ previousDue: null }),
+            'A4',
+        );
+    });
+
     it('prints on the paper the operator picks in the prompt', async () => {
         await sellOneItem();
         await screen.findByRole('dialog');

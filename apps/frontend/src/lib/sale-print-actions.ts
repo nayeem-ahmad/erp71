@@ -39,6 +39,12 @@ export interface PrintableSale {
         product?: { name?: string; sku?: string | null } | null;
     }[];
     payments?: { payment_method?: string; method?: string; amount: string | number }[];
+    /**
+     * What the customer owed before this sale, as the sale endpoints report it.
+     * Null for a walk-in or a cancelled sale, and then the invoice prints no
+     * dues at all.
+     */
+    previous_due?: number | null;
 }
 
 /** Letterhead and labels the caller has already resolved from its hooks. */
@@ -124,6 +130,17 @@ export function printSaleInvoice(
 
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity - (i.discount || 0), 0);
     const total = parseFloat(sale.total_amount) || subtotal;
+    const payments = (sale.payments ?? []).map((p) => ({
+        method: paymentMethod(p),
+        amount: paymentAmount(p),
+        reference: paymentInstrumentSummary(p as any),
+    }));
+    // The stored figure first: a sale brought in from another system can carry
+    // what was paid with no payment rows behind it.
+    const storedPaid = parseFloat(sale.amount_paid);
+    const amountPaid = Number.isFinite(storedPaid)
+        ? storedPaid
+        : payments.reduce((sum, p) => sum + p.amount, 0);
 
     printSalesInvoice(
         {
@@ -134,17 +151,15 @@ export function printSaleInvoice(
             customerName: sale.customer?.name,
             customerPhone: sale.customer?.phone ?? undefined,
             items,
-            payments: (sale.payments ?? []).map((p) => ({
-                method: paymentMethod(p),
-                amount: paymentAmount(p),
-                reference: paymentInstrumentSummary(p as any),
-            })),
+            payments,
             subtotal,
             // The difference between the lines and the stored total is whatever
             // invoice-level adjustment was applied; showing it as rounding is
             // closer than silently printing a total the lines do not sum to.
             rounding: Math.abs(total - subtotal) > 0.005 ? total - subtotal : undefined,
             total,
+            amountPaid,
+            previousDue: sale.previous_due,
             note: sale.note ?? undefined,
         },
         size,

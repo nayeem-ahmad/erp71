@@ -449,6 +449,8 @@ export const salesMessages = {
             amountPaid: "Montant payé",
             change: "Monnaie rendue",
             balanceDue: "Solde dû",
+            previousDue: "Solde antérieur",
+            totalDue: "Total dû",
             paymentDetails: "Détails du paiement",
             notePrefix: "Note : ",
             binVatReg: "BIN (n° TVA) :",

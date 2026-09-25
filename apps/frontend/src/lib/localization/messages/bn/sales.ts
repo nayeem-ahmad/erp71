@@ -449,6 +449,8 @@ export const salesMessages = {
                 amountPaid: "পরিমাণ Paid",
                 change: "ফেরত",
                 balanceDue: "বকেয়া ব্যালেন্স",
+                previousDue: "পূর্বের বকেয়া",
+                totalDue: "সর্বমোট বকেয়া",
                 paymentDetails: "পেমেন্ট বিবরণ",
                 notePrefix: "নোট: ",
                 binVatReg: "বিআইএন (ভ্যাট নিবন্ধন):",
