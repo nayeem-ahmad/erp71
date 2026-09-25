@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "صرف شدہ (گھ)",
         colRemaining: "باقی (گھ)",
         total: "کل",
-        dayHint: "ہر دن اس دن کے اختتام پر باقی گھنٹے دکھاتا ہے۔",
         stats: "اہم اعداد و شمار",
         statProgress: "پیش رفت",
         statTasksDone: "مکمل ٹاسک",
@@ -783,6 +782,18 @@ export const projectsMessages = {
         ahead: "{hours} گھنٹے آگے",
         behind: "{hours} گھنٹے پیچھے",
         onTrack: "درست راہ پر",
+        viewLabel: "منظر",
+        viewTable: "جدول",
+        viewCards: "کارڈز",
+        searchTasks: "ٹاسک، اسٹوریز، لوگ، لیبل تلاش کریں",
+        noMatches: "تلاش سے کوئی ٹاسک میل نہیں کھاتا۔",
+        noColumnForProject: "{project} میں \"{column}\" کالم نہیں، اس لیے یہ کارڈ وہاں نہیں جا سکتا۔",
+        laneLocked: "کارڈ اپنی ہی قطار میں کالم بدلتے ہیں۔",
+        everyone: "سب",
+        info: "اسپرنٹ",
+        noGoal: "کوئی ہدف مقرر نہیں",
+        timeElapsed: "گزرا ہوا وقت",
+        dayOf: "{total} میں سے دن {day}",
     },
 
     burndown: {
@@ -797,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "{written} دن دوبارہ بنائے، {skipped} برقرار رکھے",
         weekendNote: "مثالی لکیر جمعہ/ہفتہ چھوڑ دیتی ہے۔",
         tenantScope: "اس اسپرنٹ کے تمام پروجیکٹس",
+        hoursUnit: "گھ",
+        tasksUnit: "ٹاسک",
+        openTasks: "کھلے ٹاسک",
+        openTasksRightAxis: "کھلے ٹاسک (دایاں محور)",
     },
 
     settings: {

@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "खर्च (घं)",
         colRemaining: "शेष (घं)",
         total: "कुल",
-        dayHint: "हर दिन उस दिन के अंत में बचे घंटे दिखाता है।",
         stats: "मुख्य आँकड़े",
         statProgress: "प्रगति",
         statTasksDone: "पूरे टास्क",
@@ -783,6 +782,18 @@ export const projectsMessages = {
         ahead: "{hours} घं आगे",
         behind: "{hours} घं पीछे",
         onTrack: "सही राह पर",
+        viewLabel: "व्यू",
+        viewTable: "तालिका",
+        viewCards: "कार्ड",
+        searchTasks: "टास्क, स्टोरी, लोग, लेबल खोजें",
+        noMatches: "खोज से कोई टास्क मेल नहीं खाता।",
+        noColumnForProject: "{project} में \"{column}\" कॉलम नहीं है, इसलिए यह कार्ड वहाँ नहीं जा सकता।",
+        laneLocked: "कार्ड अपनी ही पंक्ति में कॉलम बदलते हैं।",
+        everyone: "सभी",
+        info: "स्प्रिंट",
+        noGoal: "कोई लक्ष्य तय नहीं",
+        timeElapsed: "बीता समय",
+        dayOf: "{total} में से दिन {day}",
     },
 
     burndown: {
@@ -797,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "{written} दिन पुनर्निर्मित, {skipped} रखे गए",
         weekendNote: "आदर्श रेखा शुक्र/शनि छोड़ती है।",
         tenantScope: "इस स्प्रिंट की सभी परियोजनाएँ",
+        hoursUnit: "घं",
+        tasksUnit: "टास्क",
+        openTasks: "खुले टास्क",
+        openTasksRightAxis: "खुले टास्क (दायाँ अक्ष)",
     },
 
     settings: {

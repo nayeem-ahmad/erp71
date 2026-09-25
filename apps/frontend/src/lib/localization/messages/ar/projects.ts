@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "المستغرق (س)",
         colRemaining: "المتبقي (س)",
         total: "الإجمالي",
-        dayHint: "يعرض كل يوم الساعات المتبقية في نهايته.",
         stats: "إحصاءات رئيسية",
         statProgress: "التقدم",
         statTasksDone: "المهام المنجزة",
@@ -783,6 +782,18 @@ export const projectsMessages = {
         ahead: "متقدم {hours} س",
         behind: "متأخر {hours} س",
         onTrack: "ضمن المسار",
+        viewLabel: "العرض",
+        viewTable: "جدول",
+        viewCards: "بطاقات",
+        searchTasks: "ابحث في المهام والقصص والأشخاص والتسميات",
+        noMatches: "لا توجد مهام تطابق البحث.",
+        noColumnForProject: "لا يحتوي {project} على عمود \"{column}\"، لذا لا يمكن نقل هذه البطاقة إليه.",
+        laneLocked: "تنتقل البطاقات بين الأعمدة داخل صفها فقط.",
+        everyone: "الجميع",
+        info: "السبرنت",
+        noGoal: "لم يُحدَّد هدف",
+        timeElapsed: "الوقت المنقضي",
+        dayOf: "اليوم {day} من {total}",
     },
 
     burndown: {
@@ -797,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "أُعيد بناء {written} يوم، وأُبقي على {skipped}",
         weekendNote: "يتخطّى الخط المثالي الجمعة والسبت.",
         tenantScope: "كل المشاريع في هذه الدورة",
+        hoursUnit: "س",
+        tasksUnit: "مهام",
+        openTasks: "المهام المفتوحة",
+        openTasksRightAxis: "المهام المفتوحة (المحور الأيمن)",
     },
 
     settings: {

@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "ব্যয়িত (ঘ)",
         colRemaining: "বাকি (ঘ)",
         total: "মোট",
-        dayHint: "প্রতিটি দিনে সেই দিনের শেষে বাকি ঘণ্টা দেখায়।",
         stats: "মূল পরিসংখ্যান",
         statProgress: "অগ্রগতি",
         statTasksDone: "সম্পন্ন টাস্ক",
@@ -783,6 +782,18 @@ export const projectsMessages = {
         ahead: "{hours} ঘণ্টা এগিয়ে",
         behind: "{hours} ঘণ্টা পিছিয়ে",
         onTrack: "সঠিক পথে",
+        viewLabel: "ভিউ",
+        viewTable: "টেবিল",
+        viewCards: "কার্ড",
+        searchTasks: "টাস্ক, স্টোরি, ব্যক্তি, লেবেল খুঁজুন",
+        noMatches: "অনুসন্ধানের সাথে কোনো টাস্ক মেলেনি।",
+        noColumnForProject: "{project}-এ \"{column}\" কলাম নেই, তাই এই কার্ড সেখানে সরানো যাবে না।",
+        laneLocked: "কার্ড নিজের সারির মধ্যেই কলাম বদলায়।",
+        everyone: "সবাই",
+        info: "স্প্রিন্ট",
+        noGoal: "কোনো লক্ষ্য নির্ধারিত নেই",
+        timeElapsed: "অতিবাহিত সময়",
+        dayOf: "{total} দিনের মধ্যে {day}তম দিন",
     },
 
     burndown: {
@@ -797,6 +808,10 @@ export const projectsMessages = {
         rebuilt: '{written} দিন পুনর্গঠিত, {skipped} অপরিবর্তিত',
         weekendNote: 'আদর্শ রেখা শুক্র/শনি বাদ দেয়।',
         tenantScope: "এই স্প্রিন্টের সব প্রকল্প",
+        hoursUnit: "ঘ",
+        tasksUnit: "টাস্ক",
+        openTasks: "খোলা টাস্ক",
+        openTasksRightAxis: "খোলা টাস্ক (ডান অক্ষ)",
     },
 
     settings: {

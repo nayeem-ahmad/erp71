@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "Digunakan (j)",
         colRemaining: "Baki (j)",
         total: "Jumlah",
-        dayHint: "Setiap hari menunjukkan jam berbaki pada penghujung hari itu.",
         stats: "Statistik utama",
         statProgress: "Kemajuan",
         statTasksDone: "Tugas selesai",
@@ -783,6 +782,18 @@ export const projectsMessages = {
         ahead: "{hours}j di hadapan",
         behind: "{hours}j di belakang",
         onTrack: "Mengikut landasan",
+        viewLabel: "Paparan",
+        viewTable: "Jadual",
+        viewCards: "Kad",
+        searchTasks: "Cari tugas, cerita, orang, label",
+        noMatches: "Tiada tugas sepadan dengan carian.",
+        noColumnForProject: "{project} tiada lajur \"{column}\", jadi kad ini tidak boleh dipindahkan ke sana.",
+        laneLocked: "Kad bergerak antara lajur dalam barisnya sendiri.",
+        everyone: "Semua orang",
+        info: "Sprint",
+        noGoal: "Tiada matlamat ditetapkan",
+        timeElapsed: "Masa berlalu",
+        dayOf: "Hari {day} daripada {total}",
     },
 
     burndown: {
@@ -797,6 +808,10 @@ export const projectsMessages = {
         rebuilt: 'Dibina semula {written} hari, dikekalkan {skipped}',
         weekendNote: 'Garis unggul melangkau Jum/Sab.',
         tenantScope: "Semua projek dalam sprint ini",
+        hoursUnit: "j",
+        tasksUnit: "tugas",
+        openTasks: "Tugas terbuka",
+        openTasksRightAxis: "Tugas terbuka (paksi kanan)",
     },
 
     settings: {

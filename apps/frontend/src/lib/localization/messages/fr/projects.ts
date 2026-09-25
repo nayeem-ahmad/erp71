@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "Passé (h)",
         colRemaining: "Restant (h)",
         total: "Total",
-        dayHint: "Chaque jour affiche les heures restantes en fin de journée.",
         stats: "Indicateurs clés",
         statProgress: "Avancement",
         statTasksDone: "Tâches terminées",
@@ -783,6 +782,18 @@ export const projectsMessages = {
         ahead: "{hours} h d'avance",
         behind: "{hours} h de retard",
         onTrack: "Dans les temps",
+        viewLabel: "Vue",
+        viewTable: "Tableau",
+        viewCards: "Cartes",
+        searchTasks: "Rechercher tâches, stories, personnes, étiquettes",
+        noMatches: "Aucune tâche ne correspond à la recherche.",
+        noColumnForProject: "{project} n'a pas de colonne « {column} », cette carte ne peut donc pas y aller.",
+        laneLocked: "Les cartes changent de colonne à l'intérieur de leur propre ligne.",
+        everyone: "Tout le monde",
+        info: "Sprint",
+        noGoal: "Aucun objectif défini",
+        timeElapsed: "Temps écoulé",
+        dayOf: "Jour {day} sur {total}",
     },
 
     burndown: {
@@ -797,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "{written} jour(s) reconstruit(s), {skipped} conservé(s)",
         weekendNote: "La ligne idéale saute les ven./sam.",
         tenantScope: "Tous les projets de ce sprint",
+        hoursUnit: "h",
+        tasksUnit: "tâches",
+        openTasks: "Tâches ouvertes",
+        openTasksRightAxis: "Tâches ouvertes (axe de droite)",
     },
 
     settings: {

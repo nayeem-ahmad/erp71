@@ -778,7 +778,6 @@ export const projectsMessages = {
         colSpent: "Spent (h)",
         colRemaining: "Remaining (h)",
         total: "Total",
-        dayHint: "Each day shows the hours left at the end of that day.",
         stats: "Key stats",
         statProgress: "Progress",
         statTasksDone: "Tasks done",
@@ -787,6 +786,18 @@ export const projectsMessages = {
         ahead: "{hours}h ahead",
         behind: "{hours}h behind",
         onTrack: "On track",
+        viewLabel: "View",
+        viewTable: "Table",
+        viewCards: "Cards",
+        searchTasks: "Search tasks, stories, people, labels",
+        noMatches: "No tasks match the search.",
+        noColumnForProject: "{project} has no \"{column}\" column, so this card cannot move there.",
+        laneLocked: "Cards move between columns inside their own row.",
+        everyone: "Everyone",
+        info: "Sprint",
+        noGoal: "No goal set",
+        timeElapsed: "Time elapsed",
+        dayOf: "Day {day} of {total}",
     },
 
     burndown: {
@@ -801,6 +812,10 @@ export const projectsMessages = {
         rebuilt: 'Rebuilt {written} day(s), kept {skipped}',
         weekendNote: 'The ideal line skips Fri/Sat.',
         tenantScope: 'All projects in this sprint',
+        hoursUnit: "h",
+        tasksUnit: "tasks",
+        openTasks: "Open tasks",
+        openTasksRightAxis: "Open tasks (right axis)",
     },
 
     settings: {
