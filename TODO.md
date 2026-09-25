@@ -1513,6 +1513,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Released `dev` → `main` (PR #720) — open tasks as a line on the sprint burndown, burndown on top, compact key stats (#719).** Merge commit `ad862707`, 2026-09-25, pinned to the tested head `bdf50fe5`. PR checks green; Deploy to VPS run 36089245302 green, health endpoint reported live commit `ad862707` with `db: ok`, app HTTP 200.
+
 - [x] **Sprint detail side column: burndown on top with open tasks as a second line, compact key stats** — done 2026-09-25. The separate "Open tasks chart" is folded into the burndown as its own line (dark grey, hollow markers) on a right-hand axis in tasks — hours and tasks cannot share a scale, so the axis is labelled "tasks", the left one "h", and the legend says "Open tasks (right axis)"; the task axis rounds to a multiple of four so every gridline is a whole number of tasks. A project burndown has no `open` and draws exactly as before. Side column order is now burndown → sprint info → key stats; the stats are a two-column label/value list instead of seven tiles. `OpenTasksChart.tsx` is gone.
 
 - [x] **Released `dev` → `main` (PR #718) — sprint detail card view, search + assignee filter, sprint info card, open tasks chart (#716).** Merge commit `c4ef3e02`, 2026-09-25, pinned to the tested head `8c1c372d`. PR checks green; Deploy to VPS run 36085491485 green, health endpoint reported live commit `c4ef3e02` with `db: ok`, app HTTP 200.
