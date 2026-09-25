@@ -1,6 +1,7 @@
 # Task page — from "modal body on a grey page" to a finished page
 
-**Status:** design, awaiting approval. No code written.
+**Status:** implemented 2026-09-25, all seven phases, with the six decisions
+taken as recommended. What shipped against this plan is at the end.
 **Written:** 2026-09-25
 **Predecessor:** `2026-09-14-task-card-presentation-split-design.md` (3P, all seven
 steps shipped 2026-09-14). Read its "What Phase 4 already settled" table first.
@@ -281,3 +282,43 @@ a tab opens by default.
 - Hiding Delete from people without `MANAGE_PROJECT_TASKS`. The Tasks list
   doesn't either, and the endpoint refuses. Worth doing app-wide, not here.
 - Start date back on the card.
+
+---
+
+## What shipped, against this plan
+
+Built on 2026-09-25 in the order of the Sequencing table, with Phase 0 as a
+commit of its own, proved green before anything changed. The six decisions
+were taken as recommended. Where the build departs from the text above:
+
+- **The Time card is titled "Hours".** Its three captions are "Estimated /
+  Logged / Remaining", the words the project page already uses, and the figures
+  are bare. The plan kept the "(h)" captions. In the browser they wrapped onto
+  a second line at the sidebar's width, and the unit is said once by the card
+  title instead. `task.logged` and `task.remaining` lost their only reader and
+  were removed; `task.estimate` stays, because the create forms label an input
+  with it.
+- **The labels row is the picker's trigger.** The mockup put the chips beside a
+  dashed "+". Every other row in the list is one clickable value, and the
+  labels behave the same way.
+- **No `labels.edit` string.** It was added and then removed, since nothing
+  needed it.
+- **Menu width.** The ⋯ menu is 16rem, not 14rem. At 14rem, "Copy task key"
+  plus the key truncated the key.
+- **The key chip on a phone.** The 44px touch floor sits on an unstyled
+  button, with the chip drawn inside it. A 44px-tall bordered box around a 12px
+  key read as a text field.
+- **Primitives.** `Button` gained a `tinted` variant for a pressed toggle
+  (Watching) or a live action (a running clock), because a `className` cannot
+  restyle `secondary`. `Tabs` gained `bordered`, so a strip that heads a card
+  with nothing open does not rule a line on the card's own edge.
+
+Verification: the full frontend suite (390 suites / 4,839 tests) passed twice,
+and `project-tasks.service.spec.ts` passes 96/96. The frontend type check and
+lint are clean on every changed file, and all nine catalogues are in parity.
+The real page component was rendered in headless Chromium against stubbed API
+responses at 360, 390, 1024, 1440 and 1920px. At each width the checks were no
+horizontal scroll, and a screenshot compared against the mockup. The labels
+picker, the ⋯ menu and the log form were also opened and screenshotted. It has
+not been run against a real backend or on a real phone; `TODO.md` carries that.
+
