@@ -54,6 +54,12 @@ export interface BurndownPoint {
     actual: number | null;
     /** Total committed hours as at that day — rises when scope is added. */
     committed: number | null;
+    /**
+     * Tasks not yet done at the end of that day, where the snapshot knows it.
+     * Null for a day with no snapshot, and on series built without task counts
+     * (a project's, which is replayed from hours alone).
+     */
+    open: number | null;
     isWorkingDay: boolean;
 }
 
@@ -61,7 +67,7 @@ export interface BurndownInput {
     startDate: Date;
     endDate: Date;
     /** One entry per day that has a snapshot, keyed `YYYY-MM-DD`. */
-    snapshots: Map<string, { remaining: number; committed: number }>;
+    snapshots: Map<string, { remaining: number; committed: number; open?: number }>;
     weekendDays?: number[];
 }
 
@@ -111,6 +117,7 @@ export function buildBurndownSeries(input: BurndownInput): BurndownPoint[] {
             ideal,
             actual: snap ? round2(snap.remaining) : null,
             committed: snap ? round2(snap.committed) : null,
+            open: snap?.open ?? null,
             isWorkingDay: isWorking,
         };
     });
@@ -182,45 +189,3 @@ export function replayDailyTotals(
     return totals;
 }
 
-/**
- * Each task's remaining hours as at the end of every day, from its log.
- *
- * The per-row counterpart of `replayDailyTotals`: the sprint table shows one
- * figure per task per day, and summing a row of these gives what the burndown
- * would draw for that task alone. A day before the task's first log row, or
- * after `todayKey`, is `null` — not yet known, and a table cell reading `0`
- * there would say the work was finished.
- */
-export function replayDailyByTask(
-    entries: RemainingLogEntry[],
-    days: string[],
-    todayKey: string,
-): Map<string, (number | null)[]> {
-    const byTask = new Map<string, RemainingLogEntry[]>();
-    for (const entry of entries) {
-        const list = byTask.get(entry.taskId) ?? [];
-        list.push(entry);
-        byTask.set(entry.taskId, list);
-    }
-
-    const out = new Map<string, (number | null)[]>();
-    for (const [taskId, list] of byTask) {
-        const ordered = [...list].sort((a, b) => a.changedAt.getTime() - b.changedAt.getTime());
-        let cursor = 0;
-        let latest: number | null = null;
-        out.set(
-            taskId,
-            days.map((day) => {
-                if (day > todayKey) return null;
-                const end = fromDateKey(day);
-                end.setUTCDate(end.getUTCDate() + 1);
-                while (cursor < ordered.length && ordered[cursor].changedAt.getTime() < end.getTime()) {
-                    latest = ordered[cursor].hours;
-                    cursor += 1;
-                }
-                return latest == null ? null : round2(latest);
-            }),
-        );
-    }
-    return out;
-}

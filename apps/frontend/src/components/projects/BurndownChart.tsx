@@ -8,6 +8,8 @@ export interface BurndownPoint {
     ideal: number | null;
     actual: number | null;
     committed: number | null;
+    /** Tasks not yet done at the end of the day; the open tasks chart draws it. */
+    open?: number | null;
     isWorkingDay: boolean;
 }
 
