@@ -365,13 +365,37 @@ describe('TaskDetailPanel labels', () => {
         getProjectLabels.mockResolvedValue([blocked, waiting]);
     });
 
-    const openLabels = () => openSection(/^Labels/);
+    /**
+     * The labels a task wears are on the card as their own chips now, and the
+     * picker is a click on them away. It lists the workspace's catalogue, which
+     * loads the first time it opens — so every case waits for a row that only
+     * the catalogue carries.
+     */
+    const openLabels = async () => {
+        fireEvent.click(await screen.findByRole('button', { name: 'Labels' }));
+        await screen.findByRole('option', { name: 'Client waiting' });
+    };
+
+    it('shows the labels a task wears without opening anything', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [{ label: blocked }] });
+        panel();
+
+        // It was a collapsed section: a card's labels could not be seen without
+        // opening it. The chips come with the task, so nothing is fetched.
+        expect(await screen.findByRole('button', { name: 'Labels' })).toHaveTextContent('Blocked');
+        expect(getProjectLabels).not.toHaveBeenCalled();
+    });
 
     it('offers every label in the workspace', async () => {
         panel();
         await openLabels();
-        expect(await screen.findByRole('button', { name: 'Blocked' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Client waiting' })).toBeInTheDocument();
+
+        expect(screen.getByRole('option', { name: 'Blocked' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Client waiting' })).toBeInTheDocument();
+        expect(screen.getByRole('listbox', { name: 'Labels' })).toHaveAttribute(
+            'aria-multiselectable',
+            'true',
+        );
     });
 
     it('shows which are on the task', async () => {
@@ -379,12 +403,9 @@ describe('TaskDetailPanel labels', () => {
         panel();
         await openLabels();
 
-        expect(await screen.findByRole('button', { name: 'Blocked' })).toHaveAttribute(
-            'aria-pressed',
-            'true',
-        );
-        expect(screen.getByRole('button', { name: 'Client waiting' })).toHaveAttribute(
-            'aria-pressed',
+        expect(screen.getByRole('option', { name: 'Blocked' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('option', { name: 'Client waiting' })).toHaveAttribute(
+            'aria-selected',
             'false',
         );
     });
@@ -396,7 +417,7 @@ describe('TaskDetailPanel labels', () => {
         panel();
         await openLabels();
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Client waiting' }));
+        fireEvent.click(screen.getByRole('option', { name: 'Client waiting' }));
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -416,7 +437,7 @@ describe('TaskDetailPanel labels', () => {
         panel();
         await openLabels();
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
+        fireEvent.click(screen.getByRole('option', { name: 'Blocked' }));
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -432,25 +453,32 @@ describe('TaskDetailPanel labels', () => {
         panel();
         await openLabels();
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
+        fireEvent.click(screen.getByRole('option', { name: 'Blocked' }));
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: [], coverColor: '' }),
         );
     });
 
-    it('hides the section entirely when the workspace has no labels', async () => {
-        getProjectLabels.mockResolvedValue([]);
-    getTaskComments.mockResolvedValue([]);
-    getTaskActivity.mockResolvedValue([]);
-    getTaskWatchers.mockResolvedValue([]);
-    getProjectColumns.mockResolvedValue([]);
-    getTaskAttachments.mockResolvedValue([]);
+    // Ticking three labels is three clicks, not three trips back to the chip.
+    it('stays open while labels are ticked', async () => {
         panel();
         await openLabels();
 
-        await screen.findByText('Pull the cable');
-        expect(screen.queryByRole('button', { name: 'Blocked' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('option', { name: 'Blocked' }));
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalled());
+
+        expect(screen.getByRole('listbox', { name: 'Labels' })).toBeInTheDocument();
+    });
+
+    it('says so when the workspace has no labels', async () => {
+        getProjectLabels.mockResolvedValue([]);
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Labels' }));
+
+        expect(await screen.findByText('No labels yet.')).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: 'Blocked' })).not.toBeInTheDocument();
     });
 });
 
@@ -647,36 +675,6 @@ describe('TaskDetailPanel activity', () => {
         expect(updateTaskComment).not.toHaveBeenCalled();
     });
 
-    it('watches a task you are not watching', async () => {
-        panel();
-        await openTab(/^Comments/);
-
-        fireEvent.click(await screen.findByRole('button', { name: /Watch/ }));
-
-        await waitFor(() => expect(watchTask).toHaveBeenCalledWith('t1'));
-    });
-
-    it('unwatches one you are', async () => {
-        getTaskWatchers.mockResolvedValue([{ user_id: 'user-me' }]);
-        panel();
-        await openTab(/^Comments/);
-
-        fireEvent.click(await screen.findByRole('button', { name: /Watching/ }));
-
-        await waitFor(() => expect(unwatchTask).toHaveBeenCalledWith('t1'));
-    });
-
-    it('shows you are already watching when you are', async () => {
-        getTaskWatchers.mockResolvedValue([{ user_id: 'user-me' }]);
-        panel();
-        await openTab(/^Comments/);
-
-        expect(await screen.findByRole('button', { name: /Watching/ })).toHaveAttribute(
-            'aria-pressed',
-            'true',
-        );
-    });
-
     // An empty timeline and a broken one look identical otherwise — the trap
     // logged against useServerList, in miniature.
     it('says the feed failed rather than showing it as empty', async () => {
@@ -692,6 +690,56 @@ describe('TaskDetailPanel activity', () => {
         panel();
         await openTab(/^Comments/);
         expect(await screen.findByText('Nothing has happened here yet.')).toBeInTheDocument();
+    });
+});
+
+/**
+ * Watching is the task's, not its comment feed's: the button moved from inside
+ * the Comments tab to the card's header, and whether the viewer watches comes
+ * with the task read (`viewer_watching`) instead of a watcher-list fetch.
+ */
+describe('TaskDetailPanel watching', () => {
+    it('watches a task you are not watching, from the header', async () => {
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Watch' }));
+
+        await waitFor(() => expect(watchTask).toHaveBeenCalledWith('t1'));
+        // Reachable without opening a tab, and without the watcher list.
+        expect(getTaskWatchers).not.toHaveBeenCalled();
+    });
+
+    it('unwatches one you are', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), viewer_watching: true });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Watching' }));
+
+        await waitFor(() => expect(unwatchTask).toHaveBeenCalledWith('t1'));
+    });
+
+    it('shows you are already watching when you are', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), viewer_watching: true });
+        panel();
+
+        expect(await screen.findByRole('button', { name: 'Watching' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+    });
+
+    // Neither endpoint answers with the task, and re-reading it would cost the
+    // round trip `apply` exists to avoid.
+    it('flips the button from what it just did, without re-reading the card', async () => {
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Watch' }));
+
+        expect(await screen.findByRole('button', { name: 'Watching' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        );
+        expect(getProjectTask).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -815,11 +863,26 @@ describe('TaskDetailPanel description', () => {
         expect(screen.queryByText('**Isolate** the board first')).not.toBeInTheDocument();
     });
 
-    it('needs no pencil and offers no Save button', async () => {
+    // 4D made the text itself the way in, and it still is. The Edit button is a
+    // shortcut for a reader who does not know that — not a mode to get out of:
+    // there is no Save/Cancel pair, focus leaving the editor is the save.
+    it('opens from an Edit shortcut too, with no Save button to get out', async () => {
         getProjectTask.mockResolvedValue(withDescription('Old detail'));
         panel();
-        await screen.findByText('Old detail');
 
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }));
+
+        const editor = screen.getByLabelText('Description');
+        const section = within(editor.closest('section') as HTMLElement);
+        expect(section.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
+
+    it('offers no Edit shortcut when there is nothing to edit yet', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+
+        // The empty prompt is itself the button, and says what belongs there.
+        expect(await screen.findByText(/how you'll know it's done/)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Edit description' })).not.toBeInTheDocument();
     });
 
@@ -1155,16 +1218,15 @@ describe('TaskDetailPanel timer', () => {
 
         const timer = await screen.findByRole('button', { name: /start/i });
 
-        // The block holding the three figures is the timer's own container now.
-        // Asserted through `Logged (h)` rather than a class or a testid: the
-        // grouping is the thing being pinned, and the label is what a reader
-        // sees grouping them.
-        // Metric tile -> the three-across grid -> the block that also holds the
-        // timer, which is the grouping this test exists to pin.
-        const hours = screen.getByText('Logged (h)').closest('div')!.parentElement!.parentElement!;
+        // The card titled Hours holds the three figures and the clock that
+        // moves them. Asserted through the heading and the estimate's label
+        // rather than a class: the grouping is what is pinned, and those are
+        // what a reader sees grouping them.
+        const hours = screen.getByRole('heading', { name: 'Hours' }).closest('section') as HTMLElement;
 
         expect(hours).toContainElement(timer);
-        expect(hours).toContainElement(screen.getByText('Remaining (h)'));
+        expect(hours).toContainElement(screen.getByLabelText('Estimated'));
+        expect(within(hours).getByText('Logged')).toBeInTheDocument();
 
         // And it is no longer the first thing in the description column.
         const description = screen.getByRole('button', { name: 'Description' });
@@ -1248,14 +1310,14 @@ describe('TaskDetailPanel estimate', () => {
         getProjectTask.mockResolvedValue(withEstimate('6'));
         panel();
 
-        expect(await screen.findByLabelText('Estimate (h)')).toHaveValue(6);
+        expect(await screen.findByLabelText('Estimated')).toHaveValue(6);
     });
 
     it('saves a new estimate on Enter', async () => {
         getProjectTask.mockResolvedValue(withEstimate('6'));
         panel();
 
-        const field = await screen.findByLabelText('Estimate (h)');
+        const field = await screen.findByLabelText('Estimated');
         fireEvent.change(field, { target: { value: '8' } });
         fireEvent.keyDown(field, { key: 'Enter' });
 
@@ -1268,7 +1330,7 @@ describe('TaskDetailPanel estimate', () => {
         getProjectTask.mockResolvedValue(withEstimate('6'));
         panel();
 
-        const field = await screen.findByLabelText('Estimate (h)');
+        const field = await screen.findByLabelText('Estimated');
         fireEvent.change(field, { target: { value: '2.5' } });
         fireEvent.blur(field);
 
@@ -1281,7 +1343,7 @@ describe('TaskDetailPanel estimate', () => {
         getProjectTask.mockResolvedValue(withEstimate('6'));
         panel();
 
-        fireEvent.blur(await screen.findByLabelText('Estimate (h)'));
+        fireEvent.blur(await screen.findByLabelText('Estimated'));
 
         expect(updateProjectTask).not.toHaveBeenCalled();
     });
@@ -1292,7 +1354,7 @@ describe('TaskDetailPanel estimate', () => {
         getProjectTask.mockResolvedValue(withEstimate('6'));
         panel();
 
-        const field = await screen.findByLabelText('Estimate (h)');
+        const field = await screen.findByLabelText('Estimated');
         fireEvent.change(field, { target: { value: '' } });
         fireEvent.blur(field);
 
@@ -1304,7 +1366,7 @@ describe('TaskDetailPanel estimate', () => {
         getProjectTask.mockResolvedValue(withEstimate('6'));
         panel();
 
-        const field = await screen.findByLabelText('Estimate (h)');
+        const field = await screen.findByLabelText('Estimated');
         fireEvent.change(field, { target: { value: '9' } });
         fireEvent.keyDown(field, { key: 'Escape' });
 
@@ -1318,7 +1380,7 @@ describe('TaskDetailPanel estimate', () => {
         updateProjectTask.mockRejectedValue(new Error('Nope'));
         panel();
 
-        const field = await screen.findByLabelText('Estimate (h)');
+        const field = await screen.findByLabelText('Estimated');
         fireEvent.change(field, { target: { value: '8' } });
         fireEvent.blur(field);
 
@@ -1477,7 +1539,7 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
         updateProjectTask.mockResolvedValue(saved({ estimate_hours: '9' }));
         panel();
 
-        const estimate = await screen.findByLabelText('Estimate (h)');
+        const estimate = await screen.findByLabelText('Estimated');
         expect(getProjectColumns).toHaveBeenCalledTimes(1);
 
         fireEvent.change(estimate, { target: { value: '9' } });
@@ -1496,7 +1558,7 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
     it('costs three requests to open, not ten', async () => {
         getProjectTask.mockResolvedValue(saved());
         panel();
-        await screen.findByLabelText('Estimate (h)');
+        await screen.findByLabelText('Estimated');
 
         expect(getProjectTask).toHaveBeenCalledTimes(1);
         expect(remainingHistory()).toHaveBeenCalledTimes(1);
@@ -1514,7 +1576,7 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
     it('fetches the activity block only when the feed is opened', async () => {
         getProjectTask.mockResolvedValue(saved());
         panel();
-        await screen.findByLabelText('Estimate (h)');
+        await screen.findByLabelText('Estimated');
 
         await openTab(/^Comments/);
 
@@ -1525,7 +1587,7 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
     it('fetches the label catalogue only when the labels are opened', async () => {
         getProjectTask.mockResolvedValue(saved());
         panel();
-        await screen.findByLabelText('Estimate (h)');
+        await screen.findByLabelText('Estimated');
 
         await openSection(/^Labels/);
 
@@ -1559,7 +1621,7 @@ describe('TaskDetailPanel saving without re-reading the card', () => {
         updateProjectTask.mockResolvedValue({});
         panel();
 
-        const estimate = await screen.findByLabelText('Estimate (h)');
+        const estimate = await screen.findByLabelText('Estimated');
         fireEvent.change(estimate, { target: { value: '9' } });
         fireEvent.blur(estimate);
 
@@ -1576,7 +1638,7 @@ describe('TaskDetailPanel telling the list behind it', () => {
     const saved = () => ({ ...withChecklist([]), title: 'Wire the meter' });
 
     const editEstimate = async (value: string) => {
-        const estimate = await screen.findByLabelText('Estimate (h)');
+        const estimate = await screen.findByLabelText('Estimated');
         fireEvent.change(estimate, { target: { value } });
         fireEvent.blur(estimate);
         await waitFor(() => expect(updateProjectTask).toHaveBeenCalled());
@@ -1619,7 +1681,7 @@ describe('TaskDetailPanel telling the list behind it', () => {
         getProjectTask.mockResolvedValue(saved());
         render(<TaskDetailPanel taskId="t1" onClose={jest.fn()} onChanged={onChanged} />);
 
-        await screen.findByLabelText('Estimate (h)');
+        await screen.findByLabelText('Estimated');
         closeCard();
 
         expect(onChanged).not.toHaveBeenCalled();
@@ -1641,7 +1703,7 @@ describe('TaskDetailPanel telling the list behind it', () => {
         );
         render(<TaskDetailPanel taskId="t1" onClose={jest.fn()} onChanged={onChanged} />);
 
-        const estimate = await screen.findByLabelText('Estimate (h)');
+        const estimate = await screen.findByLabelText('Estimated');
         fireEvent.change(estimate, { target: { value: '9' } });
         fireEvent.blur(estimate);
         await waitFor(() => expect(updateProjectTask).toHaveBeenCalled());
@@ -1805,7 +1867,7 @@ describe('TaskDetailPanel cover', () => {
         panel();
         // The card's own "loaded" anchor: this fixture carries no checklist
         // items, so there is no item text to wait on.
-        await screen.findByLabelText('Estimate (h)');
+        await screen.findByLabelText('Estimated');
 
         expect(screen.queryByRole('button', { name: 'No cover' })).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Cover colour Blue')).not.toBeInTheDocument();
@@ -1814,9 +1876,9 @@ describe('TaskDetailPanel cover', () => {
     it('takes the cover from the first label when one is added', async () => {
         getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [] });
         panel();
-        await openSection(/^Labels/);
+        fireEvent.click(await screen.findByRole('button', { name: 'Labels' }));
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
+        fireEvent.click(await screen.findByRole('option', { name: 'Blocked' }));
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', {
@@ -1829,9 +1891,9 @@ describe('TaskDetailPanel cover', () => {
     it('clears the cover with the last label, the PATCH-clearing convention', async () => {
         getProjectTask.mockResolvedValue({ ...withChecklist([]), labels: [{ label: blocked }] });
         panel();
-        await openSection(/^Labels/);
+        fireEvent.click(await screen.findByRole('button', { name: 'Labels' }));
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Blocked' }));
+        fireEvent.click(await screen.findByRole('option', { name: 'Blocked' }));
 
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', { labelIds: [], coverColor: '' }),
@@ -2018,5 +2080,246 @@ describe('TaskDetailPanel attachments', () => {
 
         expect(await screen.findByText('Could not load the attachments.')).toBeInTheDocument();
         expect(screen.queryByText('Nothing attached yet.')).not.toBeInTheDocument();
+    });
+});
+
+/**
+ * The card as the 2026-09-25 redesign left it: a key and a project under the
+ * title, a property list for the details, a Time card holding everything about
+ * hours, and states for a task that will not load.
+ */
+describe('TaskDetailPanel identity', () => {
+    it('names the task by its key and its project', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), reference: 14 });
+        panel();
+
+        expect(await screen.findByText('PRJ-0001-14 · Fit-out')).toBeInTheDocument();
+    });
+
+    it('falls back to the project code when the key cannot be composed', async () => {
+        panel();
+
+        expect(await screen.findByText('PRJ-0001 · Fit-out')).toBeInTheDocument();
+    });
+
+    it('says who created it and when it last moved', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            created_at: '2026-09-12T10:00:00Z',
+            updated_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+            creator: { id: 'u9', name: 'Tania Akter', email: 't@x.com' },
+        });
+        panel();
+
+        expect(await screen.findByText(/^Created .* by Tania Akter$/)).toBeInTheDocument();
+        expect(screen.getByText('Updated 2 hours ago')).toBeInTheDocument();
+    });
+});
+
+describe('TaskDetailPanel when the task will not load', () => {
+    // It used to say "Loading…" for ever: the read's failure was swallowed and
+    // `!task` meant loading whatever the reason.
+    it('says a deleted or hidden task is unavailable', async () => {
+        getProjectTask.mockRejectedValue(Object.assign(new Error('Task not found'), { status: 404 }));
+        panel();
+
+        expect(await screen.findByText("This task isn't available")).toBeInTheDocument();
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    });
+
+    it('offers another try when the read failed for any other reason', async () => {
+        getProjectTask.mockRejectedValueOnce(Object.assign(new Error('Bad gateway'), { status: 502 }));
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }));
+
+        expect(await screen.findByText('Pull the cable')).toBeInTheDocument();
+        expect(getProjectTask).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('TaskDetailPanel details', () => {
+    it('shows the epic the story belongs to, and does not offer to change it', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            userStory: {
+                id: 's1',
+                reference: 3,
+                code: 'FIT-3',
+                title: 'Meter room',
+                epic: { id: 'e1', code: 'FIT-E1', title: 'Electrics' },
+            },
+        });
+        panel();
+
+        expect(await screen.findByText('FIT-E1')).toBeInTheDocument();
+        expect(screen.getByText('Electrics')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Epic' })).not.toBeInTheDocument();
+    });
+
+    it('draws no epic row for a task with none', async () => {
+        panel();
+        await screen.findByText('Pull the cable');
+
+        expect(screen.queryByText('Epic')).not.toBeInTheDocument();
+    });
+
+    it('says how far off the due date is', async () => {
+        const inThreeDays = new Date(Date.now() + 3 * 86_400_000);
+        const due = `${inThreeDays.getFullYear()}-${String(inThreeDays.getMonth() + 1).padStart(2, '0')}-${String(inThreeDays.getDate()).padStart(2, '0')}`;
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), due_date: `${due}T00:00:00.000Z` });
+        panel();
+
+        expect(await screen.findByText('in 3 days')).toBeInTheDocument();
+    });
+
+    it('clears the due date from its own button, with the empty string', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            due_date: '2026-08-10T00:00:00.000Z',
+        });
+        panel();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Clear due date' }));
+
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalledWith('t1', { dueDate: '' }));
+    });
+
+    it('reads as having no due date rather than as an empty date box', async () => {
+        panel();
+
+        expect(await screen.findByText('No due date')).toBeInTheDocument();
+    });
+});
+
+describe('TaskDetailPanel time card', () => {
+    it('folds the log form away once a log lands', async () => {
+        panel();
+
+        const toggle = await screen.findByRole('button', { name: 'Log time' });
+        fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+        fireEvent.change(screen.getByLabelText('Hours'), { target: { value: '2' } });
+        await act(async () => {
+            fireEvent.click(
+                within(toggle.closest('section') as HTMLElement).getByRole('button', { name: 'Save' }),
+            );
+        });
+
+        await waitFor(() => expect(logProjectTime).toHaveBeenCalled());
+        await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'));
+    });
+
+    it('keeps the form open when the log fails, so nothing typed is lost', async () => {
+        logProjectTime.mockRejectedValue(new Error('Nope'));
+        panel();
+
+        const toggle = await screen.findByRole('button', { name: 'Log time' });
+        fireEvent.click(toggle);
+        fireEvent.change(screen.getByLabelText('Hours'), { target: { value: '2' } });
+        await act(async () => {
+            fireEvent.click(
+                within(toggle.closest('section') as HTMLElement).getByRole('button', { name: 'Save' }),
+            );
+        });
+
+        await waitFor(() => expect(logProjectTime).toHaveBeenCalled());
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('shows an unestimated task as a dash, not an empty box', async () => {
+        panel();
+
+        expect(await screen.findByLabelText('Estimated')).toHaveAttribute('placeholder', '—');
+    });
+});
+
+describe('TaskDetailPanel hour log', () => {
+    const entries = [
+        { id: 'e1', work_date: '2026-09-20T00:00:00Z', hours: '3', note: 'Rewired', user: { id: 'u1', name: 'Rafiq Hasan' } },
+        { id: 'e2', work_date: '2026-09-21T00:00:00Z', hours: '1.5', note: null, user: { id: 'u2', name: 'Jerom Rozario' } },
+    ];
+
+    it('names who logged each entry', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), timeEntries: entries });
+        panel();
+        await openTab(/^Hour log/);
+
+        expect(await screen.findByText('Rafiq Hasan')).toBeInTheDocument();
+        expect(screen.getByText('Jerom Rozario')).toBeInTheDocument();
+    });
+
+    it('asks before deleting an entry', async () => {
+        const { api } = jest.requireMock('@/lib/api');
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), timeEntries: entries });
+        panel();
+        await openTab(/^Hour log/);
+
+        fireEvent.click((await screen.findAllByRole('button', { name: 'Delete' }))[0]);
+        expect(api.deleteProjectTimeEntry).not.toHaveBeenCalled();
+
+        const dialog = (await screen.findByText('Delete this time entry?')).closest(
+            '[role="dialog"]',
+        ) as HTMLElement;
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.deleteProjectTimeEntry).toHaveBeenCalledWith('e1'));
+    });
+});
+
+describe('TaskDetailPanel subtasks', () => {
+    it('lists the subtasks a task has, each linking to its own page', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            subtasks: [
+                { id: 'st1', reference: 21, title: 'Buy the cable', status: { id: 's3', name: 'Done', category: 'DONE' } },
+                { id: 'st2', reference: 22, title: 'Book the electrician', status: { id: 's1', name: 'To do', category: 'TODO' } },
+            ],
+        });
+        panel();
+
+        expect(await screen.findByText('1 of 2')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Book the electrician/ })).toHaveAttribute(
+            'href',
+            '/projects/tasks/st2',
+        );
+        expect(screen.getByText('PRJ-0001-22')).toBeInTheDocument();
+    });
+
+    it('draws nothing at all for a task without subtasks', async () => {
+        panel();
+        await screen.findByText('Pull the cable');
+
+        expect(screen.queryByText('Subtasks')).not.toBeInTheDocument();
+    });
+});
+
+describe('TaskDetailPanel record tabs', () => {
+    it('opens with no tab selected, so the modal stays a peek', async () => {
+        panel();
+        await screen.findByText('Pull the cable');
+
+        for (const tab of screen.getAllByRole('tab')) {
+            expect(tab).toHaveAttribute('aria-selected', 'false');
+        }
+        expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
+    });
+
+    it('counts attachments from the task read, before the tab is opened', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), _count: { attachments: 4 } });
+        panel();
+
+        expect(await screen.findByRole('tab', { name: /^Attachments/ })).toHaveTextContent('4');
+        expect(getTaskAttachments).not.toHaveBeenCalled();
+    });
+
+    it('draws the comment feed without a heading of its own', async () => {
+        panel();
+        await openTab(/^Comments/);
+        await screen.findByLabelText('Add a comment…');
+
+        // The tab names it. The box it used to draw said "Activity" here.
+        expect(screen.queryByRole('heading', { name: 'Activity' })).not.toBeInTheDocument();
     });
 });

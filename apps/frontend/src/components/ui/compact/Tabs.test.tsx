@@ -135,4 +135,18 @@ describe('Tabs', () => {
         expect(screen.getByRole('tab', { name: /^Two/ })).toHaveAttribute('tabindex', '0');
         expect(screen.getByRole('tab', { name: /^One/ })).toHaveAttribute('tabindex', '-1');
     });
+
+    // A strip that heads a card with nothing open would otherwise rule a line
+    // right on top of the card's own bottom edge.
+    it('draws its rule only when asked to', () => {
+        const { rerender } = render(
+            <Tabs<K> tabs={TABS} value={null} onChange={jest.fn()} idPrefix="r" label="Rule" />,
+        );
+        expect(screen.getByRole('tablist', { name: 'Rule' }).className).toMatch(/border-b/);
+
+        rerender(
+            <Tabs<K> tabs={TABS} value={null} onChange={jest.fn()} idPrefix="r" label="Rule" bordered={false} />,
+        );
+        expect(screen.getByRole('tablist', { name: 'Rule' }).className).not.toMatch(/border-b/);
+    });
 });

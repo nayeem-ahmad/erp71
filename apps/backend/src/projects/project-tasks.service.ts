@@ -329,8 +329,31 @@ export class ProjectTasksService {
             } as never,
             include: {
                 ...TASK_INCLUDE,
+                // What the task card shows beyond a list row: the epic its story
+                // belongs to, who filed it, and whether the viewer watches it.
+                // Here rather than in TASK_INCLUDE, which every list and board
+                // shares, so a column of fifty cards does not pay for them.
+                userStory: {
+                    select: {
+                        id: true,
+                        reference: true,
+                        code: true,
+                        title: true,
+                        status: true,
+                        epic: { select: { id: true, code: true, title: true } },
+                    },
+                },
+                creator: { select: { id: true, name: true, email: true } },
+                // Only the viewer's own row. It answers the one question the
+                // card's Watch button asks, without a second request, and the
+                // count below covers everyone else.
+                watchers: { where: { user_id: viewer.userId }, select: { user_id: true } },
+                _count: {
+                    select: { subtasks: true, comments: true, attachments: true, watchers: true },
+                },
                 subtasks: {
                     where: { deleted_at: null },
+                    orderBy: { reference: 'asc' },
                     include: { status: { select: { id: true, name: true, category: true } } },
                 },
                 timeEntries: {
@@ -340,8 +363,14 @@ export class ProjectTasksService {
             } as never,
         });
         if (!task) throw new NotFoundException('Task not found');
-        const [withLogged] = await this.attachLoggedHours(tenantId, [task as TaskRow]);
-        return withLogged;
+        // The viewer's watcher row is folded into a flag rather than returned:
+        // a `watchers` array holding one person would read as the whole list.
+        const { watchers, ...row } = task as TaskRow & { watchers?: unknown[] };
+        const [withLogged] = await this.attachLoggedHours(tenantId, [row as TaskRow]);
+        return {
+            ...withLogged,
+            viewer_watching: Array.isArray(watchers) && watchers.length > 0,
+        };
     }
 
     async create(viewer: ProjectViewer, dto: CreateTaskDto) {

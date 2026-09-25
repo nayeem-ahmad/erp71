@@ -840,6 +840,66 @@ describe('Integration Tests (e2e)', () => {
 
             expect(productAfter?.stocks[0]?.quantity).toBe(initialStock + 5);
         });
+
+        it('keeps the cheque and wallet details a purchase was paid with', async () => {
+            const product = await db.product.findFirst({ where: { sku: 'CB-001' } });
+            const supplier = await db.supplier.findFirst({ where: { tenant_id: tenantId, name: 'Fresh Farms' } });
+
+            const response = await request(app.getHttpServer())
+                .post('/purchases')
+                .set('Authorization', `Bearer ${authToken}`)
+                .set('x-tenant-id', tenantId)
+                .set('x-store-id', storeId)
+                .send({
+                    storeId,
+                    supplierId: supplier?.id,
+                    items: [{ productId: product?.id, quantity: 2, unitCost: 50 }],
+                    payments: [
+                        {
+                            paymentMethod: 'Bank',
+                            amount: 60,
+                            bankName: 'City Bank',
+                            bankBranch: 'Gulshan',
+                            bankAccountNumber: '1234567890',
+                            referenceNo: 'CHQ-100231',
+                            instrumentDate: '2026-10-05',
+                        },
+                        // A wallet whose date box was filled in and then
+                        // cleared, which the form sends as ''.
+                        { paymentMethod: 'Mobile Wallet', amount: 40, referenceNo: 'TRX9A7', instrumentDate: '' },
+                    ],
+                });
+
+            expect(response.status).toBe(201);
+
+            const invoice = bodyOf(
+                await request(app.getHttpServer())
+                    .get(`/purchases/${bodyOf(response).id}/invoice`)
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .set('x-tenant-id', tenantId)
+                    .set('x-store-id', storeId),
+            );
+            const byMethod = Object.fromEntries(
+                invoice.purchase.payments.map((payment: any) => [payment.payment_method, payment]),
+            );
+
+            expect(invoice.purchase.payment_status).toBe('PAID');
+            expect(byMethod.Bank).toMatchObject({
+                amount: '60',
+                bank_name: 'City Bank',
+                bank_branch: 'Gulshan',
+                bank_account_number: '1234567890',
+                reference_no: 'CHQ-100231',
+            });
+            // The day written on the cheque, not shifted by the server's zone.
+            expect(String(byMethod.Bank.instrument_date)).toMatch(/^2026-10-05/);
+            expect(byMethod['Mobile Wallet']).toMatchObject({
+                amount: '40',
+                bank_name: null,
+                reference_no: 'TRX9A7',
+                instrument_date: null,
+            });
+        });
     });
 
     describe('Purchase Returns', () => {

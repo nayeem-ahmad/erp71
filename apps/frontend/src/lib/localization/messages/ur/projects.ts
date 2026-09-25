@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: "مقررہ تاریخ",
         milestone: "سنگِ میل",
         estimate: "تخمینہ (گھنٹے)",
-        remaining: "باقی (گھنٹے)",
-        logged: "درج شدہ (گھنٹے)",
         subtasks: "ذیلی ٹاسک",
         noTasks: "ابھی کوئی ٹاسک نہیں۔",
         deleted: "ٹاسک حذف ہو گیا",
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: "اس پروجیکٹ کی ٹیم میں ابھی کوئی نہیں ہے۔",
         assigneeAddTeam: "ٹیم کے ارکان شامل کریں",
         assigneeLoadFailed: "اس پروجیکٹ کی ٹیم پڑھی نہیں جا سکی۔",
+        copyKey: "ٹاسک کلید کاپی کریں",
+        keyCopied: "ٹاسک کلید کاپی ہو گئی",
+        copyKeyFailed: "ٹاسک کلید کاپی نہیں ہو سکی",
+        moreActions: "مزید اختیارات",
+        openProject: "پروجیکٹ کھولیں",
+        createdBy: "{date} کو {name} نے بنایا",
+        createdOn: "{date} کو بنایا گیا",
+        updatedAt: "آخری تبدیلی {when}",
+        unavailableTitle: "یہ ٹاسک دستیاب نہیں ہے",
+        unavailableBody: "ہو سکتا ہے اسے حذف کر دیا گیا ہو، یا یہ کسی ایسے نجی پروجیکٹ کا حصہ ہو جس کے آپ رکن نہیں ہیں۔",
+        loadFailed: "یہ ٹاسک لوڈ نہیں ہو سکا۔",
+        goToTasks: "ٹاسکس پر جائیں",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: "ابھی کوئی تفصیل نہیں۔",
         placeholder: "جو کچھ یہ کام کرنے والے کو جاننا چاہیے۔",
         saveFailed: "تفصیل محفوظ نہیں ہو سکی",
+        addHint: "کیا درکار ہے، اور کیسے پتا چلے گا کہ کام مکمل ہو گیا۔ مارک ڈاؤن اور پیسٹ کیے گئے اسکرین شاٹ دونوں چلتے ہیں۔",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: "مقررہ تاریخ",
         inverted: "آغاز مقررہ تاریخ کے بعد ہے۔",
         saveFailed: "تاریخیں محفوظ نہیں ہو سکیں",
+        none: "کوئی مقررہ تاریخ نہیں",
+        clear: "مقررہ تاریخ ہٹائیں",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: "رنگ",
         saveFailed: "لیبل اپ ڈیٹ نہیں ہو سکے",
         untagged: "{count} ٹاسک سے ہٹا دیا گیا۔",
+        coverNote: "پہلا لیبل کارڈ کا رنگ طے کرتا ہے۔",
+        manage: "لیبل منظم کریں",
         colors: {
             GRAY: "سرمئی",
             BLUE: "نیلا",
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: "تبصرے",
             activity: "سرگرمی",
             time: "گھنٹوں کا لاگ",
-            remaining: "باقی گھنٹوں کی تاریخ",
+            remaining: "باقی",
             attachments: "منسلکات",
         },
         record: "ٹاسک ریکارڈ",
         addChecklistItem: "آئٹم شامل کریں",
         logTime: "وقت درج کریں",
+        timeTitle: "گھنٹے",
         spark: {
             title: "باقی",
             hover: "تفصیل کے لیے ہوور کریں",
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: "وقت درج ہو گیا",
         deleted: "وقت کی اندراج حذف ہو گئی",
         totalHours: "کل گھنٹے",
+        deleteEntryTitle: "یہ وقت کا اندراج حذف کریں؟",
+        deleteEntryPrompt: "{date} کے {hours} گھنٹے درج شدہ کل وقت سے کم ہو جائیں گے۔",
     },
 
     hourLogs: {

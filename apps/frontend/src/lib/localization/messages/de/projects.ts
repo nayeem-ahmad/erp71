@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: "Fälligkeitsdatum",
         milestone: "Meilenstein",
         estimate: "Schätzung (h)",
-        remaining: "Verbleibend (h)",
-        logged: "Gebucht (h)",
         subtasks: "Teilaufgaben",
         noTasks: "Noch keine Aufgaben.",
         deleted: "Aufgabe gelöscht",
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: "Diesem Projekt ist noch niemand zugeordnet.",
         assigneeAddTeam: "Teammitglieder hinzufügen",
         assigneeLoadFailed: "Das Team dieses Projekts konnte nicht geladen werden.",
+        copyKey: "Aufgabenschlüssel kopieren",
+        keyCopied: "Aufgabenschlüssel kopiert",
+        copyKeyFailed: "Der Aufgabenschlüssel konnte nicht kopiert werden",
+        moreActions: "Weitere Aktionen",
+        openProject: "Projekt öffnen",
+        createdBy: "Erstellt am {date} von {name}",
+        createdOn: "Erstellt am {date}",
+        updatedAt: "Aktualisiert {when}",
+        unavailableTitle: "Diese Aufgabe ist nicht verfügbar",
+        unavailableBody: "Sie wurde möglicherweise gelöscht oder gehört zu einem privaten Projekt, in dem Sie kein Mitglied sind.",
+        loadFailed: "Diese Aufgabe konnte nicht geladen werden.",
+        goToTasks: "Zu den Aufgaben",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: "Noch keine Beschreibung.",
         placeholder: "Alles, was die ausführende Person wissen muss.",
         saveFailed: "Die Beschreibung konnte nicht gespeichert werden",
+        addHint: "Was gebraucht wird und woran man erkennt, dass es fertig ist. Markdown und eingefügte Screenshots funktionieren.",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: "Fälligkeitsdatum",
         inverted: "Der Start liegt nach dem Fälligkeitsdatum.",
         saveFailed: "Die Termine konnten nicht gespeichert werden",
+        none: "Kein Fälligkeitsdatum",
+        clear: "Fälligkeitsdatum entfernen",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: "Farbe",
         saveFailed: "Die Labels konnten nicht aktualisiert werden",
         untagged: "Von {count} Aufgabe(n) entfernt.",
+        coverNote: "Das erste Label färbt die Karte.",
+        manage: "Labels verwalten",
         colors: {
             GRAY: "Grau",
             BLUE: "Blau",
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: "Kommentare",
             activity: "Aktivität",
             time: "Stundenprotokoll",
-            remaining: "Verlauf der Reststunden",
+            remaining: "Verbleibend",
             attachments: "Anhänge",
         },
         record: "Aufgabenverlauf",
         addChecklistItem: "Eintrag hinzufügen",
         logTime: "Zeit erfassen",
+        timeTitle: "Stunden",
         spark: {
             title: "Rest",
             hover: "für Details bewegen",
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: "Zeit gebucht",
         deleted: "Zeitbuchung gelöscht",
         totalHours: "Stunden gesamt",
+        deleteEntryTitle: "Diese Zeitbuchung löschen?",
+        deleteEntryPrompt: "{hours} Std. am {date} werden von der gebuchten Summe abgezogen.",
     },
 
     hourLogs: {

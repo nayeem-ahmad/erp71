@@ -52,6 +52,8 @@ interface AnchoredDropdownProps {
     className?: string;
     role?: string;
     'aria-label'?: string;
+    /** For a `listbox` that holds several choices at once. */
+    'aria-multiselectable'?: boolean;
     children: ReactNode;
 }
 
@@ -83,6 +85,7 @@ export default function AnchoredDropdown({
     className = '',
     role,
     'aria-label': ariaLabel,
+    'aria-multiselectable': ariaMultiselectable,
     children,
 }: AnchoredDropdownProps) {
     const [box, setBox] = useState<AnchorBox>(ZERO_BOX);
@@ -185,6 +188,7 @@ export default function AnchoredDropdown({
             }}
             role={role}
             aria-label={ariaLabel}
+            aria-multiselectable={ariaMultiselectable}
             style={style}
             className={`z-dropdown overflow-y-auto rounded border bg-white shadow-lg ${className}`}
         >

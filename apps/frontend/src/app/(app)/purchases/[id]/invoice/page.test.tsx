@@ -42,13 +42,17 @@ const mockInvoice = {
                 product: { name: 'Widget A', sku: 'WID-001' },
             },
         ],
+        // `PurchasePayment` rows, as GET /purchases/:id/invoice sends them.
         payments: [
             {
                 id: 'pay-1',
+                payment_method: 'Bank',
                 amount: '10600',
-                method: 'cash',
-                paid_at: '2026-01-15T11:00:00Z',
-                reference: 'REF-001',
+                bank_name: 'City Bank',
+                bank_branch: 'Gulshan',
+                bank_account_number: null,
+                reference_no: 'CHQ-100231',
+                instrument_date: '2026-01-20T00:00:00.000Z',
             },
         ],
     },
@@ -125,6 +129,26 @@ describe('PurchaseInvoicePage', () => {
         await waitFor(() => {
             expect(screen.getByText(/Urgent order/)).toBeInTheDocument();
         });
+    });
+
+    it('names the cheque the bill was paid with', async () => {
+        render(<PurchaseInvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByText('Payment Details')).toBeInTheDocument();
+        });
+        expect(screen.getByText('Bank')).toBeInTheDocument();
+        // Number, bank and the day written on the cheque — the DATE column's
+        // own day, not one shifted by the browser's timezone.
+        expect(screen.getByText('CHQ-100231 · City Bank · 2026-01-20')).toBeInTheDocument();
+    });
+
+    it('leaves the payment block off a bill with nothing paid at entry', async () => {
+        getApi().getPurchaseInvoice.mockResolvedValue({ purchase: { ...mockInvoice.purchase, payments: [] } });
+        render(<PurchaseInvoicePage />);
+        await waitFor(() => {
+            expect(screen.getByText('ABC Supplier')).toBeInTheDocument();
+        });
+        expect(screen.queryByText('Payment Details')).not.toBeInTheDocument();
     });
 
     it('shows print button', async () => {

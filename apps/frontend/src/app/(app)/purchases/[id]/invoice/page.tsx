@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
+import { instrumentFromRecord, instrumentSummary, type PaymentInstrumentRecord } from '@/lib/payment-instrument';
 
 interface InvoiceData {
     purchase: {
@@ -40,6 +41,12 @@ interface InvoiceData {
                 sku: string | null;
             } | null;
         }[];
+        /** What was handed over when the bill was recorded, one row per tender. */
+        payments?: (PaymentInstrumentRecord & {
+            id: string;
+            payment_method: string;
+            amount: string;
+        })[];
     };
     tenant: {
         name: string;
@@ -94,6 +101,7 @@ export default function PurchaseInvoicePage() {
     const total = parseFloat(purchase.total_amount);
 
     const hasAdjustments = tax > 0 || discount > 0 || freight > 0;
+    const payments = purchase.payments ?? [];
 
     return (
         <>
@@ -306,6 +314,31 @@ export default function PurchaseInvoicePage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Paid at entry, with the cheque / transfer details */}
+                        {payments.length > 0 && (
+                            <div>
+                                <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">
+                                    {t.purchases.invoice.paymentDetails}
+                                </div>
+                                <div className="space-y-1.5 text-sm">
+                                    {payments.map((payment) => {
+                                        const summary = instrumentSummary(instrumentFromRecord(payment));
+                                        return (
+                                            <div key={payment.id} className="flex items-start justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <div className="font-medium text-gray-700">{payment.payment_method}</div>
+                                                    {summary && <div className="text-xs text-gray-500">{summary}</div>}
+                                                </div>
+                                                <span className="text-gray-700">
+                                                    {formatBDT(parseFloat(payment.amount), { locale })}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Notes */}
                         {purchase.notes && (
