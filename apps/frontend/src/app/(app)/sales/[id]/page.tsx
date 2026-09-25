@@ -8,6 +8,7 @@ import { formatBDT, formatDate, toDatetimeLocal } from '@/lib/format';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
+import { instrumentFromRecord } from '@/lib/payment-instrument';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import SaleEntryLayout, {
     computeSaleTotals,
@@ -123,13 +124,7 @@ function SaleDetailPageContent() {
             payments: (sale.payments || []).map((p: any) => ({
                 method: p.payment_method,
                 amount: parseFloat(p.amount),
-                bankName: p.bank_name ?? undefined,
-                bankBranch: p.bank_branch ?? undefined,
-                bankAccountNumber: p.bank_account_number ?? undefined,
-                referenceNo: p.reference_no ?? undefined,
-                // Date-only for the form's date box; the column is a DATE, so
-                // the first ten characters are the whole of it.
-                instrumentDate: p.instrument_date ? String(p.instrument_date).slice(0, 10) : undefined,
+                ...instrumentFromRecord(p),
             })),
         });
 
