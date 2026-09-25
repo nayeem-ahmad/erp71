@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: 'Due date',
         milestone: 'Milestone',
         estimate: 'Estimate (h)',
-        remaining: 'Remaining (h)',
-        logged: 'Logged (h)',
         subtasks: 'Subtasks',
         noTasks: 'No tasks yet.',
         deleted: 'Task deleted',
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: "No one is on this project's team yet.",
         assigneeAddTeam: 'Add team members',
         assigneeLoadFailed: "Could not read this project's team.",
+        copyKey: "Copy task key",
+        keyCopied: "Task key copied",
+        copyKeyFailed: "Could not copy the task key",
+        moreActions: "More actions",
+        openProject: "Open project",
+        createdBy: "Created {date} by {name}",
+        createdOn: "Created {date}",
+        updatedAt: "Updated {when}",
+        unavailableTitle: "This task isn't available",
+        unavailableBody: "It may have been deleted, or it belongs to a private project you're not a member of.",
+        loadFailed: "Could not load this task.",
+        goToTasks: "Go to Tasks",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: 'No description yet.',
         placeholder: 'Anything the person doing this needs to know.',
         saveFailed: 'Could not save the description',
+        addHint: "What's needed, and how you'll know it's done. Markdown and pasted screenshots work.",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: 'Due date',
         inverted: 'The start is after the due date.',
         saveFailed: 'Could not save the dates',
+        none: "No due date",
+        clear: "Clear due date",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: 'Colour',
         saveFailed: 'Could not update the labels',
         untagged: 'Removed from {count} task(s).',
+        coverNote: "The first label colours the card.",
+        manage: "Manage labels",
         colors: {
             GRAY: 'Grey',
             BLUE: 'Blue',
@@ -449,13 +464,14 @@ export const projectsMessages = {
         tabs: {
             comments: 'Comments',
             activity: 'Activity',
-            time: 'Hour Log',
-            remaining: 'Remaining Hours History',
+            time: 'Hour log',
+            remaining: 'Remaining',
             attachments: 'Attachments',
         },
         record: 'Task record',
         addChecklistItem: 'Add item',
         logTime: 'Log time',
+        timeTitle: 'Hours',
         spark: {
             title: 'Remaining',
             hover: 'hover for detail',
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: 'Time logged',
         deleted: 'Time entry deleted',
         totalHours: 'Total hours',
+        deleteEntryTitle: "Delete this time entry?",
+        deleteEntryPrompt: "{hours}h on {date} comes off the logged total.",
     },
 
     hourLogs: {

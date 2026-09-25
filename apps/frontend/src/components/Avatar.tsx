@@ -16,7 +16,11 @@ export function initialsOf(name: string): string {
 }
 
 const SIZES = {
+    /** Inline beside a name in a field or chip. */
+    xs: 'w-5 h-5 text-[10px]',
     sm: 'w-8 h-8 text-xs',
+    /** A comment or feed row: one line of name, one of text. */
+    md: 'w-7 h-7 text-[11px]',
     lg: 'w-16 h-16 text-lg',
 } as const;
 
@@ -40,10 +44,11 @@ export default function Avatar({
     const dimensions = SIZES[size];
 
     if (src) {
-        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URLs
-        // are not in next.config's remotePatterns, and a 32px list avatar gains
-        // nothing from the optimiser.
+        // A plain <img>: Cloudinary URLs are not in next.config's
+        // remotePatterns, and a 32px list avatar gains nothing from the
+        // optimiser.
         return (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
                 src={src}
                 alt={name}

@@ -183,4 +183,102 @@ describe('ChipPopover', () => {
             expect(screen.queryByText('No one is on this team yet.')).not.toBeInTheDocument();
         });
     });
+
+    /**
+     * Several values at once, for the task card's labels. The panel stays open
+     * and each row toggles; unticking everything is how nothing is chosen, so
+     * there is no "none" row.
+     */
+    describe('multiple', () => {
+        const labels: ChipOption[] = [
+            { value: 'l1', label: 'Blocked' },
+            { value: 'l2', label: 'Client waiting' },
+        ];
+
+        const multi = (values: string[] = ['l1']) => {
+            const onToggle = jest.fn();
+            const onPick = chip({
+                label: 'Labels',
+                options: labels,
+                multiple: true,
+                values,
+                onToggle,
+                emptyLabel: 'No labels',
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Labels' }));
+            return { onToggle, onPick };
+        };
+
+        it('says the list holds several choices, and marks each one chosen', () => {
+            multi(['l1']);
+
+            expect(screen.getByRole('listbox', { name: 'Labels' })).toHaveAttribute(
+                'aria-multiselectable',
+                'true',
+            );
+            expect(screen.getByRole('option', { name: 'Blocked' })).toHaveAttribute('aria-selected', 'true');
+            expect(screen.getByRole('option', { name: 'Client waiting' })).toHaveAttribute(
+                'aria-selected',
+                'false',
+            );
+        });
+
+        it('toggles a row and stays open for the next', () => {
+            const { onToggle, onPick } = multi(['l1']);
+
+            fireEvent.click(screen.getByRole('option', { name: 'Client waiting' }));
+
+            expect(onToggle).toHaveBeenCalledWith('l2');
+            expect(onPick).not.toHaveBeenCalled();
+            expect(screen.getByRole('listbox', { name: 'Labels' })).toBeInTheDocument();
+        });
+
+        it('toggles with Enter too', () => {
+            const { onToggle } = multi([]);
+
+            fireEvent.keyDown(screen.getByLabelText('Search'), { key: 'Enter' });
+
+            expect(onToggle).toHaveBeenCalledWith('l1');
+        });
+
+        it('offers no "none" row', () => {
+            multi([]);
+
+            expect(screen.queryByRole('option', { name: 'No labels' })).not.toBeInTheDocument();
+        });
+
+        it('shows its footer under the rows', () => {
+            render(
+                <ChipPopover
+                    label="Tags"
+                    value=""
+                    display="Tags"
+                    options={labels}
+                    multiple
+                    values={[]}
+                    onToggle={jest.fn()}
+                    footer={<a href="/settings">Manage</a>}
+                />,
+            );
+            fireEvent.click(screen.getByRole('button', { name: 'Tags' }));
+
+            expect(screen.getByRole('link', { name: 'Manage' })).toBeInTheDocument();
+        });
+    });
+
+    describe('field variant', () => {
+        // A quiet value in a property list, not a pill: every set pill was the
+        // same blue, so status, priority and sprint all looked alike.
+        it('draws no pill around a set value', () => {
+            chip({ variant: 'field', value: 'user:u1', display: 'Karim' });
+
+            expect(trigger().className).not.toMatch(/rounded-full|bg-blue-50/);
+        });
+
+        it('greys an empty value rather than tinting it', () => {
+            chip({ variant: 'field', tone: 'muted' });
+
+            expect(trigger().className).toMatch(/text-gray-400/);
+        });
+    });
 });

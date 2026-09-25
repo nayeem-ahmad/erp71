@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: "تاريخ الاستحقاق",
         milestone: "المعلم",
         estimate: "التقدير (ساعة)",
-        remaining: "المتبقي (ساعة)",
-        logged: "المسجَّل (ساعة)",
         subtasks: "المهام الفرعية",
         noTasks: "لا توجد مهام بعد.",
         deleted: "تم حذف المهمة",
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: "لا أحد في فريق هذا المشروع بعد.",
         assigneeAddTeam: "إضافة أعضاء الفريق",
         assigneeLoadFailed: "تعذّر قراءة فريق هذا المشروع.",
+        copyKey: "نسخ مفتاح المهمة",
+        keyCopied: "تم نسخ مفتاح المهمة",
+        copyKeyFailed: "تعذّر نسخ مفتاح المهمة",
+        moreActions: "إجراءات أخرى",
+        openProject: "فتح المشروع",
+        createdBy: "أنشأها {name} في {date}",
+        createdOn: "أُنشئت في {date}",
+        updatedAt: "آخر تحديث {when}",
+        unavailableTitle: "هذه المهمة غير متاحة",
+        unavailableBody: "ربما حُذفت، أو أنها تتبع مشروعًا خاصًا لست عضوًا فيه.",
+        loadFailed: "تعذّر تحميل هذه المهمة.",
+        goToTasks: "الانتقال إلى المهام",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: "لا يوجد وصف بعد.",
         placeholder: "كل ما يحتاج من ينفّذ هذا إلى معرفته.",
         saveFailed: "تعذّر حفظ الوصف",
+        addHint: "ما المطلوب، وكيف ستعرف أن العمل اكتمل. يدعم Markdown ولصق لقطات الشاشة.",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: "تاريخ الاستحقاق",
         inverted: "تاريخ البدء بعد تاريخ الاستحقاق.",
         saveFailed: "تعذّر حفظ التواريخ",
+        none: "لا يوجد تاريخ استحقاق",
+        clear: "مسح تاريخ الاستحقاق",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: "اللون",
         saveFailed: "تعذّر تحديث التسميات",
         untagged: "أُزيلت من {count} مهمة.",
+        coverNote: "التسمية الأولى تحدد لون البطاقة.",
+        manage: "إدارة التسميات",
         colors: {
             GRAY: "رمادي",
             BLUE: "أزرق",
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: "التعليقات",
             activity: "النشاط",
             time: "سجل الساعات",
-            remaining: "سجل الساعات المتبقية",
+            remaining: "المتبقي",
             attachments: "المرفقات",
         },
         record: "سجل المهمة",
         addChecklistItem: "إضافة عنصر",
         logTime: "تسجيل الوقت",
+        timeTitle: "الساعات",
         spark: {
             title: "المتبقي",
             hover: "مرّر للتفاصيل",
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: "تم تسجيل الوقت",
         deleted: "حُذف تسجيل الوقت",
         totalHours: "إجمالي الساعات",
+        deleteEntryTitle: "حذف قيد الوقت هذا؟",
+        deleteEntryPrompt: "ستُخصم {hours} ساعة بتاريخ {date} من إجمالي الوقت المسجّل.",
     },
 
     hourLogs: {

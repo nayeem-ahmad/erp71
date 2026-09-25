@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: "Date d'échéance",
         milestone: "Jalon",
         estimate: "Estimation (h)",
-        remaining: "Restant (h)",
-        logged: "Saisi (h)",
         subtasks: "Sous-tâches",
         noTasks: "Aucune tâche pour le moment.",
         deleted: "Tâche supprimée",
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: "Personne ne fait encore partie de l’équipe de ce projet.",
         assigneeAddTeam: "Ajouter des membres",
         assigneeLoadFailed: "Impossible de charger l’équipe de ce projet.",
+        copyKey: "Copier la clé de la tâche",
+        keyCopied: "Clé de la tâche copiée",
+        copyKeyFailed: "Impossible de copier la clé de la tâche",
+        moreActions: "Plus d'actions",
+        openProject: "Ouvrir le projet",
+        createdBy: "Créée le {date} par {name}",
+        createdOn: "Créée le {date}",
+        updatedAt: "Mise à jour {when}",
+        unavailableTitle: "Cette tâche n'est pas disponible",
+        unavailableBody: "Elle a peut-être été supprimée, ou elle appartient à un projet privé dont vous n'êtes pas membre.",
+        loadFailed: "Impossible de charger cette tâche.",
+        goToTasks: "Aller aux tâches",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: "Aucune description pour le moment.",
         placeholder: "Tout ce que la personne chargée de la tâche doit savoir.",
         saveFailed: "Impossible d'enregistrer la description",
+        addHint: "Ce qu'il faut, et comment savoir que c'est terminé. Le Markdown et les captures d'écran collées fonctionnent.",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: "Date d'échéance",
         inverted: "Le début est postérieur à l'échéance.",
         saveFailed: "Impossible d'enregistrer les dates",
+        none: "Pas de date d'échéance",
+        clear: "Effacer la date d'échéance",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: "Couleur",
         saveFailed: "Impossible de mettre à jour les étiquettes",
         untagged: "Retirée de {count} tâche(s).",
+        coverNote: "La première étiquette donne sa couleur à la carte.",
+        manage: "Gérer les étiquettes",
         colors: {
             GRAY: "Gris",
             BLUE: "Bleu",
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: "Commentaires",
             activity: "Activité",
             time: "Journal des heures",
-            remaining: "Historique des heures restantes",
+            remaining: "Restant",
             attachments: "Pièces jointes",
         },
         record: "Journal de la tâche",
         addChecklistItem: "Ajouter un élément",
         logTime: "Saisir du temps",
+        timeTitle: "Heures",
         spark: {
             title: "Restant",
             hover: "survolez pour le détail",
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: "Temps saisi",
         deleted: "Saisie de temps supprimée",
         totalHours: "Total des heures",
+        deleteEntryTitle: "Supprimer cette saisie de temps ?",
+        deleteEntryPrompt: "{hours} h du {date} seront retirées du total saisi.",
     },
 
     hourLogs: {

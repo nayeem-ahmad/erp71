@@ -3,7 +3,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'tinted';
 type Size = 'sm' | 'md';
 
 const baseClass =
@@ -19,6 +19,13 @@ const variantClass: Record<Variant, string> = {
     secondary: 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
     ghost: 'text-gray-600 hover:bg-gray-100',
     danger: 'bg-danger hover:bg-red-700 text-white',
+    /**
+     * A secondary button that is *on*: a toggle that is pressed (Watching), or
+     * an action that is live (a running clock). Its own variant because a
+     * `className` cannot restyle another one — `bg-blue-50` beside `bg-white`
+     * loses or wins by stylesheet order, not by the order of the class string.
+     */
+    tinted: 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
