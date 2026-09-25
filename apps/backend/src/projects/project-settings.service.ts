@@ -9,6 +9,7 @@ import {
     UpdateProjectTypeDto,
     UpdateTaskStatusDto,
 } from './project.dto';
+import { syncStoryStatuses } from './story-status.util';
 
 /**
  * The columns a tenant gets before they configure anything. Seeded lazily on
@@ -204,7 +205,7 @@ export class ProjectSettingsService {
 
         if (dto.isDefault) await this.clearDefault(tenantId, status.project_id ?? undefined);
 
-        return this.db.projectTaskStatus.update({
+        const updated = await this.db.projectTaskStatus.update({
             where: { id },
             data: {
                 ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
@@ -215,6 +216,17 @@ export class ProjectSettingsService {
                 ...(dto.wipLimit !== undefined ? { wip_limit: dto.wipLimit } : {}),
             },
         });
+
+        // Recategorising a column changes what every card in it means, and so
+        // the status of every story those cards belong to.
+        if (dto.category !== undefined && dto.category !== status.category) {
+            const held = await this.db.projectTask.findMany({
+                where: { tenant_id: tenantId, status_id: id, deleted_at: null, user_story_id: { not: null } },
+                select: { user_story_id: true },
+            });
+            await syncStoryStatuses(this.db as never, tenantId, held.map((row) => row.user_story_id));
+        }
+        return updated;
     }
 
     async removeTaskStatus(tenantId: string, id: string) {
