@@ -12,6 +12,19 @@ import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
 const API_BASE = ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
     || (process.env.NODE_ENV === 'production' ? 'https://erp71-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
 
+/** What `GET /auth/reset-token/:token` reports — see `PasswordResetService.inspectToken`. */
+type TokenStatus = { valid: boolean; canResend: boolean; passwordPolicy: PasswordPolicy | null };
+
+/**
+ * Every success arrives inside the backend TransformInterceptor's `{ data }`
+ * envelope. Reading `valid` off the envelope instead of its contents is how
+ * every fresh reset link came to be announced as expired the moment it opened.
+ */
+function unwrap<T>(body: unknown): Partial<T> | null {
+    if (!body || typeof body !== 'object') return null;
+    return ('data' in body ? body.data : body) as Partial<T> | null;
+}
+
 function ResetPasswordContent() {
     const { t } = useI18n();
     const m = t.auth.resetPassword;
@@ -59,10 +72,13 @@ function ResetPasswordContent() {
         let cancelled = false;
         fetch(`${API_BASE}/auth/reset-token/${encodeURIComponent(token)}`)
             .then((res) => (res.ok ? res.json() : null))
-            .then((status) => {
+            .then((body) => {
+                const status = unwrap<TokenStatus>(body);
                 if (cancelled || !status) return;
                 setPolicy(status.passwordPolicy ?? null);
-                if (status.valid) return;
+                // Only an explicit "no" closes the form. An answer this page cannot
+                // read is no evidence against the token, same as an unreachable one.
+                if (status.valid !== false) return;
                 setCanResendInvite(!!status.canResend);
                 setError(status.canResend ? m.expiredInviteTitle : m.defaultError);
             })
@@ -83,7 +99,7 @@ function ResetPasswordContent() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token }),
             });
-            const body = await res.json().catch(() => null);
+            const body = unwrap<{ resent: boolean }>(await res.json().catch(() => null));
             if (body?.resent) {
                 setResent(true);
                 setError(null);
@@ -120,7 +136,9 @@ function ResetPasswordContent() {
 
             if (!res.ok) {
                 const body = await res.json().catch(() => null);
-                throw new Error(body?.message || m.defaultError);
+                // The HttpExceptionFilter nests the reason under `error`, so a
+                // workspace policy rejection reads as what it is, not "expired".
+                throw new Error(body?.error?.message || body?.message || m.defaultError);
             }
 
             setSuccess(true);
