@@ -5144,6 +5144,8 @@ export const api = {
         const suffix = query.toString();
         return fetchWithAuth(`/project-epics${suffix ? `?${suffix}` : ''}`);
     },
+    /** A project's epics, stories and tasks as flat rows, for the Backlog tree. */
+    getProjectBacklog: (projectId: string) => fetchWithAuth(`/project-backlog/${projectId}`),
     /** One epic with the stories filed under it. */
     getProjectEpic: (epicId: string) => fetchWithAuth(`/project-epics/${epicId}`),
     createProjectEpic: (data: Record<string, unknown>) =>

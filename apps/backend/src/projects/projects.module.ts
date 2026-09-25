@@ -6,6 +6,7 @@ import { BoardsController } from './boards.controller';
 import { ProjectsController } from './projects.controller';
 import { ProjectStoriesController } from './project-stories.controller';
 import { ProjectEpicsController } from './project-epics.controller';
+import { ProjectBacklogController } from './project-backlog.controller';
 import { ProjectTasksController } from './project-tasks.controller';
 import { ProjectTimeController } from './project-time.controller';
 import { SprintsController } from './sprints.controller';
@@ -15,6 +16,7 @@ import { ProjectAccessService } from './project-access.service';
 import { ProjectsService } from './projects.service';
 import { ProjectStoriesService } from './project-stories.service';
 import { ProjectEpicsService } from './project-epics.service';
+import { ProjectBacklogService } from './project-backlog.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectTimeService } from './project-time.service';
 import { ProjectTimerService } from './project-timer.service';
@@ -36,6 +38,7 @@ import { ProjectsScheduler } from './projects.scheduler';
         ProjectsController,
         ProjectStoriesController,
         ProjectEpicsController,
+        ProjectBacklogController,
         ProjectTasksController,
         ProjectTimeController,
         SprintsController,
@@ -47,6 +50,7 @@ import { ProjectsScheduler } from './projects.scheduler';
         BoardColumnsService,
         ProjectStoriesService,
         ProjectEpicsService,
+        ProjectBacklogService,
         ProjectTasksService,
         ProjectTimeService,
         ProjectTimerService,

@@ -84,6 +84,8 @@ describe('ProjectTasksService', () => {
             sprint: { findFirst: jest.fn().mockResolvedValue({ id: 'sprint-1', project_id: 'project-1' }) },
             projectUserStory: {
                 findFirst: jest.fn().mockResolvedValue({ id: 'story-1', project_id: 'project-1' }),
+                findMany: jest.fn().mockResolvedValue([]),
+                update: jest.fn().mockResolvedValue({}),
             },
             userStorePermission: { findFirst: jest.fn().mockResolvedValue(null) },
             // Both forms: the interactive callback move() uses, and the array of
@@ -241,6 +243,20 @@ describe('ProjectTasksService', () => {
     });
 
     describe('update', () => {
+        it("moves its story along when a task's column changes", async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ user_story_id: 'story-1' }));
+            db.projectTaskStatus.findFirst.mockResolvedValue(done);
+            db.projectUserStory.findMany.mockResolvedValue([{ id: 'story-1', status: 'READY' }]);
+            db.projectTask.findMany.mockResolvedValue([{ user_story_id: 'story-1', status: done }]);
+
+            await service.update(OWNER, 'task-1', { statusId: done.id } as never);
+
+            expect(db.projectUserStory.update).toHaveBeenCalledWith({
+                where: { id: 'story-1' },
+                data: { status: 'DONE' },
+            });
+        });
+
         it('burns remaining to zero when a task reaches a Done column', async () => {
             db.projectTaskStatus.findFirst.mockResolvedValue(done);
 

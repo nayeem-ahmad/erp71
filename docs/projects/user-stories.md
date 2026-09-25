@@ -60,7 +60,7 @@ exist, neither is mandatory.
 | `title` | The one required field. |
 | `as_a`, `i_want`, `so_that` | The classic template as three columns, not one blob: the card composes the sentence in the reader's own language, and a story missing its *why* is visibly missing it. All optional — refusing to save a one-line story would push people back to writing tasks. |
 | `acceptance_criteria` | What "done" means, as free text. A task's checklist already covers tick-off work; acceptance criteria are read whole. |
-| `status` | `BACKLOG → READY → IN_PROGRESS → DONE`, set by hand. |
+| `status` | `BACKLOG → READY → IN_PROGRESS → DONE`. Follows the story's tasks once it has any; only Backlog ↔ Ready is set by hand (see below). |
 | `priority` | The same `ProjectPriority` as everything else in the module. |
 | `story_points` | Relative size, **never hours**. Hours live on the tasks and roll up from them; a story carrying both would invite the two to disagree. |
 | `sort_order` | Backlog order. New stories land at the bottom. |
@@ -82,10 +82,23 @@ The whole list is counted in **one** query — Prisma cannot `groupBy` a relatio
 field, so the rows are folded in memory rather than counted per story, which
 would be an N+1 growing with the backlog.
 
-`status` is deliberately **not** derived from those counts. It is the grooming
-state somebody sets by hand: a story whose tasks are all done is still not
-accepted until a person says so, which is the entire point of acceptance
-criteria.
+**Revised 2026-09-25: `status` follows the story's tasks.** It was first set
+by hand, on the grounds that finished tasks are not an accepted story; in use,
+a hand-set status just drifted from the work, and the Backlog tree made the
+drift visible on every row. The rule now (`story-status.util.ts`):
+
+| Tasks | Status |
+|---|---|
+| none | whatever was set — nothing to derive from |
+| all TODO | the grooming state, BACKLOG or READY; a story that had moved on falls back to READY |
+| any started, or some done | IN_PROGRESS |
+| all DONE | DONE |
+
+It is still stored, so the list can filter on it. `syncStoryStatuses` rewrites
+it after every task create, update, move, delete and bulk delete, and after a
+board column is recategorised; opening a project's Backlog also re-syncs that
+project's stories, which repairs anything written before the rule existed. A
+hand-set status the tasks contradict is refused with a 400.
 
 ---
 

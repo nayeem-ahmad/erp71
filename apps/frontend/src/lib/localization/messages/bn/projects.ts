@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'স্টোরি মোছা যায়নি',
         loadFailed: 'ইউজার স্টোরি লোড করা যায়নি',
         titleRequired: 'স্টোরির একটি শিরোনাম দিন।',
+        statusDerived: "কোনো টাস্ক শুরু হলে স্ট্যাটাস টাস্ক অনুযায়ী চলে।",
     },
 
     /**
@@ -253,6 +254,32 @@ export const projectsMessages = {
         deleteFailed: "এপিক মুছে ফেলা যায়নি",
         loadFailed: "এপিক লোড করা যায়নি",
         titleRequired: "এপিকের একটি শিরোনাম দিন।",
+    },
+
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "ব্যাকলগ",
+        subtitle: "এপিক, ইউজার স্টোরি ও তাদের টাস্ক এক ট্রিতে",
+        open: "ব্যাকলগ",
+        searchPlaceholder: "আইডি, শিরোনাম বা দায়িত্বপ্রাপ্ত ব্যক্তি খুঁজুন",
+        hideDone: "সম্পন্নগুলো লুকান",
+        expand: "প্রসারিত করুন",
+        expandEpics: "শুধু এপিক",
+        expandStories: "এপিক ও স্টোরি",
+        expandAll: "সবকিছু",
+        noEpic: "কোনো এপিক নেই",
+        unplanned: "স্টোরি ছাড়া টাস্ক",
+        empty: "এই ব্যাকলগে এখনও কিছু নেই। একটি এপিক দিয়ে শুরু করুন, অথবা সরাসরি একটি স্টোরি লিখুন।",
+        emptyFiltered: "এই ফিল্টারের সাথে কিছু মেলেনি।",
+        addStory: "স্টোরি যোগ করুন",
+        addTask: "টাস্ক যোগ করুন",
+        subtasks: "{count}টি সাবটাস্ক",
+        hours: "{logged}/{estimate} ঘণ্টা",
+        unassigned: "কেউ দায়িত্বে নেই",
+        expandRow: "প্রসারিত করুন",
+        collapseRow: "সংকুচিত করুন",
+        loadFailed: "ব্যাকলগ লোড করা যায়নি",
+        createFailed: "যোগ করা যায়নি",
     },
 
     epicList: {
