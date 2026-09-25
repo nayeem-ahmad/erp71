@@ -474,6 +474,11 @@ export function StoryFormModal({
         setErrors((previous) => ({ ...previous, [field]: undefined }));
 
     const pickProject = !story && !projectId;
+    // Once a story has tasks its status follows them; only the grooming call
+    // (Backlog ↔ Ready) is left to a person, and only until work starts.
+    const hasTasks = (story?.progress?.taskCount ?? story?.tasks?.length ?? 0) > 0;
+    const statusLocked = hasTasks && (story?.status === 'IN_PROGRESS' || story?.status === 'DONE');
+    const statusOptions = hasTasks && !statusLocked ? (['BACKLOG', 'READY'] as const) : STATUSES;
     const targetProjectId = projectId ?? form.projectId;
     const prefix = projectCode ?? projects?.find((project) => project.id === targetProjectId)?.code;
 
@@ -665,15 +670,20 @@ export function StoryFormModal({
 
                     <div className="space-y-3">
                         <div className="grid grid-cols-3 gap-3">
-                            <Field label={m.fields.status} htmlFor="story-status">
+                            <Field
+                                label={m.fields.status}
+                                htmlFor="story-status"
+                                hint={hasTasks ? m.stories.statusDerived : undefined}
+                            >
                                 <Select
                                     id="story-status"
                                     value={form.status}
+                                    disabled={statusLocked}
                                     onChange={(e) => set({ status: e.target.value })}
                                 >
-                                    {STATUSES.map((status) => (
+                                    {(statusLocked ? [form.status] : statusOptions).map((status) => (
                                         <option key={status} value={status}>
-                                            {m.stories.statuses[status]}
+                                            {m.stories.statuses[status as (typeof STATUSES)[number]]}
                                         </option>
                                     ))}
                                 </Select>

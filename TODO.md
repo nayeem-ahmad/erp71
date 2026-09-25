@@ -1373,6 +1373,17 @@ Open after the work:
 - [ ] **Epics are absent from boards, sprints and the task panel.** A task reaches its epic only through its story. Obvious next steps: board swimlanes by epic (beside assignee / user story), and showing the epic on the task card via its story.
 - [ ] **An epic cannot be reordered, and neither can the stories under it.** `sort_order` exists and is PATCHable, as for stories.
 
+### Project Management — Backlog tree (2026-09-25)
+
+Asked as "need a good UI for project backlog management. same UI where epic/user story/tasks can be managed. the hierarchy should be visible and easy to handle." Plan agreed in chat. Decided: no sprint split view; **story status derived from its tasks**; subtasks stay out of the tree. Phase 1 landed (see COMPLETED); the rest:
+
+- [ ] **Phase 2 — drag-and-drop reorder and re-parent.** `PATCH /project-backlog/:projectId/move` taking `{ type, id, newParentId, beforeId }`, re-parenting and re-sequencing in one transaction (the whole-order write `ReorderChecklistDto` uses, not pairwise `sortOrder` PATCHes). `@dnd-kit` is already a dependency. Legal drops only: story → epic / No epic, task → story / Unplanned. A "Move to…" menu per row as the non-drag path, plus keyboard (↑/↓ move focus, ←/→ fold, Alt+↑/↓ reorder). Tasks under a story are ordered by `reference` today, because `ProjectTask.sort_order` is the board-column order; a per-story order needs its own column (`story_sort_order`) or it will fight the board.
+- [ ] **Phase 3 — multi-select and bulk actions** (move to epic/story, set status, delete) and inline chip edits (status, priority, points, assignee via `ChipPopover`) straight on the row.
+- [ ] **Phase 4 — one tree everywhere.** Point `/projects/stories` and `/projects/epics` at the same tree with a project column, then retire `ProjectEpicsCard` / `ProjectStoriesCard` from the project page in favour of the Backlog link.
+- [ ] **A story and a task in the same project can share an ID.** Story codes default to `<project.code>-<n>` and task keys are `<project.code>-<reference>` from a separate counter, so `OTB-1` is both the first story and the first task — side by side in the Backlog tree it reads as one item. Pre-existing (the epic already avoids it with `-E<n>`); the fix is a story default like `OTB-S1`, which only changes *new* stories since codes are stored and editable. Needs a decision, not just a patch.
+- [ ] **The story-status filter on `/projects/stories` can be wrong for stories nobody has touched since the rule changed.** Status is stored and re-synced on writes and on opening that project's Backlog, not by a backfill (production runs `db push`, so there is no migration step to hang one on). A one-off `syncStoryStatuses` over every story, run once after the release, closes it.
+- [ ] **The tree is not virtualised.** Fine at the tens-to-low-hundreds of rows a project holds today; revisit past ~500 visible rows.
+
 ### Project Management Phase 4 — task entry, and watching remaining hours move — COMPLETE (scoped 2026-09-11; 4E + 4I that day, the rest 2026-09-12)
 
 Full scope, measurements and what the build turned up: `docs/projects/project-management-phase-4.md`. Asked as "Task entry/edit UI is too cumbersome. Can you suggest a more streamlined version? Also, where can we add a chart to show change of remaining hours?", then "finish the remaining parts in one go".
@@ -1512,6 +1523,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 ---
 
 ## COMPLETED
+
+- [x] **Project Backlog tree, phase 1 — epic → story → task on one screen, and story status derived from tasks** — done 2026-09-25. `/projects/[id]/backlog`, linked from the project header. One `GET /project-backlog/:projectId` returns flat epics/stories/top-level tasks (keys, logged hours); `backlog-tree.ts` folds them into a tree with rollups counted before filtering (story: tasks done, hours; epic: stories done, points), keeps a search hit's ancestors, and files orphans under "No epic" / "Tasks without a story". Collapsible at every level with Epics / Epics+stories / Everything presets remembered per project; inline "Add story" / "Add task" at the foot of each group; epic colour down the block's leading edge; rows open the existing epic/story modals and `TaskDetailPanel`. Story status now follows its tasks (`story-status.util.ts`, synced from every task write and column recategorisation; the story form locks the field once work starts). 18 new frontend tests, 16 new backend tests; checked in a browser at 1440px and 360px against a local database.
 
 - [x] **Sprint detail side column: burndown on top with open tasks as a second line, compact key stats** — done 2026-09-25. The separate "Open tasks chart" is folded into the burndown as its own line (dark grey, hollow markers) on a right-hand axis in tasks — hours and tasks cannot share a scale, so the axis is labelled "tasks", the left one "h", and the legend says "Open tasks (right axis)"; the task axis rounds to a multiple of four so every gridline is a whole number of tasks. A project burndown has no `open` and draws exactly as before. Side column order is now burndown → sprint info → key stats; the stats are a two-column label/value list instead of seven tiles. `OpenTasksChart.tsx` is gone.
 

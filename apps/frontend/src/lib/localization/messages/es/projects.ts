@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'No se pudo eliminar la historia',
         loadFailed: 'No se pudieron cargar las historias de usuario',
         titleRequired: 'Ponle un título a la historia.',
+        statusDerived: "Sigue a sus tareas en cuanto alguna empieza.",
     },
 
     /**
@@ -253,6 +254,32 @@ export const projectsMessages = {
         deleteFailed: "No se pudo eliminar la épica",
         loadFailed: "No se pudieron cargar las épicas",
         titleRequired: "Ponle un título a la épica.",
+    },
+
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "Backlog",
+        subtitle: "Épicas, historias de usuario y sus tareas en un solo árbol",
+        open: "Backlog",
+        searchPlaceholder: "Buscar IDs, títulos o responsables",
+        hideDone: "Ocultar terminadas",
+        expand: "Expandir",
+        expandEpics: "Solo épicas",
+        expandStories: "Épicas e historias",
+        expandAll: "Todo",
+        noEpic: "Sin épica",
+        unplanned: "Tareas sin historia",
+        empty: "Este backlog aún está vacío. Empieza con una épica o escribe una historia directamente.",
+        emptyFiltered: "Nada coincide con estos filtros.",
+        addStory: "Añadir historia",
+        addTask: "Añadir tarea",
+        subtasks: "{count} subtareas",
+        hours: "{logged}/{estimate} h",
+        unassigned: "Sin asignar",
+        expandRow: "Expandir",
+        collapseRow: "Contraer",
+        loadFailed: "No se pudo cargar el backlog",
+        createFailed: "No se pudo añadir",
     },
 
     epicList: {

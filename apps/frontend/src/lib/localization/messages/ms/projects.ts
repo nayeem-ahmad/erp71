@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'Cerita tidak dapat dipadam',
         loadFailed: 'Cerita pengguna tidak dapat dimuatkan',
         titleRequired: 'Beri cerita ini satu tajuk.',
+        statusDerived: "Mengikut tugasannya sebaik sahaja satu bermula.",
     },
 
     /**
@@ -253,6 +254,32 @@ export const projectsMessages = {
         deleteFailed: "Tidak dapat memadam epik",
         loadFailed: "Tidak dapat memuatkan epik",
         titleRequired: "Beri epik ini tajuk.",
+    },
+
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "Backlog",
+        subtitle: "Epik, cerita pengguna dan tugasannya dalam satu pepohon",
+        open: "Backlog",
+        searchPlaceholder: "Cari ID, tajuk atau penerima tugasan",
+        hideDone: "Sembunyikan yang selesai",
+        expand: "Kembangkan",
+        expandEpics: "Epik sahaja",
+        expandStories: "Epik dan cerita",
+        expandAll: "Semua",
+        noEpic: "Tiada epik",
+        unplanned: "Tugasan tanpa cerita",
+        empty: "Backlog ini masih kosong. Mulakan dengan epik, atau tulis cerita terus.",
+        emptyFiltered: "Tiada yang sepadan dengan penapis ini.",
+        addStory: "Tambah cerita",
+        addTask: "Tambah tugasan",
+        subtasks: "{count} subtugasan",
+        hours: "{logged}/{estimate} j",
+        unassigned: "Tidak ditugaskan",
+        expandRow: "Kembangkan",
+        collapseRow: "Runtuhkan",
+        loadFailed: "Tidak dapat memuatkan backlog",
+        createFailed: "Tidak dapat ditambah",
     },
 
     epicList: {
