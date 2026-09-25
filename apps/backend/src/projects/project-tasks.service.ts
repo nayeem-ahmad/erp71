@@ -676,6 +676,24 @@ export class ProjectTasksService {
                 source: RemainingSource.RE_ESTIMATED,
                 userId,
             });
+        } else if (dto.estimateHours != null && task.status?.category !== 'DONE') {
+            // Remaining nobody has touched since it opened still equals the
+            // estimate, so a changed estimate carries it along. Once time is
+            // logged or someone re-estimates, remaining is its own number and an
+            // estimate change leaves it alone.
+            const oldEstimate = task.estimate_hours == null ? null : Number(task.estimate_hours);
+            if (oldEstimate != null && previous === oldEstimate) {
+                await this.remaining.write({
+                    tenantId,
+                    taskId,
+                    projectId: task.project_id,
+                    sprintId,
+                    previousHours: previous,
+                    newHours: dto.estimateHours,
+                    source: RemainingSource.RE_ESTIMATED,
+                    userId,
+                });
+            }
         }
 
         return this.findOne(viewer, taskId);
