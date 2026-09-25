@@ -8,7 +8,7 @@ export interface BurndownPoint {
     ideal: number | null;
     actual: number | null;
     committed: number | null;
-    /** Tasks not yet done at the end of the day, drawn against the right-hand axis. */
+    /** Tasks not yet done at the end of the day, drawn against the task axis on the right. */
     open?: number | null;
     isWorkingDay: boolean;
 }
@@ -20,7 +20,7 @@ const FULL = { width: 720, height: 260 };
  */
 const COMPACT = { width: 340, height: 220 };
 const PAD = { top: 16, right: 16, bottom: 34, left: 44 };
-/** Room for the right-hand task-count labels, when there is an open-tasks line. */
+/** Room for the task-count labels on the right, when there is an open-tasks line. */
 const PAD_RIGHT_WITH_OPEN = 32;
 
 /**
@@ -32,8 +32,8 @@ const PAD_RIGHT_WITH_OPEN = 32;
  * Gaps (days with no snapshot) break the line instead of interpolating across.
  *
  * When the series carries `open` (a sprint's does; a project's does not), the
- * count of tasks not yet done is drawn as its own line against a right-hand
- * axis in tasks. Hours and tasks cannot share a scale, so the second axis is
+ * count of tasks not yet done is drawn as its own line against a second axis,
+ * on the right, in tasks. Hours and tasks cannot share a scale, so that axis is
  * labelled in tasks, the line is styled apart from the hours lines, and its
  * legend entry names the axis — so it is never read off the hours scale. The
  * task axis is rounded to a multiple of four so every hours gridline also
