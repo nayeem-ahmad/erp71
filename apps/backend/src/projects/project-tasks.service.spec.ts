@@ -341,6 +341,31 @@ describe('ProjectTasksService', () => {
             expect(remaining.write).not.toHaveBeenCalled();
         });
 
+        it('moves untouched remaining along with a changed estimate', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ estimate_hours: 8, remaining_hours: 8 }));
+
+            await service.update(OWNER, 'task-1', { estimateHours: 12 } as never);
+
+            expect(remaining.write).toHaveBeenCalledWith(
+                expect.objectContaining({ previousHours: 8, newHours: 12, source: 'RE_ESTIMATED' }),
+            );
+        });
+
+        it('leaves a remaining that has drifted from the estimate alone', async () => {
+            // 8h estimate, 5h remaining — time was logged or someone re-estimated.
+            await service.update(OWNER, 'task-1', { estimateHours: 12 } as never);
+            expect(remaining.write).not.toHaveBeenCalled();
+        });
+
+        it('does not revive remaining on a done task when its estimate changes', async () => {
+            db.projectTask.findFirst.mockResolvedValue(
+                task({ status: done, status_id: done.id, estimate_hours: 8, remaining_hours: 8 }),
+            );
+
+            await service.update(OWNER, 'task-1', { estimateHours: 12 } as never);
+            expect(remaining.write).not.toHaveBeenCalled();
+        });
+
         it('carries the re-estimate note onto the log row', async () => {
             await service.update(OWNER, 'task-1', {
                 remainingHours: 12,
