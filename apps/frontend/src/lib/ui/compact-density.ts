@@ -23,6 +23,13 @@ export const compactDensity = {
 
     card: 'rounded-lg border border-gray-200 bg-white p-3 md:p-4 shadow-sm',
     cardFlat: 'rounded-lg border border-gray-100 bg-white p-3',
+    /**
+     * `card` without its padding, for a card whose content runs to the edges —
+     * a tab strip along the top, a list with full-width rows. A padded card
+     * cannot be un-padded from the call site: `p-0` beside `p-3` loses to
+     * Tailwind's stylesheet order, not to the order of the class string.
+     */
+    cardSurface: 'rounded-lg border border-gray-200 bg-white shadow-sm',
 
     statLabel: 'text-xs font-medium text-gray-500',
     statValue: 'text-xl font-bold tracking-tight',

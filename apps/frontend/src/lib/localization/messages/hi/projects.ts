@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: "नियत तिथि",
         milestone: "मील का पत्थर",
         estimate: "अनुमान (घं.)",
-        remaining: "शेष (घं.)",
-        logged: "दर्ज (घं.)",
         subtasks: "उप-कार्य",
         noTasks: "अभी कोई कार्य नहीं।",
         deleted: "कार्य हटा दिया गया",
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: "इस प्रोजेक्ट की टीम में अभी कोई नहीं है।",
         assigneeAddTeam: "टीम सदस्य जोड़ें",
         assigneeLoadFailed: "इस प्रोजेक्ट की टीम नहीं पढ़ी जा सकी।",
+        copyKey: "कार्य कुंजी कॉपी करें",
+        keyCopied: "कार्य कुंजी कॉपी हो गई",
+        copyKeyFailed: "कार्य कुंजी कॉपी नहीं हो सकी",
+        moreActions: "और विकल्प",
+        openProject: "प्रोजेक्ट खोलें",
+        createdBy: "{date} को {name} ने बनाया",
+        createdOn: "{date} को बनाया गया",
+        updatedAt: "अंतिम अपडेट {when}",
+        unavailableTitle: "यह कार्य उपलब्ध नहीं है",
+        unavailableBody: "हो सकता है इसे हटा दिया गया हो, या यह किसी ऐसे निजी प्रोजेक्ट का हिस्सा हो जिसके आप सदस्य नहीं हैं।",
+        loadFailed: "यह कार्य लोड नहीं हो सका।",
+        goToTasks: "कार्यों पर जाएँ",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: "अभी कोई विवरण नहीं।",
         placeholder: "जो कुछ भी यह काम करने वाले को जानना चाहिए।",
         saveFailed: "विवरण सहेजा नहीं जा सका",
+        addHint: "क्या चाहिए, और कैसे पता चलेगा कि काम पूरा हुआ। मार्कडाउन और पेस्ट किए स्क्रीनशॉट दोनों चलते हैं।",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: "नियत तिथि",
         inverted: "आरंभ नियत तिथि के बाद है।",
         saveFailed: "तिथियाँ सहेजी नहीं जा सकीं",
+        none: "कोई नियत तिथि नहीं",
+        clear: "नियत तिथि हटाएँ",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: "रंग",
         saveFailed: "लेबल अपडेट नहीं हो सके",
         untagged: "{count} कार्य से हटाया गया।",
+        coverNote: "पहला लेबल कार्ड का रंग तय करता है।",
+        manage: "लेबल प्रबंधित करें",
         colors: {
             GRAY: "धूसर",
             BLUE: "नीला",
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: "टिप्पणियाँ",
             activity: "गतिविधि",
             time: "घंटा लॉग",
-            remaining: "शेष घंटों का इतिहास",
+            remaining: "शेष",
             attachments: "अनुलग्नक",
         },
         record: "कार्य अभिलेख",
         addChecklistItem: "आइटम जोड़ें",
         logTime: "समय दर्ज करें",
+        timeTitle: "घंटे",
         spark: {
             title: "शेष",
             hover: "विवरण के लिए होवर करें",
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: "समय दर्ज हुआ",
         deleted: "समय प्रविष्टि हटाई गई",
         totalHours: "कुल घंटे",
+        deleteEntryTitle: "यह समय प्रविष्टि हटाएँ?",
+        deleteEntryPrompt: "{date} के {hours} घंटे दर्ज कुल समय से घट जाएँगे।",
     },
 
     hourLogs: {

@@ -1164,6 +1164,51 @@ describe('ProjectTasksService', () => {
             }),
         );
     });
+
+    /**
+     * What the task card shows beyond a list row. These ride on the one read
+     * the card already makes, so opening it still costs three requests.
+     */
+    describe('findOne, for the task card', () => {
+        const include = () => db.projectTask.findFirst.mock.calls[0][0].include;
+
+        it('says whether the viewer watches the task, from their own watcher row only', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ watchers: [{ user_id: 'user-1' }] }));
+
+            const result = await service.findOne(OWNER, 'task-1');
+
+            expect(include().watchers).toEqual({
+                where: { user_id: 'user-1' },
+                select: { user_id: true },
+            });
+            expect(result.viewer_watching).toBe(true);
+            // Folded into the flag, not returned: a `watchers` array holding
+            // one person would read as the whole list.
+            expect(result).not.toHaveProperty('watchers');
+        });
+
+        it('reads a task nobody watches as not watched', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ watchers: [] }));
+
+            const result = await service.findOne(OWNER, 'task-1');
+
+            expect(result.viewer_watching).toBe(false);
+        });
+
+        it('carries the creator, the epic behind the story, and the tab counts', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ watchers: [] }));
+
+            await service.findOne(OWNER, 'task-1');
+
+            expect(include().creator).toEqual({ select: { id: true, name: true, email: true } });
+            expect(include().userStory.select.epic).toEqual({
+                select: { id: true, code: true, title: true },
+            });
+            expect(include()._count.select).toEqual(
+                expect.objectContaining({ attachments: true, watchers: true, comments: true }),
+            );
+        });
+    });
     describe('bulkRemove', () => {
         it('soft-deletes the whole selection in one query', async () => {
             // One `updateMany`, not one `update` per id: the page used to fan

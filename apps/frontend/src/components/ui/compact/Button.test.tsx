@@ -30,6 +30,16 @@ describe('Button', () => {
         expect(btn).toHaveClass('bg-danger', 'text-white');
     });
 
+    // A pressed toggle or a live action: its own variant, because a className
+    // cannot restyle secondary — bg-blue-50 beside bg-white is decided by
+    // stylesheet order, not by the class string.
+    it('renders the tinted variant without the secondary white', () => {
+        render(<Button variant="tinted">Watching</Button>);
+        const btn = screen.getByRole('button', { name: 'Watching' });
+        expect(btn).toHaveClass('border-blue-200', 'bg-blue-50', 'text-blue-700');
+        expect(btn).not.toHaveClass('bg-white');
+    });
+
     it('renders md size with larger padding/text', () => {
         render(<Button size="md">Continue</Button>);
         const btn = screen.getByRole('button', { name: 'Continue' });

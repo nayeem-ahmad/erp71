@@ -306,8 +306,6 @@ export const projectsMessages = {
         dueDate: "Fecha de vencimiento",
         milestone: "Hito",
         estimate: "Estimación (h)",
-        remaining: "Restante (h)",
-        logged: "Imputado (h)",
         subtasks: "Subtareas",
         noTasks: "Aún no hay tareas.",
         deleted: "Tarea eliminada",
@@ -333,6 +331,18 @@ export const projectsMessages = {
         assigneeNoTeam: "Todavía no hay nadie en el equipo de este proyecto.",
         assigneeAddTeam: "Añadir miembros del equipo",
         assigneeLoadFailed: "No se pudo cargar el equipo de este proyecto.",
+        copyKey: "Copiar la clave de la tarea",
+        keyCopied: "Clave de la tarea copiada",
+        copyKeyFailed: "No se pudo copiar la clave de la tarea",
+        moreActions: "Más acciones",
+        openProject: "Abrir el proyecto",
+        createdBy: "Creada el {date} por {name}",
+        createdOn: "Creada el {date}",
+        updatedAt: "Actualizada {when}",
+        unavailableTitle: "Esta tarea no está disponible",
+        unavailableBody: "Puede que se haya eliminado, o que pertenezca a un proyecto privado del que no eres miembro.",
+        loadFailed: "No se pudo cargar esta tarea.",
+        goToTasks: "Ir a Tareas",
     },
 
     description: {
@@ -342,6 +352,7 @@ export const projectsMessages = {
         empty: "Aún no hay descripción.",
         placeholder: "Todo lo que necesita saber quien vaya a hacerlo.",
         saveFailed: "No se pudo guardar la descripción",
+        addHint: "Qué se necesita y cómo sabrás que está terminado. Funcionan el Markdown y las capturas pegadas.",
     },
 
     dates: {
@@ -350,6 +361,8 @@ export const projectsMessages = {
         due: "Fecha de vencimiento",
         inverted: "El inicio es posterior a la fecha de vencimiento.",
         saveFailed: "No se pudieron guardar las fechas",
+        none: "Sin fecha de vencimiento",
+        clear: "Quitar la fecha de vencimiento",
     },
 
     activity: {
@@ -403,6 +416,8 @@ export const projectsMessages = {
         color: "Color",
         saveFailed: "No se pudieron actualizar las etiquetas",
         untagged: "Quitada de {count} tarea(s).",
+        coverNote: "La primera etiqueta da color a la tarjeta.",
+        manage: "Gestionar etiquetas",
         colors: {
             GRAY: "Gris",
             BLUE: "Azul",
@@ -450,12 +465,13 @@ export const projectsMessages = {
             comments: "Comentarios",
             activity: "Actividad",
             time: "Registro de horas",
-            remaining: "Historial de horas restantes",
+            remaining: "Restante",
             attachments: "Adjuntos",
         },
         record: "Registro de la tarea",
         addChecklistItem: "Añadir elemento",
         logTime: "Registrar tiempo",
+        timeTitle: "Horas",
         spark: {
             title: "Restante",
             hover: "pasa el cursor para ver detalles",
@@ -533,6 +549,8 @@ export const projectsMessages = {
         logged: "Tiempo imputado",
         deleted: "Imputación de tiempo eliminada",
         totalHours: "Total de horas",
+        deleteEntryTitle: "¿Eliminar este registro de tiempo?",
+        deleteEntryPrompt: "Las {hours} h del {date} se restarán del total imputado.",
     },
 
     hourLogs: {
