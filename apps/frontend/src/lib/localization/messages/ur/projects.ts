@@ -821,6 +821,9 @@ export const projectsMessages = {
         noGoal: "کوئی ہدف مقرر نہیں",
         timeElapsed: "گزرا ہوا وقت",
         dayOf: "{total} میں سے دن {day}",
+        focusLane: "صرف یہ لین دکھائیں",
+        expandAllLanes: "تمام لین کھولیں",
+        lanesCollapsed: "{count} بند",
     },
 
     burndown: {

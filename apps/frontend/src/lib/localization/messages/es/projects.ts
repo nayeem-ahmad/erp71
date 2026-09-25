@@ -821,6 +821,9 @@ export const projectsMessages = {
         noGoal: "Sin objetivo definido",
         timeElapsed: "Tiempo transcurrido",
         dayOf: "Día {day} de {total}",
+        focusLane: "Mostrar solo este carril",
+        expandAllLanes: "Expandir todos los carriles",
+        lanesCollapsed: "{count} contraído(s)",
     },
 
     burndown: {

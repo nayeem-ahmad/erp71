@@ -821,6 +821,9 @@ export const projectsMessages = {
         noGoal: "Tiada matlamat ditetapkan",
         timeElapsed: "Masa berlalu",
         dayOf: "Hari {day} daripada {total}",
+        focusLane: "Tunjukkan lorong ini sahaja",
+        expandAllLanes: "Kembangkan semua lorong",
+        lanesCollapsed: "{count} dilipat",
     },
 
     burndown: {

@@ -821,6 +821,9 @@ export const projectsMessages = {
         noGoal: "لم يُحدَّد هدف",
         timeElapsed: "الوقت المنقضي",
         dayOf: "اليوم {day} من {total}",
+        focusLane: "إظهار هذا المسار فقط",
+        expandAllLanes: "توسيع كل المسارات",
+        lanesCollapsed: "{count} مطوية",
     },
 
     burndown: {

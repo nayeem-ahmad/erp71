@@ -821,6 +821,9 @@ export const projectsMessages = {
         noGoal: "Kein Ziel festgelegt",
         timeElapsed: "Verstrichene Zeit",
         dayOf: "Tag {day} von {total}",
+        focusLane: "Nur diese Bahn zeigen",
+        expandAllLanes: "Alle Bahnen aufklappen",
+        lanesCollapsed: "{count} eingeklappt",
     },
 
     burndown: {
