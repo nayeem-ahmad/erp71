@@ -794,6 +794,9 @@ export const projectsMessages = {
         noGoal: "Aucun objectif défini",
         timeElapsed: "Temps écoulé",
         dayOf: "Jour {day} sur {total}",
+        focusLane: "Afficher uniquement ce couloir",
+        expandAllLanes: "Déplier tous les couloirs",
+        lanesCollapsed: "{count} replié(s)",
     },
 
     burndown: {
