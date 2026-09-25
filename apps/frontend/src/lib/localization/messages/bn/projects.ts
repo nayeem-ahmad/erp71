@@ -794,6 +794,9 @@ export const projectsMessages = {
         noGoal: "কোনো লক্ষ্য নির্ধারিত নেই",
         timeElapsed: "অতিবাহিত সময়",
         dayOf: "{total} দিনের মধ্যে {day}তম দিন",
+        focusLane: "শুধু এই লেন দেখান",
+        expandAllLanes: "সব লেন খুলুন",
+        lanesCollapsed: "{count}টি বন্ধ",
     },
 
     burndown: {

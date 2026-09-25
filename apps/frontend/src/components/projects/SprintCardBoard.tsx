@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 import RunningClock from './RunningClock';
+import SprintLaneHeading from './SprintLaneHeading';
 import { useIsTimerRunningFor } from './TimerChip';
 import { useProjectTimerActions } from './use-project-timer';
 import {
@@ -67,6 +68,7 @@ export default function SprintCardBoard({
     onOpen,
     onReturn,
     onMove,
+    laneControls,
 }: {
     lanes: SprintLane[];
     laneMode: SprintLaneMode;
@@ -75,6 +77,13 @@ export default function SprintCardBoard({
     onOpen: (taskId: string) => void;
     onReturn: (task: SprintCardTask) => void;
     onMove: (task: SprintCardTask, statusId: string, sortOrder: number) => void;
+    /** Folding lanes, owned by the page so the table and the cards share one state. */
+    laneControls?: {
+        isCollapsed: (key: string) => boolean;
+        isFocused: (key: string) => boolean;
+        onToggle: (key: string) => void;
+        onFocus: (key: string) => void;
+    };
 }) {
     const { t, fmt } = useI18n();
     const m = t.projects;
@@ -225,19 +234,35 @@ export default function SprintCardBoard({
             <div className="inline-flex min-w-full flex-col gap-3">
                 {lanes.map((lane) => {
                     const byColumn = tasksByColumn(lane.tasks as SprintCardTask[]);
+                    const collapsed = grouped && Boolean(laneControls?.isCollapsed(lane.key));
                     return (
                         <section key={lane.key} className="space-y-2" data-testid="sprint-card-lane">
                             {grouped && (
-                                <h3 className="sticky start-0 w-fit text-xs font-medium text-gray-700">
-                                    {laneTitle(lane)}
-                                    <span className="ms-2 font-normal text-gray-500">{lane.tasks.length}</span>
+                                <h3 className="sticky start-0 w-fit max-w-full text-xs font-medium text-gray-700">
+                                    {laneControls ? (
+                                        <SprintLaneHeading
+                                            title={laneTitle(lane)}
+                                            count={lane.tasks.length}
+                                            collapsed={collapsed}
+                                            focused={laneControls.isFocused(lane.key)}
+                                            onToggle={() => laneControls.onToggle(lane.key)}
+                                            onFocus={() => laneControls.onFocus(lane.key)}
+                                        />
+                                    ) : (
+                                        <>
+                                            {laneTitle(lane)}
+                                            <span className="ms-2 font-normal text-gray-500">{lane.tasks.length}</span>
+                                        </>
+                                    )}
                                 </h3>
                             )}
-                            <div className="flex items-stretch gap-3">
-                                {columns.map((column) =>
-                                    renderColumn(column, byColumn[column.key] ?? [], grouped ? lane.key : undefined),
-                                )}
-                            </div>
+                            {!collapsed && (
+                                <div className="flex items-stretch gap-3">
+                                    {columns.map((column) =>
+                                        renderColumn(column, byColumn[column.key] ?? [], grouped ? lane.key : undefined),
+                                    )}
+                                </div>
+                            )}
                         </section>
                     );
                 })}

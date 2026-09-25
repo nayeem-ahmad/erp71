@@ -16,6 +16,12 @@ import {
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import SprintBacklogModal from '@/components/projects/SprintBacklogModal';
 import SprintCardBoard from '@/components/projects/SprintCardBoard';
+import SprintLaneHeading from '@/components/projects/SprintLaneHeading';
+import {
+    laneStorageId,
+    readCollapsedLanes,
+    writeCollapsedLanes,
+} from '@/components/projects/board-lane-storage';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import {
     NO_LANE,
@@ -95,6 +101,9 @@ export default function SprintDetailPage() {
     const [assignee, setAssignee] = useState('all');
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
     const [laneMode, setLaneMode] = useState<SprintLaneMode>('none');
+    // Folded lanes, as `laneStorageId(mode, key)`, remembered per sprint in
+    // this browser. The board's lane store, under a `sprint:` key.
+    const [collapsedLanes, setCollapsedLanes] = useState<string[]>([]);
     const [adding, setAdding] = useState(false);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<SprintTask | null>(null);
@@ -104,6 +113,9 @@ export default function SprintDetailPage() {
         setLaneMode(readStored(LANE_STORAGE_KEY, SPRINT_LANE_MODES, 'none'));
         setViewMode(readStored<SprintViewMode>(VIEW_STORAGE_KEY, ['table', 'cards'], 'table'));
     }, []);
+
+    const laneStoreKey = `sprint:${sprintId}`;
+    useEffect(() => setCollapsedLanes(readCollapsedLanes(laneStoreKey)), [laneStoreKey]);
 
     const load = useCallback(async () => {
         try {
@@ -236,6 +248,42 @@ export default function SprintDetailPage() {
     const iconButton =
         'min-h-touch min-w-touch rounded-md p-1.5 transition-colors disabled:opacity-50';
 
+    const saveCollapsed = (next: string[]) => {
+        setCollapsedLanes(next);
+        writeCollapsedLanes(laneStoreKey, next);
+    };
+    const isCollapsed = (key: string) =>
+        laneMode !== 'none' && collapsedLanes.includes(laneStorageId(laneMode, key));
+    const openLanes = lanes.filter((lane) => !isCollapsed(lane.key));
+    const collapsedCount = lanes.length - openLanes.length;
+    /** The one lane left open while the others are folded. */
+    const isFocused = (key: string) => lanes.length > 1 && openLanes.length === 1 && openLanes[0].key === key;
+    // Entries for the other grouping are kept: folding "Rahim" must not
+    // unfold a story folded while grouped by story.
+    const otherModes = () => collapsedLanes.filter((id) => !id.startsWith(`${laneMode}|`));
+    const toggleLane = (key: string) => {
+        const id = laneStorageId(laneMode, key);
+        saveCollapsed(collapsedLanes.includes(id) ? collapsedLanes.filter((x) => x !== id) : [...collapsedLanes, id]);
+    };
+    const expandAllLanes = () => saveCollapsed(otherModes());
+    /** Folds every other lane — or, pressed on the lane already in focus, opens them all again. */
+    const focusLane = (key: string) => {
+        if (isFocused(key)) {
+            expandAllLanes();
+            return;
+        }
+        saveCollapsed([
+            ...otherModes(),
+            ...lanes.filter((lane) => lane.key !== key).map((lane) => laneStorageId(laneMode, lane.key)),
+        ]);
+    };
+    const laneControls = {
+        isCollapsed,
+        isFocused,
+        onToggle: toggleLane,
+        onFocus: focusLane,
+    };
+
     const laneTitle = (lane: (typeof lanes)[number]) => {
         if (lane.key !== NO_LANE) return lane.code ? `${lane.code} · ${lane.title ?? ''}` : (lane.title ?? '');
         return laneMode === 'story' ? m.board.laneNoStory : m.board.laneUnassigned;
@@ -358,7 +406,7 @@ export default function SprintDetailPage() {
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
                 <section className="min-w-0 rounded-md border border-gray-200 bg-white">
-                    <div className="border-b border-gray-200 px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-2">
                         <h2 className="text-sm font-medium">
                             {m.sprint.committed}
                             <span className="ms-2 text-xs font-normal text-gray-500">
@@ -368,6 +416,15 @@ export default function SprintDetailPage() {
                                 · {totals.remaining}h
                             </span>
                         </h2>
+                        {laneMode !== 'none' && collapsedCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={expandAllLanes}
+                                className="min-h-touch text-xs text-blue-600 hover:underline md:min-h-0"
+                            >
+                                {fmt(m.sprint.lanesCollapsed, { count: collapsedCount })} · {m.sprint.expandAllLanes}
+                            </button>
+                        )}
                     </div>
 
                     {tasks.length === 0 ? (
@@ -383,6 +440,7 @@ export default function SprintDetailPage() {
                             onOpen={setOpenTaskId}
                             onReturn={(task) => void returnToBacklog(task)}
                             onMove={(task, statusId, sortOrder) => void moveCard(task, statusId, sortOrder)}
+                            laneControls={laneControls}
                         />
                     ) : (
                         <div className="overflow-x-auto">
@@ -415,16 +473,20 @@ export default function SprintDetailPage() {
                                                     className="border-b border-gray-200 bg-gray-100 font-medium text-gray-700"
                                                     data-testid="sprint-lane"
                                                 >
-                                                    <td className="sticky start-0 z-10 max-w-xs truncate bg-gray-100 px-3 py-2">
-                                                        {laneTitle(lane)}
-                                                        <span className="ms-2 font-normal text-gray-500">
-                                                            {lane.tasks.length}
-                                                        </span>
+                                                    <td className="sticky start-0 z-10 max-w-xs bg-gray-100 px-3 py-1">
+                                                        <SprintLaneHeading
+                                                            title={laneTitle(lane)}
+                                                            count={lane.tasks.length}
+                                                            collapsed={isCollapsed(lane.key)}
+                                                            focused={isFocused(lane.key)}
+                                                            onToggle={() => toggleLane(lane.key)}
+                                                            onFocus={() => focusLane(lane.key)}
+                                                        />
                                                     </td>
                                                     {figureCells(lane.tasks)}
                                                 </tr>
                                             )}
-                                            {lane.tasks.map((task) => {
+                                            {!isCollapsed(lane.key) && lane.tasks.map((task) => {
                                                 const done = task.status?.category === 'DONE';
                                                 return (
                                                     <tr
