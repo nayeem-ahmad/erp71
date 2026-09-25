@@ -794,8 +794,6 @@ export const projectsMessages = {
         noGoal: "کوئی ہدف مقرر نہیں",
         timeElapsed: "گزرا ہوا وقت",
         dayOf: "{total} میں سے دن {day}",
-        openTasksChart: "کھلے ٹاسک کا چارٹ",
-        openTasksNoData: "ابھی کوئی اسنیپ شاٹ نہیں۔ اسپرنٹ ایک دن چلنے کے بعد چارٹ بھرے گا۔",
     },
 
     burndown: {
@@ -810,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "{written} دن دوبارہ بنائے، {skipped} برقرار رکھے",
         weekendNote: "مثالی لکیر جمعہ/ہفتہ چھوڑ دیتی ہے۔",
         tenantScope: "اس اسپرنٹ کے تمام پروجیکٹس",
+        hoursUnit: "گھ",
+        tasksUnit: "ٹاسک",
+        openTasks: "کھلے ٹاسک",
+        openTasksRightAxis: "کھلے ٹاسک (دایاں محور)",
     },
 
     settings: {

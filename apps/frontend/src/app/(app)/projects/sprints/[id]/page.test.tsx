@@ -265,13 +265,22 @@ describe('Sprint detail page', () => {
         }
     });
 
-    it('draws the open tasks chart below the burndown', async () => {
+    it('puts the burndown, with its open tasks line, above the sprint info and a compact stats list', async () => {
         render(<SprintDetailPage />);
+        const info = await screen.findByTestId('sprint-info');
 
-        expect(await screen.findByText('Open tasks chart')).toBeInTheDocument();
-        const chart = screen.getByTestId('open-tasks-chart');
-        // One reading per day that has a snapshot; the future day is a gap.
-        expect(chart.querySelectorAll('title')).toHaveLength(2);
-        expect(chart.querySelector('title')).toHaveTextContent('2026-08-02: 2');
+        const burndown = screen.getByRole('img', { name: 'Burndown' });
+        const stats = screen.getByTestId('sprint-stats');
+        // Document order: burndown, then info, then stats.
+        expect(burndown.compareDocumentPosition(info) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(info.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+        // One marker per day with a snapshot; the future day is a gap.
+        expect(within(burndown as unknown as HTMLElement).getAllByTestId('open-task-point')).toHaveLength(2);
+        expect(screen.getByText('Open tasks (right axis)')).toBeInTheDocument();
+        expect(screen.queryByText('Open tasks chart')).not.toBeInTheDocument();
+
+        // Seven figures as label/value pairs, not tiles.
+        expect(within(stats).getAllByRole('term')).toHaveLength(7);
     });
 });

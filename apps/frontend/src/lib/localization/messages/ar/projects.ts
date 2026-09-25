@@ -794,8 +794,6 @@ export const projectsMessages = {
         noGoal: "لم يُحدَّد هدف",
         timeElapsed: "الوقت المنقضي",
         dayOf: "اليوم {day} من {total}",
-        openTasksChart: "مخطط المهام المفتوحة",
-        openTasksNoData: "لا توجد لقطات بعد. يمتلئ المخطط بعد مرور يوم على السبرنت.",
     },
 
     burndown: {
@@ -810,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "أُعيد بناء {written} يوم، وأُبقي على {skipped}",
         weekendNote: "يتخطّى الخط المثالي الجمعة والسبت.",
         tenantScope: "كل المشاريع في هذه الدورة",
+        hoursUnit: "س",
+        tasksUnit: "مهام",
+        openTasks: "المهام المفتوحة",
+        openTasksRightAxis: "المهام المفتوحة (المحور الأيمن)",
     },
 
     settings: {
