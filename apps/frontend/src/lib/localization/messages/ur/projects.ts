@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'اسٹوری حذف نہیں ہو سکی',
         loadFailed: 'یوزر اسٹوریز لوڈ نہیں ہو سکیں',
         titleRequired: 'اسٹوری کو ایک عنوان دیں۔',
+        statusDerived: "کوئی ٹاسک شروع ہوتے ہی اسٹیٹس ٹاسک کے مطابق چلتا ہے۔",
     },
 
     /**
@@ -255,6 +256,32 @@ export const projectsMessages = {
         titleRequired: "ایپک کو ایک عنوان دیں۔",
     },
 
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "بیک لاگ",
+        subtitle: "ایپکس، یوزر اسٹوریز اور ان کے ٹاسک ایک ٹری میں",
+        open: "بیک لاگ",
+        searchPlaceholder: "آئی ڈی، عنوان یا ذمہ دار تلاش کریں",
+        hideDone: "مکمل شدہ چھپائیں",
+        expand: "پھیلائیں",
+        expandEpics: "صرف ایپکس",
+        expandStories: "ایپکس اور اسٹوریز",
+        expandAll: "سب کچھ",
+        noEpic: "کوئی ایپک نہیں",
+        unplanned: "بغیر اسٹوری کے ٹاسک",
+        empty: "اس بیک لاگ میں ابھی کچھ نہیں۔ کسی ایپک سے شروع کریں، یا سیدھے ایک اسٹوری لکھیں۔",
+        emptyFiltered: "ان فلٹرز سے کچھ نہیں ملتا۔",
+        addStory: "اسٹوری شامل کریں",
+        addTask: "ٹاسک شامل کریں",
+        subtasks: "{count} ذیلی ٹاسک",
+        hours: "{logged}/{estimate} گھنٹے",
+        unassigned: "کسی کو تفویض نہیں",
+        expandRow: "پھیلائیں",
+        collapseRow: "سمیٹیں",
+        loadFailed: "بیک لاگ لوڈ نہیں ہو سکا",
+        createFailed: "شامل نہیں ہو سکا",
+    },
+
     epicList: {
         title: "ایپکس",
         subtitle: "ہر پروجیکٹ کے تمام ایپکس",
@@ -300,6 +327,9 @@ export const projectsMessages = {
         noProjects: "پہلے ایک پروجیکٹ بنائیں — ہر ٹاسک کسی نہ کسی پروجیکٹ سے تعلق رکھتا ہے۔",
         createFailed: "ٹاسک نہیں بن سکا",
         openFull: "مکمل صفحہ کھولیں",
+        copyLink: "لنک کاپی کریں",
+        linkCopied: "لنک کاپی ہو گیا",
+        copyLinkFailed: "لنک کاپی نہیں ہو سکا",
         assigneeNoTeam: "اس پروجیکٹ کی ٹیم میں ابھی کوئی نہیں ہے۔",
         assigneeAddTeam: "ٹیم کے ارکان شامل کریں",
         assigneeLoadFailed: "اس پروجیکٹ کی ٹیم پڑھی نہیں جا سکی۔",

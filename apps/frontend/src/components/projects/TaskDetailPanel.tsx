@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, File as FileIcon, FileText, GripVertical, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, File as FileIcon, FileText, GripVertical, Link2, Maximize2, Paperclip, Play, Plus, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -61,6 +61,7 @@ import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { useProjectTimerActions } from './use-project-timer';
+import { copyTaskLink } from './task-link';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 
@@ -1172,6 +1173,15 @@ export default function TaskDetailPanel({
                 subtitle={task?.project ? `${task.project.code} · ${task.project.name}` : undefined}
                 onClose={close}
             >
+                <button
+                    type="button"
+                    onClick={() => void copyTaskLink(taskId, m.task)}
+                    aria-label={m.task.copyLink}
+                    title={m.task.copyLink}
+                    className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                >
+                    <Link2 className="h-4 w-4" aria-hidden />
+                </button>
                 {/* A link rather than a button: it navigates, so middle-click
                     and copy-link-address should behave like any other link. */}
                 <Link

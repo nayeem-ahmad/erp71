@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'Story konnte nicht gelöscht werden',
         loadFailed: 'User Storys konnten nicht geladen werden',
         titleRequired: 'Geben Sie der Story einen Titel.',
+        statusDerived: "Folgt den Aufgaben, sobald eine begonnen hat.",
     },
 
     /**
@@ -255,6 +256,32 @@ export const projectsMessages = {
         titleRequired: "Geben Sie dem Epic einen Titel.",
     },
 
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "Backlog",
+        subtitle: "Epics, User Stories und ihre Aufgaben in einem Baum",
+        open: "Backlog",
+        searchPlaceholder: "IDs, Titel oder Zuständige suchen",
+        hideDone: "Erledigte ausblenden",
+        expand: "Aufklappen",
+        expandEpics: "Nur Epics",
+        expandStories: "Epics und Stories",
+        expandAll: "Alles",
+        noEpic: "Kein Epic",
+        unplanned: "Aufgaben ohne Story",
+        empty: "Dieser Backlog ist noch leer. Beginnen Sie mit einem Epic oder schreiben Sie direkt eine Story.",
+        emptyFiltered: "Nichts entspricht diesen Filtern.",
+        addStory: "Story hinzufügen",
+        addTask: "Aufgabe hinzufügen",
+        subtasks: "{count} Unteraufgaben",
+        hours: "{logged}/{estimate} h",
+        unassigned: "Nicht zugewiesen",
+        expandRow: "Aufklappen",
+        collapseRow: "Zuklappen",
+        loadFailed: "Backlog konnte nicht geladen werden",
+        createFailed: "Konnte nicht hinzugefügt werden",
+    },
+
     epicList: {
         title: "Epics",
         subtitle: "Alle Epics aus allen Projekten",
@@ -300,6 +327,9 @@ export const projectsMessages = {
         noProjects: "Legen Sie zuerst ein Projekt an — jede Aufgabe gehört zu einem.",
         createFailed: "Die Aufgabe konnte nicht erstellt werden",
         openFull: "Ganze Seite öffnen",
+        copyLink: "Link kopieren",
+        linkCopied: "Link kopiert",
+        copyLinkFailed: "Link konnte nicht kopiert werden",
         assigneeNoTeam: "Diesem Projekt ist noch niemand zugeordnet.",
         assigneeAddTeam: "Teammitglieder hinzufügen",
         assigneeLoadFailed: "Das Team dieses Projekts konnte nicht geladen werden.",

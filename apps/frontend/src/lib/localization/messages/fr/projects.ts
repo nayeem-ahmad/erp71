@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'Impossible de supprimer la story',
         loadFailed: 'Impossible de charger les user stories',
         titleRequired: 'Donnez un titre à la story.',
+        statusDerived: "Suit ses tâches dès que l'une a commencé.",
     },
 
     /**
@@ -255,6 +256,32 @@ export const projectsMessages = {
         titleRequired: "Donnez un titre à l'épopée.",
     },
 
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "Backlog",
+        subtitle: "Épopées, user stories et leurs tâches dans un seul arbre",
+        open: "Backlog",
+        searchPlaceholder: "Rechercher un ID, un titre ou un responsable",
+        hideDone: "Masquer les terminés",
+        expand: "Déplier",
+        expandEpics: "Épopées seulement",
+        expandStories: "Épopées et stories",
+        expandAll: "Tout",
+        noEpic: "Aucune épopée",
+        unplanned: "Tâches sans story",
+        empty: "Ce backlog est encore vide. Commencez par une épopée, ou écrivez directement une story.",
+        emptyFiltered: "Rien ne correspond à ces filtres.",
+        addStory: "Ajouter une story",
+        addTask: "Ajouter une tâche",
+        subtasks: "{count} sous-tâches",
+        hours: "{logged}/{estimate} h",
+        unassigned: "Non assigné",
+        expandRow: "Déplier",
+        collapseRow: "Replier",
+        loadFailed: "Impossible de charger le backlog",
+        createFailed: "Impossible de l'ajouter",
+    },
+
     epicList: {
         title: "Épopées",
         subtitle: "Toutes les épopées de tous les projets",
@@ -300,6 +327,9 @@ export const projectsMessages = {
         noProjects: "Créez d'abord un projet — chaque tâche appartient à l'un d'eux.",
         createFailed: "Impossible de créer la tâche",
         openFull: "Ouvrir la page entière",
+        copyLink: "Copier le lien",
+        linkCopied: "Lien copié",
+        copyLinkFailed: "Impossible de copier le lien",
         assigneeNoTeam: "Personne ne fait encore partie de l’équipe de ce projet.",
         assigneeAddTeam: "Ajouter des membres",
         assigneeLoadFailed: "Impossible de charger l’équipe de ce projet.",

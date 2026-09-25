@@ -1,8 +1,10 @@
 'use client';
 
+import { Link2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { PageShell, PageHeader, Button } from '@/components/ui';
 import { TaskCardBody, useTaskCard } from '@/components/projects/TaskDetailPanel';
+import { copyTaskLink } from '@/components/projects/task-link';
 import { useI18n } from '@/lib/i18n';
 import { projectChildBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -54,14 +56,23 @@ export default function TaskDetailPage() {
                        no Back at all. The project is always a real destination —
                        a task has no board of its own, since a board is a
                        hand-picked cross-project wall a task may not be on. */
-                    project ? (
+                    <>
                         <Button
                             variant="secondary"
-                            onClick={() => router.push(routes.projects.detail(project.id))}
+                            icon={<Link2 className="h-4 w-4" aria-hidden />}
+                            onClick={() => void copyTaskLink(taskId, m.task)}
                         >
-                            {t.common.back}
+                            {m.task.copyLink}
                         </Button>
-                    ) : undefined
+                        {project ? (
+                            <Button
+                                variant="secondary"
+                                onClick={() => router.push(routes.projects.detail(project.id))}
+                            >
+                                {t.common.back}
+                            </Button>
+                        ) : null}
+                    </>
                 }
             />
 

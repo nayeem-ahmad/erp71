@@ -187,6 +187,7 @@ export const projectsMessages = {
         deleteFailed: 'Could not delete the story',
         loadFailed: 'Could not load the user stories',
         titleRequired: 'Give the story a title.',
+        statusDerived: "Follows its tasks once any has started.",
     },
 
     /**
@@ -255,6 +256,32 @@ export const projectsMessages = {
         titleRequired: "Give the epic a title.",
     },
 
+    /** The per-project tree at /projects/[id]/backlog. */
+    backlog: {
+        title: "Backlog",
+        subtitle: "Epics, user stories and their tasks in one tree",
+        open: "Backlog",
+        searchPlaceholder: "Search IDs, titles or assignees",
+        hideDone: "Hide done",
+        expand: "Expand",
+        expandEpics: "Epics only",
+        expandStories: "Epics and stories",
+        expandAll: "Everything",
+        noEpic: "No epic",
+        unplanned: "Tasks without a story",
+        empty: "Nothing in this backlog yet. Start with an epic, or write a story straight away.",
+        emptyFiltered: "Nothing matches these filters.",
+        addStory: "Add story",
+        addTask: "Add task",
+        subtasks: "{count} subtasks",
+        hours: "{logged}/{estimate} h",
+        unassigned: "Unassigned",
+        expandRow: "Expand",
+        collapseRow: "Collapse",
+        loadFailed: "Could not load the backlog",
+        createFailed: "Could not add it",
+    },
+
     epicList: {
         title: "Epics",
         subtitle: "Every epic across every project",
@@ -300,6 +327,9 @@ export const projectsMessages = {
         noProjects: 'Create a project first — every task belongs to one.',
         createFailed: 'Could not create the task',
         openFull: 'Open full page',
+        copyLink: 'Copy link',
+        linkCopied: 'Link copied',
+        copyLinkFailed: 'Could not copy the link',
         assigneeNoTeam: "No one is on this project's team yet.",
         assigneeAddTeam: 'Add team members',
         assigneeLoadFailed: "Could not read this project's team.",
