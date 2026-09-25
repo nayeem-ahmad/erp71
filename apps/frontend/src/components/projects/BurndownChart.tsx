@@ -8,7 +8,7 @@ export interface BurndownPoint {
     ideal: number | null;
     actual: number | null;
     committed: number | null;
-    /** Tasks not yet done at the end of the day; the open tasks chart draws it. */
+    /** Tasks not yet done at the end of the day, drawn against the task axis on the right. */
     open?: number | null;
     isWorkingDay: boolean;
 }
@@ -20,6 +20,8 @@ const FULL = { width: 720, height: 260 };
  */
 const COMPACT = { width: 340, height: 220 };
 const PAD = { top: 16, right: 16, bottom: 34, left: 44 };
+/** Room for the task-count labels on the right, when there is an open-tasks line. */
+const PAD_RIGHT_WITH_OPEN = 32;
 
 /**
  * Burndown: ideal against actual remaining, with the committed line on top so
@@ -28,6 +30,14 @@ const PAD = { top: 16, right: 16, bottom: 34, left: 44 };
  * Deliberately straight segments, not a spline. A burndown is a series of daily
  * readings, and a curve between them would draw hours that were never measured.
  * Gaps (days with no snapshot) break the line instead of interpolating across.
+ *
+ * When the series carries `open` (a sprint's does; a project's does not), the
+ * count of tasks not yet done is drawn as its own line against a second axis,
+ * on the right, in tasks. Hours and tasks cannot share a scale, so that axis is
+ * labelled in tasks, the line is styled apart from the hours lines, and its
+ * legend entry names the axis — so it is never read off the hours scale. The
+ * task axis is rounded to a multiple of four so every hours gridline also
+ * lands on a whole number of tasks.
  */
 export default function BurndownChart({
     series,
@@ -57,15 +67,24 @@ export default function BurndownChart({
         );
         const max = Math.max(...values, 1);
 
-        const innerW = WIDTH - PAD.left - PAD.right;
+        const openValues = series.map((p) => p.open).filter((v): v is number => v != null);
+        const hasOpen = openValues.length > 0;
+        const openMax = Math.ceil(Math.max(...openValues, 4) / 4) * 4;
+        const padRight = hasOpen ? PAD_RIGHT_WITH_OPEN : PAD.right;
+
+        const innerW = WIDTH - PAD.left - padRight;
         const innerH = HEIGHT - PAD.top - PAD.bottom;
         const stepX = series.length > 1 ? innerW / (series.length - 1) : 0;
 
         const x = (i: number) => PAD.left + i * stepX;
         const y = (value: number) => PAD.top + innerH - (value / max) * innerH;
+        const yOpen = (value: number) => PAD.top + innerH - (value / openMax) * innerH;
 
         /** Splits into runs of consecutive non-null points so gaps stay gaps. */
-        const runs = (pick: (p: BurndownPoint) => number | null): string[] => {
+        const runs = (
+            pick: (p: BurndownPoint) => number | null | undefined,
+            scale: (value: number) => number = y,
+        ): string[] => {
             const out: string[] = [];
             let current: string[] = [];
             series.forEach((point, i) => {
@@ -75,7 +94,7 @@ export default function BurndownChart({
                     current = [];
                     return;
                 }
-                current.push(`${x(i)},${y(value)}`);
+                current.push(`${x(i)},${scale(value)}`);
             });
             if (current.length > 1) out.push(current.join(' '));
             return out;
@@ -89,6 +108,11 @@ export default function BurndownChart({
             idealRuns: runs((p) => p.ideal),
             actualRuns: runs((p) => p.actual),
             committedRuns: runs((p) => p.committed),
+            openRuns: hasOpen ? runs((p) => p.open, yOpen) : [],
+            hasOpen,
+            openMax,
+            padRight,
+            yOpen,
             weekends: series
                 .map((p, i) => ({ ...p, i }))
                 .filter((p) => !p.isWorkingDay),
@@ -100,8 +124,23 @@ export default function BurndownChart({
         return <p className="text-sm text-gray-500">{m.noData}</p>;
     }
 
-    const { max, x, y, innerH, idealRuns, actualRuns, committedRuns, weekends, stepX } = geometry;
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(max * f));
+    const {
+        max,
+        x,
+        y,
+        innerH,
+        idealRuns,
+        actualRuns,
+        committedRuns,
+        openRuns,
+        hasOpen,
+        openMax,
+        padRight,
+        yOpen,
+        weekends,
+        stepX,
+    } = geometry;
+    const fractions = [0, 0.25, 0.5, 0.75, 1];
 
     return (
         <div className="space-y-2">
@@ -125,26 +164,54 @@ export default function BurndownChart({
                         />
                     ))}
 
-                    {ticks.map((tick) => (
-                        <g key={tick}>
-                            <line
-                                x1={PAD.left}
-                                x2={WIDTH - PAD.right}
-                                y1={y(tick)}
-                                y2={y(tick)}
-                                className="stroke-gray-200"
-                                strokeWidth={1}
-                            />
-                            <text
-                                x={PAD.left - 8}
-                                y={y(tick) + 4}
-                                textAnchor="end"
-                                className="fill-gray-500 text-[10px]"
-                            >
-                                {tick}
+                    {fractions.map((f) => {
+                        const at = PAD.top + innerH - f * innerH;
+                        return (
+                            <g key={f}>
+                                <line
+                                    x1={PAD.left}
+                                    x2={WIDTH - padRight}
+                                    y1={at}
+                                    y2={at}
+                                    className="stroke-gray-200"
+                                    strokeWidth={1}
+                                />
+                                <text
+                                    x={PAD.left - 8}
+                                    y={at + 4}
+                                    textAnchor="end"
+                                    className="fill-gray-500 text-[10px]"
+                                >
+                                    {Math.round(max * f)}
+                                </text>
+                                {hasOpen && (
+                                    <text
+                                        x={WIDTH - padRight + 6}
+                                        y={at + 4}
+                                        textAnchor="start"
+                                        className="fill-gray-700 text-[10px]"
+                                    >
+                                        {openMax * f}
+                                    </text>
+                                )}
+                            </g>
+                        );
+                    })}
+                    {hasOpen && (
+                        <>
+                            <text x={PAD.left - 8} y={PAD.top - 6} textAnchor="end" className="fill-gray-500 text-[10px]">
+                                {m.hoursUnit}
                             </text>
-                        </g>
-                    ))}
+                            <text
+                                x={WIDTH - padRight + 6}
+                                y={PAD.top - 6}
+                                textAnchor="start"
+                                className="fill-gray-700 text-[10px]"
+                            >
+                                {m.tasksUnit}
+                            </text>
+                        </>
+                    )}
 
                     {committedRuns.map((points, i) => (
                         <polyline
@@ -176,6 +243,32 @@ export default function BurndownChart({
                             strokeWidth={2.5}
                         />
                     ))}
+
+                    {openRuns.map((points, i) => (
+                        <polyline
+                            key={`open-${i}`}
+                            points={points}
+                            fill="none"
+                            className="stroke-gray-700"
+                            strokeWidth={1.5}
+                            strokeLinejoin="round"
+                        />
+                    ))}
+                    {series.map((point, i) =>
+                        point.open == null ? null : (
+                            <circle
+                                key={`open-${point.date}`}
+                                cx={x(i)}
+                                cy={yOpen(point.open)}
+                                r={2.5}
+                                className="fill-white stroke-gray-700"
+                                strokeWidth={1.5}
+                                data-testid="open-task-point"
+                            >
+                                <title>{`${point.date}: ${point.open} ${m.openTasks.toLowerCase()}`}</title>
+                            </circle>
+                        ),
+                    )}
 
                     {series.map((point, i) =>
                         point.actual == null ? null : (
@@ -223,6 +316,15 @@ export default function BurndownChart({
                     <span className="inline-block h-0.5 w-4 bg-amber-500" />
                     {m.committed}
                 </span>
+                {hasOpen && (
+                    <span className="flex items-center gap-1.5">
+                        <span className="relative inline-flex h-2 w-4 items-center" aria-hidden>
+                            <span className="h-0.5 w-4 bg-gray-700" />
+                            <span className="absolute start-1 h-2 w-2 rounded-full border-2 border-gray-700 bg-white" />
+                        </span>
+                        {m.openTasksRightAxis}
+                    </span>
+                )}
                 <span className="text-gray-500">{m.weekendNote}</span>
             </div>
         </div>

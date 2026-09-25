@@ -794,8 +794,6 @@ export const projectsMessages = {
         noGoal: "कोई लक्ष्य तय नहीं",
         timeElapsed: "बीता समय",
         dayOf: "{total} में से दिन {day}",
-        openTasksChart: "खुले टास्क चार्ट",
-        openTasksNoData: "अभी कोई स्नैपशॉट नहीं। स्प्रिंट एक दिन चलने के बाद चार्ट भरेगा।",
     },
 
     burndown: {
@@ -810,6 +808,10 @@ export const projectsMessages = {
         rebuilt: "{written} दिन पुनर्निर्मित, {skipped} रखे गए",
         weekendNote: "आदर्श रेखा शुक्र/शनि छोड़ती है।",
         tenantScope: "इस स्प्रिंट की सभी परियोजनाएँ",
+        hoursUnit: "घं",
+        tasksUnit: "टास्क",
+        openTasks: "खुले टास्क",
+        openTasksRightAxis: "खुले टास्क (दायाँ अक्ष)",
     },
 
     settings: {

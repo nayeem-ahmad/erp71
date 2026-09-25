@@ -10,12 +10,10 @@ import {
     Button,
     Select,
     StatusBadge,
-    CompactStat,
     ConfirmDialog,
     Input,
 } from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
-import OpenTasksChart from '@/components/projects/OpenTasksChart';
 import SprintBacklogModal from '@/components/projects/SprintBacklogModal';
 import SprintCardBoard from '@/components/projects/SprintCardBoard';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
@@ -522,6 +520,20 @@ export default function SprintDetailPage() {
                 </section>
 
                 <aside className="space-y-4">
+                    <section className="rounded-md border border-gray-200 bg-white p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <h2 className="text-sm font-medium">{m.burndown.title}</h2>
+                            {/* The chart spans every project in the sprint, so saying
+                                so keeps it from reading as one project's progress. */}
+                            <span className="text-xs text-gray-500">{m.burndown.tenantScope}</span>
+                        </div>
+                        {burndown && burndown.length > 0 ? (
+                            <BurndownChart series={burndown} compact />
+                        ) : (
+                            <p className="text-sm text-gray-500">{m.burndown.noData}</p>
+                        )}
+                    </section>
+
                     {sprint && timeline && (
                         <section
                             className="space-y-3 rounded-md border border-gray-200 bg-white p-3"
@@ -575,59 +587,53 @@ export default function SprintDetailPage() {
                         </section>
                     )}
 
-                    <section className="rounded-md border border-gray-200 bg-white p-3">
-                        <h2 className="mb-2 text-sm font-medium">{m.sprint.stats}</h2>
-                        <div className="grid grid-cols-2 gap-2">
-                            <CompactStat label={m.sprint.colEstimate} value={stats.estimate} />
-                            <CompactStat label={m.sprint.colSpent} value={stats.spent} />
-                            <CompactStat label={m.sprint.colRemaining} value={stats.remaining} tone="info" />
-                            <CompactStat label={m.sprint.statProgress} value={`${stats.progress}%`} />
-                            <CompactStat
-                                label={m.sprint.statTasksDone}
-                                value={`${stats.doneCount}/${stats.taskCount}`}
-                                tone={stats.taskCount > 0 && stats.doneCount === stats.taskCount ? 'positive' : 'default'}
-                            />
-                            <CompactStat label={m.sprint.statDaysLeft} value={stats.workingDaysLeft} />
-                            <CompactStat
-                                className="col-span-2"
-                                label={m.sprint.statVariance}
-                                value={
-                                    stats.variance == null
+                    <section className="rounded-md border border-gray-200 bg-white p-3" data-testid="sprint-stats">
+                        <h2 className="mb-1.5 text-sm font-medium">{m.sprint.stats}</h2>
+                        {/* Label and figure on one line each, two to a row: seven
+                            figures in the height the tiles took for three. */}
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            {(
+                                [
+                                    [m.sprint.colEstimate, stats.estimate, ''],
+                                    [m.sprint.colSpent, stats.spent, ''],
+                                    [m.sprint.colRemaining, stats.remaining, 'text-blue-600'],
+                                    [m.sprint.statProgress, `${stats.progress}%`, ''],
+                                    [
+                                        m.sprint.statTasksDone,
+                                        `${stats.doneCount}/${stats.taskCount}`,
+                                        stats.taskCount > 0 && stats.doneCount === stats.taskCount
+                                            ? 'text-emerald-700'
+                                            : '',
+                                    ],
+                                    [m.sprint.statDaysLeft, stats.workingDaysLeft, ''],
+                                ] as const
+                            ).map(([label, value, tone]) => (
+                                <div key={label} className="flex items-baseline justify-between gap-2">
+                                    <dt className="truncate text-gray-500">{label}</dt>
+                                    <dd className={`font-semibold tabular-nums text-gray-900 ${tone}`}>{value}</dd>
+                                </div>
+                            ))}
+                            <div className="col-span-2 flex items-baseline justify-between gap-2 border-t border-gray-100 pt-1">
+                                <dt className="text-gray-500">{m.sprint.statVariance}</dt>
+                                <dd
+                                    className={`font-semibold tabular-nums ${
+                                        stats.variance == null
+                                            ? 'text-gray-900'
+                                            : stats.variance >= 0
+                                              ? 'text-emerald-700'
+                                              : 'text-amber-600'
+                                    }`}
+                                >
+                                    {stats.variance == null
                                         ? '—'
                                         : stats.variance > 0
                                           ? fmt(m.sprint.ahead, { hours: stats.variance })
                                           : stats.variance < 0
                                             ? fmt(m.sprint.behind, { hours: -stats.variance })
-                                            : m.sprint.onTrack
-                                }
-                                tone={
-                                    stats.variance == null
-                                        ? 'default'
-                                        : stats.variance >= 0
-                                          ? 'positive'
-                                          : 'warning'
-                                }
-                            />
-                        </div>
-                    </section>
-
-                    <section className="rounded-md border border-gray-200 bg-white p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                            <h2 className="text-sm font-medium">{m.burndown.title}</h2>
-                            {/* The chart spans every project in the sprint, so saying
-                                so keeps it from reading as one project's progress. */}
-                            <span className="text-xs text-gray-500">{m.burndown.tenantScope}</span>
-                        </div>
-                        {burndown && burndown.length > 0 ? (
-                            <BurndownChart series={burndown} compact />
-                        ) : (
-                            <p className="text-sm text-gray-500">{m.burndown.noData}</p>
-                        )}
-                    </section>
-
-                    <section className="rounded-md border border-gray-200 bg-white p-3">
-                        <h2 className="mb-2 text-sm font-medium">{m.sprint.openTasksChart}</h2>
-                        <OpenTasksChart series={burndown ?? []} />
+                                            : m.sprint.onTrack}
+                                </dd>
+                            </div>
+                        </dl>
                     </section>
                 </aside>
             </div>
