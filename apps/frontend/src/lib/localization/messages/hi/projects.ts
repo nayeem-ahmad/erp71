@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "खर्च (घं)",
         colRemaining: "शेष (घं)",
         total: "कुल",
-        dayHint: "हर दिन उस दिन के अंत में बचे घंटे दिखाता है।",
         stats: "मुख्य आँकड़े",
         statProgress: "प्रगति",
         statTasksDone: "पूरे टास्क",
@@ -790,6 +789,13 @@ export const projectsMessages = {
         noMatches: "खोज से कोई टास्क मेल नहीं खाता।",
         noColumnForProject: "{project} में \"{column}\" कॉलम नहीं है, इसलिए यह कार्ड वहाँ नहीं जा सकता।",
         laneLocked: "कार्ड अपनी ही पंक्ति में कॉलम बदलते हैं।",
+        everyone: "सभी",
+        info: "स्प्रिंट",
+        noGoal: "कोई लक्ष्य तय नहीं",
+        timeElapsed: "बीता समय",
+        dayOf: "{total} में से दिन {day}",
+        openTasksChart: "खुले टास्क चार्ट",
+        openTasksNoData: "अभी कोई स्नैपशॉट नहीं। स्प्रिंट एक दिन चलने के बाद चार्ट भरेगा।",
     },
 
     burndown: {

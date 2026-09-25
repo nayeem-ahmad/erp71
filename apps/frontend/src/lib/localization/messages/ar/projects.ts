@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "المستغرق (س)",
         colRemaining: "المتبقي (س)",
         total: "الإجمالي",
-        dayHint: "يعرض كل يوم الساعات المتبقية في نهايته.",
         stats: "إحصاءات رئيسية",
         statProgress: "التقدم",
         statTasksDone: "المهام المنجزة",
@@ -790,6 +789,13 @@ export const projectsMessages = {
         noMatches: "لا توجد مهام تطابق البحث.",
         noColumnForProject: "لا يحتوي {project} على عمود \"{column}\"، لذا لا يمكن نقل هذه البطاقة إليه.",
         laneLocked: "تنتقل البطاقات بين الأعمدة داخل صفها فقط.",
+        everyone: "الجميع",
+        info: "السبرنت",
+        noGoal: "لم يُحدَّد هدف",
+        timeElapsed: "الوقت المنقضي",
+        dayOf: "اليوم {day} من {total}",
+        openTasksChart: "مخطط المهام المفتوحة",
+        openTasksNoData: "لا توجد لقطات بعد. يمتلئ المخطط بعد مرور يوم على السبرنت.",
     },
 
     burndown: {

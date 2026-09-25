@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "ব্যয়িত (ঘ)",
         colRemaining: "বাকি (ঘ)",
         total: "মোট",
-        dayHint: "প্রতিটি দিনে সেই দিনের শেষে বাকি ঘণ্টা দেখায়।",
         stats: "মূল পরিসংখ্যান",
         statProgress: "অগ্রগতি",
         statTasksDone: "সম্পন্ন টাস্ক",
@@ -790,6 +789,13 @@ export const projectsMessages = {
         noMatches: "অনুসন্ধানের সাথে কোনো টাস্ক মেলেনি।",
         noColumnForProject: "{project}-এ \"{column}\" কলাম নেই, তাই এই কার্ড সেখানে সরানো যাবে না।",
         laneLocked: "কার্ড নিজের সারির মধ্যেই কলাম বদলায়।",
+        everyone: "সবাই",
+        info: "স্প্রিন্ট",
+        noGoal: "কোনো লক্ষ্য নির্ধারিত নেই",
+        timeElapsed: "অতিবাহিত সময়",
+        dayOf: "{total} দিনের মধ্যে {day}তম দিন",
+        openTasksChart: "খোলা টাস্কের চার্ট",
+        openTasksNoData: "এখনও কোনো স্ন্যাপশট নেই। স্প্রিন্ট এক দিন চললে চার্ট পূর্ণ হবে।",
     },
 
     burndown: {

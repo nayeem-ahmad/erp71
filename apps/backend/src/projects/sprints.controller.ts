@@ -55,13 +55,6 @@ export class SprintsController {
         return this.sprints.burndown(tenant.tenantId, id);
     }
 
-    /** Each committed task's end-of-day remaining hours, for the sprint table. */
-    @Get(':id/daily-remaining')
-    @RequireStorePermission(StorePermission.VIEW_PROJECTS)
-    dailyRemaining(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.sprints.dailyRemaining(tenant, id);
-    }
-
     /**
      * Repairs gaps by replaying the remaining-hours log. Available because the
      * snapshots are a cache — without the log this endpoint could not exist.

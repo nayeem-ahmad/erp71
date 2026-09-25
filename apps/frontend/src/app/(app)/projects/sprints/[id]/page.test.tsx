@@ -28,7 +28,6 @@ jest.mock('@/lib/api', () => ({
     api: {
         getSprint: jest.fn(),
         getProjectTasks: jest.fn(),
-        getSprintDailyRemaining: jest.fn(),
         getSprintBurndown: jest.fn(),
         getProjects: jest.fn(),
         getProjectStories: jest.fn(),
@@ -77,11 +76,13 @@ beforeEach(() => {
         end_date: '2026-08-04',
     });
     (api.getProjectTasks as jest.Mock).mockReset().mockResolvedValue({ items: tasks });
-    (api.getSprintDailyRemaining as jest.Mock).mockReset().mockResolvedValue({
-        days: ['2026-08-02', '2026-08-03', '2026-08-04'],
-        tasks: { t1: [8, 5.5, null], t2: [4, 4, null] },
+    (api.getSprintBurndown as jest.Mock).mockReset().mockResolvedValue({
+        series: [
+            { date: '2026-08-02', ideal: 12, actual: 12, committed: 12, open: 2, isWorkingDay: true },
+            { date: '2026-08-03', ideal: 6, actual: 9.5, committed: 12, open: 2, isWorkingDay: true },
+            { date: '2026-08-04', ideal: 0, actual: null, committed: null, open: null, isWorkingDay: true },
+        ],
     });
-    (api.getSprintBurndown as jest.Mock).mockReset().mockResolvedValue({ series: [] });
     (api.getProjects as jest.Mock).mockReset().mockResolvedValue({ items: [] });
     (api.getProjectStories as jest.Mock).mockReset().mockResolvedValue([
         {
@@ -102,21 +103,22 @@ beforeEach(() => {
 });
 
 describe('Sprint detail page', () => {
-    it('shows committed tasks in a table with hours and each day\'s end-of-day remaining', async () => {
+    it('shows committed tasks in a table with hours, and no day columns', async () => {
         render(<SprintDetailPage />);
 
         const row = (await screen.findByText('Wire the bKash callback')).closest('tr')!;
         const cells = within(row).getAllByRole('cell').map((cell) => cell.textContent);
-        // Task, estimate, spent, remaining, assignee, actions, then the days.
+        // Task, estimate, spent, remaining, assignee, actions — nothing after.
+        expect(cells).toHaveLength(6);
         expect(cells.slice(1, 5)).toEqual(['8', '6', '3', 'Rahim']);
-        expect(cells.slice(6)).toEqual(['8', '5.5', '']);
 
         const footer = screen.getByText('Total').closest('tr')!;
-        expect(within(footer).getAllByRole('cell').slice(6).map((c) => c.textContent)).toEqual([
+        expect(within(footer).getAllByRole('cell').slice(1, 4).map((c) => c.textContent)).toEqual([
             '12',
-            '9.5',
-            '',
+            '6',
+            '7',
         ]);
+        expect(screen.getAllByRole('columnheader')).toHaveLength(6);
         // No backlog on the page until it is asked for.
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(api.getProjectTasks).toHaveBeenCalledWith({ sprintId: 's1', limit: 200 });
@@ -226,5 +228,50 @@ describe('Sprint detail page', () => {
         expect(lanes).toHaveLength(2);
         expect(lanes[0]).toHaveTextContent('Rahim');
         expect(lanes[1]).toHaveTextContent('Unassigned');
+    });
+
+    it('filters by assignee, with Unassigned as a choice, alongside the search', async () => {
+        render(<SprintDetailPage />);
+        await screen.findByText('Wire the bKash callback');
+
+        const filter = screen.getByTestId('sprint-assignee-filter');
+        expect(within(filter).getAllByRole('option').map((o) => o.textContent)).toEqual([
+            'Everyone',
+            'Rahim',
+            'Unassigned',
+        ]);
+
+        fireEvent.change(filter, { target: { value: 'none' } });
+        expect(screen.getAllByTestId('sprint-task-row')).toHaveLength(1);
+        expect(screen.getByText('Receipt email')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByRole('searchbox', { name: /search tasks/i }), {
+            target: { value: 'bkash' },
+        });
+        expect(screen.getByText(/no tasks match the search/i)).toBeInTheDocument();
+    });
+
+    it('shows the sprint\'s goal, dates and how much of its time has passed', async () => {
+        jest.useFakeTimers({ now: new Date('2026-08-03T10:00:00Z'), doNotFake: ['setTimeout', 'setInterval'] });
+        try {
+            render(<SprintDetailPage />);
+            const info = await screen.findByTestId('sprint-info');
+
+            expect(info).toHaveTextContent('Payments');
+            expect(info).toHaveTextContent('Day 2 of 3');
+            expect(within(info).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '67');
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('draws the open tasks chart below the burndown', async () => {
+        render(<SprintDetailPage />);
+
+        expect(await screen.findByText('Open tasks chart')).toBeInTheDocument();
+        const chart = screen.getByTestId('open-tasks-chart');
+        // One reading per day that has a snapshot; the future day is a gap.
+        expect(chart.querySelectorAll('title')).toHaveLength(2);
+        expect(chart.querySelector('title')).toHaveTextContent('2026-08-02: 2');
     });
 });

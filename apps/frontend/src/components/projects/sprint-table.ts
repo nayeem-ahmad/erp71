@@ -109,29 +109,6 @@ export function sumHours(tasks: SprintTask[]): HourTotals {
     };
 }
 
-/**
- * Per-day totals across `tasks`. A day where no task has a reading is `null`,
- * not zero: it is a future day or one before anything was estimated, and a
- * total of `0` would read as a finished sprint.
- */
-export function dayTotals(
-    tasks: SprintTask[],
-    daily: Record<string, (number | null)[]>,
-    dayCount: number,
-): (number | null)[] {
-    return Array.from({ length: dayCount }, (_, i) => {
-        let seen = false;
-        let sum = 0;
-        for (const task of tasks) {
-            const value = daily[task.id]?.[i];
-            if (value == null) continue;
-            seen = true;
-            sum += value;
-        }
-        return seen ? round2(sum) : null;
-    });
-}
-
 export interface SprintStats extends HourTotals {
     taskCount: number;
     doneCount: number;
@@ -163,6 +140,53 @@ export function sprintStats(
         today && today.ideal != null && today.actual != null ? round2(today.ideal - today.actual) : null;
 
     return { ...totals, taskCount: tasks.length, doneCount, progress, workingDaysLeft, variance };
+}
+
+export interface SprintTimeline {
+    /** Which calendar day of the sprint today is: 0 before it starts, `total` once it has ended. */
+    day: number;
+    total: number;
+    /** Share of the sprint's calendar days that have passed, 0–100. */
+    percent: number;
+}
+
+/**
+ * How far through its dates the sprint is, counting calendar days inclusive,
+ * so a one-day sprint is 100% on its day. Today counts as passed — by the
+ * time anyone reads this, most of it has.
+ */
+export function sprintTimeline(startDate: string, endDate: string, today: string): SprintTimeline {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const start = Date.parse(`${startDate.slice(0, 10)}T00:00:00Z`);
+    const end = Date.parse(`${endDate.slice(0, 10)}T00:00:00Z`);
+    const now = Date.parse(`${today}T00:00:00Z`);
+    const total = Math.max(Math.round((end - start) / dayMs) + 1, 1);
+    const day = Math.min(Math.max(Math.round((now - start) / dayMs) + 1, 0), total);
+    return { day, total, percent: Math.round((day / total) * 100) };
+}
+
+export interface AssigneeOption {
+    key: string;
+    /** The person's name; null for `NO_LANE`, which the page names. */
+    label: string | null;
+}
+
+/**
+ * Everyone holding a task in the sprint, by name, with Unassigned last — the
+ * choices for the assignee filter. Derived from the tasks, so it never offers
+ * a person who would filter the sprint down to nothing.
+ */
+export function assigneeOptions(tasks: SprintTask[]): AssigneeOption[] {
+    const seen = new Map<string, AssigneeOption>();
+    for (const task of tasks) {
+        const key = laneKeyOf(task, 'assignee');
+        if (!seen.has(key)) seen.set(key, { key, label: key === NO_LANE ? null : assigneeNameOf(task) });
+    }
+    return [...seen.values()].sort((a, b) => {
+        if (a.key === NO_LANE) return 1;
+        if (b.key === NO_LANE) return -1;
+        return (a.label ?? '').localeCompare(b.label ?? '');
+    });
 }
 
 /** Today as a `YYYY-MM-DD` key in UTC — the form the sprint API's days use. */

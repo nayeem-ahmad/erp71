@@ -778,7 +778,6 @@ export const projectsMessages = {
         colSpent: "Spent (h)",
         colRemaining: "Remaining (h)",
         total: "Total",
-        dayHint: "Each day shows the hours left at the end of that day.",
         stats: "Key stats",
         statProgress: "Progress",
         statTasksDone: "Tasks done",
@@ -794,6 +793,13 @@ export const projectsMessages = {
         noMatches: "No tasks match the search.",
         noColumnForProject: "{project} has no \"{column}\" column, so this card cannot move there.",
         laneLocked: "Cards move between columns inside their own row.",
+        everyone: "Everyone",
+        info: "Sprint",
+        noGoal: "No goal set",
+        timeElapsed: "Time elapsed",
+        dayOf: "Day {day} of {total}",
+        openTasksChart: "Open tasks chart",
+        openTasksNoData: "No snapshots yet. The chart fills in once the sprint has run for a day.",
     },
 
     burndown: {

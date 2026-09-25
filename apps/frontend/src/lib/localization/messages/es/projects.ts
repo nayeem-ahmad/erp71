@@ -774,7 +774,6 @@ export const projectsMessages = {
         colSpent: "Dedicado (h)",
         colRemaining: "Restante (h)",
         total: "Total",
-        dayHint: "Cada día muestra las horas restantes al final de ese día.",
         stats: "Indicadores clave",
         statProgress: "Progreso",
         statTasksDone: "Tareas hechas",
@@ -790,6 +789,13 @@ export const projectsMessages = {
         noMatches: "Ninguna tarea coincide con la búsqueda.",
         noColumnForProject: "{project} no tiene la columna «{column}», así que esta tarjeta no puede ir ahí.",
         laneLocked: "Las tarjetas cambian de columna dentro de su propia fila.",
+        everyone: "Todos",
+        info: "Sprint",
+        noGoal: "Sin objetivo definido",
+        timeElapsed: "Tiempo transcurrido",
+        dayOf: "Día {day} de {total}",
+        openTasksChart: "Gráfico de tareas abiertas",
+        openTasksNoData: "Aún no hay instantáneas. El gráfico se completa cuando el sprint lleva un día.",
     },
 
     burndown: {

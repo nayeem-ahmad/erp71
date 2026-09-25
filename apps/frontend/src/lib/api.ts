@@ -5672,8 +5672,6 @@ export const api = {
             body: JSON.stringify({ storyIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
-    /** `tasks[taskId][i]` is that task's remaining hours at the end of `days[i]`. */
-    getSprintDailyRemaining: (id: string) => fetchWithAuth(`/sprints/${id}/daily-remaining`),
     removeTasksFromSprint: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/sprints/${id}/tasks`, {
             method: 'DELETE',
