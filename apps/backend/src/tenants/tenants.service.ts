@@ -417,7 +417,7 @@ export class TenantsService {
 
             // Purchases
             await tx.purchaseReturn.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseReturnItem
-            await tx.purchase.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseItem
+            await tx.purchase.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseItem, PurchasePayment
             await tx.purchaseOrder.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseOrderItem
             await tx.purchaseQuotation.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseQuotationItem
             await tx.productDemand.deleteMany({ where: { tenant_id: tenantId } }); // cascades ProductDemandItem

@@ -33,6 +33,7 @@ jest.mock('@/lib/api', () => ({
 
 const CASH_METHOD = { id: 'pm-1', name: 'Cash', type: 'Cash', is_active: true, show_on_entry: true, sort_order: 1 };
 const BKASH_METHOD = { id: 'pm-2', name: 'bKash', type: 'Mobile Wallet', is_active: true, show_on_entry: true, sort_order: 2 };
+const BANK_METHOD = { id: 'pm-3', name: 'City Bank', type: 'Bank', is_active: true, show_on_entry: true, sort_order: 3 };
 
 const COFFEE = {
     id: 'prod-1',
@@ -385,6 +386,74 @@ describe('NewPurchasePage', () => {
                     }),
                 );
             });
+        });
+
+        const postAndReadPayload = async () => {
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+            });
+            await waitFor(() => expect(api.createPurchase).toHaveBeenCalled());
+            return (api.createPurchase as jest.Mock).mock.calls[0][0];
+        };
+
+        it('records the cheque the supplier was paid with', async () => {
+            (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH_METHOD, BANK_METHOD]);
+            await billOf40();
+
+            // Offered once money is going out on that tender, not before.
+            expect(screen.queryByText('+ Bank / cheque details')).not.toBeInTheDocument();
+            fireEvent.change(screen.getByLabelText('City Bank amount'), { target: { value: '40' } });
+            fireEvent.click(screen.getByText('+ Bank / cheque details'));
+
+            fireEvent.change(screen.getByLabelText('City Bank Bank'), { target: { value: 'City Bank' } });
+            fireEvent.change(screen.getByLabelText('City Bank A/C number'), { target: { value: '1234567890' } });
+            fireEvent.change(screen.getByLabelText('City Bank Cheque / ref. no.'), { target: { value: 'CHQ-100231' } });
+            fireEvent.change(screen.getByLabelText('City Bank Cheque date'), { target: { value: '2026-10-05' } });
+
+            expect((await postAndReadPayload()).payments).toEqual([
+                {
+                    paymentMethod: 'Bank',
+                    amount: 40,
+                    accountId: undefined,
+                    bankName: 'City Bank',
+                    bankAccountNumber: '1234567890',
+                    referenceNo: 'CHQ-100231',
+                    instrumentDate: '2026-10-05',
+                },
+            ]);
+        });
+
+        it('names a bKash payment by the wallet and its transaction id', async () => {
+            await billOf40();
+
+            fireEvent.change(screen.getByLabelText('bKash amount'), { target: { value: '40' } });
+            fireEvent.click(screen.getByText('+ Payment details'));
+            fireEvent.change(screen.getByLabelText('bKash Wallet number'), { target: { value: '01711000000' } });
+            fireEvent.change(screen.getByLabelText('bKash Transaction ID'), { target: { value: 'TRX9A7' } });
+
+            expect((await postAndReadPayload()).payments).toEqual([
+                expect.objectContaining({
+                    paymentMethod: 'Mobile Wallet',
+                    amount: 40,
+                    bankAccountNumber: '01711000000',
+                    referenceNo: 'TRX9A7',
+                }),
+            ]);
+        });
+
+        it('does not send a cheque date that was typed and then cleared', async () => {
+            (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH_METHOD, BANK_METHOD]);
+            await billOf40();
+
+            fireEvent.change(screen.getByLabelText('City Bank amount'), { target: { value: '40' } });
+            fireEvent.click(screen.getByText('+ Bank / cheque details'));
+            fireEvent.change(screen.getByLabelText('City Bank Cheque / ref. no.'), { target: { value: 'CHQ-100231' } });
+            fireEvent.change(screen.getByLabelText('City Bank Cheque date'), { target: { value: '2026-10-05' } });
+            fireEvent.change(screen.getByLabelText('City Bank Cheque date'), { target: { value: '' } });
+
+            const [payment] = (await postAndReadPayload()).payments;
+            expect(payment).toMatchObject({ referenceNo: 'CHQ-100231' });
+            expect(payment).not.toHaveProperty('instrumentDate');
         });
 
         it('shows what is still owed to the supplier as the tender is entered', async () => {
