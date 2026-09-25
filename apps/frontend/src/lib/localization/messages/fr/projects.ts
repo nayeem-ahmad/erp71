@@ -783,6 +783,13 @@ export const projectsMessages = {
         ahead: "{hours} h d'avance",
         behind: "{hours} h de retard",
         onTrack: "Dans les temps",
+        viewLabel: "Vue",
+        viewTable: "Tableau",
+        viewCards: "Cartes",
+        searchTasks: "Rechercher tâches, stories, personnes, étiquettes",
+        noMatches: "Aucune tâche ne correspond à la recherche.",
+        noColumnForProject: "{project} n'a pas de colonne « {column} », cette carte ne peut donc pas y aller.",
+        laneLocked: "Les cartes changent de colonne à l'intérieur de leur propre ligne.",
     },
 
     burndown: {

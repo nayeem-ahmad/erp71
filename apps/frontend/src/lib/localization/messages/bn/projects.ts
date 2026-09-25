@@ -783,6 +783,13 @@ export const projectsMessages = {
         ahead: "{hours} ঘণ্টা এগিয়ে",
         behind: "{hours} ঘণ্টা পিছিয়ে",
         onTrack: "সঠিক পথে",
+        viewLabel: "ভিউ",
+        viewTable: "টেবিল",
+        viewCards: "কার্ড",
+        searchTasks: "টাস্ক, স্টোরি, ব্যক্তি, লেবেল খুঁজুন",
+        noMatches: "অনুসন্ধানের সাথে কোনো টাস্ক মেলেনি।",
+        noColumnForProject: "{project}-এ \"{column}\" কলাম নেই, তাই এই কার্ড সেখানে সরানো যাবে না।",
+        laneLocked: "কার্ড নিজের সারির মধ্যেই কলাম বদলায়।",
     },
 
     burndown: {

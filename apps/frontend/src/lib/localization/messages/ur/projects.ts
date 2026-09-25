@@ -783,6 +783,13 @@ export const projectsMessages = {
         ahead: "{hours} گھنٹے آگے",
         behind: "{hours} گھنٹے پیچھے",
         onTrack: "درست راہ پر",
+        viewLabel: "منظر",
+        viewTable: "جدول",
+        viewCards: "کارڈز",
+        searchTasks: "ٹاسک، اسٹوریز، لوگ، لیبل تلاش کریں",
+        noMatches: "تلاش سے کوئی ٹاسک میل نہیں کھاتا۔",
+        noColumnForProject: "{project} میں \"{column}\" کالم نہیں، اس لیے یہ کارڈ وہاں نہیں جا سکتا۔",
+        laneLocked: "کارڈ اپنی ہی قطار میں کالم بدلتے ہیں۔",
     },
 
     burndown: {

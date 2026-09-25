@@ -783,6 +783,13 @@ export const projectsMessages = {
         ahead: "{hours} घं आगे",
         behind: "{hours} घं पीछे",
         onTrack: "सही राह पर",
+        viewLabel: "व्यू",
+        viewTable: "तालिका",
+        viewCards: "कार्ड",
+        searchTasks: "टास्क, स्टोरी, लोग, लेबल खोजें",
+        noMatches: "खोज से कोई टास्क मेल नहीं खाता।",
+        noColumnForProject: "{project} में \"{column}\" कॉलम नहीं है, इसलिए यह कार्ड वहाँ नहीं जा सकता।",
+        laneLocked: "कार्ड अपनी ही पंक्ति में कॉलम बदलते हैं।",
     },
 
     burndown: {

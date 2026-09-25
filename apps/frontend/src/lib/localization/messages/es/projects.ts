@@ -783,6 +783,13 @@ export const projectsMessages = {
         ahead: "{hours} h por delante",
         behind: "{hours} h por detrás",
         onTrack: "En plazo",
+        viewLabel: "Vista",
+        viewTable: "Tabla",
+        viewCards: "Tarjetas",
+        searchTasks: "Buscar tareas, historias, personas, etiquetas",
+        noMatches: "Ninguna tarea coincide con la búsqueda.",
+        noColumnForProject: "{project} no tiene la columna «{column}», así que esta tarjeta no puede ir ahí.",
+        laneLocked: "Las tarjetas cambian de columna dentro de su propia fila.",
     },
 
     burndown: {

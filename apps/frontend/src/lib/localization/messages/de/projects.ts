@@ -783,6 +783,13 @@ export const projectsMessages = {
         ahead: "{hours} h voraus",
         behind: "{hours} h im Rückstand",
         onTrack: "Im Plan",
+        viewLabel: "Ansicht",
+        viewTable: "Tabelle",
+        viewCards: "Karten",
+        searchTasks: "Aufgaben, Stories, Personen, Labels suchen",
+        noMatches: "Keine Aufgaben passen zur Suche.",
+        noColumnForProject: "{project} hat keine Spalte „{column}“, daher kann diese Karte nicht dorthin.",
+        laneLocked: "Karten wechseln die Spalte nur innerhalb ihrer eigenen Zeile.",
     },
 
     burndown: {

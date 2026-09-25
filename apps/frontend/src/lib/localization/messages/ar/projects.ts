@@ -783,6 +783,13 @@ export const projectsMessages = {
         ahead: "متقدم {hours} س",
         behind: "متأخر {hours} س",
         onTrack: "ضمن المسار",
+        viewLabel: "العرض",
+        viewTable: "جدول",
+        viewCards: "بطاقات",
+        searchTasks: "ابحث في المهام والقصص والأشخاص والتسميات",
+        noMatches: "لا توجد مهام تطابق البحث.",
+        noColumnForProject: "لا يحتوي {project} على عمود \"{column}\"، لذا لا يمكن نقل هذه البطاقة إليه.",
+        laneLocked: "تنتقل البطاقات بين الأعمدة داخل صفها فقط.",
     },
 
     burndown: {

@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Eye, Pencil, Plus, Trash2, Undo2 } from 'lucide-react';
+import { Eye, LayoutGrid, Pencil, Plus, Search, Table2, Trash2, Undo2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -12,9 +12,11 @@ import {
     StatusBadge,
     CompactStat,
     ConfirmDialog,
+    Input,
 } from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import SprintBacklogModal from '@/components/projects/SprintBacklogModal';
+import SprintCardBoard from '@/components/projects/SprintCardBoard';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import {
     NO_LANE,
@@ -29,6 +31,12 @@ import {
     type SprintLaneMode,
     type SprintTask,
 } from '@/components/projects/sprint-table';
+import {
+    buildStatusColumns,
+    matchesSprintSearch,
+    type ProjectStatusColumn,
+    type SprintCardTask,
+} from '@/components/projects/sprint-cards';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -49,21 +57,24 @@ interface DailyRemaining {
     tasks: Record<string, (number | null)[]>;
 }
 
-/** Per viewer and per browser, like the board's swimlanes: how one person reads the table. */
+/** Per viewer and per browser, like the board's swimlanes: how one person reads the page. */
 const LANE_STORAGE_KEY = 'erp71.sprint.swimlanes';
+const VIEW_STORAGE_KEY = 'erp71.sprint.view';
 
-function readLaneMode(): SprintLaneMode {
+type SprintViewMode = 'table' | 'cards';
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
     try {
-        const raw = localStorage.getItem(LANE_STORAGE_KEY);
-        return SPRINT_LANE_MODES.includes(raw as SprintLaneMode) ? (raw as SprintLaneMode) : 'none';
+        const raw = localStorage.getItem(key);
+        return allowed.includes(raw as T) ? (raw as T) : fallback;
     } catch {
-        return 'none';
+        return fallback;
     }
 }
 
-function writeLaneMode(mode: SprintLaneMode) {
+function writeStored(key: string, value: string) {
     try {
-        localStorage.setItem(LANE_STORAGE_KEY, mode);
+        localStorage.setItem(key, value);
     } catch {
         // Storage blocked — the choice just does not survive a reload.
     }
@@ -90,7 +101,10 @@ export default function SprintDetailPage() {
     const m = t.projects;
 
     const [sprint, setSprint] = useState<Sprint | null>(null);
-    const [tasks, setTasks] = useState<SprintTask[]>([]);
+    const [tasks, setTasks] = useState<SprintCardTask[]>([]);
+    const [projectColumns, setProjectColumns] = useState<Record<string, ProjectStatusColumn[]>>({});
+    const [search, setSearch] = useState('');
+    const [viewMode, setViewMode] = useState<SprintViewMode>('table');
     const [daily, setDaily] = useState<DailyRemaining>({ days: [], tasks: {} });
     const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
     const [laneMode, setLaneMode] = useState<SprintLaneMode>('none');
@@ -99,7 +113,10 @@ export default function SprintDetailPage() {
     const [pendingDelete, setPendingDelete] = useState<SprintTask | null>(null);
     const [busy, setBusy] = useState(false);
 
-    useEffect(() => setLaneMode(readLaneMode()), []);
+    useEffect(() => {
+        setLaneMode(readStored(LANE_STORAGE_KEY, SPRINT_LANE_MODES, 'none'));
+        setViewMode(readStored<SprintViewMode>(VIEW_STORAGE_KEY, ['table', 'cards'], 'table'));
+    }, []);
 
     const load = useCallback(async () => {
         try {
@@ -110,7 +127,7 @@ export default function SprintDetailPage() {
                 api.getSprintBurndown(sprintId).catch(() => null),
             ]);
             setSprint(detail as Sprint);
-            setTasks((sprintPage?.items ?? []) as SprintTask[]);
+            setTasks((sprintPage?.items ?? []) as SprintCardTask[]);
             setDaily((dailyRes as DailyRemaining | null) ?? { days: [], tasks: {} });
             setBurndown((burndownRes as { series?: BurndownPoint[] } | null)?.series ?? []);
         } catch (error) {
@@ -122,18 +139,80 @@ export default function SprintDetailPage() {
         void load();
     }, [load]);
 
+    // Each project's own board columns, for the card view's status columns.
+    // Keyed by the set of projects so adding a task from a new project fetches
+    // that project's columns, and nothing is refetched otherwise.
+    const projectIds = useMemo(
+        () => [...new Set(tasks.map((task) => task.project?.id).filter(Boolean) as string[])].sort(),
+        [tasks],
+    );
+    const projectKey = projectIds.join(',');
+    useEffect(() => {
+        if (!projectKey) return;
+        let cancelled = false;
+        void Promise.all(
+            projectKey.split(',').map(async (id) => {
+                const columns = await api.getProjectColumns(id).catch(() => []);
+                return [id, (Array.isArray(columns) ? columns : []) as ProjectStatusColumn[]] as const;
+            }),
+        ).then((entries) => {
+            if (!cancelled) setProjectColumns(Object.fromEntries(entries));
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [projectKey]);
+
     const changeLaneMode = (mode: SprintLaneMode) => {
         setLaneMode(mode);
-        writeLaneMode(mode);
+        writeStored(LANE_STORAGE_KEY, mode);
+    };
+
+    const changeViewMode = (mode: SprintViewMode) => {
+        setViewMode(mode);
+        writeStored(VIEW_STORAGE_KEY, mode);
+    };
+
+    const moveCard = async (task: SprintCardTask, statusId: string, sortOrder: number) => {
+        const column = statusColumns.find((candidate) =>
+            Object.values(candidate.statusIds).includes(statusId),
+        );
+        // Moved on screen first, so the card does not snap back while the
+        // server answers; the reload that follows puts every figure right.
+        if (column) {
+            setTasks((prev) =>
+                prev.map((candidate) =>
+                    candidate.id === task.id
+                        ? { ...candidate, status: { id: statusId, name: column.name, category: column.category } }
+                        : candidate,
+                ),
+            );
+        }
+        setBusy(true);
+        try {
+            await api.moveProjectTask(task.id, { statusId, sortOrder });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.board.moveFailed);
+        } finally {
+            setBusy(false);
+            await load();
+        }
     };
 
     const today = todayKey();
     const days = daily.days;
-    const lanes = useMemo(() => groupSprintTasks(tasks, laneMode), [tasks, laneMode]);
-    const totals = useMemo(() => sumHours(tasks), [tasks]);
+    // The search narrows both views and their totals; the stats and the
+    // burndown beside them stay whole, because they describe the sprint.
+    const visibleTasks = useMemo(
+        () => tasks.filter((task) => matchesSprintSearch(task, search)),
+        [tasks, search],
+    );
+    const lanes = useMemo(() => groupSprintTasks(visibleTasks, laneMode), [visibleTasks, laneMode]);
+    const statusColumns = useMemo(() => buildStatusColumns(tasks, projectColumns), [tasks, projectColumns]);
+    const totals = useMemo(() => sumHours(visibleTasks), [visibleTasks]);
     const totalByDay = useMemo(
-        () => dayTotals(tasks, daily.tasks, days.length),
-        [tasks, daily.tasks, days.length],
+        () => dayTotals(visibleTasks, daily.tasks, days.length),
+        [visibleTasks, daily.tasks, days.length],
     );
     const stats = useMemo(() => sprintStats(tasks, burndown ?? [], today), [tasks, burndown, today]);
     const headings = useMemo(() => days.map((day) => dayHeading(day, locale)), [days, locale]);
@@ -228,35 +307,90 @@ export default function SprintDetailPage() {
                 }
             />
 
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
+                <div className="relative min-w-0 flex-1 basis-64">
+                    <Search
+                        className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                        aria-hidden
+                    />
+                    <Input
+                        type="search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder={m.sprint.searchTasks}
+                        aria-label={m.sprint.searchTasks}
+                        className="ps-8"
+                    />
+                </div>
+                <div
+                    role="group"
+                    aria-label={m.sprint.viewLabel}
+                    className="inline-flex overflow-hidden rounded-md border border-gray-200"
+                >
+                    {(
+                        [
+                            { key: 'table', label: m.sprint.viewTable, Icon: Table2 },
+                            { key: 'cards', label: m.sprint.viewCards, Icon: LayoutGrid },
+                        ] as const
+                    ).map(({ key, label, Icon }) => (
+                        <button
+                            key={key}
+                            type="button"
+                            aria-pressed={viewMode === key}
+                            onClick={() => changeViewMode(key)}
+                            className={`inline-flex min-h-touch items-center gap-1.5 px-3 text-xs font-medium transition-colors md:min-h-0 md:py-1.5 ${
+                                viewMode === key ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Icon className="h-4 w-4" aria-hidden />
+                            {label}
+                        </button>
+                    ))}
+                </div>
+                <label className="flex items-center gap-2 text-xs text-gray-600">
+                    {m.board.view.swimlanes}
+                    <Select
+                        value={laneMode}
+                        onChange={(e) => changeLaneMode(e.target.value as SprintLaneMode)}
+                        className="w-36"
+                        data-testid="sprint-swimlanes"
+                    >
+                        <option value="none">{m.board.view.swimlanesNone}</option>
+                        <option value="assignee">{m.board.view.swimlanesAssignee}</option>
+                        <option value="story">{m.board.view.swimlanesStory}</option>
+                    </Select>
+                </label>
+            </div>
+
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
                 <section className="min-w-0 rounded-md border border-gray-200 bg-white">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-2">
-                        <div className="min-w-0">
-                            <h2 className="text-sm font-medium">
-                                {m.sprint.committed}
-                                <span className="ms-2 text-xs font-normal text-gray-500">
-                                    {tasks.length} · {totals.remaining}h
-                                </span>
-                            </h2>
-                            <p className="text-xs text-gray-500">{m.sprint.dayHint}</p>
-                        </div>
-                        <label className="flex items-center gap-2 text-xs text-gray-600">
-                            {m.board.view.swimlanes}
-                            <Select
-                                value={laneMode}
-                                onChange={(e) => changeLaneMode(e.target.value as SprintLaneMode)}
-                                className="w-36"
-                                data-testid="sprint-swimlanes"
-                            >
-                                <option value="none">{m.board.view.swimlanesNone}</option>
-                                <option value="assignee">{m.board.view.swimlanesAssignee}</option>
-                                <option value="story">{m.board.view.swimlanesStory}</option>
-                            </Select>
-                        </label>
+                    <div className="border-b border-gray-200 px-3 py-2">
+                        <h2 className="text-sm font-medium">
+                            {m.sprint.committed}
+                            <span className="ms-2 text-xs font-normal text-gray-500">
+                                {visibleTasks.length === tasks.length
+                                    ? tasks.length
+                                    : `${visibleTasks.length}/${tasks.length}`}{' '}
+                                · {totals.remaining}h
+                            </span>
+                        </h2>
+                        {viewMode === 'table' && <p className="text-xs text-gray-500">{m.sprint.dayHint}</p>}
                     </div>
 
                     {tasks.length === 0 ? (
                         <p className="p-3 text-sm text-gray-500">{m.sprint.emptySprint}</p>
+                    ) : visibleTasks.length === 0 ? (
+                        <p className="p-3 text-sm text-gray-500">{m.sprint.noMatches}</p>
+                    ) : viewMode === 'cards' ? (
+                        <SprintCardBoard
+                            lanes={lanes}
+                            laneMode={laneMode}
+                            columns={statusColumns}
+                            busy={busy}
+                            onOpen={setOpenTaskId}
+                            onReturn={(task) => void returnToBacklog(task)}
+                            onMove={(task, statusId, sortOrder) => void moveCard(task, statusId, sortOrder)}
+                        />
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-xs">
@@ -409,7 +543,7 @@ export default function SprintDetailPage() {
                                 <tfoot>
                                     <tr className="border-t border-gray-300 bg-gray-50 font-medium text-gray-800">
                                         <td className="sticky start-0 z-10 bg-gray-50 px-3 py-2">{m.sprint.total}</td>
-                                        {figureCells(tasks, totalByDay)}
+                                        {figureCells(visibleTasks, totalByDay)}
                                     </tr>
                                 </tfoot>
                             </table>

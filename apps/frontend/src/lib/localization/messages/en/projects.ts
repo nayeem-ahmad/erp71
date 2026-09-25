@@ -787,6 +787,13 @@ export const projectsMessages = {
         ahead: "{hours}h ahead",
         behind: "{hours}h behind",
         onTrack: "On track",
+        viewLabel: "View",
+        viewTable: "Table",
+        viewCards: "Cards",
+        searchTasks: "Search tasks, stories, people, labels",
+        noMatches: "No tasks match the search.",
+        noColumnForProject: "{project} has no \"{column}\" column, so this card cannot move there.",
+        laneLocked: "Cards move between columns inside their own row.",
     },
 
     burndown: {
