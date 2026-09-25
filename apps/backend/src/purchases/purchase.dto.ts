@@ -9,6 +9,7 @@ import {
     ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PaymentInstrumentDto } from '../common/payment-instrument.dto';
 import { CreateSupplierDto } from '../suppliers/supplier.dto';
 
 export class CreatePurchaseItemDto {
@@ -39,8 +40,12 @@ export class CreatePurchaseItemDto {
  * method string ('Cash', 'Bank', 'Mobile Wallet', 'Card', or a tenant-defined
  * name); `accountId` is the GL account the tenant configured for it, resolved
  * server-side from the method name so a stale client id cannot redirect cash.
+ *
+ * The cheque, transfer, card or wallet details it inherits are stored on the
+ * bill's `PurchasePayment` row for this tender — the bank the shop's cheque is
+ * drawn on, its number and the date written on it.
  */
-export class CreatePurchasePaymentDto {
+export class CreatePurchasePaymentDto extends PaymentInstrumentDto {
     @IsString()
     @IsNotEmpty()
     paymentMethod: string;

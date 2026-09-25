@@ -82,6 +82,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'InventoryShrinkageItem', exempt: 'Line item; periodic inventory posts nothing for stock loss.' },
     { model: 'ProductionJobCost', exempt: 'Cost line of a ProductionJob; periodic inventory reclassification.' },
     { model: 'PaymentRecord', exempt: 'Payment-method breakdown line of a Sale; the Sale posts.' },
+    { model: 'PurchasePayment', exempt: 'Payment-method breakdown line of a Purchase; the bill\'s paid leg (supplier_payment) posts the total.' },
     { model: 'SupplierPaymentAllocation', exempt: 'Allocation of a supplier payment to bills; the payment (SupplierCreditTransaction) posts.' },
 
     // ── Exempt: catalog / pricing / config (not a transaction) ───────────────
