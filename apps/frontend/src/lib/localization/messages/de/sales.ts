@@ -449,6 +449,8 @@ export const salesMessages = {
             amountPaid: "Gezahlter Betrag",
             change: "Rückgeld",
             balanceDue: "Offener Betrag",
+            previousDue: "Vorheriger offener Betrag",
+            totalDue: "Offener Gesamtbetrag",
             paymentDetails: "Zahlungsdetails",
             notePrefix: "Hinweis: ",
             binVatReg: "BIN (USt-Reg.):",

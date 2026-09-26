@@ -16,6 +16,7 @@ import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../a
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
+import { resolveSalePreviousDue } from './sale-previous-due.util';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
@@ -464,13 +465,22 @@ export class SalesService {
             }
         }
         let loyaltyResult = { ...loyaltyPreview, pointsEarned: 0 };
+        // What the customer owed going into this sale — the invoice's previous
+        // due. A credit sale's is the balance its ledger row is built on below;
+        // a paid sale moves no due, so the row the spend update hands back
+        // already holds it. Either way it is the figure `resolveSalePreviousDue`
+        // works back to when the invoice is reprinted.
+        let previousDue: number | null = null;
         if (dto.customerId) {
-            await tx.customer.update({
+            const customerBefore = await tx.customer.update({
                 where: { id: dto.customerId },
                 data: {
                     total_spent: { increment: computedTotal },
                 },
             });
+            previousDue = balanceDue > 0.005
+                ? creditCustomerDueBalance
+                : Number(customerBefore?.due_balance ?? 0);
 
             loyaltyResult = await recordSaleLoyalty(
                 tx,
@@ -575,6 +585,7 @@ export class SalesService {
             voucher_number: posting.voucherNumber ?? null,
             voucher_type: posting.voucherType ?? null,
             loyalty: loyaltyResult,
+            previous_due: previousDue,
         };
     }
 
@@ -967,9 +978,17 @@ export class SalesService {
             throw new NotFoundException('Sale not found');
         }
 
+        const [posting, previousDue] = await Promise.all([
+            loadPostingSummary(this.db, tenantId, 'sales', 'sale', sale.id),
+            // Printed with the invoice, which the list and this screen both
+            // print from this response.
+            resolveSalePreviousDue(this.db, tenantId, sale, Number(sale.customer?.due_balance ?? 0)),
+        ]);
+
         return {
             ...sale,
-            ...(await loadPostingSummary(this.db, tenantId, 'sales', 'sale', sale.id)),
+            ...posting,
+            previous_due: previousDue,
         };
     }
 
@@ -1447,7 +1466,14 @@ export class SalesService {
 
         if (!sale) throw new NotFoundException('Sale not found');
 
-        return { sale, tenant };
+        const previousDue = await resolveSalePreviousDue(
+            this.db,
+            tenantId,
+            sale,
+            Number(sale.customer?.due_balance ?? 0),
+        );
+
+        return { sale: { ...sale, previous_due: previousDue }, tenant };
     }
 
     private validateWarrantySerials(

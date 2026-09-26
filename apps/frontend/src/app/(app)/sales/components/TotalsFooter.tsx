@@ -1,3 +1,4 @@
+import { invoiceDues } from '@/lib/customer-credit';
 import type { DiscountMode } from './SaleEntryLayout';
 
 interface TotalsFooterProps {
@@ -21,8 +22,17 @@ interface TotalsFooterProps {
     };
     onTotalsChange: (newTotals: any) => void;
     tenantVatRate: number;
-    /** Outstanding balance the selected customer already owes, if any. */
-    previousDue?: number;
+    /**
+     * What the customer owed before this sale. Null or left out when there is
+     * no customer to owe anything.
+     */
+    previousDue?: number | null;
+    /**
+     * What is being paid against this sale. Given alongside `previousDue`, the
+     * total due — the previous due plus whatever this sale leaves unpaid — is
+     * shown under it.
+     */
+    amountPaid?: number;
     readOnly?: boolean;
     /**
      * Document-level discount, VAT, transport, labor and rounding. Off for
@@ -46,7 +56,8 @@ export default function TotalsFooter({
     totals,
     onTotalsChange,
     tenantVatRate,
-    previousDue = 0,
+    previousDue = null,
+    amountPaid,
     readOnly = false,
     showAdjustments = true,
     totalLabel = 'Total',
@@ -72,6 +83,15 @@ export default function TotalsFooter({
     // A flat discount larger than the subtotal is held at the subtotal rather
     // than inverting the invoice, so say so instead of silently ignoring it.
     const discountCapped = byAmount && (totals.discountAmount ?? 0) > totals.discount + 0.005;
+
+    // Only for a customer with a balance already. With nothing owed before, the
+    // total due is just what this sale leaves unpaid, and the payment strip
+    // right below says that. Without a paid amount the sale is taken as
+    // settled, which is how the previous due used to be shown on its own.
+    const dues = previousDue != null && Math.abs(previousDue) > 0.005
+        ? invoiceDues(totals.total, amountPaid ?? totals.total, previousDue)
+        : null;
+    const oweTone = (value: number) => (value > 0.005 ? 'text-amber-600' : 'text-gray-700');
 
     // In read-only mode only the rows that actually carry a value are shown —
     // a column of zeroes reads as data the sale doesn't have.
@@ -219,13 +239,22 @@ export default function TotalsFooter({
                 <span className="text-lg font-bold text-blue-600">{amount(totals.total)}</span>
             </div>
 
-            {/* What the customer already owed before this sale — informational
-                only; it is never rolled into the sale total. */}
-            {previousDue > 0.005 && (
-                <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Previous Due</span>
-                    <span className="font-medium text-amber-600">{amount(previousDue)}</span>
-                </div>
+            {/* What the customer already owed before this sale, and what they
+                will owe with it — informational only; neither is ever rolled
+                into the sale total. */}
+            {dues && (
+                <>
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-500">Previous Due</span>
+                        <span className={`font-medium ${oweTone(dues.previousDue)}`}>{amount(dues.previousDue)}</span>
+                    </div>
+                    {amountPaid !== undefined && (
+                        <div className="flex justify-between items-center">
+                            <span className="text-gray-500">Total Due</span>
+                            <span className={`font-semibold ${oweTone(dues.totalDue)}`}>{amount(dues.totalDue)}</span>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

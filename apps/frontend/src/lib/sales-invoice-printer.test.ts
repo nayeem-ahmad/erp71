@@ -1,4 +1,5 @@
 import { printSalesInvoice, type InvoiceData, type PaperSize } from './sales-invoice-printer';
+import { formatBDT } from './format';
 
 const baseInvoice: InvoiceData = {
     referenceNumber: '2609-010',
@@ -97,6 +98,80 @@ describe('sales invoice layout', () => {
 
         // A roll is monospace and edge-to-edge; page padding would waste paper.
         expect(ruleFor(html, '.invoice-body')).not.toMatch(/padding:\s*\d+mm/);
+    });
+});
+
+describe('customer dues', () => {
+    /** The totals block as [label, amount] pairs, top to bottom. */
+    function totalsRows(html: string): [string, string][] {
+        const table = html.match(/<table class="totals-table">([\s\S]*?)<\/table>/)?.[1] ?? '';
+        return [...table.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g)]
+            .map(([, label, amount]) => [label, amount]);
+    }
+
+    /** A ৳4,800 credit sale with ৳3,000 paid, to a customer who owed ৳2,000. */
+    const creditSale: InvoiceData = {
+        ...baseInvoice,
+        items: [{ name: 'Rice 25kg', quantity: 2, unitPrice: 2400 }],
+        payments: [{ method: 'Cash', amount: 3000 }],
+        subtotal: 4800,
+        total: 4800,
+        amountPaid: 3000,
+        previousDue: 2000,
+    };
+
+    it('closes on paid, this invoice\'s due, the previous due and the total due', () => {
+        const rows = totalsRows(render(creditSale));
+
+        expect(rows.slice(-4)).toEqual([
+            ['Paid', formatBDT(3000)],
+            ['Due', formatBDT(1800)],
+            ['Previous Due', formatBDT(2000)],
+            ['Total Due', formatBDT(3800)],
+        ]);
+    });
+
+    it('rules the total due off, on a roll as well as a page', () => {
+        for (const size of ['A4', 'Thermal80'] as const) {
+            const html = render(creditSale, size);
+
+            expect(html).toContain(`<tr class="total-due"><td>Total Due</td><td>${formatBDT(3800)}</td></tr>`);
+            expect(ruleFor(html, '.total-due td')).toMatch(/border-top:/);
+        }
+    });
+
+    it('drops the invoice\'s own due when it was paid in full', () => {
+        const rows = totalsRows(render({ ...creditSale, amountPaid: 4800 }));
+        const labels = rows.map(([label]) => label);
+
+        expect(labels).not.toContain('Due');
+        expect(rows.slice(-3)).toEqual([
+            ['Paid', formatBDT(4800)],
+            ['Previous Due', formatBDT(2000)],
+            ['Total Due', formatBDT(2000)],
+        ]);
+    });
+
+    it('takes what was paid from the payments when no figure is given', () => {
+        const rows = totalsRows(render({ ...creditSale, amountPaid: undefined }));
+
+        expect(rows).toContainEqual(['Paid', formatBDT(3000)]);
+        expect(rows).toContainEqual(['Total Due', formatBDT(3800)]);
+    });
+
+    it('prints a walk-in invoice as it always has', () => {
+        const labels = totalsRows(render(baseInvoice)).map(([label]) => label);
+
+        expect(labels).not.toContain('Previous Due');
+        expect(labels).not.toContain('Total Due');
+        expect(labels).not.toContain('Paid');
+    });
+
+    it('prints no dues for a settled invoice to a customer who owes nothing', () => {
+        const labels = totalsRows(render({ ...baseInvoice, amountPaid: 290, previousDue: 0 }))
+            .map(([label]) => label);
+
+        expect(labels).not.toContain('Total Due');
     });
 });
 
