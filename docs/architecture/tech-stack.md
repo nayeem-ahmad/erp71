@@ -4,7 +4,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **Frontend Framework** | Next.js (React) | latest | Web Dashboard | Full-stack capabilities, SSR, and excellent developer velocity. |
 | **Backend Framework** | NestJS | latest | Enterprise API | Provides architectural rigor (DI, modules) similar to Spring Boot but in TS. |
-| **Mobile Framework** | Flutter | latest | Cross-platform POS | High-performance, pixel-perfect UI for Android/iOS/Desktop. |
+| **Mobile Framework** | Flutter | 3.47 (pinned in CI) | Android/iOS app: CRM first, POS later | One codebase for both phones; talks to the same REST API as the web. |
 | **Language** | TypeScript | latest | Primary Language | Standardized across Web and Backend for E2E type safety. |
 | **Database** | PostgreSQL | latest | Primary Data Store | Reliable relational database, hosted on the VPS (self-hosted PostgreSQL 15 in Docker). |
 | **ORM** | Prisma | latest | Database Access | Type-safe database client shared across the TS monorepo. |

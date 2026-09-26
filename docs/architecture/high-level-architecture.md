@@ -2,7 +2,7 @@
 
 ### Technical Summary
 
-The ERP71 platform is architected as a **Containerized Monorepo**. It prioritizes **Type Safety** through an all-TypeScript web/backend core, while leveraging **Flutter** for a high-performance mobile POS. The system is deployed as Docker Compose services on a **self-managed Ubuntu VPS** (Docker Compose + Caddy), giving us full control of a containerized environment.
+The ERP71 platform is architected as a **Containerized Monorepo**. It prioritizes **Type Safety** through an all-TypeScript web/backend core, while leveraging **Flutter** for the Android/iOS app (`apps/mobile`: Google sign-in and the CRM first; a mobile POS remains on the roadmap). The system is deployed as Docker Compose services on a **self-managed Ubuntu VPS** (Docker Compose + Caddy), giving us full control of a containerized environment.
 
 ### Platform and Infrastructure Choice
 
@@ -25,7 +25,7 @@ The ERP71 platform is architected as a **Containerized Monorepo**. It prioritize
 graph TD
     subgraph Clients
         Web[Next.js Dashboard]
-        Mobile[Flutter POS]
+        Mobile[Flutter app]
     end
 
     subgraph VPS

@@ -23,7 +23,7 @@ ERP71 platform targeting Bangladeshi small/medium retailers. Monorepo:
 
 - `apps/backend` — NestJS REST API
 - `apps/frontend` — Next.js 15 app
-- `apps/mobile` — Flutter (not started)
+- `apps/mobile` — Flutter app for Android/iOS: Google sign-in + CRM. Own toolchain and CI workflow (`.github/workflows/mobile.yml`); setup in `apps/mobile/README.md`
 - `packages/database` — Prisma schema + migrations
 - `packages/shared-types` — shared TypeScript types and permission matrix
 
