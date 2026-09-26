@@ -233,4 +233,52 @@ describe('RefreshTokenService', () => {
             expect(db.refreshToken.updateMany).not.toHaveBeenCalled();
         });
     });
+
+    describe('revokeSession', () => {
+        it('ends the whole session the token belongs to and says whose it was', async () => {
+            db.refreshToken.findUnique.mockResolvedValue(storedToken());
+
+            await expect(service.revokeSession('raw-token')).resolves.toEqual({ userId: 'user-1' });
+
+            expect(db.refreshToken.findUnique).toHaveBeenCalledWith({
+                where: { token_hash: hashRefreshToken('raw-token') },
+                select: { id: true, user_id: true, family_id: true },
+            });
+            expect(db.refreshToken.updateMany).toHaveBeenCalledWith({
+                where: { family_id: 'family-1', revoked_at: null },
+                data: { revoked_at: expect.any(Date) },
+            });
+        });
+
+        it('leaves the user signed in on their other devices', async () => {
+            db.refreshToken.findUnique.mockResolvedValue(storedToken());
+
+            await service.revokeSession('raw-token');
+
+            const revocations = db.refreshToken.updateMany.mock.calls.map((call: any) => call[0].where);
+            expect(revocations).not.toContainEqual(expect.objectContaining({ user_id: 'user-1' }));
+        });
+
+        it('revokes just the token when it predates session families', async () => {
+            db.refreshToken.findUnique.mockResolvedValue(storedToken({ family_id: null }));
+
+            await service.revokeSession('raw-token');
+
+            expect(db.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+            expect(db.refreshToken.updateMany).toHaveBeenCalledWith({
+                where: { token_hash: hashRefreshToken('raw-token'), revoked_at: null },
+                data: { revoked_at: expect.any(Date) },
+            });
+        });
+
+        it('is a no-op for a token it does not know, or none at all', async () => {
+            db.refreshToken.findUnique.mockResolvedValue(null);
+
+            await expect(service.revokeSession('unknown')).resolves.toBeNull();
+            await expect(service.revokeSession(undefined)).resolves.toBeNull();
+            await expect(service.revokeSession(null)).resolves.toBeNull();
+
+            expect(db.refreshToken.updateMany).not.toHaveBeenCalled();
+        });
+    });
 });

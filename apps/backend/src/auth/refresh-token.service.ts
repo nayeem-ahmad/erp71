@@ -184,6 +184,31 @@ export class RefreshTokenService {
     }
 
     /**
+     * Sign one device out: every token of the session the presented one
+     * belongs to, so an earlier copy still inside its reuse grace cannot
+     * outlive the sign-out. Unknown tokens are ignored — sign-out is
+     * idempotent. Returns whose session it was, for the audit trail.
+     */
+    async revokeSession(raw: string | undefined | null): Promise<{ userId: string } | null> {
+        if (!raw || typeof raw !== 'string') return null;
+
+        const existing = await this.db.refreshToken.findUnique({
+            where: { token_hash: hashRefreshToken(raw) },
+            select: { id: true, user_id: true, family_id: true },
+        });
+        if (!existing) return null;
+
+        if (existing.family_id) {
+            await this.revokeFamily(existing.family_id);
+        } else {
+            // Issued before families existed and never rotated: it is the
+            // whole session.
+            await this.revoke(raw);
+        }
+        return { userId: existing.user_id };
+    }
+
+    /**
      * End one sign-in wherever it is in its rotation chain — the replay
      * response, and what a per-device sign-out would want.
      */
