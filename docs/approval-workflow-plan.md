@@ -178,12 +178,13 @@ Also missing, and needed for people-based routing:
 
 ## 2. The model
 
-Four tables. Two are configuration, two are runtime.
+Five tables. Three are configuration, two are runtime.
 
 ```
-ApprovalPolicy   (per tenant, per entity type — the on switch)
-  └── ApprovalRule      (ordered, conditional — "which chain does this entry get?")
-        └── ApprovalStep    (ordered — "who signs at level 2, and how many of them?")
+ApprovalSettings     (per tenant — the master switch, off until an owner turns it on)
+  └── ApprovalPolicy     (per entity type — which documents are gated)
+        └── ApprovalRule      (ordered, conditional — "which chain does this entry get?")
+              └── ApprovalStep    (ordered — "who signs at level 2, and how many of them?")
 
 ApprovalRequest  (one per submitted document — the live instance)
   └── ApprovalAction   (one per decision — the audit trail)
@@ -192,6 +193,26 @@ ApprovalRequest  (one per submitted document — the live instance)
 ### 2.1 Configuration
 
 ```prisma
+/// The tenant's master switch. A tenant with no row here — which is every
+/// tenant on the day this ships — has approval off everywhere, whatever
+/// policies exist below. Absence is the default, so nothing is back-filled and
+/// no existing table grows a column (§6.9).
+model ApprovalSettings {
+  id        String  @id @default(uuid())
+  tenant_id String  @unique
+  enabled   Boolean @default(false)
+
+  /// Who last flipped it and when — this is the control that can release or
+  /// hold every document in the workspace, so it does not change anonymously.
+  updated_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("approval_settings")
+}
+
 /// Turns approval on for one document type in one tenant, and owns the rules
 /// that route it. No row for an entity type means approval is off for it —
 /// which is why every hot path can short-circuit on a single indexed lookup.
@@ -297,7 +318,60 @@ model ApprovalStep {
 }
 ```
 
-### 2.2 Runtime
+### 2.2 Off by default, and the owner turns it on
+
+**Two switches, not one.** `ApprovalSettings.enabled` is the tenant's master
+control; `ApprovalPolicy.enabled` says which document types are gated once the
+master is on. Both default false, and a *missing* row counts as off for each —
+so a tenant that never opens the page has no rows at all and behaves exactly as
+it does today. Two levels rather than one because they answer different
+questions: "do we do approvals here?" is a decision the owner makes once, while
+"do we gate purchase orders as well as vouchers?" is one they revisit. The
+master switch is also the kill switch, and §4.1's deadlock is why it has to
+exist: when a chain traps the business, the owner needs one control that
+unblocks it without dismantling a matrix they spent an afternoon building.
+
+**Who flips it: the tenant owner.** This copies the endpoint the feature
+generalises rather than inventing anything —
+`accounting.controller.ts` guards `PATCH settings/accounting` with
+`@TenantRoles('OWNER')` and carries no role guard on the matching `GET`, under
+a comment that already states the rule: it is "readable by anyone who can see
+the ledger — the voucher UI needs to know whether approval is on — but only the
+owner sets the policy". The approvals settings endpoints take the
+same shape, and `@TenantRoles('OWNER')` is the guard — not a new
+`StorePermission`, because this is a workspace-wide stance rather than a
+per-store capability. The same convention is already written into
+`AccountingSettings`: "every flag defaults to the pre-feature behaviour, so a
+tenant that never opens the settings page is unaffected."
+
+**Off has to be free, which constrains where the flag lives.** The engine sits
+on the save path of every gated document type, so the check for a tenant that
+has never turned it on must not cost a query per save. One tenant-scoped read,
+cached for the request (the same lifetime the tenant context already has), and
+a miss is a definitive "off" — never a fall-through that then goes looking for
+policies. This is §1's first inherited lesson restated as a schema constraint: if the
+cheapest possible "off" is not the *default* path, the feature taxes every
+tenant who declined it.
+
+**Turning it on must not change history, and turning it off must not strand
+anything.** Enabling gates documents *submitted from that moment*; entries
+already posted keep their current status and are not retroactively pulled into
+a queue. Disabling is the sharper direction, because open `ApprovalRequest`
+rows would otherwise outlive the queue that was going to resolve them — a
+voucher left `PENDING` with nothing able to approve it, and invisible in
+approved-only reports (§5.1). So switching off closes every open request
+through the owning module's commit hook, recording an `AUTO_APPROVED` action
+per document whose note names the owner who turned approval off. Nothing is
+stranded, and the audit trail says what happened rather than going quiet. The
+UI shows the count of affected documents before the owner confirms, because
+"release 43 pending vouchers" is a different decision from "release none".
+
+**Default off is not a security posture.** It governs whether the engine runs,
+not whether an endpoint checks authority. The three unguarded approval
+endpoints in §1.2 are unguarded with the engine off and unguarded with it on;
+they are fixed by adding the missing checks, not by this switch.
+
+### 2.3 Runtime
 
 ```prisma
 /// The live approval of one document. Addressed by (entity_type, entity_id)
@@ -846,8 +920,9 @@ safe side. The back-fill reads `require_voucher_approval` and writes rows into
 `ApprovalPolicy` — a table `db push` has just created — so it belongs **after**
 `db push`, with the rest. And the outage half does not arise here at
 all: §2 adds no column and no unique index to any *existing* table, so there are
-no rows for a NOT NULL or a `@@unique` to be refused over. All four tables are
-new and therefore empty, `ApprovalRequest`'s two `@@unique`s included. That is a
+no rows for a NOT NULL or a `@@unique` to be refused over. All five tables are
+new and therefore empty — `ApprovalSettings`'s `@unique` on `tenant_id` and
+`ApprovalRequest`'s two `@@unique`s included. That is a
 consequence of the §5.1 seam — a module keeps its own status column and gains no
 schema change by adopting the engine — rather than luck, and it is worth
 defending: the day this design reaches for a NOT NULL column on `vouchers`, its
@@ -865,6 +940,15 @@ permissions are defined there first):
 | `MANAGE_APPROVAL_POLICIES` | OWNER, ADMIN | configuring the matrix |
 | `VIEW_APPROVAL_QUEUE` | anyone who approves anything | the unified queue page |
 
+**The master switch is deliberately not one of these.** Turning approval on or
+off for the whole workspace is `@TenantRoles('OWNER')`, per §2.2 — the same
+guard, and the same reasoning, as the `PATCH settings/accounting` endpoint this
+feature generalises. `MANAGE_APPROVAL_POLICIES` is the weaker, delegable right
+to edit the matrix while the feature is on; an admin can maintain the rules
+without being able to switch approvals off for the business. Reading the switch
+needs nothing, because the UI has to tell any submitter whether their entry is
+about to be gated.
+
 The existing `APPROVE_VOUCHER`, `APPROVE_GOODS_TRANSFER`,
 `APPROVE_PRODUCT_DEMAND`, `APPROVE_FUND_TRANSFER`, `APPROVE_CRM_ACTIVITY`
 **stay, unchanged**. They remain the *capability* — may this person approve this
@@ -878,11 +962,23 @@ replace it. This also means `StorePermissionGuard` needs no changes.
 
 | Phase | Scope | Ships |
 |---|---|---|
-| **1** | Engine, dark. 4 tables + migration, `ApprovalsModule`, `condition.util.ts` + `rule-match.util.ts` + resolver, all spec'd. Wired to nothing. | no behaviour change |
-| **2** | Voucher pilot. `require_voucher_approval` becomes an `ApprovalPolicy` row; "no rules" degenerates to today's behaviour (one step, anyone with `APPROVE_VOUCHER`). Back-fill in a **sync script**, not a migration — see §6.9. | amount-banded voucher approval |
-| **3** | UI. Unified `/approvals` queue (`PageShell` + `PageHeader`), generalised badge hook, policy editor with the test panel, per-entity deep links. | the feature becomes visible |
+| **1** | Engine, dark. 5 tables + migration, `ApprovalsModule`, `condition.util.ts` + `rule-match.util.ts` + resolver, all spec'd. Wired to nothing, and off for everyone — no `ApprovalSettings` row exists yet. | no behaviour change |
+| **2** | Voucher pilot. `require_voucher_approval` becomes an `ApprovalPolicy` row; "no rules" degenerates to today's behaviour (one step, anyone with `APPROVE_VOUCHER`). Back-fill in a **sync script**, not a migration — see §6.9, and the carry-over rule below. | amount-banded voucher approval |
+| **3** | UI. The owner's on/off switch and the settings page behind it (§2.2), unified `/approvals` queue (`PageShell` + `PageHeader`), generalised badge hook, policy editor with the test panel, per-entity deep links. | the feature becomes visible |
 | **4** | Adoption, one small PR each: purchase orders, expense claims, fund transfers, **bad-debt write-offs**, warehouse transfers, product demands, overtime records, warranty claims, sales discounts. | eleven bespoke flows become one |
 | **5** | Delegation / out-of-office, SLA escalation, parallel + quorum steps, approve-from-notification on mobile. | the long tail |
+
+**The carry-over rule for Phase 2.** "Default off" describes a tenant who has
+never asked for approval — it must not describe a tenant who already has it. A
+workspace running with `require_voucher_approval = true` today has an approval
+step its bookkeeping depends on, and the deploy that ships Phase 2 must not
+quietly remove it. So the sync script writes `ApprovalSettings.enabled = true`
+and an enabled `VOUCHER` policy for exactly those tenants, and writes nothing at
+all for the rest, who stay off by absence. The migration is therefore
+behaviour-preserving in both directions: nobody who declined approval gets it,
+and nobody who chose it loses it. Getting this backwards is the more dangerous
+half — an unnoticed *disable* silently posts vouchers that used to wait for a
+second pair of eyes, and the tenant finds out at the month end.
 
 Phases 1 and 2 are the real work. Phase 4 is repetitive and cheap *because* of
 §5.1 — each module publishes facts, calls `open()`, handles the event, and keeps
