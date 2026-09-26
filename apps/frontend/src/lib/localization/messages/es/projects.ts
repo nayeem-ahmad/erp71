@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'Historias de usuario',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "Contraer",
         loadFailed: "No se pudo cargar el backlog",
         createFailed: "No se pudo añadir",
+        dragHandle: "Arrastra para mover",
+        moveTo: "Mover a…",
+        moveToLabel: "Mover {title} a…",
+        noStory: "Sin historia",
+        moveFailed: "No se pudo mover",
+        editFailed: "No se pudo guardar el cambio",
+        select: "Seleccionar {title}",
+        selectedCount: "{count} seleccionados",
+        clearSelection: "Quitar",
+        bulkRegion: "Acciones para la selección",
+        bulkPriority: "Prioridad",
+        bulkStatus: "Estado",
+        bulkAssignee: "Responsable",
+        bulkDelete: "Eliminar",
+        bulkDeletePrompt: "¿Eliminar {count} elementos seleccionados?\n\nLas historias y tareas de una épica o historia eliminada se conservan: solo pierden la agrupación.",
+        bulkDone: "{count} actualizados",
+        bulkSkipped: "{updated} actualizados, {skipped} omitidos: {reason}",
+        bulkFailed: "No se pudo aplicar a la selección",
+        mixedSelection: "Elige un solo tipo de elemento de un proyecto para cambiar su estado, moverlo o asignarlo.",
+        keyboardHint: "↑/↓ entre filas · →/← abrir y cerrar · Alt+↑/↓ reordena · Espacio selecciona · Enter abre",
+        noPoints: "Sin puntos",
+        pointsOf: "Puntos de {title}",
+        priorityOf: "Prioridad de {title}",
+        statusOf: "Estado de {title}",
+        assigneeOf: "Responsable de {title}",
+        noTeam: "Aún no hay nadie en el equipo de este proyecto.",
+        emptyAll: "Aún no hay épicas ni historias de usuario en ningún proyecto.",
+        openBacklog: "Abrir backlog",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "{percent} % de historias terminadas",
+        allProjects: "Todos los proyectos",
     },
 
     epicList: {

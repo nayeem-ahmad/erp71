@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ListTree, Lock, Plus } from 'lucide-react';
 import {
@@ -16,9 +16,10 @@ import {
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
-import ProjectStoriesCard, { type UserStory } from '@/components/projects/ProjectStoriesCard';
-import ProjectEpicsCard, { type Epic } from '@/components/projects/ProjectEpicsCard';
+import type { UserStory } from '@/components/projects/StoryFormModal';
+import type { Epic } from '@/components/projects/EpicFormModal';
 import ProjectTeamCard from '@/components/projects/ProjectTeamCard';
+import BacklogSummary from '@/components/projects/backlog/BacklogSummary';
 import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -93,12 +94,17 @@ function assigneeLabel(task: Task): string {
 export default function ProjectDetailPage() {
     const params = useParams<{ id: string }>();
     const projectId = params.id;
-    // Set by a link from the cross-project backlog, so the story that was
-    // clicked there is already open when the project page paints.
+    // `?story=` / `?epic=` used to open that item in the cards this page
+    // carried. The cards are the Backlog now, so an old link — bookmarked, or
+    // pasted into a chat — is sent on to the same item there.
     const searchParams = useSearchParams();
-    const openStoryId = searchParams.get('story');
-    // Likewise from the cross-project epic list.
-    const openEpicId = searchParams.get('epic');
+    const router = useRouter();
+    const linkedStory = searchParams.get('story');
+    const linkedEpic = searchParams.get('epic');
+    useEffect(() => {
+        if (linkedStory) router.replace(routes.projects.storyInProject(projectId, linkedStory));
+        else if (linkedEpic) router.replace(routes.projects.epicInProject(projectId, linkedEpic));
+    }, [linkedStory, linkedEpic, projectId, router]);
     const { t } = useI18n();
     const m = t.projects;
 
@@ -291,32 +297,10 @@ export default function ProjectDetailPage() {
 
             <section className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-3 md:col-span-2">
-                    {/* Above the task table rather than beside it: the stories
-                        are what the tasks are *for*, and the table below is the
-                        same work seen flat. */}
-                    <ProjectEpicsCard
-                        projectId={projectId}
-                        projectCode={project?.code}
-                        epics={epics}
-                        openEpicId={openEpicId}
-                        onEpicsChanged={loadEpics}
-                        onStoriesChanged={loadStories}
-                    />
-
-                    <ProjectStoriesCard
-                        projectId={projectId}
-                        projectCode={project?.code}
-                        stories={stories}
-                        epics={epics ?? undefined}
-                        openStoryId={openStoryId}
-                        onStoriesChanged={async () => {
-                            await loadStories();
-                            // An epic's progress is counted from its stories.
-                            await loadEpics();
-                        }}
-                        onTasksChanged={load}
-                        onOpenTask={setOpenTaskId}
-                    />
+                    {/* Above the task table rather than beside it: the scope is
+                        what the tasks are *for*. The editing lives in the
+                        Backlog; this is how much of it there is, and the way in. */}
+                    <BacklogSummary projectId={projectId} epics={epics} stories={stories} />
 
                     <div className="rounded-md border border-gray-200 bg-white">
                         <h2 className="border-b border-gray-200 px-3 py-2 text-sm font-medium">

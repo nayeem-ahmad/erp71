@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'यूज़र स्टोरी',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "समेटें",
         loadFailed: "बैकलॉग लोड नहीं हो सका",
         createFailed: "जोड़ा नहीं जा सका",
+        dragHandle: "खिसकाने के लिए खींचें",
+        moveTo: "यहाँ ले जाएँ…",
+        moveToLabel: "{title} को ले जाएँ…",
+        noStory: "कोई स्टोरी नहीं",
+        moveFailed: "खिसकाया नहीं जा सका",
+        editFailed: "बदलाव सहेजा नहीं जा सका",
+        select: "{title} चुनें",
+        selectedCount: "{count} चुने गए",
+        clearSelection: "हटाएँ",
+        bulkRegion: "चयन के लिए क्रियाएँ",
+        bulkPriority: "प्राथमिकता",
+        bulkStatus: "स्थिति",
+        bulkAssignee: "असाइनी",
+        bulkDelete: "हटाएँ",
+        bulkDeletePrompt: "चुने गए {count} आइटम हटाएँ?\n\nहटाए गए एपिक या स्टोरी के अंदर की स्टोरी और टास्क बने रहेंगे — बस समूह हट जाएगा।",
+        bulkDone: "{count} अपडेट हुए",
+        bulkSkipped: "{updated} अपडेट, {skipped} छोड़े गए: {reason}",
+        bulkFailed: "चयन पर इसे लागू नहीं किया जा सका",
+        mixedSelection: "स्थिति बदलने, ले जाने या असाइन करने के लिए एक प्रोजेक्ट का एक ही प्रकार का आइटम चुनें।",
+        keyboardHint: "↑/↓ पंक्तियों में जाएँ · →/← खोलें और बंद करें · Alt+↑/↓ क्रम बदलता है · Space चुनता है · Enter खोलता है",
+        noPoints: "कोई पॉइंट नहीं",
+        pointsOf: "{title} के पॉइंट",
+        priorityOf: "{title} की प्राथमिकता",
+        statusOf: "{title} की स्थिति",
+        assigneeOf: "{title} का असाइनी",
+        noTeam: "इस प्रोजेक्ट की टीम में अभी कोई नहीं है।",
+        emptyAll: "किसी भी प्रोजेक्ट में अभी कोई एपिक या यूज़र स्टोरी नहीं है।",
+        openBacklog: "बैकलॉग खोलें",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "{percent}% स्टोरी पूरी",
+        allProjects: "सभी प्रोजेक्ट",
     },
 
     epicList: {

@@ -1,6 +1,7 @@
 /**
  * The project backlog as a tree — epic → story → task — built from the flat
- * rows `GET /project-backlog/:projectId` returns.
+ * rows `GET /project-backlog/:projectId` (one project) or `GET /project-backlog`
+ * (every project with scope) returns.
  *
  * Pure on purpose: the page recomputes it on every keystroke of the search box
  * and after every write, and everything that can go wrong with a hierarchy
@@ -8,8 +9,16 @@
  * rendering anything.
  */
 
+export interface BacklogProject {
+    id: string;
+    code: string;
+    name: string;
+    short_name?: string | null;
+}
+
 export interface BacklogEpic {
     id: string;
+    project_id?: string;
     code: string;
     title: string;
     description?: string | null;
@@ -23,6 +32,7 @@ export interface BacklogEpic {
 
 export interface BacklogStory {
     id: string;
+    project_id?: string;
     code: string;
     title: string;
     as_a?: string | null;
@@ -38,6 +48,7 @@ export interface BacklogStory {
 
 export interface BacklogTask {
     id: string;
+    project_id?: string;
     key: string;
     reference: number;
     title: string;
@@ -55,7 +66,10 @@ export interface BacklogTask {
 }
 
 export interface BacklogData {
-    project: { id: string; code: string; name: string; short_name?: string | null };
+    /** The one project, on a project's own Backlog. */
+    project?: BacklogProject;
+    /** Every project, on the cross-project screens. */
+    projects?: BacklogProject[];
     epics: BacklogEpic[];
     stories: BacklogStory[];
     tasks: BacklogTask[];
@@ -117,9 +131,39 @@ export interface BacklogFilters {
 
 export const NO_BACKLOG_FILTERS: BacklogFilters = { text: '', hideDone: false };
 
-/** Group ids for the two catch-all sections, so they collapse like any node. */
-export const NO_EPIC_GROUP = '__no-epic';
-export const UNPLANNED_GROUP = '__unplanned';
+/**
+ * Expand-state ids for the nodes that are not a row in the database: the two
+ * catch-all groups (one pair per project) and, across projects, the project.
+ */
+export const noEpicGroup = (projectId: string) => `__no-epic:${projectId}`;
+export const unplannedGroup = (projectId: string) => `__unplanned:${projectId}`;
+export const projectGroup = (projectId: string) => `__project:${projectId}`;
+
+/** Every project this data spans, in the order the server sent them. */
+export function projectsOf(data: BacklogData): BacklogProject[] {
+    if (data.projects) return data.projects;
+    return data.project ? [data.project] : [];
+}
+
+/**
+ * The data cut into one slice per project, each shaped like a single project's
+ * backlog, so `buildBacklogTree` never has to know it is looking at several.
+ * Rows without a `project_id` belong to the only project there is.
+ */
+export function splitByProject(data: BacklogData): { project: BacklogProject; data: BacklogData }[] {
+    const projects = projectsOf(data);
+    if (projects.length === 1 && !data.projects) return [{ project: projects[0], data }];
+    const of = (row: { project_id?: string }, id: string) => (row.project_id ?? projects[0]?.id) === id;
+    return projects.map((project) => ({
+        project,
+        data: {
+            project,
+            epics: data.epics.filter((epic) => of(epic, project.id)),
+            stories: data.stories.filter((story) => of(story, project.id)),
+            tasks: data.tasks.filter((task) => of(task, project.id)),
+        },
+    }));
+}
 
 export const isTaskDone = (task: BacklogTask) => task.status?.category === 'DONE';
 export const isStoryDone = (story: BacklogStory) => story.status === 'DONE';
@@ -286,10 +330,15 @@ export type ExpandLevel = 'epics' | 'stories' | 'all';
  */
 export function expandedFor(data: BacklogData, level: ExpandLevel): Set<string> {
     const open = new Set<string>();
+    // A project heading is never what "epics only" means to fold: across
+    // projects, every level starts with the projects open.
+    for (const project of projectsOf(data)) open.add(projectGroup(project.id));
     if (level === 'epics') return open;
     for (const epic of data.epics) open.add(epic.id);
-    open.add(NO_EPIC_GROUP);
-    open.add(UNPLANNED_GROUP);
+    for (const project of projectsOf(data)) {
+        open.add(noEpicGroup(project.id));
+        open.add(unplannedGroup(project.id));
+    }
     if (level === 'all') for (const story of data.stories) open.add(story.id);
     return open;
 }
