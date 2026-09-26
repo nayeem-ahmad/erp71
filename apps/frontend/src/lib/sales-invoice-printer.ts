@@ -1,4 +1,5 @@
 import { formatBDT } from './format';
+import { invoiceDues } from './customer-credit';
 import { paymentMethodLabel } from './payment-method-label';
 import { openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
@@ -46,6 +47,14 @@ export interface InvoiceData {
     laborCost?: number;
     rounding?: number;
     total: number;
+    /** Paid against this invoice; the payments' sum when left out. */
+    amountPaid?: number;
+    /**
+     * What the customer owed before this invoice. With it the totals close on
+     * the invoice's own due, this previous due and the total due — the two
+     * added together. Left out for a walk-in, who owes nothing on account.
+     */
+    previousDue?: number | null;
     note?: string;
 }
 
@@ -123,6 +132,13 @@ function buildStyles(isThermal: boolean): string {
             padding-top:${isThermal ? '4px' : '8px'};
             color:${isThermal ? '#000' : '#111827'};
         }
+        /* What the customer owes once this invoice stands — the figure a credit
+           customer reads first, so it is ruled off like the total above. */
+        .total-due td {
+            font-weight:bold;
+            border-top:1px solid ${isThermal ? '#000' : '#e5e7eb'};
+            color:${isThermal ? '#000' : '#111827'};
+        }
 
         /* Payments */
         .payments-section { ${isThermal ? 'margin:6px 0;' : 'background:#f8fafc; border-radius:8px; padding:12px 16px; margin-bottom:20px;'} }
@@ -142,6 +158,23 @@ function buildStyles(isThermal: boolean): string {
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
     `;
+}
+
+/**
+ * The memo's closing lines under the total: paid, this invoice's due, what the
+ * customer owed before it, and the total due. Printed only for a customer who
+ * owes something either way, so a settled invoice looks as it always has.
+ */
+function buildDueRows(data: InvoiceData): string {
+    const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
+    const dues = invoiceDues(data.total, paid, data.previousDue);
+    if (!dues) return '';
+
+    return `
+            <tr><td>Paid</td><td>${formatBDT(dues.paid)}</td></tr>
+            ${dues.invoiceDue > 0.005 ? `<tr><td>Due</td><td>${formatBDT(dues.invoiceDue)}</td></tr>` : ''}
+            <tr><td>Previous Due</td><td>${formatBDT(dues.previousDue)}</td></tr>
+            <tr class="total-due"><td>Total Due</td><td>${formatBDT(dues.totalDue)}</td></tr>`;
 }
 
 function buildBody(data: InvoiceData, isThermal: boolean): string {
@@ -206,6 +239,7 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
             ${data.laborCost ? `<tr><td>Labour</td><td>${formatBDT(data.laborCost)}</td></tr>` : ''}
             ${data.rounding ? `<tr><td>Rounding</td><td>${formatBDT(data.rounding)}</td></tr>` : ''}
             <tr class="grand-total"><td>TOTAL</td><td>${formatBDT(data.total)}</td></tr>
+            ${buildDueRows(data)}
         </table>
     </div>
 

@@ -453,6 +453,8 @@ export const salesMessages = {
             amountPaid: 'Amount Paid',
             change: 'Change',
             balanceDue: 'Balance Due',
+            previousDue: 'Previous Due',
+            totalDue: 'Total Due',
             paymentDetails: 'Payment Details',
             notePrefix: 'Note: ',
             binVatReg: 'BIN (VAT Reg):',

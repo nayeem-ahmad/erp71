@@ -117,6 +117,13 @@ interface SaleEntryLayoutProps {
     customerDraft?: NewCustomerDraft | null;
     setCustomerDraft?: (draft: NewCustomerDraft | null) => void;
     customerDraftNameInvalid?: boolean;
+    /**
+     * What the customer owed before this sale. Left out, it is the picked
+     * customer's balance as it stands, which is right while a sale is being
+     * entered — and wrong once it is posted, when that balance already
+     * includes the sale. A posted sale passes the server's figure instead.
+     */
+    previousDue?: number | null;
 
     items: LineItem[];
     onUpdateItem: (productId: string, updates: Partial<LineItem>) => void;
@@ -183,6 +190,7 @@ export default function SaleEntryLayout({
     customerDraft = null,
     setCustomerDraft,
     customerDraftNameInvalid = false,
+    previousDue,
     items,
     onUpdateItem,
     onRemoveItem,
@@ -303,7 +311,10 @@ export default function SaleEntryLayout({
                         totals={totals}
                         onTotalsChange={onTotalsChange}
                         tenantVatRate={tenantVatRate}
-                        previousDue={Number(customer?.due_balance ?? 0)}
+                        previousDue={previousDue !== undefined
+                            ? previousDue
+                            : customer ? Number(customer.due_balance ?? 0) : null}
+                        amountPaid={payments.reduce((sum, p) => sum + p.amount, 0)}
                         readOnly={readOnly}
                         roundingLabel={adjustmentLabel}
                     />
