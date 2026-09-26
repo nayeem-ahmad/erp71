@@ -352,6 +352,8 @@ export const salesMessages = {
             paperSizeHint: 'Format, in dem Rechnungen und Lieferscheine aus diesem Browser gedruckt werden. Die Vorgabe für den Laden steht unter Einstellungen → Verkauf.',
             skipPreviewLabel: 'Druckvorschau überspringen',
             skipPreviewHint: 'Dokumente direkt an den Drucker senden, statt sie vorher anzuzeigen.',
+            compactLabel: 'Kompaktes Layout',
+            compactHint: 'Kleinere Schrift und engere Zeilen, damit eine lange Rechnung mehr Positionen pro Seite unterbringt. Gilt für jedes Dokument, das von diesem Browser auf A4, A5 oder Letter gedruckt wird.',
             saved: 'Druckeinstellungen gespeichert',
         },
         printMenu: {

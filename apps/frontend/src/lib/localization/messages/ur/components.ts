@@ -231,6 +231,12 @@ export const componentsMessages = {
         noPreview: "اس فائل کا پیش منظر نہیں دکھایا جا سکتا۔",
     },
 
+    printWindow: {
+        /* The switch in the toolbar over every print window that lists rows. */
+        compact: 'کمپیکٹ لے آؤٹ',
+        compactHint: 'چھوٹا متن اور قریب قریب قطاریں، تاکہ ہر صفحے پر زیادہ سطریں آئیں',
+    },
+
     richText: {
         toolbar: "فارمیٹنگ",
         hint: "فارمیٹنگ: **بولڈ**، *ترچھا*، - فہرستیں اور [لنکس](url)۔",

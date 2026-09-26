@@ -1,7 +1,7 @@
 import { formatBDT } from './format';
 import { invoiceDues } from './customer-credit';
 import { paymentMethodLabel } from './payment-method-label';
-import { openPrintWindow, renderHeaderHtml } from './print';
+import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
@@ -157,7 +157,41 @@ function buildStyles(isThermal: boolean): string {
         }
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
+        ${isThermal ? '' : compactStyles()}
     `;
+}
+
+/**
+ * The compact invoice: as many item rows on a sheet as stay comfortable to
+ * read. Cells, gaps and type all tighten, and the SKU moves up beside the item
+ * name — on its own line it doubles the height of every row that has one.
+ *
+ * Inert until `html.p71-compact` is set, and never emitted for a roll, which
+ * does not compact (see `PrintDensity`).
+ */
+function compactStyles(): string {
+    const c = COMPACT_SCOPE;
+    return `
+        ${c} .invoice-body { padding:1mm 0; }
+        ${c} .meta-grid { gap:8px; margin-bottom:8px; }
+        ${c} .meta-block { padding:5px 10px; border-radius:6px; }
+        ${c} .meta-block h3 { font-size:10px; margin-bottom:2px; }
+        ${c} .meta-block p { font-size:11px; margin-bottom:0; }
+        ${c} .divider { margin:0 0 6px 0; }
+        ${c} .items-table { margin-bottom:6px; }
+        ${c} .items-table thead th { font-size:10px; padding:3px 6px; }
+        ${c} .items-table tbody td { font-size:11px; padding:2px 6px; }
+        ${c} .item-name br, ${c} .pay-label br { display:none; }
+        ${c} .item-name .sku, ${c} .pay-label .pay-ref { margin-left:6px; }
+        ${c} .totals-wrap { margin-bottom:6px; }
+        ${c} .totals-table td { font-size:11px; padding:1px 6px; }
+        ${c} .grand-total td { font-size:13px; padding-top:3px; }
+        ${c} .payments-section { padding:5px 10px; margin-bottom:6px; border-radius:6px; }
+        ${c} .payments-section h3 { font-size:10px; margin-bottom:2px; }
+        ${c} .pay-label, ${c} .pay-amount { font-size:11px; padding:1px 0; }
+        ${c} .pay-ref { font-size:10px; }
+        ${c} .note-box { font-size:11px; padding:5px 8px; margin-bottom:6px; }
+        ${c} .footer { font-size:10px; margin-top:8px; padding-top:6px; }`;
 }
 
 /**
@@ -282,6 +316,8 @@ export function printSalesInvoice(
         styles: buildStyles(isThermal),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
+        // A long item list is exactly what compact is for.
+        compactable: true,
         preview,
     });
 }

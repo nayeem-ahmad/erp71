@@ -352,6 +352,8 @@ export const salesMessages = {
             paperSizeHint: 'Tamaño con el que se imprimen facturas y albaranes desde este navegador. El valor por defecto de la tienda se configura en Ajustes → Ventas.',
             skipPreviewLabel: 'Omitir la vista previa de impresión',
             skipPreviewHint: 'Enviar los documentos directamente a la impresora en lugar de mostrarlos primero.',
+            compactLabel: 'Diseño compacto',
+            compactHint: 'Texto más pequeño y filas más juntas para que una factura larga ocupe menos páginas. Se aplica a todos los documentos impresos desde este navegador en A4, A5 y Letter.',
             saved: 'Ajustes de impresión guardados',
         },
         printMenu: {

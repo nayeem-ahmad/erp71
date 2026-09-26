@@ -209,6 +209,7 @@ function OrderDetailsPageContent() {
             headerConfig: printHeader.headerConfig,
             headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
+            compactable: true,
             repeatHeader: true,
             bodyHtml: printContent.innerHTML,
             footerHtml: `<div class="footer">${t.shared.print.salesOrder}</div>`,

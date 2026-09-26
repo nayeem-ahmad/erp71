@@ -231,6 +231,12 @@ export const componentsMessages = {
             noPreview: "Fail ini tidak boleh dipratonton.",
         },
 
+        printWindow: {
+            /* The switch in the toolbar over every print window that lists rows. */
+            compact: 'Susun atur padat',
+            compactHint: 'Tulisan lebih kecil dan baris lebih rapat, jadi lebih banyak baris muat pada setiap halaman',
+        },
+
         richText: {
             toolbar: "Pemformatan",
             hint: "Pemformatan: **tebal**, *condong*, - senarai dan [pautan](url).",

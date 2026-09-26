@@ -1,4 +1,4 @@
-import { openPrintWindow } from '@/lib/print';
+import { COMPACT_SCOPE, openPrintWindow } from '@/lib/print';
 import { formatBDT } from '@/lib/format';
 import type { RefereeLedger } from '@/components/admin/referrals/types';
 
@@ -159,6 +159,14 @@ export function printStatement(
             }
             .stmt .data td:not(:first-child) { text-align: right; }
             .stmt .data th:not(:first-child) { text-align: right; }
+
+            ${COMPACT_SCOPE} .stmt h1 { font-size: 16px; }
+            ${COMPACT_SCOPE} .stmt h2 { font-size: 12px; margin: 10px 0 4px; }
+            ${COMPACT_SCOPE} .stmt .meta { margin-bottom: 8px; }
+            ${COMPACT_SCOPE} .stmt .meta-table td { padding: 1px 0; font-size: 11px; }
+            ${COMPACT_SCOPE} .stmt .data th, ${COMPACT_SCOPE} .stmt .data td { padding: 2px 4px; font-size: 11px; }
         `,
+        // A busy partner's commissions and payouts run to pages.
+        compactable: true,
     });
 }

@@ -231,6 +231,12 @@ export const componentsMessages = {
         noPreview: "This file cannot be previewed.",
     },
 
+    printWindow: {
+        /* The switch in the toolbar over every print window that lists rows. */
+        compact: 'Compact layout',
+        compactHint: 'Smaller type and tighter rows, so more lines fit on each page',
+    },
+
     richText: {
         toolbar: 'Formatting',
         hint: 'Formatting: **bold**, *italic*, - lists and [links](url).',

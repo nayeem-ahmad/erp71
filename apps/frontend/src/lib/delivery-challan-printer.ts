@@ -1,4 +1,4 @@
-import { openPrintWindow, renderHeaderHtml } from './print';
+import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
@@ -149,7 +149,36 @@ function buildStyles(isThermal: boolean): string {
 
         .no-price { text-align:center; font-size:${isThermal ? '9px' : '11px'}; color:#888; margin-top:${isThermal ? '8px' : '18px'}; font-style:italic; }
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '8px' : '18px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
+        ${isThermal ? '' : compactStyles()}
     `;
+}
+
+/**
+ * The compact challan — the invoice's treatment: tighter rows, one size
+ * smaller type, the SKU beside the item name. The signature band keeps enough
+ * room above its lines to sign on; that space is the point of the document.
+ *
+ * Inert until `html.p71-compact` is set, and never emitted for a roll.
+ */
+function compactStyles(): string {
+    const c = COMPACT_SCOPE;
+    return `
+        ${c} .meta-grid { gap:8px; margin-bottom:8px; }
+        ${c} .meta-block { padding:5px 10px; border-radius:6px; }
+        ${c} .meta-block h3 { font-size:10px; margin-bottom:2px; }
+        ${c} .meta-block p { font-size:11px; margin-bottom:0; }
+        ${c} .divider { margin:0 0 6px 0; }
+        ${c} .items-table { margin-bottom:6px; }
+        ${c} .items-table thead th { font-size:10px; padding:3px 6px; }
+        ${c} .items-table tbody td { font-size:11px; padding:2px 6px; }
+        ${c} .item-name br { display:none; }
+        ${c} .item-name .sku { margin-left:6px; }
+        ${c} .qty-summary { margin-bottom:6px; }
+        ${c} .qty-summary td { font-size:12px; padding:2px 6px; }
+        ${c} .note-box { font-size:11px; padding:5px 8px; margin-bottom:6px; }
+        ${c} .sign-band { margin-top:32px; }
+        ${c} .no-price { font-size:10px; margin-top:8px; }
+        ${c} .footer { font-size:10px; margin-top:8px; padding-top:6px; }`;
 }
 
 function buildBody(data: DeliveryChallanData, isThermal: boolean): string {
@@ -276,6 +305,7 @@ export function printDeliveryChallan(
         styles: buildStyles(isThermal),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
+        compactable: true,
         preview,
     });
 }
