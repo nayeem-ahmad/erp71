@@ -5146,6 +5146,40 @@ export const api = {
     },
     /** A project's epics, stories and tasks as flat rows, for the Backlog tree. */
     getProjectBacklog: (projectId: string) => fetchWithAuth(`/project-backlog/${projectId}`),
+    /** Every visible project's epics and stories (and the tasks under stories). */
+    getAllProjectsBacklog: () => fetchWithAuth('/project-backlog'),
+    /** A drop in the tree: the item, its new parent, and its group's whole new order. */
+    reorderBacklogScope: (
+        projectId: string,
+        data: { kind: 'epic' | 'story'; id: string; parentId?: string | null; orderedIds: string[] },
+    ) =>
+        fetchWithAuth(`/project-backlog/${projectId}/scope/order`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    reorderBacklogTasks: (projectId: string, data: { id: string; parentId?: string | null; orderedIds: string[] }) =>
+        fetchWithAuth(`/project-backlog/${projectId}/tasks/order`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /** One action over selected epics or stories; answers `{ updated, skipped }`. */
+    bulkBacklogScope: (
+        projectId: string,
+        data: { kind: 'epic' | 'story'; ids: string[]; action: string; value?: string | null },
+    ) =>
+        fetchWithAuth(`/project-backlog/${projectId}/scope/bulk`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    bulkBacklogTasks: (projectId: string, data: { ids: string[]; action: string; value?: string | null }) =>
+        fetchWithAuth(`/project-backlog/${projectId}/tasks/bulk`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     /** One epic with the stories filed under it. */
     getProjectEpic: (epicId: string) => fetchWithAuth(`/project-epics/${epicId}`),
     createProjectEpic: (data: Record<string, unknown>) =>

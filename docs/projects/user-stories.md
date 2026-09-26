@@ -153,30 +153,54 @@ the backstop.
 
 ---
 
-## UI
+## UI — the Backlog tree (rebuilt 2026-09-25/26)
 
-Everything is on the project page (`/projects/[id]`), above the flat task table:
-the stories are what the tasks are *for*, and the table below is the same work
-seen flat.
+Epics, stories and tasks are edited in one place: the **Backlog**, a single
+ARIA tree of epic → story → task. It is the same component
+(`components/projects/backlog/BacklogWorkspace.tsx`) on three screens:
 
-- A collapsed story row shows `US-3`, its title, its points, `1/4 tasks` and its
-  status. The counts are in the **collapsed** row on purpose: a collapse that
-  cannot say whether it holds anything is one people open to check.
-- Opening a row composes the "As a … I want … so that …" sentence, shows the
-  acceptance criteria, lists the tasks under the story, and offers a one-field
-  quick add that files a new task straight under it. The tasks are fetched per
-  story on open — a backlog of forty would otherwise pull the project's whole
-  task table to draw rows nobody expands.
-- A task opened from a story row opens the page's existing `TaskDetailPanel`,
-  not a second one.
-- `TaskDetailPanel` has a **User story** picker beside the assignee, loaded the
-  first time it is touched (the card already knows which story holds it, so the
-  field reads correctly before the list arrives).
-- The new-task dialog on the project page offers the picker only where the
-  project actually has stories.
+| Screen | What it shows |
+|---|---|
+| `/projects/[id]/backlog` | One project, opened to the stories, including "Tasks without a story" |
+| `/projects/stories` | Every project with scope, grouped by project, opened to the stories |
+| `/projects/epics` | The same, folded to the epics |
 
-Nothing was added to the sidebar. A story belongs to one project, and a
-cross-project backlog page would be a second place to look for the same rows.
+The project page no longer carries epic and story cards; it shows a
+`BacklogSummary` (epics, stories and points done) with a link in, and forwards
+the old `/projects/<id>?story=` / `?epic=` links to the Backlog.
+
+**Reading it.** Every parent row carries its rollup — stories done and points
+for an epic, tasks done and a bar for a story, hours and assignee for a task —
+counted from every row *before* filtering, so hiding done work never misstates
+progress. Orphans are kept visible under "No epic" and "Tasks without a story".
+Search keeps a hit's ancestors; the fold state is remembered per screen.
+Subtasks are left out: they belong to their task's own panel.
+
+**Rearranging.** Three routes, one write path: drag a row by its handle (mouse,
+or long-press on touch), pick a new parent from the row's "Move to" chip, or
+Alt+↑/↓ on the focused row. Each becomes a `BacklogMove`; `resolveDrop` in
+`backlog-rows.ts` decides which drops are legal (never across projects, never a
+task under an epic). The page applies the move at once and sends the target
+group's **whole** order — `PATCH /project-backlog/:projectId/scope/order` for
+epics and stories, `…/tasks/order` for tasks — then reloads so derived story
+statuses catch up. A task's backlog position is `ProjectTask.backlog_order`,
+deliberately separate from its board-column `sort_order`.
+
+**Editing in place.** Status, priority, points and assignee are chips on the
+row. A story's status chip only offers Backlog/Ready while its tasks are
+untouched and disappears once work has started, because the status then
+follows the tasks.
+
+**Many at once.** Row checkboxes (Space from the keyboard, Shift to extend)
+open a bar with priority, status, "Move to", assignee and delete.
+`POST …/scope/bulk` and `…/tasks/bulk` apply the action row by row through the
+existing story, epic and task services, so a bulk change behaves exactly like
+single ones; rows the server refuses come back with a reason instead of failing
+the batch.
+
+**Keyboard.** ↑/↓ between rows, → opens (or steps in), ← closes (or steps out
+to the parent), Home/End, Enter opens the editor, Space selects. The tree is
+one tab stop.
 
 ## Epics (added 2026-09-24)
 

@@ -7242,6 +7242,12 @@ model ProjectTask {
   /// An independent re-estimate, never derived from estimate minus logged.
   /// Written only by RemainingHoursService, always alongside a log row.
   remaining_hours      Decimal?           @db.Decimal(8, 2)
+  /// Place among its siblings in the Backlog tree — under its story, or among
+  /// the tasks with none. Separate from `sort_order`, which is the task's place
+  /// in its board column: the two orders answer different questions, and one
+  /// column serving both would reshuffle the board every time the backlog is
+  /// groomed. Set to `reference` on create, so a new task lands at the bottom.
+  backlog_order        Int                @default(0)
   sort_order           Int                @default(0)
   completed_at         DateTime?
   created_by           String?

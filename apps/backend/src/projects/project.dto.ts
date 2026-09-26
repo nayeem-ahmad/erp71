@@ -1048,3 +1048,96 @@ export class UpdateCommentDto {
     @IsString() @MinLength(1) @MaxLength(5000)
     body!: string;
 }
+
+// ── Backlog tree ───────────────────────────────────────────────────────────
+
+/**
+ * `parentId`: absent keeps the item where it is (a reorder among siblings), a
+ * UUID moves it under that parent, and `null` moves it to the parentless group
+ * — "No epic" for a story, "Tasks without a story" for a task.
+ */
+class BacklogParentDto {
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    parentId?: string | null;
+}
+
+/**
+ * One drop in the Backlog tree: the item moved, and the whole order of the group
+ * it landed in, as the page now shows it. A whole-order write rather than an
+ * index, for the reason `ReorderChecklistDto` gives — two indexes computed from
+ * two stale views of the same group collide, a full order simply wins.
+ */
+export class ReorderBacklogScopeDto extends BacklogParentDto {
+    @IsIn(['epic', 'story'])
+    kind!: 'epic' | 'story';
+
+    @IsUUID()
+    id!: string;
+
+    @IsArray()
+    @ArrayMaxSize(500)
+    @IsUUID(undefined, { each: true })
+    orderedIds!: string[];
+}
+
+export class ReorderBacklogTasksDto extends BacklogParentDto {
+    @IsUUID()
+    id!: string;
+
+    @IsArray()
+    @ArrayMaxSize(500)
+    @IsUUID(undefined, { each: true })
+    orderedIds!: string[];
+}
+
+export const BACKLOG_SCOPE_ACTIONS = ['delete', 'priority', 'status', 'epic'] as const;
+export const BACKLOG_TASK_ACTIONS = ['delete', 'priority', 'status', 'story', 'assignee'] as const;
+
+/**
+ * One action over a selection of epics or stories. `value` is the new
+ * priority, status or epic id; `null` for "no epic". Capped like
+ * `BulkDeleteTasksDto`.
+ */
+export class BulkBacklogScopeDto {
+    @IsIn(['epic', 'story'])
+    kind!: 'epic' | 'story';
+
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(200)
+    @IsUUID(undefined, { each: true })
+    ids!: string[];
+
+    @IsIn(BACKLOG_SCOPE_ACTIONS as unknown as string[])
+    action!: (typeof BACKLOG_SCOPE_ACTIONS)[number];
+
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsString()
+    @MaxLength(80)
+    value?: string | null;
+}
+
+/**
+ * One action over a selection of tasks. `value` is a priority, a board-column
+ * id, a story id (`null` for none) or an assignee as the task list keys it —
+ * `user:<id>` / `employee:<id>`, `null` to unassign.
+ */
+export class BulkBacklogTasksDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(200)
+    @IsUUID(undefined, { each: true })
+    ids!: string[];
+
+    @IsIn(BACKLOG_TASK_ACTIONS as unknown as string[])
+    action!: (typeof BACKLOG_TASK_ACTIONS)[number];
+
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsString()
+    @MaxLength(80)
+    value?: string | null;
+}

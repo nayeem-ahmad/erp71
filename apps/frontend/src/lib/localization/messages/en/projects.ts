@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'User stories',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "Collapse",
         loadFailed: "Could not load the backlog",
         createFailed: "Could not add it",
+        dragHandle: "Drag to move",
+        moveTo: "Move to…",
+        moveToLabel: "Move {title} to…",
+        noStory: "No story",
+        moveFailed: "Could not move it",
+        editFailed: "Could not save that change",
+        select: "Select {title}",
+        selectedCount: "{count} selected",
+        clearSelection: "Clear",
+        bulkRegion: "Actions for the selection",
+        bulkPriority: "Priority",
+        bulkStatus: "Status",
+        bulkAssignee: "Assignee",
+        bulkDelete: "Delete",
+        bulkDeletePrompt: "Delete {count} selected items?\n\nStories and tasks under a deleted epic or story are kept — they only lose the grouping.",
+        bulkDone: "{count} updated",
+        bulkSkipped: "{updated} updated, {skipped} skipped: {reason}",
+        bulkFailed: "Could not apply that to the selection",
+        mixedSelection: "Pick one kind of item in one project to change its status, move it or assign it.",
+        keyboardHint: "↑/↓ move between rows · →/← open and close · Alt+↑/↓ reorders · Space selects · Enter opens",
+        noPoints: "No points",
+        pointsOf: "Points of {title}",
+        priorityOf: "Priority of {title}",
+        statusOf: "Status of {title}",
+        assigneeOf: "Assignee of {title}",
+        noTeam: "Nobody is on this project’s team yet.",
+        emptyAll: "No epics or user stories in any project yet.",
+        openBacklog: "Open backlog",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "{percent}% of stories done",
+        allProjects: "All projects",
     },
 
     epicList: {
