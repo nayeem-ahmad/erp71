@@ -352,6 +352,8 @@ export const salesMessages = {
                 paperSizeHint: 'Saiz cetakan invois dan chalan dari pelayar ini. Lalai seluruh kedai ditetapkan di Tetapan → Jualan.',
                 skipPreviewLabel: 'Langkau pratonton cetak',
                 skipPreviewHint: 'Hantar dokumen terus ke pencetak tanpa memaparkannya dahulu.',
+                compactLabel: 'Susun atur padat',
+                compactHint: 'Tulisan lebih kecil dan baris lebih rapat, jadi invois yang panjang memuatkan lebih banyak baris pada setiap halaman. Terpakai pada setiap dokumen yang dicetak dari pelayar ini pada A4, A5 dan Letter.',
                 saved: 'Tetapan cetak disimpan',
             },
             printMenu: {

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
-import { PRINT_PREVIEW_SKIP_MESSAGE } from '@/lib/print';
+import { PRINT_PREVIEW_SKIP_MESSAGE, type PrintDensity } from '@/lib/print';
+import { usePrintDensity } from '@/lib/print/use-print-density';
 
 const PAPER_SIZE_KEY = 'erp71:sales-print:paper-size';
 const SKIP_PREVIEW_KEY = 'erp71:sales-print:skip-preview';
@@ -38,6 +39,13 @@ export interface SalePrintPrefs {
     /** True once the operator has opted out of the preview step. */
     skipPreview: boolean;
     setSkipPreview: (skip: boolean) => void;
+    /**
+     * Compact or normal. Not a sales-only answer like the two above: it is
+     * the one remembered setting every document's print window follows, and
+     * it is surfaced here so the sales screens can show and change it.
+     */
+    density: PrintDensity;
+    setDensity: (density: PrintDensity) => void;
 }
 
 /**
@@ -56,6 +64,7 @@ export interface SalePrintPrefs {
 export function useSalePrintPrefs(): SalePrintPrefs {
     const [paperSize, setPaperSizeState] = useState<PaperSize>('A4');
     const [skipPreview, setSkipPreviewState] = useState(false);
+    const [density, setDensity] = usePrintDensity();
 
     // Read the stored answers on mount rather than in the initialiser: this
     // renders on the server first, where there is no localStorage, and a
@@ -112,5 +121,5 @@ export function useSalePrintPrefs(): SalePrintPrefs {
         return () => window.removeEventListener('message', onMessage);
     }, [setSkipPreview]);
 
-    return { paperSize, setPaperSize, skipPreview, setSkipPreview };
+    return { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity };
 }

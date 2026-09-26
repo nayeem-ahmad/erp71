@@ -9,7 +9,7 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { COMPACT_SCOPE, SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -203,8 +203,11 @@ function PurchaseReturnDetailPageContent() {
                 .meta-box { padding: 12px; background: #f9f9f9; border-radius: 8px; }
                 .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; display: block; margin-bottom: 4px; }
                 .text-right { text-align: right; }
-                .text-center { text-align: center; }`,
+                .text-center { text-align: center; }
+                ${COMPACT_SCOPE} .meta-grid { gap: 8px; margin-bottom: 8px; }
+                ${COMPACT_SCOPE} .meta-box { padding: 6px 8px; }`,
             repeatHeader: true,
+            compactable: true,
             bodyHtml: `
                 <h1>${purchaseReturn.return_number}</h1>
                 <div class="subtitle">

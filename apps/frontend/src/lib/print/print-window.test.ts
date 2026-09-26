@@ -1,4 +1,5 @@
 import { buildPrintDocument, openPrintWindow, PRINT_PREVIEW_SKIP_MESSAGE } from './print-window';
+import { PRINT_DENSITY_KEY, PRINT_DENSITY_MESSAGE, readPrintDensity } from './density';
 
 const base = {
     title: 'Invoice INV-001',
@@ -274,6 +275,17 @@ describe('a footer pinned to the page bottom', () => {
             .toContain('.p71-doc--pinned { height: 190mm; }');
     });
 
+    it('pins it on the preview sheet as well, where the page is drawn to size', () => {
+        const html = buildPrintDocument({
+            ...pinned,
+            preview: { title: 'Q-1', printLabel: 'Print', closeLabel: 'Close' },
+        });
+
+        // A percentage has nothing to resolve against inside the sheet, which
+        // left the footer under the content on screen but at the bottom on paper.
+        expect(html).toContain('.p71-pv-sheet .p71-doc--pinned { height: 267mm; }');
+    });
+
     it('does not pin on a roll, which prints to an open-ended length', () => {
         expect(buildPrintDocument({ ...pinned, paperSize: 'Thermal80' })).not.toContain('p71-doc--pinned');
     });
@@ -490,5 +502,227 @@ describe('preview sheet', () => {
 
         // The sheet is screen furniture; on paper the page box is the sheet.
         expect(html).toMatch(/@media print \{[^}]*\.p71-pv-sheet[^}]*(box-shadow|margin|padding|width)\s*:\s*/);
+    });
+});
+
+describe('compact density', () => {
+    const withSwitch = {
+        title: 'Invoice — A4',
+        printLabel: 'Print',
+        closeLabel: 'Close',
+        compactLabel: 'Compact layout',
+        compactHint: 'Fits more lines on each page',
+    };
+    const SWITCH = 'class="p71-pv-check p71-pv-compact"';
+
+    it('marks a compact document on its root element', () => {
+        expect(buildPrintDocument({ ...base, density: 'compact' })).toContain('<html class="p71-compact">');
+        expect(buildPrintDocument({ ...base, density: 'normal' })).toContain('<html>');
+    });
+
+    it('leaves a document with no switch free of the compact rules', () => {
+        expect(buildPrintDocument(base)).not.toContain('html.p71-compact');
+    });
+
+    it('ships the compact rules with the switch, so it can turn them on in place', () => {
+        const html = buildPrintDocument({ ...base, preview: withSwitch });
+
+        expect(html).toContain('<html>');
+        expect(html).toContain('html.p71-compact body');
+        expect(html).toContain(SWITCH);
+        expect(html).toContain('title="Fits more lines on each page"');
+    });
+
+    it('lets a document restate the shared compact rules, by coming after them', () => {
+        const html = buildPrintDocument({
+            ...base,
+            density: 'compact',
+            styles: 'html.p71-compact body { font-size: 10px; }',
+        });
+
+        expect(html.indexOf('html.p71-compact body { font-size: 10px; }'))
+            .toBeGreaterThan(html.indexOf('html.p71-compact body { font-size: 11px; }'));
+    });
+
+    it('never compacts a roll, and offers it no switch', () => {
+        const html = buildPrintDocument({
+            ...base,
+            paperSize: 'Thermal80',
+            density: 'compact',
+            preview: withSwitch,
+        });
+
+        expect(html).toContain('<html>');
+        expect(html).not.toContain(SWITCH);
+        expect(html).not.toContain('html.p71-compact');
+    });
+
+    it('reports the switch back to the opener rather than writing storage', () => {
+        const html = buildPrintDocument({ ...base, preview: withSwitch });
+
+        expect(html).toContain(PRINT_DENSITY_MESSAGE);
+        expect(html).not.toContain('localStorage');
+    });
+
+    /**
+     * The switch is an inline handler in a document the app never scripts, so
+     * the only real test is to load that document and flip it.
+     */
+    function loadInFrame(html: string) {
+        const frame = document.createElement('iframe');
+        document.body.appendChild(frame);
+        const win = frame.contentWindow!;
+        const postMessage = jest.fn();
+        Object.defineProperty(win, 'opener', { value: { postMessage }, configurable: true });
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        const box = win.document.querySelector<HTMLInputElement>('.p71-pv-compact input')!;
+        return { win, box, postMessage, remove: () => frame.remove() };
+    }
+
+    it('reflows the open document and tells the opener when flipped', () => {
+        const { win, box, postMessage, remove } = loadInFrame(
+            buildPrintDocument({ ...base, preview: withSwitch }),
+        );
+
+        expect(box.checked).toBe(false);
+        box.click();
+
+        expect(win.document.documentElement.classList.contains('p71-compact')).toBe(true);
+        expect(postMessage).toHaveBeenCalledWith(
+            { type: PRINT_DENSITY_MESSAGE, density: 'compact' },
+            '*',
+        );
+
+        box.click();
+        expect(win.document.documentElement.classList.contains('p71-compact')).toBe(false);
+        expect(postMessage).toHaveBeenLastCalledWith(
+            { type: PRINT_DENSITY_MESSAGE, density: 'normal' },
+            '*',
+        );
+        remove();
+    });
+
+    it('starts ticked on a document that is already compact', () => {
+        const { box, remove } = loadInFrame(
+            buildPrintDocument({ ...base, density: 'compact', preview: withSwitch }),
+        );
+
+        expect(box.checked).toBe(true);
+        remove();
+    });
+});
+
+describe('openPrintWindow — compactable documents', () => {
+    function mockWindow() {
+        const win = {
+            document: { write: jest.fn(), close: jest.fn(), images: [] },
+            print: jest.fn(),
+            focus: jest.fn(),
+            setTimeout: jest.fn(),
+        };
+        jest.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+        return win;
+    }
+    const written = (win: ReturnType<typeof mockWindow>) => win.document.write.mock.calls[0][0] as string;
+    const SWITCH = 'class="p71-pv-check p71-pv-compact"';
+
+    beforeEach(() => window.localStorage.clear());
+    afterEach(() => {
+        jest.restoreAllMocks();
+        delete document.documentElement.dataset.locale;
+    });
+
+    it('prints at the density the counter chose', () => {
+        window.localStorage.setItem(PRINT_DENSITY_KEY, 'compact');
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, compactable: true });
+
+        expect(written(win)).toContain('<html class="p71-compact">');
+    });
+
+    it('lets the caller settle the density itself', () => {
+        window.localStorage.setItem(PRINT_DENSITY_KEY, 'compact');
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, compactable: true, density: 'normal' });
+
+        expect(written(win)).toContain('<html>');
+    });
+
+    it('gives a document printed straight away the switch, and still prints it at once', () => {
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, compactable: true });
+
+        const html = written(win);
+        expect(html).toContain(SWITCH);
+        expect(html).toContain('>Compact layout<');
+        expect(html).toContain('>Print<');
+        expect(html).toContain('>Close<');
+        // No opt-out checkbox: there was no preview to skip.
+        expect(html).not.toContain('p71-pv-check p71-pv-skip');
+        expect(win.print).toHaveBeenCalledTimes(1);
+    });
+
+    it('adds the switch to a preview without replacing its own wording', () => {
+        const win = mockWindow();
+
+        openPrintWindow({
+            ...base,
+            compactable: true,
+            preview: { title: 'Invoice — A4', printLabel: 'Imprimer', closeLabel: 'Fermer', skipLabel: 'Skip it' },
+        });
+
+        const html = written(win);
+        expect(html).toContain('>Imprimer<');
+        expect(html).toContain('Skip it');
+        expect(html).toContain(SWITCH);
+        expect(win.print).not.toHaveBeenCalled();
+    });
+
+    it('leaves a document that lists no rows exactly as it was', () => {
+        window.localStorage.setItem(PRINT_DENSITY_KEY, 'compact');
+        const win = mockWindow();
+
+        openPrintWindow(base);
+
+        const html = written(win);
+        expect(html).toContain('<html>');
+        expect(html).not.toContain('p71-pv');
+        expect(html).not.toContain('html.p71-compact');
+    });
+
+    it('keeps a roll at its normal setting, even with compact remembered', () => {
+        window.localStorage.setItem(PRINT_DENSITY_KEY, 'compact');
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, paperSize: 'Thermal80', compactable: true });
+
+        const html = written(win);
+        expect(html).toContain('<html>');
+        expect(html).not.toContain('p71-pv');
+    });
+
+    it('words the switch in the language the app is showing', () => {
+        document.documentElement.dataset.locale = 'bn';
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, compactable: true });
+
+        expect(written(win)).toContain('কমপ্যাক্ট লেআউট');
+    });
+
+    it('remembers what the window reports back', () => {
+        mockWindow();
+        openPrintWindow({ ...base, compactable: true });
+
+        window.dispatchEvent(new MessageEvent('message', {
+            data: { type: PRINT_DENSITY_MESSAGE, density: 'compact' },
+        }));
+
+        expect(readPrintDensity()).toBe('compact');
     });
 });

@@ -1,5 +1,5 @@
 import { formatBDT } from './format';
-import { openPrintWindow, renderHeaderHtml } from './print';
+import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
 export interface VoucherPrintLine {
@@ -48,6 +48,16 @@ const VOUCHER_STYLES = `
     .muted { color: #666; font-size: 10px; }
     .total { margin-top: 12px; text-align: right; font-weight: bold; }
     .footer { margin-top: 24px; text-align: center; color: #666; font-size: 10px; }
+
+    /* Compact: a journal with many lines keeps them on fewer pages. */
+    ${COMPACT_SCOPE} .meta { margin-bottom: 8px; }
+    ${COMPACT_SCOPE} .meta td { padding: 1px 0; }
+    ${COMPACT_SCOPE} table.lines { margin-top: 4px; }
+    ${COMPACT_SCOPE} table.lines th, ${COMPACT_SCOPE} table.lines td { padding: 2px 6px; }
+    ${COMPACT_SCOPE} table.lines th { font-size: 10px; }
+    ${COMPACT_SCOPE} .muted { font-size: 9px; }
+    ${COMPACT_SCOPE} .total { margin-top: 6px; }
+    ${COMPACT_SCOPE} .footer { margin-top: 12px; }
 `;
 
 function escHtml(value: string) {
@@ -103,5 +113,6 @@ export function printVoucher(data: VoucherPrintData, paperSize: PaperSize = 'A4'
         footerHtml: `<div class="footer">${escHtml(data.labels.footer)}</div>`,
         styles: VOUCHER_STYLES,
         repeatHeader: true,
+        compactable: true,
     });
 }

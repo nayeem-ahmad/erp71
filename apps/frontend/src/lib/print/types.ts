@@ -38,6 +38,17 @@ export function paperSizeLabel(size: PaperSize): string {
     return size;
 }
 
+/**
+ * How tightly a document is set on the page.
+ *
+ * `compact` trades whitespace for rows — smaller type, tighter cells, slimmer
+ * gaps between blocks — so a long invoice fits more lines on each sheet. It is
+ * a sheet-paper option only: a thermal roll prints to whatever length its
+ * content needs, so there is no page to fit more onto, and the rolls always
+ * print at their normal setting.
+ */
+export type PrintDensity = 'normal' | 'compact';
+
 /** Document families a header template can be assigned to. */
 export type PrintDocType =
     | 'SALES_INVOICE'

@@ -207,3 +207,40 @@ describe('payment method labels', () => {
         expect(labelFor('BANK')).toBe('Bank');
     });
 });
+
+describe('compact invoice', () => {
+    beforeEach(() => window.localStorage.clear());
+
+    it('ships tighter rows for a sheet, switched by the compact class', () => {
+        const html = render();
+
+        expect(ruleFor(html, 'html.p71-compact .items-table tbody td')).toMatch(/padding:2px 6px/);
+        expect(ruleFor(html, 'html.p71-compact .items-table tbody td')).toMatch(/font-size:11px/);
+        // Inert until the class is set: the normal cell keeps its own padding.
+        expect(ruleFor(html, '.items-table tbody td')).toMatch(/padding:7px 10px/);
+    });
+
+    it('moves the SKU up beside the item name rather than onto a line of its own', () => {
+        const html = render();
+
+        expect(html).toContain('html.p71-compact .item-name br');
+        // Grouped with the payment reference, which moves up the same way.
+        expect(html).toMatch(/html\.p71-compact \.item-name \.sku[^{]*\{ margin-left:6px; \}/);
+    });
+
+    it('prints compact once the counter has chosen it, with the switch to undo it', () => {
+        window.localStorage.setItem('erp71:print:density', 'compact');
+        const html = render();
+
+        expect(html).toContain('<html class="p71-compact">');
+        expect(html).toMatch(/<input type="checkbox" checked onchange="document\.documentElement\.classList\.toggle/);
+    });
+
+    it('keeps a roll in its own treatment, compact or not', () => {
+        window.localStorage.setItem('erp71:print:density', 'compact');
+        const html = render(baseInvoice, 'Thermal80');
+
+        expect(html).toContain('<html>');
+        expect(html).not.toContain('html.p71-compact .items-table');
+    });
+});

@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { ChevronDown, Printer } from 'lucide-react';
+import { ChevronDown, Printer, Square, SquareCheck } from 'lucide-react';
 import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
+import { useI18n } from '@/lib/i18n';
+import { usePrintDensity } from '@/lib/print/use-print-density';
 import { PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
 
 interface PaperSizeMenuProps {
@@ -31,6 +33,9 @@ interface PaperSizeMenuProps {
  * It aligns to the anchor's right edge: the panel is wider than the chevron it
  * hangs off, and this button sits at the right of a row, so growing leftwards
  * is what keeps it both on screen and under its trigger.
+ *
+ * The Compact switch under the sizes is the remembered setting every print
+ * surface shares (see `usePrintDensity`); flipping it keeps the menu open.
  */
 export default function PaperSizeMenu({
     paperSize,
@@ -39,6 +44,9 @@ export default function PaperSizeMenu({
     label,
     triggerLabel = 'Choose paper size',
 }: PaperSizeMenuProps) {
+    const { t } = useI18n();
+    const [density, setDensity] = usePrintDensity();
+    const compact = density === 'compact';
     const [open, setOpen] = useState(false);
     const wrapRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -106,6 +114,22 @@ export default function PaperSizeMenu({
                             {paperSizeLabel(size)}
                         </button>
                     ))}
+                    <div className="my-1 border-t" />
+                    <button
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={compact}
+                        onClick={() => setDensity(compact ? 'normal' : 'compact')}
+                        title={t.components.printWindow.compactHint}
+                        className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-start text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                        {compact ? (
+                            <SquareCheck className="h-4 w-4 text-blue-600" />
+                        ) : (
+                            <Square className="h-4 w-4 text-gray-400" />
+                        )}
+                        {t.components.printWindow.compact}
+                    </button>
                 </AnchoredDropdown>
             ) : null}
         </div>
