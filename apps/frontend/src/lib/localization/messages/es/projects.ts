@@ -727,6 +727,7 @@ export const projectsMessages = {
         addCard: "Añadir una tarjeta",
         newCardPlaceholder: "¿Qué hay que hacer?",
         assignCardTo: "Asignar tarjeta a",
+        entryColumn: "Columna: {column}",
         filters: {
             assignee: "Asignado a",
             priority: "Prioridad",

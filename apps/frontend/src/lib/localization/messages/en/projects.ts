@@ -731,6 +731,7 @@ export const projectsMessages = {
         addCard: 'Add a card',
         newCardPlaceholder: 'What needs doing?',
         assignCardTo: 'Assign card to',
+        entryColumn: 'Column: {column}',
         filters: {
             assignee: 'Assignee',
             priority: 'Priority',

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
@@ -74,6 +74,31 @@ const task = (id: string, title: string, project: { id: string; code: string; sh
     _count: { subtasks: 0, comments: 0 },
 });
 
+/**
+ * What the API answers a composed card with: the whole board, the new card at
+ * the foot of the column it went into, and which card is the new one. Built on
+ * whatever board the test handed `getBoard` — read off its implementation, so
+ * building it is not a second request for the board.
+ */
+const composedAnswer = async (
+    _boardId: string,
+    columnId: string,
+    body: { projectId: string; title: string },
+) => {
+    const board = await (api.getBoard as jest.Mock).getMockImplementation()!('b1');
+    const card = task('k-new', body.title, {
+        id: body.projectId,
+        code: body.projectId === 'p2' ? 'BET' : 'ALP',
+    });
+    return {
+        ...board,
+        columns: board.columns.map((column: { id: string; tasks: unknown[] }) =>
+            column.id === columnId ? { ...column, tasks: [...column.tasks, card] } : column,
+        ),
+        created_task_id: card.id,
+    };
+};
+
 describe('BoardPage', () => {
     beforeEach(() => {
         // The mocked `api` module is shared across every test in this file, so its
@@ -98,7 +123,7 @@ describe('BoardPage', () => {
                 { id: 'p2', code: 'BET', name: 'Beta' },
             ],
         });
-        (api.createBoardCard as jest.Mock).mockReset().mockResolvedValue({});
+        (api.createBoardCard as jest.Mock).mockReset().mockImplementation(composedAnswer);
         (api.getBoardColumns as jest.Mock).mockReset().mockResolvedValue([]);
         (api.createBoardColumn as jest.Mock).mockReset().mockResolvedValue({});
         (api.updateBoardColumn as jest.Mock).mockReset().mockResolvedValue({});
@@ -288,11 +313,14 @@ describe('BoardPage', () => {
                     expect.objectContaining({ projectId: 'p1', title: 'Write changelog' }),
                 ),
             );
-            // The new card only exists server-side until the board is re-read.
-            await waitFor(() => expect(api.getBoard).toHaveBeenCalledTimes(2));
+            // Painted from the API's answer, which is the whole board — not
+            // from a second read of it.
+            const card = await screen.findByRole('button', { name: /open task: Write changelog/i });
+            expect(document.querySelector(`[${COLUMN_ATTR}="c2"]`)).toContainElement(card);
+            expect(api.getBoard).toHaveBeenCalledTimes(1);
         });
 
-        it('submits on Enter and keeps the composer open for the next card', async () => {
+        it('submits on Enter, then puts the form away and focus back on "Add a card"', async () => {
             render(<BoardPage />);
             await screen.findByText('Fix login');
 
@@ -307,8 +335,30 @@ describe('BoardPage', () => {
                     expect.objectContaining({ projectId: 'p1', title: 'Rotate the keys' }),
                 ),
             );
-            await waitFor(() => expect(field).toHaveValue(''));
-            expect(screen.getByRole('textbox', { name: /add a card/i })).toBeInTheDocument();
+            // The card is the confirmation; an open form under it is what used
+            // to push it out of sight.
+            expect(
+                await screen.findByRole('button', { name: /open task: Rotate the keys/i }),
+            ).toBeInTheDocument();
+            expect(screen.queryByRole('textbox', { name: /add a card/i })).not.toBeInTheDocument();
+            // The next card is still one keystroke away.
+            expect(screen.getAllByRole('button', { name: /add a card/i })[0]).toHaveFocus();
+        });
+
+        it('keeps the form open, with what was typed, when the save fails', async () => {
+            const toastErrorSpy = jest.spyOn(toast, 'error').mockImplementation(() => '');
+            (api.createBoardCard as jest.Mock).mockRejectedValue(new Error('Could not reach the server'));
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const field = await openComposer(0);
+            fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+            fireEvent.keyDown(field, { key: 'Enter' });
+
+            await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Could not reach the server'));
+            expect(screen.getByRole('textbox', { name: /add a card/i })).toHaveValue('Rotate the keys');
+            toastErrorSpy.mockRestore();
         });
 
         it('sends the project chosen in the composer, since a board spans projects', async () => {
@@ -544,10 +594,9 @@ describe('BoardPage', () => {
                 );
             });
 
-            // A run of cards is the case this control exists for: the composer
-            // stays open after a save, and it must not silently reset to the
-            // filter's default once somebody has overridden it.
-            it('keeps an override across a run of cards', async () => {
+            // An override is a choice about one card. A save puts the composer
+            // away, and reopening it is a fresh start from the default.
+            it('starts the next card from the default again after a save', async () => {
                 render(<BoardPage />);
                 await screen.findByText('Fix login');
 
@@ -556,20 +605,19 @@ describe('BoardPage', () => {
                 fireEvent.change(field, { target: { value: 'First' } });
                 fireEvent.keyDown(field, { key: 'Enter' });
 
-                await waitFor(() => expect(field).toHaveValue(''));
-                fireEvent.change(field, { target: { value: 'Second' } });
-                fireEvent.keyDown(field, { key: 'Enter' });
-
                 await waitFor(() =>
-                    expect(api.createBoardCard).toHaveBeenLastCalledWith(
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
                         'b1',
                         'c1',
-                        expect.objectContaining({
-                            title: 'Second',
-                            assigneeId: 'u-rafi',
-                        }),
+                        expect.objectContaining({ title: 'First', assigneeId: 'u-rafi' }),
                     ),
                 );
+                await waitFor(() =>
+                    expect(screen.queryByRole('textbox', { name: /add a card/i })).not.toBeInTheDocument(),
+                );
+
+                await openComposer(0);
+                expect(screen.getByRole('combobox', { name: 'Assign card to' })).toHaveValue('user:me-1');
             });
         });
 
@@ -582,6 +630,293 @@ describe('BoardPage', () => {
             fireEvent.keyDown(field, { key: 'Enter' });
 
             expect(api.createBoardCard).not.toHaveBeenCalled();
+        });
+
+        /**
+         * The card lands at the foot of its column — below the fold on a long
+         * one, and inside the column's own scroller on a board that scrolls by
+         * column. Neither is somewhere the reader is looking.
+         */
+        describe('bringing the new card into view', () => {
+            let scrolledTo: Element[];
+
+            beforeEach(() => {
+                scrolledTo = [];
+                // jsdom lays nothing out and has no scrollIntoView to call.
+                Element.prototype.scrollIntoView = jest.fn(function (this: Element) {
+                    scrolledTo.push(this);
+                });
+            });
+
+            afterEach(() => {
+                delete (Element.prototype as Partial<Element>).scrollIntoView;
+                jest.useRealTimers();
+            });
+
+            it('scrolls to the card and marks it for a moment', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                const field = await openComposer(0);
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                jest.useFakeTimers();
+                fireEvent.keyDown(field, { key: 'Enter' });
+
+                const card = await screen.findByRole('button', { name: /open task: Rotate the keys/i });
+                await waitFor(() => expect(scrolledTo).toContain(card));
+                expect(card).toHaveClass('ring-2');
+
+                // Let go again: a mark that stayed would read as a state.
+                act(() => {
+                    jest.advanceTimersByTime(2000);
+                });
+                expect(card).not.toHaveClass('ring-2');
+            });
+
+            it('keeps it on screen through a filter it does not match, until the filter changes', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+
+                fireEvent.change(screen.getByLabelText('Search cards'), { target: { value: 'login' } });
+                expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+
+                const field = await openComposer(0);
+                fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                fireEvent.keyDown(field, { key: 'Enter' });
+
+                // A new card the search would hide looks like a save that failed.
+                expect(
+                    await screen.findByRole('button', { name: /open task: Rotate the keys/i }),
+                ).toBeInTheDocument();
+                // Only the card just made is let through.
+                expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+
+                // The next filter the reader picks applies to it like any other.
+                fireEvent.change(screen.getByLabelText('Search cards'), { target: { value: 'logi' } });
+                await waitFor(() =>
+                    expect(screen.queryByText('Rotate the keys')).not.toBeInTheDocument(),
+                );
+                expect(screen.getByText('Fix login')).toBeInTheDocument();
+            });
+
+            // A folded lane renders no cards at all, so one handed to its
+            // person from another lane's composer would land out of sight.
+            it('unfolds the lane the card lands in', async () => {
+                const rafi = { id: 'u-rafi', name: 'Rafi Hasan', email: 'rafi@erp71.com' };
+                localStorage.setItem(
+                    BOARD_VIEW_STORAGE_KEY,
+                    JSON.stringify({ ...DEFAULT_BOARD_VIEW, swimlanes: 'assignee' }),
+                );
+                (api.getBoard as jest.Mock).mockResolvedValue({
+                    id: 'b1',
+                    name: 'Release 4',
+                    columns: [
+                        {
+                            id: 'c1',
+                            name: 'To Do',
+                            category: 'TODO',
+                            wip_limit: null,
+                            tasks: [
+                                { ...task('k1', 'Fix login', { id: 'p1', code: 'ALP' }), assignee: rafi },
+                                task('k2', 'Ship docs', { id: 'p1', code: 'ALP' }),
+                            ],
+                        },
+                    ],
+                    unsorted: [],
+                });
+                // The answer has the new card on Rafi, as the server would.
+                (api.createBoardCard as jest.Mock).mockImplementation(
+                    async (...args: Parameters<typeof composedAnswer>) => {
+                        const answer = await composedAnswer(...args);
+                        return {
+                            ...answer,
+                            columns: answer.columns.map((column: { tasks: { id: string }[] }) => ({
+                                ...column,
+                                tasks: column.tasks.map((card) =>
+                                    card.id === 'k-new' ? { ...card, assignee: rafi } : card,
+                                ),
+                            })),
+                        };
+                    },
+                );
+
+                try {
+                    render(<BoardPage />);
+                    await screen.findByText('Fix login');
+
+                    const rafisLane = () => within(screen.getByRole('region', { name: 'Rafi Hasan' }));
+                    fireEvent.click(rafisLane().getByRole('button', { expanded: true }));
+                    expect(screen.queryByText('Fix login')).not.toBeInTheDocument();
+
+                    // Composed in the Unassigned lane, and handed to Rafi.
+                    const unassigned = within(screen.getByRole('region', { name: 'Unassigned' }));
+                    fireEvent.click(unassigned.getByRole('button', { name: /add a card/i }));
+                    const holder = screen.getByRole('combobox', { name: 'Assign card to' });
+                    fireEvent.focus(holder);
+                    await within(holder).findByRole('option', { name: 'Rafi Hasan' });
+                    fireEvent.change(holder, { target: { value: 'user:u-rafi' } });
+                    const field = screen.getByRole('textbox', { name: /add a card/i });
+                    fireEvent.change(field, { target: { value: 'Rotate the keys' } });
+                    fireEvent.keyDown(field, { key: 'Enter' });
+
+                    const card = await rafisLane().findByRole('button', {
+                        name: /open task: Rotate the keys/i,
+                    });
+                    expect(card).toBeInTheDocument();
+                    expect(rafisLane().getByText('Fix login')).toBeInTheDocument();
+                } finally {
+                    localStorage.clear();
+                }
+            });
+        });
+
+        /** "More fields": the composer's way into the New Task form. */
+        describe('the full New Task form', () => {
+            const dialog = () => within(screen.getByRole('dialog'));
+
+            it('opens with what the composer had, and says which column the card goes into', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Ship docs');
+
+                const field = await openComposer(1);
+                fireEvent.change(field, { target: { value: 'Write changelog' } });
+                fireEvent.click(screen.getByRole('button', { name: 'More fields' }));
+
+                await screen.findByRole('dialog');
+                expect(dialog().getByLabelText(/^title/i)).toHaveValue('Write changelog');
+                expect(dialog().getByLabelText(/^project/i)).toHaveValue('p1');
+                // The holder the composer would have picked: the signed-in user.
+                expect(dialog().getByLabelText('Assignee')).toHaveValue('user:me-1');
+                expect(dialog().getByText('Column: Done')).toBeInTheDocument();
+                // The line it replaced is put away, not left open behind it.
+                expect(screen.queryByRole('textbox', { name: /add a card/i })).not.toBeInTheDocument();
+            });
+
+            it('files the card into that column with the rest of the form, then shows it', async () => {
+                render(<BoardPage />);
+                await screen.findByText('Ship docs');
+
+                await openComposer(1);
+                fireEvent.click(screen.getByRole('button', { name: 'More fields' }));
+                await screen.findByRole('dialog');
+
+                fireEvent.change(dialog().getByLabelText(/^title/i), {
+                    target: { value: 'Write changelog' },
+                });
+                fireEvent.change(dialog().getByLabelText(/^due date/i), {
+                    target: { value: '2026-10-01' },
+                });
+                fireEvent.change(dialog().getByLabelText(/^estimate/i), { target: { value: '3' } });
+                fireEvent.click(dialog().getByRole('button', { name: /set priority/i }));
+                fireEvent.change(dialog().getByLabelText(/^priority/i), { target: { value: 'HIGH' } });
+                fireEvent.click(dialog().getByRole('button', { name: /^save$/i }));
+
+                await waitFor(() =>
+                    expect(api.createBoardCard).toHaveBeenCalledWith(
+                        'b1',
+                        'c2',
+                        expect.objectContaining({
+                            projectId: 'p1',
+                            title: 'Write changelog',
+                            dueDate: '2026-10-01',
+                            estimateHours: 3,
+                            priority: 'HIGH',
+                            assigneeId: 'me-1',
+                            assigneeEmployeeId: '',
+                        }),
+                    ),
+                );
+                await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+                const card = await screen.findByRole('button', { name: /open task: Write changelog/i });
+                expect(document.querySelector(`[${COLUMN_ATTR}="c2"]`)).toContainElement(card);
+            });
+
+            it('stays open with what was entered when the column refuses the card', async () => {
+                const toastErrorSpy = jest.spyOn(toast, 'error').mockImplementation(() => '');
+                (api.createBoardCard as jest.Mock).mockRejectedValue(
+                    new ApiError('That column is not mapped to a status in this project.', 400),
+                );
+
+                render(<BoardPage />);
+                await screen.findByText('Ship docs');
+                const field = await openComposer(1);
+                fireEvent.change(field, { target: { value: 'Write changelog' } });
+                fireEvent.click(screen.getByRole('button', { name: 'More fields' }));
+                await screen.findByRole('dialog');
+                fireEvent.click(dialog().getByRole('button', { name: /^save$/i }));
+
+                await waitFor(() =>
+                    expect(toastErrorSpy).toHaveBeenCalledWith(
+                        'That column is not mapped to a status in this project.',
+                    ),
+                );
+                expect(dialog().getByLabelText(/^title/i)).toHaveValue('Write changelog');
+                toastErrorSpy.mockRestore();
+            });
+
+            /**
+             * A story lane decides two things the form would otherwise ask:
+             * the story, and — since a task joins only a story of its own
+             * project — the project.
+             */
+            it('files a card from a story lane into that story, in the story’s project', async () => {
+                localStorage.setItem(
+                    BOARD_VIEW_STORAGE_KEY,
+                    JSON.stringify({ ...DEFAULT_BOARD_VIEW, swimlanes: 'story' }),
+                );
+                (api.getBoard as jest.Mock).mockResolvedValue({
+                    id: 'b1',
+                    name: 'Release 4',
+                    columns: [
+                        {
+                            id: 'c1',
+                            name: 'To Do',
+                            category: 'TODO',
+                            wip_limit: null,
+                            tasks: [
+                                {
+                                    ...task('k1', 'Fix login', { id: 'p2', code: 'BET' }),
+                                    userStory: { id: 's1', code: 'BET-3', title: 'Checkout' },
+                                },
+                            ],
+                        },
+                    ],
+                    unsorted: [],
+                });
+
+                try {
+                    render(<BoardPage />);
+                    await screen.findByText('Fix login');
+
+                    // jsdom is phone-width: one column, the lanes stacked under it.
+                    const lane = within(screen.getByRole('region', { name: 'Checkout' }));
+                    fireEvent.click(lane.getByRole('button', { name: /add a card/i }));
+                    fireEvent.click(screen.getByRole('button', { name: 'More fields' }));
+                    await screen.findByRole('dialog');
+
+                    expect(dialog().queryByLabelText(/^project/i)).not.toBeInTheDocument();
+                    expect(dialog().getByText('Column: To Do · BET-3 Checkout')).toBeInTheDocument();
+
+                    fireEvent.change(dialog().getByLabelText(/^title/i), {
+                        target: { value: 'Pay by card' },
+                    });
+                    fireEvent.click(dialog().getByRole('button', { name: /^save$/i }));
+
+                    await waitFor(() =>
+                        expect(api.createBoardCard).toHaveBeenCalledWith(
+                            'b1',
+                            'c1',
+                            expect.objectContaining({
+                                projectId: 'p2',
+                                userStoryId: 's1',
+                                title: 'Pay by card',
+                            }),
+                        ),
+                    );
+                } finally {
+                    localStorage.clear();
+                }
+            });
         });
     });
 

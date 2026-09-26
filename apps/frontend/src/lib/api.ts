@@ -5340,8 +5340,10 @@ export const api = {
             body: JSON.stringify({ taskIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
-    /** Compose a new task straight into a board column; returns the reloaded board. */
     /**
+     * Compose a new task straight into a board column. Returns the reloaded
+     * board, with `created_task_id` naming the card that is new.
+     *
      * Both assignee columns travel on every card: a task goes to a user or to
      * an employee without a login, never both, so whichever one the chosen
      * holder does not fill is sent as `''`. The DTO is spelled for that.
@@ -5356,6 +5358,11 @@ export const api = {
             assigneeEmployeeId?: string;
             /** Set when the card is composed inside a story swimlane. */
             userStoryId?: string;
+            /** The rest of the New Task form, when the card is filed through it. */
+            description?: string;
+            priority?: string;
+            dueDate?: string;
+            estimateHours?: number;
         },
     ) =>
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards`, {
