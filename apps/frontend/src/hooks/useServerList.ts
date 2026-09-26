@@ -25,9 +25,16 @@ export interface ServerPaginationProps<T = unknown> {
     fetchAllRows?: (onProgress?: (loaded: number, total: number) => void) => Promise<FetchAllPagesResult<T>>;
 }
 
-export interface UseServerListResult<T> {
+export interface UseServerListResult<T, R extends Paginated<T> = Paginated<T>> {
     items: T[];
     total: number;
+    /**
+     * The whole payload of the last response that committed, or null before the
+     * first one and after a failed one. For endpoints that send something beside
+     * the page — a report's period totals — which is then guaranteed to belong
+     * to the same request as `items`, stale responses dropped alike.
+     */
+    response: R | null;
     loading: boolean;
     error: unknown;
     /** Spread straight into `<DataTable serverPagination={...} />`. */
@@ -55,7 +62,7 @@ export interface UseServerListResult<T> {
  * newest in-flight request is allowed to commit — otherwise the slower stale
  * response can overwrite the correct rows.
  */
-export function useServerList<T>({
+export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
     fetch,
     deps = [],
     tableId,
@@ -63,7 +70,7 @@ export function useServerList<T>({
     initialSort = null,
     enabled = true,
 }: {
-    fetch: (params: ServerListParams) => Promise<Paginated<T>>;
+    fetch: (params: ServerListParams) => Promise<R>;
     deps?: unknown[];
     /**
      * The `tableId` of the DataTable this drives. Supplying it makes a chosen rows-per-page
@@ -76,9 +83,10 @@ export function useServerList<T>({
     initialSort?: { id: string; desc: boolean } | null;
     /** Set false to hold off fetching until prerequisites (e.g. a selected account) exist. */
     enabled?: boolean;
-}): UseServerListResult<T> {
+}): UseServerListResult<T, R> {
     const [items, setItems] = useState<T[]>([]);
     const [total, setTotal] = useState(0);
+    const [response, setResponse] = useState<R | null>(null);
     const [loading, setLoading] = useState(enabled);
     const [error, setError] = useState<unknown>(null);
     const [page, setPage] = useState(1);
@@ -102,6 +110,7 @@ export function useServerList<T>({
         if (!enabled) {
             setItems([]);
             setTotal(0);
+            setResponse(null);
             setLoading(false);
             return;
         }
@@ -117,11 +126,13 @@ export function useServerList<T>({
             if (seq !== loadSeq.current) return;
             setItems(result?.items ?? []);
             setTotal(result?.total ?? 0);
+            setResponse(result ?? null);
             setError(null);
         } catch (err) {
             if (seq !== loadSeq.current) return;
             setItems([]);
             setTotal(0);
+            setResponse(null);
             setError(err);
         } finally {
             if (seq === loadSeq.current) setLoading(false);
@@ -164,5 +175,5 @@ export function useServerList<T>({
         fetchAllRows,
     }), [total, page, pageSize, sort, fetchAllRows]);
 
-    return { items, total, loading, error, serverPagination, reload: load, setItems, page, pageSize, sort };
+    return { items, total, response, loading, error, serverPagination, reload: load, setItems, page, pageSize, sort };
 }

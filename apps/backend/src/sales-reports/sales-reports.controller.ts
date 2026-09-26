@@ -21,18 +21,23 @@ import {
     GetSalesByCategoryDto,
     GetSalesByCustomerDto,
     GetSalesByProductDto,
+    GetSalesLineItemsDto,
     GetSalesSummaryDto,
     GetSalesTrendDto,
     GetTopMoversDto,
 } from './sales-reports.dto';
 import { SalesReportsService } from './sales-reports.service';
+import { SalesLineItemsService } from './sales-line-items.service';
 
 @Controller('sales-reports')
 @UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
 @UseInterceptors(TenantInterceptor)
 @RequiresPlan('BASIC')
 export class SalesReportsController {
-    constructor(private readonly service: SalesReportsService) {}
+    constructor(
+        private readonly service: SalesReportsService,
+        private readonly lineItems: SalesLineItemsService,
+    ) {}
 
     @Get('summary')
     getSalesSummary(@Tenant() tenant: TenantContext, @Query() query: GetSalesSummaryDto) {
@@ -64,6 +69,15 @@ export class SalesReportsController {
     @Get('by-customer')
     getSalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCustomerDto) {
         return this.service.getSalesByCustomer(tenant.tenantId, query);
+    }
+
+    /**
+     * Every sale line, searchable. No financial-report permission: it shows
+     * what was sold and at what price, never what it cost.
+     */
+    @Get('line-items')
+    getSalesLineItems(@Tenant() tenant: TenantContext, @Query() query: GetSalesLineItemsDto) {
+        return this.lineItems.getSalesLineItems(tenant.tenantId, query, tenant.timezone);
     }
 
     @Get('monthly-by-customer')

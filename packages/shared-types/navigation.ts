@@ -84,6 +84,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'sales.reports': { id: 'sales.reports', kind: 'subgroup', icon: 'BarChart3', labelKey: 'sales.hub.reports', advancedOnly: true },
   'sales.reports.summary': { id: 'sales.reports.summary', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.salesSummary', href: '/sales/reports/summary' },
   'sales.reports.products': { id: 'sales.reports.products', kind: 'link', icon: 'Package', labelKey: 'sidebar.items.salesByProduct', href: '/sales/reports/products' },
+  'sales.reports.line-items': { id: 'sales.reports.line-items', kind: 'link', icon: 'ScrollText', labelKey: 'sidebar.items.salesLineItems', href: '/sales/reports/line-items' },
   'sales.reports.consolidated': { id: 'sales.reports.consolidated', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.consolidated', href: '/sales/reports/consolidated' },
   'sales.reports.branch-report': { id: 'sales.reports.branch-report', kind: 'link', icon: 'BarChart3', labelKey: 'sidebar.items.branchReport', href: '/sales/reports/branch-report' },
   // `exact` on the by-product entry: the other three sit under its href, and the
@@ -129,6 +130,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'purchase.reports.summary': { id: 'purchase.reports.summary', kind: 'link', icon: 'TrendingUp', labelKey: 'sidebar.items.purchaseSummary', href: '/purchases/reports/summary', advancedOnly: true },
   'purchase.reports.by-product': { id: 'purchase.reports.by-product', kind: 'link', icon: 'Package', labelKey: 'sidebar.items.purchasesByProduct', href: '/purchases/reports/by-product', advancedOnly: true },
   'purchase.reports.by-supplier': { id: 'purchase.reports.by-supplier', kind: 'link', icon: 'Truck', labelKey: 'sidebar.items.purchasesBySupplier', href: '/purchases/reports/by-supplier', advancedOnly: true },
+  'purchase.reports.line-items': { id: 'purchase.reports.line-items', kind: 'link', icon: 'ScrollText', labelKey: 'sidebar.items.purchaseLineItems', href: '/purchases/reports/line-items', advancedOnly: true },
   'purchase.setup': { id: 'purchase.setup', kind: 'subgroup', icon: 'Layers', labelKey: 'purchases.hub.setup' },
   'purchase.setup.suppliers': { id: 'purchase.setup.suppliers', kind: 'link', icon: 'Truck', labelKey: 'sidebar.items.suppliers', href: '/purchases/suppliers' },
 
@@ -401,6 +403,10 @@ function layoutNode(id: string, parentId: string | null, sortOrder: number, visi
  *
  * The 2026-09-24 epics added `projects.epics` the same way:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=projects.epics`.
+ *
+ * The 2026-09-26 line-item searches added one leaf to each of the two report
+ * subgroups, again with no reset needed:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=sales.reports.line-items,purchase.reports.line-items`.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -418,16 +424,17 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.reports', 'sales', 10),
   layoutNode('sales.reports.summary', 'sales.reports', 0),
   layoutNode('sales.reports.products', 'sales.reports', 1),
-  layoutNode('sales.reports.consolidated', 'sales.reports', 2),
-  layoutNode('sales.reports.branch-report', 'sales.reports', 3),
-  layoutNode('sales.reports.gross-profit', 'sales.reports', 4),
-  layoutNode('sales.reports.gross-profit-salespeople', 'sales.reports', 5),
-  layoutNode('sales.reports.gross-profit-exceptions', 'sales.reports', 6),
-  layoutNode('sales.reports.gross-profit-bridge', 'sales.reports', 7),
-  layoutNode('sales.receivables.customer-ledger', 'sales.reports', 8),
-  layoutNode('sales.receivables.due-aging', 'sales.reports', 9),
-  layoutNode('sales.customers.loyalty', 'sales.reports', 10),
-  layoutNode('sales.receivables.bad-debts', 'sales.reports', 11),
+  layoutNode('sales.reports.line-items', 'sales.reports', 2),
+  layoutNode('sales.reports.consolidated', 'sales.reports', 3),
+  layoutNode('sales.reports.branch-report', 'sales.reports', 4),
+  layoutNode('sales.reports.gross-profit', 'sales.reports', 5),
+  layoutNode('sales.reports.gross-profit-salespeople', 'sales.reports', 6),
+  layoutNode('sales.reports.gross-profit-exceptions', 'sales.reports', 7),
+  layoutNode('sales.reports.gross-profit-bridge', 'sales.reports', 8),
+  layoutNode('sales.receivables.customer-ledger', 'sales.reports', 9),
+  layoutNode('sales.receivables.due-aging', 'sales.reports', 10),
+  layoutNode('sales.customers.loyalty', 'sales.reports', 11),
+  layoutNode('sales.receivables.bad-debts', 'sales.reports', 12),
   layoutNode('sales.setup', 'sales', 11),
   layoutNode('sales.setup.customer-groups', 'sales.setup', 0),
   layoutNode('sales.setup.price-lists', 'sales.setup', 1),
@@ -455,6 +462,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('purchase.reports.summary', 'purchase.reports', 0),
   layoutNode('purchase.reports.by-product', 'purchase.reports', 1),
   layoutNode('purchase.reports.by-supplier', 'purchase.reports', 2),
+  layoutNode('purchase.reports.line-items', 'purchase.reports', 3),
   layoutNode('purchase.setup', 'purchase', 8),
   layoutNode('purchase.setup.suppliers', 'purchase.setup', 0),
 

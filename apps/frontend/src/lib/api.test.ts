@@ -1091,6 +1091,38 @@ describe('api.getMonthlySalesByCustomer', () => {
     });
 });
 
+describe('api.getSalesLineItems', () => {
+    it('sends only the filters that are set and unwraps the report', async () => {
+        const report = { summary: { lineCount: 1 }, rows: [], pagination: { page: 2, limit: 50, total: 51, pages: 2 } };
+        mockOk({ data: report });
+
+        const result = await api.getSalesLineItems({
+            from: '2026-03-01',
+            to: '',
+            customerId: 'c1',
+            productId: undefined,
+            search: 'rice',
+            page: 2,
+            limit: 50,
+            sortBy: 'unitPrice',
+            sortDir: 'desc',
+        });
+
+        const url = new URL(lastUrl(), 'http://localhost');
+        expect(url.pathname).toMatch(/\/sales-reports\/line-items$/);
+        expect(Object.fromEntries(url.searchParams)).toEqual({
+            from: '2026-03-01',
+            customerId: 'c1',
+            search: 'rice',
+            page: '2',
+            limit: '50',
+            sortBy: 'unitPrice',
+            sortDir: 'desc',
+        });
+        expect(result).toEqual(report);
+    });
+});
+
 describe('api.getBranchReport', () => {
     it('fetches /sales-reports/branch-report with storeId required', async () => {
         mockOk({ data: {} });
@@ -2173,6 +2205,17 @@ describe('api.getPurchasesBySupplier', () => {
         mockOk({ data: {} });
         await api.getPurchasesBySupplier({ storeId: 's1' });
         expect(lastUrl()).toContain('/purchase-reports/by-supplier');
+    });
+});
+
+describe('api.getPurchaseLineItems', () => {
+    it('fetches /purchase-reports/line-items with the supplier filter', async () => {
+        mockOk({ data: { rows: [] } });
+        await api.getPurchaseLineItems({ supplierId: 'sup1', storeId: 's1' });
+
+        const url = new URL(lastUrl(), 'http://localhost');
+        expect(url.pathname).toMatch(/\/purchase-reports\/line-items$/);
+        expect(Object.fromEntries(url.searchParams)).toEqual({ supplierId: 'sup1', storeId: 's1' });
     });
 });
 
