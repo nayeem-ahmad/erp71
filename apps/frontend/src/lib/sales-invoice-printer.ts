@@ -1,6 +1,7 @@
 import { formatBDT } from './format';
+import { invoiceDues } from './customer-credit';
 import { paymentMethodLabel } from './payment-method-label';
-import { openPrintWindow, renderHeaderHtml } from './print';
+import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
@@ -46,6 +47,14 @@ export interface InvoiceData {
     laborCost?: number;
     rounding?: number;
     total: number;
+    /** Paid against this invoice; the payments' sum when left out. */
+    amountPaid?: number;
+    /**
+     * What the customer owed before this invoice. With it the totals close on
+     * the invoice's own due, this previous due and the total due — the two
+     * added together. Left out for a walk-in, who owes nothing on account.
+     */
+    previousDue?: number | null;
     note?: string;
 }
 
@@ -123,6 +132,13 @@ function buildStyles(isThermal: boolean): string {
             padding-top:${isThermal ? '4px' : '8px'};
             color:${isThermal ? '#000' : '#111827'};
         }
+        /* What the customer owes once this invoice stands — the figure a credit
+           customer reads first, so it is ruled off like the total above. */
+        .total-due td {
+            font-weight:bold;
+            border-top:1px solid ${isThermal ? '#000' : '#e5e7eb'};
+            color:${isThermal ? '#000' : '#111827'};
+        }
 
         /* Payments */
         .payments-section { ${isThermal ? 'margin:6px 0;' : 'background:#f8fafc; border-radius:8px; padding:12px 16px; margin-bottom:20px;'} }
@@ -141,7 +157,58 @@ function buildStyles(isThermal: boolean): string {
         }
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
+        ${isThermal ? '' : compactStyles()}
     `;
+}
+
+/**
+ * The compact invoice: as many item rows on a sheet as stay comfortable to
+ * read. Cells, gaps and type all tighten, and the SKU moves up beside the item
+ * name — on its own line it doubles the height of every row that has one.
+ *
+ * Inert until `html.p71-compact` is set, and never emitted for a roll, which
+ * does not compact (see `PrintDensity`).
+ */
+function compactStyles(): string {
+    const c = COMPACT_SCOPE;
+    return `
+        ${c} .invoice-body { padding:1mm 0; }
+        ${c} .meta-grid { gap:8px; margin-bottom:8px; }
+        ${c} .meta-block { padding:5px 10px; border-radius:6px; }
+        ${c} .meta-block h3 { font-size:10px; margin-bottom:2px; }
+        ${c} .meta-block p { font-size:11px; margin-bottom:0; }
+        ${c} .divider { margin:0 0 6px 0; }
+        ${c} .items-table { margin-bottom:6px; }
+        ${c} .items-table thead th { font-size:10px; padding:3px 6px; }
+        ${c} .items-table tbody td { font-size:11px; padding:2px 6px; }
+        ${c} .item-name br, ${c} .pay-label br { display:none; }
+        ${c} .item-name .sku, ${c} .pay-label .pay-ref { margin-left:6px; }
+        ${c} .totals-wrap { margin-bottom:6px; }
+        ${c} .totals-table td { font-size:11px; padding:1px 6px; }
+        ${c} .grand-total td { font-size:13px; padding-top:3px; }
+        ${c} .payments-section { padding:5px 10px; margin-bottom:6px; border-radius:6px; }
+        ${c} .payments-section h3 { font-size:10px; margin-bottom:2px; }
+        ${c} .pay-label, ${c} .pay-amount { font-size:11px; padding:1px 0; }
+        ${c} .pay-ref { font-size:10px; }
+        ${c} .note-box { font-size:11px; padding:5px 8px; margin-bottom:6px; }
+        ${c} .footer { font-size:10px; margin-top:8px; padding-top:6px; }`;
+}
+
+/**
+ * The memo's closing lines under the total: paid, this invoice's due, what the
+ * customer owed before it, and the total due. Printed only for a customer who
+ * owes something either way, so a settled invoice looks as it always has.
+ */
+function buildDueRows(data: InvoiceData): string {
+    const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
+    const dues = invoiceDues(data.total, paid, data.previousDue);
+    if (!dues) return '';
+
+    return `
+            <tr><td>Paid</td><td>${formatBDT(dues.paid)}</td></tr>
+            ${dues.invoiceDue > 0.005 ? `<tr><td>Due</td><td>${formatBDT(dues.invoiceDue)}</td></tr>` : ''}
+            <tr><td>Previous Due</td><td>${formatBDT(dues.previousDue)}</td></tr>
+            <tr class="total-due"><td>Total Due</td><td>${formatBDT(dues.totalDue)}</td></tr>`;
 }
 
 function buildBody(data: InvoiceData, isThermal: boolean): string {
@@ -206,6 +273,7 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
             ${data.laborCost ? `<tr><td>Labour</td><td>${formatBDT(data.laborCost)}</td></tr>` : ''}
             ${data.rounding ? `<tr><td>Rounding</td><td>${formatBDT(data.rounding)}</td></tr>` : ''}
             <tr class="grand-total"><td>TOTAL</td><td>${formatBDT(data.total)}</td></tr>
+            ${buildDueRows(data)}
         </table>
     </div>
 
@@ -248,6 +316,8 @@ export function printSalesInvoice(
         styles: buildStyles(isThermal),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
+        // A long item list is exactly what compact is for.
+        compactable: true,
         preview,
     });
 }

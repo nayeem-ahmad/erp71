@@ -1,0 +1,6 @@
+// Google Sign-In for iOS. Replace both values with the iOS OAuth client from
+// the same Google Cloud project as the backend's GOOGLE_CLIENT_ID — see
+// apps/mobile/README.md. The reversed id is the client id with its dotted
+// parts in reverse order: com.googleusercontent.apps.<number>-<hash>.
+GOOGLE_IOS_CLIENT_ID = REPLACE_WITH_IOS_CLIENT_ID.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.REPLACE_WITH_IOS_CLIENT_ID

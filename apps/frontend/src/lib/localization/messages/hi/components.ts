@@ -231,6 +231,12 @@ export const componentsMessages = {
         noPreview: "इस फ़ाइल का पूर्वावलोकन नहीं किया जा सकता।",
     },
 
+    printWindow: {
+        /* The switch in the toolbar over every print window that lists rows. */
+        compact: 'कॉम्पैक्ट लेआउट',
+        compactHint: 'छोटा टेक्स्ट और सघन पंक्तियाँ, ताकि हर पेज पर ज़्यादा लाइनें आएँ',
+    },
+
     richText: {
         toolbar: "फ़ॉर्मैटिंग",
         hint: "फ़ॉर्मैटिंग: **बोल्ड**, *इटैलिक*, - सूचियाँ और [लिंक](url)।",

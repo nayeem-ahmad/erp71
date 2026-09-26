@@ -352,6 +352,8 @@ export const salesMessages = {
             paperSizeHint: 'اس براؤزر سے انوائس اور چالان اس سائز میں پرنٹ ہوں گے۔ دکان کا ڈیفالٹ سیٹنگز ← سیلز میں طے ہوتا ہے۔',
             skipPreviewLabel: 'پرنٹ پیش نظارہ چھوڑیں',
             skipPreviewHint: 'دستاویزات پہلے دکھانے کے بجائے سیدھا پرنٹر پر بھیجیں۔',
+            compactLabel: 'کمپیکٹ لے آؤٹ',
+            compactHint: 'چھوٹا متن اور قریب قریب قطاریں، تاکہ لمبے انوائس کے ہر صفحے پر زیادہ سطریں آئیں۔ اس براؤزر سے A4، A5 اور Letter پر پرنٹ ہونے والی ہر دستاویز پر لاگو۔',
             saved: 'پرنٹ سیٹنگز محفوظ ہو گئیں',
         },
         printMenu: {
@@ -449,6 +451,8 @@ export const salesMessages = {
             amountPaid: 'ادا شدہ رقم',
             change: 'واپس رقم',
             balanceDue: 'واجب الادا بیلنس',
+            previousDue: 'سابقہ بقایا',
+            totalDue: 'کل بقایا',
             paymentDetails: 'ادائیگی کی تفصیلات',
             notePrefix: 'نوٹ: ',
             binVatReg: 'بی آئی این (ویٹ رجسٹریشن):',

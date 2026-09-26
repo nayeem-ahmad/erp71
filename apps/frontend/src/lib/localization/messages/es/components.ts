@@ -231,6 +231,12 @@ export const componentsMessages = {
         noPreview: "Este archivo no se puede previsualizar.",
     },
 
+    printWindow: {
+        /* The switch in the toolbar over every print window that lists rows. */
+        compact: 'Diseño compacto',
+        compactHint: 'Texto más pequeño y filas más juntas para que quepan más líneas en cada página',
+    },
+
     richText: {
         toolbar: "Formato",
         hint: "Formato: **negrita**, *cursiva*, - listas y [enlaces](url).",

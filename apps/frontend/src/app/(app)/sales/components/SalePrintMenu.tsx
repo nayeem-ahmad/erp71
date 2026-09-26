@@ -2,9 +2,10 @@
 
 import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, Eye, FileCheck, Printer, Receipt, Truck } from 'lucide-react';
+import { ChevronDown, Eye, FileCheck, Printer, Receipt, Square, SquareCheck, Truck } from 'lucide-react';
 import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
+import { usePrintDensity } from '@/lib/print/use-print-density';
 import { PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
@@ -40,6 +41,11 @@ export interface SalePrintMenuProps {
  * six icons in the row, and it means the three screens that print a sale cannot
  * drift apart in what they offer.
  *
+ * Under the sizes sits the Compact switch. It is a setting, not a print — it
+ * keeps the menu open so a size can be picked next — and it is the same
+ * remembered answer the print window's own switch and the sales list's print
+ * settings show, so the three always agree.
+ *
  * The panel goes through `AnchoredDropdown` rather than being an `absolute`
  * child: on the detail screen this button sits inside the entry layout's 320px
  * `overflow-hidden` sidebar, where an in-flow panel wider than the column gets
@@ -58,6 +64,9 @@ export default function SalePrintMenu({
 }: SalePrintMenuProps) {
     const { t } = useI18n();
     const copy = t.sales.printMenu;
+    const [density, setDensity] = usePrintDensity();
+    // Not `compact` — that prop already means the icon-only trigger.
+    const printsCompact = density === 'compact';
     const [open, setOpen] = useState(false);
     const wrapRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -139,6 +148,21 @@ export default function SalePrintMenu({
                             {paperSizeLabel(size)}
                         </button>
                     ))}
+                    <button
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={printsCompact}
+                        onClick={() => setDensity(printsCompact ? 'normal' : 'compact')}
+                        title={t.components.printWindow.compactHint}
+                        className={itemClass}
+                    >
+                        {printsCompact ? (
+                            <SquareCheck className="h-4 w-4 text-blue-600" />
+                        ) : (
+                            <Square className="h-4 w-4 text-gray-400" />
+                        )}
+                        {t.components.printWindow.compact}
+                    </button>
 
                     <div className="my-1 border-t" />
                     <p className={headingClass}>{copy.otherDocuments}</p>

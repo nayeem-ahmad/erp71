@@ -352,6 +352,8 @@ export const salesMessages = {
             paperSizeHint: 'Format d’impression des factures et bons de livraison depuis ce navigateur. La valeur par défaut de la boutique se règle dans Paramètres → Ventes.',
             skipPreviewLabel: 'Ignorer l’aperçu avant impression',
             skipPreviewHint: 'Envoyer les documents directement à l’imprimante au lieu de les afficher d’abord.',
+            compactLabel: 'Mise en page compacte',
+            compactHint: 'Texte plus petit et lignes resserrées : une longue facture tient plus de lignes par page. S’applique à tous les documents imprimés depuis ce navigateur en A4, A5 et Letter.',
             saved: 'Paramètres d’impression enregistrés',
         },
         printMenu: {
@@ -449,6 +451,8 @@ export const salesMessages = {
             amountPaid: "Montant payé",
             change: "Monnaie rendue",
             balanceDue: "Solde dû",
+            previousDue: "Solde antérieur",
+            totalDue: "Total dû",
             paymentDetails: "Détails du paiement",
             notePrefix: "Note : ",
             binVatReg: "BIN (n° TVA) :",

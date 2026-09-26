@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'یوزر اسٹوریز',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "سمیٹیں",
         loadFailed: "بیک لاگ لوڈ نہیں ہو سکا",
         createFailed: "شامل نہیں ہو سکا",
+        dragHandle: "منتقل کرنے کے لیے گھسیٹیں",
+        moveTo: "یہاں منتقل کریں…",
+        moveToLabel: "{title} کو منتقل کریں…",
+        noStory: "کوئی اسٹوری نہیں",
+        moveFailed: "منتقل نہیں ہو سکا",
+        editFailed: "تبدیلی محفوظ نہیں ہو سکی",
+        select: "{title} منتخب کریں",
+        selectedCount: "{count} منتخب",
+        clearSelection: "صاف کریں",
+        bulkRegion: "انتخاب کے لیے اقدامات",
+        bulkPriority: "ترجیح",
+        bulkStatus: "اسٹیٹس",
+        bulkAssignee: "ذمہ دار",
+        bulkDelete: "حذف کریں",
+        bulkDeletePrompt: "منتخب {count} آئٹمز حذف کریں؟\n\nحذف شدہ ایپک یا اسٹوری کے تحت اسٹوریز اور ٹاسک باقی رہیں گے — صرف گروپ بندی ختم ہوگی۔",
+        bulkDone: "{count} اپ ڈیٹ ہوئے",
+        bulkSkipped: "{updated} اپ ڈیٹ، {skipped} چھوڑے گئے: {reason}",
+        bulkFailed: "انتخاب پر یہ لاگو نہیں ہو سکا",
+        mixedSelection: "اسٹیٹس بدلنے، منتقل کرنے یا تفویض کرنے کے لیے ایک پروجیکٹ میں ایک ہی قسم کا آئٹم چنیں۔",
+        keyboardHint: "↑/↓ قطاروں میں جائیں · →/← کھولیں اور بند کریں · Alt+↑/↓ ترتیب بدلیں · Space منتخب · Enter کھولے",
+        noPoints: "کوئی پوائنٹس نہیں",
+        pointsOf: "{title} کے پوائنٹس",
+        priorityOf: "{title} کی ترجیح",
+        statusOf: "{title} کا اسٹیٹس",
+        assigneeOf: "{title} کا ذمہ دار",
+        noTeam: "اس پروجیکٹ کی ٹیم میں ابھی کوئی نہیں۔",
+        emptyAll: "کسی پروجیکٹ میں ابھی کوئی ایپک یا یوزر اسٹوری نہیں۔",
+        openBacklog: "بیک لاگ کھولیں",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "{percent}% اسٹوریز مکمل",
+        allProjects: "تمام پروجیکٹس",
     },
 
     epicList: {

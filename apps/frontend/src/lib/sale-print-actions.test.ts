@@ -92,6 +92,30 @@ describe('printSaleInvoice', () => {
         expect((printSalesInvoice as jest.Mock).mock.calls[0][2]).toBeUndefined();
     });
 
+    it('hands the invoice what was paid and what the customer owed before', () => {
+        printSaleInvoice(
+            { ...listShapedSale, total_amount: '3000', amount_paid: '1000', previous_due: 2500 },
+            'A4',
+            ctx,
+            true,
+        );
+        const data = (printSalesInvoice as jest.Mock).mock.calls[0][0];
+
+        expect(data.amountPaid).toBe(1000);
+        expect(data.previousDue).toBe(2500);
+    });
+
+    it('trusts the stored amount paid over payment rows an imported sale never had', () => {
+        printSaleInvoice(
+            { ...listShapedSale, amount_paid: '1200', payments: [], previous_due: 0 },
+            'A4',
+            ctx,
+            true,
+        );
+
+        expect((printSalesInvoice as jest.Mock).mock.calls[0][0].amountPaid).toBe(1200);
+    });
+
     it('carries the gap between the lines and the stored total as an adjustment', () => {
         // 3 x 1000 is 3000, but the sale was posted at 2900 after a discount.
         printSaleInvoice({ ...listShapedSale, total_amount: '2900' }, 'A4', ctx, true);

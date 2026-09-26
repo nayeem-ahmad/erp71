@@ -352,6 +352,8 @@ export const salesMessages = {
             paperSizeHint: 'الحجم الذي تُطبع به الفواتير وبيانات التسليم من هذا المتصفح. الإعداد الافتراضي للمتجر في الإعدادات ← المبيعات.',
             skipPreviewLabel: 'تخطي معاينة الطباعة',
             skipPreviewHint: 'أرسل المستندات إلى الطابعة مباشرةً بدلاً من عرضها أولاً.',
+            compactLabel: 'تخطيط مضغوط',
+            compactHint: 'خط أصغر وصفوف متقاربة، لتتسع كل صفحة من الفاتورة الطويلة لأسطر أكثر. ينطبق على كل مستند يُطبع من هذا المتصفح على مقاسات A4 وA5 وLetter.',
             saved: 'تم حفظ إعدادات الطباعة',
         },
         printMenu: {
@@ -449,6 +451,8 @@ export const salesMessages = {
             amountPaid: 'المبلغ المدفوع',
             change: 'الباقي',
             balanceDue: 'الرصيد المستحق',
+            previousDue: 'الرصيد السابق',
+            totalDue: 'إجمالي المستحق',
             paymentDetails: 'تفاصيل الدفع',
             notePrefix: 'ملاحظة: ',
             binVatReg: 'رقم التسجيل الضريبي (BIN):',

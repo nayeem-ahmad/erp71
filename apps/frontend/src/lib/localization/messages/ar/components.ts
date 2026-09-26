@@ -231,6 +231,12 @@ export const componentsMessages = {
         noPreview: "لا يمكن معاينة هذا الملف.",
     },
 
+    printWindow: {
+        /* The switch in the toolbar over every print window that lists rows. */
+        compact: 'تخطيط مضغوط',
+        compactHint: 'خط أصغر وصفوف متقاربة، لتتسع كل صفحة لأسطر أكثر',
+    },
+
     richText: {
         toolbar: "التنسيق",
         hint: "التنسيق: **عريض**، *مائل*، - قوائم و[روابط](url).",

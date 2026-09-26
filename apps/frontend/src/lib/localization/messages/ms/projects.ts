@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'Cerita pengguna',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "Runtuhkan",
         loadFailed: "Tidak dapat memuatkan backlog",
         createFailed: "Tidak dapat ditambah",
+        dragHandle: "Seret untuk alih",
+        moveTo: "Alih ke…",
+        moveToLabel: "Alih {title} ke…",
+        noStory: "Tiada cerita",
+        moveFailed: "Tidak dapat dialihkan",
+        editFailed: "Tidak dapat menyimpan perubahan",
+        select: "Pilih {title}",
+        selectedCount: "{count} dipilih",
+        clearSelection: "Kosongkan",
+        bulkRegion: "Tindakan untuk pilihan",
+        bulkPriority: "Keutamaan",
+        bulkStatus: "Status",
+        bulkAssignee: "Penerima tugasan",
+        bulkDelete: "Padam",
+        bulkDeletePrompt: "Padam {count} item yang dipilih?\n\nCerita dan tugasan di bawah epik atau cerita yang dipadam dikekalkan — hanya kumpulannya hilang.",
+        bulkDone: "{count} dikemas kini",
+        bulkSkipped: "{updated} dikemas kini, {skipped} dilangkau: {reason}",
+        bulkFailed: "Tidak dapat menggunakannya pada pilihan",
+        mixedSelection: "Pilih satu jenis item dalam satu projek untuk menukar status, mengalih atau menugaskannya.",
+        keyboardHint: "↑/↓ antara baris · →/← buka dan tutup · Alt+↑/↓ susun semula · Space memilih · Enter membuka",
+        noPoints: "Tiada mata",
+        pointsOf: "Mata {title}",
+        priorityOf: "Keutamaan {title}",
+        statusOf: "Status {title}",
+        assigneeOf: "Penerima tugasan {title}",
+        noTeam: "Belum ada sesiapa dalam pasukan projek ini.",
+        emptyAll: "Belum ada epik atau cerita pengguna dalam mana-mana projek.",
+        openBacklog: "Buka backlog",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "{percent}% cerita selesai",
+        allProjects: "Semua projek",
     },
 
     epicList: {

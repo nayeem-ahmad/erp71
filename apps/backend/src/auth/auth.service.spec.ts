@@ -36,6 +36,7 @@ const refreshTokens = {
         familyId: 'family-1',
     }),
     revoke: async () => {},
+    revokeSession: async (): Promise<{ userId: string } | null> => null,
     revokeFamily: async () => {},
     revokeAllForUser: async () => {},
 };
@@ -1129,6 +1130,45 @@ describe('AuthService', () => {
                 { userId, ipAddress: '203.0.113.9', userAgent: 'Safari' },
                 userId,
             );
+        });
+    });
+
+    describe('logoutSession', () => {
+        // Spies on the shared plain-function double, restored one by one:
+        // `jest.restoreAllMocks()` would reach well beyond this block.
+        const spies: jest.SpyInstance[] = [];
+        afterEach(() => spies.splice(0).forEach((spy) => spy.mockRestore()));
+
+        it('ends only the presented session and records the sign-out', async () => {
+            const revokeSession = jest
+                .spyOn(refreshTokens, 'revokeSession')
+                .mockResolvedValue({ userId: 'user-1' });
+            const revokeAllForUser = jest.spyOn(refreshTokens, 'revokeAllForUser');
+            spies.push(revokeSession, revokeAllForUser);
+
+            await service.logoutSession('refresh-token', { ipAddress: '203.0.113.9' });
+            await new Promise(process.nextTick);
+
+            expect(revokeSession).toHaveBeenCalledWith('refresh-token');
+            // `logout` bumps token_version and revokes every session; a phone
+            // signing itself out must not also sign its owner out of the web.
+            expect(revokeAllForUser).not.toHaveBeenCalled();
+            expect(db.user.update).not.toHaveBeenCalled();
+            expect(auditService.logForUserTenants).toHaveBeenCalledWith(
+                'USER_LOGOUT',
+                'User',
+                { userId: 'user-1', ipAddress: '203.0.113.9' },
+                'user-1',
+                { scope: 'session' },
+            );
+        });
+
+        it('records nothing for a token it does not know', async () => {
+            spies.push(jest.spyOn(refreshTokens, 'revokeSession').mockResolvedValue(null));
+
+            await expect(service.logoutSession('unknown')).resolves.toBeUndefined();
+
+            expect(auditService.logForUserTenants).not.toHaveBeenCalled();
         });
     });
 });

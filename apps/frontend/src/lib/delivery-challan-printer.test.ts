@@ -335,3 +335,30 @@ describe('printDeliveryChallan — locale and escaping', () => {
         expect(html).toContain('&lt;img src=x');
     });
 });
+
+describe('printDeliveryChallan — compact', () => {
+    beforeEach(() => window.localStorage.clear());
+
+    it('offers the Compact switch on a sheet and follows the counter\'s choice', () => {
+        window.localStorage.setItem('erp71:print:density', 'compact');
+        const html = renderChallan();
+
+        expect(html).toContain('<html class="p71-compact">');
+        expect(html).toContain('class="p71-pv-check p71-pv-compact"');
+        expect(html).toContain('html.p71-compact .items-table tbody td');
+    });
+
+    it('keeps room to sign above the signature lines', () => {
+        const html = renderChallan();
+
+        expect(html).toMatch(/html\.p71-compact \.sign-band \{ margin-top:32px; \}/);
+    });
+
+    it('leaves the roll alone', () => {
+        window.localStorage.setItem('erp71:print:density', 'compact');
+        const html = renderChallan(fullChallan, 'Thermal80');
+
+        expect(html).toContain('<html>');
+        expect(html).not.toContain('p71-pv-compact');
+    });
+});

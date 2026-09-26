@@ -204,22 +204,20 @@ export const routes = {
         // A card is normally a modal opened from a list or a board. This is the
         // same card as a page, so a link to one task can be pasted somewhere.
         taskDetail: (id: string) => `/projects/tasks/${id}` as const,
-        // Every project's backlog on one screen. A story still belongs to one
-        // project and is edited on that project's page; this is the read across
-        // all of them.
+        // Every project's stories on one screen, as the Backlog tree grouped by
+        // project and opened to the stories.
         stories: '/projects/stories',
         /**
-         * A story opened on the page that owns it. The cross-project list links
-         * here rather than to a story route of its own: a story is edited in one
-         * place, beside the rest of its project's backlog.
+         * A story opened in its project's Backlog, beside the rest of that
+         * project's scope. `/projects/<id>?story=` still works — the project
+         * page forwards it here.
          */
         storyInProject: (projectId: string, storyId: string) =>
-            `/projects/${projectId}?story=${storyId}` as const,
-        // Every project's epics on one screen; like stories, an epic is edited
-        // on the page of the project that owns it.
+            `/projects/${projectId}/backlog?story=${storyId}` as const,
+        // Every project's epics on one screen, as the same tree folded to epics.
         epics: '/projects/epics',
         epicInProject: (projectId: string, epicId: string) =>
-            `/projects/${projectId}?epic=${epicId}` as const,
+            `/projects/${projectId}/backlog?epic=${epicId}` as const,
         sprints: '/projects/sprints',
         sprintDetail: (id: string) => `/projects/sprints/${id}` as const,
         hourLogs: '/projects/hour-logs',

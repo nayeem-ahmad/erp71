@@ -108,6 +108,7 @@ export default function QuotesPage() {
             headerConfig: printHeader.headerConfig,
             headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
+            compactable: true,
             repeatHeader: true,
             bodyHtml: `
                 <h1>${quote.quote_number} (${formatMessage(t.shared.version, { version: quote.version })})</h1>

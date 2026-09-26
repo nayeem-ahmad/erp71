@@ -201,6 +201,7 @@ export function printTable<T>(table: Table<T>, title: string, header?: PrintTabl
         headerHtml: header?.html,
         context: header?.context,
         styles: SIMPLE_DOC_STYLES,
+        compactable: true,
         // Reports run long — repeat the letterhead on every page.
         repeatHeader: true,
         bodyHtml: `

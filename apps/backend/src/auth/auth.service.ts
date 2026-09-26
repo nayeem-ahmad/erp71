@@ -672,9 +672,19 @@ export class AuthService {
         };
     }
 
-    /** Sign one session out without touching the user's other devices. */
-    async revokeRefreshToken(rawToken: string | undefined | null): Promise<void> {
-        await this.refreshTokens.revoke(rawToken);
+    /**
+     * Sign one device out without touching the user's other sessions — the
+     * mobile app's "Sign out". `logout` above is "sign out everywhere": its
+     * `token_version` bump ends every browser and phone at once.
+     */
+    async logoutSession(rawToken: string | undefined | null, meta: AuditRequestMeta = {}): Promise<void> {
+        const ended = await this.refreshTokens.revokeSession(rawToken);
+        if (!ended) return;
+        this.audit
+            .logForUserTenants('USER_LOGOUT', 'User', { userId: ended.userId, ...meta }, ended.userId, {
+                scope: 'session',
+            })
+            .catch(() => {});
     }
 
     async sendVerificationEmail(userId: string): Promise<void> {

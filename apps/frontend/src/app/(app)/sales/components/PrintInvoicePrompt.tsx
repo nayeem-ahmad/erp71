@@ -3,7 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { CheckCircle2, Printer } from 'lucide-react';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
-import { Button, Field, Select } from '@/components/ui';
+import { Button, Checkbox, Field, Select } from '@/components/ui';
+import { isThermalPaper } from '@/lib/print';
+import { usePrintDensity } from '@/lib/print/use-print-density';
 import { PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
 import { useI18n } from '@/lib/i18n';
 
@@ -27,6 +29,11 @@ export type PrintInvoicePromptProps = {
  * the caller prints a snapshot of what was saved rather than the empty form.
  * Declining is a real answer, not a dead end — the sale record prints the same
  * invoice later, which is what the hint says.
+ *
+ * The Compact switch sits under the size because a sale with a long item list
+ * is exactly when the question comes up. It is offered for sheet sizes only —
+ * a roll never compacts — and it is the shared remembered setting, so it is
+ * already ticked for a counter that always prints compact.
  */
 export default function PrintInvoicePrompt({
     serialNumber,
@@ -39,6 +46,7 @@ export default function PrintInvoicePrompt({
     const { t, fmt } = useI18n();
     const copy = t.sales.printPrompt;
     const printRef = useRef<HTMLButtonElement>(null);
+    const [density, setDensity] = usePrintDensity();
 
     // At a counter the answer is almost always yes, so Enter prints; Escape and
     // the backdrop decline. Either way the sale is already saved.
@@ -82,6 +90,20 @@ export default function PrintInvoicePrompt({
                         ))}
                     </Select>
                 </Field>
+
+                {!isThermalPaper(paperSize) && (
+                    <label className="flex min-h-touch cursor-pointer items-start gap-3 sm:min-h-0">
+                        <Checkbox
+                            checked={density === 'compact'}
+                            onChange={(event) => setDensity(event.target.checked ? 'compact' : 'normal')}
+                            className="mt-0.5"
+                        />
+                        <span>
+                            <span className="block text-sm text-gray-700">{t.components.printWindow.compact}</span>
+                            <span className="block text-xs text-gray-400">{t.components.printWindow.compactHint}</span>
+                        </span>
+                    </label>
+                )}
             </div>
 
             <ModalFooter>

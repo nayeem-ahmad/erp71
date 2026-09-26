@@ -4,20 +4,25 @@ import { useState } from 'react';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { Button, Checkbox, Field, Select } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
+import type { PrintDensity } from '@/lib/print';
 import { PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
 
 export interface PrintSettingsModalProps {
     paperSize: PaperSize;
     skipPreview: boolean;
-    onSave: (next: { paperSize: PaperSize; skipPreview: boolean }) => void;
+    density: PrintDensity;
+    onSave: (next: { paperSize: PaperSize; skipPreview: boolean; density: PrintDensity }) => void;
     onClose: () => void;
 }
 
 /**
- * How this counter prints — paper size and whether to preview first.
+ * How this counter prints — paper size, whether to preview first, and whether
+ * to print compact.
  *
- * Both answers describe the printer next to this browser rather than the
- * tenant, so they are saved per device (see `useSalePrintPrefs`). That is also
+ * All three describe how this counter prints rather than the tenant, so they
+ * are saved per device (see `useSalePrintPrefs`). Compact is the one answer
+ * every document follows, not only sales — it is the same switch the print
+ * windows and the sales print menu show (`usePrintDensity`). That is also
  * why they belong here and not only in Settings → Sales: the shop-wide default
  * is an owner's decision, but the till that actually has the 80mm roll plugged
  * in needs to say so without an admin round trip.
@@ -30,6 +35,7 @@ export interface PrintSettingsModalProps {
 export default function PrintSettingsModal({
     paperSize,
     skipPreview,
+    density,
     onSave,
     onClose,
 }: PrintSettingsModalProps) {
@@ -40,6 +46,7 @@ export default function PrintSettingsModal({
     // current setup alone.
     const [size, setSize] = useState<PaperSize>(paperSize);
     const [skip, setSkip] = useState(skipPreview);
+    const [compact, setCompact] = useState(density === 'compact');
 
     return (
         <ModalShell onBackdropClick={onClose}>
@@ -72,6 +79,18 @@ export default function PrintSettingsModal({
                         <span className="block text-xs text-gray-400">{copy.skipPreviewHint}</span>
                     </span>
                 </label>
+
+                <label className="flex min-h-touch cursor-pointer items-start gap-3 sm:min-h-0">
+                    <Checkbox
+                        checked={compact}
+                        onChange={(e) => setCompact(e.target.checked)}
+                        className="mt-0.5"
+                    />
+                    <span>
+                        <span className="block text-sm text-gray-700">{copy.compactLabel}</span>
+                        <span className="block text-xs text-gray-400">{copy.compactHint}</span>
+                    </span>
+                </label>
             </div>
 
             <ModalFooter>
@@ -81,7 +100,11 @@ export default function PrintSettingsModal({
                 <Button
                     type="button"
                     onClick={() => {
-                        onSave({ paperSize: size, skipPreview: skip });
+                        onSave({
+                            paperSize: size,
+                            skipPreview: skip,
+                            density: compact ? 'compact' : 'normal',
+                        });
                         onClose();
                     }}
                 >

@@ -1,6 +1,6 @@
 import type { StatementGroup } from '@/components/accounting/StatementSection';
 import { formatBDT } from './format';
-import { openPrintWindow, renderHeaderHtml } from './print';
+import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 
 /**
@@ -98,6 +98,18 @@ const STATEMENT_STYLES = `
     .num { text-align: right; white-space: nowrap; }
     .empty { color: #666; font-style: italic; }
     .footnote { margin-top: 10px; color: #666; font-size: 9px; }
+
+    /* Compact. Already a tight document, so it moves less than an invoice;
+       the account indent is restated because the cell padding below would
+       otherwise flatten it. */
+    ${COMPACT_SCOPE} body { font-size: 10px; }
+    ${COMPACT_SCOPE} .meta { margin-bottom: 6px; }
+    ${COMPACT_SCOPE} table.stmt { margin-bottom: 6px; }
+    ${COMPACT_SCOPE} table.stmt th, ${COMPACT_SCOPE} table.stmt td { padding: 2px 5px; }
+    ${COMPACT_SCOPE} table.stmt th, ${COMPACT_SCOPE} tr.section td { font-size: 9px; }
+    ${COMPACT_SCOPE} tr.row td.name { padding-left: 16px; }
+    ${COMPACT_SCOPE} tr.footer.strong td { font-size: 11px; }
+    ${COMPACT_SCOPE} .footnote { margin-top: 6px; }
 `;
 
 function escHtml(value: string): string {
@@ -200,6 +212,7 @@ export function printStatementReport(
         bodyHtml,
         styles: STATEMENT_STYLES,
         repeatHeader: true,
+        compactable: true,
     });
 }
 
@@ -283,5 +296,6 @@ export function printTrialBalanceReport(
         bodyHtml,
         styles: STATEMENT_STYLES,
         repeatHeader: true,
+        compactable: true,
     });
 }

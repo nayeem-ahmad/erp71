@@ -231,6 +231,12 @@ export const componentsMessages = {
             noPreview: "এই ফাইলটির প্রিভিউ দেখানো যাচ্ছে না।",
         },
 
+        printWindow: {
+            /* The switch in the toolbar over every print window that lists rows. */
+            compact: 'কমপ্যাক্ট লেআউট',
+            compactHint: 'ছোট লেখা ও ঘন সারি, তাই প্রতি পৃষ্ঠায় বেশি লাইন ধরে',
+        },
+
         richText: {
             toolbar: "ফরম্যাটিং",
             hint: "ফরম্যাটিং: **বোল্ড**, *ইটালিক*, - তালিকা এবং [লিংক](url)।",

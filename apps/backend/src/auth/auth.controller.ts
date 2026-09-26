@@ -119,6 +119,23 @@ export class AuthController {
     }
 
     /**
+     * Sign this device out and leave the account's other sessions alone — what
+     * the mobile app's "Sign out" means. `/auth/logout` above signs out
+     * everywhere, browsers included.
+     *
+     * Unauthenticated for the reason `/auth/refresh` is: the access token may
+     * already have lapsed, and the refresh token in the body is the credential.
+     * Holding one already lets the caller mint sessions from it, so letting
+     * them end that session grants nothing new.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 60 } })
+    @HttpCode(HttpStatus.NO_CONTENT)
+    @Post('logout/session')
+    async logoutSession(@Body() dto: RefreshTokenDto, @Request() req) {
+        await this.authService.logoutSession(dto.refresh_token, extractRequestMeta(req));
+    }
+
+    /**
      * Whether the platform admin has left "Try Demo" switched on. Read by the
      * sign-in page and the marketing hero before they render the button, for
      * the same reason as `/auth/google/config`: the switch lives in platform

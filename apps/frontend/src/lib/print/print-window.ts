@@ -7,6 +7,13 @@
  */
 
 import {
+    COMPACT_CLASS,
+    COMPACT_SCOPE,
+    listenForPrintWindowDensity,
+    PRINT_DENSITY_MESSAGE,
+    readPrintDensity,
+} from './density';
+import {
     footerBleeds,
     footerPinsToBottom,
     footerRepeats,
@@ -19,8 +26,10 @@ import {
     type DeepPartial,
     type HeaderContext,
     type PaperSize,
+    type PrintDensity,
     type PrintHeaderConfig,
 } from './types';
+import { printWindowLabels } from './window-labels';
 
 /** Sizes are paired with the margins in `PAGE_MARGIN_MM` — keep them in step. */
 const PAGE_SIZE: Record<PaperSize, string> = {
@@ -85,6 +94,21 @@ export interface PrintDocumentOptions {
      * does not survive pagination.
      */
     repeatHeader?: boolean;
+    /**
+     * The document lists rows and carries compact rules for them, written under
+     * `COMPACT_SCOPE`. `openPrintWindow` then gives its window the Compact
+     * switch and prints it at the operator's remembered density, unless
+     * `density` settles it. Ignored on the thermal rolls, which never compact.
+     *
+     * Opt-in rather than universal: on a receipt or a one-page flyer a switch
+     * that changes nothing would only read as broken.
+     */
+    compactable?: boolean;
+    /**
+     * How tightly to set the document — see `PrintDensity`. `'compact'` marks
+     * `<html>` with `COMPACT_CLASS`; a thermal roll ignores it.
+     */
+    density?: PrintDensity;
     autoPrint?: boolean;
     /**
      * Show the document with a toolbar instead of printing straight away.
@@ -104,6 +128,13 @@ export interface PrintPreviewOptions {
     closeLabel: string;
     /** Wording of the opt-out checkbox; omitted to hide it entirely. */
     skipLabel?: string;
+    /**
+     * Wording of the Compact switch; omitted to hide it. `openPrintWindow`
+     * fills both for a `compactable` document, so callers rarely set them.
+     */
+    compactLabel?: string;
+    /** Tooltip saying what the switch does. */
+    compactHint?: string;
 }
 
 /**
@@ -131,6 +162,22 @@ function wrapCss(thermal: boolean, bleeds: boolean, sheet: boolean): string {
 
     return `${base}
         @media print { .p71-wrap { max-width: none; margin: 0; } }`;
+}
+
+/**
+ * The compact setting's shared rules: only what holds for every document.
+ *
+ * Each document adds its own under `COMPACT_SCOPE` for the parts only it knows
+ * — its item table, its totals block — and those are appended after these, so
+ * at equal specificity the document's word is the last one. Everything is
+ * scoped to the class rather than emitted per density, which is what lets the
+ * toolbar switch flip a finished document without rebuilding it.
+ */
+function compactCss(): string {
+    return `
+        /* The body type steps down one size; documents that set their own
+           base size step theirs down in their own rules. */
+        ${COMPACT_SCOPE} body { font-size: 11px; }`;
 }
 
 /** The paper's width in mm — the sheet is drawn to it on screen. */
@@ -274,6 +321,13 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     // `layoutDocument`.
     const useTable = repeatHeader || repeatFooter;
     const flexPin = pinFooter && !repeatFooter;
+
+    // A roll has no page to fit more onto, so it neither compacts nor offers
+    // the switch. The compact rules ship whenever the switch does, so it can
+    // turn them on without a rebuild.
+    const compactOn = opts.density === 'compact' && !thermal;
+    const compactSwitch = !!opts.preview?.compactLabel && !thermal;
+
     const content = layoutDocument({
         header,
         bodyHtml: opts.bodyHtml,
@@ -285,7 +339,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     });
 
     return `<!DOCTYPE html>
-<html>
+<html${compactOn ? ` class="${COMPACT_CLASS}"` : ''}>
 <head>
     <meta charset="utf-8">
     <title>${escapeAttr(opts.title)}</title>
@@ -314,7 +368,12 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         @media screen {
             .p71-doc--pinned { height: 100%; }
             html, body, .p71-wrap { height: 100%; }
+            .p71-doc--pinned > tbody > tr > td { vertical-align: top; }
             .p71-doc--pinned > tfoot > tr > td { vertical-align: bottom; }
+            /* The preview sheet is drawn to the paper's size, where a percentage
+               has nothing to resolve against — so the table takes the page's
+               height in mm, as it does on paper. */
+            .p71-pv-sheet .p71-doc--pinned { height: ${pageHeightMm}mm; }
         }` : ''}
         ${flexPin ? `
         /* A page-tall flex column: the body absorbs the slack, so the footer is
@@ -334,12 +393,13 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         ${headerCss(opts.headerConfig, opts.paperSize)}
         ${pageCss(opts.paperSize)}
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+        ${compactOn || compactSwitch ? compactCss() : ''}
         ${opts.styles ?? ''}
         ${opts.preview ? previewCss() : ''}
     </style>
 </head>
 <body>
-${opts.preview ? previewToolbarHtml(opts.preview) : ''}
+${opts.preview ? previewToolbarHtml(opts.preview, { show: compactSwitch, on: compactOn }) : ''}
 ${opts.preview
         ? `<div class="p71-pv-sheet"><div class="p71-wrap">${content}</div></div>`
         : `<div class="p71-wrap">${content}</div>`}
@@ -358,7 +418,14 @@ export function openPrintWindow(opts: PrintDocumentOptions): Window | null {
     const win = window.open('', '_blank', `width=${width},height=${height}`);
     if (!win) return null;
 
-    win.document.write(buildPrintDocument(opts));
+    const compactable = !!opts.compactable && !isThermalPaper(opts.paperSize);
+    // A document that lists rows prints at the operator's standing answer
+    // unless its caller decided; anything else prints as it always has.
+    const density = opts.density ?? (compactable ? readPrintDensity() : 'normal');
+    const preview = compactable ? withCompactSwitch(opts.preview, opts.title) : opts.preview;
+    if (compactable) listenForPrintWindowDensity();
+
+    win.document.write(buildPrintDocument({ ...opts, density, preview }));
     win.document.close();
 
     // A previewed document waits for the operator to press Print; printing it
@@ -368,24 +435,55 @@ export function openPrintWindow(opts: PrintDocumentOptions): Window | null {
     return win;
 }
 
+/**
+ * The toolbar a compactable document's window carries, with its Compact switch.
+ *
+ * A document printed straight away gets the bar too, although nothing else
+ * about it changes: the print dialog still opens at once, and the bar — the one
+ * place the switch lives — is waiting underneath when the dialog closes. The
+ * wording is the app's own, looked up in the active locale.
+ */
+function withCompactSwitch(
+    preview: PrintPreviewOptions | undefined,
+    title: string,
+): PrintPreviewOptions {
+    const labels = printWindowLabels();
+    const bar = preview ?? { title, printLabel: labels.print, closeLabel: labels.close };
+    return { compactLabel: labels.compact, compactHint: labels.compactHint, ...bar };
+}
+
 /** Message a preview window posts back when "skip next time" is ticked. */
 export const PRINT_PREVIEW_SKIP_MESSAGE = 'erp71:print-preview-skip';
 
 /**
  * The preview toolbar, rendered into the print document itself.
  *
- * It is `no-print` and `position: fixed`, so it is on screen but never on
- * paper. The buttons are wired with inline handlers rather than a script the
- * opener injects, because the document is written through `document.write` and
- * a popup blocker that permits the window still races an injected listener.
+ * It is `no-print` and pinned to the top of the window, so it is on screen but
+ * never on paper. The buttons are wired with inline handlers rather than a
+ * script the opener injects, because the document is written through
+ * `document.write` and a popup blocker that permits the window still races an
+ * injected listener.
  *
- * The checkbox reports back through `postMessage` — the opener owns the
- * preference, and a popup writing to the app's localStorage would be writing
+ * The checkboxes report back through `postMessage` — the opener owns the
+ * preferences, and a popup writing to the app's localStorage would be writing
  * to a different origin's copy in some browsers.
+ *
+ * The Compact switch also acts on the document in place: it flips the class
+ * every compact rule is scoped to, so the page reflows on the spot and the
+ * operator sees how many pages it now takes before pressing Print.
  */
-function previewToolbarHtml(preview: PrintPreviewOptions): string {
+function previewToolbarHtml(
+    preview: PrintPreviewOptions,
+    compact: { show: boolean; on: boolean },
+): string {
+    const compactSwitch = compact.show && preview.compactLabel
+        ? `<label class="p71-pv-check p71-pv-compact"${preview.compactHint ? ` title="${escapeAttr(preview.compactHint)}"` : ''}>
+               <input type="checkbox"${compact.on ? ' checked' : ''} onchange="document.documentElement.classList.toggle('${COMPACT_CLASS}',this.checked);try{window.opener&&window.opener.postMessage({type:'${PRINT_DENSITY_MESSAGE}',density:this.checked?'compact':'normal'},'*')}catch(e){}">
+               <span>${escapeAttr(preview.compactLabel)}</span>
+           </label>`
+        : '';
     const skip = preview.skipLabel
-        ? `<label class="p71-pv-skip">
+        ? `<label class="p71-pv-check p71-pv-skip">
                <input type="checkbox" onchange="try{window.opener&&window.opener.postMessage({type:'${PRINT_PREVIEW_SKIP_MESSAGE}',skip:this.checked},'*')}catch(e){}">
                <span>${escapeAttr(preview.skipLabel)}</span>
            </label>`
@@ -394,6 +492,7 @@ function previewToolbarHtml(preview: PrintPreviewOptions): string {
     return `<div class="p71-pv no-print">
         <span class="p71-pv-title">${escapeAttr(preview.title)}</span>
         <span class="p71-pv-actions">
+            ${compactSwitch}
             ${skip}
             <button type="button" class="p71-pv-btn p71-pv-btn--ghost" onclick="window.close()">${escapeAttr(preview.closeLabel)}</button>
             <button type="button" class="p71-pv-btn p71-pv-btn--primary" onclick="window.focus();window.print()">${escapeAttr(preview.printLabel)}</button>
@@ -404,8 +503,11 @@ function previewToolbarHtml(preview: PrintPreviewOptions): string {
 /** Toolbar styling. Screen-only — `@media print` hides the bar outright. */
 function previewCss(): string {
     return `
+        /* Sticky rather than fixed: the bar keeps its own height in the flow,
+           so however far a long translation wraps it, it never covers the top
+           of the document. */
         .p71-pv {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
+            position: sticky; top: 0; z-index: 2147483647;
             display: flex; align-items: center; justify-content: space-between;
             gap: 12px; flex-wrap: wrap;
             padding: 8px 12px;
@@ -414,8 +516,11 @@ function previewCss(): string {
             font-family: Arial, Helvetica, sans-serif; font-size: 13px;
         }
         .p71-pv-title { font-weight: 700; color: #111827; }
-        .p71-pv-actions { display: flex; align-items: center; gap: 10px; }
-        .p71-pv-skip { display: flex; align-items: center; gap: 5px; color: #4b5563; font-size: 12px; cursor: pointer; }
+        .p71-pv-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .p71-pv-check { display: flex; align-items: center; gap: 5px; color: #4b5563; font-size: 12px; cursor: pointer; }
+        /* The switch changes the page itself, so it reads as a setting rather
+           than as small print beside the buttons. */
+        .p71-pv-compact { color: #111827; font-weight: 600; }
         .p71-pv-btn {
             border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
             cursor: pointer; border: 1px solid transparent; min-height: 32px;
@@ -424,11 +529,8 @@ function previewCss(): string {
         .p71-pv-btn--ghost:hover { background: #f9fafb; }
         .p71-pv-btn--primary { background: #2563eb; color: #fff; }
         .p71-pv-btn--primary:hover { background: #1d4ed8; }
-        /* Clear the fixed bar so the top of the document is not hidden under it. */
-        body { padding-top: 52px; }
         @media print {
             .p71-pv { display: none !important; }
-            body { padding-top: 0; }
         }`;
 }
 

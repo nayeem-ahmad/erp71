@@ -270,6 +270,7 @@ function SaleDetailPageContent() {
                 discount: i.discount || 0,
             })),
             payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
+            previous_due: sale.previous_due ?? null,
         };
     }, [sale, saleDate, totals.total, description, customer, items, payments]);
 
@@ -295,6 +296,14 @@ function SaleDetailPageContent() {
 
     const statusLabel =
         t.shared.statuses.sale[status as keyof typeof t.shared.statuses.sale] ?? status;
+
+    // The customer's balance today already includes this sale, so a posted
+    // sale shows what the server worked back to instead. A draft has posted
+    // nothing, and a customer swapped in on the edit form is not the one the
+    // server answered for — both fall back to the picked customer's balance.
+    const previousDue = !isDraft && customer?.id === sale.customer_id
+        ? sale.previous_due ?? null
+        : undefined;
 
     const banner = (
         <div className="flex flex-wrap items-center gap-3 rounded border bg-white px-3 py-2">
@@ -501,6 +510,7 @@ function SaleDetailPageContent() {
             setSaleDate={setSaleDate}
             customer={customer}
             setCustomer={setCustomer}
+            previousDue={previousDue}
             items={items}
             onUpdateItem={updateItem}
             onRemoveItem={removeItem}

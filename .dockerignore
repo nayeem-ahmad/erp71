@@ -4,3 +4,6 @@ node_modules
 *.log
 .DS_Store
 .getaibd/
+
+# The Flutter app is built by its own workflow, never inside these images.
+apps/mobile

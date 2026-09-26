@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'User Storys',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "Zuklappen",
         loadFailed: "Backlog konnte nicht geladen werden",
         createFailed: "Konnte nicht hinzugefügt werden",
+        dragHandle: "Zum Verschieben ziehen",
+        moveTo: "Verschieben nach…",
+        moveToLabel: "{title} verschieben nach…",
+        noStory: "Keine Story",
+        moveFailed: "Konnte nicht verschoben werden",
+        editFailed: "Änderung konnte nicht gespeichert werden",
+        select: "{title} auswählen",
+        selectedCount: "{count} ausgewählt",
+        clearSelection: "Aufheben",
+        bulkRegion: "Aktionen für die Auswahl",
+        bulkPriority: "Priorität",
+        bulkStatus: "Status",
+        bulkAssignee: "Zuständig",
+        bulkDelete: "Löschen",
+        bulkDeletePrompt: "{count} ausgewählte Einträge löschen?\n\nStories und Aufgaben unter einem gelöschten Epic oder einer gelöschten Story bleiben erhalten — sie verlieren nur die Gruppierung.",
+        bulkDone: "{count} aktualisiert",
+        bulkSkipped: "{updated} aktualisiert, {skipped} übersprungen: {reason}",
+        bulkFailed: "Konnte nicht auf die Auswahl angewendet werden",
+        mixedSelection: "Wählen Sie eine Art von Eintrag in einem Projekt, um Status, Ort oder Zuständigkeit zu ändern.",
+        keyboardHint: "↑/↓ zwischen Zeilen · →/← auf- und zuklappen · Alt+↑/↓ umsortieren · Leertaste wählt · Enter öffnet",
+        noPoints: "Keine Punkte",
+        pointsOf: "Punkte von {title}",
+        priorityOf: "Priorität von {title}",
+        statusOf: "Status von {title}",
+        assigneeOf: "Zuständig für {title}",
+        noTeam: "Noch niemand im Team dieses Projekts.",
+        emptyAll: "Noch keine Epics oder User Stories in irgendeinem Projekt.",
+        openBacklog: "Backlog öffnen",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "{percent} % der Stories erledigt",
+        allProjects: "Alle Projekte",
     },
 
     epicList: {

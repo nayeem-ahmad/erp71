@@ -355,6 +355,8 @@ export const salesMessages = {
             paperSizeHint: 'The size invoices and chalans print at from this browser. Your shop-wide default is set in Settings → Sales.',
             skipPreviewLabel: 'Skip print preview',
             skipPreviewHint: 'Send documents straight to the printer instead of showing them first.',
+            compactLabel: 'Compact layout',
+            compactHint: 'Smaller type and tighter rows, so a long invoice fits more lines on each page. Applies to every document printed from this browser on A4, A5 and Letter.',
             saved: 'Print settings saved',
         },
         printMenu: {
@@ -453,6 +455,8 @@ export const salesMessages = {
             amountPaid: 'Amount Paid',
             change: 'Change',
             balanceDue: 'Balance Due',
+            previousDue: 'Previous Due',
+            totalDue: 'Total Due',
             paymentDetails: 'Payment Details',
             notePrefix: 'Note: ',
             binVatReg: 'BIN (VAT Reg):',

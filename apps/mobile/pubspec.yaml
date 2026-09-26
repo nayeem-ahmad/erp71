@@ -1,0 +1,29 @@
+name: erp71_mobile
+description: "ERP71 for Android and iOS: Google sign-in and CRM."
+publish_to: 'none'
+
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  flutter_secure_storage: ^11.2.0
+  go_router: ^17.5.0
+  google_sign_in: ^7.2.0
+  http: ^1.6.0
+  intl: ^0.20.2
+  timezone: ^0.11.1
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mocktail: ^1.0.5
+
+flutter:
+  uses-material-design: true

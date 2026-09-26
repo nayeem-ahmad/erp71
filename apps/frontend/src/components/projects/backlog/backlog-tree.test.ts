@@ -1,7 +1,9 @@
 import {
-    NO_EPIC_GROUP,
-    UNPLANNED_GROUP,
     buildBacklogTree,
+    noEpicGroup,
+    projectGroup,
+    splitByProject,
+    unplannedGroup,
     expandedFor,
     isTreeEmpty,
     type BacklogData,
@@ -122,18 +124,51 @@ describe('buildBacklogTree', () => {
 });
 
 describe('expandedFor', () => {
-    it('opens nothing for epics only', () => {
-        expect(expandedFor(data(), 'epics').size).toBe(0);
+    it('opens only the project headings for epics only', () => {
+        expect([...expandedFor(data(), 'epics')]).toEqual([projectGroup('p1')]);
     });
 
-    it('opens epics and the catch-all groups for stories', () => {
+    it("opens epics and the project's catch-all groups for stories", () => {
         const open = expandedFor(data(), 'stories');
-        expect([...open].sort()).toEqual([NO_EPIC_GROUP, UNPLANNED_GROUP, 'e1', 'e2'].sort());
+        expect([...open].sort()).toEqual(
+            [projectGroup('p1'), noEpicGroup('p1'), unplannedGroup('p1'), 'e1', 'e2'].sort(),
+        );
     });
 
     it('opens stories too for everything', () => {
         const open = expandedFor(data(), 'all');
         expect(open.has('s1')).toBe(true);
         expect(open.has('s3')).toBe(true);
+    });
+});
+
+describe('splitByProject', () => {
+    it('returns a single project backlog as it is', () => {
+        const input = data();
+        const [only, ...rest] = splitByProject(input);
+        expect(rest).toEqual([]);
+        expect(only.project.id).toBe('p1');
+        expect(only.data).toBe(input);
+    });
+
+    it('cuts cross-project data into one slice per project, in the server’s order', () => {
+        const input: BacklogData = {
+            projects: [
+                { id: 'p1', code: 'OTB', name: 'Online till' },
+                { id: 'p2', code: 'WMS', name: 'Warehouse' },
+            ],
+            epics: [
+                { ...data().epics[0], project_id: 'p2' },
+                { ...data().epics[1], project_id: 'p1' },
+            ],
+            stories: [{ ...data().stories[0], project_id: 'p1', epic_id: 'e2' }],
+            tasks: [{ ...task(), project_id: 'p1' }],
+        };
+        const slices = splitByProject(input);
+        expect(slices.map((slice) => slice.project.code)).toEqual(['OTB', 'WMS']);
+        expect(slices[0].data.epics.map((epic) => epic.id)).toEqual(['e2']);
+        expect(slices[0].data.stories).toHaveLength(1);
+        expect(slices[1].data.epics.map((epic) => epic.id)).toEqual(['e1']);
+        expect(slices[1].data.tasks).toEqual([]);
     });
 });

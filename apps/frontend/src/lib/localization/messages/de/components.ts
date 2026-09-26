@@ -231,6 +231,12 @@ export const componentsMessages = {
         noPreview: "Diese Datei kann nicht in der Vorschau angezeigt werden.",
     },
 
+    printWindow: {
+        /* The switch in the toolbar over every print window that lists rows. */
+        compact: 'Kompaktes Layout',
+        compactHint: 'Kleinere Schrift und engere Zeilen, damit mehr Positionen auf jede Seite passen',
+    },
+
     richText: {
         toolbar: "Formatierung",
         hint: "Formatierung: **fett**, *kursiv*, - Listen und [Links](url).",

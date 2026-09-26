@@ -88,6 +88,7 @@ export default function ReturnsPage() {
             headerConfig: printHeader.headerConfig,
             headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
+            compactable: true,
             repeatHeader: true,
             bodyHtml: `
                 <h1>${ret.return_number}</h1>
