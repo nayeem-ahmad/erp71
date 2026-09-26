@@ -165,6 +165,12 @@ describe('SalesService', () => {
       tenant: {
         findUnique: jest.fn().mockResolvedValue({ name: 'Tenant 1', sms_on_sale: true }),
       },
+      // Read to work out a sale's previous due. Empty is a customer whose
+      // ledger has not moved since the sale.
+      customerCreditTransaction: {
+        findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -771,6 +777,64 @@ describe('SalesService', () => {
       );
     });
 
+    it('returns the due the credit sale was added to, for its invoice to print', async () => {
+      tx.customer.findFirst.mockResolvedValue({
+        id: 'cust-1',
+        due_balance: 1000,
+        credit_limit: 5000,
+      });
+      tx.sale.create.mockResolvedValue({ id: 'sale-credit', serial_number: 'SL-1', total_amount: 1000 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: 1000 });
+      tx.customerCreditTransaction.create.mockResolvedValue({});
+
+      const result = await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 1000,
+        amountPaid: 600,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1000 }],
+        payments: [{ paymentMethod: 'CASH', amount: 600 }],
+      });
+
+      // 1,000 before; the ledger row lands on 1,400 — the invoice's total due.
+      expect(result.previous_due).toBe(1000);
+    });
+
+    it('returns the standing due on a customer sale paid in full', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-paid', serial_number: 'SL-2', total_amount: 50 });
+      tx.saleItem.create.mockResolvedValue({});
+      // The spend update hands back the customer row, Decimal due and all.
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '750.00' });
+
+      const result = await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 50,
+        amountPaid: 50,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 50 }],
+        payments: [{ paymentMethod: 'CASH', amount: 50 }],
+      });
+
+      expect(result.previous_due).toBe(750);
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('returns no previous due for a walk-in sale', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-walk-in', serial_number: 'SL-3', total_amount: 20 });
+      tx.saleItem.create.mockResolvedValue({});
+
+      const result = await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 20,
+        amountPaid: 20,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 20 }],
+        payments: [{ paymentMethod: 'CASH', amount: 20 }],
+      });
+
+      expect(result.previous_due).toBeNull();
+    });
+
     it('rejects keeping due when credit limit would be exceeded', async () => {
       tx.customer.findFirst.mockResolvedValue({
         id: 'cust-1',
@@ -1126,12 +1190,81 @@ describe('SalesService', () => {
       const result = await service.findOne('tenant-1', 's1');
 
       expect(result.id).toBe('s1');
+      // No customer, so nobody owed anything before it.
+      expect(result.previous_due).toBeNull();
+    });
+
+    it('carries what the customer owed before the sale, for its invoice', async () => {
+      const createdAt = new Date('2026-09-01T10:00:00Z');
+      db.sale.findFirst.mockResolvedValue({
+        id: 's1',
+        status: 'COMPLETED',
+        customer_id: 'cust-1',
+        created_at: createdAt,
+        customer: { id: 'cust-1', due_balance: '1400.00' },
+        items: [],
+        payments: [],
+      });
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        { id: 'ct-1', type: 'CREDIT_SALE', amount: '400.00', created_at: createdAt },
+      ]);
+
+      const result = await service.findOne('tenant-1', 's1');
+
+      expect(result.previous_due).toBe(1000);
     });
 
     it('should throw NotFoundException when sale does not exist', async () => {
       db.sale.findFirst.mockResolvedValue(null);
 
       await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getInvoiceData()', () => {
+    it('puts the previous due on the sale, worked back past later payments', async () => {
+      db.sale.findFirst.mockResolvedValue({
+        id: 's1',
+        status: 'COMPLETED',
+        customer_id: 'cust-1',
+        created_at: new Date('2026-09-01T10:00:00Z'),
+        customer: { id: 'cust-1', due_balance: '700.00' },
+        items: [],
+        payments: [],
+      });
+      db.tenant.findUnique.mockResolvedValue({ name: 'Rahim Store' });
+      // A paid sale, then 300 paid off since: 1,000 was owed going in.
+      db.customerCreditTransaction.groupBy.mockResolvedValue([
+        { type: 'PAYMENT', _sum: { amount: '300.00' } },
+      ]);
+
+      const result = await service.getInvoiceData('tenant-1', 's1');
+
+      expect(result.sale.previous_due).toBe(1000);
+      expect(result.tenant).toEqual({ name: 'Rahim Store' });
+    });
+
+    it('prints no previous due on a cancelled sale', async () => {
+      db.sale.findFirst.mockResolvedValue({
+        id: 's1',
+        status: 'CANCELLED',
+        customer_id: 'cust-1',
+        created_at: new Date('2026-09-01T10:00:00Z'),
+        customer: { id: 'cust-1', due_balance: '700.00' },
+        items: [],
+        payments: [],
+      });
+
+      const result = await service.getInvoiceData('tenant-1', 's1');
+
+      expect(result.sale.previous_due).toBeNull();
+      expect(db.customerCreditTransaction.findMany).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException for an unknown sale', async () => {
+      db.sale.findFirst.mockResolvedValue(null);
+
+      await expect(service.getInvoiceData('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
   });
 

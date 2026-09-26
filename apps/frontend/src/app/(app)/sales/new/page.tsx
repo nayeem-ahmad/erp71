@@ -210,8 +210,13 @@ function NewSalePageContent() {
      * What is on the screen right now, as an invoice. Printed straight from the
      * toolbar before a sale is saved, and snapshotted on save so the prompt can
      * still print it after the cart has been cleared.
+     *
+     * `postedPreviousDue` is the server's figure for what the customer owed
+     * going into the sale, once it is posted. Before then the balance the
+     * customer picker loaded stands in; a customer still being typed in has no
+     * balance to show.
      */
-    const buildInvoiceData = (fallbackReference?: string): InvoiceData => ({
+    const buildInvoiceData = (fallbackReference?: string, postedPreviousDue?: number | null): InvoiceData => ({
         referenceNumber: refNumber || fallbackReference || '—',
         date: formatDate(saleDate, locale),
         companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name || printHeader.companyName,
@@ -238,6 +243,10 @@ function NewSalePageContent() {
         laborCost: totals.laborCost > 0 ? totals.laborCost : undefined,
         rounding: totals.rounding || undefined,
         total: totals.total,
+        amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
+        previousDue: postedPreviousDue !== undefined
+            ? postedPreviousDue
+            : customer ? Number(customer.due_balance ?? 0) : null,
         note: description || undefined,
     });
 
@@ -376,7 +385,7 @@ function NewSalePageContent() {
             // that was just posted, not the blank screen it leaves behind. The
             // sale number stands in as the invoice reference when the operator
             // typed none, matching what the sale record prints later.
-            const invoice = buildInvoiceData(response.serial_number);
+            const invoice = buildInvoiceData(response.serial_number, response.previous_due);
 
             // Clear cart and show success
             clearCart();

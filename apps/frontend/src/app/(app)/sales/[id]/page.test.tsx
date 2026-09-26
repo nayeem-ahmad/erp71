@@ -328,6 +328,52 @@ describe('SaleDetailPage — view mode', () => {
             .toHaveAttribute('href', '/sales/new?duplicate=test-sale-1');
     });
 
+    /**
+     * ৳3,000 sold, ৳1,000 paid, to a customer who owed ৳500 going in — so they
+     * owe ৳2,500 today, a balance that already includes this sale.
+     */
+    const creditSale = {
+        ...mockSale,
+        amount_paid: '1000',
+        payments: [{ payment_method: 'Cash', amount: '1000', created_at: '2026-01-15T12:01:00Z' }],
+        customer: { ...mockSale.customer, due_balance: '2500.00' },
+        previous_due: 500,
+    };
+
+    /** The amount printed beside a label in the totals panel. */
+    const amountBeside = (label: string) => screen.getByText(label).nextElementSibling?.textContent;
+
+    it('shows the due from before the sale, not a balance that already includes it', async () => {
+        getApi().getSale.mockResolvedValue(creditSale);
+        await renderPage();
+
+        expect(amountBeside('Previous Due')).toBe('৳500.00');
+        expect(amountBeside('Total Due')).toBe('৳2500.00');
+    });
+
+    it('prints the same dues on the invoice', async () => {
+        const { printSalesInvoice } = require('@/lib/sales-invoice-printer');
+        getApi().getSale.mockResolvedValue(creditSale);
+        await renderPage();
+
+        fireEvent.click(screen.getByTitle('Print Invoice'));
+        await act(async () => { await Promise.resolve(); });
+
+        expect(printSalesInvoice).toHaveBeenCalledWith(
+            expect.objectContaining({ total: 3000, amountPaid: 1000, previousDue: 500 }),
+            expect.anything(),
+            expect.anything(),
+        );
+    });
+
+    it('shows no dues on a cancelled sale, whose due was taken back', async () => {
+        getApi().getSale.mockResolvedValue({ ...creditSale, status: 'CANCELLED', previous_due: null });
+        await renderPage();
+
+        expect(screen.queryByText('Previous Due')).not.toBeInTheDocument();
+        expect(screen.queryByText('Total Due')).not.toBeInTheDocument();
+    });
+
     it('navigates to edit mode from the Edit action', async () => {
         await renderPage();
         fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));

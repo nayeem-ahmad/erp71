@@ -18,6 +18,7 @@ import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
+import { customerLedgerDueDelta } from './customer-credit.utils';
 
 const CUSTOMER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -128,23 +129,6 @@ export class CustomersService {
 
     private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number): number {
         return type === 'PAYOUT' ? amount : -amount;
-    }
-
-    private ledgerDueDelta(type: string, amount: number): number {
-        switch (type) {
-            case 'CREDIT_SALE':
-            case 'PAYOUT':
-                return amount;
-            case 'PAYMENT':
-            // A write-off settles the due the same way a payment does; what
-            // differs is where the other leg lands (expense, not cash).
-            case 'WRITE_OFF':
-                return -amount;
-            case 'ADJUSTMENT':
-                return amount;
-            default:
-                return 0;
-        }
     }
 
     private directionFromType(type: string): CustomerPaymentDirectionDto {
@@ -594,7 +578,7 @@ export class CustomersService {
                 ...tx,
                 amount,
                 balance_after: balanceAfter,
-                balance_before: balanceAfter - this.ledgerDueDelta(tx.type, amount),
+                balance_before: balanceAfter - customerLedgerDueDelta(tx.type, amount),
             };
         });
 
@@ -1062,7 +1046,7 @@ export class CustomersService {
      * settled. `ageBalance` applies each receipt to the oldest open charge, the
      * way the shopkeeper does on paper, and ages only what survives.
      *
-     * `ledgerDueDelta` is the single place that knows which transaction types
+     * `customerLedgerDueDelta` is the single place that knows which transaction types
      * raise a due and which settle one, so this report cannot disagree with the
      * customer's own statement about what a row means.
      */
@@ -1094,7 +1078,7 @@ export class CustomersService {
             }
             bucket.entries.push({
                 date: tx.created_at,
-                delta: this.ledgerDueDelta(tx.type, Number(tx.amount)),
+                delta: customerLedgerDueDelta(tx.type, Number(tx.amount)),
             });
         }
 
