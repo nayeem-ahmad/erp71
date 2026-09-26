@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'قصص المستخدم',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "طي",
         loadFailed: "تعذّر تحميل القائمة",
         createFailed: "تعذّرت الإضافة",
+        dragHandle: "اسحب للنقل",
+        moveTo: "نقل إلى…",
+        moveToLabel: "نقل {title} إلى…",
+        noStory: "بلا قصة",
+        moveFailed: "تعذّر النقل",
+        editFailed: "تعذّر حفظ التغيير",
+        select: "تحديد {title}",
+        selectedCount: "{count} محدد",
+        clearSelection: "مسح",
+        bulkRegion: "إجراءات للتحديد",
+        bulkPriority: "الأولوية",
+        bulkStatus: "الحالة",
+        bulkAssignee: "المكلَّف",
+        bulkDelete: "حذف",
+        bulkDeletePrompt: "حذف {count} من العناصر المحددة؟\n\nتبقى القصص والمهام التابعة لملحمة أو قصة محذوفة — تفقد التجميع فقط.",
+        bulkDone: "تم تحديث {count}",
+        bulkSkipped: "تم تحديث {updated}، وتخطي {skipped}: {reason}",
+        bulkFailed: "تعذّر تطبيق ذلك على التحديد",
+        mixedSelection: "اختر نوعًا واحدًا من العناصر في مشروع واحد لتغيير حالته أو نقله أو تكليفه.",
+        keyboardHint: "↑/↓ للتنقل بين الصفوف · →/← للفتح والإغلاق · Alt+↑/↓ لإعادة الترتيب · Space للتحديد · Enter للفتح",
+        noPoints: "بلا نقاط",
+        pointsOf: "نقاط {title}",
+        priorityOf: "أولوية {title}",
+        statusOf: "حالة {title}",
+        assigneeOf: "المكلَّف بـ {title}",
+        noTeam: "لا أحد في فريق هذا المشروع بعد.",
+        emptyAll: "لا ملاحم ولا قصص مستخدم في أي مشروع بعد.",
+        openBacklog: "فتح القائمة",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "اكتمل {percent}% من القصص",
+        allProjects: "كل المشاريع",
     },
 
     epicList: {

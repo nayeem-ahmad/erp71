@@ -140,7 +140,7 @@ export const projectsMessages = {
 
     /**
      * User stories. The requirement in the words of whoever wants it, with the
-     * tasks that deliver it filed under it — see `ProjectStoriesCard`.
+     * tasks that deliver it filed under it — see the Backlog tree (`components/projects/backlog`).
      */
     stories: {
         title: 'User stories',
@@ -280,6 +280,37 @@ export const projectsMessages = {
         collapseRow: "Replier",
         loadFailed: "Impossible de charger le backlog",
         createFailed: "Impossible de l'ajouter",
+        dragHandle: "Glisser pour déplacer",
+        moveTo: "Déplacer vers…",
+        moveToLabel: "Déplacer {title} vers…",
+        noStory: "Aucune story",
+        moveFailed: "Impossible de le déplacer",
+        editFailed: "Impossible d’enregistrer la modification",
+        select: "Sélectionner {title}",
+        selectedCount: "{count} sélectionnés",
+        clearSelection: "Effacer",
+        bulkRegion: "Actions pour la sélection",
+        bulkPriority: "Priorité",
+        bulkStatus: "Statut",
+        bulkAssignee: "Responsable",
+        bulkDelete: "Supprimer",
+        bulkDeletePrompt: "Supprimer {count} éléments sélectionnés ?\n\nLes stories et tâches d’une épopée ou story supprimée sont conservées — elles perdent seulement le regroupement.",
+        bulkDone: "{count} mis à jour",
+        bulkSkipped: "{updated} mis à jour, {skipped} ignorés : {reason}",
+        bulkFailed: "Impossible d’appliquer cela à la sélection",
+        mixedSelection: "Choisissez un seul type d’élément dans un projet pour changer son statut, le déplacer ou l’assigner.",
+        keyboardHint: "↑/↓ entre les lignes · →/← ouvrir et fermer · Alt+↑/↓ réordonne · Espace sélectionne · Entrée ouvre",
+        noPoints: "Aucun point",
+        pointsOf: "Points de {title}",
+        priorityOf: "Priorité de {title}",
+        statusOf: "Statut de {title}",
+        assigneeOf: "Responsable de {title}",
+        noTeam: "Personne n’est encore dans l’équipe de ce projet.",
+        emptyAll: "Aucune épopée ni user story dans aucun projet pour l’instant.",
+        openBacklog: "Ouvrir le backlog",
+        doneOf: "{done}/{total}",
+        storiesDonePercent: "{percent} % des stories terminées",
+        allProjects: "Tous les projets",
     },
 
     epicList: {

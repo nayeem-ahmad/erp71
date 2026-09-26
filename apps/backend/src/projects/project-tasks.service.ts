@@ -398,11 +398,15 @@ export class ProjectTasksService {
         // opening position, and it gives the burndown something to start from.
         const opening = dto.remainingHours ?? estimate;
 
+        const reference = await this.nextReference(dto.projectId);
         const task = await this.db.projectTask.create({
             data: {
                 tenant_id: tenantId,
                 project_id: dto.projectId,
-                reference: await this.nextReference(dto.projectId),
+                reference,
+                // Bottom of its Backlog group: references only grow, and a
+                // groomed group is renumbered from 0.
+                backlog_order: reference,
                 title: dto.title.trim(),
                 description: dto.description?.trim() || null,
                 status_id: statusId,
