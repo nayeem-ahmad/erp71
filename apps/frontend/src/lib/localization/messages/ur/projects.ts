@@ -727,6 +727,7 @@ export const projectsMessages = {
         addCard: "کارڈ شامل کریں",
         newCardPlaceholder: "کیا کرنا ہے؟",
         assignCardTo: "کارڈ تفویض کریں",
+        entryColumn: "کالم: {column}",
         filters: {
             assignee: "تفویض کردہ",
             priority: "ترجیح",

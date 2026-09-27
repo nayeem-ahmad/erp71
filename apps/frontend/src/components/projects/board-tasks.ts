@@ -297,11 +297,19 @@ export function matchesFilters(task: BoardTask, filters: BoardFilters): boolean 
     return matchesDue(task, filters.due);
 }
 
-export function applyFilters(columns: BoardColumn[], filters: BoardFilters): BoardColumn[] {
+/**
+ * `keep` names cards that stay whatever the filters say — the ones the reader
+ * has just composed, which would otherwise vanish the moment they were saved.
+ */
+export function applyFilters(
+    columns: BoardColumn[],
+    filters: BoardFilters,
+    keep?: ReadonlySet<string>,
+): BoardColumn[] {
     if (!hasActiveFilter(filters)) return columns;
     return columns.map((column) => ({
         ...column,
-        tasks: column.tasks.filter((task) => matchesFilters(task, filters)),
+        tasks: column.tasks.filter((task) => keep?.has(task.id) || matchesFilters(task, filters)),
     }));
 }
 

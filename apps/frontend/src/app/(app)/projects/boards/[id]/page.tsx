@@ -22,9 +22,13 @@ import { PageShell, PageHeader, Button, Checkbox, Input, Select, StatusBadge } f
 import type { StatusBadgeTone } from '@/components/ui';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
-import BoardCardComposer, { type ComposerProject } from '@/components/projects/BoardCardComposer';
+import BoardCardComposer, {
+    type ComposerDraft,
+    type ComposerProject,
+} from '@/components/projects/BoardCardComposer';
+import TaskEntryModal, { type TaskEntryValues } from '@/components/projects/TaskEntryModal';
 import { useProjectMeta } from '@/components/projects/use-project-meta';
-import { defaultAssigneeKeyFor } from '@/components/projects/task-assignee';
+import { assigneeColumns, defaultAssigneeKeyFor } from '@/components/projects/task-assignee';
 import BoardColumnComposer from '@/components/projects/BoardColumnComposer';
 import BoardColumnHead from '@/components/projects/BoardColumnHead';
 import BoardSettingsModal from '@/components/projects/BoardSettingsModal';
@@ -119,7 +123,27 @@ interface BoardSummary {
 interface BoardResponse extends BoardSummary {
     columns?: BoardColumn[];
     unsorted?: BoardTask[];
+    /** Set by composing a card: which card on the board is the new one. */
+    created_task_id?: string;
 }
+
+/** The New Task form, opened from a column's composer, and where its card goes. */
+interface CardEntry {
+    columnId: string;
+    initial: Partial<TaskEntryValues>;
+    /** Names `initial.assignee` before the project's roster arrives. */
+    assigneeLabel: string;
+    /** A story lane's story, which the card joins. */
+    userStory?: { id: string; code: string; title: string };
+    /** A story lane fixes the project to its story's. */
+    projectLocked: boolean;
+}
+
+/**
+ * How long a freshly composed card stays marked. Long enough to find it after
+ * the scroll that brings it into view, short enough not to read as a state.
+ */
+const FRESH_MS = 2000;
 
 const num = (value: unknown): number => (value == null ? 0 : Number(value));
 
@@ -224,6 +248,19 @@ export default function BoardPage() {
     // Which project a composed card belongs to. Held here rather than per
     // column so picking it once covers the whole board.
     const [composerProject, setComposerProject] = useState('');
+    /** The New Task form, when a composer's "More fields" opened it. */
+    const [entry, setEntry] = useState<CardEntry | null>(null);
+    /**
+     * Cards composed on this visit. Each stays on screen whatever the filters
+     * say until the reader next changes them: a card typed into a board
+     * filtered to "High" or to a search would otherwise vanish the moment it
+     * was saved, which reads as a save that failed. The assignee filter needs
+     * no help — the composer defaults to it — but a new card cannot be made to
+     * match a search or a due date.
+     */
+    const [composed, setComposed] = useState<string[]>([]);
+    /** The card just composed, while it is scrolled into view and marked. */
+    const [fresh, setFresh] = useState<string | null>(null);
     /** Who is composing — a card lands on them when no filter says otherwise. */
     const [userId, setUserId] = useState<string | null>(null);
     /** The composer's assignee picker draws on the chosen project's roster. */
@@ -262,10 +299,14 @@ export default function BoardPage() {
         filterOptionIds,
     );
 
-    const visibleColumns = useMemo(() => applyFilters(columns, filters), [columns, filters]);
+    const keep = useMemo(() => new Set(composed), [composed]);
+    const visibleColumns = useMemo(
+        () => applyFilters(columns, filters, keep),
+        [columns, filters, keep],
+    );
     const visibleUnsorted = useMemo(
-        () => unsorted.filter((task) => matchesFilters(task, filters)),
-        [unsorted, filters],
+        () => unsorted.filter((task) => keep.has(task.id) || matchesFilters(task, filters)),
+        [unsorted, filters, keep],
     );
     /** Grouped after filtering, so a filter that empties a lane hides it. */
     const lanes = useMemo(
@@ -444,6 +485,25 @@ export default function BoardPage() {
             return next.length === current.length ? current : next;
         });
     }, [visibleColumns, visibleUnsorted]);
+
+    /**
+     * Brings a freshly composed card into view. It lands at the foot of its
+     * column, which on a long column is below the fold — and on a board that
+     * scrolls inside its columns, inside a scroller the page cannot see.
+     * `nearest` leaves a card that is already on screen where it is.
+     */
+    useEffect(() => {
+        if (!fresh) return;
+        const still =
+            !view.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        document.querySelector(`[${CARD_ATTR}="${fresh}"]`)?.scrollIntoView?.({
+            block: 'nearest',
+            inline: 'nearest',
+            behavior: still ? 'auto' : 'smooth',
+        });
+        const timer = window.setTimeout(() => setFresh(null), FRESH_MS);
+        return () => window.clearTimeout(timer);
+    }, [fresh, view.animate]);
 
     /**
      * `lane` makes the drop a swimlane change as well: the card is redrawn with
@@ -852,6 +912,78 @@ export default function BoardPage() {
             .filter((column) => column.id !== columnId)
             .map((column) => ({ id: column.id, name: column.name }));
 
+    /** A filter chosen after composing applies to the new cards like any other. */
+    const changeFilters = (next: BoardFilters) => {
+        setComposed([]);
+        setFilters(next);
+    };
+
+    /**
+     * Paints the board a card was just composed into — the API answers with
+     * the whole board — and makes sure the new card can be seen: kept past the
+     * filters, its lane unfolded, and scrolled to by the effect above.
+     */
+    const cardComposed = (res: unknown) => {
+        const next = res as BoardResponse;
+        applyBoard(next);
+        const id = next.created_task_id;
+        if (!id) return;
+        setComposed((current) => [...current, id]);
+        const task = [...(next.columns ?? []).flatMap((column) => column.tasks), ...(next.unsorted ?? [])]
+            .find((candidate) => candidate.id === id);
+        // A card can land in a lane the reader has folded — handed to someone
+        // else from the composer, or the first card of a lane folded on an
+        // earlier visit. A folded lane renders no cards at all.
+        if (grouped && task) {
+            const lane = laneStorageId(view.swimlanes, laneKeyOf(task, view.swimlanes));
+            setCollapsedLanes((current) => {
+                if (!current.includes(lane)) return current;
+                const unfolded = current.filter((other) => other !== lane);
+                writeCollapsedLanes(boardId, unfolded);
+                return unfolded;
+            });
+        }
+        setFresh(id);
+    };
+
+    /** Opens the New Task form for a column, carrying over what its composer had. */
+    const openEntry = (
+        columnId: string,
+        projectId: string,
+        draft: ComposerDraft,
+        lane: { userStory?: CardEntry['userStory']; projectLocked?: boolean } = {},
+    ) =>
+        setEntry({
+            columnId,
+            initial: { projectId, title: draft.title, assignee: draft.assignee },
+            assigneeLabel: draft.assigneeLabel,
+            userStory: lane.userStory,
+            projectLocked: lane.projectLocked ?? false,
+        });
+
+    /**
+     * The New Task form's save: the card the composer would have made, with
+     * the rest of the form riding along. The column still decides the status.
+     */
+    const fileCard = async (target: CardEntry, values: TaskEntryValues) => {
+        const res = await api.createBoardCard(boardId, target.columnId, {
+            projectId: values.projectId,
+            title: values.title.trim(),
+            // `''` means nobody here, as it does in the composer — the form
+            // opened on whoever the composer would have picked.
+            ...assigneeColumns(values.assignee),
+            ...(target.userStory ? { userStoryId: target.userStory.id } : {}),
+            description: values.description.trim() || undefined,
+            priority: values.priority,
+            dueDate: values.dueDate || undefined,
+            estimateHours: values.estimateHours ? Number(values.estimateHours) : undefined,
+        });
+        // The project picked here is the one the next card is most likely for
+        // too — the same memory the composer's own picker writes to.
+        if (!target.projectLocked) setComposerProject(values.projectId);
+        cardComposed(res);
+    };
+
     if (!board) {
         if (loadError) {
             return (
@@ -895,6 +1027,7 @@ export default function BoardPage() {
             selected={selection.includes(task.id)}
             onToggleSelected={() => toggleSelected(task.id)}
             dragging={drag?.active === true && drag.taskId === task.id}
+            fresh={fresh === task.id}
             onPointerDownBody={(e) => beginDrag(e, task, { fromHandle: false })}
             onPointerDownHandle={(e) => beginDrag(e, task, { fromHandle: true })}
             onPointerMove={continueDrag}
@@ -1001,7 +1134,8 @@ export default function BoardPage() {
             defaultAssigneeLabel={composerAssigneeLabel}
             assignees={projectMeta.peek(composerProject)?.assignees ?? []}
             onAssigneeMenuOpen={() => void projectMeta.load(composerProject)}
-            onCreated={loadBoard}
+            onCreated={cardComposed}
+            onOpenFull={(draft) => openEntry(columnId, composerProject, draft)}
         />
     );
 
@@ -1063,7 +1197,13 @@ export default function BoardPage() {
                 defaultAssigneeLabel={byPerson ? laneName(lane) : composerAssigneeLabel}
                 assignees={projectMeta.peek(projectId)?.assignees ?? []}
                 onAssigneeMenuOpen={() => void projectMeta.load(projectId)}
-                onCreated={loadBoard}
+                onCreated={cardComposed}
+                onOpenFull={(draft) =>
+                    openEntry(columnId, projectId, draft, {
+                        userStory: story,
+                        projectLocked: Boolean(story && lane.projectId),
+                    })
+                }
                 compact
             />
         );
@@ -1142,7 +1282,7 @@ export default function BoardPage() {
                                     buttons — see the settings one below. */}
                                 <BoardFilterBar
                                     filters={filters}
-                                    onChange={setFilters}
+                                    onChange={changeFilters}
                                     assignees={assigneeOptions}
                                     labels={labels}
                                     shown={shown}
@@ -1456,6 +1596,33 @@ export default function BoardPage() {
                 onCancel={() => setPendingRemoval(null)}
                 onConfirm={confirmRemoval}
             />
+
+            {entry && (
+                <TaskEntryModal
+                    projects={projects}
+                    initial={entry.initial}
+                    projectLocked={entry.projectLocked}
+                    // Where the card is going, since the form has no field for
+                    // it: the column decides the status, a story lane the story.
+                    subtitle={[
+                        bm.entryColumn.replace(
+                            '{column}',
+                            columns.find((column) => column.id === entry.columnId)?.name ?? '',
+                        ),
+                        entry.userStory && `${entry.userStory.code} ${entry.userStory.title}`,
+                    ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    projectMeta={projectMeta}
+                    assigneeName={(key) =>
+                        key === entry.initial.assignee
+                            ? entry.assigneeLabel
+                            : assigneeOptions.find((option) => option.key === key)?.label
+                    }
+                    onSubmit={(values) => fileCard(entry, values)}
+                    onClose={() => setEntry(null)}
+                />
+            )}
 
             {adding && (
                 <AddBoardTasksModal
@@ -1810,6 +1977,7 @@ function TaskCard({
     view,
     index,
     dragging,
+    fresh,
     selecting,
     selected,
     onToggleSelected,
@@ -1826,6 +1994,8 @@ function TaskCard({
     /** Position in its column, for the entrance stagger. */
     index: number;
     dragging: boolean;
+    /** Just composed: marked for a moment, so the eye finds it among the rest. */
+    fresh: boolean;
     /**
      * True while anything on the board is selected. The box then shows on every
      * card rather than only on the chosen ones, so a selection started from one
@@ -1944,7 +2114,9 @@ function TaskCard({
                     ? 'border-emerald-500 ring-1 ring-emerald-300'
                     : selected
                       ? 'border-blue-500 ring-1 ring-blue-300'
-                      : 'border-gray-200'
+                      : fresh
+                        ? 'border-blue-400 ring-2 ring-blue-200'
+                        : 'border-gray-200'
             } ${dragging ? 'opacity-40' : ''} ${motionClass(view, 'card')}`}
         >
             {cover && <div aria-hidden className={`h-1.5 w-full ${cover}`} />}

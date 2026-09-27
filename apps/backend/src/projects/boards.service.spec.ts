@@ -9,6 +9,7 @@ import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { visibilityOr } from './project-access.test-support';
+import { ProjectPriorityDto } from './project.dto';
 import { DatabaseService } from '../database/database.service';
 import { AssetsService } from '../assets/assets.service';
 
@@ -554,6 +555,34 @@ describe('BoardsService', () => {
                 owner,
                 expect.objectContaining({ assigneeId: '', assigneeEmployeeId: 'e3' }),
             );
+        });
+
+        it('hands over the rest of the New Task form when the card was filed through it', async () => {
+            await service.createCard(owner, 'b1', 'c1', {
+                ...dto,
+                description: 'Every change since 4.1',
+                priority: ProjectPriorityDto.HIGH,
+                dueDate: '2026-10-01',
+                estimateHours: 3,
+            });
+
+            expect(tasks.create).toHaveBeenCalledWith(
+                owner,
+                expect.objectContaining({
+                    description: 'Every change since 4.1',
+                    priority: 'HIGH',
+                    dueDate: '2026-10-01',
+                    estimateHours: 3,
+                }),
+            );
+        });
+
+        // The page brings the new card into view, and a diff of two boards is
+        // a guess once anybody else is adding cards too.
+        it('names the task it created alongside the board it answers with', async () => {
+            const res = await service.createCard(owner, 'b1', 'c1', dto);
+
+            expect(res).toEqual(expect.objectContaining({ id: 'b1', created_task_id: 'k9' }));
         });
 
         // A card composed with nobody picked must not silently land on the

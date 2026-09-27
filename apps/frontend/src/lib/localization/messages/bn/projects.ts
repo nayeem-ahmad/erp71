@@ -727,6 +727,7 @@ export const projectsMessages = {
         addCard: 'কার্ড যোগ করুন',
         newCardPlaceholder: 'কী করতে হবে?',
         assignCardTo: 'কার্ড দেওয়া হবে',
+        entryColumn: 'কলাম: {column}',
         filters: {
             assignee: 'দায়িত্বপ্রাপ্ত',
             priority: 'অগ্রাধিকার',

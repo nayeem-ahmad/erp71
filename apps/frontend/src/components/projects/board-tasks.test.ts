@@ -262,6 +262,20 @@ describe('applyFilters', () => {
         expect(result[0].tasks.map((t) => t.id)).toEqual(['a']);
         expect(result[1].tasks).toEqual([]);
     });
+
+    // A card just composed stays where it was typed, match or not.
+    it('lets a kept card through a filter it does not match, and only that one', () => {
+        const columns = [
+            column([
+                task({ id: 'a', priority: 'URGENT' }),
+                task({ id: 'b', priority: 'LOW' }),
+                task({ id: 'new', priority: 'MEDIUM' }),
+            ]),
+        ];
+        const result = applyFilters(columns, { ...NO_FILTERS, priority: 'URGENT' }, new Set(['new']));
+
+        expect(result[0].tasks.map((t) => t.id)).toEqual(['a', 'new']);
+    });
 });
 
 describe('isOverWip', () => {

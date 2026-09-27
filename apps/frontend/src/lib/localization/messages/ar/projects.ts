@@ -727,6 +727,7 @@ export const projectsMessages = {
         addCard: "إضافة بطاقة",
         newCardPlaceholder: "ما الذي يجب إنجازه؟",
         assignCardTo: "تعيين البطاقة إلى",
+        entryColumn: "العمود: {column}",
         filters: {
             assignee: "المسؤول",
             priority: "الأولوية",
