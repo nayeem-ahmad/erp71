@@ -5,15 +5,25 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { TenantRoleGuard } from '../auth/tenant-role.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { GetPurchaseSummaryDto, GetPurchaseTrendDto, GetPurchasesByProductDto, GetPurchasesBySupplierDto } from './purchase-reports.dto';
+import {
+    GetPurchaseLineItemsDto,
+    GetPurchaseSummaryDto,
+    GetPurchaseTrendDto,
+    GetPurchasesByProductDto,
+    GetPurchasesBySupplierDto,
+} from './purchase-reports.dto';
 import { PurchaseReportsService } from './purchase-reports.service';
+import { PurchaseLineItemsService } from './purchase-line-items.service';
 
 @Controller('purchase-reports')
 @UseGuards(JwtAuthGuard, TenantRoleGuard, SubscriptionAccessGuard)
 @UseInterceptors(TenantInterceptor)
 @RequiresPlan('BASIC')
 export class PurchaseReportsController {
-    constructor(private readonly service: PurchaseReportsService) {}
+    constructor(
+        private readonly service: PurchaseReportsService,
+        private readonly lineItems: PurchaseLineItemsService,
+    ) {}
 
     @Get('summary')
     getPurchaseSummary(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseSummaryDto) {
@@ -33,5 +43,10 @@ export class PurchaseReportsController {
     @Get('by-supplier')
     getPurchasesBySupplier(@Tenant() tenant: TenantContext, @Query() query: GetPurchasesBySupplierDto) {
         return this.service.getPurchasesBySupplier(tenant.tenantId, query);
+    }
+
+    @Get('line-items')
+    getPurchaseLineItems(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseLineItemsDto) {
+        return this.lineItems.getPurchaseLineItems(tenant.tenantId, query, tenant.timezone);
     }
 }

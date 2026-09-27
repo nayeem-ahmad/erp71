@@ -8,6 +8,7 @@ import {
     FileSearch,
     FileText,
     Package,
+    ScrollText,
     TrendingUp,
     Truck,
     Undo2,
@@ -49,6 +50,7 @@ const PURCHASE_HUB_SECTIONS: HubSectionConfig[] = [
             { href: routes.purchases.reports.summary, key: 'purchaseSummary', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100', advancedOnly: true },
             { href: routes.purchases.reports.byProduct, key: 'purchasesByProduct', icon: Package, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
             { href: routes.purchases.reports.bySupplier, key: 'purchasesBySupplier', icon: Truck, accent: 'bg-primary-light text-primary border-primary-border', advancedOnly: true },
+            { href: routes.purchases.reports.lineItems, key: 'purchaseLineItems', icon: ScrollText, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
         ],
     },
     {

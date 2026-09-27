@@ -28,6 +28,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/sales/loyalty', label: 'Loyalty Points' },
     { path: '/sales/reports/summary', label: 'Sales Summary' },
     { path: '/sales/reports/products', label: 'Sales by Product' },
+    { path: '/sales/reports/line-items', label: 'Sales Line Items' },
     { path: '/sales/reports/consolidated', label: 'Consolidated Report' },
     { path: '/sales/reports/branch-report', label: 'Branch Report' },
     { path: '/sales/customer-groups', label: 'Customer Groups' },
@@ -46,6 +47,7 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/purchases/reports/summary', label: 'Purchase Summary' },
     { path: '/purchases/reports/by-product', label: 'Purchases by Product' },
     { path: '/purchases/reports/by-supplier', label: 'Purchases by Supplier' },
+    { path: '/purchases/reports/line-items', label: 'Purchase Line Items' },
     { path: '/purchases/suppliers', label: 'Suppliers' },
 
     // Accounting — sidebar + hub

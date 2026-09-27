@@ -1,24 +1,20 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useId, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { History, Loader2, Search, X } from 'lucide-react';
+import { History } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
+import { Button, Field, Input, Select } from '@/components/ui';
+import SearchFilterPicker, { type FilterOption } from '@/components/reports/SearchFilterPicker';
+import { searchProductOptions } from '@/components/reports/filter-searches';
 import { api } from '@/lib/api';
-import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { formatBDT, formatCalendarDate, formatDateTime } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { warehouseLabel } from '@/lib/warehouse-label';
-
-interface ProductOption {
-    id: string;
-    name: string;
-    sku?: string | null;
-}
 
 interface HistoryRow {
     id: string;
@@ -86,9 +82,10 @@ function ProductTransactionHistoryContent() {
     const { t, locale } = useI18n();
     const copy = t.inventoryReports.productTransactionHistory;
     const searchParams = useSearchParams();
+    const fieldId = useId();
 
     const [productId, setProductId] = useState(searchParams.get('productId') ?? '');
-    const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(null);
+    const [selectedProduct, setSelectedProduct] = useState<FilterOption | null>(null);
     const [warehouseId, setWarehouseId] = useState(searchParams.get('warehouseId') ?? '');
     const [storeId, setStoreId] = useState('');
     const [fromDate, setFromDate] = useState('');
@@ -149,7 +146,7 @@ function ProductTransactionHistoryContent() {
                 setReport(data);
                 setError(null);
                 // A product reached by URL has no name until the report names it.
-                setSelectedProduct({ id: data.product.id, name: data.product.name, sku: data.product.sku });
+                setSelectedProduct({ id: data.product.id, name: data.product.name, detail: data.product.sku });
             } catch (err) {
                 if (cancelled) return;
                 console.error('Failed to load product transaction history', err);
@@ -385,25 +382,35 @@ function ProductTransactionHistoryContent() {
             />
 
             <div className="bg-white border border-gray-100 rounded-lg p-3 md:p-4 space-y-3">
-                <ProductPicker
-                    copy={copy}
+                <SearchFilterPicker
+                    copy={{
+                        label: copy.productLabel,
+                        placeholder: copy.searchPlaceholder,
+                        searchLabel: copy.selectProduct,
+                        clear: copy.changeProduct,
+                        searching: copy.searching,
+                        noMatches: copy.noMatches,
+                    }}
                     selected={selectedProduct}
+                    search={searchProductOptions}
                     onSelect={(product) => {
                         setSelectedProduct(product);
                         setProductId(product?.id ?? '');
                     }}
+                    // The card cannot run without a product, so letting go of
+                    // one only ever means picking another.
+                    reopenOnClear
                 />
 
                 <div className="flex flex-wrap gap-3 items-end">
-                    <label className="space-y-1 min-w-[180px] flex-1">
-                        <span className="block text-xs font-medium text-gray-500">{copy.branchLabel}</span>
-                        <select
+                    <Field label={copy.branchLabel} htmlFor={`${fieldId}-branch`} className="min-w-[180px] flex-1">
+                        <Select
+                            id={`${fieldId}-branch`}
                             value={storeId}
                             onChange={(e) => {
                                 setStoreId(e.target.value);
                                 setWarehouseId('');
                             }}
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm min-h-touch"
                         >
                             <option value="">{copy.allBranches}</option>
                             {stores.map((store: any) => (
@@ -411,14 +418,13 @@ function ProductTransactionHistoryContent() {
                                     {store.name}
                                 </option>
                             ))}
-                        </select>
-                    </label>
-                    <label className="space-y-1 min-w-[180px] flex-1">
-                        <span className="block text-xs font-medium text-gray-500">{copy.warehouseLabel}</span>
-                        <select
+                        </Select>
+                    </Field>
+                    <Field label={copy.warehouseLabel} htmlFor={`${fieldId}-warehouse`} className="min-w-[180px] flex-1">
+                        <Select
+                            id={`${fieldId}-warehouse`}
                             value={warehouseId}
                             onChange={(e) => setWarehouseId(e.target.value)}
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm min-h-touch"
                         >
                             <option value="">{copy.allWarehouses}</option>
                             {visibleWarehouses.map((warehouse: any) => (
@@ -426,38 +432,35 @@ function ProductTransactionHistoryContent() {
                                     {warehouseLabel(warehouse, visibleWarehouses)}
                                 </option>
                             ))}
-                        </select>
-                    </label>
-                    <label className="space-y-1 min-w-[150px]">
-                        <span className="block text-xs font-medium text-gray-500">{copy.fromLabel}</span>
-                        <input
+                        </Select>
+                    </Field>
+                    <Field label={copy.fromLabel} htmlFor={`${fieldId}-from`} className="min-w-[150px]">
+                        <Input
+                            id={`${fieldId}-from`}
                             type="date"
                             value={fromDate}
                             onChange={(e) => setFromDate(e.target.value)}
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm min-h-touch"
                         />
-                    </label>
-                    <label className="space-y-1 min-w-[150px]">
-                        <span className="block text-xs font-medium text-gray-500">{copy.toLabel}</span>
-                        <input
+                    </Field>
+                    <Field label={copy.toLabel} htmlFor={`${fieldId}-to`} className="min-w-[150px]">
+                        <Input
+                            id={`${fieldId}-to`}
                             type="date"
                             value={toDate}
                             onChange={(e) => setToDate(e.target.value)}
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm min-h-touch"
                         />
-                    </label>
-                    <button
-                        type="button"
+                    </Field>
+                    <Button
+                        variant="secondary"
                         onClick={() => {
                             setStoreId('');
                             setWarehouseId('');
                             setFromDate('');
                             setToDate('');
                         }}
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 min-h-touch"
                     >
                         {copy.clearFilters}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -540,119 +543,6 @@ function ProductTransactionHistoryContent() {
                 </>
             )}
         </PageShell>
-    );
-}
-
-/**
- * A typed-search product field rather than a `<select>`: a mid-sized shop has
- * thousands of SKUs, and a dropdown of all of them is unusable on a phone and
- * slow everywhere else.
- */
-function ProductPicker({
-    copy,
-    selected,
-    onSelect,
-}: {
-    copy: any;
-    selected: ProductOption | null;
-    onSelect: (product: ProductOption | null) => void;
-}) {
-    const [query, setQuery] = useState('');
-    const [options, setOptions] = useState<ProductOption[]>([]);
-    const [open, setOpen] = useState(false);
-    const [searching, setSearching] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    const isInside = useCallback((target: Node) => Boolean(containerRef.current?.contains(target)), []);
-    useDismissOnClickOutside(open, isInside, () => setOpen(false));
-
-    useEffect(() => {
-        if (!open) return;
-
-        let cancelled = false;
-        const timer = setTimeout(async () => {
-            const term = query.trim();
-            try {
-                setSearching(true);
-                // An empty term browses the most-sold products, so the list can be
-                // opened and read without typing anything.
-                const data = await api.searchProductsByQuantity(term, term ? 20 : 30);
-                if (!cancelled) setOptions(Array.isArray(data) ? data : []);
-            } catch (err) {
-                console.error('Failed to search products', err);
-                if (!cancelled) setOptions([]);
-            } finally {
-                if (!cancelled) setSearching(false);
-            }
-        }, 250);
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
-    }, [query, open]);
-
-    return (
-        <div ref={containerRef} className="relative">
-            <span className="block text-xs font-medium text-gray-500 mb-1">{copy.productLabel}</span>
-            {selected ? (
-                <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 min-h-touch">
-                    <span className="text-sm font-semibold text-gray-800">{selected.name}</span>
-                    {selected.sku && <span className="text-xs text-gray-400">{selected.sku}</span>}
-                    <button
-                        type="button"
-                        aria-label={copy.changeProduct}
-                        onClick={() => {
-                            onSelect(null);
-                            setQuery('');
-                            setOpen(true);
-                        }}
-                        className="ms-auto inline-flex items-center gap-1 text-xs font-semibold text-blue-600"
-                    >
-                        <X className="w-4 h-4" /> {copy.changeProduct}
-                    </button>
-                </div>
-            ) : (
-                <div className="relative">
-                    <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onFocus={() => setOpen(true)}
-                        placeholder={copy.searchPlaceholder}
-                        aria-label={copy.selectProduct}
-                        className="w-full rounded-xl border border-gray-100 bg-gray-50 ps-9 pe-3 py-2 text-sm min-h-touch"
-                    />
-                </div>
-            )}
-
-            {open && !selected && (
-                <div className="absolute z-20 mt-1 w-full max-h-72 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
-                    {searching && (
-                        <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500">
-                            <Loader2 className="w-4 h-4 animate-spin" /> {copy.searching}
-                        </div>
-                    )}
-                    {!searching && options.length === 0 && (
-                        <div className="px-3 py-3 text-xs text-gray-500">{copy.noMatches}</div>
-                    )}
-                    {options.map((product) => (
-                        <button
-                            key={product.id}
-                            type="button"
-                            onClick={() => {
-                                onSelect({ id: product.id, name: product.name, sku: product.sku });
-                                setOpen(false);
-                            }}
-                            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-start hover:bg-gray-50 min-h-touch"
-                        >
-                            <span className="text-sm text-gray-800">{product.name}</span>
-                            {product.sku && <span className="text-xs text-gray-400">{product.sku}</span>}
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
     );
 }
 
