@@ -1,5 +1,6 @@
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { LineItemSearchDto } from '../common/line-item-search';
 
 /** Bucket width for any time-series report. */
 export const TREND_GRANULARITIES = ['day', 'week', 'month'] as const;
@@ -339,4 +340,25 @@ export class GetCostCoverageDto {
     @IsOptional()
     @IsString()
     to?: string;
+}
+
+/**
+ * Columns the sales line-item search can be ordered by. No `amount`: a line's
+ * value is quantity × unit price, which is not a column the database can sort.
+ */
+export const SALES_LINE_ITEM_SORTS = ['date', 'invoice', 'customer', 'product', 'quantity', 'unitPrice'] as const;
+export type SalesLineItemSort = (typeof SALES_LINE_ITEM_SORTS)[number];
+
+/**
+ * Every line of every completed sale, narrowed by any mix of period, customer,
+ * product, branch and free text.
+ */
+export class GetSalesLineItemsDto extends LineItemSearchDto {
+    @IsOptional()
+    @IsUUID()
+    customerId?: string;
+
+    @IsOptional()
+    @IsIn(SALES_LINE_ITEM_SORTS)
+    sortBy?: SalesLineItemSort;
 }
