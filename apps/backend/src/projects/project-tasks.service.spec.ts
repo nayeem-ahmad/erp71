@@ -5,6 +5,7 @@ import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectAccessService } from './project-access.service';
+import { BoardColumnsService } from './board-columns.service';
 import { OWNER, narrow, ownTaskOr, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
@@ -13,6 +14,8 @@ describe('ProjectTasksService', () => {
     let db: any;
     let remaining: { write: jest.Mock; history: jest.Mock };
     let activity: { record: jest.Mock; watch: jest.Mock; notifyWatchers: jest.Mock };
+    let settings: { defaultTaskStatus: jest.Mock; listTaskStatuses: jest.Mock };
+    let boardColumns: { bindProject: jest.Mock };
 
     const todo = { id: 'status-todo', category: 'TODO' };
     const doing = { id: 'status-doing', category: 'IN_PROGRESS' };
@@ -39,9 +42,17 @@ describe('ProjectTasksService', () => {
             watch: jest.fn().mockResolvedValue(null),
             notifyWatchers: jest.fn().mockResolvedValue(0),
         };
+        settings = {
+            defaultTaskStatus: jest.fn().mockResolvedValue(todo),
+            listTaskStatuses: jest.fn().mockResolvedValue([todo, doing, done]),
+        };
+        boardColumns = { bindProject: jest.fn().mockResolvedValue(undefined) };
 
         db = {
-            project: { findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }) },
+            project: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
             projectTask: {
                 findFirst: jest.fn().mockResolvedValue(task()),
                 findMany: jest.fn().mockResolvedValue([]),
@@ -80,7 +91,16 @@ describe('ProjectTasksService', () => {
             projectTimeEntry: {
                 groupBy: jest.fn().mockResolvedValue([]),
                 aggregate: jest.fn().mockResolvedValue({ _sum: { hours: 3 } }),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
+            // The rows that carry a copy of the task's project, which a move
+            // re-points. Read-only everywhere else in this spec.
+            projectTimer: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            projectTaskRemainingLog: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            projectTaskActivity: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            projectComment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            projectAttachment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            boardTask: { findMany: jest.fn().mockResolvedValue([]) },
             sprint: { findFirst: jest.fn().mockResolvedValue({ id: 'sprint-1', project_id: 'project-1' }) },
             projectUserStory: {
                 findFirst: jest.fn().mockResolvedValue({ id: 'story-1', project_id: 'project-1' }),
@@ -104,13 +124,8 @@ describe('ProjectTasksService', () => {
                 { provide: DatabaseService, useValue: db },
                 { provide: RemainingHoursService, useValue: remaining },
                 { provide: ProjectActivityService, useValue: activity },
-                {
-                    provide: ProjectSettingsService,
-                    useValue: {
-                        defaultTaskStatus: jest.fn().mockResolvedValue(todo),
-                        listTaskStatuses: jest.fn().mockResolvedValue([todo, doing, done]),
-                    },
-                },
+                { provide: ProjectSettingsService, useValue: settings },
+                { provide: BoardColumnsService, useValue: boardColumns },
             ],
         }).compile();
 
@@ -399,6 +414,290 @@ describe('ProjectTasksService', () => {
                 service.update(OWNER, 'task-1', { userStoryId: 'story-1' } as never),
             ).rejects.toBeInstanceOf(BadRequestException);
             expect(db.projectTask.update).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('moving to another project', () => {
+        // The project the task is moving to has columns of its own — none of
+        // their ids is one the task has ever held.
+        const target = {
+            todo: { id: 'p2-todo', name: 'To Do', category: 'TODO', sort_order: 0, is_default: true },
+            doing: { id: 'p2-doing', name: 'In Progress', category: 'IN_PROGRESS', sort_order: 1, is_default: false },
+            review: { id: 'p2-review', name: 'In Review', category: 'IN_PROGRESS', sort_order: 2, is_default: false },
+            done: { id: 'p2-done', name: 'Done', category: 'DONE', sort_order: 3, is_default: false },
+        };
+
+        const named = {
+            todo: { id: 'status-todo', name: 'To Do', category: 'TODO' },
+            review: { id: 'status-review', name: 'In Review', category: 'IN_PROGRESS' },
+            blocked: { id: 'status-blocked', name: 'Blocked', category: 'IN_PROGRESS' },
+            done: { id: 'status-done', name: 'Done', category: 'DONE' },
+        };
+
+        /** ERP-12, in the To Do column of its current project. */
+        const moving = (overrides: Record<string, unknown> = {}) =>
+            task({ reference: 12, title: 'Wire the panel', status: named.todo, status_id: named.todo.id, ...overrides });
+
+        /**
+         * One `findFirst` answers three questions here, told apart by what they
+         * sort on: the task itself, the highest key in the new project, and the
+         * last card of the column it lands in.
+         */
+        const lookups = (current: Record<string, unknown>, lastReference = 4, lastSortOrder = 2) =>
+            db.projectTask.findFirst.mockImplementation(async (args: any) => {
+                if (args?.orderBy?.reference) return { reference: lastReference };
+                if (args?.orderBy?.sort_order) return { sort_order: lastSortOrder };
+                return current;
+            });
+
+        const subtasksOf = (rows: Record<string, unknown>[]) =>
+            db.projectTask.findMany.mockImplementation(async (args: any) =>
+                args?.where?.parent_task_id ? rows : [],
+            );
+
+        const updateOf = (id: string) =>
+            db.projectTask.update.mock.calls.find((call: any[]) => call[0].where.id === id)?.[0].data;
+
+        const moveTo = (dto: Record<string, unknown> = {}, viewer = OWNER) =>
+            service.update(viewer, 'task-1', { projectId: 'project-2', ...dto } as never);
+
+        beforeEach(() => {
+            lookups(moving());
+            settings.listTaskStatuses.mockResolvedValue(Object.values(target));
+            db.project.findFirst.mockResolvedValue({ id: 'project-2' });
+            db.project.findMany.mockResolvedValue([
+                { id: 'project-1', code: 'ERP', name: 'ERP71' },
+                { id: 'project-2', code: 'CRM', name: 'Retail CRM' },
+            ]);
+        });
+
+        it('files it at the end of the new project: next key, bottom of its column and of the backlog', async () => {
+            await moveTo();
+
+            expect(updateOf('task-1')).toMatchObject({
+                project_id: 'project-2',
+                reference: 5,
+                backlog_order: 5,
+                sort_order: 3,
+            });
+        });
+
+        it('lands in the column of the same name on the new board', async () => {
+            lookups(moving({ status: named.review, status_id: named.review.id }));
+
+            await moveTo();
+
+            // "In Progress" is the first column of the same category; the name wins.
+            expect(updateOf('task-1')).toMatchObject({ status_id: target.review.id });
+        });
+
+        it('falls back to the default column when nothing on the new board fits', async () => {
+            lookups(moving({ status: named.blocked, status_id: named.blocked.id }));
+            settings.listTaskStatuses.mockResolvedValue([target.todo, target.done]);
+
+            await moveTo();
+
+            expect(updateOf('task-1')).toMatchObject({ status_id: target.todo.id });
+        });
+
+        it('keeps a finished task finished', async () => {
+            const finishedAt = new Date('2026-09-20T10:00:00Z');
+            lookups(moving({ status: named.done, status_id: named.done.id, completed_at: finishedAt, remaining_hours: 0 }));
+
+            await moveTo();
+
+            expect(updateOf('task-1')).toMatchObject({ status_id: target.done.id, completed_at: finishedAt });
+            expect(remaining.write).not.toHaveBeenCalled();
+        });
+
+        it('reopens a done task on a board with no done column, burning from the new project', async () => {
+            lookups(moving({ status: named.done, status_id: named.done.id, completed_at: new Date(), remaining_hours: 0 }));
+            settings.listTaskStatuses.mockResolvedValue([target.todo, target.doing]);
+
+            await moveTo();
+
+            expect(updateOf('task-1')).toMatchObject({ status_id: target.todo.id, completed_at: null });
+            expect(remaining.write).toHaveBeenCalledWith(
+                expect.objectContaining({ projectId: 'project-2', source: 'TASK_REOPENED' }),
+            );
+        });
+
+        it('leaves its user story and milestone, which belong to the old project', async () => {
+            lookups(moving({ user_story_id: 'story-1', milestone_id: 'milestone-1' }));
+
+            await moveTo();
+
+            expect(updateOf('task-1')).toMatchObject({ user_story_id: null, milestone_id: null });
+        });
+
+        it('recomputes the status of the story it leaves', async () => {
+            lookups(moving({ user_story_id: 'story-1' }));
+            // What story-1 still holds once this task is gone: one finished task.
+            db.projectTask.findMany.mockImplementation(async (args: any) =>
+                args?.where?.user_story_id ? [{ user_story_id: 'story-1', status: { category: 'DONE' } }] : [],
+            );
+            db.projectUserStory.findMany.mockResolvedValue([{ id: 'story-1', status: 'IN_PROGRESS' }]);
+
+            await moveTo();
+
+            expect(db.projectUserStory.update).toHaveBeenCalledWith({
+                where: { id: 'story-1' },
+                data: { status: 'DONE' },
+            });
+        });
+
+        it('checks a story sent with the move against the new project', async () => {
+            db.projectUserStory.findFirst.mockResolvedValue({ id: 'story-9', project_id: 'project-2' });
+
+            await moveTo({ userStoryId: 'story-9' });
+
+            expect(updateOf('task-1')).toMatchObject({ project_id: 'project-2', user_story_id: 'story-9' });
+        });
+
+        it('refuses a project the viewer cannot see, before writing anything', async () => {
+            db.project.findFirst.mockResolvedValue(null);
+
+            await expect(moveTo({}, staff())).rejects.toBeInstanceOf(NotFoundException);
+            expect(db.projectTask.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses to move a subtask away from its parent', async () => {
+            lookups(moving({ parent_task_id: 'task-0' }));
+
+            await expect(moveTo()).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.projectTask.update).not.toHaveBeenCalled();
+        });
+
+        it('takes its subtasks along, each renumbered behind it', async () => {
+            subtasksOf([
+                { id: 'sub-1', reference: 13, status: named.review },
+                { id: 'sub-2', reference: 14, status: named.todo },
+            ]);
+
+            await moveTo();
+
+            expect(updateOf('sub-1')).toMatchObject({
+                project_id: 'project-2',
+                reference: 6,
+                backlog_order: 6,
+                status_id: target.review.id,
+                user_story_id: null,
+                milestone_id: null,
+            });
+            expect(updateOf('sub-2')).toMatchObject({
+                project_id: 'project-2',
+                reference: 7,
+                status_id: target.todo.id,
+            });
+        });
+
+        it('reopens a finished subtask the way it reopens its parent, when the new board has no done column', async () => {
+            settings.listTaskStatuses.mockResolvedValue([target.todo, target.doing]);
+            subtasksOf([
+                {
+                    id: 'sub-1',
+                    reference: 13,
+                    sprint_id: 'sprint-1',
+                    estimate_hours: 4,
+                    remaining_hours: 0,
+                    status: named.done,
+                },
+            ]);
+
+            await moveTo();
+
+            expect(updateOf('sub-1')).toMatchObject({ status_id: target.todo.id, completed_at: null });
+            // 4h estimated, 3h already logged → 1h left.
+            expect(remaining.write).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    taskId: 'sub-1',
+                    projectId: 'project-2',
+                    previousHours: 0,
+                    newHours: 1,
+                    source: 'TASK_REOPENED',
+                }),
+            );
+        });
+
+        it.each([
+            ['projectTimeEntry', 'the hours logged on it'],
+            ['projectTimer', 'a clock running on it'],
+            ['projectTaskRemainingLog', 'its remaining-hours history'],
+            ['projectTaskActivity', 'its feed'],
+            ['projectComment', 'its comments'],
+            ['projectAttachment', 'its attachments'],
+        ])('carries %s along — %s', async (table) => {
+            subtasksOf([{ id: 'sub-1', reference: 13, status: named.todo }]);
+
+            await moveTo();
+
+            expect(db[table].updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', task_id: { in: ['task-1', 'sub-1'] } },
+                data: { project_id: 'project-2' },
+            });
+        });
+
+        it("binds the new project's columns on every board the card is on", async () => {
+            db.boardTask.findMany.mockResolvedValue([{ board_id: 'board-1' }, { board_id: 'board-2' }]);
+
+            await moveTo();
+
+            expect(boardColumns.bindProject).toHaveBeenCalledTimes(2);
+            expect(boardColumns.bindProject).toHaveBeenCalledWith('tenant-1', 'board-1', 'project-2');
+            expect(boardColumns.bindProject).toHaveBeenCalledWith('tenant-1', 'board-2', 'project-2');
+        });
+
+        it('records the move with both keys, and tells the watchers', async () => {
+            await moveTo();
+
+            expect(activity.record).toHaveBeenCalledWith({
+                tenantId: 'tenant-1',
+                taskId: 'task-1',
+                projectId: 'project-2',
+                actorId: 'user-1',
+                type: 'PROJECT_CHANGED',
+                data: { from: 'ERP-12', to: 'CRM-5', fromProject: 'ERP71', toProject: 'Retail CRM' },
+            });
+            expect(activity.notifyWatchers).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    taskId: 'task-1',
+                    body: 'Moved to Retail CRM as CRM-5',
+                    link: '/projects/project-2',
+                }),
+            );
+        });
+
+        it('says nothing about the column when the new board has one of the same name', async () => {
+            await moveTo();
+
+            expect(activity.record).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'STATUS_CHANGED' }),
+            );
+        });
+
+        it('records the column change when the task lands in a differently named one', async () => {
+            lookups(moving({ status: named.blocked, status_id: named.blocked.id }));
+            settings.listTaskStatuses.mockResolvedValue([target.todo, target.done]);
+
+            await moveTo();
+
+            expect(activity.record).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: 'STATUS_CHANGED',
+                    projectId: 'project-2',
+                    data: { from: 'Blocked', to: 'To Do' },
+                }),
+            );
+        });
+
+        it('treats the project it is already in as no move at all', async () => {
+            await service.update(OWNER, 'task-1', { projectId: 'project-1', title: 'Renamed' } as never);
+
+            expect(updateOf('task-1')).not.toHaveProperty('reference');
+            expect(updateOf('task-1')).not.toHaveProperty('project_id');
+            expect(activity.record).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'PROJECT_CHANGED' }),
+            );
         });
     });
 

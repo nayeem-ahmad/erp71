@@ -11,6 +11,7 @@ import {
     type ProjectLabelColor,
 } from '@/components/projects/board-tasks';
 import ChipPopover from '@/components/projects/ChipPopover';
+import { ConfirmDialog } from '@/components/ui';
 import { formatCalendarDate } from '@/lib/format';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
@@ -18,10 +19,13 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import {
     dateInputValue,
+    isTask,
     num,
     relativeDay,
+    taskKeyOf,
     type AssigneeOption,
     type ProjectMemberRow,
+    type ProjectOption,
     type StoryOption,
     type Task,
 } from './model';
@@ -167,6 +171,131 @@ export function AssigneeField({
             note={note}
             filterable
         />
+    );
+}
+
+/**
+ * The project the task belongs to, and the way to move it to another.
+ *
+ * Unlike the fields around it, a pick asks first. The task is renumbered in the
+ * project it moves to — moving it back does not return its old key — and it
+ * leaves its story and milestone behind, since both belong to the old one. Its
+ * comments, logged hours and history go with it.
+ *
+ * A subtask lives in its parent's project and the API refuses to move one on
+ * its own, so on a subtask this is plain text saying why.
+ */
+export function ProjectField({
+    task,
+    taskId,
+    projects,
+    onSaved,
+    onWanted,
+}: {
+    task: Task;
+    taskId: string;
+    projects: ProjectOption[];
+    onSaved: (updated: unknown) => Promise<unknown>;
+    /** Fires when the picker is first opened, so the project list loads then. */
+    onWanted: () => void;
+}) {
+    const { t, fmt } = useI18n();
+    const m = t.projects;
+    const [pending, setPending] = useState<ProjectOption | null>(null);
+    const [saving, setSaving] = useState(false);
+    const current = task.project ?? null;
+
+    // The task's own project is listed before the list has loaded, for the
+    // reason the story picker gives.
+    const options = useMemo(() => {
+        const rows = [...projects];
+        if (current && !rows.some((row) => row.id === current.id)) rows.unshift(current);
+        return rows;
+    }, [projects, current]);
+
+    const display = current ? (
+        <span className="flex min-w-0 items-center gap-1.5">
+            <span className="shrink-0 font-medium">{current.code}</span>
+            <span className="truncate text-gray-600">{current.name}</span>
+        </span>
+    ) : (
+        m.fields.project
+    );
+
+    if (task.parent_task_id) {
+        return (
+            <span className="flex min-w-0 flex-col px-2 py-1 text-sm text-gray-700">
+                {display}
+                <span className="text-xs text-gray-500">{m.task.subtaskProject}</span>
+            </span>
+        );
+    }
+
+    const move = async () => {
+        if (!pending) return;
+        setSaving(true);
+        try {
+            const updated = await api.updateProjectTask(taskId, { projectId: pending.id });
+            await onSaved(updated);
+            const key = isTask(updated) ? taskKeyOf(updated.reference, updated.project) : null;
+            toast.success(fmt(m.task.moved, { project: pending.name, key: key ?? pending.code }));
+            setPending(null);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // The consequences, then the question — ConfirmDialog sets the last
+    // paragraph in bold.
+    const prompt = pending
+        ? [
+              [
+                  fmt(m.task.movePrompt, {
+                      key: taskKeyOf(task.reference, current) ?? task.title,
+                      project: pending.name,
+                  }),
+                  task.userStory ? fmt(m.task.moveLeavesStory, { story: task.userStory.code }) : null,
+                  task.milestone ? fmt(m.task.moveLeavesMilestone, { milestone: task.milestone.name }) : null,
+                  task.subtasks?.length ? m.task.moveWithSubtasks : null,
+              ]
+                  .filter(Boolean)
+                  .join(' '),
+              fmt(m.task.moveQuestion, { project: pending.name }),
+          ].join('\n\n')
+        : '';
+
+    return (
+        <>
+            <ChipPopover
+                variant="field"
+                label={m.fields.project}
+                value={current?.id ?? ''}
+                display={display}
+                tone={current ? 'default' : 'muted'}
+                options={options.map((project) => ({
+                    value: project.id,
+                    label: project.code,
+                    subtitle: project.name,
+                }))}
+                disabled={saving}
+                onOpen={onWanted}
+                onPick={(projectId) => setPending(options.find((row) => row.id === projectId) ?? null)}
+                filterable
+            />
+            <ConfirmDialog
+                open={pending != null}
+                title={m.task.moveTitle}
+                prompt={prompt}
+                confirmLabel={m.task.moveConfirm}
+                cancelLabel={t.common.cancel}
+                workingLabel={m.task.moving}
+                loading={saving}
+                onCancel={() => setPending(null)}
+                onConfirm={() => void move()}
+            />
+        </>
     );
 }
 

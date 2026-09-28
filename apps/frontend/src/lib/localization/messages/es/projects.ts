@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "Puede que se haya eliminado, o que pertenezca a un proyecto privado del que no eres miembro.",
         loadFailed: "No se pudo cargar esta tarea.",
         goToTasks: "Ir a Tareas",
+        moveTitle: "Mover a otro proyecto",
+        movePrompt: "{key} recibirá una clave nueva en {project} y se llevará sus comentarios, horas registradas e historial.",
+        moveLeavesStory: "Deja la historia de usuario {story}, que se queda en este proyecto.",
+        moveLeavesMilestone: "Deja el hito {milestone}.",
+        moveWithSubtasks: "Sus subtareas se mueven con ella.",
+        moveQuestion: "¿Moverla a {project}?",
+        moveConfirm: "Mover tarea",
+        moving: "Moviendo…",
+        moved: "Movida a {project} como {key}",
+        subtaskProject: "Una subtarea se mueve con su tarea principal.",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: "cambió las fechas",
             LABELS_CHANGED: "cambió las etiquetas (ahora {count})",
             RE_ESTIMATED: "reestimó de {from} h a {to} h",
+            PROJECT_CHANGED: "la movió a {project} — {from} ahora es {to}",
         },
     },
 
@@ -727,6 +738,7 @@ export const projectsMessages = {
         addCard: "Añadir una tarjeta",
         newCardPlaceholder: "¿Qué hay que hacer?",
         assignCardTo: "Asignar tarjeta a",
+        entryColumn: "Columna: {column}",
         filters: {
             assignee: "Asignado a",
             priority: "Prioridad",

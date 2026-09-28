@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "Tugasan ini mungkin telah dipadam, atau ia milik projek persendirian yang anda bukan ahlinya.",
         loadFailed: "Tidak dapat memuatkan tugasan ini.",
         goToTasks: "Pergi ke Tugasan",
+        moveTitle: "Alih ke projek lain",
+        movePrompt: "{key} akan mendapat kunci baharu dalam {project}, dan membawa bersama komen, jam yang direkodkan dan sejarahnya.",
+        moveLeavesStory: "Ia meninggalkan cerita pengguna {story}, yang kekal dalam projek ini.",
+        moveLeavesMilestone: "Ia meninggalkan pencapaian {milestone}.",
+        moveWithSubtasks: "Sub-tugasannya turut dialihkan.",
+        moveQuestion: "Alihkannya ke {project}?",
+        moveConfirm: "Alih tugasan",
+        moving: "Mengalihkan…",
+        moved: "Dialihkan ke {project} sebagai {key}",
+        subtaskProject: "Sub-tugasan beralih bersama tugasan induknya.",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: 'menukar tarikh',
             LABELS_CHANGED: 'menukar label ({count} kini)',
             RE_ESTIMATED: 'menganggar semula dari {from}j ke {to}j',
+            PROJECT_CHANGED: "mengalihkannya ke {project} — {from} kini {to}",
         },
     },
 
@@ -727,6 +738,7 @@ export const projectsMessages = {
         addCard: 'Tambah kad',
         newCardPlaceholder: 'Apa yang perlu dibuat?',
         assignCardTo: 'Tugaskan kad kepada',
+        entryColumn: 'Lajur: {column}',
         filters: {
             assignee: 'Penerima',
             priority: 'Keutamaan',

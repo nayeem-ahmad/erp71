@@ -295,6 +295,15 @@ title, press Add, keep typing. It stays open with an empty field so a column can
 be filled in one go, and keeps the text if the save fails. Anything beyond a
 title is the detail panel's job.
 
+*Revised 2026-09-26:* a save now closes the composer and hands focus back to
+"Add a card" — the open form under a new card pushed it out of sight on a long
+column. The board brings the card into view instead: scrolled to, marked for a
+moment, kept past any filter it does not match until the filters next change,
+and its lane unfolded if it was folded. "More fields" in the composer opens the
+New Task form the Tasks page uses (`TaskEntryModal`), which files the card into
+the same column through the same endpoint, now taking the form's description,
+priority, due date and estimate.
+
 **A test-infrastructure fix came out of this.** jsdom implements no
 `PointerEvent`, and Testing Library's fallback silently drops `pointerType`,
 `pointerId` and `button` — a handler branching on any of them sees `undefined`

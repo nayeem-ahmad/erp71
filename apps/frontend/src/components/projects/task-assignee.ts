@@ -1,3 +1,5 @@
+import type { ProjectMeta } from './use-project-meta';
+
 /**
  * Who holds a task, in the one key space the module uses everywhere:
  * `user:<id>` for somebody with a login, `employee:<id>` for a team member
@@ -85,4 +87,18 @@ export function assigneeLabelOf(task: TaskHolder, fallback = '—'): string {
     if (task.assignee) return task.assignee.name || task.assignee.email;
     if (task.assigneeEmployee) return task.assigneeEmployee.name ?? fallback;
     return fallback;
+}
+
+/**
+ * Why an Assignee list is short, when it is — the project has nobody on it, or
+ * the roster could not be read. Undefined while it is still loading and once
+ * there is somebody to pick, so the control is quiet in the normal case.
+ */
+export function assigneeNoteFor(
+    meta: ProjectMeta | undefined,
+    text: { assigneeLoadFailed: string; assigneeNoTeam: string },
+): string | undefined {
+    if (!meta) return undefined;
+    if (meta.failed) return text.assigneeLoadFailed;
+    return meta.assignees.length === 0 ? text.assigneeNoTeam : undefined;
 }

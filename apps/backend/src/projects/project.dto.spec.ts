@@ -46,6 +46,27 @@ describe('UpdateTaskDto clearing', () => {
     });
 });
 
+/**
+ * Moving a task to another project. The global pipe runs with
+ * `forbidNonWhitelisted` (`main.ts`), so a field the DTO does not declare is a
+ * 400 rather than something the service quietly never sees.
+ */
+describe('UpdateTaskDto project', () => {
+    const pipeErrors = (payload: Record<string, unknown>) =>
+        validateSync(plainToInstance(UpdateTaskDto, payload) as object, {
+            whitelist: true,
+            forbidNonWhitelisted: true,
+        }).map((e) => e.property);
+
+    it('takes a project to move the task to', () => {
+        expect(pipeErrors({ projectId: UUID })).toEqual([]);
+    });
+
+    it('refuses an empty project — unlike the links around it, a task cannot have none', () => {
+        expect(errorsFor({ projectId: '' })).toEqual(['projectId']);
+    });
+});
+
 const createTaskErrors = (payload: Record<string, unknown>) =>
     validateSync(plainToInstance(CreateTaskDto, payload) as object).map((e) => e.property);
 
@@ -161,6 +182,42 @@ describe('CreateBoardCardDto assignees', () => {
         expect(cardErrors({ ...base, assigneeEmployeeId: 'nope' })).toEqual([
             'assigneeEmployeeId',
         ]);
+    });
+});
+
+/**
+ * A card filed through the New Task form carries that form's other fields.
+ * The global pipe forbids anything the DTO does not name, so each one has to be
+ * declared here or the dialog 400s — and each is checked as `CreateTaskDto`
+ * checks it, since it goes on to `tasks.create` unchanged.
+ */
+describe('CreateBoardCardDto New Task fields', () => {
+    const cardErrors = (payload: Record<string, unknown>) =>
+        validateSync(plainToInstance(CreateBoardCardDto, payload) as object).map((e) => e.property);
+
+    const base = { projectId: UUID, title: 'Write the changelog' };
+
+    it('takes a description, a priority, a due date and an estimate', () => {
+        expect(
+            cardErrors({
+                ...base,
+                description: 'Every change since 4.1',
+                priority: 'HIGH',
+                dueDate: '2026-10-01',
+                estimateHours: 2.5,
+            }),
+        ).toEqual([]);
+    });
+
+    it('reads a due date left empty as none', () => {
+        expect(cardErrors({ ...base, dueDate: '' })).toEqual([]);
+    });
+
+    it('rejects what CreateTaskDto rejects', () => {
+        expect(cardErrors({ ...base, priority: 'SOMEDAY' })).toEqual(['priority']);
+        expect(cardErrors({ ...base, dueDate: 'next week' })).toEqual(['dueDate']);
+        expect(cardErrors({ ...base, estimateHours: -1 })).toEqual(['estimateHours']);
+        expect(cardErrors({ ...base, description: 'x'.repeat(5001) })).toEqual(['description']);
     });
 });
 

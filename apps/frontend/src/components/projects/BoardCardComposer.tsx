@@ -15,6 +15,15 @@ export interface ComposerProject {
     name: string;
 }
 
+/** What the composer hands the New Task form, so nothing typed is lost on the way. */
+export interface ComposerDraft {
+    title: string;
+    /** The holder the card would have gone to, in the `user:`/`employee:` key space. */
+    assignee: string;
+    /** Names `assignee` for a form whose roster has not arrived yet. */
+    assigneeLabel: string;
+}
+
 /**
  * The "Add a card" affordance at the foot of a board column, the way JIRA and
  * Trello put one at the bottom of every lane.
@@ -24,6 +33,12 @@ export interface ComposerProject {
  * columns so composing a run of cards for one project is one choice, not one
  * per card. The column, not the project's default status, decides the new
  * task's status; the server does that resolution.
+ *
+ * A saved card closes the composer: the card itself is the confirmation, and
+ * the page brings it into view — an open form under it pushed it out of sight
+ * in a long column. Focus goes back to "Add a card", so the next card is still
+ * one keystroke away. "More fields" trades the line for the full New Task form,
+ * carrying over whatever was already typed and picked.
  */
 export default function BoardCardComposer({
     boardId,
@@ -36,6 +51,7 @@ export default function BoardCardComposer({
     defaultAssigneeLabel,
     onAssigneeMenuOpen,
     onCreated,
+    onOpenFull,
     userStory,
     projectLocked = false,
     compact = false,
@@ -57,7 +73,10 @@ export default function BoardCardComposer({
     defaultAssigneeLabel: string;
     /** Fetches that roster lazily — a board need not pay for it unopened. */
     onAssigneeMenuOpen: () => void;
-    onCreated: () => void | Promise<void>;
+    /** Gets the API's answer: the reloaded board, naming the card just made. */
+    onCreated: (board: unknown) => void | Promise<void>;
+    /** Opens the full New Task form for this column, seeded with the draft. */
+    onOpenFull: (draft: ComposerDraft) => void;
     /**
      * The story a card composed here joins — set in a story swimlane, so the
      * card lands in the row it was typed into rather than in No story.
@@ -84,7 +103,13 @@ export default function BoardCardComposer({
     const [open, setOpen] = useState(false);
     const [title, setTitle] = useState('');
     const [saving, setSaving] = useState(false);
-    const inputRef = useRef<HTMLTextAreaElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    /**
+     * Set by a save, so the render that swaps the form back for the trigger
+     * can put focus on it. Not every close does this: Cancel and "More fields"
+     * send the reader elsewhere on purpose.
+     */
+    const refocus = useRef(false);
 
     /**
      * Who this card goes to. `null` means "nobody has overridden it", which is
@@ -101,6 +126,12 @@ export default function BoardCardComposer({
         if (!open) setAssignee(null);
     }, [open]);
 
+    useEffect(() => {
+        if (open || !refocus.current) return;
+        refocus.current = false;
+        triggerRef.current?.focus();
+    }, [open]);
+
     const close = () => {
         setOpen(false);
         setTitle('');
@@ -111,7 +142,7 @@ export default function BoardCardComposer({
         if (!trimmed || !projectId || saving) return;
         setSaving(true);
         try {
-            await api.createBoardCard(boardId, columnId, {
+            const board = await api.createBoardCard(boardId, columnId, {
                 projectId,
                 title: trimmed,
                 // Both columns, every time — see the API client's note.
@@ -119,12 +150,9 @@ export default function BoardCardComposer({
                 ...(userStory ? { userStoryId: userStory.id } : {}),
             });
             toast.success(t.projects.task.created);
-            // Stays open with the field cleared: adding cards comes in runs, and
-            // reopening the composer between each one is the whole friction this
-            // control exists to remove.
-            setTitle('');
-            inputRef.current?.focus();
-            await onCreated();
+            refocus.current = true;
+            close();
+            await onCreated(board);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : bm.createFailed);
         } finally {
@@ -132,9 +160,20 @@ export default function BoardCardComposer({
         }
     };
 
+    const openFull = () => {
+        onOpenFull({
+            title: title.trim(),
+            assignee: chosen,
+            assigneeLabel:
+                assignees.find((person) => person.value === chosen)?.label ?? defaultAssigneeLabel,
+        });
+        close();
+    };
+
     if (!open) {
         return (
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={() => setOpen(true)}
                 className={`flex min-h-touch w-full items-center gap-1.5 rounded-md px-2 py-2 text-start text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 ${
@@ -152,7 +191,6 @@ export default function BoardCardComposer({
     return (
         <div className="space-y-2 rounded-md border border-blue-300 bg-white p-2">
             <Textarea
-                ref={inputRef}
                 autoFocus
                 rows={2}
                 value={title}
@@ -210,7 +248,7 @@ export default function BoardCardComposer({
                     </option>
                 ))}
             </Select>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <Button
                     className="min-h-touch"
                     onClick={submit}
@@ -220,6 +258,16 @@ export default function BoardCardComposer({
                 </Button>
                 <Button variant="secondary" className="min-h-touch" onClick={close}>
                     {t.common.cancel}
+                </Button>
+                {/* The full form, for a card that needs a due date, an
+                    estimate or a description before it is worth saving. */}
+                <Button
+                    variant="ghost"
+                    className="min-h-touch"
+                    disabled={saving}
+                    onClick={openFull}
+                >
+                    {t.projects.quickAdd.more}
                 </Button>
             </div>
             {!projectId && <p className="text-xs text-amber-600">{t.projects.task.projectRequired}</p>}

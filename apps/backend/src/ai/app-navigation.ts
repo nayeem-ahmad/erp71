@@ -44,6 +44,7 @@ const APP_PAGES: AppPage[] = [
     { path: '/sales/loyalty', label: 'Loyalty', description: 'customer loyalty points and rewards', modules: ['retail'] },
     { path: '/sales/reports/summary', label: 'Sales Summary', description: 'sales totals and trend over a period', modules: ['retail'] },
     { path: '/sales/reports/products', label: 'Product Sales', description: 'sales broken down by product, top movers', modules: ['retail'] },
+    { path: '/sales/reports/line-items', label: 'Sales Line Items', description: 'every invoice line, searchable by period, customer, product or branch — which invoices a figure came from', modules: ['retail'] },
 
     // Customers — CRM
     { path: '/sales/customers', label: 'Customers', description: 'the customer list and customer profiles', modules: ['crm'] },
@@ -71,6 +72,7 @@ const APP_PAGES: AppPage[] = [
     { path: '/purchases/supplier-payments', label: 'Supplier Payments', description: 'pay a supplier', modules: ['retail'] },
     { path: '/purchases/supplier-ledger', label: 'Supplier Ledger', description: 'a supplier\'s running account of purchases and payments', modules: ['retail'] },
     { path: '/purchases/reports/summary', label: 'Purchase Summary', description: 'purchase totals and trend over a period', modules: ['retail'] },
+    { path: '/purchases/reports/line-items', label: 'Purchase Line Items', description: 'every purchase bill line, searchable by period, supplier, product or branch', modules: ['retail'] },
 
     // Accounting — always available
     { path: '/accounting/expenses', label: 'Expenses', description: 'record an expense and review expenses' },

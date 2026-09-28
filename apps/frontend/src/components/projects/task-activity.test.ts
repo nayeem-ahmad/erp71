@@ -17,6 +17,7 @@ const strings = {
     DATES_CHANGED: 'changed the dates',
     LABELS_CHANGED: 'changed the labels ({count} now)',
     RE_ESTIMATED: 're-estimated from {from}h to {to}h',
+    PROJECT_CHANGED: 'moved it to {project} — {from} is now {to}',
 };
 
 const comment = (id: string, at: string): TaskComment => ({
@@ -119,6 +120,17 @@ describe('describeActivity', () => {
         expect(describe_('RE_ESTIMATED', { from: null, to: 5 })).toBe(
             're-estimated from —h to 5h',
         );
+    });
+
+    it('names the project a move went to, and the key it left for the new one', () => {
+        expect(
+            describe_('PROJECT_CHANGED', {
+                from: 'ERP-12',
+                to: 'CRM-5',
+                fromProject: 'ERP71',
+                toProject: 'Retail CRM',
+            }),
+        ).toBe('moved it to Retail CRM — ERP-12 is now CRM-5');
     });
 
     it('copes with a row that has no data at all', () => {

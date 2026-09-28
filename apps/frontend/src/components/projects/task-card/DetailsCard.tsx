@@ -6,6 +6,7 @@ import {
     CalendarDays,
     CircleDot,
     Flag,
+    FolderKanban,
     Layers,
     Milestone,
     Repeat,
@@ -20,7 +21,7 @@ import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { relativeTime, type Task } from './model';
 import type { TaskCard } from './useTaskCard';
-import { AssigneeField, DueDateField, LabelsField, UserStoryField } from './fields';
+import { AssigneeField, DueDateField, LabelsField, ProjectField, UserStoryField } from './fields';
 import StatusDot from './StatusDot';
 
 /**
@@ -74,6 +75,19 @@ export default function DetailsCard({ task, card }: { task: Task; card: TaskCard
     return (
         <CompactSection title={m.task.details} titleStyle="heading">
             <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-4 gap-y-0.5">
+                {/* First, because it frames every field under it: the columns,
+                    the roster and the stories all belong to the project. A
+                    move can write a remaining-hours row, hence `applyWithLog`. */}
+                <Property icon={FolderKanban} label={m.fields.project}>
+                    <ProjectField
+                        task={task}
+                        taskId={task.id}
+                        projects={card.projects}
+                        onSaved={card.applyWithLog}
+                        onWanted={card.onProjectsWanted}
+                    />
+                </Property>
+
                 <Property icon={CircleDot} label={m.fields.status}>
                     <ChipPopover
                         variant="field"

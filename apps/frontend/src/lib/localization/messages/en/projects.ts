@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "It may have been deleted, or it belongs to a private project you're not a member of.",
         loadFailed: "Could not load this task.",
         goToTasks: "Go to Tasks",
+        moveTitle: "Move to another project",
+        movePrompt: "{key} will get a new key in {project}, and take its comments, logged hours and history with it.",
+        moveLeavesStory: "It leaves user story {story}, which stays in this project.",
+        moveLeavesMilestone: "It leaves milestone {milestone}.",
+        moveWithSubtasks: "Its subtasks move with it.",
+        moveQuestion: "Move it to {project}?",
+        moveConfirm: "Move task",
+        moving: "Moving…",
+        moved: "Moved to {project} as {key}",
+        subtaskProject: "A subtask moves with its parent task.",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: 'changed the dates',
             LABELS_CHANGED: 'changed the labels ({count} now)',
             RE_ESTIMATED: 're-estimated from {from}h to {to}h',
+            PROJECT_CHANGED: "moved it to {project} — {from} is now {to}",
         },
     },
 
@@ -731,6 +742,7 @@ export const projectsMessages = {
         addCard: 'Add a card',
         newCardPlaceholder: 'What needs doing?',
         assignCardTo: 'Assign card to',
+        entryColumn: 'Column: {column}',
         filters: {
             assignee: 'Assignee',
             priority: 'Priority',

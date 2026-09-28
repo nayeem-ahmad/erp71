@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "এটি মুছে ফেলা হয়ে থাকতে পারে, অথবা এটি এমন একটি প্রাইভেট প্রজেক্টের অংশ যার আপনি সদস্য নন।",
         loadFailed: "টাস্কটি লোড করা যায়নি।",
         goToTasks: "টাস্ক তালিকায় যান",
+        moveTitle: "অন্য প্রকল্পে সরান",
+        movePrompt: "{project}-এ {key} একটি নতুন কী পাবে, আর এর মন্তব্য, লগ করা ঘণ্টা ও ইতিহাস সঙ্গে যাবে।",
+        moveLeavesStory: "এটি ইউজার স্টোরি {story} ছেড়ে যাবে, যা এই প্রকল্পেই থাকবে।",
+        moveLeavesMilestone: "এটি মাইলফলক {milestone} ছেড়ে যাবে।",
+        moveWithSubtasks: "এর সাব-টাস্কগুলোও সঙ্গে যাবে।",
+        moveQuestion: "এটি {project}-এ সরাবেন?",
+        moveConfirm: "টাস্ক সরান",
+        moving: "সরানো হচ্ছে…",
+        moved: "{project}-এ {key} হিসেবে সরানো হয়েছে",
+        subtaskProject: "সাব-টাস্ক তার মূল টাস্কের সঙ্গেই সরে।",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: 'তারিখ পরিবর্তন করেছেন',
             LABELS_CHANGED: 'লেবেল পরিবর্তন করেছেন (এখন {count}টি)',
             RE_ESTIMATED: '{from} ঘণ্টা থেকে {to} ঘণ্টা পুনঃপ্রাক্কলন করেছেন',
+            PROJECT_CHANGED: "এটি {project}-এ সরিয়েছেন — {from} এখন {to}",
         },
     },
 
@@ -727,6 +738,7 @@ export const projectsMessages = {
         addCard: 'কার্ড যোগ করুন',
         newCardPlaceholder: 'কী করতে হবে?',
         assignCardTo: 'কার্ড দেওয়া হবে',
+        entryColumn: 'কলাম: {column}',
         filters: {
             assignee: 'দায়িত্বপ্রাপ্ত',
             priority: 'অগ্রাধিকার',

@@ -58,6 +58,7 @@ export const routes = {
             /** মূসক-৬.২ and মূসক-৬.১০, on one screen. */
             mushak: '/sales/reports/mushak',
             products: '/sales/reports/products',
+            lineItems: '/sales/reports/line-items',
             monthly: '/sales/reports/monthly',
             customers: '/sales/reports/customers',
             consolidated: '/sales/reports/consolidated',
@@ -97,6 +98,7 @@ export const routes = {
             summary: '/purchases/reports/summary',
             byProduct: '/purchases/reports/by-product',
             bySupplier: '/purchases/reports/by-supplier',
+            lineItems: '/purchases/reports/line-items',
         },
     },
 

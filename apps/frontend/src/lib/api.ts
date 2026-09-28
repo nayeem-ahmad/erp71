@@ -885,6 +885,102 @@ export type ReportLevelParams = { level?: ReportLevel };
  */
 export type ApprovedOnlyParams = { approvedOnly?: boolean };
 
+/**
+ * Filters shared by the sales and purchase line-item searches. Dates are
+ * `YYYY-MM-DD` calendar days, read in the workspace's own zone.
+ */
+export type LineItemSearchParams = {
+    from?: string;
+    to?: string;
+    storeId?: string;
+    productId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+};
+
+export type SalesLineItemParams = LineItemSearchParams & { customerId?: string };
+export type PurchaseLineItemParams = LineItemSearchParams & { supplierId?: string };
+
+type LineItemProduct = { id: string; name: string; sku: string | null; unit_type?: string | null };
+type LineItemBranch = { id: string; name: string };
+
+/** One invoice line. `amount` is quantity × unit price, before any invoice-level discount. */
+export interface SalesLineItemRow {
+    id: string;
+    saleId: string;
+    invoiceNumber: string;
+    referenceNumber: string | null;
+    date: string;
+    store: LineItemBranch | null;
+    customer: { id: string; name: string; phone: string | null; customer_code: string | null } | null;
+    product: LineItemProduct;
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+    /** Everything returned against this line so far, whenever it came back. */
+    returnedQuantity: number;
+    returnedAmount: number;
+}
+
+/** One bill line, as entered — before bill-level discount, tax or freight. */
+export interface PurchaseLineItemRow {
+    id: string;
+    purchaseId: string;
+    purchaseNumber: string;
+    referenceNumber: string | null;
+    date: string;
+    store: LineItemBranch | null;
+    supplier: { id: string; name: string; phone: string | null } | null;
+    product: LineItemProduct;
+    quantity: number;
+    unitCost: number;
+    amount: number;
+    returnedQuantity: number;
+    returnedAmount: number;
+}
+
+type LineItemTotals = {
+    lineCount: number;
+    quantity: number;
+    amount: number;
+    returnedQuantity: number;
+    returnedAmount: number;
+};
+
+type LineItemFilters = {
+    from: string | null;
+    to: string | null;
+    store: LineItemBranch | null;
+    product: { id: string; name: string; sku: string | null } | null;
+};
+
+/** A page of lines plus totals over every line that matched, not just the page. */
+export interface SalesLineItemsReport {
+    summary: LineItemTotals & { invoiceCount: number };
+    filters: LineItemFilters & { customer: SalesLineItemRow['customer'] };
+    rows: SalesLineItemRow[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+}
+
+export interface PurchaseLineItemsReport {
+    summary: LineItemTotals & { billCount: number };
+    filters: LineItemFilters & { supplier: PurchaseLineItemRow['supplier'] };
+    rows: PurchaseLineItemRow[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+}
+
+/** Only the filters that are set: the API rejects an empty `from=` as a malformed date. */
+function lineItemQuery(params: Record<string, string | number | undefined>): string {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== '') query.set(key, String(value));
+    }
+    return query.toString();
+}
+
 export type CustomFieldDef = { key: string; label: string; order: number };
 
 /**
@@ -1454,6 +1550,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/by-product${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /** Every completed sale line matching the filters, a page at a time, with period totals. */
+    getSalesLineItems: (params: SalesLineItemParams = {}): Promise<SalesLineItemsReport> =>
+        fetchWithAuth(`/sales-reports/line-items?${lineItemQuery(params)}`),
     getSalesByCategory: (params?: { storeId?: string; from?: string; to?: string }) => {
         const query = new URLSearchParams();
         if (params?.storeId) query.set('storeId', params.storeId);
@@ -2644,6 +2743,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/purchase-reports/by-supplier${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /** Every line of the purchases that still stand, matching the filters, with period totals. */
+    getPurchaseLineItems: (params: PurchaseLineItemParams = {}): Promise<PurchaseLineItemsReport> =>
+        fetchWithAuth(`/purchase-reports/line-items?${lineItemQuery(params)}`),
     updateSupplier: (id: string, data: any) => fetchWithAuth(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
     getPurchaseInvoice: (id: string) => fetchWithAuth(`/purchases/${id}/invoice`),
@@ -5340,8 +5442,10 @@ export const api = {
             body: JSON.stringify({ taskIds }),
             headers: { 'Content-Type': 'application/json' },
         }),
-    /** Compose a new task straight into a board column; returns the reloaded board. */
     /**
+     * Compose a new task straight into a board column. Returns the reloaded
+     * board, with `created_task_id` naming the card that is new.
+     *
      * Both assignee columns travel on every card: a task goes to a user or to
      * an employee without a login, never both, so whichever one the chosen
      * holder does not fill is sent as `''`. The DTO is spelled for that.
@@ -5356,6 +5460,11 @@ export const api = {
             assigneeEmployeeId?: string;
             /** Set when the card is composed inside a story swimlane. */
             userStoryId?: string;
+            /** The rest of the New Task form, when the card is filed through it. */
+            description?: string;
+            priority?: string;
+            dueDate?: string;
+            estimateHours?: number;
         },
     ) =>
         fetchWithAuth(`/projects/boards/${id}/columns/${columnId}/cards`, {

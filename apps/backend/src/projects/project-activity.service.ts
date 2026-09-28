@@ -11,6 +11,7 @@ export enum ActivityType {
     DATES_CHANGED = 'DATES_CHANGED',
     LABELS_CHANGED = 'LABELS_CHANGED',
     RE_ESTIMATED = 'RE_ESTIMATED',
+    PROJECT_CHANGED = 'PROJECT_CHANGED',
 }
 
 export interface RecordActivity {

@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "ربما حُذفت، أو أنها تتبع مشروعًا خاصًا لست عضوًا فيه.",
         loadFailed: "تعذّر تحميل هذه المهمة.",
         goToTasks: "الانتقال إلى المهام",
+        moveTitle: "النقل إلى مشروع آخر",
+        movePrompt: "ستحصل {key} على مفتاح جديد في {project}، وتنتقل معها تعليقاتها وساعاتها المسجلة وسجلها.",
+        moveLeavesStory: "ستغادر قصة المستخدم {story}، التي تبقى في هذا المشروع.",
+        moveLeavesMilestone: "ستغادر المعلم {milestone}.",
+        moveWithSubtasks: "تنتقل مهامها الفرعية معها.",
+        moveQuestion: "نقلها إلى {project}؟",
+        moveConfirm: "نقل المهمة",
+        moving: "جارٍ النقل…",
+        moved: "نُقلت إلى {project} باسم {key}",
+        subtaskProject: "تنتقل المهمة الفرعية مع مهمتها الأصلية.",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: "غيّر التواريخ",
             LABELS_CHANGED: "غيّر التسميات ({count} الآن)",
             RE_ESTIMATED: "أعاد التقدير من {from} ساعة إلى {to} ساعة",
+            PROJECT_CHANGED: "نقلها إلى {project} — أصبحت {from} الآن {to}",
         },
     },
 
@@ -727,6 +738,7 @@ export const projectsMessages = {
         addCard: "إضافة بطاقة",
         newCardPlaceholder: "ما الذي يجب إنجازه؟",
         assignCardTo: "تعيين البطاقة إلى",
+        entryColumn: "العمود: {column}",
         filters: {
             assignee: "المسؤول",
             priority: "الأولوية",

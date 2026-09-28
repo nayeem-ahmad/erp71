@@ -7295,6 +7295,12 @@ model ProjectTask {
 /// `delta` is redundant against previous/new and stored anyway so a burndown
 /// query is a SUM over a date range rather than a window function over rows.
 /// Rows are immutable and survive task soft-delete.
+///
+/// `project_id` is the exception, and deliberately unlike `sprint_id`. A sprint
+/// is a time-box, and what a task burned inside one is history; a project is
+/// the task's home. Moving a task to another project re-points its rows, so the
+/// project burndown — replayed from this table by project — shows the task in
+/// the project that now holds it, rather than frozen forever in the one it left.
 model ProjectTaskRemainingLog {
   id             String               @id @default(uuid())
   tenant_id      String
@@ -7337,10 +7343,18 @@ enum ProjectTaskActivityType {
   DATES_CHANGED
   LABELS_CHANGED
   RE_ESTIMATED
+  /// The task moved to another project. `data` carries both keys and both
+  /// project names, since the key is the thing that changed.
+  PROJECT_CHANGED
 }
 
 /// Append-only. Rows are never updated or deleted, and survive task soft-delete
 /// — "who moved this and when" is the question the feed exists to answer.
+///
+/// The one exception is `project_id`, which is a copy of the task's and follows
+/// it when the task moves to another project (`ProjectTasksService.update`).
+/// The move itself is recorded as a PROJECT_CHANGED row, so the feed still says
+/// where the task came from.
 ///
 /// `data` holds the before/after payload rather than a rendered sentence, so the
 /// line is composed client-side and therefore translates. A stored English

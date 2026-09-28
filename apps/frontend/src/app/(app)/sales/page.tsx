@@ -18,6 +18,7 @@ import {
     MapPin,
     Menu,
     Package,
+    ScrollText,
     Settings,
     ShieldCheck,
     Tag,
@@ -57,6 +58,7 @@ const SALES_HUB_SECTIONS: HubSectionConfig[] = [
         links: [
             { href: routes.sales.reports.summary, key: 'salesSummary', icon: TrendingUp, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100', advancedOnly: true },
             { href: routes.sales.reports.products, key: 'salesByProduct', icon: Package, accent: 'bg-sky-50 text-sky-700 border-sky-100', advancedOnly: true },
+            { href: routes.sales.reports.lineItems, key: 'salesLineItems', icon: ScrollText, accent: 'bg-primary-light text-primary border-primary-border', advancedOnly: true },
             { href: routes.sales.reports.consolidated, key: 'consolidated', icon: BarChart3, accent: 'bg-primary-light text-primary border-primary-border', advancedOnly: true },
             { href: routes.sales.reports.branchReport, key: 'branchReport', icon: BarChart3, accent: 'bg-amber-50 text-amber-700 border-amber-100', advancedOnly: true },
             { href: routes.sales.reports.grossProfit, key: 'grossProfitByProduct', icon: HandCoins, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100', advancedOnly: true },

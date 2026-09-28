@@ -1,19 +1,24 @@
+import { Type } from 'class-transformer';
 import {
     ArrayNotEmpty,
     IsArray,
+    IsDateString,
     IsEnum,
     IsIn,
     IsInt,
+    IsNumber,
     IsOptional,
     IsString,
     IsUUID,
     Matches,
+    Max,
     MaxLength,
     Min,
     MinLength,
     ValidateIf,
 } from 'class-validator';
 import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
+import { ProjectPriorityDto } from './project.dto';
 
 const CATEGORIES = ['TODO', 'IN_PROGRESS', 'DONE'] as const;
 export type BoardColumnCategory = (typeof CATEGORIES)[number];
@@ -113,6 +118,23 @@ export class CreateBoardCardDto {
      */
     @IsOptional() @ValidateIf((_, value) => value !== '') @IsUUID()
     userStoryId?: string;
+
+    /**
+     * The rest of the New Task form, for a card filed through it rather than
+     * typed into the column. Spelled exactly as `CreateTaskDto` spells them,
+     * since they go straight on to `tasks.create`.
+     */
+    @IsOptional() @IsString() @MaxLength(5000)
+    description?: string;
+
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
+    @IsOptional() @ValidateIf((_, value) => value !== '') @IsDateString()
+    dueDate?: string;
+
+    @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(9999)
+    estimateHours?: number;
 }
 
 /** What a swimlane is keyed by. Mirrors `BoardSwimlanes` on the page, minus `none`. */

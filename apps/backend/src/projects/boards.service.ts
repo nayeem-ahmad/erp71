@@ -462,11 +462,17 @@ export class BoardsService {
             assigneeId: dto.assigneeId,
             assigneeEmployeeId: dto.assigneeEmployeeId,
             userStoryId: dto.userStoryId || undefined,
+            description: dto.description,
+            priority: dto.priority,
+            dueDate: dto.dueDate || undefined,
+            estimateHours: dto.estimateHours,
         });
 
         // addTasks returns the reloaded board, which is exactly what the page
-        // needs to render the new card.
-        return this.addTasks(viewer, boardId, [task.id]);
+        // needs to render the new card — and it is told which card is new, so
+        // it can bring that one into view rather than guess it from a diff.
+        const board = await this.addTasks(viewer, boardId, [task.id]);
+        return { ...board, created_task_id: task.id };
     }
 
     async removeTask(viewer: ProjectViewer, boardId: string, taskId: string) {
