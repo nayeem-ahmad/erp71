@@ -56,6 +56,7 @@ const deleteTaskAttachment = jest.fn();
 const getProject = jest.fn();
 const getProjectStories = jest.fn();
 const getSprints = jest.fn();
+const getProjects = jest.fn();
 const logProjectTime = jest.fn();
 const getProjectTimer = jest.fn();
 const startProjectTimer = jest.fn();
@@ -88,6 +89,7 @@ jest.mock('@/lib/api', () => ({
         getProject: (...args: unknown[]) => getProject(...args),
         getProjectStories: (...args: unknown[]) => getProjectStories(...args),
         getSprints: (...args: unknown[]) => getSprints(...args),
+        getProjects: (...args: unknown[]) => getProjects(...args),
         logProjectTime: (...args: unknown[]) => logProjectTime(...args),
         // Left unmocked the timer read threw, `TimerButton` caught it and
         // rendered nothing — so every assertion about the clock passed against
@@ -144,6 +146,7 @@ beforeEach(() => {
         getProject,
         getProjectStories,
         getSprints,
+        getProjects,
         logProjectTime,
         getProjectTimer,
         startProjectTimer,
@@ -152,6 +155,7 @@ beforeEach(() => {
         mock.mockReset();
         mock.mockResolvedValue({});
     }
+    getProjects.mockResolvedValue({ items: [] });
     getProject.mockResolvedValue({ id: 'project-1', members: [] });
     getProjectLabels.mockResolvedValue([]);
     getTaskComments.mockResolvedValue([]);
@@ -1815,6 +1819,119 @@ describe('TaskDetailPanel sprint', () => {
         await waitFor(() =>
             expect(updateProjectTask).toHaveBeenCalledWith('t1', { sprintId: '' }),
         );
+    });
+});
+
+describe('TaskDetailPanel project', () => {
+    const projects = {
+        items: [
+            { id: 'project-1', code: 'PRJ-0001', name: 'Fit-out' },
+            { id: 'project-2', code: 'PRJ-0002', name: 'Warehouse' },
+        ],
+    };
+
+    const chip = async () => screen.findByRole('button', { name: 'Project' });
+
+    const pickWarehouse = async () => {
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: /PRJ-0002/ }));
+    };
+
+    /** The confirmation, which opens over the card's own dialog. */
+    const confirmation = async () => {
+        await screen.findByText('Move to another project');
+        return screen.getAllByRole('dialog').at(-1)!;
+    };
+
+    beforeEach(() => {
+        getProjects.mockResolvedValue(projects);
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), reference: 12 });
+    });
+
+    it('names the project the task is in, before any list is fetched', async () => {
+        panel();
+
+        expect(await chip()).toHaveTextContent('PRJ-0001');
+        expect(getProjects).not.toHaveBeenCalled();
+    });
+
+    it('asks before moving, naming the task and where it is going', async () => {
+        panel();
+        await pickWarehouse();
+
+        const dialog = await confirmation();
+        expect(dialog).toHaveTextContent('PRJ-0001-12');
+        expect(dialog).toHaveTextContent('Warehouse');
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('moves the task once confirmed', async () => {
+        panel();
+        await pickWarehouse();
+        fireEvent.click(within(await confirmation()).getByRole('button', { name: 'Move task' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { projectId: 'project-2' }),
+        );
+    });
+
+    it('leaves the task where it is when the move is cancelled', async () => {
+        panel();
+        await pickWarehouse();
+        fireEvent.click(within(await confirmation()).getByRole('button', { name: 'Cancel' }));
+
+        await waitFor(() =>
+            expect(screen.queryByText('Move to another project')).not.toBeInTheDocument(),
+        );
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('asks nothing when the project picked is the one it is already in', async () => {
+        panel();
+        fireEvent.click(await chip());
+        fireEvent.click(await screen.findByRole('option', { name: /PRJ-0001/ }));
+
+        expect(screen.queryByText('Move to another project')).not.toBeInTheDocument();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('warns that the task leaves its user story and milestone behind', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            reference: 12,
+            userStory: { id: 'us1', reference: 3, code: 'FIT-3', title: 'Metering' },
+            milestone: { id: 'ms1', name: 'Handover' },
+        });
+        panel();
+        await pickWarehouse();
+
+        const dialog = await confirmation();
+        expect(dialog).toHaveTextContent('FIT-3');
+        expect(dialog).toHaveTextContent('Handover');
+    });
+
+    it('shows the task under its new key once moved', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        updateProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            reference: 5,
+            project: { id: 'project-2', code: 'PRJ-0002', name: 'Warehouse' },
+        });
+        panel();
+        await pickWarehouse();
+        fireEvent.click(within(await confirmation()).getByRole('button', { name: 'Move task' }));
+
+        expect(await screen.findByText('PRJ-0002-5 · Warehouse')).toBeInTheDocument();
+        expect(toast.success).toHaveBeenCalledWith('Moved to Warehouse as PRJ-0002-5');
+    });
+
+    // The API refuses it: a subtask's key is composed from its parent's project.
+    it('shows a subtask’s project without offering to move it on its own', async () => {
+        getProjectTask.mockResolvedValue({ ...withChecklist([]), reference: 12, parent_task_id: 'parent-1' });
+        panel();
+
+        expect(await screen.findByText(/moves with its parent/i)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Project' })).not.toBeInTheDocument();
     });
 });
 

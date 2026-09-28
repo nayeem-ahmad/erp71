@@ -4,6 +4,7 @@ import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectAccessService } from './project-access.service';
+import { BoardColumnsService } from './board-columns.service';
 import { DatabaseService } from '../database/database.service';
 
 /**
@@ -48,6 +49,7 @@ describe('ProjectTasksService remaining trend', () => {
                     provide: ProjectAccessService,
                     useValue: { taskFilter: jest.fn().mockResolvedValue({}) },
                 },
+                { provide: BoardColumnsService, useValue: {} },
             ],
         }).compile();
 

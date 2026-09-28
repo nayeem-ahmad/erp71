@@ -10,6 +10,7 @@ import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { ActivityType, ProjectActivityService } from './project-activity.service';
+import { BoardColumnsService, pickColumnForStatus } from './board-columns.service';
 import { syncStoryStatuses } from './story-status.util';
 import {
     CreateChecklistItemDto,
@@ -62,6 +63,7 @@ export class ProjectTasksService {
         private readonly settings: ProjectSettingsService,
         private readonly activity: ProjectActivityService,
         private readonly access: ProjectAccessService,
+        private readonly boardColumns: BoardColumnsService,
     ) {}
 
     /**
@@ -70,8 +72,8 @@ export class ProjectTasksService {
      * next task written — two tasks called ERP-2 would make every older note
      * about one of them wrong. Same rule user stories follow.
      */
-    async nextReference(projectId: string): Promise<number> {
-        const last = await this.db.projectTask.findFirst({
+    async nextReference(projectId: string, client: Prisma.TransactionClient = this.db): Promise<number> {
+        const last = await client.projectTask.findFirst({
             where: { project_id: projectId },
             orderBy: { reference: 'desc' },
             select: { reference: true },
@@ -593,58 +595,78 @@ export class ProjectTasksService {
         const tenantId = viewer.tenantId;
         const userId = viewer.userId;
         const task = await this.assertTask(viewer, taskId);
+        // Null for an ordinary edit — including one that names the project the
+        // task is already in.
+        const move = await this.planMove(viewer, task, dto);
+        const projectId = move?.projectId ?? task.project_id;
 
         let statusId = task.status_id;
         let completedAt = task.completed_at;
         let becameDone = false;
         let becameUndone = false;
 
-        if (dto.statusId && dto.statusId !== task.status_id) {
-            const status = await this.assertStatus(tenantId, dto.statusId, task.project_id);
-            statusId = status.id;
+        // A move always changes the column, since every project has columns of
+        // its own; it takes the one the plan matched unless the request named one.
+        const nextStatus =
+            dto.statusId && dto.statusId !== task.status_id
+                ? await this.assertStatus(tenantId, dto.statusId, projectId)
+                : (move?.status ?? null);
+        if (nextStatus && nextStatus.id !== task.status_id) {
+            statusId = nextStatus.id;
             const wasDone = task.status?.category === 'DONE';
-            const isDone = status.category === 'DONE';
+            const isDone = nextStatus.category === 'DONE';
             becameDone = !wasDone && isDone;
             becameUndone = wasDone && !isDone;
             if (becameDone) completedAt = new Date();
             if (becameUndone) completedAt = null;
         }
 
-        if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, task.project_id);
+        if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, projectId);
         if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
 
-        await this.db.projectTask.update({
-            where: { id: taskId },
-            data: {
-                ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
-                ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
-                ...(dto.statusId !== undefined ? { status_id: statusId, completed_at: completedAt } : {}),
-                ...(dto.priority !== undefined ? { priority: dto.priority as never } : {}),
-                ...(dto.assigneeId !== undefined ? { assignee_id: dto.assigneeId || null } : {}),
-                ...(dto.assigneeEmployeeId !== undefined
-                    ? { assignee_employee_id: dto.assigneeEmployeeId || null }
-                    : {}),
-                ...(dto.milestoneId !== undefined ? { milestone_id: dto.milestoneId || null } : {}),
-                ...(dto.userStoryId !== undefined ? { user_story_id: dto.userStoryId || null } : {}),
-                ...(dto.sprintId !== undefined ? { sprint_id: dto.sprintId || null } : {}),
-                ...(dto.startDate !== undefined
-                    ? { start_date: dto.startDate ? new Date(dto.startDate) : null }
-                    : {}),
-                ...(dto.dueDate !== undefined ? { due_date: dto.dueDate ? new Date(dto.dueDate) : null } : {}),
-                ...(dto.coverColor !== undefined
-                    ? { cover_color: (dto.coverColor || null) as never }
-                    : {}),
-                ...(dto.estimateHours !== undefined ? { estimate_hours: dto.estimateHours ?? null } : {}),
-            },
-        });
+        const data = {
+            ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+            ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+            ...(statusId !== task.status_id ? { status_id: statusId, completed_at: completedAt } : {}),
+            ...(dto.priority !== undefined ? { priority: dto.priority as never } : {}),
+            ...(dto.assigneeId !== undefined ? { assignee_id: dto.assigneeId || null } : {}),
+            ...(dto.assigneeEmployeeId !== undefined
+                ? { assignee_employee_id: dto.assigneeEmployeeId || null }
+                : {}),
+            ...(dto.milestoneId !== undefined ? { milestone_id: dto.milestoneId || null } : {}),
+            ...(dto.userStoryId !== undefined ? { user_story_id: dto.userStoryId || null } : {}),
+            ...(dto.sprintId !== undefined ? { sprint_id: dto.sprintId || null } : {}),
+            ...(dto.startDate !== undefined
+                ? { start_date: dto.startDate ? new Date(dto.startDate) : null }
+                : {}),
+            ...(dto.dueDate !== undefined ? { due_date: dto.dueDate ? new Date(dto.dueDate) : null } : {}),
+            ...(dto.coverColor !== undefined
+                ? { cover_color: (dto.coverColor || null) as never }
+                : {}),
+            ...(dto.estimateHours !== undefined ? { estimate_hours: dto.estimateHours ?? null } : {}),
+        };
+
+        const moved = move
+            ? await this.db.$transaction((tx) => this.applyMove(tx, tenantId, task, move, data, statusId))
+            : null;
+        if (!moved) await this.db.projectTask.update({ where: { id: taskId }, data });
 
         if (dto.labelIds !== undefined) await this.setLabels(tenantId, taskId, dto.labelIds);
-        if (statusId !== task.status_id || dto.userStoryId !== undefined) {
-            // Both ends: the story it left loses a task, the one it joined gains one.
-            await syncStoryStatuses(this.db as never, tenantId, [task.user_story_id, dto.userStoryId]);
+        if (statusId !== task.status_id || dto.userStoryId !== undefined || moved) {
+            // Both ends: the story it left loses a task, the one it joined gains
+            // one. A move takes the task and its subtasks out of their stories.
+            await syncStoryStatuses(this.db as never, tenantId, [
+                task.user_story_id,
+                dto.userStoryId,
+                ...(moved?.leftStoryIds ?? []),
+            ]);
         }
 
-        await this.recordUpdateActivity(tenantId, userId, task, dto, statusId);
+        await this.recordUpdateActivity(tenantId, userId, task, dto, statusId, projectId);
+        if (moved) {
+            await this.recordMove(tenantId, userId, task, projectId, moved.reference, nextStatus?.name ?? null);
+            await this.bindBoards(tenantId, moved.taskIds, projectId);
+        }
 
         const previous = task.remaining_hours == null ? null : Number(task.remaining_hours);
         const sprintId = dto.sprintId !== undefined ? dto.sprintId || null : task.sprint_id;
@@ -655,7 +677,7 @@ export class ProjectTasksService {
             await this.remaining.write({
                 tenantId,
                 taskId,
-                projectId: task.project_id,
+                projectId,
                 sprintId,
                 previousHours: previous,
                 newHours: dto.remainingHours,
@@ -663,32 +685,17 @@ export class ProjectTasksService {
                 note: dto.remainingNote ?? null,
                 userId,
             });
-        } else if (becameDone) {
-            // Finishing a task means no hours left on it, whatever the last
-            // estimate said. Without this the burndown never reaches zero.
-            await this.remaining.write({
+        } else if (becameDone || becameUndone) {
+            await this.burnDoneCrossing({
                 tenantId,
+                userId,
                 taskId,
-                projectId: task.project_id,
+                projectId,
                 sprintId,
                 previousHours: previous,
-                newHours: 0,
-                source: RemainingSource.TASK_COMPLETED,
-                userId,
-            });
-        } else if (becameUndone) {
-            const logged = await this.loggedHours(tenantId, taskId);
-            const estimate =
-                dto.estimateHours ?? (task.estimate_hours == null ? null : Number(task.estimate_hours));
-            await this.remaining.write({
-                tenantId,
-                taskId,
-                projectId: task.project_id,
-                sprintId,
-                previousHours: previous,
-                newHours: Math.max((estimate ?? 0) - logged, 0),
-                source: RemainingSource.TASK_REOPENED,
-                userId,
+                estimateHours:
+                    dto.estimateHours ?? (task.estimate_hours == null ? null : Number(task.estimate_hours)),
+                becameDone,
             });
         } else if (previous == null && dto.estimateHours != null) {
             // Estimated after it was created: `create` only opens remaining
@@ -702,7 +709,7 @@ export class ProjectTasksService {
             await this.remaining.write({
                 tenantId,
                 taskId,
-                projectId: task.project_id,
+                projectId,
                 sprintId,
                 previousHours: null,
                 newHours: done ? 0 : Math.max(dto.estimateHours - logged, 0),
@@ -719,7 +726,7 @@ export class ProjectTasksService {
                 await this.remaining.write({
                     tenantId,
                     taskId,
-                    projectId: task.project_id,
+                    projectId,
                     sprintId,
                     previousHours: previous,
                     newHours: dto.estimateHours,
@@ -729,7 +736,234 @@ export class ProjectTasksService {
             }
         }
 
+        // A subtask that crossed into or out of Done on the way — only possible
+        // when the new project has no column of its kind — burns by the same
+        // rule its parent does.
+        for (const crossing of moved?.crossings ?? []) {
+            await this.burnDoneCrossing({ tenantId, userId, projectId, ...crossing });
+        }
+
         return this.findOne(viewer, taskId);
+    }
+
+    /**
+     * Where a task goes when it changes project, worked out before anything is
+     * written, so every check that can refuse the move runs first.
+     *
+     * The column is matched the way a board places a project's statuses — by
+     * name, then by category — so "In Progress" stays in progress and a
+     * finished task stays finished. Only a project with no column of the kind
+     * falls back to its default one.
+     */
+    private async planMove(
+        viewer: ProjectViewer,
+        task: { project_id: string; parent_task_id: string | null; status?: MovableStatus | null },
+        dto: UpdateTaskDto,
+    ): Promise<ProjectMove | null> {
+        if (!dto.projectId || dto.projectId === task.project_id) return null;
+        // One level of subtasks, and the parent's card composes each subtask's
+        // key from its own project — so a subtask lives where its parent does.
+        if (task.parent_task_id) throw new BadRequestException('A subtask moves with its parent task.');
+        await this.assertProject(viewer, dto.projectId);
+
+        const columns = await this.settings.listTaskStatuses(viewer.tenantId, false, dto.projectId);
+        if (columns.length === 0) throw new BadRequestException('That project has no board columns.');
+        const fallback = columns.find((column) => column.is_default) ?? columns[0];
+        const columnFor = (status: MovableStatus | null | undefined) => {
+            const id = status ? pickColumnForStatus(columns, status) : null;
+            return columns.find((column) => column.id === id) ?? fallback;
+        };
+
+        return { projectId: dto.projectId, status: columnFor(task.status), columnFor };
+    }
+
+    /**
+     * The writes of a move, in one transaction: the task and its subtasks
+     * renumbered into the new project, and every row carrying a copy of their
+     * project re-pointed at it — the hours logged on them, a clock running on
+     * one, the remaining-hours log, the feed, comments and attachments. Half a
+     * move would report hours under a project the task has left, and stopping
+     * a running clock would log them there too.
+     *
+     * The task's story and milestone belong to the project it is leaving, so
+     * they go — unless the request sent a story, which was checked against the
+     * new project.
+     */
+    private async applyMove(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        task: { id: string },
+        move: ProjectMove,
+        data: Prisma.ProjectTaskUncheckedUpdateInput,
+        statusId: string,
+    ) {
+        const reference = await this.nextReference(move.projectId, tx);
+        await tx.projectTask.update({
+            where: { id: task.id },
+            data: {
+                user_story_id: null,
+                milestone_id: null,
+                ...data,
+                project_id: move.projectId,
+                reference,
+                // The bottom of its Backlog group and of its column, as a new
+                // task would land.
+                backlog_order: reference,
+                sort_order: await this.nextSortOrder(tenantId, move.projectId, statusId, tx),
+            },
+        });
+
+        // Deleted ones too: a subtask is always in its parent's project.
+        const subtasks = await tx.projectTask.findMany({
+            where: { tenant_id: tenantId, parent_task_id: task.id },
+            orderBy: { reference: 'asc' },
+            select: {
+                id: true,
+                user_story_id: true,
+                sprint_id: true,
+                estimate_hours: true,
+                remaining_hours: true,
+                completed_at: true,
+                status: { select: { id: true, name: true, category: true } },
+            },
+        });
+
+        const crossings: DoneCrossing[] = [];
+        for (const [index, subtask] of subtasks.entries()) {
+            const column = move.columnFor(subtask.status);
+            const wasDone = subtask.status?.category === 'DONE';
+            const isDone = column.category === 'DONE';
+            if (wasDone !== isDone) {
+                crossings.push({
+                    taskId: subtask.id,
+                    sprintId: subtask.sprint_id,
+                    previousHours: subtask.remaining_hours == null ? null : Number(subtask.remaining_hours),
+                    estimateHours: subtask.estimate_hours == null ? null : Number(subtask.estimate_hours),
+                    becameDone: isDone,
+                });
+            }
+            await tx.projectTask.update({
+                where: { id: subtask.id },
+                data: {
+                    project_id: move.projectId,
+                    reference: reference + index + 1,
+                    backlog_order: reference + index + 1,
+                    status_id: column.id,
+                    sort_order: await this.nextSortOrder(tenantId, move.projectId, column.id, tx),
+                    user_story_id: null,
+                    milestone_id: null,
+                    ...(wasDone !== isDone ? { completed_at: isDone ? new Date() : null } : {}),
+                },
+            });
+        }
+
+        const taskIds = [task.id, ...subtasks.map((subtask) => subtask.id)];
+        const rows = { where: { tenant_id: tenantId, task_id: { in: taskIds } }, data: { project_id: move.projectId } };
+        await tx.projectTimeEntry.updateMany(rows);
+        await tx.projectTimer.updateMany(rows);
+        await tx.projectTaskRemainingLog.updateMany(rows);
+        await tx.projectTaskActivity.updateMany(rows);
+        await tx.projectComment.updateMany(rows);
+        await tx.projectAttachment.updateMany(rows);
+
+        return {
+            reference,
+            taskIds,
+            crossings,
+            leftStoryIds: subtasks.map((subtask) => subtask.user_story_id),
+        };
+    }
+
+    /**
+     * The feed's account of a move: one line carrying both keys, since the key
+     * is what people will go looking for, and a column change only when the
+     * task landed in a differently named column — the new project's "To Do" is
+     * a copy of the old one, not news.
+     */
+    private async recordMove(
+        tenantId: string,
+        userId: string,
+        task: { id: string; project_id: string; reference: number; title: string; status?: MovableStatus | null },
+        projectId: string,
+        reference: number,
+        statusName: string | null,
+    ) {
+        const projects = await this.db.project.findMany({
+            where: { tenant_id: tenantId, id: { in: [task.project_id, projectId] } },
+            select: { id: true, code: true, name: true },
+        });
+        const from = projects.find((project) => project.id === task.project_id);
+        const to = projects.find((project) => project.id === projectId);
+        const toKey = to ? composeTaskKey(to.code, reference) : null;
+        const base = { tenantId, taskId: task.id, projectId, actorId: userId };
+
+        await this.activity.record({
+            ...base,
+            type: ActivityType.PROJECT_CHANGED,
+            data: {
+                from: from ? composeTaskKey(from.code, task.reference) : null,
+                to: toKey,
+                fromProject: from?.name ?? null,
+                toProject: to?.name ?? null,
+            },
+        });
+
+        const fromStatus = task.status?.name ?? null;
+        if (statusName !== fromStatus) {
+            await this.activity.record({
+                ...base,
+                type: ActivityType.STATUS_CHANGED,
+                data: { from: fromStatus, to: statusName },
+            });
+        }
+
+        await this.activity.notifyWatchers({
+            tenantId,
+            taskId: task.id,
+            actorId: userId,
+            title: task.title,
+            body: `Moved to ${to?.name ?? 'another project'} as ${toKey ?? 'a new task'}`,
+            link: `/projects/${projectId}`,
+        });
+    }
+
+    /**
+     * A board holds cards from any project and places each by its status, and
+     * the new project's statuses may be bound on none of the boards the card is
+     * on. Binding them — what adding a card from that project would have done —
+     * keeps the card in its column instead of dropping it to Unsorted.
+     */
+    private async bindBoards(tenantId: string, taskIds: string[], projectId: string) {
+        const cards = await this.db.boardTask.findMany({
+            where: { tenant_id: tenantId, task_id: { in: taskIds } },
+            select: { board_id: true },
+        });
+        for (const boardId of new Set(cards.map((card) => card.board_id))) {
+            await this.boardColumns.bindProject(tenantId, boardId, projectId);
+        }
+    }
+
+    /**
+     * What a column change owes the remaining-hours log when it crosses into or
+     * out of Done. Finishing a task means no hours left on it, whatever the last
+     * estimate said — without this the burndown never reaches zero. Reopening
+     * one leaves its estimate less what is already logged.
+     */
+    private async burnDoneCrossing({
+        becameDone,
+        estimateHours,
+        ...write
+    }: DoneCrossing & { tenantId: string; userId: string; projectId: string }) {
+        if (becameDone) {
+            await this.remaining.write({ ...write, newHours: 0, source: RemainingSource.TASK_COMPLETED });
+            return;
+        }
+        const logged = await this.loggedHours(write.tenantId, write.taskId);
+        await this.remaining.write({
+            ...write,
+            newHours: Math.max((estimateHours ?? 0) - logged, 0),
+            source: RemainingSource.TASK_REOPENED,
+        });
     }
 
     /**
@@ -932,8 +1166,11 @@ export class ProjectTasksService {
         task: TaskForActivity,
         dto: UpdateTaskDto,
         statusId: string,
+        /** Where the task is now — the project a move just took it to. */
+        projectId: string,
     ) {
-        const base = { tenantId, taskId: task.id, projectId: task.project_id, actorId: userId };
+        const base = { tenantId, taskId: task.id, projectId, actorId: userId };
+        const moved = projectId !== task.project_id;
 
         if (dto.title !== undefined && dto.title.trim() !== task.title) {
             await this.activity.record({
@@ -943,7 +1180,9 @@ export class ProjectTasksService {
             });
         }
 
-        if (dto.statusId !== undefined && statusId !== task.status_id) {
+        // A move's column change is `recordMove`'s to describe: it lands in the
+        // new project's copy of the column more often than not.
+        if (!moved && dto.statusId !== undefined && statusId !== task.status_id) {
             const [from, to] = await Promise.all([
                 this.statusName(tenantId, task.status_id),
                 this.statusName(tenantId, statusId),
@@ -975,7 +1214,7 @@ export class ProjectTasksService {
                     actorId: userId,
                     title: task.title,
                     body: `Assigned to ${to ?? 'nobody'}`,
-                    link: `/projects/${task.project_id}`,
+                    link: `/projects/${projectId}`,
                 });
             }
         }
@@ -1170,8 +1409,13 @@ export class ProjectTasksService {
         return Number(total._sum.hours ?? 0);
     }
 
-    private async nextSortOrder(tenantId: string, projectId: string, statusId: string) {
-        const last = await this.db.projectTask.findFirst({
+    private async nextSortOrder(
+        tenantId: string,
+        projectId: string,
+        statusId: string,
+        client: Prisma.TransactionClient = this.db,
+    ) {
+        const last = await client.projectTask.findFirst({
             where: { tenant_id: tenantId, project_id: projectId, status_id: statusId, deleted_at: null },
             orderBy: { sort_order: 'desc' },
             select: { sort_order: true },
@@ -1287,6 +1531,29 @@ interface TaskRow {
     id: string;
     status_id?: string;
     [key: string]: unknown;
+}
+
+/** A column as a move reads it: enough to match it by name, then by kind. */
+interface MovableStatus {
+    id: string;
+    name: string;
+    category: string;
+}
+
+/** A move, planned: where to, the column the task lands in, and the rule that chose it. */
+interface ProjectMove {
+    projectId: string;
+    status: MovableStatus;
+    columnFor: (status: MovableStatus | null | undefined) => MovableStatus;
+}
+
+/** A task whose column changed across Done on a move, and what it burns from. */
+interface DoneCrossing {
+    taskId: string;
+    sprintId: string | null;
+    previousHours: number | null;
+    estimateHours: number | null;
+    becameDone: boolean;
 }
 
 /**

@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "Elle a peut-être été supprimée, ou elle appartient à un projet privé dont vous n'êtes pas membre.",
         loadFailed: "Impossible de charger cette tâche.",
         goToTasks: "Aller aux tâches",
+        moveTitle: "Déplacer vers un autre projet",
+        movePrompt: "{key} recevra une nouvelle clé dans {project} et emportera ses commentaires, ses heures saisies et son historique.",
+        moveLeavesStory: "Elle quitte la user story {story}, qui reste dans ce projet.",
+        moveLeavesMilestone: "Elle quitte le jalon {milestone}.",
+        moveWithSubtasks: "Ses sous-tâches la suivent.",
+        moveQuestion: "La déplacer vers {project} ?",
+        moveConfirm: "Déplacer la tâche",
+        moving: "Déplacement…",
+        moved: "Déplacée vers {project} sous {key}",
+        subtaskProject: "Une sous-tâche suit sa tâche parente.",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: "a modifié les dates",
             LABELS_CHANGED: "a modifié les étiquettes ({count} désormais)",
             RE_ESTIMATED: "a réestimé de {from} h à {to} h",
+            PROJECT_CHANGED: "l'a déplacée vers {project} — {from} est désormais {to}",
         },
     },
 

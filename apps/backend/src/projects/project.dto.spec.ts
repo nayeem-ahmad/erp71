@@ -46,6 +46,27 @@ describe('UpdateTaskDto clearing', () => {
     });
 });
 
+/**
+ * Moving a task to another project. The global pipe runs with
+ * `forbidNonWhitelisted` (`main.ts`), so a field the DTO does not declare is a
+ * 400 rather than something the service quietly never sees.
+ */
+describe('UpdateTaskDto project', () => {
+    const pipeErrors = (payload: Record<string, unknown>) =>
+        validateSync(plainToInstance(UpdateTaskDto, payload) as object, {
+            whitelist: true,
+            forbidNonWhitelisted: true,
+        }).map((e) => e.property);
+
+    it('takes a project to move the task to', () => {
+        expect(pipeErrors({ projectId: UUID })).toEqual([]);
+    });
+
+    it('refuses an empty project — unlike the links around it, a task cannot have none', () => {
+        expect(errorsFor({ projectId: '' })).toEqual(['projectId']);
+    });
+});
+
 const createTaskErrors = (payload: Record<string, unknown>) =>
     validateSync(plainToInstance(CreateTaskDto, payload) as object).map((e) => e.property);
 

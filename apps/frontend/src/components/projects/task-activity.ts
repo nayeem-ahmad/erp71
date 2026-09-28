@@ -93,6 +93,13 @@ export function describeActivity(entry: TaskActivity, strings: ActivityStrings):
             return (strings.RE_ESTIMATED ?? '')
                 .replace('{from}', asText(data.from, none))
                 .replace('{to}', asText(data.to, none));
+        case 'PROJECT_CHANGED':
+            // Both keys, because the key is what changed and what people will
+            // go looking for.
+            return (strings.PROJECT_CHANGED ?? '')
+                .replace('{project}', asText(data.toProject, none))
+                .replace('{from}', asText(data.from, none))
+                .replace('{to}', asText(data.to, none));
         default:
             // A type this client does not know about — a newer server, say —
             // shows as itself rather than as an empty line.

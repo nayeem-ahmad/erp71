@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "हो सकता है इसे हटा दिया गया हो, या यह किसी ऐसे निजी प्रोजेक्ट का हिस्सा हो जिसके आप सदस्य नहीं हैं।",
         loadFailed: "यह कार्य लोड नहीं हो सका।",
         goToTasks: "कार्यों पर जाएँ",
+        moveTitle: "दूसरी परियोजना में ले जाएँ",
+        movePrompt: "{project} में {key} को नई कुंजी मिलेगी, और इसकी टिप्पणियाँ, दर्ज घंटे और इतिहास साथ जाएँगे।",
+        moveLeavesStory: "यह यूज़र स्टोरी {story} छोड़ देगा, जो इसी परियोजना में रहेगी।",
+        moveLeavesMilestone: "यह मील का पत्थर {milestone} छोड़ देगा।",
+        moveWithSubtasks: "इसके उप-कार्य भी साथ जाएँगे।",
+        moveQuestion: "इसे {project} में ले जाएँ?",
+        moveConfirm: "कार्य ले जाएँ",
+        moving: "ले जाया जा रहा है…",
+        moved: "{project} में {key} के रूप में ले जाया गया",
+        subtaskProject: "उप-कार्य अपने मूल कार्य के साथ ही जाता है।",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: "ने तिथियाँ बदलीं",
             LABELS_CHANGED: "ने लेबल बदले (अब {count})",
             RE_ESTIMATED: "ने {from} घं. से {to} घं. पुनःअनुमान लगाया",
+            PROJECT_CHANGED: "ने इसे {project} में ले जाया — {from} अब {to} है",
         },
     },
 

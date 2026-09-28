@@ -67,6 +67,8 @@ export interface Task {
     timeEntries?: TimeEntry[];
     /** Soft-deleted subtasks already left out, with their columns. `findOne` only. */
     subtasks?: SubtaskRow[];
+    /** Set on a subtask, which lives in its parent's project and moves only with it. */
+    parent_task_id?: string | null;
     created_at?: string;
     updated_at?: string;
     completed_at?: string | null;
@@ -95,6 +97,13 @@ export interface SprintOption {
     id: string;
     name: string;
     status?: string;
+}
+
+/** A project the task can be moved to. */
+export interface ProjectOption {
+    id: string;
+    code: string;
+    name: string;
 }
 
 /** A row of the project's backlog — the options for the story picker. */

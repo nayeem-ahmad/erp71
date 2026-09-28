@@ -564,6 +564,14 @@ export class CreateTaskDto {
 }
 
 export class UpdateTaskDto {
+    /**
+     * Moves the task, with its subtasks and its whole record, to another
+     * project — see `ProjectTasksService.update`. No `''` spelling, unlike the
+     * links below: a task cannot be left without a project.
+     */
+    @IsOptional() @IsUUID()
+    projectId?: string;
+
     @IsOptional() @IsString() @MinLength(1) @MaxLength(300)
     title?: string;
 

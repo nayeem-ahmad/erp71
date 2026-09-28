@@ -10,6 +10,7 @@ import {
     isTask,
     num,
     type ProjectMemberRow,
+    type ProjectOption,
     type RemainingLog,
     type SprintOption,
     type StoryOption,
@@ -205,6 +206,28 @@ export function useTaskCard(
             live = false;
         };
     }, [sprintsWanted]);
+
+    /**
+     * The projects the task can move to, fetched when the picker is first
+     * opened — the same list the New Task dialog offers, every project the
+     * viewer can see.
+     */
+    const [projects, setProjects] = useState<ProjectOption[]>([]);
+    const [projectsWanted, setProjectsWanted] = useState(false);
+    useEffect(() => {
+        if (!projectsWanted) return;
+        let live = true;
+        api.getProjects({ limit: 100 })
+            .then((res) => {
+                if (live) setProjects((res?.items ?? []) as ProjectOption[]);
+            })
+            .catch(() => {
+                if (live) setProjects([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [projectsWanted]);
 
     /**
      * The surface behind the modal is reloaded once, when the card is put down.
@@ -422,13 +445,14 @@ export function useTaskCard(
         task, loadError, retry: firstLoad, statuses, history, busy, timeForm, setTimeForm,
         watching, watchBusy, toggleWatch,
         hours, canSaveWork, hoursLeftAfter,
-        allLabels, members, membersFailed, stories, sprints, localeInfo,
-        apply, refresh, markChanged, close,
+        allLabels, members, membersFailed, stories, sprints, projects, localeInfo,
+        apply, applyWithLog, refresh, markChanged, close,
         changeStatus, changePriority, changeSprint, saveWork, deleteEntry,
         onLabelsWanted: () => setLabelsWanted(true),
         onMembersWanted: () => setMembersWanted(true),
         onStoriesWanted: () => setStoriesWanted(true),
         onSprintsWanted: () => setSprintsWanted(true),
+        onProjectsWanted: () => setProjectsWanted(true),
     };
 }
 

@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "ہو سکتا ہے اسے حذف کر دیا گیا ہو، یا یہ کسی ایسے نجی پروجیکٹ کا حصہ ہو جس کے آپ رکن نہیں ہیں۔",
         loadFailed: "یہ ٹاسک لوڈ نہیں ہو سکا۔",
         goToTasks: "ٹاسکس پر جائیں",
+        moveTitle: "دوسرے پروجیکٹ میں منتقل کریں",
+        movePrompt: "{project} میں {key} کو نئی کلید ملے گی، اور اس کے تبصرے، درج شدہ گھنٹے اور تاریخچہ ساتھ جائیں گے۔",
+        moveLeavesStory: "یہ یوزر اسٹوری {story} چھوڑ دے گا، جو اسی پروجیکٹ میں رہے گی۔",
+        moveLeavesMilestone: "یہ سنگِ میل {milestone} چھوڑ دے گا۔",
+        moveWithSubtasks: "اس کے ذیلی ٹاسک بھی ساتھ جائیں گے۔",
+        moveQuestion: "اسے {project} میں منتقل کریں؟",
+        moveConfirm: "ٹاسک منتقل کریں",
+        moving: "منتقل کیا جا رہا ہے…",
+        moved: "{project} میں {key} کے طور پر منتقل ہو گیا",
+        subtaskProject: "ذیلی ٹاسک اپنے مرکزی ٹاسک کے ساتھ ہی منتقل ہوتا ہے۔",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: "نے تاریخیں بدلیں",
             LABELS_CHANGED: "نے لیبل بدلے (اب {count})",
             RE_ESTIMATED: "نے تخمینہ {from} گھنٹے سے {to} گھنٹے کر دیا",
+            PROJECT_CHANGED: "نے اسے {project} میں منتقل کیا — {from} اب {to} ہے",
         },
     },
 

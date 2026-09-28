@@ -374,6 +374,16 @@ export const projectsMessages = {
         unavailableBody: "Sie wurde möglicherweise gelöscht oder gehört zu einem privaten Projekt, in dem Sie kein Mitglied sind.",
         loadFailed: "Diese Aufgabe konnte nicht geladen werden.",
         goToTasks: "Zu den Aufgaben",
+        moveTitle: "In ein anderes Projekt verschieben",
+        movePrompt: "{key} erhält in {project} einen neuen Schlüssel und nimmt Kommentare, erfasste Stunden und Verlauf mit.",
+        moveLeavesStory: "Sie verlässt die User Story {story}, die in diesem Projekt bleibt.",
+        moveLeavesMilestone: "Sie verlässt den Meilenstein {milestone}.",
+        moveWithSubtasks: "Ihre Teilaufgaben werden mitverschoben.",
+        moveQuestion: "Nach {project} verschieben?",
+        moveConfirm: "Aufgabe verschieben",
+        moving: "Wird verschoben…",
+        moved: "Nach {project} verschoben als {key}",
+        subtaskProject: "Eine Teilaufgabe wird mit ihrer übergeordneten Aufgabe verschoben.",
     },
 
     description: {
@@ -419,6 +429,7 @@ export const projectsMessages = {
             DATES_CHANGED: "hat die Termine geändert",
             LABELS_CHANGED: "hat die Labels geändert (jetzt {count})",
             RE_ESTIMATED: "hat von {from} h auf {to} h neu geschätzt",
+            PROJECT_CHANGED: "hat sie nach {project} verschoben — {from} ist jetzt {to}",
         },
     },
 

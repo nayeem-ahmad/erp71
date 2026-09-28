@@ -160,6 +160,25 @@ from it now revokes their access rather than just un-staffing them.
 
 ---
 
+## Moving a task to another project
+
+A task can move between projects from its card (2026-09-28), and for everything
+the task carries that is a visibility change. The hour log filters on each
+entry's own `project_id` — a copy of the task's — so `ProjectTasksService.update`
+re-points the task's and its subtasks' time entries, running timer,
+remaining-hours log, activity, comments and attachments in the same transaction
+as the move. Left behind, the hours of a task moved from a public project into a
+private one would stay on the public project's reports, readable by everyone the
+task itself is now hidden from.
+
+The mover must be able to see the destination — `assertProjectVisible`, so an
+invisible one is a 404 like any other project. Moving a task *out* of a private
+project into a public one is deliberately not restricted further: it takes the
+same authority as editing the task, and whoever can see and manage a task
+already decides what it says.
+
+---
+
 ## Not done
 
 Per-user **record scope** — "only their own tasks and hour logs" inside a
