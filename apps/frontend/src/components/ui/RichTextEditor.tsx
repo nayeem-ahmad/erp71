@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Bold, Code, Italic, Link2, List, ListOrdered, Strikethrough } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bold, Check, Code, Italic, Link2, List, ListOrdered, Strikethrough, X } from 'lucide-react';
 import { useEditor, EditorContent, ReactNodeViewRenderer, type Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import { Placeholder } from '@tiptap/extensions';
+import { Button } from './compact';
 import { docToMarkdown, markdownToDoc } from './markdown-bridge';
 import { contentExtensions, Image } from './editor-extensions';
 import { ResizableImage } from './ResizableImage';
@@ -49,10 +50,17 @@ export type RichTextEditorProps = {
     ariaLabel?: string;
     disabled?: boolean;
     autoFocus?: boolean;
-    /** Ctrl/⌘+Enter. */
+    /** Ctrl/⌘+Enter, and the tick when `showActions` draws one. */
     onSubmit?: () => void;
-    /** Escape. */
+    /** Escape, and the cross when `showActions` draws one. */
     onCancel?: () => void;
+    /**
+     * Draws a tick and a cross under the editor, for `onSubmit` and
+     * `onCancel` — the keyboard's two ways out, made visible. For an editor
+     * over something already saved; a form has its own footer, and the comment
+     * box its Comment button.
+     */
+    showActions?: boolean;
     /** Hides the "**bold**, *italic*…" line when the caller says it elsewhere. */
     hideHint?: boolean;
     /**
@@ -90,24 +98,23 @@ function imagesOnClipboard(data: DataTransfer | null): File[] {
     return Array.from(data?.files ?? []).filter((file) => file.type.startsWith('image/'));
 }
 
-/** Ctrl/⌘+Enter and Escape, which belong to the caller rather than the editor. */
-const Shortcuts = Extension.create<{ onSubmit?: () => void; onCancel?: () => void }>({
+/**
+ * Ctrl/⌘+Enter and Escape, which belong to the caller rather than the editor.
+ *
+ * Each answers whether it handled the key; false lets it fall through, which
+ * for Ctrl/⌘+Enter is a line break. They are handed functions that look the
+ * caller's callbacks up when the key is pressed rather than the callbacks
+ * themselves, because TipTap builds an extension once, with the editor, and
+ * never again: a callback configured here stayed the one from the render the
+ * editor opened in, and its closure held the text as it was then.
+ */
+const Shortcuts = Extension.create<{ submit: () => boolean; cancel: () => boolean }>({
     name: 'richTextShortcuts',
-    addOptions: () => ({ onSubmit: undefined, onCancel: undefined }),
+    addOptions: () => ({ submit: () => false, cancel: () => false }),
     addKeyboardShortcuts() {
         return {
-            'Mod-Enter': () => {
-                const submit = this.options.onSubmit;
-                if (!submit) return false;
-                submit();
-                return true;
-            },
-            Escape: () => {
-                const cancel = this.options.onCancel;
-                if (!cancel) return false;
-                cancel();
-                return true;
-            },
+            'Mod-Enter': () => this.options.submit(),
+            Escape: () => this.options.cancel(),
         };
     },
 });
@@ -123,6 +130,7 @@ export function RichTextEditor({
     autoFocus,
     onSubmit,
     onCancel,
+    showActions,
     hideHint,
     uploadImage,
     onUploadingChange,
@@ -130,6 +138,29 @@ export function RichTextEditor({
     const { t } = useI18n();
     const m = t.components.richText;
     const [uploading, setUploading] = useState(0);
+
+    /* This render's callbacks, for the shortcuts — which TipTap will not
+       rebuild — to find when a key is pressed. */
+    const latest = useRef({ onSubmit, onCancel, uploading: false });
+    latest.current = { onSubmit, onCancel, uploading: uploading > 0 };
+
+    /** Ctrl/⌘+Enter and the tick. */
+    const submit = () => {
+        const { onSubmit: save, uploading: busy } = latest.current;
+        if (!save) return false;
+        // Swallowed rather than run: mid-upload, the document still holds the
+        // image's blob URL, which means nothing outside this tab.
+        if (!busy) save();
+        return true;
+    };
+
+    /** Escape and the cross. */
+    const cancel = () => {
+        const discard = latest.current.onCancel;
+        if (!discard) return false;
+        discard();
+        return true;
+    };
 
     const editor = useEditor({
         extensions: [
@@ -139,7 +170,7 @@ export function RichTextEditor({
             ...contentExtensions.filter((extension) => extension.name !== 'image'),
             Image.extend({ addNodeView: () => ReactNodeViewRenderer(ResizableImage) }),
             Placeholder.configure({ placeholder: placeholder ?? '' }),
-            Shortcuts.configure({ onSubmit, onCancel }),
+            Shortcuts.configure({ submit, cancel }),
         ],
         content: markdownToDoc(value).toJSON(),
         editable: !disabled,
@@ -363,7 +394,7 @@ export function RichTextEditor({
                 <EditorContent editor={editor} />
             </div>
 
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center justify-between gap-2">
                 {/* The paste line shows even where the caller hides the
                     formatting one: pasting a screenshot is not a thing anyone
                     tries on the chance that it works. */}
@@ -376,11 +407,45 @@ export function RichTextEditor({
                 ) : (
                     <span />
                 )}
-                {maxLength !== undefined && (
-                    <p className={`shrink-0 text-xs ${overLimit ? 'text-danger' : 'text-gray-400'}`}>
-                        {length}/{maxLength}
-                    </p>
-                )}
+                <div className="flex shrink-0 items-center gap-2">
+                    {maxLength !== undefined && (
+                        <p className={`text-xs ${overLimit ? 'text-danger' : 'text-gray-400'}`}>
+                            {length}/{maxLength}
+                        </p>
+                    )}
+                    {showActions && (
+                        <div className="flex items-center gap-1">
+                            {/* Pressed without taking focus, like the toolbar:
+                                a click does not focus a button in Safari, so
+                                the editor would lose focus to nothing — which
+                                a caller that saves on blur reads as leaving,
+                                and saves before the cross has said "discard". */}
+                            <Button
+                                size="icon"
+                                title={t.common.save}
+                                aria-label={t.common.save}
+                                disabled={disabled || uploading > 0}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={submit}
+                            >
+                                <Check className="h-4 w-4" aria-hidden />
+                            </Button>
+                            {/* Ghost rather than secondary: secondary's border
+                                makes it 2px bigger than the tick beside it. */}
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                title={t.common.cancel}
+                                aria-label={t.common.cancel}
+                                disabled={disabled}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={cancel}
+                            >
+                                <X className="h-4 w-4" aria-hidden />
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

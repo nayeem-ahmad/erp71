@@ -178,6 +178,13 @@ That removes `TitleField`'s and `DescriptionSection`'s editing state machines,
 both `stopPropagation` hacks, and the "which field is this one?" tax on every
 edit.
 
+**Amended 2026-09-29 — a tick and a cross on the rich-text editors.** Asked for:
+blur was the description's only visible way out, and Escape its only way to
+throw an edit away. `RichTextEditor`'s `showActions` draws ✓/✕ under the
+editor, and the description and comment editing use it; comment editing's text
+Save/Cancel pair went with it. Blur still saves the description. This is the
+one deliberate exception to "no Save/Cancel pairs" — not a regression to undo.
+
 ### 4E — Use the PATCH response — **shipped 2026-09-11**
 
 `setTask(response)` instead of `await load()`. The panel now has three tiers

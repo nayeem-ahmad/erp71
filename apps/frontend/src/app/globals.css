@@ -96,6 +96,61 @@
     }
 }
 
+@layer components {
+    /*
+     * The rich-text editor's document, drawn the way it reads once saved.
+     *
+     * Preflight strips lists of their markers and indent, links of their
+     * colour and paragraphs of their spacing, and TipTap puts none of it back:
+     * a list typed into a task description was a column of plain lines until
+     * the editor closed and `Markdown` drew it, and the placeholder never
+     * showed at all. These are the classes `components/ui/Markdown.tsx` gives
+     * the same elements — change one, change the other. The DOM is the same
+     * on both sides: ProseMirror wraps a list item's text in a paragraph, and
+     * so does react-markdown, because the bridge writes lists loose.
+     */
+    .prose-editor p {
+        @apply mt-2 leading-relaxed first:mt-0;
+    }
+
+    .prose-editor strong {
+        @apply font-semibold text-gray-900;
+    }
+
+    /* TipTap's strikethrough is an `s`; react-markdown's is a `del`. */
+    .prose-editor s {
+        @apply text-gray-500 line-through;
+    }
+
+    .prose-editor code {
+        @apply rounded bg-gray-200 px-1 py-0.5 font-mono text-[11px] text-gray-800;
+    }
+
+    .prose-editor a {
+        @apply text-blue-600 hover:underline;
+    }
+
+    .prose-editor ul {
+        @apply mt-2 list-disc space-y-1 ps-4 first:mt-0;
+    }
+
+    .prose-editor ol {
+        @apply mt-2 list-decimal space-y-1 ps-4 first:mt-0;
+    }
+
+    .prose-editor li {
+        @apply leading-relaxed marker:text-gray-400;
+    }
+
+    /* TipTap's Placeholder only marks the empty line; drawing it is left to
+       CSS. `float-start` rather than the documented `float: left`, so it sits
+       where the caret does in Arabic and Urdu too. */
+    .prose-editor p.is-editor-empty:first-child::before {
+        content: attr(data-placeholder);
+        @apply pointer-events-none float-start h-0 text-gray-400;
+    }
+}
+
 @layer utilities {
     /* The native number spinners sit *inside* the box and eat ~16px of it,
        which clipped five-figure amounts in the document line table. Where a

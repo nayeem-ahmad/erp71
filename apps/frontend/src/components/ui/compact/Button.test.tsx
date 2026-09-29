@@ -46,6 +46,20 @@ describe('Button', () => {
         expect(btn).toHaveClass('px-4', 'py-2', 'text-sm');
     });
 
+    // Icon-only, like the rich-text editor's save and cancel: square around its
+    // glyph, and a full 44px target on a phone across as well as up — the base
+    // class only guarantees the height.
+    it('renders the icon size square, centred, and touch-wide on mobile', () => {
+        render(
+            <Button size="icon" aria-label="Save">
+                <svg aria-hidden />
+            </Button>,
+        );
+        const btn = screen.getByRole('button', { name: 'Save' });
+        expect(btn).toHaveClass('p-1.5', 'justify-center', 'max-md:min-w-touch', 'max-md:min-h-touch');
+        expect(btn).not.toHaveClass('px-3', 'py-1.5');
+    });
+
     it('applies shared shape classes across variants', () => {
         render(<Button>Save</Button>);
         const btn = screen.getByRole('button', { name: 'Save' });

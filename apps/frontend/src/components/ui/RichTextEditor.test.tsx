@@ -17,10 +17,17 @@ function Host({
     uploadImage,
     onUploadingChange,
     initial = '',
+    onSubmit,
+    onCancel,
+    showActions,
 }: {
     uploadImage?: (file: File) => Promise<{ url: string; name?: string } | null>;
     onUploadingChange?: (uploading: boolean) => void;
     initial?: string;
+    /** Told the value as the host holds it when the save happens. */
+    onSubmit?: (value: string) => void;
+    onCancel?: () => void;
+    showActions?: boolean;
 }) {
     const [value, setValue] = useState(initial);
     latest = value;
@@ -34,6 +41,11 @@ function Host({
             ariaLabel="Description"
             uploadImage={uploadImage}
             onUploadingChange={onUploadingChange}
+            // A closure over this render's value, the way every real caller's
+            // save is: the description's `commit`, the comment box's `post`.
+            onSubmit={onSubmit ? () => onSubmit(value) : undefined}
+            onCancel={onCancel}
+            showActions={showActions}
         />
     );
 }
@@ -44,6 +56,36 @@ const surface = () => screen.getByLabelText('Description');
 
 const paste = (files: File[]) => {
     fireEvent.paste(surface(), { clipboardData: { files, getData: () => '' } });
+};
+
+/**
+ * Replaces what the editor holds with `text`, through ProseMirror's own paste
+ * handling — the one path in jsdom that produces a real document.
+ */
+const typeText = (text: string) => {
+    fireEvent.focus(surface());
+    fireEvent.keyDown(surface(), { key: 'a', ctrlKey: true });
+    fireEvent.paste(surface(), {
+        clipboardData: {
+            files: [],
+            getData: (type: string) => (type === 'text/plain' ? text : ''),
+            types: ['text/plain'],
+        },
+    });
+};
+
+/** Ctrl+Enter; `Mod` is Ctrl off a Mac, and jsdom is not one. */
+const pressModEnter = () => fireEvent.keyDown(surface(), { key: 'Enter', ctrlKey: true });
+
+/** An upload that stays in flight until the test lets it land. */
+const heldUpload = () => {
+    let land!: (value: { url: string }) => void;
+    const uploadImage = jest.fn().mockReturnValue(
+        new Promise((resolve) => {
+            land = resolve as (value: { url: string }) => void;
+        }),
+    );
+    return { uploadImage, land: (value: { url: string }) => land(value) };
 };
 
 beforeAll(() => {
@@ -209,5 +251,91 @@ describe('RichTextEditor markdown contract', () => {
     it('sizes an image to the width on its URL', async () => {
         render(<Host initial="![shot.png](https://cdn/shot.png?w=420)" />);
         expect(await screen.findByRole('img')).toHaveStyle({ width: '420px' });
+    });
+});
+
+describe('RichTextEditor saving with Ctrl/⌘+Enter', () => {
+    /*
+     * TipTap builds the editor's extensions once and never rebuilds them, so a
+     * shortcut holding the caller's callback kept the one from the render the
+     * editor opened in — and with it the text as it was then. The description
+     * closed without saving what was typed, and the comment box posted nothing.
+     */
+    it('saves the text as it is now, not as it was when the editor opened', async () => {
+        const onSubmit = jest.fn();
+        render(<Host initial="Draft" onSubmit={onSubmit} />);
+
+        typeText('Revised');
+        await waitFor(() => expect(latest).toBe('Revised'));
+        pressModEnter();
+
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(onSubmit).toHaveBeenCalledWith('Revised');
+    });
+
+    it('does not save while a pasted image is still uploading', async () => {
+        // The text holds a blob URL until the upload lands, and a blob URL
+        // means nothing outside the tab that made it.
+        const { uploadImage } = heldUpload();
+        const onSubmit = jest.fn();
+        render(<Host initial="See below" onSubmit={onSubmit} uploadImage={uploadImage} />);
+
+        paste([image()]);
+        await screen.findByRole('img');
+        pressModEnter();
+
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+});
+
+describe('RichTextEditor save and cancel buttons', () => {
+    it('draws none unless asked to', () => {
+        // The comment box has its own Comment button; a form has its footer.
+        render(<Host onSubmit={jest.fn()} onCancel={jest.fn()} />);
+
+        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    });
+
+    it('saves what was typed through the tick', async () => {
+        const onSubmit = jest.fn();
+        const onCancel = jest.fn();
+        render(<Host showActions onSubmit={onSubmit} onCancel={onCancel} />);
+
+        typeText('Revised');
+        await waitFor(() => expect(latest).toBe('Revised'));
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(onSubmit).toHaveBeenCalledWith('Revised');
+        expect(onCancel).not.toHaveBeenCalled();
+    });
+
+    it('cancels through the cross, without saving', () => {
+        const onSubmit = jest.fn();
+        const onCancel = jest.fn();
+        render(<Host showActions onSubmit={onSubmit} onCancel={onCancel} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(onCancel).toHaveBeenCalledTimes(1);
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('holds the tick back until a pasted image has landed', async () => {
+        const { uploadImage, land } = heldUpload();
+        render(
+            <Host showActions onSubmit={jest.fn()} onCancel={jest.fn()} uploadImage={uploadImage} />,
+        );
+
+        paste([image()]);
+        await screen.findByRole('img');
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+        await act(async () => {
+            land({ url: 'https://cdn/x.png' });
+        });
+
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
     });
 });
