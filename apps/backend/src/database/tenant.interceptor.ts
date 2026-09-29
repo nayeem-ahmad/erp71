@@ -101,14 +101,27 @@ export class TenantInterceptor implements NestInterceptor {
         const isOwner = request.userRole === 'OWNER';
 
         if (storeId) {
-            // OWNER bypasses store access check (they own all stores in their tenant)
-            if (!isOwner) {
+            // The store id is a request header, so it is checked against the workspace
+            // the request resolved to, for everyone. Without that, a member of workspace
+            // A who owns a workspace B could send B's store id (which holds every
+            // permission for them) and have it accepted as a store of A.
+            if (isOwner) {
+                // OWNER may use any store — of their own workspace.
+                const store = await this.db.store.findFirst({
+                    where: { id: storeId as string, tenant_id: resolvedTenantId },
+                    select: { id: true },
+                });
+                if (!store) {
+                    throw new ForbiddenException('You do not have access to this store');
+                }
+            } else {
                 const access = await this.db.userStoreAccess.findUnique({
                     where: {
                         user_id_store_id: {
                             user_id: userId,
                             store_id: storeId as string,
                         },
+                        tenant_id: resolvedTenantId,
                     },
                     select: { store_id: true, access_level: true },
                 });

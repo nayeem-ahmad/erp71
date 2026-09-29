@@ -79,6 +79,7 @@ export class ProjectAccessService {
             where: {
                 user_id: viewer.userId,
                 store_id: viewer.storeId,
+                tenant_id: viewer.tenantId,
                 permission: StorePermission.VIEW_ALL_PROJECTS as never,
             },
             select: { id: true },

@@ -86,7 +86,7 @@ describe('TeamService', () => {
             expect.objectContaining({ items: [], total: 0 }),
         );
         expect(db.userStorePermission.findFirst).toHaveBeenCalledWith({
-            where: { user_id: 'cash', store_id: 's1', permission: StorePermission.MANAGE_USERS },
+            where: { user_id: 'cash', store_id: 's1', tenant_id: 't1', permission: StorePermission.MANAGE_USERS },
             select: { id: true },
         });
     });

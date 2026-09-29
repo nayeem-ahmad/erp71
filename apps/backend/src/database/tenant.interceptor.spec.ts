@@ -37,6 +37,7 @@ describe('TenantInterceptor', () => {
         db = {
             tenantUser: { findFirst: jest.fn(), findMany: jest.fn() },
             userStoreAccess: { findUnique: jest.fn(), findMany: jest.fn() },
+            store: { findFirst: jest.fn() },
         };
         interceptor = new TenantInterceptor(db, timezones as any);
         jest.resetAllMocks();
@@ -96,12 +97,42 @@ describe('TenantInterceptor', () => {
         await expect(interceptor.intercept(ctx, next)).rejects.toThrow(ForbiddenException);
     });
 
-    it('bypasses store access check for OWNER', async () => {
-        const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1', storeIdHeader: 'any-store' });
+    it('bypasses the per-user store access list for OWNER, but not the workspace check', async () => {
+        const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1', storeIdHeader: 'store-a' });
         db.tenantUser.findFirst.mockResolvedValue({ tenant_id: 'tenant-1', role: 'OWNER' });
+        db.store.findFirst.mockResolvedValue({ id: 'store-a' });
         await interceptor.intercept(ctx, next);
-        expect(req.storeId).toBe('any-store');
+        expect(req.storeId).toBe('store-a');
         expect(db.userStoreAccess.findUnique).not.toHaveBeenCalled();
+        expect(db.store.findFirst).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: 'store-a', tenant_id: 'tenant-1' } }),
+        );
+    });
+
+    it('refuses an OWNER a store that belongs to another workspace', async () => {
+        const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1', storeIdHeader: 'store-of-b' });
+        db.tenantUser.findFirst.mockResolvedValue({ tenant_id: 'tenant-1', role: 'OWNER' });
+        db.store.findFirst.mockResolvedValue(null);
+        await expect(interceptor.intercept(ctx, next)).rejects.toThrow(ForbiddenException);
+        expect(req.storeId).toBeUndefined();
+    });
+
+    // A member can own a workspace, and with it a store carrying every permission.
+    // Access to *that* store must not count as access to a store in the workspace
+    // named in the header.
+    it('looks store access up for the workspace being accessed', async () => {
+        const { ctx } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-victim', storeIdHeader: 'store-mine' });
+        db.tenantUser.findFirst.mockResolvedValue({ tenant_id: 'tenant-victim', role: 'CASHIER' });
+        db.userStoreAccess.findUnique.mockResolvedValue(null);
+        await expect(interceptor.intercept(ctx, next)).rejects.toThrow(ForbiddenException);
+        expect(db.userStoreAccess.findUnique).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    user_id_store_id: { user_id: 'user-1', store_id: 'store-mine' },
+                    tenant_id: 'tenant-victim',
+                }),
+            }),
+        );
     });
 
     it('auto-resolves storeId when user has exactly one store access', async () => {

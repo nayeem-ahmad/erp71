@@ -85,10 +85,15 @@ export class StorePermissionGuard implements CanActivate {
         request.storeId = storeId;
 
         // Check each required permission — all must be granted
+        // Scoped to the workspace being accessed, not only the store. The store id
+        // is a request header, and a member can own a workspace — and a store with
+        // every permission — of their own; without `tenant_id` here, sending that
+        // store's id would satisfy every check in a workspace they merely belong to.
         const grants = await this.db.userStorePermission.findMany({
             where: {
                 user_id: userId,
                 store_id: storeId,
+                tenant_id: tenantId,
                 permission: { in: required as any[] },
             },
             select: { permission: true },

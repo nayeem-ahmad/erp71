@@ -93,4 +93,37 @@ describe('StorePermissionGuard', () => {
         (ctx.switchToHttp().getRequest() as any).user = undefined;
         await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
     });
+
+    // A store id arrives in a request header, and a member can own a workspace
+    // (and a store with every permission) of their own. Permissions must be read
+    // for the workspace being accessed, or a low-privilege member of workspace A
+    // could send their own store's id and pass every check in A.
+    describe('workspace scoping', () => {
+        it('reads permissions for the workspace being accessed, not just the store', async () => {
+            reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+            db.userStorePermission.findMany.mockResolvedValue([{ permission: StorePermission.CREATE_SALE }]);
+
+            await guard.canActivate(makeContext({ tenantId: 'tenant-victim', storeId: 'store-mine' }));
+
+            expect(db.userStorePermission.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        user_id: 'user-1',
+                        store_id: 'store-mine',
+                        tenant_id: 'tenant-victim',
+                    }),
+                }),
+            );
+        });
+
+        it('refuses a store whose grants belong to another workspace', async () => {
+            reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+            // What the database now answers: no grant rows carry the victim's tenant id.
+            db.userStorePermission.findMany.mockResolvedValue([]);
+
+            await expect(
+                guard.canActivate(makeContext({ tenantId: 'tenant-victim', storeId: 'store-mine' })),
+            ).rejects.toThrow(ForbiddenException);
+        });
+    });
 });
