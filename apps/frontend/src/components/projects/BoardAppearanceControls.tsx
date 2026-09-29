@@ -33,7 +33,20 @@ import type { BoardViewControls } from './use-board-view';
  * is why they sit in their own section rather than beside the background, which
  * everyone in the workspace sees.
  */
-export default function BoardAppearanceControls({ view, set, toggleField, reset }: BoardViewControls) {
+export default function BoardAppearanceControls({
+    view,
+    set,
+    toggleField,
+    reset,
+    hide = [],
+}: BoardViewControls & {
+    /**
+     * Settings a surface does not honour, left out rather than shown doing
+     * nothing. The sprint page picks its lanes in its own toolbar, and its card
+     * view sits in a panel, so neither swimlanes nor scroll mean anything there.
+     */
+    hide?: ('swimlanes' | 'scroll')[];
+}) {
     const { t } = useI18n();
     const v = t.projects.board.view;
 
@@ -55,19 +68,25 @@ export default function BoardAppearanceControls({ view, set, toggleField, reset 
             {/* First, because it changes the board more than anything under
                 it: the rest restyle the same columns, this one reshapes them
                 into rows. */}
-            <Segmented<BoardSwimlanes>
-                label={v.swimlanes}
-                hint={v.swimlanesHint}
-                value={view.swimlanes}
-                onChange={(next) => set('swimlanes', next)}
-                options={[
-                    { value: 'none', label: v.swimlanesNone },
-                    { value: 'assignee', label: v.swimlanesAssignee },
-                    { value: 'story', label: v.swimlanesStory },
-                ]}
-            />
+            {!hide.includes('swimlanes') && (
+                <Segmented<BoardSwimlanes>
+                    label={v.swimlanes}
+                    hint={v.swimlanesHint}
+                    value={view.swimlanes}
+                    onChange={(next) => set('swimlanes', next)}
+                    options={[
+                        { value: 'none', label: v.swimlanesNone },
+                        { value: 'assignee', label: v.swimlanesAssignee },
+                        { value: 'story', label: v.swimlanesStory },
+                    ]}
+                />
+            )}
 
-            <div className="grid gap-3 border-t border-gray-100 pt-3 sm:grid-cols-3">
+            <div
+                className={`grid gap-3 sm:grid-cols-3 ${
+                    hide.includes('swimlanes') ? '' : 'border-t border-gray-100 pt-3'
+                }`}
+            >
                 <Segmented<BoardDensity>
                     label={v.cardSize}
                     value={view.density}
@@ -104,18 +123,20 @@ export default function BoardAppearanceControls({ view, set, toggleField, reset 
                 Card size, column width and colour are all self-evident from
                 their two or three options; this one is not until you have read
                 what it does to the page, so it needs the line underneath. */}
-            <div className="border-t border-gray-100 pt-3">
-                <Segmented<BoardScroll>
-                    label={v.scroll}
-                    hint={v.scrollHint}
-                    value={view.scroll}
-                    onChange={(next) => set('scroll', next)}
-                    options={[
-                        { value: 'page', label: v.scrollPage },
-                        { value: 'column', label: v.scrollColumn },
-                    ]}
-                />
-            </div>
+            {!hide.includes('scroll') && (
+                <div className="border-t border-gray-100 pt-3">
+                    <Segmented<BoardScroll>
+                        label={v.scroll}
+                        hint={v.scrollHint}
+                        value={view.scroll}
+                        onChange={(next) => set('scroll', next)}
+                        options={[
+                            { value: 'page', label: v.scrollPage },
+                            { value: 'column', label: v.scrollColumn },
+                        ]}
+                    />
+                </div>
+            )}
 
             <div className="flex items-start justify-between gap-3 border-t border-gray-100 pt-3">
                 <div className="min-w-0">

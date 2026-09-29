@@ -19,6 +19,7 @@ import {
     MinLength,
     ValidateIf,
 } from 'class-validator';
+import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
 import { PROJECT_CODE_PATTERN } from './url-keys/project-code';
 
 export enum ProjectStatusDto {
@@ -956,6 +957,14 @@ export class UpdateSprintDto {
 
     @IsOptional() @IsEnum(SprintStatusDto)
     status?: SprintStatusDto;
+
+    /**
+     * A palette key, or `null` for the plain sprint — the same contract as
+     * `UpdateBoardDto.backgroundColor`, and validated against the same list.
+     */
+    @IsOptional()
+    @IsIn(BOARD_BACKGROUND_COLORS)
+    backgroundColor?: BoardBackgroundColor | null;
 }
 
 export class AssignTasksToSprintDto {

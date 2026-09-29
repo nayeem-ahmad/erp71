@@ -7729,6 +7729,14 @@ model Sprint {
   created_at DateTime     @default(now())
   updated_at DateTime     @updatedAt
 
+  /// How the sprint's card view is painted — the same three columns, and the
+  /// same rules, as Board.background_*: one background, shared by everyone
+  /// who opens the sprint, a palette key rather than a free colour, and the
+  /// Cloudinary public_id kept so a replaced picture can be deleted.
+  background_color     String?
+  background_image_url String?
+  background_image_key String?
+
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   tasks         ProjectTask[]

@@ -1,14 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    NotFoundException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { SprintsService } from './sprints.service';
 import { SprintSnapshotService } from './sprint-snapshot.service';
 import { ProjectAccessService } from './project-access.service';
 import { OWNER, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
+import { AssetsService } from '../assets/assets.service';
 
 describe('SprintsService', () => {
     let service: SprintsService;
     let db: any;
+    let assets: { isEnabled: jest.Mock; uploadBuffer: jest.Mock; deleteFile: jest.Mock };
     let snapshots: { snapshotToday: jest.Mock; computeCurrent: jest.Mock; rebuild: jest.Mock };
 
     const sprint = (overrides: Record<string, unknown> = {}) => ({
@@ -54,12 +61,21 @@ describe('SprintsService', () => {
             sprintSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
         };
 
+        assets = {
+            isEnabled: jest.fn().mockReturnValue(true),
+            uploadBuffer: jest
+                .fn()
+                .mockResolvedValue({ url: 'https://cdn/new.jpg', publicId: 't1/project-sprints/new', bytes: 10 }),
+            deleteFile: jest.fn().mockResolvedValue(undefined),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 SprintsService,
                 ProjectAccessService,
                 { provide: DatabaseService, useValue: db },
                 { provide: SprintSnapshotService, useValue: snapshots },
+                { provide: AssetsService, useValue: assets },
             ],
         }).compile();
 
@@ -271,4 +287,89 @@ describe('SprintsService', () => {
         });
     });
 
+    describe('background', () => {
+        const withImage = () =>
+            db.sprint.findFirst.mockResolvedValue(
+                sprint({ background_image_url: 'https://cdn/old.jpg', background_image_key: 't1/project-sprints/old' }),
+            );
+
+        const pixel =
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+        it('renames without touching the background', async () => {
+            withImage();
+
+            await service.update('tenant-1', 'sprint-1', { name: 'Sprint 2' } as never);
+
+            expect(db.sprint.update).toHaveBeenCalledWith({ where: { id: 'sprint-1' }, data: { name: 'Sprint 2' } });
+            expect(assets.deleteFile).not.toHaveBeenCalled();
+        });
+
+        it('drops the image when a colour is picked, file and all', async () => {
+            withImage();
+
+            await service.update('tenant-1', 'sprint-1', { backgroundColor: 'BLUE' } as never);
+
+            expect(db.sprint.update).toHaveBeenCalledWith({
+                where: { id: 'sprint-1' },
+                data: { background_color: 'BLUE', background_image_url: null, background_image_key: null },
+            });
+            expect(assets.deleteFile).toHaveBeenCalledWith('t1/project-sprints/old', 'image');
+        });
+
+        it('stores an uploaded image with its key, in the sprint folder', async () => {
+            withImage();
+
+            await service.setBackgroundImage('tenant-1', 'sprint-1', { imageBase64: pixel });
+
+            expect(assets.uploadBuffer).toHaveBeenCalledWith(
+                expect.any(Buffer),
+                'tenant-1/project-sprints',
+                'background',
+                'image',
+            );
+            expect(db.sprint.update).toHaveBeenCalledWith({
+                where: { id: 'sprint-1' },
+                data: {
+                    background_color: null,
+                    background_image_url: 'https://cdn/new.jpg',
+                    background_image_key: 't1/project-sprints/new',
+                },
+            });
+            expect(assets.deleteFile).toHaveBeenCalledWith('t1/project-sprints/old', 'image');
+        });
+
+        it('says so plainly when storage is not configured', async () => {
+            assets.isEnabled.mockReturnValue(false);
+
+            await expect(
+                service.setBackgroundImage('tenant-1', 'sprint-1', { imageBase64: pixel }),
+            ).rejects.toBeInstanceOf(ServiceUnavailableException);
+            expect(db.sprint.update).not.toHaveBeenCalled();
+        });
+
+        it('clearing takes all three columns and the file', async () => {
+            withImage();
+
+            await service.clearBackground('tenant-1', 'sprint-1');
+
+            expect(db.sprint.update).toHaveBeenCalledWith({
+                where: { id: 'sprint-1' },
+                data: { background_color: null, background_image_url: null, background_image_key: null },
+            });
+            expect(assets.deleteFile).toHaveBeenCalledWith('t1/project-sprints/old', 'image');
+        });
+
+        it('never sends the storage key to the browser', async () => {
+            withImage();
+            db.sprint.update.mockResolvedValue(sprint({ background_image_key: 't1/project-sprints/new' }));
+
+            const found = await service.findOne('tenant-1', 'sprint-1');
+            const cleared = await service.clearBackground('tenant-1', 'sprint-1');
+
+            expect(found).toMatchObject({ background_image_url: 'https://cdn/old.jpg' });
+            expect(found).not.toHaveProperty('background_image_key');
+            expect(cleared).not.toHaveProperty('background_image_key');
+        });
+    });
 });

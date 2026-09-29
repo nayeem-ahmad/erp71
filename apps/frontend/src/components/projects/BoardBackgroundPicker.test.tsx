@@ -11,6 +11,9 @@ jest.mock('@/lib/api', () => ({
         updateBoard: jest.fn(),
         setBoardBackgroundImage: jest.fn(),
         clearBoardBackground: jest.fn(),
+        updateSprint: jest.fn(),
+        setSprintBackgroundImage: jest.fn(),
+        clearSprintBackground: jest.fn(),
     },
 }));
 
@@ -78,7 +81,7 @@ describe('BoardBackgroundPicker', () => {
         const onChanged = jest.fn();
         render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={plain}
                 onChanged={onChanged}
             />,
@@ -100,7 +103,7 @@ describe('BoardBackgroundPicker', () => {
     it('marks the colour the board is already wearing', () => {
         render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={{ background_color: 'RED', background_image_url: null }}
                 onChanged={jest.fn()}
             />,
@@ -121,7 +124,7 @@ describe('BoardBackgroundPicker', () => {
         const onChanged = jest.fn();
         const { container } = render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={plain}
                 onChanged={onChanged}
             />,
@@ -146,7 +149,7 @@ describe('BoardBackgroundPicker', () => {
         stubFileReader('data:image/png;base64,AAAA');
         const { container } = render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={plain}
                 onChanged={jest.fn()}
             />,
@@ -165,7 +168,7 @@ describe('BoardBackgroundPicker', () => {
         stubFileReader('data:application/pdf;base64,AAAA');
         const { container } = render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={plain}
                 onChanged={jest.fn()}
             />,
@@ -183,7 +186,7 @@ describe('BoardBackgroundPicker', () => {
     it('offers removal only once there is a background to remove', () => {
         const { rerender } = render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={plain}
                 onChanged={jest.fn()}
             />,
@@ -192,7 +195,7 @@ describe('BoardBackgroundPicker', () => {
 
         rerender(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={{ background_color: 'AMBER', background_image_url: null }}
                 onChanged={jest.fn()}
             />,
@@ -204,7 +207,7 @@ describe('BoardBackgroundPicker', () => {
         const onChanged = jest.fn();
         render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={{ background_color: null, background_image_url: 'https://cdn/x.jpg' }}
                 onChanged={onChanged}
             />,
@@ -221,7 +224,7 @@ describe('BoardBackgroundPicker', () => {
         const onChanged = jest.fn();
         render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={plain}
                 onChanged={onChanged}
             />,
@@ -237,7 +240,7 @@ describe('BoardBackgroundPicker', () => {
     it('shows the picture the board is wearing, so a replace is an informed one', () => {
         render(
             <BoardBackgroundPicker
-                boardId="b1"
+                target={{ kind: 'board', id: 'b1' }}
                 background={{ background_color: null, background_image_url: 'https://cdn/x.jpg' }}
                 onChanged={jest.fn()}
             />,
@@ -245,5 +248,47 @@ describe('BoardBackgroundPicker', () => {
 
         expect(screen.getByRole('img')).toHaveAttribute('src', 'https://cdn/x.jpg');
         expect(screen.getByRole('button', { name: /replace the picture/i })).toBeInTheDocument();
+    });
+
+    describe('on a sprint', () => {
+        beforeEach(() => {
+            (api.updateSprint as jest.Mock).mockReset().mockResolvedValue({
+                background_color: 'BLUE',
+                background_image_url: null,
+            });
+            (api.clearSprintBackground as jest.Mock).mockReset().mockResolvedValue(plain);
+        });
+
+        it('saves to the sprint, not to a board', async () => {
+            render(
+                <BoardBackgroundPicker
+                    target={{ kind: 'sprint', id: 's1' }}
+                    background={plain}
+                    onChanged={jest.fn()}
+                />,
+            );
+
+            expect(screen.getByText(/opens this sprint/i)).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: /blue/i }));
+
+            await waitFor(() =>
+                expect(api.updateSprint).toHaveBeenCalledWith('s1', { backgroundColor: 'BLUE' }),
+            );
+            expect(api.updateBoard).not.toHaveBeenCalled();
+        });
+
+        it('clears the sprint background', async () => {
+            render(
+                <BoardBackgroundPicker
+                    target={{ kind: 'sprint', id: 's1' }}
+                    background={{ background_color: 'RED', background_image_url: null }}
+                    onChanged={jest.fn()}
+                />,
+            );
+
+            fireEvent.click(screen.getByRole('button', { name: /remove background/i }));
+
+            await waitFor(() => expect(api.clearSprintBackground).toHaveBeenCalledWith('s1'));
+        });
     });
 });

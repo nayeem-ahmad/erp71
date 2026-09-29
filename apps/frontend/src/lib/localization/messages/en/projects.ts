@@ -892,6 +892,9 @@ export const projectsMessages = {
         focusLane: "Show only this lane",
         expandAllLanes: "Expand all lanes",
         lanesCollapsed: "{count} collapsed",
+        settings: "Sprint settings",
+        backgroundHint: "Everyone who opens this sprint sees it.",
+        currentBackground: "Current sprint background",
     },
 
     burndown: {

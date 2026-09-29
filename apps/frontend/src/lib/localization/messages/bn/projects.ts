@@ -888,6 +888,9 @@ export const projectsMessages = {
         focusLane: "শুধু এই লেন দেখান",
         expandAllLanes: "সব লেন খুলুন",
         lanesCollapsed: "{count}টি বন্ধ",
+        settings: "স্প্রিন্ট সেটিংস",
+        backgroundHint: "এই স্প্রিন্ট যে-ই খুলুক, সবাই এটি দেখবে।",
+        currentBackground: "স্প্রিন্টের বর্তমান ব্যাকগ্রাউন্ড",
     },
 
     burndown: {

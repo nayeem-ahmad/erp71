@@ -33,16 +33,41 @@ const readAsDataUrl = (file: File) =>
         reader.readAsDataURL(file);
     });
 
+/**
+ * What wears the background. A board and a sprint store it the same way — the
+ * same three columns behind the same rules — and differ only in the endpoints.
+ */
+export interface BackgroundTarget {
+    kind: 'board' | 'sprint';
+    id: string;
+}
+
+type ImageUpload = { imageBase64: string; mimeType?: string; fileName?: string };
+
+function backgroundApi({ kind, id }: BackgroundTarget) {
+    return kind === 'sprint'
+        ? {
+              setColor: (color: BoardBackgroundColor) => api.updateSprint(id, { backgroundColor: color }),
+              setImage: (data: ImageUpload) => api.setSprintBackgroundImage(id, data),
+              clear: () => api.clearSprintBackground(id),
+          }
+        : {
+              setColor: (color: BoardBackgroundColor) => api.updateBoard(id, { backgroundColor: color }),
+              setImage: (data: ImageUpload) => api.setBoardBackgroundImage(id, data),
+              clear: () => api.clearBoardBackground(id),
+          };
+}
+
 interface BoardBackgroundPickerProps {
-    boardId: string;
-    /** The board as it looks now — the picker marks what is already chosen. */
+    target: BackgroundTarget;
+    /** The board or sprint as it looks now — the picker marks what is already chosen. */
     background: BoardBackground;
-    /** Called with the board the API returned, so the page repaints without a reload. */
+    /** Called with the row the API returned, so the page repaints without a reload. */
     onChanged: (board: BoardBackground) => void;
 }
 
 /**
- * Pick a colour for the board, or upload a picture for it.
+ * Pick a colour for a board or a sprint, or upload a picture for it.
  *
  * Unlike the appearance controls it sits beside, this is the board's own and
  * everyone in the workspace sees it — which is why the two are separate
@@ -53,12 +78,16 @@ interface BoardBackgroundPickerProps {
  * two-step commit would mean choosing blind.
  */
 export default function BoardBackgroundPicker({
-    boardId,
+    target,
     background,
     onChanged,
 }: Readonly<BoardBackgroundPickerProps>) {
     const { t } = useI18n();
     const m = t.projects.boards.background;
+    const ofSprint = target.kind === 'sprint';
+    const hint = ofSprint ? t.projects.sprint.backgroundHint : m.hint;
+    const currentImage = ofSprint ? t.projects.sprint.currentBackground : m.currentImage;
+    const endpoints = backgroundApi(target);
 
     const fileRef = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
@@ -81,7 +110,7 @@ export default function BoardBackgroundPicker({
     };
 
     const pickColor = (color: BoardBackgroundColor) =>
-        run(() => api.updateBoard(boardId, { backgroundColor: color }));
+        run(() => endpoints.setColor(color));
 
     const upload = async (file: File | undefined) => {
         if (!file) return;
@@ -101,7 +130,7 @@ export default function BoardBackgroundPicker({
             return;
         }
         await run(() =>
-            api.setBoardBackgroundImage(boardId, {
+            endpoints.setImage({
                 imageBase64: dataUrl,
                 mimeType: file.type,
                 fileName: file.name,
@@ -111,7 +140,7 @@ export default function BoardBackgroundPicker({
 
     return (
         <div className="space-y-3">
-            <p className="text-xs text-gray-500">{m.hint}</p>
+            <p className="text-xs text-gray-500">{hint}</p>
 
             <fieldset disabled={busy}>
                 <legend className="mb-2 text-xs font-medium text-gray-600">{m.colors}</legend>
@@ -147,7 +176,7 @@ export default function BoardBackgroundPicker({
                     // eslint-disable-next-line @next/next/no-img-element -- a Cloudinary URL from tenant data, not a build-time asset next/image could optimise
                     <img
                         src={background.background_image_url}
-                        alt={m.currentImage}
+                        alt={currentImage}
                         className="mb-2 h-20 w-full rounded-md object-cover"
                     />
                 )}
@@ -187,7 +216,7 @@ export default function BoardBackgroundPicker({
                             variant="ghost"
                             className="min-h-touch"
                             disabled={busy}
-                            onClick={() => run(() => api.clearBoardBackground(boardId))}
+                            onClick={() => run(() => endpoints.clear())}
                         >
                             <Trash2 className="h-4 w-4" />
                             {m.remove}

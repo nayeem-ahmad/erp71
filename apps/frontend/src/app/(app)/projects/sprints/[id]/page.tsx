@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Eye, LayoutGrid, Pencil, Plus, Search, Table2, Trash2, Undo2 } from 'lucide-react';
+import { Eye, LayoutGrid, Pencil, Plus, Search, Settings, Table2, Trash2, Undo2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -17,6 +17,14 @@ import BurndownChart, { type BurndownPoint } from '@/components/projects/Burndow
 import SprintBacklogModal from '@/components/projects/SprintBacklogModal';
 import SprintCardBoard from '@/components/projects/SprintCardBoard';
 import SprintLaneHeading from '@/components/projects/SprintLaneHeading';
+import SprintSettingsModal from '@/components/projects/SprintSettingsModal';
+import { useBoardView } from '@/components/projects/use-board-view';
+import {
+    boardCanvasClass,
+    boardCanvasStyle,
+    boardColumnLiftClass,
+    type BoardBackground,
+} from '@/components/projects/board-background';
 import {
     laneStorageId,
     readCollapsedLanes,
@@ -51,7 +59,7 @@ import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { formatCalendarDate } from '@/lib/format';
 
-interface Sprint {
+interface Sprint extends BoardBackground {
     id: string;
     name: string;
     goal?: string | null;
@@ -108,6 +116,10 @@ export default function SprintDetailPage() {
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<SprintTask | null>(null);
     const [busy, setBusy] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    // The same per-browser appearance the boards use: card size, column width
+    // and colour, card fields and motion. Read by the card view only.
+    const boardView = useBoardView();
 
     useEffect(() => {
         setLaneMode(readStored(LANE_STORAGE_KEY, SPRINT_LANE_MODES, 'none'));
@@ -318,6 +330,14 @@ export default function SprintDetailPage() {
                 actions={
                     sprint ? (
                         <div className="flex items-center gap-2">
+                            <Button
+                                variant="secondary"
+                                className="max-md:min-h-touch"
+                                onClick={() => setSettingsOpen(true)}
+                            >
+                                <Settings className="h-4 w-4" />
+                                {m.sprint.settings}
+                            </Button>
                             <StatusBadge tone={sprint.status === 'ACTIVE' ? 'info' : 'neutral'}>
                                 {(m.sprint[sprint.status.toLowerCase() as keyof typeof m.sprint] as string)
                                     ?? sprint.status}
@@ -432,16 +452,22 @@ export default function SprintDetailPage() {
                     ) : visibleTasks.length === 0 ? (
                         <p className="p-3 text-sm text-gray-500">{m.sprint.noMatches}</p>
                     ) : viewMode === 'cards' ? (
-                        <SprintCardBoard
-                            lanes={lanes}
-                            laneMode={laneMode}
-                            columns={statusColumns}
-                            busy={busy}
-                            onOpen={setOpenTaskId}
-                            onReturn={(task) => void returnToBacklog(task)}
-                            onMove={(task, statusId, sortOrder) => void moveCard(task, statusId, sortOrder)}
-                            laneControls={laneControls}
-                        />
+                        // Painted inside the panel rather than behind the page:
+                        // the table, the charts and the stats stay on white.
+                        <div className={boardCanvasClass(sprint)} style={boardCanvasStyle(sprint)}>
+                            <SprintCardBoard
+                                lanes={lanes}
+                                laneMode={laneMode}
+                                columns={statusColumns}
+                                busy={busy}
+                                onOpen={setOpenTaskId}
+                                onReturn={(task) => void returnToBacklog(task)}
+                                onMove={(task, statusId, sortOrder) => void moveCard(task, statusId, sortOrder)}
+                                laneControls={laneControls}
+                                view={boardView.view}
+                                lift={boardColumnLiftClass(sprint)}
+                            />
+                        </div>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-xs">
@@ -720,6 +746,28 @@ export default function SprintDetailPage() {
                 onConfirm={confirmDelete}
                 onCancel={() => setPendingDelete(null)}
             />
+
+            {settingsOpen && sprint && (
+                <SprintSettingsModal
+                    sprintId={sprintId}
+                    sprintName={sprint.name}
+                    boardView={boardView}
+                    background={sprint}
+                    onClose={() => setSettingsOpen(false)}
+                    // Repainted from the response, not by reloading every task for a colour.
+                    onBackgroundChanged={(next) =>
+                        setSprint((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      background_color: next.background_color ?? null,
+                                      background_image_url: next.background_image_url ?? null,
+                                  }
+                                : prev,
+                        )
+                    }
+                />
+            )}
 
             {openTaskId && (
                 <TaskDetailPanel

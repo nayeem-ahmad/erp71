@@ -77,7 +77,7 @@ export default function BoardSettingsPanel({
 
             <TabPanel tabKey="background" value={tab} idPrefix="board-settings">
                 <BoardBackgroundPicker
-                    boardId={boardId}
+                    target={{ kind: 'board', id: boardId }}
                     background={background}
                     onChanged={onBackgroundChanged}
                 />

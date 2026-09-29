@@ -1,13 +1,8 @@
-import {
-    BadRequestException,
-    Injectable,
-    NotFoundException,
-    ServiceUnavailableException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '../database/database.service';
 import { AssetsService } from '../assets/assets.service';
-import { parseImageUpload } from '../common/image-upload.util';
+import { NO_BACKGROUND, uploadBackgroundImage, withoutStorageKey } from './background-image.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
 import { ProjectTasksService } from './project-tasks.service';
@@ -43,20 +38,6 @@ const CARD_TASK_INCLUDE = {
  */
 export function boardBackgroundFolder(tenantId: string): string {
     return `${tenantId}/project-boards`;
-}
-
-/**
- * A board on its way to the browser.
- *
- * `background_image_key` is the Cloudinary `public_id` and is the server's
- * business only — it is how this service deletes a replaced picture, and the
- * browser has no use for it. Stripped here rather than by a `select` so the
- * mutation responses keep the rest of the row exactly as they always returned
- * it, and so one function is the single place that decides this.
- */
-function withoutStorageKey<T extends { background_image_key?: string | null }>(board: T) {
-    const { background_image_key: _key, ...rest } = board;
-    return rest;
 }
 
 @Injectable()
@@ -227,31 +208,7 @@ export class BoardsService {
      */
     async setBackgroundImage(tenantId: string, boardId: string, dto: SetBoardBackgroundImageDto) {
         const board = await this.assertBoard(tenantId, boardId);
-        const { buffer } = parseImageUpload(dto.imageBase64, dto.mimeType);
-
-        if (!this.assets.isEnabled()) {
-            // Distinguishable from a transient failure: this will not fix
-            // itself on retry, and the operator needs to know why.
-            throw new ServiceUnavailableException(
-                'File storage is not configured, so the background could not be saved.',
-            );
-        }
-
-        const stem = (dto.fileName ?? 'background').replace(/\.[^.]+$/, '').slice(0, 100);
-        const safeStem =
-            stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'background';
-
-        let stored: { url: string; publicId: string };
-        try {
-            stored = await this.assets.uploadBuffer(
-                buffer,
-                boardBackgroundFolder(tenantId),
-                safeStem,
-                'image',
-            );
-        } catch {
-            throw new ServiceUnavailableException('The background could not be uploaded.');
-        }
+        const stored = await uploadBackgroundImage(this.assets, boardBackgroundFolder(tenantId), dto);
 
         const updated = await this.db.board.update({
             where: { id: boardId },
@@ -276,11 +233,7 @@ export class BoardsService {
         const board = await this.assertBoard(tenantId, boardId);
         const updated = await this.db.board.update({
             where: { id: boardId },
-            data: {
-                background_color: null,
-                background_image_url: null,
-                background_image_key: null,
-            },
+            data: NO_BACKGROUND,
         });
         if ((board as any).background_image_key) {
             await this.assets.deleteFile((board as any).background_image_key, 'image');

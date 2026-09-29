@@ -6,6 +6,7 @@ import {
     Param,
     Patch,
     Post,
+    Put,
     Query,
     UseGuards,
     UseInterceptors,
@@ -23,6 +24,7 @@ import {
     CreateSprintDto,
     UpdateSprintDto,
 } from './project.dto';
+import { SetBoardBackgroundImageDto } from './board.dto';
 
 @Controller('sprints')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
@@ -77,6 +79,31 @@ export class SprintsController {
         @Body() dto: UpdateSprintDto,
     ) {
         return this.sprints.update(tenant.tenantId, id, dto);
+    }
+
+    /**
+     * The uploaded half of the background; a colour goes through `PATCH :id`.
+     * Split for the reason the board's is: megabytes of base64 that can fail on
+     * their own must not take a rename down with them.
+     *
+     * MANAGE_SPRINTS, like every other change to the sprint: everyone who opens
+     * it sees the background, so it is not a reader's preference.
+     */
+    @Put(':id/background/image')
+    @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
+    setBackgroundImage(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: SetBoardBackgroundImageDto,
+    ) {
+        return this.sprints.setBackgroundImage(tenant.tenantId, id, dto);
+    }
+
+    /** Back to the plain sprint, whichever kind of background it had. */
+    @Delete(':id/background')
+    @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
+    clearBackground(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        return this.sprints.clearBackground(tenant.tenantId, id);
     }
 
     @Post(':id/start')

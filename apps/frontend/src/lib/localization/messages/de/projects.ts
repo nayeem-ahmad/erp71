@@ -888,6 +888,9 @@ export const projectsMessages = {
         focusLane: "Nur diese Bahn zeigen",
         expandAllLanes: "Alle Bahnen aufklappen",
         lanesCollapsed: "{count} eingeklappt",
+        settings: "Sprint-Einstellungen",
+        backgroundHint: "Alle, die diesen Sprint öffnen, sehen ihn.",
+        currentBackground: "Aktueller Sprint-Hintergrund",
     },
 
     burndown: {
