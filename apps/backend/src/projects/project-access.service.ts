@@ -96,6 +96,16 @@ export class ProjectAccessService {
      * is only safe where the caller's `where` provably has none.
      */
     async projectFilter(viewer: ProjectViewer): Promise<Record<string, unknown>> {
+        // Checked before `seesEveryProject`, so a VIEW_ALL_PROJECTS grant picked
+        // up from another role cannot reopen what this scope closed.
+        if (this.memberProjectsOnly(viewer)) {
+            return {
+                OR: [
+                    { manager_id: viewer.userId },
+                    { members: { some: { user_id: viewer.userId } } },
+                ],
+            };
+        }
         if (await this.seesEveryProject(viewer)) return {};
         return {
             OR: [
@@ -137,6 +147,24 @@ export class ProjectAccessService {
         if (viewer.userRole === 'OWNER') return false;
         if (!viewer.userId) return false;
         return viewer.recordScope === TenantRecordScope.OWN;
+    }
+
+    /**
+     * Whether this viewer reaches only the projects they are on.
+     *
+     * The `PROJECT` scope narrows by project rather than by row: every task of a
+     * project they are a member or manager of, whoever it is assigned to, and
+     * nothing of any other project — public or not. That is what a contributor
+     * staffed onto one project needs, and what `OWN` cannot give them: under
+     * `OWN` they lose sight of the rest of the work on the project they belong to.
+     *
+     * Same exemptions as `ownRecordsOnly`: OWNER is never narrow, and a viewer
+     * with no user is the system.
+     */
+    memberProjectsOnly(viewer: ProjectViewer): boolean {
+        if (viewer.userRole === 'OWNER') return false;
+        if (!viewer.userId) return false;
+        return viewer.recordScope === TenantRecordScope.PROJECT;
     }
 
     /**
@@ -206,7 +234,9 @@ export class ProjectAccessService {
      */
     async timeFilter(viewer: ProjectViewer): Promise<Record<string, unknown>> {
         const visibility = await this.relatedFilter(viewer);
-        if (!this.ownRecordsOnly(viewer)) return visibility;
+        // Hours stay personal under `PROJECT` too. The scope opens a project's
+        // tasks to its members; it does not open what each of them logged.
+        if (!this.ownRecordsOnly(viewer) && !this.memberProjectsOnly(viewer)) return visibility;
 
         const employeeId = await this.viewerEmployeeId(viewer);
         const own = employeeId

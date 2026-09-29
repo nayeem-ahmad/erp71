@@ -132,8 +132,19 @@ export class BoardsService {
     async list(viewer: ProjectViewer) {
         const tenantId = viewer.tenantId;
         const visible = await this.access.taskFilter(viewer);
+        // Someone reaching only the projects they are on is shown only the boards
+        // that hold a card from one of them, plus the ones they made — a board
+        // they just created is empty, and must not vanish from under them.
+        const boardScope = this.access.memberProjectsOnly(viewer)
+            ? {
+                  OR: [
+                      { created_by: viewer.userId },
+                      { cards: { some: { task: { deleted_at: null, ...visible } } } },
+                  ],
+              }
+            : {};
         const boards = await this.db.board.findMany({
-            where: { tenant_id: tenantId, deleted_at: null },
+            where: { tenant_id: tenantId, deleted_at: null, ...boardScope } as never,
             orderBy: { created_at: 'desc' },
             // Scoped to non-deleted tasks: an unscoped count would advertise
             // cards that findOne() then hides, e.g. "8 cards" rendering as 6.
@@ -312,6 +323,17 @@ export class BoardsService {
                 include: { task: { include: CARD_TASK_INCLUDE } },
             }),
         ]);
+
+        // The list hides such a board, so opening it by address must not be the
+        // way round that. Missing rather than forbidden, like a private project:
+        // the answer must not confirm the board exists.
+        if (
+            this.access.memberProjectsOnly(viewer) &&
+            (board as any).created_by !== viewer.userId &&
+            !(cards as any[]).some((row) => !row.task?.deleted_at)
+        ) {
+            throw new NotFoundException('Board not found');
+        }
 
         const columnOfStatus = new Map<string, string>();
         for (const column of boardColumns as any[]) {

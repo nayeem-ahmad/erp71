@@ -380,4 +380,57 @@ describe('ProjectAccessService', () => {
             );
         });
     });
+
+    // `PROJECT` narrows by project rather than by row: everything in the projects
+    // the member is on, nothing of any other project, and only their own hours.
+    describe('member-projects scope', () => {
+        const projectStaff: ProjectViewer = { ...staff, recordScope: 'PROJECT' };
+        const memberProjects = {
+            OR: [{ manager_id: 'user-staff' }, { members: { some: { user_id: 'user-staff' } } }],
+        };
+
+        it('is not "own records only" — a teammate task in their project is theirs to read', () => {
+            expect(service.ownRecordsOnly(projectStaff)).toBe(false);
+            expect(service.memberProjectsOnly(projectStaff)).toBe(true);
+        });
+
+        it('is wide for the workspace owner even when the request says PROJECT', () => {
+            expect(service.memberProjectsOnly({ ...owner, recordScope: 'PROJECT' })).toBe(false);
+        });
+
+        it('admits the manager and members only — a public project they are not on stays hidden', async () => {
+            await expect(service.projectFilter(projectStaff)).resolves.toEqual(memberProjects);
+        });
+
+        it('is not widened by a VIEW_ALL_PROJECTS grant', async () => {
+            db.userStorePermission.findFirst.mockResolvedValue({ id: 'grant-1' });
+
+            // Same rule as the row scope: the restriction wins, so a stray grant on
+            // another role cannot reopen the projects this one was meant to close.
+            await expect(service.projectFilter(projectStaff)).resolves.toEqual(memberProjects);
+        });
+
+        it('reads every task of those projects, whoever it is assigned to', async () => {
+            await expect(service.taskFilter(projectStaff)).resolves.toEqual({
+                AND: [{ project: memberProjects }],
+            });
+        });
+
+        it('still narrows an hour log to the viewer own entries', async () => {
+            await expect(service.timeFilter(projectStaff)).resolves.toEqual({
+                AND: [{ project: memberProjects }, { user_id: 'user-staff' }],
+            });
+        });
+
+        it('reports a project they are not on as missing, not forbidden', async () => {
+            db.project.findFirst.mockResolvedValue(null);
+
+            await expect(service.assertProjectVisible(projectStaff, 'project-9')).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
+            expect(db.project.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining(memberProjects) }),
+            );
+        });
+    });
 });

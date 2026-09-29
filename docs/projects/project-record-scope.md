@@ -19,14 +19,15 @@ already promised "their tasks and their time log".
 
 ## The rule
 
-`TenantRole.record_scope` is `ALL` or `OWN`. A member's effective scope is the
-**widest** across the roles they hold, resolved once per request by
-`TenantInterceptor` and carried on `TenantContext.recordScope`.
+`TenantRole.record_scope` is `ALL`, `PROJECT` or `OWN`. A member's effective scope
+is the **widest** across the roles they hold (`ALL` > `PROJECT` > `OWN`), resolved
+once per request by `TenantInterceptor` and carried on `TenantContext.recordScope`.
 
-| Effective scope | What they read inside a project they can reach |
-|---|---|
-| `ALL` (default) | every task and every hour log, as before |
-| `OWN` | tasks assigned to them (by login **or** employee card) or raised by them; hour logs they logged |
+| Effective scope | Which projects they reach | What they read inside them |
+|---|---|---|
+| `ALL` (default) | public projects, plus private ones they are on | every task and every hour log, as before |
+| `PROJECT` | **only** projects they are a member or manager of — a public project they are not on stays hidden | every task, whoever it is assigned to; hour logs they logged |
+| `OWN` | as `ALL` | tasks assigned to them (by login **or** employee card) or raised by them; hour logs they logged |
 
 `OWNER` is always `ALL`: they bypass every permission check in the app, so a
 restriction they could not lift would be the only one of its kind. A member with
@@ -42,6 +43,28 @@ one row a contributor must never lose sight of is the one they just wrote.
 with no login (Phase 2). Someone who has both can hold work under either, so
 "my tasks" asks about both — the employee id is resolved from `Employee.user_id`
 on the narrow path only.
+
+### `PROJECT` — "member projects only" (added 2026-09-29)
+
+`OWN` narrows by *row*, which left a contributor staffed onto a project unable to
+see the rest of the work on it — a board of the team's tasks showed them only the
+cards assigned to them. `PROJECT` narrows by *project* instead: everything in the
+projects they belong to, nothing of any other.
+
+- **`projectFilter`** admits only `manager_id` = me or a `ProjectMember` row, so
+  a public project they are not on is as invisible as a private one. It is
+  checked *before* `VIEW_ALL_PROJECTS`, so a stray grant from another role cannot
+  reopen what this scope closed. Every project-scoped query (projects list, tasks,
+  cards, stories, sprints, attachments) inherits it.
+- **`taskFilter`** adds no row clause — visibility alone decides.
+- **`timeFilter`** still narrows to their own hours: the scope opens a project's
+  tasks to its members, not what each of them logged.
+- **Boards** are workspace-level, so they cannot be hidden by project. A board is
+  listed, and opens, only when it holds a live card from one of the member's
+  projects, or when they created it (so a board they just made does not vanish).
+  Any other board is a 404 by address, not a 403.
+
+Choosing it is an explicit act on a role in Team → Roles; no existing role changes.
 
 ---
 

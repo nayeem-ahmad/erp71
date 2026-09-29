@@ -4084,7 +4084,7 @@ export const api = {
         name: string;
         description?: string;
         permissions: string[];
-        recordScope?: 'ALL' | 'OWN';
+        recordScope?: 'ALL' | 'PROJECT' | 'OWN';
     }) =>
         fetchWithAuth('/team/roles', {
             method: 'POST',
@@ -4097,7 +4097,7 @@ export const api = {
             name?: string;
             description?: string;
             permissions?: string[];
-            recordScope?: 'ALL' | 'OWN';
+            recordScope?: 'ALL' | 'PROJECT' | 'OWN';
         },
     ) =>
         fetchWithAuth(`/team/roles/${id}`, {

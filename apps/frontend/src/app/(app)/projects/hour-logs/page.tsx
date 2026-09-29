@@ -43,7 +43,7 @@ import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { labelClass } from '@/components/projects/board-tasks';
 import { useServerList } from '@/hooks/useServerList';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
-import { readsOwnRecordsOnly, tenantFromMe } from '@/lib/permissions';
+import { readsOwnHoursOnly, tenantFromMe } from '@/lib/permissions';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -247,7 +247,8 @@ export default function HourLogsPage() {
     const [typing, setTyping] = useState(false);
     const [projects, setProjects] = useState<ProjectOption[]>([]);
     const [people, setPeople] = useState<PersonOption[]>([]);
-    // A narrowed member only ever reads their own hours, so the person filter
+    // A narrowed member (own records, or member projects only) only ever reads
+    // their own hours, so the person filter
     // has one option and no purpose. The server enforces it either way.
     const [ownRecordsOnly, setOwnRecordsOnly] = useState(false);
     const [tags, setTags] = useState<HourLogTag[]>([]);
@@ -308,7 +309,7 @@ export default function HourLogsPage() {
                     tenants?: { id: string; role?: string | null; record_scope?: string | null }[];
                 };
                 setOwnRecordsOnly(
-                    readsOwnRecordsOnly(tenantFromMe(payload, getWorkspaceItem('tenant_id'))),
+                    readsOwnHoursOnly(tenantFromMe(payload, getWorkspaceItem('tenant_id'))),
                 );
             })
             .catch(() => setOwnRecordsOnly(false));

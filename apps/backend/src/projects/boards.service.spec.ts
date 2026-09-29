@@ -147,6 +147,88 @@ describe('BoardsService', () => {
         ]);
     });
 
+    // A contributor staffed onto one project must not be shown the rest of the
+    // workspace's boards: a board is listed and opens only when it holds a card
+    // from a project they are on.
+    describe('member-projects scope', () => {
+        const projectViewer: ProjectViewer = { ...staff('u2'), recordScope: 'PROJECT' } as ProjectViewer;
+        const memberProjects = {
+            OR: [{ manager_id: 'u2' }, { members: { some: { user_id: 'u2' } } }],
+        };
+        const visibleCard = { deleted_at: null, AND: [{ project: memberProjects }] };
+
+        it('lists only boards holding a card from their projects, plus boards they made', async () => {
+            await service.list(projectViewer);
+
+            expect(db.board.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        tenant_id: tenantId,
+                        deleted_at: null,
+                        OR: [{ created_by: 'u2' }, { cards: { some: { task: visibleCard } } }],
+                    },
+                }),
+            );
+        });
+
+        it('counts only the cards they can see', async () => {
+            await service.list(projectViewer);
+
+            expect(db.board.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    include: { _count: { select: { cards: { where: { task: visibleCard } } } } },
+                }),
+            );
+        });
+
+        it('adds no board clause for anyone else', async () => {
+            await service.list(staff('u2'));
+
+            const { where } = db.board.findMany.mock.calls[0][0];
+            expect(where).toEqual({ tenant_id: tenantId, deleted_at: null });
+        });
+
+        it('opens a board that holds a card of theirs, showing every card of their projects', async () => {
+            db.boardTask.findMany.mockResolvedValue([card('k1', 'p1', 's1'), card('k2', 'p1', 's1')]);
+
+            const board = await service.findOne(projectViewer, 'b1');
+
+            expect(board.columns.flatMap((column: any) => column.cards)).toHaveLength(2);
+            expect(db.boardTask.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ task: { AND: [{ project: memberProjects }] } }),
+                }),
+            );
+        });
+
+        it('reports a board with none of their projects on it as missing, not forbidden', async () => {
+            db.boardTask.findMany.mockResolvedValue([]);
+
+            await expect(service.findOne(projectViewer, 'b1')).rejects.toBeInstanceOf(NotFoundException);
+        });
+
+        it('still opens an empty board they made themselves', async () => {
+            db.board.findFirst.mockResolvedValue({
+                id: 'b1',
+                tenant_id: tenantId,
+                name: 'Mine',
+                description: null,
+                created_by: 'u2',
+            });
+            db.boardTask.findMany.mockResolvedValue([]);
+
+            await expect(service.findOne(projectViewer, 'b1')).resolves.toBeDefined();
+        });
+
+        it('does not count a soft-deleted task as a card of theirs', async () => {
+            const gone = card('k1', 'p1', 's1');
+            gone.task.deleted_at = new Date() as never;
+            db.boardTask.findMany.mockResolvedValue([gone]);
+
+            await expect(service.findOne(projectViewer, 'b1')).rejects.toBeInstanceOf(NotFoundException);
+        });
+    });
+
     it('groups cards into the column their status is bound to', async () => {
         db.boardTask.findMany.mockResolvedValue([card('k1', 'p1', 's1'), card('k2', 'p2', 's2')]);
 
