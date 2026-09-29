@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { StorePermission } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
-import { STORE_PERMISSIONS_KEY } from './store-permission.decorator';
+import { STORE_PERMISSIONS_ANY_KEY, STORE_PERMISSIONS_KEY } from './store-permission.decorator';
 
 @Injectable()
 export class StorePermissionGuard implements CanActivate {
@@ -23,8 +23,16 @@ export class StorePermissionGuard implements CanActivate {
             [context.getHandler(), context.getClass()],
         );
 
+        // Any one of these is enough; see `RequireAnyStorePermission`.
+        const requiredAny = this.reflector.getAllAndOverride<StorePermission[]>(
+            STORE_PERMISSIONS_ANY_KEY,
+            [context.getHandler(), context.getClass()],
+        );
+        const hasAll = Boolean(required && required.length > 0);
+        const hasAny = Boolean(requiredAny && requiredAny.length > 0);
+
         // No permissions required — allow through
-        if (!required || required.length === 0) {
+        if (!hasAll && !hasAny) {
             return true;
         }
 
@@ -84,27 +92,33 @@ export class StorePermissionGuard implements CanActivate {
 
         request.storeId = storeId;
 
-        // Check each required permission — all must be granted
         // Scoped to the workspace being accessed, not only the store. The store id
         // is a request header, and a member can own a workspace — and a store with
         // every permission — of their own; without `tenant_id` here, sending that
         // store's id would satisfy every check in a workspace they merely belong to.
+        const wanted = [...(hasAll ? required : []), ...(hasAny ? requiredAny : [])];
         const grants = await this.db.userStorePermission.findMany({
             where: {
                 user_id: userId,
                 store_id: storeId,
                 tenant_id: tenantId,
-                permission: { in: required as any[] },
+                permission: { in: [...new Set(wanted)] as any[] },
             },
             select: { permission: true },
         });
 
         const grantedSet = new Set(grants.map((g) => g.permission));
-        const missing = required.filter((p) => !grantedSet.has(p as any));
+        const missing = hasAll ? required.filter((p) => !grantedSet.has(p as any)) : [];
 
         if (missing.length > 0) {
             throw new ForbiddenException(
                 `Missing store permissions: ${missing.join(', ')}`,
+            );
+        }
+
+        if (hasAny && !requiredAny.some((p) => grantedSet.has(p as any))) {
+            throw new ForbiddenException(
+                `Requires one of these store permissions: ${requiredAny.join(', ')}`,
             );
         }
 

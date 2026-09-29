@@ -14,7 +14,7 @@ import {
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
-import { RequireStorePermission } from '../auth/store-permission.decorator';
+import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CrmMessageTemplatesService } from './crm-message-templates.service';
@@ -24,6 +24,7 @@ import {
     UpdateMessageTemplateDto,
 } from './message-template.dto';
 
+import { CRM_STAFF } from '../auth/permission-sets';
 @Controller('crm/message-templates')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -35,6 +36,7 @@ export class CrmMessageTemplatesController {
      * both offer the list. Only the mutations require MANAGE_CRM_SETTINGS, which
      * matches how the CRM Setup lists next door are gated.
      */
+    @RequireAnyStorePermission(...CRM_STAFF)
     @Get()
     list(@Tenant() tenant: TenantContext, @Query() query: ListMessageTemplatesDto) {
         return this.service.list(tenant.tenantId, query);

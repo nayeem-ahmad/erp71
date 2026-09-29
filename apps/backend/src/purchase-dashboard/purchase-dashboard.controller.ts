@@ -8,23 +8,28 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PurchaseDashboardService } from './purchase-dashboard.service';
 import { PurchaseDashboardQueryDto } from './purchase-dashboard.dto';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { PURCHASE_READ } from '../auth/permission-sets';
 /**
  * Guarded exactly as `PurchaseReportsController` is — the same role gate and the
  * same `BASIC` floor. This dashboard is those reports folded into one payload,
  * so anything it shows was already reachable by whoever can reach it.
  */
 @Controller('purchases/dashboard')
-@UseGuards(JwtAuthGuard, TenantRoleGuard, SubscriptionAccessGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard, TenantRoleGuard, SubscriptionAccessGuard)
 @UseInterceptors(TenantInterceptor)
 @RequiresPlan('BASIC')
 export class PurchaseDashboardController {
     constructor(private readonly service: PurchaseDashboardService) {}
 
+    @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('overview')
     getOverview(@Tenant() tenant: TenantContext, @Query() query: PurchaseDashboardQueryDto) {
         return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
     }
 
+    @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: PurchaseDashboardQueryDto) {
         return this.service.getTrends(tenant.tenantId, query, tenant.timezone);

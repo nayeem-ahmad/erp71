@@ -5,12 +5,16 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CreateInventoryShrinkageDto, ShrinkageDirection } from './inventory-shrinkage.dto';
 import { InventoryShrinkageService } from './inventory-shrinkage.service';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { SHRINKAGE_STAFF } from '../auth/permission-sets';
 @Controller('inventory-shrinkage')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class InventoryShrinkageController {
     constructor(private readonly service: InventoryShrinkageService) {}
 
+    @RequireAnyStorePermission(...SHRINKAGE_STAFF)
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateInventoryShrinkageDto) {
         return this.service.create(tenant.tenantId, dto);
@@ -21,6 +25,7 @@ export class InventoryShrinkageController {
      * Omitted returns both — this is the entry log, where seeing the two
      * together is the point; the reports scope themselves instead.
      */
+    @RequireAnyStorePermission(...SHRINKAGE_STAFF)
     @Get()
     findAll(
         @Tenant() tenant: TenantContext,
@@ -36,6 +41,7 @@ export class InventoryShrinkageController {
         });
     }
 
+    @RequireAnyStorePermission(...SHRINKAGE_STAFF)
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.findOne(tenant.tenantId, id);

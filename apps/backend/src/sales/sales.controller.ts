@@ -5,10 +5,11 @@ import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
 import { CancelEntryDto } from '../common/cancel-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
-import { RequireStorePermission } from '../auth/store-permission.decorator';
+import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
+import { SALES_READ, SALE_DELETE, SALE_WRITE } from '../auth/permission-sets';
 // `StorePermissionGuard` is class-wide but only the cancel route names a
 // permission; the guard is a no-op for a handler that requires none, so every
 // other route keeps the access it had.
@@ -18,11 +19,13 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 export class SalesController {
     constructor(private readonly salesService: SalesService) { }
 
+    @RequireAnyStorePermission(...SALE_WRITE)
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateSaleDto) {
         return this.salesService.create(tenant.tenantId, tenant.userId, dto);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
@@ -50,16 +53,19 @@ export class SalesController {
         });
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get(':id')
     async findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.salesService.findOne(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get(':id/invoice')
     async getInvoice(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.salesService.getInvoiceData(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...SALE_WRITE)
     @Post(':id/finalize')
     async finalize(
         @Tenant() tenant: TenantContext,
@@ -69,6 +75,7 @@ export class SalesController {
         return this.salesService.finalizeDraft(tenant.tenantId, tenant.userId, id, dto);
     }
 
+    @RequireAnyStorePermission(...SALE_WRITE)
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSaleDto) {
         return this.salesService.update(tenant.tenantId, id, dto);
@@ -88,6 +95,7 @@ export class SalesController {
         return this.salesService.cancel(tenant.tenantId, tenant.userId, id, dto.note);
     }
 
+    @RequireAnyStorePermission(...SALE_DELETE)
     @Delete(':id')
     async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.salesService.remove(tenant.tenantId, id);

@@ -293,15 +293,20 @@ export default function SalesPage() {
                                     <Edit2 className="w-4 h-4" />
                                 </Link>
                             )}
-                            <button
-                                type="button"
-                                onClick={() => handleDelete(sale)}
-                                disabled={deletingId === sale.id}
-                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:text-gray-300 transition-colors"
-                                title={t.common.delete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
+                            {/* Deleting reverses a posted sale, so it needs the same
+                                permission as cancelling one — `DELETE /sales/:id` answers
+                                403 without it, and a button that can only fail is noise. */}
+                            {canCancel && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleDelete(sale)}
+                                    disabled={deletingId === sale.id}
+                                    className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:text-gray-300 transition-colors"
+                                    title={t.common.delete}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            )}
                             <SaleRowOverflowMenu
                                 saleId={sale.id}
                                 label={t.sales.printMenu.moreActions}

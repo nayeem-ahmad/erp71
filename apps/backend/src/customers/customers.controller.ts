@@ -13,11 +13,12 @@ import {
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
-import { RequireStorePermission } from '../auth/store-permission.decorator';
+import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ImportRowsDto } from '../common/import.dto';
 
+import { CUSTOMER_CREDIT_READ, CUSTOMER_CREDIT_WRITE, CUSTOMER_READ, CUSTOMER_WRITE } from '../auth/permission-sets';
 // `StorePermissionGuard` is class-wide but only the write-off routes name a
 // permission, so every other route behaves exactly as before — the guard is a
 // no-op without `@RequireStorePermission`. Same arrangement as
@@ -31,21 +32,25 @@ export class CustomersController {
         private readonly segmentsService: SegmentsService,
     ) {}
 
+    @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateCustomerDto) {
         return this.customersService.create(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get('segment-stats')
     async getSegmentStats(@Tenant() tenant: TenantContext) {
         return this.customersService.getSegmentStats(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Post('run-segmentation')
     async runSegmentation(@Tenant() tenant: TenantContext) {
         return this.segmentsService.runForTenant(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
@@ -72,6 +77,7 @@ export class CustomersController {
         });
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
     @Get('credit/payments')
     async listCreditPayments(
         @Tenant() tenant: TenantContext,
@@ -80,6 +86,7 @@ export class CustomersController {
         return this.customersService.listCreditPayments(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
     @Get('credit/payments/:paymentId')
     async getCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -88,6 +95,7 @@ export class CustomersController {
         return this.customersService.getCreditPayment(tenant.tenantId, paymentId);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
     @Patch('credit/payments/:paymentId')
     async updateCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -97,6 +105,7 @@ export class CustomersController {
         return this.customersService.updateCreditPayment(tenant.tenantId, paymentId, dto, tenant.storeId);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
     @Delete('credit/payments/:paymentId')
     async deleteCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -105,21 +114,25 @@ export class CustomersController {
         return this.customersService.deleteCreditPayment(tenant.tenantId, paymentId);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Post('segments/evaluate')
     async evaluateSegments(@Tenant() tenant: TenantContext) {
         return this.segmentsService.evaluateForTenant(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Post('import')
     importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
         return this.customersService.importRows(tenant.tenantId, body.rows, body.mode);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get(':id')
     async findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.customersService.findOne(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get(':id/history')
     async getHistory(
         @Tenant() tenant: TenantContext,
@@ -137,11 +150,13 @@ export class CustomersController {
         });
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get(':id/analytics')
     async getAnalytics(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.customersService.getAnalytics(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
     @Get(':id/credit')
     async getCreditLedger(
         @Tenant() tenant: TenantContext,
@@ -159,6 +174,7 @@ export class CustomersController {
         });
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
     @Get(':id/gl-ledger')
     async getGlLedger(
         @Tenant() tenant: TenantContext,
@@ -169,6 +185,7 @@ export class CustomersController {
         return this.customersService.getGlLedger(tenant.tenantId, id, { from, to });
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
     @Post(':id/credit/payment')
     async recordCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -219,11 +236,13 @@ export class CustomersController {
         );
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
     @Get('reports/due-aging')
     async getDueAgingReport(@Tenant() tenant: TenantContext) {
         return this.customersService.getDueAgingReport(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCustomerDto) {
         return this.customersService.update(tenant.tenantId, id, dto);

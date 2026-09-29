@@ -3,7 +3,7 @@ import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequiresPlan } from '../auth/subscription-access.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
-import { RequireStorePermission } from '../auth/store-permission.decorator';
+import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
@@ -29,6 +29,7 @@ import {
 import { SalesReportsService } from './sales-reports.service';
 import { SalesLineItemsService } from './sales-line-items.service';
 
+import { SALES_READ } from '../auth/permission-sets';
 @Controller('sales-reports')
 @UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
 @UseInterceptors(TenantInterceptor)
@@ -39,16 +40,19 @@ export class SalesReportsController {
         private readonly lineItems: SalesLineItemsService,
     ) {}
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('summary')
     getSalesSummary(@Tenant() tenant: TenantContext, @Query() query: GetSalesSummaryDto) {
         return this.service.getSalesSummary(tenant.tenantId, query, tenant.timezone);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('by-product')
     getSalesByProduct(@Tenant() tenant: TenantContext, @Query() query: GetSalesByProductDto) {
         return this.service.getSalesByProduct(tenant.tenantId, query);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('by-category')
     getSalesByCategory(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCategoryDto) {
         return this.service.getSalesByCategory(tenant.tenantId, query);
@@ -66,6 +70,7 @@ export class SalesReportsController {
         return this.service.getBranchReport(tenant.tenantId, query);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('by-customer')
     getSalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCustomerDto) {
         return this.service.getSalesByCustomer(tenant.tenantId, query);
@@ -75,21 +80,25 @@ export class SalesReportsController {
      * Every sale line, searchable. No financial-report permission: it shows
      * what was sold and at what price, never what it cost.
      */
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('line-items')
     getSalesLineItems(@Tenant() tenant: TenantContext, @Query() query: GetSalesLineItemsDto) {
         return this.lineItems.getSalesLineItems(tenant.tenantId, query, tenant.timezone);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('monthly-by-customer')
     getMonthlySalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetMonthlySalesByCustomerDto) {
         return this.service.getMonthlySalesByCustomer(tenant.tenantId, query);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('trend')
     getSalesTrend(@Tenant() tenant: TenantContext, @Query() query: GetSalesTrendDto) {
         return this.service.getSalesTrend(tenant.tenantId, query, tenant.timezone);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('breakdown')
     getSalesBreakdown(@Tenant() tenant: TenantContext, @Query() query: GetSalesBreakdownDto) {
         return this.service.getSalesBreakdown(tenant.tenantId, query, tenant.timezone);

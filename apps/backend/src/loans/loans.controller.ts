@@ -21,32 +21,40 @@ import {
 } from './loans.dto';
 import { LoansService } from './loans.service';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { LOANS_READ, LOANS_WRITE } from '../auth/permission-sets';
 @Controller('loans')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class LoansController {
     constructor(private readonly service: LoansService) {}
 
+    @RequireAnyStorePermission(...LOANS_READ)
     @Get()
     list(@Tenant() tenant: TenantContext, @Query() query: ListLoansQueryDto) {
         return this.service.listLoans(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
+    @RequireAnyStorePermission(...LOANS_READ)
     @Get('summary')
     getSummary(@Tenant() tenant: TenantContext) {
         return this.service.getSummary(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...LOANS_READ)
     @Get(':id')
     get(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.getLoan(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...LOANS_WRITE)
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateLoanDto) {
         return this.service.createLoan(tenant.tenantId, tenant.userId, dto);
     }
 
+    @RequireAnyStorePermission(...LOANS_WRITE)
     @Patch(':id')
     update(
         @Tenant() tenant: TenantContext,
@@ -56,11 +64,13 @@ export class LoansController {
         return this.service.updateLoan(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...LOANS_WRITE)
     @Delete(':id')
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.deleteLoan(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...LOANS_WRITE)
     @Post(':id/payments')
     addPayment(
         @Tenant() tenant: TenantContext,
@@ -70,6 +80,7 @@ export class LoansController {
         return this.service.addPayment(tenant.tenantId, tenant.userId, id, dto);
     }
 
+    @RequireAnyStorePermission(...LOANS_WRITE)
     @Delete(':id/payments/:paymentId')
     deletePayment(
         @Tenant() tenant: TenantContext,

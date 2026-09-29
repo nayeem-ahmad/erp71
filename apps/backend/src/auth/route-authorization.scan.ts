@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { STORE_PERMISSIONS_KEY } from './store-permission.decorator';
+import { STORE_PERMISSIONS_ANY_KEY, STORE_PERMISSIONS_KEY } from './store-permission.decorator';
 import { TENANT_ROLES_KEY } from './tenant-roles.decorator';
 
 /**
@@ -32,6 +32,8 @@ export interface RouteInfo {
     route: string;
     file: string;
     gate: RouteGate;
+    /** Permissions the route declares: all of `all`, and one of `any`. */
+    requires: { all: string[]; any: string[] };
 }
 
 const GUARDS_METADATA = '__guards__';
@@ -89,6 +91,7 @@ export function scanRoutes(srcRoot: string): RouteInfo[] {
             const controller = exported as { name: string; prototype: Record<string, unknown> };
             const classGuards = guardNames(controller);
             const classPermission = Reflect.getMetadata(STORE_PERMISSIONS_KEY, controller) as unknown[] | undefined;
+            const classAny = Reflect.getMetadata(STORE_PERMISSIONS_ANY_KEY, controller) as unknown[] | undefined;
             const classRoles = Reflect.getMetadata(TENANT_ROLES_KEY, controller) as unknown[] | undefined;
             const prefix = Reflect.getMetadata(PATH_METADATA, controller);
 
@@ -102,14 +105,20 @@ export function scanRoutes(srcRoot: string): RouteInfo[] {
                 const permissions = (Reflect.getMetadata(STORE_PERMISSIONS_KEY, handler) ?? classPermission) as
                     | unknown[]
                     | undefined;
+                const permissionsAny = (Reflect.getMetadata(STORE_PERMISSIONS_ANY_KEY, handler) ?? classAny) as
+                    | unknown[]
+                    | undefined;
                 const roles = (Reflect.getMetadata(TENANT_ROLES_KEY, handler) ?? classRoles) as unknown[] | undefined;
+                const hasPermission =
+                    Boolean(permissions && permissions.length > 0) ||
+                    Boolean(permissionsAny && permissionsAny.length > 0);
 
                 let gate: RouteGate;
                 if ([...guards].some((guard) => PURPOSE_GUARDS.has(guard))) gate = 'purpose-guard';
                 else if (![...guards].some((guard) => IDENTITY_GUARDS.has(guard))) gate = 'public';
                 // A permission or role is only enforced when its guard is actually
                 // listed: a decorator with no guard beside it does nothing.
-                else if (guards.has('StorePermissionGuard') && permissions && permissions.length > 0) gate = 'permission';
+                else if (guards.has('StorePermissionGuard') && hasPermission) gate = 'permission';
                 else if (guards.has('TenantRoleGuard') && roles && roles.length > 0) gate = 'role';
                 else gate = 'open';
 
@@ -119,6 +128,10 @@ export function scanRoutes(srcRoot: string): RouteInfo[] {
                     route: joinRoute(prefix, Reflect.getMetadata(PATH_METADATA, handler)),
                     file: path.relative(srcRoot, file),
                     gate,
+                    requires: {
+                        all: (permissions ?? []) as string[],
+                        any: (permissionsAny ?? []) as string[],
+                    },
                 });
             }
         }

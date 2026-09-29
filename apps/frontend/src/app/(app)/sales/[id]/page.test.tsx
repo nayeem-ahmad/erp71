@@ -512,7 +512,26 @@ describe('SaleDetailPage — drafts', () => {
     });
 });
 
+// Deleting reverses a posted sale, so it needs the permission cancelling does
+// (`DELETE /sales/:id` is gated on CANCEL_ENTRY). The button is hidden without it
+// rather than shown and left to 403.
+const signInWithCancelPermission = () =>
+    getApi().getMe.mockResolvedValue({
+        tenants: [{ id: 't1', role: 'OWNER', permissions: ['CANCEL_ENTRY'] }],
+    });
+
 describe('SaleDetailPage — delete', () => {
+    beforeEach(() => signInWithCancelPermission());
+
+    it('hides Delete from a member who cannot cancel entries', async () => {
+        getApi().getMe.mockResolvedValue({
+            tenants: [{ id: 't1', role: 'CASHIER', permissions: ['CREATE_SALE'] }],
+        });
+        await renderPage();
+
+        expect(screen.queryByRole('button', { name: /^delete$/i })).toBeNull();
+    });
+
     it('deletes after confirmation and returns to the list', async () => {
         window.confirm = jest.fn(() => true);
         await renderPage();
