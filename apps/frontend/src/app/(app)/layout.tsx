@@ -644,6 +644,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 accountingOnlyMode={accountingOnlyMode}
                 posEnabled={posEnabled}
                 planFeatures={planFeatures}
+                memberPermissions={perms}
+                memberIsOwner={owner}
                 compactNav={useCompactChrome}
                 isOpen={mobileNavOpen}
                 onClose={() => setMobileNavOpen(false)}

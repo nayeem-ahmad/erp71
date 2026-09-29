@@ -374,6 +374,133 @@ function layoutNode(id: string, parentId: string | null, sortOrder: number, visi
 }
 
 /**
+ * What a member must hold to see a nav node, by registry id — **any one** of the
+ * listed permissions is enough.
+ *
+ * A tag on a module or subgroup covers everything under it, so most modules are
+ * tagged once and only the links that need a narrower key carry their own. A node
+ * with no entry is open to every member (Dashboard, What's new, Profile). Owners
+ * are never filtered; the sidebar skips this map for them.
+ *
+ * This decides what is *shown*, not what is allowed — the API enforces access on
+ * its own. It exists so a member is not offered pages that can only refuse them.
+ *
+ * Deliberately generous at module level (every permission that opens at least one
+ * page in the module), because a wrong entry here hides a page someone needs,
+ * while a missing one only leaves a menu item that already existed. Link-level
+ * tags are added only where the page is useless without the one permission. The
+ * built-in role templates are pinned by `navigation.test.ts`: each must still see
+ * its own module.
+ */
+const SALES_ANY = [
+  'CREATE_SALE',
+  'CREATE_SALES_ORDER',
+  'CREATE_QUOTATION',
+  'CREATE_RETURN',
+  'VIEW_CUSTOMER_CREDIT',
+  'MANAGE_CUSTOMER_CREDIT',
+  'WRITE_OFF_CUSTOMER_DEBT',
+  'EDIT_PRODUCT_PRICES',
+  'VIEW_CONSOLIDATED_REPORTS',
+] as const;
+const PURCHASE_ANY = [
+  'CREATE_PURCHASE',
+  'EDIT_SUPPLIERS',
+  'CREATE_PRODUCT_DEMAND',
+  'APPROVE_PRODUCT_DEMAND',
+  'VIEW_CONSOLIDATED_REPORTS',
+] as const;
+const INVENTORY_ANY = [
+  'VIEW_PRODUCT_CATALOG',
+  'EDIT_PRODUCTS',
+  'EDIT_PRODUCT_PRICES',
+  'EDIT_BRANDS',
+  'CREATE_INVENTORY_MOVEMENTS',
+  'CREATE_GOODS_TRANSFER',
+  'APPROVE_GOODS_TRANSFER',
+  'STOCK_TAKE',
+  'CREATE_PRODUCT_DEMAND',
+  'APPROVE_PRODUCT_DEMAND',
+  'VIEW_CONSOLIDATED_REPORTS',
+] as const;
+const CRM_ANY = [
+  'VIEW_CRM_INTERACTIONS',
+  'CREATE_CRM_INTERACTIONS',
+  'MANAGE_CRM_TASKS',
+  'APPROVE_CRM_ACTIVITY',
+  'VIEW_LEADS',
+  'MANAGE_LEADS',
+  'VIEW_LEAD_CONVERSATIONS',
+  'CREATE_LEAD_CONVERSATIONS',
+  'MANAGE_CRM_SETTINGS',
+] as const;
+const HR_ANY = ['VIEW_HR', 'MANAGE_HR', 'VIEW_PAYROLL'] as const;
+/** Tenant configuration screens: whoever administers users, branches or counters. */
+const SETTINGS_ANY = ['MANAGE_USERS', 'MANAGE_STORES', 'MANAGE_COUNTERS'] as const;
+
+export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
+  sales: SALES_ANY,
+  'sales.pos': ['CREATE_SALE'],
+  'sales.new': ['CREATE_SALE'],
+  'sales.cashier-sessions': ['CREATE_SALE', 'MANAGE_COUNTERS'],
+  'sales.order-flow.quotes': ['CREATE_QUOTATION'],
+  'sales.order-flow.orders': ['CREATE_SALES_ORDER'],
+  'sales.order-flow.returns': ['CREATE_RETURN'],
+
+  storefront: [
+    'MANAGE_STOREFRONT_PAGES',
+    'VIEW_BLOG',
+    'MANAGE_BLOG',
+    'PUBLISH_BLOG',
+    'CREATE_SALE',
+    'MANAGE_USERS',
+  ],
+  'storefront.blog': ['VIEW_BLOG', 'MANAGE_BLOG', 'PUBLISH_BLOG'],
+
+  purchase: PURCHASE_ANY,
+  'purchase.setup.suppliers': ['EDIT_SUPPLIERS', 'CREATE_PURCHASE'],
+
+  imports: ['VIEW_IMPORTS', 'MANAGE_IMPORTS', 'MANAGE_IMPORT_COSTS'],
+
+  inventory: INVENTORY_ANY,
+
+  manufacturing: [
+    'CREATE_INVENTORY_MOVEMENTS',
+    'STOCK_TAKE',
+    'EDIT_PRODUCTS',
+    'CREATE_GOODS_TRANSFER',
+  ],
+
+  // Every Projects read is `VIEW_PROJECTS` on the API, so only the screen that
+  // is useless without its own management permission carries a tag.
+  'projects.setup': ['MANAGE_PROJECT_SETTINGS'],
+
+  crm: CRM_ANY,
+
+  hr: HR_ANY,
+  'hr.payroll': ['VIEW_PAYROLL', 'MANAGE_HR'],
+  'hr.reports.payroll-cost': ['VIEW_PAYROLL', 'MANAGE_HR'],
+  'hr.reports.wages-register': ['VIEW_PAYROLL', 'MANAGE_HR'],
+
+  'account-settings.localization': SETTINGS_ANY,
+  'account-settings.branding': SETTINGS_ANY,
+  'account-settings.tax': SETTINGS_ANY,
+  'account-settings.loyalty': SETTINGS_ANY,
+  'account-settings.sms': SETTINGS_ANY,
+  'account-settings.report-emails': SETTINGS_ANY,
+  'account-settings.counters': ['MANAGE_COUNTERS', 'MANAGE_STORES'],
+  'account-settings.sales': SETTINGS_ANY,
+  'account-settings.print-templates': SETTINGS_ANY,
+  'account-settings.payment-methods': SETTINGS_ANY,
+  'account-settings.discount-codes': SETTINGS_ANY,
+  'account-settings.data': SETTINGS_ANY,
+  'account-settings.sms-credits': ['MANAGE_USERS'],
+  'account-settings.ai-credits': ['MANAGE_USERS'],
+
+  chat: ['USE_TEAM_CHAT'],
+};
+
+/**
  * Default tenant sidebar tree — mirrors the original hardcoded Sidebar structure.
  *
  * The 2026-09-08 Imports split promoted the `purchase.imports` subgroup to a
