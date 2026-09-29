@@ -35,15 +35,15 @@ export function filterNavByPermissions(
     const held = new Set(viewer.permissions);
 
     const result: ResolvedNavModule[] = [];
-    for (const module of modules) {
-        if (!clears(module, held)) continue;
-        if (!module.children) {
-            result.push(module);
+    for (const navModule of modules) {
+        if (!clears(navModule, held)) continue;
+        if (!navModule.children) {
+            result.push(navModule);
             continue;
         }
 
         const children: ResolvedNavChild[] = [];
-        for (const child of module.children) {
+        for (const child of navModule.children) {
             if (!clears(child, held)) continue;
             if ('type' in child) {
                 const links = child.children.filter((link: ResolvedNavLink) => clears(link, held));
@@ -55,8 +55,8 @@ export function filterNavByPermissions(
 
         // A module that started with children and lost them all has nothing to
         // show; the sidebar would otherwise draw an empty, unclickable heading.
-        if (children.length > 0 || module.children.length === 0) {
-            result.push({ ...module, children });
+        if (children.length > 0 || navModule.children.length === 0) {
+            result.push({ ...navModule, children });
         }
     }
     return result;
