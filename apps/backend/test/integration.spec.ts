@@ -722,7 +722,7 @@ describe('Integration Tests (e2e)', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .set('x-tenant-id', secondTenantId);
 
-            expect(response.status).toBe(401);
+            expect(response.status).toBe(403);
         });
     });
 
