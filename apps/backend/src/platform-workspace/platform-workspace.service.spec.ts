@@ -19,10 +19,21 @@ describe('PlatformWorkspaceService', () => {
         tenantUser: {
             upsert: jest.fn(),
             createMany: jest.fn(),
+            findMany: jest.fn(),
         },
         user: {
             findMany: jest.fn(),
         },
+        store: {
+            upsert: jest.fn(),
+        },
+        userStoreAccess: {
+            createMany: jest.fn(),
+        },
+        userStorePermission: {
+            createMany: jest.fn(),
+        },
+        $transaction: jest.fn(),
     };
 
     const platformSettings = { isFeatureEnabled: jest.fn() };
@@ -34,6 +45,9 @@ describe('PlatformWorkspaceService', () => {
         platformSettings.isFeatureEnabled.mockResolvedValue(true);
         db.user.findMany.mockResolvedValue([{ id: 'admin-1' }, { id: 'admin-2' }]);
         db.tenantUser.createMany.mockResolvedValue({ count: 2 });
+        db.tenantUser.findMany.mockResolvedValue([]);
+        db.store.upsert.mockResolvedValue({ id: 'store-1' });
+        db.$transaction.mockImplementation((fn: (tx: typeof db) => unknown) => fn(db));
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -179,6 +193,85 @@ describe('PlatformWorkspaceService', () => {
             // The caller still gets their own membership, so the pages they just
             // opened work even when the roster query finds nobody.
             expect(db.tenantUser.upsert).toHaveBeenCalled();
+        });
+    });
+
+    // Every permission in the product is granted per store, and a workspace with
+    // no store has nothing to grant it against: an invited Project User was
+    // joined with no permissions at all. Owners never needed one, because
+    // `StorePermissionGuard` lets OWNER through before it looks for a store.
+    describe('store for invited members', () => {
+        const projectUser = {
+            user_id: 'pu-1',
+            roles: [
+                {
+                    tenantRole: {
+                        permissions: [{ permission: 'VIEW_PROJECTS' }, { permission: 'LOG_PROJECT_TIME' }],
+                    },
+                },
+                { tenantRole: { permissions: [{ permission: 'VIEW_PROJECTS' }] } },
+            ],
+        };
+
+        it('gives the workspace one store, reusing it on every later call', async () => {
+            db.tenant.findFirst.mockResolvedValue(workspace);
+
+            await service.resolveForAdmin('admin-1');
+
+            expect(db.store.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id_name: { tenant_id: 'ws-1', name: PLATFORM_WORKSPACE_NAME } },
+                    update: {},
+                    create: { tenant_id: 'ws-1', name: PLATFORM_WORKSPACE_NAME },
+                }),
+            );
+        });
+
+        it('only looks at non-owner members who have no access to that store', async () => {
+            db.tenant.findFirst.mockResolvedValue(workspace);
+
+            await service.resolveForAdmin('admin-1');
+
+            expect(db.tenantUser.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        tenant_id: 'ws-1',
+                        role: { not: 'OWNER' },
+                        user: { storeAccess: { none: { store_id: 'store-1' } } },
+                    },
+                }),
+            );
+        });
+
+        it('backfills a member joined before the store existed with the union of their roles', async () => {
+            db.tenant.findFirst.mockResolvedValue(workspace);
+            db.tenantUser.findMany.mockResolvedValue([projectUser]);
+
+            await service.resolveForAdmin('admin-1');
+
+            expect(db.userStoreAccess.createMany).toHaveBeenCalledWith({
+                data: [{ user_id: 'pu-1', store_id: 'store-1', tenant_id: 'ws-1', access_level: 'STORE_ONLY' }],
+                skipDuplicates: true,
+            });
+            expect(db.userStorePermission.createMany).toHaveBeenCalledWith({
+                data: ['VIEW_PROJECTS', 'LOG_PROJECT_TIME'].map((permission) => ({
+                    user_id: 'pu-1',
+                    store_id: 'store-1',
+                    tenant_id: 'ws-1',
+                    permission,
+                    granted_by: 'admin-1',
+                })),
+                skipDuplicates: true,
+            });
+        });
+
+        it('writes no access when every member already has it', async () => {
+            db.tenant.findFirst.mockResolvedValue(workspace);
+
+            await service.resolveForAdmin('admin-1');
+
+            expect(db.userStoreAccess.createMany).not.toHaveBeenCalled();
+            expect(db.userStorePermission.createMany).not.toHaveBeenCalled();
         });
     });
 });

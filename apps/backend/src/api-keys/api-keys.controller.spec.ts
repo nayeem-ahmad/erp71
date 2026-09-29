@@ -116,7 +116,7 @@ describe('ApiKeysController — subscription guard', () => {
         expect(res.status).toBe(403);
     });
 
-    it('blocks a user who is not a member of the requested tenant with 401', async () => {
+    it('blocks a user who is not a member of the requested tenant with 403', async () => {
         db.tenantUser.findUnique.mockResolvedValue(null);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
@@ -128,6 +128,6 @@ describe('ApiKeysController — subscription guard', () => {
             .get('/api-keys')
             .set('x-tenant-id', 'tenant-1');
 
-        expect(res.status).toBe(401);
+        expect(res.status).toBe(403);
     });
 });

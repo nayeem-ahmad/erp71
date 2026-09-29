@@ -403,7 +403,7 @@ describe('AccountingController — Story 30.1', () => {
             .get('/accounting')
             .set('x-user-id', 'user-missing')
             .set('x-tenant-id', 'tenant-1')
-            .expect(401)
+            .expect(403)
             .expect(({ body }) => {
                 expect(body.message).toBe('Invalid tenant context');
             });

@@ -1,4 +1,4 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SubscriptionAccessGuard } from './subscription-access.guard';
 import {
@@ -176,10 +176,10 @@ describe('SubscriptionAccessGuard', () => {
         await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
     });
 
-    it('throws UnauthorizedException when tenant context is missing', async () => {
+    it('throws ForbiddenException, not a 401, when tenant context is missing', async () => {
         metadataFor(undefined, 'premiumManufacturing');
         const ctx = makeContext();
         (ctx.switchToHttp().getRequest() as any).headers['x-tenant-id'] = undefined;
-        await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+        await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
     });
 });

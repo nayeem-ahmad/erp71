@@ -3,7 +3,6 @@ import {
     ExecutionContext,
     ForbiddenException,
     Injectable,
-    UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../database/database.service';
@@ -33,7 +32,7 @@ export class TenantRoleGuard implements CanActivate {
         const tenantId = Array.isArray(tenantIdHeader) ? tenantIdHeader[0] : tenantIdHeader;
 
         if (!userId || !tenantId) {
-            throw new UnauthorizedException('Missing tenant context');
+            throw new ForbiddenException('Missing tenant context');
         }
 
         const membership = await this.db.tenantUser.findUnique({
@@ -47,7 +46,7 @@ export class TenantRoleGuard implements CanActivate {
         });
 
         if (!membership) {
-            throw new UnauthorizedException('Invalid tenant context');
+            throw new ForbiddenException('Invalid tenant context');
         }
 
         request.tenantRole = membership.role;

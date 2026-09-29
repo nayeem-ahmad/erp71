@@ -64,6 +64,25 @@ type TenantProvisionDto = {
     billingCycle?: BillingCycle;
 };
 
+/**
+ * Whether a membership belongs in the signed-in user's workspace list.
+ *
+ * The platform's own workspace is a tenant row every platform admin belongs
+ * to, but for them it is not a shop to enter: they reach it from the admin
+ * console, and listing it would put "ERP71 Platform" in their account chooser
+ * next to real shops. Anyone else in it — a Project User invited to work on
+ * platform projects — has no admin console, so this list is their only way in.
+ * Hiding it from them left them with no workspace at all, and the shell signed
+ * them out on every login.
+ */
+function isListedMembership(
+    membership: { tenant?: { platform_workspace_key?: string | null } | null } | null | undefined,
+    isPlatformAdmin: boolean,
+): boolean {
+    if (!membership?.tenant) return false;
+    return !(isPlatformAdmin && membership.tenant.platform_workspace_key);
+}
+
 @Injectable()
 export class AuthService {
     constructor(
@@ -838,9 +857,8 @@ export class AuthService {
             where: { id: userId },
             include: {
                 tenantMembers: {
-                    // Same exclusion as `getMe`: the platform's own workspace is
-                    // not one of the shops this identity can sign into.
-                    where: { tenant: { deleted_at: null, platform_workspace_key: null } },
+                    // Filtered by `isListedMembership` below, same as `getMe`.
+                    where: { tenant: { deleted_at: null } },
                     include: {
                         tenant: {
                             include: {
@@ -869,11 +887,13 @@ export class AuthService {
             throw new UnauthorizedException('User not found');
         }
 
-        const tenantMembers = (user.tenantMembers ?? []).filter((membership) => membership?.tenant);
+        const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
+        const tenantMembers = (user.tenantMembers ?? []).filter((membership) =>
+            isListedMembership(membership, isPlatformAdmin),
+        );
         const storeAccess = user.storeAccess ?? [];
         const storePermissions = user.storePermissions ?? [];
 
-        const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
         const payload = { sub: user.id, email: user.email, tv: user.token_version, scope: AUTH_SCOPE_APP };
         const refresh = await this.refreshTokens.issue(user.id, meta, { rememberMe: options.rememberMe });
         return {
@@ -904,13 +924,8 @@ export class AuthService {
             where: { id: userId },
             include: {
                 tenantMembers: {
-                    // The platform's own workspace is a tenant row a platform
-                    // admin is a member of, but it is not a shop they can enter:
-                    // it exists so the project module has somewhere to live, and
-                    // it is reached from the admin console. Listing it here would
-                    // put "ERP71 Platform" in the account chooser next to real
-                    // shops and give it a sidebar full of sales and inventory.
-                    where: { tenant: { deleted_at: null, platform_workspace_key: null } },
+                    // Filtered by `isListedMembership` below.
+                    where: { tenant: { deleted_at: null } },
                     include: {
                         tenant: {
                             include: {
@@ -939,7 +954,10 @@ export class AuthService {
             throw new UnauthorizedException('User not found');
         }
 
-        const tenantMembers = (user.tenantMembers ?? []).filter((membership) => membership?.tenant);
+        const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
+        const tenantMembers = (user.tenantMembers ?? []).filter((membership) =>
+            isListedMembership(membership, isPlatformAdmin),
+        );
         const storeAccess = user.storeAccess ?? [];
         const storePermissions = user.storePermissions ?? [];
 
@@ -963,7 +981,7 @@ export class AuthService {
             email: user.email,
             name: user.name,
             preferred_locale: user.preferred_locale,
-            is_platform_admin: (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email),
+            is_platform_admin: isPlatformAdmin,
             is_demo: this.isDemoAccount(user.email),
             email_verified: !!user.email_verified_at,
             two_factor_enabled: twoFactorEnabled,
@@ -1450,10 +1468,19 @@ export class AuthService {
 
         // Platform switches with this tenant's own ON/OFF overrides applied, so the
         // shell gates on what a super-admin set for *this* workspace.
-        const platformFeatures = await this.platformSettings
+        const tenantFeatures = await this.platformSettings
             .getPlatformFeatures()
             .then((features) => resolveTenantFeatures(features, membership.tenant.feature_overrides))
             .catch(() => DEFAULT_PLATFORM_FEATURES);
+
+        // Only non-admin members ever see this workspace listed (see
+        // `isListedMembership`). It is not a customer shop: it has no plan to
+        // activate, and its Projects module answers to the switch the admin
+        // console already uses for it, not the shops' `projects` switch.
+        const isPlatformWorkspace = Boolean(membership.tenant.platform_workspace_key);
+        const platformFeatures = isPlatformWorkspace
+            ? { ...tenantFeatures, projects: tenantFeatures.platformProjects }
+            : tenantFeatures;
 
         return {
             id: membership.tenant.id,
@@ -1506,7 +1533,8 @@ export class AuthService {
             // shell reads it to show the activation banner, so it rides on the
             // session payload it already fetches rather than costing every page
             // load a second request. See billing/activation-state.util.
-            pending_activation: isPendingActivation(subscription),
+            pending_activation: !isPlatformWorkspace && isPendingActivation(subscription),
+            is_platform_workspace: isPlatformWorkspace,
             subscription: subscription
                 ? {
                       status: subscription.status,

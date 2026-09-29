@@ -4,7 +4,6 @@ import {
     ExecutionContext,
     ForbiddenException,
     BadRequestException,
-    UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { StorePermission } from '@erp71/shared-types';
@@ -53,7 +52,7 @@ export class StorePermissionGuard implements CanActivate {
             });
 
             if (!membership) {
-                throw new UnauthorizedException('Invalid tenant context');
+                throw new ForbiddenException('Invalid tenant context');
             }
 
             userRole = membership.role;

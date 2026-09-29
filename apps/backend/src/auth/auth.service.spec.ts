@@ -617,33 +617,100 @@ describe('AuthService', () => {
         expect(result.tenants[0].storefront_slug).toBe('karim');
     });
 
-    // The platform's own workspace is a tenant a platform admin belongs to, but
-    // it is not a shop: listing it here would put it in the account chooser
-    // beside real workspaces and hand it a sidebar full of sales and inventory.
-    it('getMe never lists the internal platform workspace as a shop', async () => {
-        db.user.findUnique.mockResolvedValue({
+    describe('the platform workspace in getMe', () => {
+        const platformMembership = (role: string) => ({
+            role,
+            tenant_id: 'platform-ws',
+            tenantRole: null,
+            roles: [],
+            tenant: {
+                id: 'platform-ws',
+                name: 'ERP71 Platform',
+                platform_workspace_key: 'platform',
+                default_locale: 'en',
+                subscription: null,
+            },
+        });
+        const userWith = (overrides: Record<string, unknown>) => ({
             id: 'user-1',
-            email: 'admin@example.com',
-            name: 'Admin',
+            name: 'Someone',
             preferred_locale: 'en',
             token_version: 0,
             email_verified_at: null,
             storeAccess: [],
             storePermissions: [],
-            tenantMembers: [],
+            ...overrides,
         });
 
-        await service.getMe('user-1');
-
-        expect(db.user.findUnique).toHaveBeenCalledWith(
-            expect.objectContaining({
-                include: expect.objectContaining({
-                    tenantMembers: expect.objectContaining({
-                        where: { tenant: { deleted_at: null, platform_workspace_key: null } },
-                    }),
+        // For an admin it is not a shop: they reach it from the admin console,
+        // and listing it would put it in their account chooser beside real ones.
+        it('is not listed for a platform admin', async () => {
+            db.user.findUnique.mockResolvedValue(
+                userWith({
+                    email: 'admin@example.com',
+                    is_platform_admin: true,
+                    tenantMembers: [platformMembership('OWNER')],
                 }),
-            }),
-        );
+            );
+
+            const result = await service.getMe('user-1');
+
+            expect(result.tenants).toEqual([]);
+        });
+
+        // Anyone else in it was invited from the Team page and has no admin
+        // console. Hiding it left them with no workspace, and the shell signed
+        // them out on every login.
+        it('is listed for an invited member, as a workspace with nothing to activate', async () => {
+            platformSettings.getPlatformFeatures.mockResolvedValue({
+                feedback: false,
+                support: false,
+                help: false,
+                voice: false,
+                projects: false,
+                platformProjects: true,
+            });
+            db.user.findUnique.mockResolvedValue(
+                userWith({
+                    email: 'contributor@example.com',
+                    is_platform_admin: false,
+                    tenantMembers: [platformMembership('CASHIER')],
+                }),
+            );
+
+            const result = await service.getMe('user-1');
+
+            expect(result.tenants).toHaveLength(1);
+            expect(result.tenants[0]).toEqual(
+                expect.objectContaining({
+                    id: 'platform-ws',
+                    is_platform_workspace: true,
+                    pending_activation: false,
+                }),
+            );
+            // Its Projects module answers to the switch the admin console uses
+            // for it, not the one that decides what shops are sold.
+            expect(result.tenants[0].platform_features.projects).toBe(true);
+        });
+
+        it('leaves an ordinary shop unflagged', async () => {
+            db.user.findUnique.mockResolvedValue(
+                userWith({
+                    email: 'owner@example.com',
+                    tenantMembers: [{
+                        role: 'OWNER',
+                        tenant_id: 'tenant-1',
+                        tenantRole: null,
+                        tenant: { id: 'tenant-1', name: 'Shop', default_locale: 'en', subscription: null },
+                    }],
+                }),
+            );
+
+            const result = await service.getMe('user-1');
+
+            expect(result.tenants[0].is_platform_workspace).toBe(false);
+            expect(result.tenants[0].pending_activation).toBe(true);
+        });
     });
 
     it('updates preferred locale through updateProfile', async () => {
