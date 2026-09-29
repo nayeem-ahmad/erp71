@@ -3,6 +3,9 @@ import { join } from 'path';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HISTORY_LIMIT, RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { DatabaseService } from '../database/database.service';
+import { SprintSnapshotService } from './sprint-snapshot.service';
+
+const snapshots = { refresh: jest.fn().mockResolvedValue(undefined) };
 
 describe('RemainingHoursService', () => {
     let service: RemainingHoursService;
@@ -18,7 +21,11 @@ describe('RemainingHoursService', () => {
         };
 
         const module: TestingModule = await Test.createTestingModule({
-            providers: [RemainingHoursService, { provide: DatabaseService, useValue: db }],
+            providers: [
+                RemainingHoursService,
+                { provide: DatabaseService, useValue: db },
+                { provide: SprintSnapshotService, useValue: snapshots },
+            ],
         }).compile();
 
         service = module.get(RemainingHoursService);
@@ -52,6 +59,18 @@ describe('RemainingHoursService', () => {
     });
 
     describe('write', () => {
+        beforeEach(() => snapshots.refresh.mockClear());
+
+        it('re-records the sprint burndown once the change is written', async () => {
+            await write();
+            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1']);
+        });
+
+        it('leaves the burndown alone when nothing changed', async () => {
+            await write({ newHours: 8 });
+            expect(snapshots.refresh).not.toHaveBeenCalled();
+        });
+
         it('updates the column and logs the change in one call', async () => {
             await write();
 
@@ -144,7 +163,11 @@ describe('RemainingHoursService.history', () => {
             projectTaskRemainingLog: { create: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
         };
         const module: TestingModule = await Test.createTestingModule({
-            providers: [RemainingHoursService, { provide: DatabaseService, useValue: db }],
+            providers: [
+                RemainingHoursService,
+                { provide: DatabaseService, useValue: db },
+                { provide: SprintSnapshotService, useValue: snapshots },
+            ],
         }).compile();
         service = module.get(RemainingHoursService);
     });

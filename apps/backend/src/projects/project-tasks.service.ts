@@ -12,6 +12,7 @@ import { ProjectSettingsService } from './project-settings.service';
 import { ActivityType, ProjectActivityService } from './project-activity.service';
 import { BoardColumnsService, pickColumnForStatus } from './board-columns.service';
 import { syncStoryStatuses } from './story-status.util';
+import { SprintSnapshotService } from './sprint-snapshot.service';
 import {
     CreateChecklistItemDto,
     CreateTaskDto,
@@ -64,6 +65,7 @@ export class ProjectTasksService {
         private readonly activity: ProjectActivityService,
         private readonly access: ProjectAccessService,
         private readonly boardColumns: BoardColumnsService,
+        private readonly snapshots: SprintSnapshotService,
     ) {}
 
     /**
@@ -458,6 +460,8 @@ export class ProjectTasksService {
                 userId,
             });
         }
+        // A task with no hours still raises the sprint's open-task count.
+        await this.snapshots.refresh(tenantId, [dto.sprintId]);
 
         return this.findOne(viewer, task.id);
     }
@@ -742,6 +746,11 @@ export class ProjectTasksService {
         for (const crossing of moved?.crossings ?? []) {
             await this.burnDoneCrossing({ tenantId, userId, projectId, ...crossing });
         }
+
+        // Both sprints when it changed sprint: the one it left loses its hours
+        // and its task. And a Done crossing with no hours left to burn writes
+        // no remaining row, yet still changes the open-task count.
+        await this.snapshots.refresh(tenantId, [task.sprint_id, sprintId]);
 
         return this.findOne(viewer, taskId);
     }
@@ -1064,6 +1073,7 @@ export class ProjectTasksService {
                 userId,
             });
         }
+        await this.snapshots.refresh(tenantId, [task.sprint_id, sprintId]);
 
         return this.findOne(viewer, taskId);
     }
@@ -1075,6 +1085,7 @@ export class ProjectTasksService {
             data: { deleted_at: new Date() },
         });
         await syncStoryStatuses(this.db as never, viewer.tenantId, [task.user_story_id]);
+        await this.snapshots.refresh(viewer.tenantId, [task.sprint_id]);
         return { success: true };
     }
 
@@ -1106,7 +1117,7 @@ export class ProjectTasksService {
 
         const affected = await this.db.projectTask.findMany({
             where: where as never,
-            select: { user_story_id: true },
+            select: { user_story_id: true, sprint_id: true },
         });
         const { count } = await this.db.projectTask.updateMany({
             where: where as never,
@@ -1116,6 +1127,10 @@ export class ProjectTasksService {
             this.db as never,
             viewer.tenantId,
             affected.map((row) => row.user_story_id),
+        );
+        await this.snapshots.refresh(
+            viewer.tenantId,
+            affected.map((row) => row.sprint_id),
         );
 
         return { success: true, deleted: count, skipped: ids.length - count };

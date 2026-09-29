@@ -198,4 +198,40 @@ describe('SprintSnapshotService', () => {
             expect(result).toEqual({ written: 0, skipped: 0 });
         });
     });
+
+    describe('todayKey', () => {
+        it('dates a change by the Dhaka calendar, so an early-morning edit lands on today', () => {
+            // 02:00 on the 5th in Dhaka is still the 4th in UTC.
+            expect(SprintSnapshotService.todayKey(new Date('2026-08-04T20:00:00.000Z'))).toBe('2026-08-05');
+        });
+    });
+
+    describe('refresh', () => {
+        beforeEach(() => {
+            db.sprint.findMany = jest.fn().mockResolvedValue([{ id: 'sprint-1' }]);
+        });
+
+        it("re-records today's point for the running sprints named", async () => {
+            await service.refresh('tenant-1', ['sprint-1', null, 'sprint-1', 'sprint-2']);
+
+            expect(db.sprint.findMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', id: { in: ['sprint-1', 'sprint-2'] }, status: 'ACTIVE' },
+                select: { id: true },
+            });
+            expect(db.sprintSnapshot.upsert).toHaveBeenCalledTimes(1);
+            expect(db.sprintSnapshot.upsert.mock.calls[0][0].where.sprint_id_snapshot_date.sprint_id).toBe(
+                'sprint-1',
+            );
+        });
+
+        it('does nothing for a task in no sprint', async () => {
+            await service.refresh('tenant-1', [null, undefined]);
+            expect(db.sprint.findMany).not.toHaveBeenCalled();
+        });
+
+        it('never fails the edit that triggered it', async () => {
+            db.sprintSnapshot.upsert.mockRejectedValue(new Error('db down'));
+            await expect(service.refresh('tenant-1', ['sprint-1'])).resolves.toBeUndefined();
+        });
+    });
 });

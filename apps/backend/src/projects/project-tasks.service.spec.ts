@@ -6,6 +6,7 @@ import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectAccessService } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
+import { SprintSnapshotService } from './sprint-snapshot.service';
 import { OWNER, narrow, ownTaskOr, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
@@ -16,6 +17,7 @@ describe('ProjectTasksService', () => {
     let activity: { record: jest.Mock; watch: jest.Mock; notifyWatchers: jest.Mock };
     let settings: { defaultTaskStatus: jest.Mock; listTaskStatuses: jest.Mock };
     let boardColumns: { bindProject: jest.Mock };
+    let snapshots: { refresh: jest.Mock };
 
     const todo = { id: 'status-todo', category: 'TODO' };
     const doing = { id: 'status-doing', category: 'IN_PROGRESS' };
@@ -47,6 +49,7 @@ describe('ProjectTasksService', () => {
             listTaskStatuses: jest.fn().mockResolvedValue([todo, doing, done]),
         };
         boardColumns = { bindProject: jest.fn().mockResolvedValue(undefined) };
+        snapshots = { refresh: jest.fn().mockResolvedValue(undefined) };
 
         db = {
             project: {
@@ -126,6 +129,7 @@ describe('ProjectTasksService', () => {
                 { provide: ProjectActivityService, useValue: activity },
                 { provide: ProjectSettingsService, useValue: settings },
                 { provide: BoardColumnsService, useValue: boardColumns },
+                { provide: SprintSnapshotService, useValue: snapshots },
             ],
         }).compile();
 
@@ -757,6 +761,42 @@ describe('ProjectTasksService', () => {
                 (c: any[]) => c[0].where.id === 'task-1',
             );
             expect(moved[0].data.sprint_id).toBeNull();
+        });
+
+        it('re-records the burndown of the sprint it left and the one it joined', async () => {
+            await service.move(OWNER, 'task-1', {
+                statusId: todo.id,
+                sortOrder: 0,
+                sprintId: 'sprint-2',
+            } as never);
+
+            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-2']);
+        });
+
+        it('re-records the burndown on Done even when there were no hours to burn', async () => {
+            // Nothing for the remaining log to write, yet the open-task count moved.
+            db.projectTask.findFirst.mockResolvedValue(task({ remaining_hours: 0 }));
+            db.projectTaskStatus.findFirst.mockResolvedValue(done);
+
+            await service.move(OWNER, 'task-1', { statusId: done.id, sortOrder: 0 } as never);
+
+            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1']);
+        });
+    });
+
+    describe('burndown points', () => {
+        it('re-records the sprint when a task is marked Done through an edit', async () => {
+            db.projectTaskStatus.findFirst.mockResolvedValue(done);
+
+            await service.update(OWNER, 'task-1', { statusId: done.id } as never);
+
+            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1']);
+        });
+
+        it('re-records the sprint a deleted task was in', async () => {
+            await service.remove(OWNER, 'task-1');
+
+            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1']);
         });
     });
 

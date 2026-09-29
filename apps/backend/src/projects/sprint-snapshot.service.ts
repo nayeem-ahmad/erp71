@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { resolveZone, zonedDateString } from '../common/tenant-time.util';
 import { eachDate, fromDateKey, round2, toDateKey } from './burndown.util';
 
 export interface SnapshotFigures {
@@ -19,7 +20,17 @@ export interface SnapshotFigures {
  */
 @Injectable()
 export class SprintSnapshotService {
+    private readonly logger = new Logger(SprintSnapshotService.name);
+
     constructor(private readonly db: DatabaseService) {}
+
+    /**
+     * The day a snapshot taken now belongs to — in Dhaka, not UTC, so an edit
+     * at 02:00 local lands on today rather than overwriting yesterday's point.
+     */
+    static todayKey(now: Date = new Date()): string {
+        return zonedDateString(now, resolveZone());
+    }
 
     /**
      * Figures as they stand right now. Used by the nightly cron for "today".
@@ -127,7 +138,35 @@ export class SprintSnapshotService {
 
     async snapshotToday(tenantId: string, sprintId: string, today = new Date()) {
         const figures = await this.computeCurrent(tenantId, sprintId);
-        return this.writeSnapshot(tenantId, sprintId, toDateKey(today), figures);
+        return this.writeSnapshot(tenantId, sprintId, SprintSnapshotService.todayKey(today), figures);
+    }
+
+    /**
+     * Re-records today's point for each running sprint named, after a change to
+     * one of its tasks — remaining hours, Done or not, joining or leaving the
+     * sprint, a delete. Waiting for the nightly cron left a sprint with no point
+     * for the day until 23:50, and with none at all on a night it missed.
+     *
+     * Only ACTIVE sprints: a planned one has no burndown yet, and a completed
+     * one's last point was frozen when it closed. Never throws — a snapshot is
+     * a cache, and failing the edit that triggered it would be worse than a
+     * stale point the next change or the cron repairs.
+     */
+    async refresh(tenantId: string, sprintIds: Array<string | null | undefined>) {
+        const ids = [...new Set(sprintIds.filter((id): id is string => !!id))];
+        if (ids.length === 0) return;
+        try {
+            const active = await this.db.sprint.findMany({
+                where: { tenant_id: tenantId, id: { in: ids }, status: 'ACTIVE' as never },
+                select: { id: true },
+            });
+            for (const sprint of active) await this.snapshotToday(tenantId, sprint.id);
+        } catch (error) {
+            this.logger.error(
+                `Sprint snapshot refresh failed for ${ids.join(', ')}`,
+                error instanceof Error ? error.stack : String(error),
+            );
+        }
     }
 
     /**

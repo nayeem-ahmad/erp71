@@ -9,7 +9,7 @@ import {
 } from './background-image.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { SprintSnapshotService } from './sprint-snapshot.service';
-import { buildBurndownSeries, toDateKey } from './burndown.util';
+import { buildBurndownSeries, eachDate, toDateKey } from './burndown.util';
 import {
     AssignStoriesToSprintDto,
     AssignTasksToSprintDto,
@@ -273,15 +273,16 @@ export class SprintsService {
     async assignTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {
         const tenantId = viewer.tenantId;
         await this.assertSprint(tenantId, sprintId);
-        const result = await this.db.projectTask.updateMany({
-            where: {
-                tenant_id: tenantId,
-                id: { in: dto.taskIds },
-                deleted_at: null,
-                ...(await this.access.taskFilter(viewer)),
-            } as never,
-            data: { sprint_id: sprintId },
-        });
+        const where = {
+            tenant_id: tenantId,
+            id: { in: dto.taskIds },
+            deleted_at: null,
+            ...(await this.access.taskFilter(viewer)),
+        } as never;
+        // Any sprint these tasks are leaving loses them from its burndown.
+        const leaving = await this.db.projectTask.findMany({ where, select: { sprint_id: true } });
+        const result = await this.db.projectTask.updateMany({ where, data: { sprint_id: sprintId } });
+        await this.snapshots.refresh(tenantId, [sprintId, ...leaving.map((task) => task.sprint_id)]);
         return { assigned: result.count };
     }
 
@@ -307,6 +308,7 @@ export class SprintsService {
             } as never,
             data: { sprint_id: sprintId },
         });
+        await this.snapshots.refresh(tenantId, [sprintId]);
         return { assigned: result.count };
     }
 
@@ -322,6 +324,7 @@ export class SprintsService {
             } as never,
             data: { sprint_id: null },
         });
+        await this.snapshots.refresh(tenantId, [sprintId]);
         return { removed: result.count };
     }
 
@@ -338,10 +341,27 @@ export class SprintsService {
     /** The three series the chart draws, plus the sprint's current totals. */
     async burndown(tenantId: string, sprintId: string) {
         const sprint = await this.assertSprint(tenantId, sprintId);
-        const rows = await this.db.sprintSnapshot.findMany({
-            where: { tenant_id: tenantId, sprint_id: sprintId },
-            orderBy: { snapshot_date: 'asc' },
-        });
+        const today = SprintSnapshotService.todayKey();
+        const findRows = () =>
+            this.db.sprintSnapshot.findMany({
+                where: { tenant_id: tenantId, sprint_id: sprintId },
+                orderBy: { snapshot_date: 'asc' },
+            });
+        let rows = await findRows();
+
+        // A past day with no row — a night the cron missed, or a sprint that
+        // ran before points were recorded on every change — is filled from the
+        // remaining-hours log rather than left as a hole in the line.
+        if (sprint.status !== 'PLANNED') {
+            const have = new Set(rows.map((row) => toDateKey(row.snapshot_date)));
+            const missing = eachDate(sprint.start_date, sprint.end_date).some(
+                (day) => day < today && !have.has(day),
+            );
+            if (missing) {
+                await this.snapshots.rebuild(tenantId, sprintId);
+                rows = await findRows();
+            }
+        }
 
         const snapshots = new Map(
             rows.map((row) => [
@@ -357,6 +377,19 @@ export class SprintsService {
         );
 
         const current = await this.snapshots.computeCurrent(tenantId, sprintId);
+        // Today's point is the live figure while the sprint runs, so the chart
+        // is never a change behind whatever the stored row says.
+        if (
+            sprint.status === 'ACTIVE' &&
+            today >= toDateKey(sprint.start_date) &&
+            today <= toDateKey(sprint.end_date)
+        ) {
+            snapshots.set(today, {
+                remaining: current.remaining_hours,
+                committed: current.committed_hours,
+                open: Math.max(current.task_count - current.done_task_count, 0),
+            });
+        }
         return {
             sprint: {
                 id: sprint.id,
