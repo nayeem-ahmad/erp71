@@ -36,3 +36,17 @@ export function readsOwnRecordsOnly(
     if (!tenant || isOwner(tenant.role)) return false;
     return tenant.record_scope === 'OWN';
 }
+
+/**
+ * Whether this member reads only their own hour logs.
+ *
+ * Wider than `readsOwnRecordsOnly`: the "member projects only" scope opens every
+ * task of a member's projects but keeps hours personal, so both narrowed scopes
+ * end up with a one-option person filter on the hour log.
+ */
+export function readsOwnHoursOnly(
+    tenant: { role?: string | null; record_scope?: string | null } | null | undefined,
+): boolean {
+    if (!tenant || isOwner(tenant.role)) return false;
+    return tenant.record_scope === 'OWN' || tenant.record_scope === 'PROJECT';
+}

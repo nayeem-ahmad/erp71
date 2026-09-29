@@ -1315,6 +1315,8 @@ model TenantUserRole {
 /// unrestricted role mean what an admin expects.
 enum TenantRecordScope {
   ALL
+  /// Only the projects the member belongs to, and every task in them.
+  PROJECT
   OWN
 }
 

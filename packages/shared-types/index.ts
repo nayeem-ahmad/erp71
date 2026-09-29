@@ -326,6 +326,7 @@ export type TenantRoleLevel =
  */
 export const TenantRecordScope = {
   ALL: "ALL",
+  PROJECT: "PROJECT",
   OWN: "OWN",
 } as const;
 export type TenantRecordScope =
@@ -340,6 +341,11 @@ export const TENANT_RECORD_SCOPE_LABELS: Record<
     label: "All records",
     description:
       "Sees every record this role's permissions reach, whoever it belongs to.",
+  },
+  [TenantRecordScope.PROJECT]: {
+    label: "Member projects only",
+    description:
+      "Sees only the projects they are a member of, and everything in them — every task, whoever it is assigned to — plus their own hours. Other projects, and the boards that hold only their tasks, stay hidden.",
   },
   [TenantRecordScope.OWN]: {
     label: "Own records only",
@@ -359,9 +365,15 @@ export function resolveRecordScope(
   scopes: (TenantRecordScope | null | undefined)[],
 ): TenantRecordScope {
   if (scopes.length === 0) return TenantRecordScope.ALL;
-  return scopes.every((scope) => scope === TenantRecordScope.OWN)
-    ? TenantRecordScope.OWN
-    : TenantRecordScope.ALL;
+  // Widest wins, in the order ALL > PROJECT > OWN: `PROJECT` reads more than
+  // `OWN` (every task of its projects, not just the ones assigned to them), so
+  // a member holding both is `PROJECT`, and any unrestricted role makes `ALL`.
+  if (scopes.some((scope) => scope !== TenantRecordScope.OWN && scope !== TenantRecordScope.PROJECT)) {
+    return TenantRecordScope.ALL;
+  }
+  return scopes.some((scope) => scope === TenantRecordScope.PROJECT)
+    ? TenantRecordScope.PROJECT
+    : TenantRecordScope.OWN;
 }
 
 /**

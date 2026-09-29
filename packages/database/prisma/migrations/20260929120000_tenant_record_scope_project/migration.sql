@@ -1,0 +1,15 @@
+-- A third record scope: `PROJECT`, "member projects only".
+--
+-- `OWN` narrows a Project User to the tasks assigned to or raised by them, which
+-- left a contributor unable to see the rest of the work on the very project they
+-- belong to. `PROJECT` narrows by *project* instead: every task of the projects
+-- the member is on (as a member or as the manager), nothing of any other project,
+-- and only their own hour logs. Boards follow — a board is listed and opens only
+-- when it holds a card from one of those projects.
+--
+-- Additive: no existing role changes, since every row keeps the value it has.
+-- Choosing `PROJECT` is an explicit act on a role in the Team page.
+--
+-- Widest wins across a member's roles, ALL > PROJECT > OWN (see
+-- `resolveRecordScope`).
+ALTER TYPE "TenantRecordScope" ADD VALUE IF NOT EXISTS 'PROJECT' BEFORE 'OWN';

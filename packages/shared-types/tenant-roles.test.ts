@@ -5,9 +5,11 @@ import {
     TENANT_ROLE_MODULES,
     TENANT_ROLE_TEMPLATES,
     TENANT_ROLE_TEMPLATE_BY_KEY,
+    TenantRecordScope,
     TenantRoleLevel,
     UserRole,
     resolveBaseUserRole,
+    resolveRecordScope,
     resolveCoarseRolesForNames,
     resolveStrongestBaseUserRole,
 } from "./index";
@@ -185,5 +187,31 @@ describe("resolveCoarseRolesForNames", () => {
 
     it("is empty for no roles at all", () => {
         expect(resolveCoarseRolesForNames([])).toEqual([]);
+    });
+});
+
+describe("resolveRecordScope", () => {
+    const { ALL, PROJECT, OWN } = TenantRecordScope;
+
+    it("is ALL for a member with no roles, so nobody mid-setup is narrowed", () => {
+        expect(resolveRecordScope([])).toBe(ALL);
+    });
+
+    it("is the role's own scope when a member holds one role", () => {
+        expect(resolveRecordScope([OWN])).toBe(OWN);
+        expect(resolveRecordScope([PROJECT])).toBe(PROJECT);
+        expect(resolveRecordScope([ALL])).toBe(ALL);
+    });
+
+    it("resolves widest-wins in the order ALL > PROJECT > OWN", () => {
+        expect(resolveRecordScope([OWN, PROJECT])).toBe(PROJECT);
+        expect(resolveRecordScope([PROJECT, ALL])).toBe(ALL);
+        expect(resolveRecordScope([OWN, ALL])).toBe(ALL);
+        expect(resolveRecordScope([OWN, PROJECT, ALL])).toBe(ALL);
+    });
+
+    it("treats an unset scope as unrestricted rather than narrow", () => {
+        expect(resolveRecordScope([OWN, null])).toBe(ALL);
+        expect(resolveRecordScope([PROJECT, undefined])).toBe(ALL);
     });
 });

@@ -479,6 +479,11 @@ function RolesPanel({
                                                         Own records
                                                     </span>
                                                 )}
+                                                {role.record_scope === TenantRecordScope.PROJECT && (
+                                                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700">
+                                                        Member projects
+                                                    </span>
+                                                )}
                                             </div>
                                             <p className="text-xs text-gray-500 mt-0.5">
                                                 {formatPermCount(role.permissions.length)} · {formatMemberCount(role.member_count ?? 0)}
