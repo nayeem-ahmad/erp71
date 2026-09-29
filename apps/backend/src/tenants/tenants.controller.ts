@@ -12,8 +12,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { SETTINGS_ADMIN } from '../auth/permission-sets';
 @Controller('tenants')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class TenantsController {
     constructor(
@@ -26,6 +29,7 @@ export class TenantsController {
         return this.tenantsService.getStorefrontSettings(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Patch('storefront-settings')
     async updateStorefrontSettings(
         @Tenant() tenant: TenantContext,
@@ -39,6 +43,7 @@ export class TenantsController {
      * settings PATCH above then persists. Throttled like the other image
      * routes: the body carries a whole picture.
      */
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Post('storefront-image')
     @Throttle({ default: { limit: 20, ttl: 60_000 } })
     async uploadStorefrontImage(
@@ -53,6 +58,7 @@ export class TenantsController {
         return this.tenantsService.getBranding(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Patch('branding')
     async updateBranding(
         @Tenant() tenant: TenantContext,
@@ -66,16 +72,19 @@ export class TenantsController {
         return this.tenantsService.getTaxSettings(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Patch('tax-settings')
     async updateTaxSettings(@Tenant() tenant: TenantContext, @Body() dto: UpdateTaxSettingsDto) {
         return this.tenantsService.updateTaxSettings(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Get('sms-settings')
     async getSmsSettings(@Tenant() tenant: TenantContext) {
         return this.tenantsService.getSmsSettings(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Patch('sms-settings')
     async updateSmsSettings(
         @Tenant() tenant: TenantContext,
@@ -84,11 +93,13 @@ export class TenantsController {
         return this.tenantsService.updateSmsSettings(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Get('report-settings')
     async getReportSettings(@Tenant() tenant: TenantContext) {
         return this.tenantsService.getReportSettings(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Patch('report-settings')
     async updateReportSettings(
         @Tenant() tenant: TenantContext,
@@ -102,6 +113,7 @@ export class TenantsController {
         return this.tenantsService.getLocalizationSettings(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Patch('localization-settings')
     async updateLocalizationSettings(
         @Tenant() tenant: TenantContext,

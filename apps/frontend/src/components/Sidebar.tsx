@@ -24,6 +24,7 @@ import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
 import { isItemVisible } from '@/lib/nav-visibility';
+import { filterNavByPermissions } from '@/lib/nav-permission-filter';
 import { buildNavModulesFromLayout, type ResolvedNavChild, type ResolvedNavModule } from '@/lib/nav-resolver';
 import {
     accordionCloseState,
@@ -173,6 +174,8 @@ export default function Sidebar({
     isOpen = false,
     onClose,
     planFeatures = {},
+    memberPermissions,
+    memberIsOwner = false,
 }: {
     canAccessAccounting?: boolean;
     canAccessInventoryReports?: boolean;
@@ -207,6 +210,14 @@ export default function Sidebar({
     onClose?: () => void;
     /** Active tenant plan features, used for per-item entitlement gating */
     planFeatures?: Record<string, unknown>;
+    /**
+     * What the signed-in member holds in this workspace. When given, entries whose
+     * `NAV_PERMISSIONS` tag they do not clear are left out; omit it to show every
+     * entry (the admin console and the portals never pass it).
+     */
+    memberPermissions?: readonly string[];
+    /** The workspace owner is never filtered. */
+    memberIsOwner?: boolean;
 }) {
     const pathname = usePathname();
     const isMdUp = useIsMdUp();
@@ -225,6 +236,10 @@ export default function Sidebar({
     );
     const [searchQuery, setSearchQuery] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const permissionViewer = useMemo(
+        () => (memberPermissions ? { isOwner: memberIsOwner, permissions: memberPermissions } : null),
+        [memberPermissions, memberIsOwner],
+    );
     const modules = useMemo(() => {
         // The employee portal is a single page. It still gets a nav entry so the
         // shell does not render an empty sidebar, and so "where am I" is
@@ -283,7 +298,7 @@ export default function Sidebar({
         }
 
         const sourceLayout = platformAdminMode ? platformAdminLayout : tenantLayout;
-        return buildNavModulesFromLayout(sourceLayout, t as Record<string, unknown>)
+        const resolved = buildNavModulesFromLayout(sourceLayout, t as Record<string, unknown>)
             .filter((module) => {
                 if (platformAdminMode) {
                     if (module.key === 'help') return helpEnabled;
@@ -386,7 +401,14 @@ export default function Sidebar({
                 return module;
             })
             .filter((module) => !module.children || module.children.length > 0);
+
+        // Last, so the plan and feature gates above have already run and this only
+        // has to remove what the member holds no permission for.
+        return permissionViewer && !platformAdminMode
+            ? filterNavByPermissions(resolved, permissionViewer)
+            : resolved;
     }, [
+        permissionViewer,
         refereeMode,
         employeeMode,
         platformAdminMode,

@@ -5,7 +5,7 @@ export async function hasStorePermission(db: any, ctx: TenantContext, permission
     if (ctx.userRole === 'OWNER') return true;
     if (!ctx.storeId) return false;
     const grant = await db.userStorePermission.findFirst({
-        where: { user_id: ctx.userId, store_id: ctx.storeId, permission: permission as any },
+        where: { user_id: ctx.userId, store_id: ctx.storeId, tenant_id: ctx.tenantId, permission: permission as any },
         select: { id: true },
     });
     return Boolean(grant);

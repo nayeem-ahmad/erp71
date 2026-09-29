@@ -6,17 +6,22 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CreateStockTakeSessionDto, UpdateStockTakeCountsDto, UpdateStockTakeStatusDto } from './stock-takes.dto';
 import { StockTakesService } from './stock-takes.service';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { STOCK_TAKE_STAFF } from '../auth/permission-sets';
 @Controller('stock-takes')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class StockTakesController {
     constructor(private readonly service: StockTakesService) {}
 
+    @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateStockTakeSessionDto) {
         return this.service.create(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Get()
     findAll(
         @Tenant() tenant: TenantContext,
@@ -30,21 +35,25 @@ export class StockTakesController {
         });
     }
 
+    @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.findOne(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Patch(':id/counts')
     updateCounts(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateStockTakeCountsDto) {
         return this.service.updateCounts(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Patch(':id/status')
     updateStatus(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateStockTakeStatusDto) {
         return this.service.updateStatus(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Post(':id/post')
     post(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.service.post(tenant.tenantId, id);

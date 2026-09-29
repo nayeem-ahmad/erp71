@@ -6,6 +6,7 @@ import { CrmLeadsController } from './crm-leads.controller';
 import { CrmLeadsService } from './crm-leads.service';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { DatabaseService } from '../database/database.service';
 
@@ -44,6 +45,7 @@ describe('CrmLeadsController — subscription guard', () => {
             ],
         })
             .overrideGuard(JwtAuthGuard).useClass(MockJwtAuthGuard)
+            .overrideGuard(StorePermissionGuard).useValue({ canActivate: () => true })
             .overrideInterceptor(TenantInterceptor).useClass(MockTenantInterceptor)
             .compile();
 

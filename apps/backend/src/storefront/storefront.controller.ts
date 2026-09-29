@@ -27,6 +27,10 @@ import { StorefrontCustomerGuard } from '../auth/storefront-customer.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { STOREFRONT_STAFF } from '../auth/permission-sets';
+
 @Controller('storefront')
 export class StorefrontController {
     constructor(private readonly storefrontService: StorefrontService) {}
@@ -35,8 +39,9 @@ export class StorefrontController {
      * Protected: tenant views their storefront orders.
      * Must be declared BEFORE :slug routes to avoid shadowing.
      */
+    @RequireAnyStorePermission(...STOREFRONT_STAFF)
     @Get('orders')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, StorePermissionGuard)
     @UseInterceptors(TenantInterceptor)
     async getOrders(
         @Tenant() tenant: TenantContext,
@@ -51,8 +56,9 @@ export class StorefrontController {
     }
 
     /** Protected: tenant updates an order status */
+    @RequireAnyStorePermission(...STOREFRONT_STAFF)
     @Patch('orders/:id/status')
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, StorePermissionGuard)
     @UseInterceptors(TenantInterceptor)
     async updateOrderStatus(
         @Tenant() tenant: TenantContext,

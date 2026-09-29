@@ -7,12 +7,16 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { POS_STAFF } from '../auth/permission-sets';
 @Controller('cashier-sessions')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class CashierSessionsController {
   constructor(private readonly cashierSessionsService: CashierSessionsService) {}
 
+  @RequireAnyStorePermission(...POS_STAFF)
   @Post('open')
   async openSession(
     @Tenant() tenant: TenantContext,
@@ -21,6 +25,7 @@ export class CashierSessionsController {
     return this.cashierSessionsService.openSession(tenant.tenantId, tenant.userId, dto);
   }
 
+  @RequireAnyStorePermission(...POS_STAFF)
   @Post(':sessionId/close')
   async closeSession(
     @Tenant() tenant: TenantContext,
@@ -30,6 +35,7 @@ export class CashierSessionsController {
     return this.cashierSessionsService.closeSession(tenant.tenantId, sessionId, dto);
   }
 
+  @RequireAnyStorePermission(...POS_STAFF)
   @Get('open')
   async getOpenSession(
     @Tenant() tenant: TenantContext,
@@ -37,6 +43,7 @@ export class CashierSessionsController {
     return this.cashierSessionsService.getOpenSessionByUser(tenant.tenantId, tenant.userId);
   }
 
+  @RequireAnyStorePermission(...POS_STAFF)
   @Get('store/:storeId')
   async getSessionsByStore(
     @Tenant() tenant: TenantContext,
@@ -49,6 +56,7 @@ export class CashierSessionsController {
    * The floor view: every till open in a store right now, with what each is
    * holding. Ordered before `:sessionId` so "open" is not read as an id.
    */
+  @RequireAnyStorePermission(...POS_STAFF)
   @Get('store/:storeId/open')
   async getOpenSessionsByStore(
     @Tenant() tenant: TenantContext,
@@ -57,6 +65,7 @@ export class CashierSessionsController {
     return this.cashierSessionsService.getOpenSessionsByStore(tenant.tenantId, storeId);
   }
 
+  @RequireAnyStorePermission(...POS_STAFF)
   @Get(':sessionId')
   async getSessionById(
     @Tenant() tenant: TenantContext,
@@ -66,6 +75,7 @@ export class CashierSessionsController {
   }
 
   /** Takings, payment-method breakdown and expected cash for one shift. */
+  @RequireAnyStorePermission(...POS_STAFF)
   @Get(':sessionId/summary')
   async getSessionSummary(
     @Tenant() tenant: TenantContext,
@@ -74,6 +84,7 @@ export class CashierSessionsController {
     return this.cashierSessionsService.getSessionSummary(tenant.tenantId, sessionId);
   }
 
+  @RequireAnyStorePermission(...POS_STAFF)
   @Post(':sessionId/cash-transaction')
   async addCashTransaction(
     @Tenant() tenant: TenantContext,
@@ -89,6 +100,7 @@ export class CashierSessionsController {
     );
   }
 
+  @RequireAnyStorePermission(...POS_STAFF)
   @Get(':sessionId/cash-transactions')
   async getCashTransactions(
     @Tenant() tenant: TenantContext,

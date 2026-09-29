@@ -8,6 +8,8 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { SalesDashboardService } from './sales-dashboard.service';
 import { SalesDashboardQueryDto } from './sales-dashboard.dto';
 
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { SALES_READ } from '../auth/permission-sets';
 /**
  * Guarded exactly as `SalesReportsController` is — the same store-permission
  * guard and the same `BASIC` floor. This dashboard is those reports folded into
@@ -21,11 +23,13 @@ import { SalesDashboardQueryDto } from './sales-dashboard.dto';
 export class SalesDashboardController {
     constructor(private readonly service: SalesDashboardService) {}
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('overview')
     getOverview(@Tenant() tenant: TenantContext, @Query() query: SalesDashboardQueryDto) {
         return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
     }
 
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: SalesDashboardQueryDto) {
         return this.service.getTrends(tenant.tenantId, query, tenant.timezone);

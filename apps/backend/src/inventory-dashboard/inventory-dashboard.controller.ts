@@ -5,6 +5,9 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { InventoryDashboardService } from './inventory-dashboard.service';
 import { InventoryDashboardQueryDto } from './inventory-dashboard.dto';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { INVENTORY_REPORT_READ } from '../auth/permission-sets';
 /**
  * Guarded exactly as `InventoryController` is — `JwtAuthGuard` and the tenant
  * scope, nothing more. Deliberately *not* `@RequiresFeature('premiumInventoryReports')`:
@@ -14,16 +17,18 @@ import { InventoryDashboardQueryDto } from './inventory-dashboard.dto';
  * request — a FREE tenant should get a shorter dashboard, not a 403.
  */
 @Controller('inventory/dashboard')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class InventoryDashboardController {
     constructor(private readonly service: InventoryDashboardService) {}
 
+    @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('overview')
     getOverview(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
         return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
     }
 
+    @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('trends')
     getTrends(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
         return this.service.getTrends(tenant.tenantId, query, tenant.timezone);

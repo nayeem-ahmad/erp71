@@ -24,6 +24,7 @@ export async function canViewPayroll(
         where: {
             user_id: tenant.userId,
             store_id: tenant.storeId,
+            tenant_id: tenant.tenantId,
             permission: StorePermission.VIEW_PAYROLL,
         },
         select: { id: true },

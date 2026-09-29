@@ -415,15 +415,17 @@ function SaleDetailPageContent() {
             >
                 {t.common.back}
             </Link>
-            <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-3 py-2 border border-red-200 rounded text-red-600 hover:bg-red-50 disabled:text-gray-400 text-sm flex items-center gap-1.5"
-            >
-                <Trash2 className="w-4 h-4" />
-                {deleting ? t.sales.detail.deleting : t.common.delete}
-            </button>
+            {canCancel && (
+                <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="px-3 py-2 border border-red-200 rounded text-red-600 hover:bg-red-50 disabled:text-gray-400 text-sm flex items-center gap-1.5"
+                >
+                    <Trash2 className="w-4 h-4" />
+                    {deleting ? t.sales.detail.deleting : t.common.delete}
+                </button>
+            )}
             {duplicateAction}
             {isDraft && (
                 <button
@@ -473,15 +475,17 @@ function SaleDetailPageContent() {
                 {t.common.cancel}
             </button>
             {duplicateAction}
-            <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting || saving}
-                className="px-3 py-2 border border-red-200 rounded text-red-600 hover:bg-red-50 disabled:text-gray-400 text-sm flex items-center gap-1.5"
-            >
-                <Trash2 className="w-4 h-4" />
-                {deleting ? t.sales.detail.deleting : t.common.delete}
-            </button>
+            {canCancel && (
+                <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting || saving}
+                    className="px-3 py-2 border border-red-200 rounded text-red-600 hover:bg-red-50 disabled:text-gray-400 text-sm flex items-center gap-1.5"
+                >
+                    <Trash2 className="w-4 h-4" />
+                    {deleting ? t.sales.detail.deleting : t.common.delete}
+                </button>
+            )}
             <button
                 type="button"
                 onClick={handleSave}

@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+    NAV_PERMISSIONS,
     NAV_REGISTRY,
     NavNodeKind,
     type NavLayoutNode,
@@ -16,6 +17,8 @@ export interface ResolvedNavLink {
     premiumOnly?: boolean;
     entitlement?: string;
     exact?: boolean;
+    /** Any one of these permissions shows the link; absent means open. See `NAV_PERMISSIONS`. */
+    permissions?: readonly string[];
 }
 
 export interface ResolvedNavSubgroup {
@@ -25,6 +28,8 @@ export interface ResolvedNavSubgroup {
     label: string;
     advancedOnly?: boolean;
     entitlement?: string;
+    /** Covers every link in the group, on top of the links' own. */
+    permissions?: readonly string[];
     children: ResolvedNavLink[];
 }
 
@@ -49,6 +54,8 @@ export interface ResolvedNavModule {
      * it in resolution.
      */
     entitlement?: string;
+    /** Covers every child of the module, on top of theirs. */
+    permissions?: readonly string[];
 }
 
 function resolveLabel(messages: Record<string, unknown>, labelKey: string): string {
@@ -94,6 +101,7 @@ function buildChildren(
                 label: resolveLabel(messages, entry.labelKey),
                 advancedOnly: entry.advancedOnly,
                 entitlement: entry.entitlement,
+                permissions: NAV_PERMISSIONS[node.id],
                 children: subgroupChildren,
             });
             continue;
@@ -109,6 +117,7 @@ function buildChildren(
             advancedOnly: entry.advancedOnly,
             premiumOnly: entry.premiumOnly,
             entitlement: entry.entitlement,
+            permissions: NAV_PERMISSIONS[node.id],
         });
     }
 
@@ -142,6 +151,7 @@ export function buildNavModulesFromLayout(
                 platformFeature: entry.platformFeature,
                 soon: entry.soon,
                 entitlement: entry.entitlement,
+                permissions: NAV_PERMISSIONS[node.id],
             });
             continue;
         }
@@ -157,6 +167,7 @@ export function buildNavModulesFromLayout(
                 platformFeature: entry.platformFeature,
                 soon: entry.soon,
                 entitlement: entry.entitlement,
+                permissions: NAV_PERMISSIONS[node.id],
             });
         }
     }

@@ -20,6 +20,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { CATALOG_READ, PRODUCT_WRITE } from '../auth/permission-sets';
 /**
  * Minimal CSV line parser that handles double-quoted fields (including commas
  * inside quotes) and trims surrounding whitespace from unquoted values.
@@ -61,11 +64,12 @@ function parseCsvLine(line: string): string[] {
 }
 
 @Controller('products')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class ProductsController {
     constructor(private readonly productsService: ProductsService) { }
 
+    @RequireAnyStorePermission(...PRODUCT_WRITE)
     @Post('import')
     @UseInterceptors(FileInterceptor('file'))
     async importCsv(
@@ -131,11 +135,13 @@ export class ProductsController {
         };
     }
 
+    @RequireAnyStorePermission(...PRODUCT_WRITE)
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateProductDto) {
         return this.productsService.create(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...CATALOG_READ)
     @Get()
     findAll(
         @Tenant() tenant: TenantContext,
@@ -177,6 +183,7 @@ export class ProductsController {
         });
     }
 
+    @RequireAnyStorePermission(...CATALOG_READ)
     @Get('search/by-quantity')
     searchByQuantity(
         @Tenant() tenant: TenantContext,
@@ -191,6 +198,7 @@ export class ProductsController {
      * The dashboard's low-stock tile. Declared before `:id`, which would
      * otherwise match `low-stock-count` as a product id.
      */
+    @RequireAnyStorePermission(...CATALOG_READ)
     @Get('low-stock-count')
     countLowStock(@Tenant() tenant: TenantContext) {
         return this.productsService.countLowStock(tenant.tenantId);
@@ -201,6 +209,7 @@ export class ProductsController {
      * and purchase entry screens. Declared before `:id` only for readability —
      * the two paths differ in segment count and cannot shadow each other.
      */
+    @RequireAnyStorePermission(...CATALOG_READ)
     @Get(':id/rate-history')
     rateHistory(
         @Tenant() tenant: TenantContext,
@@ -220,11 +229,13 @@ export class ProductsController {
         });
     }
 
+    @RequireAnyStorePermission(...CATALOG_READ)
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.productsService.findOne(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...PRODUCT_WRITE)
     @Patch(':id')
     update(
         @Tenant() tenant: TenantContext,
@@ -234,6 +245,7 @@ export class ProductsController {
         return this.productsService.update(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...PRODUCT_WRITE)
     @Delete(':id')
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.productsService.remove(tenant.tenantId, id);

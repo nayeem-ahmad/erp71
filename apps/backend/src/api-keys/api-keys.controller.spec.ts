@@ -6,6 +6,7 @@ import { ApiKeysController } from './api-keys.controller';
 import { ApiKeysService } from './api-keys.service';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { DatabaseService } from '../database/database.service';
 
@@ -46,6 +47,7 @@ describe('ApiKeysController — subscription guard', () => {
             ],
         })
             .overrideGuard(JwtAuthGuard).useClass(MockJwtAuthGuard)
+            .overrideGuard(StorePermissionGuard).useValue({ canActivate: () => true })
             .overrideInterceptor(TenantInterceptor).useClass(MockTenantInterceptor)
             .compile();
 

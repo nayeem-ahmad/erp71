@@ -22,18 +22,23 @@ import {
     UpdatePrintTemplateDto,
 } from './print-templates.dto';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { PRINT_READ, SETTINGS_ADMIN } from '../auth/permission-sets';
 @Controller('print-templates')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class PrintTemplatesController {
     constructor(private readonly printTemplatesService: PrintTemplatesService) { }
 
+    @RequireAnyStorePermission(...PRINT_READ)
     @Get()
     async list(@Tenant() tenant: TenantContext): Promise<PrintTemplateResponseDto[]> {
         return this.printTemplatesService.list(tenant.tenantId);
     }
 
     /** Effective header config for a document type — what printers call. */
+    @RequireAnyStorePermission(...PRINT_READ)
     @Get('resolve')
     async resolve(
         @Tenant() tenant: TenantContext,
@@ -42,6 +47,7 @@ export class PrintTemplatesController {
         return this.printTemplatesService.resolve(tenant.tenantId, query.docType);
     }
 
+    @RequireAnyStorePermission(...PRINT_READ)
     @Get(':id')
     async get(
         @Tenant() tenant: TenantContext,
@@ -50,6 +56,7 @@ export class PrintTemplatesController {
         return this.printTemplatesService.get(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Post()
     async create(
         @Tenant() tenant: TenantContext,
@@ -58,6 +65,7 @@ export class PrintTemplatesController {
         return this.printTemplatesService.create(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Patch(':id')
     async update(
         @Tenant() tenant: TenantContext,
@@ -67,6 +75,7 @@ export class PrintTemplatesController {
         return this.printTemplatesService.update(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
     @Delete(':id')
     async remove(
         @Tenant() tenant: TenantContext,

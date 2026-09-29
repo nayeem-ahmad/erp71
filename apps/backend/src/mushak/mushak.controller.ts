@@ -1,13 +1,14 @@
 import { Controller, Get, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RequireStorePermission } from '../auth/store-permission.decorator';
+import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { GetMushakPeriodDto, GetSalesBookDto } from './mushak.dto';
 import { MushakService } from './mushak.service';
 
+import { SALES_READ } from '../auth/permission-sets';
 /**
  * NBR Mushak 6.x documents produced from the sales module.
  *
@@ -30,6 +31,7 @@ export class MushakController {
     constructor(private readonly service: MushakService) {}
 
     /** Which 6.x forms this build produces, and whether the issuer is configured. */
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('forms')
     getForms(@Tenant() tenant: TenantContext) {
         return this.service.getFormCatalogue(tenant.tenantId);
@@ -43,12 +45,14 @@ export class MushakController {
     }
 
     /** মূসক-৬.৩ · কর চালানপত্র — the tax invoice for one sale. */
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('6.3/:saleId')
     getTaxInvoice(@Tenant() tenant: TenantContext, @Param('saleId') saleId: string) {
         return this.service.getTaxInvoice(tenant.tenantId, saleId);
     }
 
     /** মূসক-৬.৭ · ক্রেডিট নোট — the credit note for one sales return. */
+    @RequireAnyStorePermission(...SALES_READ)
     @Get('6.7/:returnId')
     getCreditNote(@Tenant() tenant: TenantContext, @Param('returnId') returnId: string) {
         return this.service.getCreditNote(tenant.tenantId, returnId);

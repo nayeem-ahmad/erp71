@@ -37,8 +37,11 @@ import {
     ReviewLeaveRequestDto,
 } from './attendance.dto';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { HR_READ, HR_WRITE } from '../auth/permission-sets';
 @Controller('attendance')
-@UseGuards(JwtAuthGuard, SubscriptionAccessGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
 @RequiresPlan('STANDARD')
 @UseInterceptors(TenantInterceptor)
 export class AttendanceController {
@@ -55,12 +58,14 @@ export class AttendanceController {
     // order, so `DELETE /attendance/punches/x` would otherwise be read as a
     // delete of the attendance record with id `punches`.
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get('punches')
     listPunches(@Tenant() tenant: TenantContext, @Query() query: PunchQueryDto) {
         return this.punches.list(tenant.tenantId, query);
     }
 
     /** One employee's punches for one day, with the summary they produce. */
+    @RequireAnyStorePermission(...HR_READ)
     @Get('punches/day')
     listPunchDay(
         @Tenant() tenant: TenantContext,
@@ -70,11 +75,13 @@ export class AttendanceController {
         return this.punches.listDay(tenant.tenantId, employeeId, date);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('punches')
     createPunch(@Tenant() tenant: TenantContext, @Body() dto: CreatePunchDto) {
         return this.punches.create(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Patch('punches/:id')
     updatePunch(
         @Tenant() tenant: TenantContext,
@@ -84,6 +91,7 @@ export class AttendanceController {
         return this.punches.update(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Delete('punches/:id')
     @HttpCode(HttpStatus.OK)
     deletePunch(@Tenant() tenant: TenantContext, @Param('id') id: string) {
@@ -92,17 +100,20 @@ export class AttendanceController {
 
     // ── Overtime & monthly snapshot ───────────────────────────────────────────
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get('overtime')
     listOvertime(@Tenant() tenant: TenantContext, @Query() query: OvertimeQueryDto) {
         return this.overtime.list(tenant.tenantId, query);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('overtime/generate')
     @HttpCode(HttpStatus.OK)
     generateOvertime(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
         return this.overtime.generateForMonth(tenant.tenantId, dto.year, dto.month);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Patch('overtime/:id/review')
     reviewOvertime(
         @Tenant() tenant: TenantContext,
@@ -112,23 +123,27 @@ export class AttendanceController {
         return this.overtime.review(tenant.tenantId, id, tenant.userId, dto);
     }
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get('month-snapshot')
     listSnapshots(@Tenant() tenant: TenantContext, @Query() query: MonthQueryDto) {
         return this.overtime.listSnapshots(tenant.tenantId, query.year, query.month);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('month-snapshot/build')
     @HttpCode(HttpStatus.OK)
     buildSnapshots(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
         return this.overtime.buildSnapshots(tenant.tenantId, dto.year, dto.month);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('month-snapshot/freeze')
     @HttpCode(HttpStatus.OK)
     freezeMonth(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
         return this.overtime.freezeMonth(tenant.tenantId, dto.year, dto.month);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('month-snapshot/unfreeze')
     @HttpCode(HttpStatus.OK)
     unfreezeMonth(@Tenant() tenant: TenantContext, @Body() dto: MonthQueryDto) {
@@ -141,6 +156,7 @@ export class AttendanceController {
      * Who might be off between two dates. Approved and pending both — the
      * question a manager is asking is not "who is definitely off".
      */
+    @RequireAnyStorePermission(...HR_READ)
     @Get('leave-calendar')
     leaveCalendar(
         @Tenant() tenant: TenantContext,
@@ -155,6 +171,7 @@ export class AttendanceController {
      *
      * Safe to re-run: the carried figure is set, not incremented.
      */
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('leave-carry-forward')
     @HttpCode(HttpStatus.OK)
     carryForward(@Tenant() tenant: TenantContext, @Body() body: { year: number }) {
@@ -168,11 +185,13 @@ export class AttendanceController {
      * controller — an employee needs to know whether self check-in is on to
      * render the button, and none of these fields are sensitive.
      */
+    @RequireAnyStorePermission(...HR_READ)
     @Get('settings')
     getSettings(@Tenant() tenant: TenantContext) {
         return this.capture.getSettings(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Patch('settings')
     updateSettings(@Tenant() tenant: TenantContext, @Body() dto: UpdateAttendanceSettingsDto) {
         return this.capture.updateSettings(tenant.tenantId, dto);
@@ -180,16 +199,19 @@ export class AttendanceController {
 
     // ── Leave Types ───────────────────────────────────────────────────────────
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get('leave-types')
     listLeaveTypes(@Tenant() tenant: TenantContext) {
         return this.svc.listLeaveTypes(tenant.tenantId);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('leave-types')
     createLeaveType(@Tenant() tenant: TenantContext, @Body() dto: CreateLeaveTypeDto) {
         return this.svc.createLeaveType(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Patch('leave-types/:id')
     updateLeaveType(
         @Tenant() tenant: TenantContext,
@@ -199,6 +221,7 @@ export class AttendanceController {
         return this.svc.updateLeaveType(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Delete('leave-types/:id')
     @HttpCode(HttpStatus.OK)
     deleteLeaveType(@Tenant() tenant: TenantContext, @Param('id') id: string) {
@@ -207,11 +230,13 @@ export class AttendanceController {
 
     // ── Attendance Records ────────────────────────────────────────────────────
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post()
     upsertAttendance(@Tenant() tenant: TenantContext, @Body() dto: UpsertAttendanceDto) {
         return this.svc.upsertAttendance(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get()
     listAttendance(
         @Tenant() tenant: TenantContext,
@@ -232,6 +257,7 @@ export class AttendanceController {
         });
     }
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get('summary/:employeeId')
     getAttendanceSummary(
         @Tenant() tenant: TenantContext,
@@ -247,6 +273,7 @@ export class AttendanceController {
         );
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Delete(':id')
     @HttpCode(HttpStatus.OK)
     deleteAttendance(@Tenant() tenant: TenantContext, @Param('id') id: string) {
@@ -255,11 +282,13 @@ export class AttendanceController {
 
     // ── Leave Balances ────────────────────────────────────────────────────────
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get('leave-balances/:employeeId')
     listLeaveBalances(@Tenant() tenant: TenantContext, @Param('employeeId') employeeId: string) {
         return this.svc.listLeaveBalances(tenant.tenantId, employeeId);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('leave-balances')
     setLeaveBalance(@Tenant() tenant: TenantContext, @Body() dto: SetLeaveBalanceDto) {
         return this.svc.setLeaveBalance(tenant.tenantId, dto);
@@ -267,11 +296,13 @@ export class AttendanceController {
 
     // ── Leave Requests ────────────────────────────────────────────────────────
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Post('leave-requests')
     createLeaveRequest(@Tenant() tenant: TenantContext, @Body() dto: CreateLeaveRequestDto) {
         return this.svc.createLeaveRequest(tenant.tenantId, dto);
     }
 
+    @RequireAnyStorePermission(...HR_READ)
     @Get('leave-requests')
     listLeaveRequests(
         @Tenant() tenant: TenantContext,
@@ -288,6 +319,7 @@ export class AttendanceController {
         });
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Patch('leave-requests/:id/review')
     reviewLeaveRequest(
         @Tenant() tenant: TenantContext,
@@ -297,6 +329,7 @@ export class AttendanceController {
         return this.svc.reviewLeaveRequest(tenant.tenantId, id, tenant.userId, dto);
     }
 
+    @RequireAnyStorePermission(...HR_WRITE)
     @Patch('leave-requests/:id/cancel')
     cancelLeaveRequest(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.svc.cancelLeaveRequest(tenant.tenantId, id);

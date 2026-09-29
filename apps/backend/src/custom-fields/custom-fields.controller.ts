@@ -12,12 +12,13 @@ import { CustomFieldEntity } from '@prisma/client';
 import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
-import { RequireStorePermission } from '../auth/store-permission.decorator';
+import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CustomFieldsService } from './custom-fields.service';
 import { SaveCustomFieldsDto } from './custom-fields.dto';
 
+import { CUSTOMER_READ } from '../auth/permission-sets';
 function parseEntity(entity?: string): CustomFieldEntity {
   if (entity === CustomFieldEntity.LEAD) return CustomFieldEntity.LEAD;
   throw new BadRequestException('Unsupported custom-field entity.');
@@ -29,6 +30,7 @@ function parseEntity(entity?: string): CustomFieldEntity {
 export class CustomFieldsController {
   constructor(private readonly service: CustomFieldsService) {}
 
+  @RequireAnyStorePermission(...CUSTOMER_READ)
   @Get()
   list(@Tenant() tenant: TenantContext, @Query('entity') entity?: string) {
     return this.service.listDefinitions(tenant.tenantId, parseEntity(entity));

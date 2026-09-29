@@ -8,19 +8,23 @@ import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { CRM_WRITE } from '../auth/permission-sets';
 /**
  * Photo uploads for leads and contacts alike, which is why this is its own
  * module rather than a route on either: the photo is picked before the record
  * it belongs to exists, so it cannot hang off `/crm/leads/:id`.
  */
 @Controller('crm/photos')
-@UseGuards(JwtAuthGuard, SubscriptionAccessGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
 @RequiresFeature('premiumCrm')
 @UseInterceptors(TenantInterceptor)
 export class CrmPhotosController {
     constructor(private readonly service: CrmPhotosService) {}
 
     /** Throttled like the card-attachment route: the body carries an image. */
+    @RequireAnyStorePermission(...CRM_WRITE)
     @Post()
     @Throttle({ default: { limit: 20, ttl: 60_000 } })
     upload(@Tenant() tenant: TenantContext, @Body() dto: UploadCrmPhotoDto) {

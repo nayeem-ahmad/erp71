@@ -6,17 +6,22 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CreatePurchaseReturnDto, UpdatePurchaseReturnDto } from './purchase-return.dto';
 import { PurchaseReturnsService } from './purchase-returns.service';
 
+import { StorePermissionGuard } from '../auth/store-permission.guard';
+import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
+import { PURCHASE_READ, PURCHASE_RETURN_WRITE } from '../auth/permission-sets';
 @Controller('purchase-returns')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class PurchaseReturnsController {
     constructor(private readonly purchaseReturnsService: PurchaseReturnsService) {}
 
+    @RequireAnyStorePermission(...PURCHASE_RETURN_WRITE)
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreatePurchaseReturnDto) {
         return this.purchaseReturnsService.create(tenant.tenantId, tenant.userId, dto);
     }
 
+    @RequireAnyStorePermission(...PURCHASE_READ)
     @Get()
     findAll(
         @Tenant() tenant: TenantContext,
@@ -30,16 +35,19 @@ export class PurchaseReturnsController {
         });
     }
 
+    @RequireAnyStorePermission(...PURCHASE_READ)
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.purchaseReturnsService.findOne(tenant.tenantId, id);
     }
 
+    @RequireAnyStorePermission(...PURCHASE_RETURN_WRITE)
     @Patch(':id')
     update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdatePurchaseReturnDto) {
         return this.purchaseReturnsService.update(tenant.tenantId, id, dto);
     }
 
+    @RequireAnyStorePermission(...PURCHASE_RETURN_WRITE)
     @Delete(':id')
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.purchaseReturnsService.remove(tenant.tenantId, id);

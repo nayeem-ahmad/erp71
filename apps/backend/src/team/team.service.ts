@@ -47,7 +47,7 @@ export class TeamService {
         }
 
         const grant = await this.db.userStorePermission.findFirst({
-            where: { user_id: ctx.userId, store_id: ctx.storeId, permission: permission as any },
+            where: { user_id: ctx.userId, store_id: ctx.storeId, tenant_id: ctx.tenantId, permission: permission as any },
             select: { id: true },
         });
 
