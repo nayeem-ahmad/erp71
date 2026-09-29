@@ -888,6 +888,9 @@ export const projectsMessages = {
         focusLane: "إظهار هذا المسار فقط",
         expandAllLanes: "توسيع كل المسارات",
         lanesCollapsed: "{count} مطوية",
+        settings: "إعدادات السبرنت",
+        backgroundHint: "يراها كل من يفتح هذا السبرنت.",
+        currentBackground: "خلفية السبرنت الحالية",
     },
 
     burndown: {

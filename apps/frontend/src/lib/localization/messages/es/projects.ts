@@ -888,6 +888,9 @@ export const projectsMessages = {
         focusLane: "Mostrar solo este carril",
         expandAllLanes: "Expandir todos los carriles",
         lanesCollapsed: "{count} contraído(s)",
+        settings: "Ajustes del sprint",
+        backgroundHint: "Todos los que abran este sprint lo verán.",
+        currentBackground: "Fondo actual del sprint",
     },
 
     burndown: {

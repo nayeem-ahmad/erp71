@@ -888,6 +888,9 @@ export const projectsMessages = {
         focusLane: "Tunjukkan lorong ini sahaja",
         expandAllLanes: "Kembangkan semua lorong",
         lanesCollapsed: "{count} dilipat",
+        settings: "Tetapan sprint",
+        backgroundHint: "Semua yang membuka sprint ini akan melihatnya.",
+        currentBackground: "Latar belakang sprint semasa",
     },
 
     burndown: {

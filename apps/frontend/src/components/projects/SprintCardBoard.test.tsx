@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import SprintCardBoard from './SprintCardBoard';
 import { resolveDropTarget } from './board-drag';
+import { DEFAULT_BOARD_VIEW } from './board-view';
 import { toast } from '@/lib/toast';
 import type { StatusColumn, SprintCardTask } from './sprint-cards';
 
@@ -113,5 +114,34 @@ describe('SprintCardBoard', () => {
 
         expect(onOpen).toHaveBeenCalledWith('a');
         expect(onMove).not.toHaveBeenCalled();
+    });
+
+    it('follows the board appearance settings: width, card size and hidden fields', () => {
+        const view = {
+            ...DEFAULT_BOARD_VIEW,
+            density: 'compact' as const,
+            columnWidth: 'wide' as const,
+            fields: { ...DEFAULT_BOARD_VIEW.fields, project: false, assignee: false },
+        };
+        render(
+            <SprintCardBoard
+                lanes={[{ key: 'all', title: null, tasks: [task('a', 'p1')] }]}
+                laneMode="none"
+                columns={columns}
+                busy={false}
+                onOpen={jest.fn()}
+                onReturn={jest.fn()}
+                onMove={jest.fn()}
+                view={view}
+            />,
+        );
+
+        expect(screen.getAllByTestId('sprint-card-column')[0]).toHaveClass('w-80');
+        expect(screen.getByText('Task a')).toHaveClass('text-xs');
+        const card = screen.getByTestId('sprint-card');
+        expect(card).not.toHaveTextContent('P1');
+        expect(card).not.toHaveTextContent('Unassigned');
+        // Details stay on, so the hours are still there.
+        expect(card).toHaveTextContent('2/5h');
     });
 });

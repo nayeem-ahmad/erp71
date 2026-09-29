@@ -5802,6 +5802,18 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /** The sprint's counterpart of `setBoardBackgroundImage`. Returns the updated sprint. */
+    setSprintBackgroundImage: (
+        id: string,
+        data: { imageBase64: string; mimeType?: string; fileName?: string },
+    ) =>
+        fetchWithAuth(`/sprints/${id}/background/image`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    clearSprintBackground: (id: string) =>
+        fetchWithAuth(`/sprints/${id}/background`, { method: 'DELETE' }),
     startSprint: (id: string) => fetchWithAuth(`/sprints/${id}/start`, { method: 'POST' }),
     completeSprint: (id: string) => fetchWithAuth(`/sprints/${id}/complete`, { method: 'POST' }),
     assignTasksToSprint: (id: string, taskIds: string[]) =>

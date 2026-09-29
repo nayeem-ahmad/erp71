@@ -1,5 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { AssetsService } from '../assets/assets.service';
+import {
+    NO_BACKGROUND,
+    uploadBackgroundImage,
+    withoutStorageKey,
+    type BackgroundImageUpload,
+} from './background-image.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { SprintSnapshotService } from './sprint-snapshot.service';
 import { buildBurndownSeries, toDateKey } from './burndown.util';
@@ -10,12 +17,18 @@ import {
     UpdateSprintDto,
 } from './project.dto';
 
+/** Where an uploaded sprint background lands. Per tenant, like a board's. */
+export function sprintBackgroundFolder(tenantId: string): string {
+    return `${tenantId}/project-sprints`;
+}
+
 @Injectable()
 export class SprintsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly snapshots: SprintSnapshotService,
         private readonly access: ProjectAccessService,
+        private readonly assets: AssetsService,
     ) {}
 
     /**
@@ -105,7 +118,7 @@ export class SprintsService {
         }
 
         return sprints.map((sprint) => ({
-            ...sprint,
+            ...withoutStorageKey(sprint),
             estimated_hours: bySprint.get(sprint.id)?.estimated ?? 0,
             remaining_hours: bySprint.get(sprint.id)?.remaining ?? 0,
             projects: projectsBySprint.get(sprint.id) ?? [],
@@ -113,11 +126,7 @@ export class SprintsService {
     }
 
     async findOne(tenantId: string, sprintId: string) {
-        const sprint = await this.db.sprint.findFirst({
-            where: { id: sprintId, tenant_id: tenantId },
-        });
-        if (!sprint) throw new NotFoundException('Sprint not found');
-        return sprint;
+        return withoutStorageKey(await this.assertSprint(tenantId, sprintId));
     }
 
     async create(tenantId: string, dto: CreateSprintDto) {
@@ -137,7 +146,7 @@ export class SprintsService {
     }
 
     async update(tenantId: string, sprintId: string, dto: UpdateSprintDto) {
-        const sprint = await this.findOne(tenantId, sprintId);
+        const sprint = await this.assertSprint(tenantId, sprintId);
 
         const start = dto.startDate ? new Date(dto.startDate) : sprint.start_date;
         const end = dto.endDate ? new Date(dto.endDate) : sprint.end_date;
@@ -147,7 +156,10 @@ export class SprintsService {
             await this.assertNoOtherActive(tenantId, sprintId);
         }
 
-        return this.db.sprint.update({
+        // One background, as on a board: a colour retires the image, file and all.
+        const replacingImage = dto.backgroundColor !== undefined && Boolean(sprint.background_image_key);
+
+        const updated = await this.db.sprint.update({
             where: { id: sprintId },
             data: {
                 ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
@@ -155,8 +167,50 @@ export class SprintsService {
                 ...(dto.startDate !== undefined ? { start_date: start } : {}),
                 ...(dto.endDate !== undefined ? { end_date: end } : {}),
                 ...(dto.status !== undefined ? { status: dto.status as never } : {}),
+                ...(dto.backgroundColor !== undefined
+                    ? { ...NO_BACKGROUND, background_color: dto.backgroundColor }
+                    : {}),
             },
         });
+
+        // After the row, as on a board: a failed delete strands a file, while
+        // the reverse leaves a sprint pointing at an image that is gone.
+        if (replacingImage) await this.assets.deleteFile(sprint.background_image_key!, 'image');
+        return withoutStorageKey(updated);
+    }
+
+    /** Upload an image and hang it behind the sprint's card view. See `BoardsService.setBackgroundImage`. */
+    async setBackgroundImage(tenantId: string, sprintId: string, dto: BackgroundImageUpload) {
+        const sprint = await this.assertSprint(tenantId, sprintId);
+        const stored = await uploadBackgroundImage(this.assets, sprintBackgroundFolder(tenantId), dto);
+
+        const updated = await this.db.sprint.update({
+            where: { id: sprintId },
+            data: {
+                ...NO_BACKGROUND,
+                background_image_url: stored.url,
+                background_image_key: stored.publicId,
+            },
+        });
+
+        const previousKey = sprint.background_image_key;
+        if (previousKey && previousKey !== stored.publicId) {
+            await this.assets.deleteFile(previousKey, 'image');
+        }
+        return withoutStorageKey(updated);
+    }
+
+    /** Back to the plain sprint: all three columns cleared, and the file with them. */
+    async clearBackground(tenantId: string, sprintId: string) {
+        const sprint = await this.assertSprint(tenantId, sprintId);
+        const updated = await this.db.sprint.update({
+            where: { id: sprintId },
+            data: NO_BACKGROUND,
+        });
+        if (sprint.background_image_key) {
+            await this.assets.deleteFile(sprint.background_image_key, 'image');
+        }
+        return withoutStorageKey(updated);
     }
 
     /**
@@ -164,7 +218,7 @@ export class SprintsService {
      * and the burndown has something to anchor its ideal line to.
      */
     async start(tenantId: string, sprintId: string) {
-        const sprint = await this.findOne(tenantId, sprintId);
+        const sprint = await this.assertSprint(tenantId, sprintId);
         if (sprint.status === 'COMPLETED') {
             throw new BadRequestException('That sprint is already complete.');
         }
@@ -175,7 +229,7 @@ export class SprintsService {
             data: { status: 'ACTIVE' as never },
         });
         await this.snapshots.snapshotToday(tenantId, sprintId);
-        return updated;
+        return withoutStorageKey(updated);
     }
 
     /**
@@ -185,7 +239,7 @@ export class SprintsService {
      * the sprint they burned in.
      */
     async complete(tenantId: string, sprintId: string) {
-        const sprint = await this.findOne(tenantId, sprintId);
+        const sprint = await this.assertSprint(tenantId, sprintId);
         await this.snapshots.snapshotToday(tenantId, sprintId);
 
         const carried = await this.db.projectTask.findMany({
@@ -207,7 +261,7 @@ export class SprintsService {
             where: { id: sprintId },
             data: { status: 'COMPLETED' as never },
         });
-        return { ...updated, carried_over: carried.length };
+        return { ...withoutStorageKey(updated), carried_over: carried.length };
     }
 
     /**
@@ -218,7 +272,7 @@ export class SprintsService {
      */
     async assignTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {
         const tenantId = viewer.tenantId;
-        await this.findOne(tenantId, sprintId);
+        await this.assertSprint(tenantId, sprintId);
         const result = await this.db.projectTask.updateMany({
             where: {
                 tenant_id: tenantId,
@@ -240,7 +294,7 @@ export class SprintsService {
      */
     async assignStories(viewer: ProjectViewer, sprintId: string, dto: AssignStoriesToSprintDto) {
         const tenantId = viewer.tenantId;
-        await this.findOne(tenantId, sprintId);
+        await this.assertSprint(tenantId, sprintId);
         if (dto.storyIds.length === 0) return { assigned: 0 };
         const result = await this.db.projectTask.updateMany({
             where: {
@@ -258,7 +312,7 @@ export class SprintsService {
 
     async removeTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {
         const tenantId = viewer.tenantId;
-        await this.findOne(tenantId, sprintId);
+        await this.assertSprint(tenantId, sprintId);
         const result = await this.db.projectTask.updateMany({
             where: {
                 tenant_id: tenantId,
@@ -272,7 +326,7 @@ export class SprintsService {
     }
 
     async remove(tenantId: string, sprintId: string) {
-        await this.findOne(tenantId, sprintId);
+        await this.assertSprint(tenantId, sprintId);
         await this.db.projectTask.updateMany({
             where: { tenant_id: tenantId, sprint_id: sprintId },
             data: { sprint_id: null },
@@ -283,7 +337,7 @@ export class SprintsService {
 
     /** The three series the chart draws, plus the sprint's current totals. */
     async burndown(tenantId: string, sprintId: string) {
-        const sprint = await this.findOne(tenantId, sprintId);
+        const sprint = await this.assertSprint(tenantId, sprintId);
         const rows = await this.db.sprintSnapshot.findMany({
             where: { tenant_id: tenantId, sprint_id: sprintId },
             orderBy: { snapshot_date: 'asc' },
@@ -322,8 +376,17 @@ export class SprintsService {
     }
 
     async rebuildSnapshots(tenantId: string, sprintId: string, overwrite = false) {
-        await this.findOne(tenantId, sprintId);
+        await this.assertSprint(tenantId, sprintId);
         return this.snapshots.rebuild(tenantId, sprintId, { overwrite });
+    }
+
+    /** The whole row, storage key included — for this service's own use, never a response. */
+    private async assertSprint(tenantId: string, sprintId: string) {
+        const sprint = await this.db.sprint.findFirst({
+            where: { id: sprintId, tenant_id: tenantId },
+        });
+        if (!sprint) throw new NotFoundException('Sprint not found');
+        return sprint;
     }
 
     /**

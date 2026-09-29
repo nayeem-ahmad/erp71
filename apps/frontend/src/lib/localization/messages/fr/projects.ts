@@ -888,6 +888,9 @@ export const projectsMessages = {
         focusLane: "Afficher uniquement ce couloir",
         expandAllLanes: "Déplier tous les couloirs",
         lanesCollapsed: "{count} replié(s)",
+        settings: "Paramètres du sprint",
+        backgroundHint: "Toute personne qui ouvre ce sprint le voit.",
+        currentBackground: "Arrière-plan actuel du sprint",
     },
 
     burndown: {

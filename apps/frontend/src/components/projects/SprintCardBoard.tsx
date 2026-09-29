@@ -27,7 +27,15 @@ import {
     projectLabelOf,
     type DueState,
 } from './board-tasks';
-import { CATEGORY_TINT } from './board-view';
+import {
+    DEFAULT_BOARD_VIEW,
+    columnWidthClass,
+    density,
+    motionClass,
+    staggerDelay,
+    tintOf,
+    type BoardView,
+} from './board-view';
 import { NO_LANE, assigneeNameOf, hours, laneKeyOf, sumHours, type SprintLane, type SprintLaneMode } from './sprint-table';
 import { sortOrderForDrop, tasksByColumn, type SprintCardTask, type StatusColumn } from './sprint-cards';
 
@@ -59,6 +67,12 @@ interface DragState {
  * dragging — mouse from anywhere on the card, touch from the grip — so a card
  * moves on a phone too. Dropping a card changes its status; with swimlanes on,
  * a card moves between columns inside its own row.
+ *
+ * It also reads the board's appearance settings (`board-view.ts`) — card size,
+ * column width, column colour, which fields a card shows and motion — so a
+ * reader who has set up how boards look gets the same look here. The swimlanes
+ * and scroll settings are the exceptions: the sprint page has its own lane
+ * picker, and its card view sits in a panel rather than filling the window.
  */
 export default function SprintCardBoard({
     lanes,
@@ -69,11 +83,17 @@ export default function SprintCardBoard({
     onReturn,
     onMove,
     laneControls,
+    view = DEFAULT_BOARD_VIEW,
+    lift = '',
 }: {
     lanes: SprintLane[];
     laneMode: SprintLaneMode;
     columns: StatusColumn[];
     busy: boolean;
+    /** How this reader likes boards to look; see `use-board-view.ts`. */
+    view?: BoardView;
+    /** The shadow that separates a column from a painted background; see `boardColumnLiftClass`. */
+    lift?: string;
     onOpen: (taskId: string) => void;
     onReturn: (task: SprintCardTask) => void;
     onMove: (task: SprintCardTask, statusId: string, sortOrder: number) => void;
@@ -168,8 +188,11 @@ export default function SprintCardBoard({
         onPointerCancel: cancel,
     });
 
-    const renderColumn = (column: StatusColumn, cards: SprintCardTask[], laneKey?: string) => {
-        const tint = CATEGORY_TINT[column.category] ?? CATEGORY_TINT.TODO;
+    const d = density(view);
+    const widthClass = columnWidthClass(view.columnWidth);
+
+    const renderColumn = (column: StatusColumn, cards: SprintCardTask[], columnIndex: number, laneKey?: string) => {
+        const tint = tintOf(view, column.category);
         const left = sumHours(cards).remaining;
         const isTarget =
             drag?.active &&
@@ -179,9 +202,10 @@ export default function SprintCardBoard({
         return (
             <div
                 key={column.key}
-                className={`flex w-72 shrink-0 flex-col rounded-md border bg-gray-50 ${
+                className={`flex ${widthClass} shrink-0 flex-col rounded-md border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${
                     isTarget ? 'border-blue-400 ring-1 ring-blue-300' : 'border-gray-200'
                 }`}
+                style={{ animationDelay: staggerDelay(view, columnIndex) }}
                 data-testid="sprint-card-column"
             >
                 <div className={`h-1 rounded-t-md ${tint.bar}`} aria-hidden />
@@ -199,15 +223,16 @@ export default function SprintCardBoard({
                 <div
                     {...{ [COLUMN_ATTR]: column.key }}
                     {...(laneKey !== undefined ? { [LANE_ATTR]: laneKey } : {})}
-                    className="flex min-h-16 flex-1 flex-col gap-2 p-2 pt-0"
+                    className={`flex min-h-16 flex-1 flex-col pt-0 ${d.columnGap} ${d.columnPad}`}
                 >
                     {cards.map((task, index) => {
                         const showIndicator = isTarget && drag?.target?.index === others.indexOf(task);
                         return (
-                            <div key={task.id} className="flex flex-col gap-2">
+                            <div key={task.id} className={`flex flex-col ${d.columnGap}`}>
                                 {showIndicator && <DropIndicator />}
                                 <SprintCard
                                     task={task}
+                                    view={view}
                                     dragging={Boolean(drag?.active && drag.task.id === task.id)}
                                     busy={busy}
                                     onOpen={() => onOpen(task.id)}
@@ -258,8 +283,13 @@ export default function SprintCardBoard({
                             )}
                             {!collapsed && (
                                 <div className="flex items-stretch gap-3">
-                                    {columns.map((column) =>
-                                        renderColumn(column, byColumn[column.key] ?? [], grouped ? lane.key : undefined),
+                                    {columns.map((column, columnIndex) =>
+                                        renderColumn(
+                                            column,
+                                            byColumn[column.key] ?? [],
+                                            columnIndex,
+                                            grouped ? lane.key : undefined,
+                                        ),
                                     )}
                                 </div>
                             )}
@@ -286,6 +316,8 @@ function DropIndicator() {
 
 function SprintCard({
     task,
+    view,
+    index,
     dragging,
     busy,
     onOpen,
@@ -297,6 +329,7 @@ function SprintCard({
     onPointerCancel,
 }: {
     task: SprintCardTask;
+    view: BoardView;
     index: number;
     dragging: boolean;
     busy: boolean;
@@ -316,8 +349,11 @@ function SprintCard({
     const timerBusy = useProjectTimerStore((state) => state.busy);
     const { start: startTimer, stop: stopTimer } = useProjectTimerActions();
 
-    const cover = coverClass(task.cover_color);
-    const labels = (task.labels ?? []).map((entry) => entry.label);
+    const d = density(view);
+    const show = view.fields;
+
+    const cover = show.cover ? coverClass(task.cover_color) : null;
+    const labels = show.labels ? (task.labels ?? []).map((entry) => entry.label) : [];
     const comments = task._count?.comments ?? 0;
     const subtasks = task._count?.subtasks ?? 0;
     const due = dueStateOf(task.due_date, task.completed_at);
@@ -334,7 +370,32 @@ function SprintCard({
     const estimate = hours(task.estimate_hours);
     const remaining = hours(task.remaining_hours);
 
+    const showBadges = show.badges && Boolean(due || urgent);
+    const showProject = show.project && Boolean(projectLabel);
+    // The hours always have something to say, so "details" on is enough.
+    const showMeta = show.details || show.assignee || showProject;
+
     const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
+    // In the meta row beside the hours it adds to; a card with that row
+    // switched off gets it in the hover toolbar, so the clock can always start.
+    const startButton = timerRunning ? null : (
+        <button
+            type="button"
+            aria-label={tm.start}
+            title={tm.start}
+            tabIndex={-1}
+            onPointerDown={stop}
+            onClick={(e) => {
+                e.stopPropagation();
+                void startTimer({ taskId: task.id, tagIds: [] });
+            }}
+            disabled={timerBusy}
+            className="max-md:min-h-touch max-md:min-w-touch inline-flex items-center justify-center rounded px-1 text-gray-300 transition-colors hover:text-emerald-600 disabled:opacity-40 md:group-hover:text-gray-400"
+        >
+            <Play className="h-3.5 w-3.5" />
+        </button>
+    );
 
     return (
         <article
@@ -353,12 +414,13 @@ function SprintCard({
                 }
             }}
             data-testid="sprint-card"
+            style={{ animationDelay: staggerDelay(view, index) }}
             className={`group relative touch-pan-y overflow-hidden rounded-md border bg-white text-start text-sm shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 md:cursor-grab ${
                 timerRunning ? 'border-emerald-500 ring-1 ring-emerald-300' : 'border-gray-200'
-            } ${dragging ? 'opacity-40' : ''}`}
+            } ${dragging ? 'opacity-40' : ''} ${motionClass(view, 'card')}`}
         >
             {cover && <div aria-hidden className={`h-1.5 w-full ${cover}`} />}
-            <div className="p-2.5">
+            <div className={d.cardPad}>
                 <div className="flex items-start gap-1">
                     <button
                         type="button"
@@ -373,13 +435,14 @@ function SprintCard({
                         <GripVertical className="h-4 w-4" />
                     </button>
                     <p
-                        className={`min-w-0 flex-1 pt-0.5 text-sm font-medium leading-snug ${
+                        className={`min-w-0 flex-1 pt-0.5 ${d.title} ${
                             done ? 'text-gray-500 line-through' : 'text-gray-900'
                         }`}
                     >
                         {task.title}
                     </p>
                     <span className="flex shrink-0 items-center md:absolute md:end-1 md:top-1 md:rounded md:border md:border-gray-200 md:bg-white md:p-0.5 md:opacity-0 md:shadow-sm md:transition-opacity md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+                        {!showMeta && startButton}
                         <button
                             type="button"
                             aria-label={t.projects.sprint.removeFromSprint}
@@ -399,7 +462,7 @@ function SprintCard({
                 </div>
 
                 {labels.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
+                    <div className={`${d.row} flex flex-wrap gap-1`}>
                         {labels.map((label) => (
                             <span
                                 key={label.id}
@@ -412,7 +475,7 @@ function SprintCard({
                 )}
 
                 {timerRunning && (
-                    <div className="mt-1.5 flex items-center gap-1">
+                    <div className={`${d.row} flex items-center gap-1`}>
                         <RunningClock
                             label={tm.running}
                             stopLabel={tm.stop}
@@ -422,8 +485,8 @@ function SprintCard({
                     </div>
                 )}
 
-                {(due || urgent) && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {showBadges && (
+                    <div className={`${d.row} flex flex-wrap items-center gap-1.5`}>
                         {due && <StatusBadge tone={DUE_TONE[due]}>{dueLabel}</StatusBadge>}
                         {urgent && (
                             <StatusBadge tone={task.priority === 'URGENT' ? 'danger' : 'warning'}>
@@ -433,72 +496,63 @@ function SprintCard({
                     </div>
                 )}
 
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-gray-500">
-                    {projectLabel && (
-                        <span
-                            title={task.project?.name ?? undefined}
-                            className="inline-flex min-w-0 max-w-32 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-gray-600"
-                        >
-                            <FolderKanban className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                            <span className="sr-only">{c.project}: </span>
-                            <span className="truncate">{projectLabel}</span>
-                        </span>
-                    )}
-                    {task.userStory && (
-                        <span title={task.userStory.title} className="font-medium text-gray-600">
-                            {task.userStory.code}
-                        </span>
-                    )}
-                    {comments > 0 && (
-                        <span
-                            className="inline-flex items-center gap-1"
-                            aria-label={c.comments.replace('{count}', String(comments))}
-                        >
-                            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-                            {comments}
-                        </span>
-                    )}
-                    {subtasks > 0 && (
-                        <span
-                            className="inline-flex items-center gap-1"
-                            aria-label={c.subtasks.replace('{count}', String(subtasks))}
-                        >
-                            <GitBranch className="h-3.5 w-3.5" aria-hidden />
-                            {subtasks}
-                        </span>
-                    )}
-                    <span className="tabular-nums" title={`${t.projects.sprint.colRemaining} / ${t.projects.sprint.colEstimate}`}>
-                        {remaining}/{estimate}h
-                    </span>
-                    {!timerRunning && (
-                        <button
-                            type="button"
-                            aria-label={tm.start}
-                            title={tm.start}
-                            tabIndex={-1}
-                            onPointerDown={stop}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                void startTimer({ taskId: task.id, tagIds: [] });
-                            }}
-                            disabled={timerBusy}
-                            className="max-md:min-h-touch max-md:min-w-touch inline-flex items-center justify-center rounded px-1 text-gray-300 transition-colors hover:text-emerald-600 disabled:opacity-40 md:group-hover:text-gray-400"
-                        >
-                            <Play className="h-3.5 w-3.5" />
-                        </button>
-                    )}
-                    {assigneeName ? (
-                        <span
-                            title={assigneeName}
-                            aria-label={assigneeName}
-                            className="ms-auto inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-medium text-blue-700"
-                        >
-                            {initialsOf(assigneeName)}
-                        </span>
-                    ) : (
-                        <span className="ms-auto text-gray-400">{c.unassigned}</span>
-                    )}
-                </div>
+                {showMeta && (
+                    <div className={`${d.row} flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-gray-500`}>
+                        {showProject && (
+                            <span
+                                title={task.project?.name ?? undefined}
+                                className="inline-flex min-w-0 max-w-32 items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-gray-600"
+                            >
+                                <FolderKanban className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                <span className="sr-only">{c.project}: </span>
+                                <span className="truncate">{projectLabel}</span>
+                            </span>
+                        )}
+                        {show.details && (
+                            <>
+                                {task.userStory && (
+                                    <span title={task.userStory.title} className="font-medium text-gray-600">
+                                        {task.userStory.code}
+                                    </span>
+                                )}
+                                {comments > 0 && (
+                                    <span
+                                        className="inline-flex items-center gap-1"
+                                        aria-label={c.comments.replace('{count}', String(comments))}
+                                    >
+                                        <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                                        {comments}
+                                    </span>
+                                )}
+                                {subtasks > 0 && (
+                                    <span
+                                        className="inline-flex items-center gap-1"
+                                        aria-label={c.subtasks.replace('{count}', String(subtasks))}
+                                    >
+                                        <GitBranch className="h-3.5 w-3.5" aria-hidden />
+                                        {subtasks}
+                                    </span>
+                                )}
+                                <span className="tabular-nums" title={`${t.projects.sprint.colRemaining} / ${t.projects.sprint.colEstimate}`}>
+                                    {remaining}/{estimate}h
+                                </span>
+                            </>
+                        )}
+                        {startButton}
+                        {show.assignee &&
+                            (assigneeName ? (
+                                <span
+                                    title={assigneeName}
+                                    aria-label={assigneeName}
+                                    className={`ms-auto inline-flex items-center justify-center rounded-full bg-blue-100 font-medium text-blue-700 ${d.avatar}`}
+                                >
+                                    {initialsOf(assigneeName)}
+                                </span>
+                            ) : (
+                                <span className="ms-auto text-gray-400">{c.unassigned}</span>
+                            ))}
+                    </div>
+                )}
             </div>
         </article>
     );
