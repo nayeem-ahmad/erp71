@@ -3,7 +3,6 @@ import {
     ExecutionContext,
     ForbiddenException,
     Injectable,
-    UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../database/database.service';
@@ -58,8 +57,12 @@ export class SubscriptionAccessGuard implements CanActivate {
         const tenantIdHeader = request.headers['x-tenant-id'];
         const tenantId = Array.isArray(tenantIdHeader) ? tenantIdHeader[0] : tenantIdHeader;
 
+        // 403, never 401: the client reads every 401 from an authenticated call as
+        // a dead session and signs the user out. A missing or foreign workspace is
+        // a context problem, not an expired token — a member whose only workspace
+        // `/auth/me` did not list was being logged out on every sign-in.
         if (!userId || !tenantId) {
-            throw new UnauthorizedException('Missing tenant context');
+            throw new ForbiddenException('Missing tenant context');
         }
 
         const membership = await this.db.tenantUser.findUnique({
@@ -72,7 +75,7 @@ export class SubscriptionAccessGuard implements CanActivate {
         });
 
         if (!membership) {
-            throw new UnauthorizedException('Invalid tenant context');
+            throw new ForbiddenException('Invalid tenant context');
         }
 
         const activeAddonStatuses: Array<'ACTIVE' | 'TRIALING'> = ['ACTIVE', 'TRIALING'];

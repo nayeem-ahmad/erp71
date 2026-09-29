@@ -1,4 +1,4 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@erp71/shared-types';
 import { TenantRoleGuard } from './tenant-role.guard';
@@ -76,11 +76,11 @@ describe('TenantRoleGuard', () => {
     it('rejects a request with no tenant context', async () => {
         await expect(
             guard.canActivate(contextFor({ user: { userId: 'u1' }, headers: {} })),
-        ).rejects.toThrow(UnauthorizedException);
+        ).rejects.toThrow(ForbiddenException);
     });
 
     it('rejects a user who is not a member of the tenant', async () => {
         db.tenantUser.findUnique.mockResolvedValue(null);
-        await expect(guard.canActivate(contextFor(request))).rejects.toThrow(UnauthorizedException);
+        await expect(guard.canActivate(contextFor(request))).rejects.toThrow(ForbiddenException);
     });
 });

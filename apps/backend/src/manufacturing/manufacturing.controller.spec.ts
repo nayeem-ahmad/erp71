@@ -183,7 +183,7 @@ describe('ManufacturingController — subscription guard', () => {
         expect(res.status).not.toBe(403);
     });
 
-    it('blocks a user who is not a member of the requested tenant with 401', async () => {
+    it('blocks a user who is not a member of the requested tenant with 403', async () => {
         db.tenantUser.findUnique.mockResolvedValue(null);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
@@ -195,6 +195,6 @@ describe('ManufacturingController — subscription guard', () => {
             .get('/manufacturing/bom')
             .set('x-tenant-id', 'tenant-1');
 
-        expect(res.status).toBe(401);
+        expect(res.status).toBe(403);
     });
 });

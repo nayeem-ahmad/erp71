@@ -105,6 +105,7 @@ export class PlatformWorkspaceService {
         // above should already have covered them — it reads admins the same way
         // `PlatformAdminGuard` does — and this costs one upsert to guarantee it.
         await this.ensureMembership(workspace.id, userId);
+        await this.ensureInvitedMemberStoreAccess(workspace.id, userId);
         return workspace;
     }
 
@@ -125,8 +126,9 @@ export class PlatformWorkspaceService {
                     platform_workspace_key: PLATFORM_WORKSPACE_KEY,
                     // The module is internal tooling, not a subscription: it is
                     // reached from the admin console rather than through a plan,
-                    // so this workspace deliberately has no subscription, no
-                    // stores and no storefront. The override pins the project
+                    // so this workspace deliberately has no subscription and no
+                    // storefront. Its one store exists only to carry invited
+                    // members' permissions — see `ensureInvitedMemberStoreAccess`. The override pins the project
                     // module on for it regardless of the tenant-facing switch,
                     // which is about what shops are sold, not what staff use.
                     feature_overrides: { projects: true },
@@ -170,6 +172,75 @@ export class PlatformWorkspaceService {
             // stepped down on purpose, and a login should not quietly undo that.
             update: {},
         });
+    }
+
+    /**
+     * Give invited members the store their permissions hang on.
+     *
+     * Every permission is granted per store, and invitation acceptance grants
+     * the invited roles against the tenant's first store — or, finding none,
+     * grants nothing. Platform admins never noticed, because they are OWNER and
+     * `StorePermissionGuard` lets OWNER through before it looks for a store. A
+     * Project User invited from the Team page is not, and joined with no
+     * permissions at all.
+     *
+     * So the workspace keeps one store, and any non-owner member without access
+     * to it gets access plus the union of their roles' permissions: the members
+     * who joined before the store existed. Owners are left without store access
+     * on purpose — with none, `TenantInterceptor` resolves no store for them and
+     * the admin console behaves exactly as it did.
+     */
+    private async ensureInvitedMemberStoreAccess(tenantId: string, grantedBy: string): Promise<void> {
+        const store = await this.db.store.upsert({
+            where: { tenant_id_name: { tenant_id: tenantId, name: PLATFORM_WORKSPACE_NAME } },
+            update: {},
+            create: { tenant_id: tenantId, name: PLATFORM_WORKSPACE_NAME },
+            select: { id: true },
+        });
+
+        const members = await this.db.tenantUser.findMany({
+            where: {
+                tenant_id: tenantId,
+                role: { not: 'OWNER' },
+                user: { storeAccess: { none: { store_id: store.id } } },
+            },
+            select: {
+                user_id: true,
+                roles: { select: { tenantRole: { select: { permissions: { select: { permission: true } } } } } },
+            },
+        });
+
+        for (const member of members) {
+            const permissions = [
+                ...new Set(
+                    member.roles.flatMap((assignment) =>
+                        assignment.tenantRole.permissions.map((grant) => grant.permission),
+                    ),
+                ),
+            ];
+
+            await this.db.$transaction(async (tx) => {
+                // `skipDuplicates` because two admins opening the module at once
+                // both see the member as missing; the loser must not throw.
+                await tx.userStoreAccess.createMany({
+                    data: [{ user_id: member.user_id, store_id: store.id, tenant_id: tenantId, access_level: 'STORE_ONLY' }],
+                    skipDuplicates: true,
+                });
+                if (permissions.length === 0) return;
+                await tx.userStorePermission.createMany({
+                    data: permissions.map((permission) => ({
+                        user_id: member.user_id,
+                        store_id: store.id,
+                        tenant_id: tenantId,
+                        permission,
+                        granted_by: grantedBy,
+                    })),
+                    skipDuplicates: true,
+                });
+            });
+
+            this.logger.log(`Gave platform workspace member ${member.user_id} access to its store`);
+        }
     }
 
     /**

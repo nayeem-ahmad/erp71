@@ -4,7 +4,6 @@ import {
     Injectable,
     Logger,
     NotFoundException,
-    UnauthorizedException,
 } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { hasStorePermission } from '../auth/permission.util';
@@ -363,7 +362,7 @@ export class SmsCreditService {
         });
 
         if (!membership) {
-            throw new UnauthorizedException('Invalid tenant context');
+            throw new ForbiddenException('Invalid tenant context');
         }
 
         return membership;
