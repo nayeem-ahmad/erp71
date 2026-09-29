@@ -16,7 +16,7 @@ describe('SprintsService', () => {
     let service: SprintsService;
     let db: any;
     let assets: { isEnabled: jest.Mock; uploadBuffer: jest.Mock; deleteFile: jest.Mock };
-    let snapshots: { snapshotToday: jest.Mock; computeCurrent: jest.Mock; rebuild: jest.Mock };
+    let snapshots: { snapshotToday: jest.Mock; computeCurrent: jest.Mock; rebuild: jest.Mock; refresh: jest.Mock };
 
     const sprint = (overrides: Record<string, unknown> = {}) => ({
         id: 'sprint-1',
@@ -41,6 +41,7 @@ describe('SprintsService', () => {
                 done_task_count: 2,
             }),
             rebuild: jest.fn().mockResolvedValue({ written: 3, skipped: 1 }),
+            refresh: jest.fn().mockResolvedValue(undefined),
         };
 
         db = {
@@ -210,6 +211,44 @@ describe('SprintsService', () => {
             expect(result.current.remaining_hours).toBe(12);
         });
 
+        describe('while the sprint runs', () => {
+            beforeEach(() => {
+                jest.useFakeTimers().setSystemTime(new Date('2026-08-04T06:00:00.000Z'));
+                db.sprint.findFirst.mockResolvedValue(sprint({ status: 'ACTIVE' }));
+            });
+            afterEach(() => jest.useRealTimers());
+
+            it("plots today from the live figures, not the stored row", async () => {
+                const result = await service.burndown('tenant-1', 'sprint-1');
+
+                const today = result.series.find((p: any) => p.date === '2026-08-04');
+                expect(today).toMatchObject({ actual: 12, committed: 40, open: 3 });
+            });
+
+            it('fills past days that have no point from the log', async () => {
+                await service.burndown('tenant-1', 'sprint-1');
+
+                expect(snapshots.rebuild).toHaveBeenCalledWith('tenant-1', 'sprint-1');
+                expect(db.sprintSnapshot.findMany).toHaveBeenCalledTimes(2);
+            });
+
+            it('does not rebuild when every past day already has a point', async () => {
+                db.sprintSnapshot.findMany.mockResolvedValue(
+                    ['2026-08-02', '2026-08-03'].map((day) => ({
+                        snapshot_date: new Date(`${day}T00:00:00.000Z`),
+                        remaining_hours: 40,
+                        committed_hours: 40,
+                        task_count: 5,
+                        done_task_count: 0,
+                    })),
+                );
+
+                await service.burndown('tenant-1', 'sprint-1');
+
+                expect(snapshots.rebuild).not.toHaveBeenCalled();
+            });
+        });
+
         it('still returns a series when no snapshot has ever been written', async () => {
             const result = await service.burndown('tenant-1', 'sprint-1');
             expect(result.series.length).toBeGreaterThan(0);
@@ -239,6 +278,14 @@ describe('SprintsService', () => {
             id: { in: ['task-a', 'task-b'] },
         });
         expect(where).not.toHaveProperty('project_id');
+    });
+
+    it('re-records the burndown of the sprint tasks join and any sprint they leave', async () => {
+        db.projectTask.findMany.mockResolvedValue([{ sprint_id: 'sprint-0' }, { sprint_id: null }]);
+
+        await service.assignTasks(OWNER, 'sprint-1', { taskIds: ['task-a', 'task-b'] } as never);
+
+        expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-0', null]);
     });
 
     it('will not pull a task from a project the viewer cannot reach into a sprint', async () => {
