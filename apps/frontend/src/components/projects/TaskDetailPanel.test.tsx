@@ -592,6 +592,16 @@ describe('TaskDetailPanel activity', () => {
         await waitFor(() => expect(box).toHaveTextContent(''));
     });
 
+    it('posts a comment on Ctrl/⌘+Enter', async () => {
+        panel();
+        await openTab(/^Comments/);
+        const box = await screen.findByLabelText('Add a comment…');
+        typeInEditor(box, 'Looks done');
+        fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
+
+        await waitFor(() => expect(addTaskComment).toHaveBeenCalledWith('t1', 'Looks done'));
+    });
+
     it('will not post an empty comment', async () => {
         panel();
         await openTab(/^Comments/);
@@ -676,6 +686,20 @@ describe('TaskDetailPanel activity', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
         fireEvent.click(commentEditor().getByRole('button', { name: 'Save' }));
 
+        expect(updateTaskComment).not.toHaveBeenCalled();
+    });
+
+    it('drops an edit through the cross', async () => {
+        getTaskComments.mockResolvedValue([comment('c1', '2026-08-03T10:00:00Z')]);
+        panel();
+        await openTab(/^Comments/);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+        typeInEditor(screen.getByLabelText('Edit comment'), 'Revised');
+        fireEvent.click(commentEditor().getByRole('button', { name: 'Cancel' }));
+
+        expect(await screen.findByText('Comment c1')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Edit comment')).not.toBeInTheDocument();
         expect(updateTaskComment).not.toHaveBeenCalled();
     });
 
@@ -851,6 +875,21 @@ describe('TaskDetailPanel description', () => {
     const leave = (editor: HTMLElement) =>
         fireEvent.blur(editorShell(editor), { relatedTarget: null });
 
+    /**
+     * A mouse press the way Safari makes one. A click never focuses a button
+     * there, so unless the press is stopped at mousedown the editor loses focus
+     * to nothing — which is exactly what leaving it looks like, and leaving it
+     * saves — before the click itself lands.
+     */
+    const press = (button: HTMLElement, editor: HTMLElement) => {
+        if (fireEvent.mouseDown(button)) leave(editor);
+        fireEvent.mouseUp(button);
+        fireEvent.click(button);
+    };
+
+    /** The description's own buttons — the hours form has a Save of its own. */
+    const inSection = (editor: HTMLElement) => within(editor.closest('section') as HTMLElement);
+
     it('offers to add one when the task has none', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
         panel();
@@ -868,17 +907,61 @@ describe('TaskDetailPanel description', () => {
     });
 
     // 4D made the text itself the way in, and it still is. The Edit button is a
-    // shortcut for a reader who does not know that — not a mode to get out of:
-    // there is no Save/Cancel pair, focus leaving the editor is the save.
-    it('opens from an Edit shortcut too, with no Save button to get out', async () => {
+    // shortcut for a reader who does not know that.
+    it('opens from an Edit shortcut too', async () => {
         getProjectTask.mockResolvedValue(withDescription('Old detail'));
         panel();
 
         fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }));
 
-        const editor = screen.getByLabelText('Description');
-        const section = within(editor.closest('section') as HTMLElement);
-        expect(section.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Description')).toHaveTextContent('Old detail');
+    });
+
+    /*
+     * Focus leaving the editor still saves, but it was the only way out, and
+     * nothing on screen said so. A tick and a cross say it (asked for
+     * 2026-09-29) — a deliberate exception to 4D's "no Save/Cancel pairs".
+     */
+    it('saves through the tick', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'Two circuits, one meter');
+        press(inSection(editor).getByRole('button', { name: 'Save' }), editor);
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', {
+                description: 'Two circuits, one meter',
+            }),
+        );
+        expect(updateProjectTask).toHaveBeenCalledTimes(1);
+    });
+
+    it('discards the edit through the cross', async () => {
+        getProjectTask.mockResolvedValue(withDescription('Old detail'));
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'Half a thought');
+        press(inSection(editor).getByRole('button', { name: 'Cancel' }), editor);
+
+        expect(await screen.findByText('Old detail')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Description', { selector: '[contenteditable]' })).not.toBeInTheDocument();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+    });
+
+    it('saves what was typed on Ctrl/⌘+Enter', async () => {
+        getProjectTask.mockResolvedValue(withDescription('Old detail'));
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'New detail');
+        fireEvent.keyDown(editor, { key: 'Enter', ctrlKey: true });
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { description: 'New detail' }),
+        );
     });
 
     it('offers no Edit shortcut when there is nothing to edit yet', async () => {

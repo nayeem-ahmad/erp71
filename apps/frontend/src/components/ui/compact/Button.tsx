@@ -4,7 +4,7 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'tinted';
-type Size = 'sm' | 'md';
+type Size = 'sm' | 'md' | 'icon';
 
 const baseClass =
     'inline-flex items-center gap-1.5 rounded-md font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed max-md:min-h-touch';
@@ -12,6 +12,11 @@ const baseClass =
 const sizeClass: Record<Size, string> = {
     sm: 'px-3 py-1.5 text-xs',
     md: 'px-4 py-2 text-sm',
+    /**
+     * A glyph and no label — it needs an `aria-label`. Square around a 16px
+     * icon, and as wide as the base class makes it tall on a phone.
+     */
+    icon: 'p-1.5 justify-center max-md:min-w-touch',
 };
 
 const variantClass: Record<Variant, string> = {

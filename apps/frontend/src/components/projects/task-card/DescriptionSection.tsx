@@ -17,7 +17,10 @@ const DESCRIPTION_MAX = 5000;
  *
  * It used to need a pencil button to get into and a Save/Cancel pair to get out
  * of — the two clicks that made "fix a typo" a four-step errand, and the loudest
- * of the five different save idioms this panel used to carry.
+ * of the five different save idioms this panel used to carry. A tick and a
+ * cross came back under the editor (2026-09-29) as a way out that says so, not
+ * as the only one: clicking away still saves, and the cross is the one way to
+ * throw an edit away that you can see.
  *
  * **The commit is on the container, not the textarea.** The editor has a
  * toolbar, and a toolbar button steals focus from the textarea; committing on
@@ -132,7 +135,8 @@ export default function DescriptionSection({
         <CompactSection title={m.title} titleStyle="heading">
             <div
                 onBlur={(event) => {
-                    // Focus moving to the toolbar is not focus leaving the editor.
+                    // Focus moving to the toolbar, or tabbing to the tick and
+                    // the cross, is not focus leaving the editor.
                     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
                     if (uploading.current) {
                         pendingCommit.current = true;
@@ -151,6 +155,7 @@ export default function DescriptionSection({
                     placeholder={m.placeholder}
                     ariaLabel={m.title}
                     onSubmit={commit}
+                    showActions
                     uploadImage={uploadImage}
                     onUploadingChange={(busy) => {
                         uploading.current = busy;

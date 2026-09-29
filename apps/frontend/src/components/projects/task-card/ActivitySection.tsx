@@ -224,7 +224,11 @@ export default function ActivitySection({
                                         · <When at={entry.created_at} locale={locale} />
                                     </p>
                                     {editingId === entry.id ? (
-                                        <div className="mt-1 space-y-2">
+                                        /* The tick and cross the description
+                                           has, in place of a Save and Cancel
+                                           pair of its own: one editor, one
+                                           way out of it. */
+                                        <div className="mt-1">
                                             <RichTextEditor
                                                 rows={2}
                                                 hideHint
@@ -235,24 +239,9 @@ export default function ActivitySection({
                                                 onChange={setEditBody}
                                                 onSubmit={() => commitEdit(entry)}
                                                 onCancel={() => setEditingId(null)}
+                                                showActions
                                                 uploadImage={uploadImage}
                                             />
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    type="button"
-                                                    disabled={saving}
-                                                    onClick={() => commitEdit(entry)}
-                                                >
-                                                    {t.common.save}
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    onClick={() => setEditingId(null)}
-                                                >
-                                                    {t.common.cancel}
-                                                </Button>
-                                            </div>
                                         </div>
                                     ) : (
                                         /* Markdown, like the description: the

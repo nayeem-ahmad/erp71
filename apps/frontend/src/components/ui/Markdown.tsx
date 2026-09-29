@@ -53,6 +53,11 @@ function isInternalPath(href: string | undefined): href is string {
     return !!href && href.startsWith('/') && !href.startsWith('//');
 }
 
+/*
+ * `RichTextEditor` draws paragraphs, marks, links and lists while they are
+ * being written, and the `.prose-editor` rules in `app/globals.css` repeat the
+ * classes below for it. Change one, change the other.
+ */
 const baseComponents: Components = {
     // One visual size for every level: the panel is too narrow for a hierarchy,
     // and the model's heading depth is not something to render faithfully.
