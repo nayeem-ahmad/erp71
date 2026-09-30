@@ -25,6 +25,26 @@ export type DailyReportPrintLabels = {
     checklist: string;
     credit: string;
     noSales: string;
+    netSales: string;
+    cashMovement: string;
+    newDues: string;
+    vsYesterday: string;
+    bills: string;
+    gross: string;
+    net: string;
+    expectedCash: string;
+    variance: string;
+    collected: string;
+    purchases: string;
+    paidToSuppliers: string;
+    expenses: string;
+    customersOwe: string;
+    youOwe: string;
+    pendingDelivery: string;
+    reorder: string;
+    unassignedSales: string;
+    firstSale: string;
+    lastSale: string;
 };
 
 export function isStockVisible(stock: DailyReport['stock']): boolean {
@@ -51,7 +71,7 @@ export function isDuesVisible(dues: DailyReport['dues']): boolean {
 }
 
 export function isTillVisible(till: DailyReport['till']): boolean {
-    return till != null;
+    return till != null && (till.sessions.length > 0 || till.unassignedSalesCount > 0);
 }
 
 function money(amount: number): string {
@@ -71,26 +91,43 @@ function section(title: string, inner: string): string {
 
 function checklistLabel(code: string, labels: DailyReportPrintLabels): string {
     if (code === 'OPEN_TILL') return labels.openTill;
-    if (code === 'REORDER') return labels.stock;
+    if (code === 'REORDER') return labels.reorder;
+    if (code === 'PENDING_DELIVERY') return labels.pendingDelivery;
     return code;
+}
+
+function formatClock(iso: string, timeZone: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    return new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    }).format(date);
 }
 
 export function buildDailyReportHtml(report: DailyReport, labels: DailyReportPrintLabels): string {
     const parts: string[] = [];
 
+    const firstLast: Array<[string, string]> = [];
+    if (report.firstSaleAt) firstLast.push([labels.firstSale, escapeHtml(formatClock(report.firstSaleAt, report.timezone))]);
+    if (report.lastSaleAt) firstLast.push([labels.lastSale, escapeHtml(formatClock(report.lastSaleAt, report.timezone))]);
     parts.push(
         `<div class="subtitle">${escapeHtml(report.tenantName)} · ${escapeHtml(report.storeName)} · ${escapeHtml(report.date)}</div>`,
     );
+    if (firstLast.length) parts.push(kvTable(firstLast));
 
     const vs =
         report.headlines.vsPreviousPct == null
-            ? ''
-            : ` (${report.headlines.vsPreviousPct > 0 ? '+' : ''}${report.headlines.vsPreviousPct}%)`;
+            ? '—'
+            : `${report.headlines.vsPreviousPct > 0 ? '+' : ''}${report.headlines.vsPreviousPct}%`;
     parts.push(
         kvTable([
-            [labels.sales, `${money(report.headlines.netSales)}${escapeHtml(vs)}`],
-            [labels.till, money(report.headlines.cashMovement)],
-            [labels.dues, money(report.headlines.newDues)],
+            [labels.netSales, money(report.headlines.netSales)],
+            [labels.cashMovement, money(report.headlines.cashMovement)],
+            [labels.newDues, money(report.headlines.newDues)],
+            [labels.vsYesterday, escapeHtml(vs)],
         ]),
     );
 
@@ -101,10 +138,10 @@ export function buildDailyReportHtml(report: DailyReport, labels: DailyReportPri
             section(
                 labels.sales,
                 kvTable([
-                    [labels.sales, String(report.sales.bills)],
-                    [labels.sales, money(report.sales.gross)],
-                    [labels.sales, money(report.sales.returnsAmount)],
-                    [labels.sales, money(report.sales.net)],
+                    [labels.bills, String(report.sales.bills)],
+                    [labels.gross, money(report.sales.gross)],
+                    [labels.returns, money(report.sales.returnsAmount)],
+                    [labels.net, money(report.sales.net)],
                 ]),
             ),
         );
@@ -130,27 +167,26 @@ export function buildDailyReportHtml(report: DailyReport, labels: DailyReportPri
                 ? `<p>${escapeHtml(labels.openTill)} (${report.till.openSessionCount})</p>`
                 : '';
         const r = report.till.rollup;
-        parts.push(
-            section(
-                labels.till,
-                `${openNote}${kvTable([
-                    [labels.till, money(r.expectedCash)],
-                    [labels.till, r.variance == null ? '—' : money(r.variance)],
-                ])}`,
-            ),
-        );
+        const tillRows: Array<[string, string]> = [
+            [labels.expectedCash, money(r.expectedCash)],
+            [labels.variance, r.variance == null ? '—' : money(r.variance)],
+        ];
+        if (report.till.unassignedSalesCount > 0) {
+            tillRows.push([labels.unassignedSales, String(report.till.unassignedSalesCount)]);
+        }
+        parts.push(section(labels.till, `${openNote}${kvTable(tillRows)}`));
     }
 
     if (isMoneyOutVisible(report.moneyOut) && report.moneyOut) {
         const rows: Array<[string, string]> = [];
         if (report.moneyOut.purchases && (report.moneyOut.purchases.count !== 0 || report.moneyOut.purchases.net !== 0)) {
-            rows.push([labels.moneyOut, money(report.moneyOut.purchases.net)]);
+            rows.push([labels.purchases, money(report.moneyOut.purchases.net)]);
         }
         if (report.moneyOut.paidToSuppliers) {
-            rows.push([labels.moneyOut, money(report.moneyOut.paidToSuppliers)]);
+            rows.push([labels.paidToSuppliers, money(report.moneyOut.paidToSuppliers)]);
         }
         if (report.moneyOut.expenses && (report.moneyOut.expenses.count !== 0 || report.moneyOut.expenses.amount !== 0)) {
-            rows.push([labels.moneyOut, money(report.moneyOut.expenses.amount)]);
+            rows.push([labels.expenses, money(report.moneyOut.expenses.amount)]);
         }
         parts.push(section(labels.moneyOut, kvTable(rows)));
     }
@@ -160,10 +196,10 @@ export function buildDailyReportHtml(report: DailyReport, labels: DailyReportPri
             section(
                 labels.dues,
                 kvTable([
-                    [labels.dues, money(report.dues.newDues)],
-                    [labels.dues, money(report.dues.collected)],
-                    [labels.dues, report.dues.accountsReceivable == null ? '—' : money(report.dues.accountsReceivable)],
-                    [labels.dues, report.dues.accountsPayable == null ? '—' : money(report.dues.accountsPayable)],
+                    [labels.newDues, money(report.dues.newDues)],
+                    [labels.collected, money(report.dues.collected)],
+                    [labels.customersOwe, report.dues.accountsReceivable == null ? '—' : money(report.dues.accountsReceivable)],
+                    [labels.youOwe, report.dues.accountsPayable == null ? '—' : money(report.dues.accountsPayable)],
                 ]),
             ),
         );
@@ -220,7 +256,9 @@ export function buildDailyReportHtml(report: DailyReport, labels: DailyReportPri
     }
 
     if (report.till && report.till.openSessionCount > 0) {
-        parts.push(`<div class="footer">${escapeHtml(labels.asOf)} ${escapeHtml(report.asOf)}</div>`);
+        parts.push(
+            `<div class="footer">${escapeHtml(labels.asOf)} ${escapeHtml(formatClock(report.asOf, report.timezone))}</div>`,
+        );
     }
 
     return parts.join('\n');

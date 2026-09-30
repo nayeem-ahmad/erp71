@@ -26,10 +26,13 @@ function todayLocal(): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function checklistHrefLabel(code: DailyReport['checklist'][number]['code'], labels: { openTill: string; stock: string }): string {
+function checklistHrefLabel(
+    code: DailyReport['checklist'][number]['code'],
+    labels: { openTill: string; reorder: string; pendingDelivery: string },
+): string {
     if (code === 'OPEN_TILL') return labels.openTill;
-    if (code === 'REORDER') return labels.stock;
-    return code;
+    if (code === 'REORDER') return labels.reorder;
+    return labels.pendingDelivery;
 }
 
 export default function DailyReportPage() {
@@ -139,10 +142,10 @@ export default function DailyReportPage() {
             {report && !loading ? (
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                        <CompactStat label={m.sales} value={formatBDT(report.headlines.netSales, { locale })} />
-                        <CompactStat label={m.till} value={formatBDT(report.headlines.cashMovement, { locale })} />
-                        <CompactStat label={m.dues} value={formatBDT(report.headlines.newDues, { locale })} />
-                        <CompactStat label={m.asOf} value={vs} />
+                        <CompactStat label={m.netSales} value={formatBDT(report.headlines.netSales, { locale })} />
+                        <CompactStat label={m.cashMovement} value={formatBDT(report.headlines.cashMovement, { locale })} />
+                        <CompactStat label={m.newDues} value={formatBDT(report.headlines.newDues, { locale })} />
+                        <CompactStat label={m.vsYesterday} value={vs} />
                     </div>
 
                     <CompactSection title={m.sales} titleStyle="heading">
@@ -150,14 +153,14 @@ export default function DailyReportPage() {
                             <p className="text-sm text-gray-600">{m.noSales}</p>
                         ) : (
                             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                                <CompactStat label={m.sales} value={String(report.sales.bills)} />
-                                <CompactStat label={m.sales} value={formatBDT(report.sales.gross, { locale })} />
+                                <CompactStat label={m.bills} value={String(report.sales.bills)} />
+                                <CompactStat label={m.gross} value={formatBDT(report.sales.gross, { locale })} />
                                 <CompactStat
                                     label={m.returns}
                                     value={formatBDT(report.sales.returnsAmount, { locale })}
                                     tone="negative"
                                 />
-                                <CompactStat label={m.sales} value={formatBDT(report.sales.net, { locale })} />
+                                <CompactStat label={m.net} value={formatBDT(report.sales.net, { locale })} />
                             </div>
                         )}
                     </CompactSection>
@@ -184,17 +187,23 @@ export default function DailyReportPage() {
                             ) : null}
                             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                                 <CompactStat
-                                    label={m.till}
+                                    label={m.expectedCash}
                                     value={formatBDT(report.till.rollup.expectedCash, { locale })}
                                 />
                                 <CompactStat
-                                    label={m.till}
+                                    label={m.variance}
                                     value={
                                         report.till.rollup.variance == null
                                             ? '—'
                                             : formatBDT(report.till.rollup.variance, { locale })
                                     }
                                 />
+                                {report.till.unassignedSalesCount > 0 ? (
+                                    <CompactStat
+                                        label={m.unassignedSales}
+                                        value={String(report.till.unassignedSalesCount)}
+                                    />
+                                ) : null}
                             </div>
                         </CompactSection>
                     ) : null}
@@ -205,7 +214,7 @@ export default function DailyReportPage() {
                                 {report.moneyOut.purchases &&
                                 (report.moneyOut.purchases.count !== 0 || report.moneyOut.purchases.net !== 0) ? (
                                     <li className="flex justify-between gap-3">
-                                        <span>{m.moneyOut}</span>
+                                        <span>{m.purchases}</span>
                                         <span className="font-medium">
                                             {formatBDT(report.moneyOut.purchases.net, { locale })}
                                         </span>
@@ -213,7 +222,7 @@ export default function DailyReportPage() {
                                 ) : null}
                                 {report.moneyOut.paidToSuppliers ? (
                                     <li className="flex justify-between gap-3">
-                                        <span>{m.moneyOut}</span>
+                                        <span>{m.paidToSuppliers}</span>
                                         <span className="font-medium">
                                             {formatBDT(report.moneyOut.paidToSuppliers, { locale })}
                                         </span>
@@ -222,7 +231,7 @@ export default function DailyReportPage() {
                                 {report.moneyOut.expenses &&
                                 (report.moneyOut.expenses.count !== 0 || report.moneyOut.expenses.amount !== 0) ? (
                                     <li className="flex justify-between gap-3">
-                                        <span>{m.moneyOut}</span>
+                                        <span>{m.expenses}</span>
                                         <span className="font-medium">
                                             {formatBDT(report.moneyOut.expenses.amount, { locale })}
                                         </span>
@@ -235,10 +244,10 @@ export default function DailyReportPage() {
                     {isDuesVisible(report.dues) && report.dues ? (
                         <CompactSection title={m.dues} titleStyle="heading">
                             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                                <CompactStat label={m.dues} value={formatBDT(report.dues.newDues, { locale })} />
-                                <CompactStat label={m.dues} value={formatBDT(report.dues.collected, { locale })} />
+                                <CompactStat label={m.newDues} value={formatBDT(report.dues.newDues, { locale })} />
+                                <CompactStat label={m.collected} value={formatBDT(report.dues.collected, { locale })} />
                                 <CompactStat
-                                    label={m.dues}
+                                    label={m.customersOwe}
                                     value={
                                         report.dues.accountsReceivable == null
                                             ? '—'
@@ -246,7 +255,7 @@ export default function DailyReportPage() {
                                     }
                                 />
                                 <CompactStat
-                                    label={m.dues}
+                                    label={m.youOwe}
                                     value={
                                         report.dues.accountsPayable == null
                                             ? '—'

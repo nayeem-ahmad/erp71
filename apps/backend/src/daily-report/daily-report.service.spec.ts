@@ -1,31 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
+import { addCalendarDays, zonedDayStart } from '../common/tenant-time.util';
 import { DailyReportService } from './daily-report.service';
 
-function salesSummary(net: number, gross = net, bills = 1, returns = 0) {
-    return {
-        summary: {
-            totalRevenue: gross,
-            totalReturns: returns,
-            netRevenue: net,
-            transactionCount: bills,
-            avgOrderValue: bills ? net / bills : 0,
-        },
-        rows: [{ date: '2026-10-01', transactions: bills, grossRevenue: gross, returns, netRevenue: net }],
-    };
-}
-
 describe('DailyReportService.getReport', () => {
-    const salesReports = {
-        getSalesSummary: jest.fn(),
-        getSalesBreakdown: jest.fn(),
-        getSalesByProduct: jest.fn(),
-    };
     const cashierSessions = { getSessionSummary: jest.fn() };
     const purchaseReports = { getPurchaseSummary: jest.fn() };
     const expenses = { getSummary: jest.fn() };
     const accounting = { getAccountingDashboardOverview: jest.fn() };
     const db = {
-        sale: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), aggregate: jest.fn() },
+        sale: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
         salesReturn: { findMany: jest.fn().mockResolvedValue([]) },
         cashierSession: { findMany: jest.fn().mockResolvedValue([]) },
         customerCreditTransaction: { findMany: jest.fn().mockResolvedValue([]) },
@@ -50,27 +33,37 @@ describe('DailyReportService.getReport', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        db.sale.findMany.mockResolvedValue([]);
+        const todayStart = zonedDayStart('2026-10-01', 'Asia/Dhaka')!;
+        db.sale.findMany.mockImplementation(async ({ where }: { where: { sale_date?: { gte?: Date } } }) => {
+            if (where.sale_date?.gte?.getTime() === todayStart.getTime()) {
+                return [
+                    {
+                        total_amount: 600,
+                        amount_paid: 600,
+                        sale_date: new Date('2026-10-01T04:00:00.000Z'),
+                        payments: [{ payment_method: 'CASH', amount: 600 }],
+                        items: [],
+                    },
+                    {
+                        total_amount: 400,
+                        amount_paid: 250,
+                        sale_date: new Date('2026-10-01T08:00:00.000Z'),
+                        payments: [{ payment_method: 'bKash', amount: 250 }],
+                        items: [{ quantity: 3, price_at_sale: 500 / 3, product: { name: 'Charger' } }],
+                    },
+                ];
+            }
+            return [];
+        });
         db.sale.count.mockResolvedValue(0);
-        db.salesReturn.findMany.mockResolvedValue([]);
+        db.salesReturn.findMany.mockResolvedValue([
+            { total_refund: 200, return_number: 'R1', reason: 'damaged' },
+        ]);
         db.cashierSession.findMany.mockResolvedValue([]);
         db.customerCreditTransaction.findMany.mockResolvedValue([]);
         db.supplierCreditTransaction.findMany.mockResolvedValue([]);
         db.product.findMany.mockResolvedValue([]);
         db.inventoryShrinkage.findMany.mockResolvedValue([]);
-        salesReports.getSalesSummary.mockImplementation((_tid: string, q: { from?: string }) => {
-            if (q.from === '2026-09-30') return salesSummary(0, 0, 0, 0);
-            return salesSummary(800, 1000, 2, 200);
-        });
-        salesReports.getSalesBreakdown.mockResolvedValue({
-            rows: [
-                { label: 'CASH', revenue: 600 },
-                { label: 'bKash', revenue: 250 },
-            ],
-        });
-        salesReports.getSalesByProduct.mockResolvedValue({
-            rows: [{ product: { name: 'Charger' }, unitsSold: 3, revenue: 500 }],
-        });
         purchaseReports.getPurchaseSummary.mockResolvedValue({
             summary: { netPurchases: 0, orderCount: 0 },
         });
@@ -78,10 +71,8 @@ describe('DailyReportService.getReport', () => {
         accounting.getAccountingDashboardOverview.mockResolvedValue({
             position: { accounts_receivable: 142000, accounts_payable: 87000 },
         });
-        db.sale.aggregate.mockResolvedValue({ _sum: { total_amount: 1000, amount_paid: 850 } });
         service = new DailyReportService(
             db as any,
-            salesReports as any,
             cashierSessions as any,
             purchaseReports as any,
             expenses as any,
@@ -99,13 +90,29 @@ describe('DailyReportService.getReport', () => {
         expect(report.tenders.some((t) => t.method === 'Credit' && t.amount === 150)).toBe(true);
     });
 
-    it('puts a 01:00 Asia/Dhaka sale on that Dhaka date via getSalesSummary from/to', async () => {
-        await service.getReport(input);
-        expect(salesReports.getSalesSummary).toHaveBeenCalledWith(
-            't1',
-            expect.objectContaining({ from: '2026-10-01', to: '2026-10-01', storeId: 's1' }),
-            'Asia/Dhaka',
-        );
+    it('counts a 01:00 Asia/Dhaka sale in both net sales and new dues', async () => {
+        const todayStart = zonedDayStart('2026-10-01', 'Asia/Dhaka')!;
+        db.sale.findMany.mockImplementation(async ({ where }: { where: { sale_date?: { gte?: Date } } }) => {
+            if (where.sale_date?.gte?.getTime() === todayStart.getTime()) {
+                return [
+                    {
+                        total_amount: 1000,
+                        amount_paid: 0,
+                        sale_date: new Date('2026-09-30T19:00:00.000Z'),
+                        payments: [],
+                        items: [],
+                    },
+                ];
+            }
+            return [];
+        });
+        db.salesReturn.findMany.mockResolvedValue([]);
+        const report = await service.getReport(input);
+        expect(report.sales.gross).toBe(1000);
+        expect(report.sales.net).toBe(1000);
+        expect(report.headlines.netSales).toBe(1000);
+        expect(report.headlines.newDues).toBe(1000);
+        expect(report.firstSaleAt).toBe('2026-09-30T19:00:00.000Z');
     });
 
     it('includes an overnight open till on today and leaves unassigned sales out of expected cash', async () => {
@@ -139,6 +146,38 @@ describe('DailyReportService.getReport', () => {
         expect(report.till?.unassignedSalesCount).toBe(2);
         expect(report.till?.openSessionCount).toBe(1);
         expect(report.till?.rollup.variance).toBeNull();
+        const start = zonedDayStart('2026-10-01', 'Asia/Dhaka');
+        const end = zonedDayStart(addCalendarDays('2026-10-01', 1), 'Asia/Dhaka');
+        expect(db.cashierSession.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    opened_at: { lt: end },
+                    OR: [{ closed_at: null }, { closed_at: { gte: start } }],
+                }),
+            }),
+        );
+    });
+
+    it('keeps vsPreviousPct null when yesterday sales cannot load', async () => {
+        const todayStart = zonedDayStart('2026-10-01', 'Asia/Dhaka')!;
+        db.sale.findMany.mockImplementation(async ({ where }: { where: { sale_date?: { gte?: Date } } }) => {
+            if (where.sale_date?.gte?.getTime() === todayStart.getTime()) {
+                return [
+                    {
+                        total_amount: 800,
+                        amount_paid: 800,
+                        sale_date: new Date('2026-10-01T04:00:00.000Z'),
+                        payments: [{ payment_method: 'CASH', amount: 800 }],
+                        items: [],
+                    },
+                ];
+            }
+            throw new Error('yesterday down');
+        });
+        db.salesReturn.findMany.mockResolvedValue([]);
+        const report = await service.getReport(input);
+        expect(report.sales.net).toBe(800);
+        expect(report.headlines.vsPreviousPct).toBeNull();
     });
 
     it('nulls stock when the product query rejects and still returns sales', async () => {

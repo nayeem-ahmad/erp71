@@ -138,7 +138,11 @@ describe('DailyReportPage', () => {
         render(<DailyReportPage />);
         await waitFor(() => expect(screen.getByRole('button', { name: /print/i })).toBeInTheDocument());
         expect(screen.getByRole('heading', { name: /Daily Report/i })).toBeInTheDocument();
+        expect(screen.getByText('Net sales')).toBeInTheDocument();
+        expect(screen.getByText('vs yesterday')).toBeInTheDocument();
         expect(screen.queryByText(/Stock/i)).not.toBeInTheDocument();
+        expect(screen.queryByText('Expected cash')).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Till' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
     });
 

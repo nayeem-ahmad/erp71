@@ -74,9 +74,9 @@ describe('buildDailyReportHtml', () => {
 
     it('omits money out, empty checklist, and empty returns', () => {
         const html = buildDailyReportHtml(quietPayload, enLabels);
-        expect(html).not.toMatch(/Money out/i);
-        expect(html).not.toMatch(/Checklist/i);
-        expect(html).not.toMatch(/Returns/i);
+        expect(html).not.toMatch(/<h2>Money out<\/h2>/);
+        expect(html).not.toMatch(/<h2>Checklist<\/h2>/);
+        expect(html).not.toMatch(/<h2>Returns<\/h2>/);
         expect(html).toMatch(/Top products/);
         expect(html).toMatch(/USB-C cable/);
     });
@@ -90,5 +90,54 @@ describe('buildDailyReportHtml', () => {
             enLabels,
         );
         expect(html).not.toMatch(/Stock/i);
+    });
+
+    it('labels headlines and sales fields instead of repeating section titles', () => {
+        const html = buildDailyReportHtml(quietPayload, enLabels);
+        expect(html).toMatch(/Net sales/);
+        expect(html).toMatch(/Cash/);
+        expect(html).toMatch(/New dues/);
+        expect(html).toMatch(/vs yesterday/);
+        expect(html).toMatch(/Bills/);
+        expect(html).toMatch(/Gross/);
+        expect(html).not.toMatch(/As of 2026-10-01T/);
+    });
+
+    it('formats first and last sale and a human as-of while a till is open', () => {
+        const html = buildDailyReportHtml(
+            {
+                ...quietPayload,
+                till: {
+                    ...quietPayload.till!,
+                    openSessionCount: 1,
+                    unassignedSalesCount: 2,
+                },
+                checklist: [{ code: 'PENDING_DELIVERY', count: 3, href: '/sales/delivery' }],
+            },
+            enLabels,
+        );
+        expect(html).toMatch(/First sale/);
+        expect(html).toMatch(/Last sale/);
+        expect(html).toMatch(/As of/i);
+        expect(html).not.toMatch(/As of 2026-10-01T15:18:00.000Z/);
+        expect(html).toMatch(/Pending delivery/);
+        expect(html).not.toMatch(/PENDING_DELIVERY/);
+        expect(html).toMatch(/Unassigned sales/);
+    });
+
+    it('omits the till block when there are no sessions and no unassigned sales', () => {
+        const html = buildDailyReportHtml(
+            {
+                ...quietPayload,
+                till: {
+                    sessions: [],
+                    rollup: quietPayload.till!.rollup,
+                    openSessionCount: 0,
+                    unassignedSalesCount: 0,
+                },
+            },
+            enLabels,
+        );
+        expect(html).not.toMatch(/Expected cash/i);
     });
 });

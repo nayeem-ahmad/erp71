@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { SalesReportsService } from '../sales-reports/sales-reports.service';
 import { CashierSessionsService } from '../cashier-sessions/cashier-sessions.service';
 import { PurchaseReportsService } from '../purchase-reports/purchase-reports.service';
 import { ExpensesService } from '../expenses/expenses.service';
@@ -58,7 +57,6 @@ async function settled<T>(promise: Promise<T>): Promise<T | null> {
 export class DailyReportService {
     constructor(
         private db: DatabaseService,
-        private salesReports: SalesReportsService,
         private cashierSessions: CashierSessionsService,
         private purchaseReports: PurchaseReportsService,
         private expenses: ExpensesService,
@@ -77,64 +75,55 @@ export class DailyReportService {
             throw new BadRequestException('Invalid date');
         }
         const dayRange = { gte: start, lt: end };
-        const previous = addCalendarDays(input.date, -1);
+        const previousStart = zonedDayStart(addCalendarDays(input.date, -1), input.timezone);
         const dateQuery = { from: input.date, to: input.date, storeId: input.storeId };
-
-        const todaySales = await this.salesReports.getSalesSummary(
-            input.tenantId,
-            dateQuery,
-            input.timezone,
-        );
-        const yesterdaySales = await this.salesReports.getSalesSummary(
-            input.tenantId,
-            { from: previous, to: previous, storeId: input.storeId },
-            input.timezone,
-        );
-        const breakdown = await this.salesReports.getSalesBreakdown(
-            input.tenantId,
-            { ...dateQuery, groupBy: 'payment_method' },
-            input.timezone,
-        );
-
-        const gross = round2(num(todaySales.summary.totalRevenue));
-        const returnsAmount = round2(num(todaySales.summary.totalReturns));
-        const net = round2(num(todaySales.summary.netRevenue));
-        const bills = num(todaySales.summary.transactionCount);
-        const yesterdayNet = num(yesterdaySales.summary.netRevenue);
-        const vsPreviousPct =
-            yesterdayNet === 0 ? null : round2(((net - yesterdayNet) / yesterdayNet) * 100);
-
-        const tenders = buildTenders(
-            gross,
-            (breakdown.rows ?? []).map((row: { label?: string; revenue?: number }) => ({
-                method: row.label ?? '',
-                amount: num(row.revenue),
-            })),
-        );
 
         const [
             daySales,
+            yesterdaySales,
             till,
             purchases,
             expenseSummary,
             supplierPayments,
             customerPayments,
             accountingOverview,
-            productRows,
             returnsRows,
             pendingDeliveryCount,
         ] = await Promise.all([
-            settled(
-                this.db.sale.findMany({
-                    where: {
-                        tenant_id: input.tenantId,
-                        store_id: input.storeId,
-                        status: 'COMPLETED',
-                        sale_date: dayRange,
+            this.db.sale.findMany({
+                where: {
+                    tenant_id: input.tenantId,
+                    store_id: input.storeId,
+                    status: 'COMPLETED',
+                    sale_date: dayRange,
+                },
+                select: {
+                    total_amount: true,
+                    amount_paid: true,
+                    sale_date: true,
+                    payments: { select: { payment_method: true, amount: true } },
+                    items: {
+                        select: {
+                            quantity: true,
+                            price_at_sale: true,
+                            product: { select: { name: true } },
+                        },
                     },
-                    select: { total_amount: true, amount_paid: true, sale_date: true },
-                }),
-            ),
+                },
+            }),
+            previousStart
+                ? settled(
+                      this.db.sale.findMany({
+                          where: {
+                              tenant_id: input.tenantId,
+                              store_id: input.storeId,
+                              status: 'COMPLETED',
+                              sale_date: { gte: previousStart, lt: start },
+                          },
+                          select: { total_amount: true },
+                      }),
+                  )
+                : Promise.resolve(null),
             settled(this.loadTill(input, start, end, dayRange)),
             settled(this.purchaseReports.getPurchaseSummary(input.tenantId, dateQuery)),
             settled(this.expenses.getSummary(input.tenantId, dateQuery)),
@@ -156,7 +145,6 @@ export class DailyReportService {
                     to: input.date,
                 }),
             ),
-            settled(this.salesReports.getSalesByProduct(input.tenantId, dateQuery)),
             settled(
                 this.db.salesReturn.findMany({
                     where: {
@@ -179,13 +167,39 @@ export class DailyReportService {
             ),
         ]);
 
+        const allReturns = returnsRows ?? [];
+        const gross = round2(daySales.reduce((sum, sale) => sum + num(sale.total_amount), 0));
+        const returnsAmount = round2(allReturns.reduce((sum, row) => sum + num(row.total_refund), 0));
+        const net = round2(gross - returnsAmount);
+        const bills = daySales.length;
+        const yesterdayNet =
+            yesterdaySales == null
+                ? null
+                : round2(yesterdaySales.reduce((sum, sale) => sum + num(sale.total_amount), 0));
+        const vsPreviousPct =
+            yesterdayNet == null || yesterdayNet === 0
+                ? null
+                : round2(((net - yesterdayNet) / yesterdayNet) * 100);
+
+        const payMap = new Map<string, number>();
+        for (const sale of daySales) {
+            for (const payment of sale.payments ?? []) {
+                const method = payment.payment_method || 'CASH';
+                payMap.set(method, (payMap.get(method) ?? 0) + num(payment.amount));
+            }
+        }
+        const tenders = buildTenders(
+            gross,
+            Array.from(payMap.entries()).map(([method, amount]) => ({ method, amount })),
+        );
+
         const newDues = round2(
-            (daySales ?? []).reduce(
+            daySales.reduce(
                 (sum, sale) => sum + Math.max(0, num(sale.total_amount) - num(sale.amount_paid)),
                 0,
             ),
         );
-        const saleTimes = (daySales ?? [])
+        const saleTimes = daySales
             .map((sale) => sale.sale_date)
             .filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime()))
             .sort((a, b) => a.getTime() - b.getTime());
@@ -231,15 +245,21 @@ export class DailyReportService {
               }
             : null;
 
-        const topProducts = (productRows?.rows ?? [])
-            .slice(0, 5)
-            .map((row: { product?: { name?: string }; unitsSold?: number; revenue?: number }) => ({
-                name: row.product?.name ?? '',
-                units: num(row.unitsSold),
-                revenue: round2(num(row.revenue)),
-            }));
+        const productMap = new Map<string, { name: string; units: number; revenue: number }>();
+        for (const sale of daySales) {
+            for (const item of sale.items ?? []) {
+                const name = item.product?.name || '—';
+                const existing = productMap.get(name) ?? { name, units: 0, revenue: 0 };
+                existing.units += num(item.quantity);
+                existing.revenue += num(item.quantity) * num(item.price_at_sale);
+                productMap.set(name, existing);
+            }
+        }
+        const topProducts = Array.from(productMap.values())
+            .map((row) => ({ ...row, revenue: round2(row.revenue) }))
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 5);
 
-        const allReturns = returnsRows ?? [];
         const returns = {
             rows: allReturns.slice(0, 5).map((row) => ({
                 label: (row.reason && String(row.reason).trim()) || String(row.return_number ?? ''),

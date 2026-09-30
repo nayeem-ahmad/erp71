@@ -77,7 +77,9 @@ GET /daily-report?date=YYYY-MM-DD&storeId=
         ▼
 DailyReportService  (compose existing services, settle independently)
         │
-        ├── sales-reports (summary, payment mix, by-product, returns)
+        ├── sale.findMany over the tenant-local day (required: gross, tenders, top products, new dues)
+        ├── sale.findMany previous local day (vsPreviousPct; settled)
+        ├── sales returns that local day
         ├── cashier-sessions (sessions overlapping the day + getSessionSummary)
         ├── purchase-reports
         ├── expenses.getSummary
@@ -112,8 +114,9 @@ GET /daily-report?date=YYYY-MM-DD&storeId=
 
 - Auth: JWT + tenant interceptor + `VIEW_FINANCIAL_REPORTS`.
 - `date` optional, default today in `tenant.timezone`. Date-only. Parsed as
-  local midnight..end in that timezone (same `zonedParts` / dashboard-window
-  rule as sales summary: a 1am Dhaka sale belongs to that Dhaka date).
+  local midnight..end via `zonedDayStart` (a 1am Dhaka sale belongs to that
+  Dhaka date). `SalesReportsService.getSalesSummary` uses a UTC calendar
+  window and is not this source.
 - `storeId` optional, default the caller’s active store. A store outside the
   tenant → 404. v1 does not accept “all stores.”
 - Future `date` → 400.
@@ -237,9 +240,9 @@ margin or till math.
 
 | Block | Source |
 |---|---|
-| Sales | `SalesReportsService.getSalesSummary` for `date..date` |
-| Tenders | payment-method aggregate on that day’s `COMPLETED` sales (`aggregateByPaymentMethod` / breakdown `groupBy=payment_method`). **Credit** = `gross − sum(those methods)`, omitted when 0 |
-| Top products | `getSalesByProduct`, sort by revenue, take 5 |
+| Sales | `sale.findMany` for `COMPLETED` rows whose `sale_date` is in the tenant-local `[start, end)` window (`zonedDayStart(date)` .. `zonedDayStart(date+1)`). Gross = sum of `total_amount`; net = gross − that day’s return refunds. Do not call `SalesReportsService.getSalesSummary` (its date window is UTC). |
+| Tenders | `Sale.payments` on those same rows. **Credit** = `gross − sum(those methods)`, omitted when 0 |
+| Top products | line items on those same rows, grouped by product name, sort by revenue, take 5 |
 | Returns list | sales returns with local `created_at` on `date`, cap 5 |
 | Till sessions | cashier sessions that **overlap** the local day: `opened_at < endOfDay` AND (`closed_at` is null OR `closed_at >= startOfDay`). Each row is `getSessionSummary`. |
 | Unassigned sales | completed sales that day with `session_id` null. They count in Sales and Tenders. They do not enter expected cash. |
@@ -250,7 +253,7 @@ margin or till math.
 | AR / AP position | `getAccountingDashboardOverview` `position.accounts_receivable` / `accounts_payable` as of `date`. Period-movement financial KPIs stay off this page. |
 | Stock | current on-hand vs reorder (same count the dashboard uses) plus shrinkage documents posted that day |
 | Pending deliveries | completed-pipeline probe already used by `RetailDashboard` (`DELIVERY_PENDING` / `AWAITING_DELIVERY` / `PENDING_DELIVERY`) |
-| Previous day | `getSalesSummary` for the previous local date |
+| Previous day | settled `sale.findMany` for the previous local `[start, end)`; `vsPreviousPct` is null when that query fails or yesterday’s completed-sale total is 0 |
 
 **Cash movement headline.** If `till` loaded and has at least one session:
 `cashTakings − refunds + cashIn − cashOut` on the roll-up. If `till` is
