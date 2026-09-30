@@ -211,6 +211,7 @@ export const settingsExtrasMessages = {
             SALES_RETURN: "مرتجعات المبيعات",
             DELIVERY_CHALLAN: "أذون التسليم",
             PURCHASE_ORDER: "أوامر الشراء",
+            PURCHASE_INVOICE: "فواتير المشتريات",
             PURCHASE_RETURN: "مرتجعات المشتريات",
             LIST_REPORT: "تقارير القوائم",
             PROFORMA_INVOICE: "الفواتير الأولية",

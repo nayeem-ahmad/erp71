@@ -130,6 +130,7 @@ export const purchasesMessages = {
             CANCELLED: 'Annulée',
         },
         printInvoice: "Imprimer la facture",
+        printLoadFailed: "Impossible de charger l'achat à imprimer.",
         modal: {
             title: "Enregistrer un achat",
             subtitle: "Réceptionner le stock, renseigner le fournisseur et mettre à jour l'inventaire",

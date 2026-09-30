@@ -130,6 +130,7 @@ export const purchasesMessages = {
             CANCELLED: 'Storniert',
         },
         printInvoice: "Rechnung drucken",
+        printLoadFailed: "Der Einkauf konnte nicht zum Drucken geladen werden.",
         modal: {
             title: "Einkauf erfassen",
             subtitle: "Ware annehmen, Lieferant erfassen und Bestand aktualisieren",

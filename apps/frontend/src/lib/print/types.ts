@@ -61,6 +61,7 @@ export type PrintDocType =
     | 'SALES_RETURN'
     | 'DELIVERY_CHALLAN'
     | 'PURCHASE_ORDER'
+    | 'PURCHASE_INVOICE'
     | 'PURCHASE_RETURN'
     | 'LIST_REPORT'
     | 'PAYSLIP';

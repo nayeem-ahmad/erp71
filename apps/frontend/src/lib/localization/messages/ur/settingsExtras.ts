@@ -211,6 +211,7 @@ export const settingsExtrasMessages = {
             SALES_RETURN: "سیلز واپسیاں",
             DELIVERY_CHALLAN: "ڈیلیوری چالان",
             PURCHASE_ORDER: "خریداری کے آرڈرز",
+            PURCHASE_INVOICE: "خریداری کے انوائسز",
             PURCHASE_RETURN: "خریداری کی واپسیاں",
             LIST_REPORT: "فہرستی رپورٹس",
             PROFORMA_INVOICE: "پروفارما انوائس",

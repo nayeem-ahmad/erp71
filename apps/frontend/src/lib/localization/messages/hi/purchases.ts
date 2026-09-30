@@ -130,6 +130,7 @@ export const purchasesMessages = {
             CANCELLED: 'रद्द',
         },
         printInvoice: "चालान प्रिंट करें",
+        printLoadFailed: "प्रिंट करने के लिए खरीद लोड नहीं हो सकी।",
         modal: {
             title: "खरीद दर्ज करें",
             subtitle: "स्टॉक प्राप्त करें, आपूर्तिकर्ता दर्ज करें और इन्वेंट्री अपडेट करें",

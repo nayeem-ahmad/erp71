@@ -130,6 +130,7 @@ export const purchasesMessages = {
             CANCELLED: 'ملغى',
         },
         printInvoice: "طباعة الفاتورة",
+        printLoadFailed: "تعذر تحميل المشترى للطباعة.",
         modal: {
             title: "تسجيل عملية شراء",
             subtitle: "استلم المخزون، وسجّل المورّد، وحدّث المخزون",

@@ -211,6 +211,7 @@ export const settingsExtrasMessages = {
             SALES_RETURN: 'Sales returns',
             DELIVERY_CHALLAN: 'Delivery challans',
             PURCHASE_ORDER: 'Purchase orders',
+            PURCHASE_INVOICE: 'Purchase invoices',
             PURCHASE_RETURN: 'Purchase returns',
             LIST_REPORT: 'List reports',
             PROFORMA_INVOICE: 'Proforma invoices',

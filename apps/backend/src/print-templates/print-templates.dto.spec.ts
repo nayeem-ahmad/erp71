@@ -139,6 +139,10 @@ describe('CreatePrintTemplateDto', () => {
         it('rejects a document type the renderer has no printer for', async () => {
             expect((await parseDocTypes(['DELIVERY_NOTE'])).length).toBeGreaterThan(0);
         });
+
+        it('accepts a template assigned to the purchase invoice', async () => {
+            expect(await parseDocTypes(['PURCHASE_INVOICE'])).toHaveLength(0);
+        });
     });
 
     describe('line formatting', () => {
