@@ -265,6 +265,15 @@ export const componentsMessages = {
             revokeSuccess: "Pautan telah dibatalkan.",
             revokeError: "Tidak dapat membatalkan pautan. Sila cuba lagi.",
         },
+        shareMessageModal: {
+            title: 'Share {subject}',
+            description: 'The message is copied or opened in WhatsApp. Editing it does not change the report.',
+            copy: 'Copy',
+            copied: 'Copied',
+            whatsapp: 'WhatsApp',
+            close: 'Close',
+            previewLabel: 'Message',
+        },
         shortLinkManager: {
             shortLinkColumn: "Pautan pendek",
             targetColumn: "Sasaran",

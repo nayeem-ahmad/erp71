@@ -268,6 +268,15 @@ export const componentsMessages = {
         revokeSuccess: "Lien révoqué.",
         revokeError: "Impossible de révoquer le lien. Veuillez réessayer.",
     },
+    shareMessageModal: {
+        title: 'Share {subject}',
+        description: 'The message is copied or opened in WhatsApp. Editing it does not change the report.',
+        copy: 'Copy',
+        copied: 'Copied',
+        whatsapp: 'WhatsApp',
+        close: 'Close',
+        previewLabel: 'Message',
+    },
     shortLinkManager: {
         shortLinkColumn: "Lien court",
         targetColumn: "Cible",

@@ -16,6 +16,7 @@ import type {
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
 import type { CandidateRow, MatchManifest } from '@/types/match';
+import type { DailyReport } from '@/lib/daily-report';
 import { normalizeApiBase } from './api-base';
 import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
@@ -1550,6 +1551,13 @@ export const api = {
         if (params?.groupId) query.set('groupId', params.groupId);
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/valuation${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    getDailyReport: (params?: { date?: string; storeId?: string; locale?: string }): Promise<DailyReport> => {
+        const query = new URLSearchParams();
+        if (params?.date) query.set('date', params.date);
+        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.locale) query.set('locale', params.locale);
+        return fetchWithAuth(`/daily-report${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSalesSummary: (params?: { storeId?: string; from?: string; to?: string }) => {
         const query = new URLSearchParams();

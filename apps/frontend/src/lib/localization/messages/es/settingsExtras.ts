@@ -216,6 +216,7 @@ export const settingsExtrasMessages = {
             LIST_REPORT: "Informes de lista",
             PROFORMA_INVOICE: "Facturas proforma",
             PAYSLIP: "Nóminas",
+            DAILY_REPORT: "Daily reports",
         },
     },
     tax: {

@@ -1,4 +1,10 @@
-import { seedDecisions, isConfirmReady, assembleDecisionRows, decisionKey } from './match-review';
+import {
+    seedDecisions,
+    isConfirmReady,
+    assembleDecisionRows,
+    decisionKey,
+    applyBulkDecision,
+} from './match-review';
 import type { CandidateRow } from '@/types/match';
 
 function row(overrides: Partial<CandidateRow> = {}): CandidateRow {
@@ -42,5 +48,49 @@ describe('assembleDecisionRows', () => {
         expect(body).toHaveLength(2);
         expect(body.find((r) => r.externalId === 'h')?.decision).toBe('accept');
         expect(body.find((r) => r.externalId === 'm')?.decision).toBe('new');
+    });
+});
+
+describe('applyBulkDecision', () => {
+    it('sets create-as-new on every targeted row', () => {
+        const rows = [row(), row({ externalId: '2', matchId: null, suggestedMatch: null })];
+        const decisions = seedDecisions(rows);
+        const result = applyBulkDecision(rows, decisions, 'new');
+        expect(result.applied).toBe(2);
+        expect(result.skipped).toBe(0);
+        expect(result.next[decisionKey('PRODUCT', '1')]).toBe('new');
+        expect(result.next[decisionKey('PRODUCT', '2')]).toBe('new');
+    });
+
+    it('accepts only rows that have a suggested match', () => {
+        const rows = [
+            row(),
+            row({ externalId: '2', matchId: null, suggestedMatch: null, decision: '' }),
+        ];
+        const decisions = seedDecisions(rows);
+        const result = applyBulkDecision(rows, decisions, 'accept');
+        expect(result.applied).toBe(1);
+        expect(result.skipped).toBe(1);
+        expect(result.next[decisionKey('PRODUCT', '1')]).toBe('accept');
+        expect(result.next[decisionKey('PRODUCT', '2')]).toBe('');
+    });
+
+    it('marks every targeted row as skip', () => {
+        const rows = [row(), row({ externalId: '2' })];
+        const decisions = seedDecisions(rows);
+        const result = applyBulkDecision(rows, decisions, 'skip');
+        expect(result.applied).toBe(2);
+        expect(result.next[decisionKey('PRODUCT', '1')]).toBe('skip');
+        expect(result.next[decisionKey('PRODUCT', '2')]).toBe('skip');
+    });
+
+    it('leaves rows that were not targeted unchanged', () => {
+        const kept = row({ externalId: 'keep', decision: 'accept', confidence: 'high' });
+        const target = row({ externalId: 'change', decision: '' });
+        const decisions = seedDecisions([kept, target]);
+        const result = applyBulkDecision([target], decisions, 'new');
+        expect(result.next[decisionKey('PRODUCT', 'keep')]).toBe('accept');
+        expect(result.next[decisionKey('PRODUCT', 'change')]).toBe('new');
+        expect(result.applied).toBe(1);
     });
 });

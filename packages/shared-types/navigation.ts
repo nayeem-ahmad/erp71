@@ -66,6 +66,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // record every VAT-registered shop has to keep — not an analytics extra to
   // be sold as an upgrade.
   'sales.mushak': { id: 'sales.mushak', kind: 'link', icon: 'FileCheck', labelKey: 'sidebar.items.mushakBooks', href: '/sales/reports/mushak' },
+  'sales.daily-report': { id: 'sales.daily-report', kind: 'link', icon: 'ClipboardList', labelKey: 'sidebar.items.dailyReport', href: '/sales/daily-report' },
   'sales.receivables': { id: 'sales.receivables', kind: 'subgroup', icon: 'Wallet', labelKey: 'sales.hub.receivables' },
   'sales.receivables.customer-payments': { id: 'sales.receivables.customer-payments', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.items.customerPayment', href: '/sales/customer-payments' },
   'sales.receivables.customer-ledger': { id: 'sales.receivables.customer-ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.customerLedger', href: '/sales/customer-ledger' },
@@ -446,6 +447,7 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'sales.order-flow.quotes': ['CREATE_QUOTATION'],
   'sales.order-flow.orders': ['CREATE_SALES_ORDER'],
   'sales.order-flow.returns': ['CREATE_RETURN'],
+  'sales.daily-report': ['VIEW_FINANCIAL_REPORTS'],
 
   storefront: [
     'MANAGE_STOREFRONT_PAGES',
@@ -548,7 +550,8 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.order-flow.delivery', 'sales', 7),
   layoutNode('sales.order-flow.warranty-claims', 'sales', 8),
   layoutNode('sales.mushak', 'sales', 9),
-  layoutNode('sales.reports', 'sales', 10),
+  layoutNode('sales.daily-report', 'sales', 10),
+  layoutNode('sales.reports', 'sales', 11),
   layoutNode('sales.reports.summary', 'sales.reports', 0),
   layoutNode('sales.reports.products', 'sales.reports', 1),
   layoutNode('sales.reports.line-items', 'sales.reports', 2),
@@ -562,7 +565,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.receivables.due-aging', 'sales.reports', 10),
   layoutNode('sales.customers.loyalty', 'sales.reports', 11),
   layoutNode('sales.receivables.bad-debts', 'sales.reports', 12),
-  layoutNode('sales.setup', 'sales', 11),
+  layoutNode('sales.setup', 'sales', 12),
   layoutNode('sales.setup.customer-groups', 'sales.setup', 0),
   layoutNode('sales.setup.price-lists', 'sales.setup', 1),
   layoutNode('sales.setup.territories', 'sales.setup', 2),

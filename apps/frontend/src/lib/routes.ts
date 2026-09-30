@@ -39,6 +39,7 @@ export const routes = {
         quoteDetail: (id: string) => `/sales/quotes/${id}` as const,
         warrantyClaims: '/sales/warranty-claims',
         cashierSessions: '/sales/cashier-sessions',
+        dailyReport: '/sales/daily-report',
         loyalty: '/sales/loyalty',
         crm: {
             followUps: '/crm/follow-ups',

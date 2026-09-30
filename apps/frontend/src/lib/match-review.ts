@@ -29,6 +29,28 @@ export function isConfirmReady(
         });
 }
 
+export type BulkMatchAction = 'accept' | 'new' | 'skip';
+
+export function applyBulkDecision(
+    targeted: CandidateRow[],
+    decisions: Record<string, MatchDecision | ''>,
+    action: BulkMatchAction,
+): { next: Record<string, MatchDecision | ''>; applied: number; skipped: number } {
+    const next = { ...decisions };
+    let applied = 0;
+    let skipped = 0;
+    for (const row of targeted) {
+        const key = decisionKey(row.entity, row.externalId);
+        if (action === 'accept' && !row.matchId) {
+            skipped += 1;
+            continue;
+        }
+        next[key] = action;
+        applied += 1;
+    }
+    return { next, applied, skipped };
+}
+
 export function assembleDecisionRows(
     rows: CandidateRow[],
     decisions: Record<string, MatchDecision | ''>,

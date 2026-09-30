@@ -171,6 +171,17 @@ describe('PrintTemplatesService', () => {
             expect(result.template_id).toBe('invoice');
         });
 
+        it('resolves DAILY_REPORT against the default template', async () => {
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'default', is_default: true }),
+                template({ id: 'invoice', is_default: false, doc_types: ['SALES_INVOICE'] }),
+            ]);
+            expect(PrintDocType.DAILY_REPORT).toBe('DAILY_REPORT');
+            const result = await service.resolve('ten1', PrintDocType.DAILY_REPORT);
+            expect(result).toBeTruthy();
+            expect(result.template_id).toBe('default');
+        });
+
         it('falls back to the tenant default for other document types', async () => {
             db.printTemplate.findMany.mockResolvedValue([
                 template({ id: 'default', is_default: true }),

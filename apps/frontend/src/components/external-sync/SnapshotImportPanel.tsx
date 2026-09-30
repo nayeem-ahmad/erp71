@@ -2,21 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Loader2, Play, Upload } from 'lucide-react';
-import { Button, Checkbox, Field, Input, Select, StatusBadge } from '@/components/ui';
+import { Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
 import { toast } from '@/lib/toast';
 import { downloadMatchWorkbook } from '@/lib/match-workbook';
 import {
+    applyBulkDecision,
     assembleDecisionRows,
     decisionKey,
     isConfirmReady,
     seedDecisions,
+    type BulkMatchAction,
 } from '@/lib/match-review';
 import type {
     ExternalSyncRun,
     ExternalSyncSnapshot,
     ExternalSyncStep,
 } from '@/lib/api';
-import type { CandidateRow, MatchDecision, MatchEntity, MatchManifest } from '@/types/match';
+import type { CandidateRow, Confidence, MatchDecision, MatchEntity, MatchManifest } from '@/types/match';
 
 const SNAPSHOT_POLL_MS = 5000;
 
@@ -25,6 +27,8 @@ const ENTITY_TABS: Array<{ entity: MatchEntity; label: string }> = [
     { entity: 'CUSTOMER', label: 'Customers' },
     { entity: 'SUPPLIER', label: 'Suppliers' },
 ];
+
+export type SnapshotImportPhase = 'extract' | 'mapping' | 'import';
 
 export type SnapshotImportAdapter = {
     listSnapshots: (provider: string) => Promise<ExternalSyncSnapshot[]>;
@@ -67,6 +71,10 @@ type SnapshotImportPanelProps = {
     dryRunDefault?: boolean;
     windowForm: SnapshotWindowForm;
     importRunning?: boolean;
+    phase?: SnapshotImportPhase;
+    onSelectedReadyChange?: (snapshotId: string | null) => void;
+    onMatchesConfirmed?: () => void;
+    onMatchesInvalidated?: () => void;
 };
 
 type FilterChip = 'needs' | 'all';
@@ -89,6 +97,22 @@ function windowLabel(snap: ExternalSyncSnapshot): string {
     return `${snap.window_from.slice(0, 10)} → ${snap.window_to.slice(0, 10)}`;
 }
 
+function confidenceTone(confidence: Confidence) {
+    if (confidence === 'high') return 'success' as const;
+    if (confidence === 'medium') return 'warning' as const;
+    if (confidence === 'low') return 'info' as const;
+    return 'neutral' as const;
+}
+
+function confidenceLabel(confidence: Confidence): string {
+    if (confidence === 'none') return 'None';
+    return confidence.charAt(0).toUpperCase() + confidence.slice(1);
+}
+
+function scorePercent(score: number): string {
+    return `${Math.round(score * 100)}%`;
+}
+
 export function SnapshotImportPanel({
     provider,
     providerLabel,
@@ -98,12 +122,18 @@ export function SnapshotImportPanel({
     dryRunDefault = true,
     windowForm,
     importRunning = false,
+    phase,
+    onSelectedReadyChange,
+    onMatchesConfirmed,
+    onMatchesInvalidated,
 }: SnapshotImportPanelProps) {
     const [snapshots, setSnapshots] = useState<ExternalSyncSnapshot[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [manifest, setManifest] = useState<MatchManifest | null>(null);
     const [rows, setRows] = useState<CandidateRow[]>([]);
     const [decisions, setDecisions] = useState<Record<string, MatchDecision | ''>>({});
+    const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+    const [bulkAction, setBulkAction] = useState<BulkMatchAction | ''>('');
     const [tab, setTab] = useState<MatchEntity>('PRODUCT');
     const [filter, setFilter] = useState<FilterChip>('needs');
     const [search, setSearch] = useState('');
@@ -116,6 +146,10 @@ export function SnapshotImportPanel({
     const [isLoadingList, setIsLoadingList] = useState(true);
     const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const showExtract = phase == null || phase === 'extract';
+    const showMapping = phase == null || phase === 'mapping';
+    const showImport = phase == null || phase === 'import';
 
     const refreshList = useCallback(async () => {
         const list = await adapter.listSnapshots(provider);
@@ -154,10 +188,15 @@ export function SnapshotImportPanel({
     const selectedReadyId = selected?.status === 'READY' ? selected.id : null;
 
     useEffect(() => {
+        onSelectedReadyChange?.(selectedReadyId);
+    }, [onSelectedReadyChange, selectedReadyId]);
+
+    useEffect(() => {
         if (!selectedReadyId) {
             setManifest(null);
             setRows([]);
             setDecisions({});
+            setSelectedKeys(new Set());
             return;
         }
         let cancelled = false;
@@ -169,6 +208,7 @@ export function SnapshotImportPanel({
                 setManifest(data.manifest);
                 setRows(data.rows);
                 setDecisions(seedDecisions(data.rows));
+                setSelectedKeys(new Set());
             })
             .catch((err: unknown) => {
                 if (!cancelled) toast.error(err instanceof Error ? err.message : 'Could not load match candidates');
@@ -186,11 +226,6 @@ export function SnapshotImportPanel({
         () => tabRows.filter((row) => row.confidence === 'medium'),
         [tabRows],
     );
-    const autoRows = useMemo(() => tabRows.filter((row) => row.confidence === 'high'), [tabRows]);
-    const newRows = useMemo(
-        () => tabRows.filter((row) => row.confidence === 'low' || row.confidence === 'none'),
-        [tabRows],
-    );
     const visibleRows = useMemo(() => {
         const base = filter === 'needs' ? mediumRows : tabRows;
         const query = search.trim().toLowerCase();
@@ -203,6 +238,12 @@ export function SnapshotImportPanel({
     }, [filter, mediumRows, tabRows, search]);
     const confirmReady = isConfirmReady(rows, decisions);
     const busy = extracting || importRunning || isExtracting || isStarting || isUploading;
+    const visibleKeys = useMemo(
+        () => visibleRows.map((row) => decisionKey(row.entity, row.externalId)),
+        [visibleRows],
+    );
+    const selectedVisibleCount = visibleKeys.filter((key) => selectedKeys.has(key)).length;
+    const allVisibleSelected = visibleKeys.length > 0 && selectedVisibleCount === visibleKeys.length;
 
     async function handleExtract() {
         setIsExtracting(true);
@@ -292,6 +333,7 @@ export function SnapshotImportPanel({
             toast.success(
                 `${result.applied} match${result.applied === 1 ? '' : 'es'} recorded, ${result.skipped} to be created fresh`,
             );
+            onMatchesConfirmed?.();
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Could not apply match decisions');
         } finally {
@@ -321,135 +363,182 @@ export function SnapshotImportPanel({
         download(manifest, rows);
     }
 
+    function markDecisions(next: Record<string, MatchDecision | ''>) {
+        setDecisions(next);
+        onMatchesInvalidated?.();
+    }
+
     function setDecision(row: CandidateRow, value: MatchDecision | '') {
-        setDecisions((prev) => ({ ...prev, [decisionKey(row.entity, row.externalId)]: value }));
+        markDecisions({ ...decisions, [decisionKey(row.entity, row.externalId)]: value });
+    }
+
+    function toggleRow(key: string, checked: boolean) {
+        setSelectedKeys((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(key);
+            else next.delete(key);
+            return next;
+        });
+    }
+
+    function toggleAllVisible(checked: boolean) {
+        setSelectedKeys((prev) => {
+            const next = new Set(prev);
+            for (const key of visibleKeys) {
+                if (checked) next.add(key);
+                else next.delete(key);
+            }
+            return next;
+        });
+    }
+
+    function handleBulkApply() {
+        if (!bulkAction) return;
+        const targeted =
+            selectedVisibleCount > 0
+                ? visibleRows.filter((row) => selectedKeys.has(decisionKey(row.entity, row.externalId)))
+                : visibleRows;
+        if (targeted.length === 0) return;
+        const result = applyBulkDecision(targeted, decisions, bulkAction);
+        markDecisions(result.next);
+        if (result.skipped > 0) {
+            toast.info(
+                `${result.applied} updated, ${result.skipped} had no suggestion to accept`,
+            );
+        } else {
+            toast.success(`${result.applied} row${result.applied === 1 ? '' : 's'} updated`);
+        }
     }
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-                <Button
-                    icon={<Play className="w-3.5 h-3.5" />}
-                    onClick={() => void handleExtract()}
-                    loading={isExtracting}
-                    disabled={!connectionId || busy}
-                >
-                    Extract from {providerLabel}
-                </Button>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".gz,.json.gz,application/gzip"
-                    className="hidden"
-                    aria-label="Upload snapshot file"
-                    onChange={(event) => void handleUpload(event)}
-                    disabled={busy}
-                />
-                <Button
-                    type="button"
-                    variant="secondary"
-                    icon={<Upload className="w-3.5 h-3.5" />}
-                    onClick={() => fileInputRef.current?.click()}
-                    loading={isUploading}
-                    disabled={busy}
-                >
-                    Upload snapshot
-                </Button>
-                {selected?.status === 'EXTRACTING' ? (
-                    <Button variant="secondary" onClick={() => void handleCancelExtract()} loading={isCancelling}>
-                        Cancel extract
-                    </Button>
-                ) : null}
-            </div>
+            {showExtract ? (
+                <>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            icon={<Play className="w-3.5 h-3.5" />}
+                            onClick={() => void handleExtract()}
+                            loading={isExtracting}
+                            disabled={!connectionId || busy}
+                        >
+                            Extract from {providerLabel}
+                        </Button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".gz,.json.gz,application/gzip"
+                            className="hidden"
+                            aria-label="Upload snapshot file"
+                            onChange={(event) => void handleUpload(event)}
+                            disabled={busy}
+                        />
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            icon={<Upload className="w-3.5 h-3.5" />}
+                            onClick={() => fileInputRef.current?.click()}
+                            loading={isUploading}
+                            disabled={busy}
+                        >
+                            Upload snapshot
+                        </Button>
+                        {selected?.status === 'EXTRACTING' ? (
+                            <Button variant="secondary" onClick={() => void handleCancelExtract()} loading={isCancelling}>
+                                Cancel extract
+                            </Button>
+                        ) : null}
+                    </div>
 
-            {isLoadingList ? (
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Loading snapshots
-                </div>
-            ) : snapshots.length === 0 ? (
-                <p className="text-xs text-gray-500">
-                    Extract from {providerLabel} or upload a .gz snapshot to review matches and import.
-                </p>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                        <thead>
-                            <tr className="text-start text-gray-500 border-b border-gray-100">
-                                <th className="py-2 pe-3 font-medium">Window</th>
-                                <th className="py-2 pe-3 font-medium">Status</th>
-                                <th className="py-2 pe-3 font-medium">Counts</th>
-                                <th className="py-2 font-medium">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {snapshots.map((snap) => (
-                                <tr
-                                    key={snap.id}
-                                    className={`border-b border-gray-50 ${snap.id === selectedId ? 'bg-blue-50' : ''}`}
-                                >
-                                    <td className="py-2 pe-3">
-                                        <button
-                                            type="button"
-                                            className="text-start text-blue-600 hover:underline max-md:min-h-touch"
-                                            onClick={() => setSelectedId(snap.id)}
+                    {isLoadingList ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Loading snapshots
+                        </div>
+                    ) : snapshots.length === 0 ? (
+                        <p className="text-xs text-gray-500">
+                            Extract from {providerLabel} or upload a .gz snapshot to review matches and import.
+                        </p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-start text-gray-500 border-b border-gray-100">
+                                        <th className="py-2 pe-3 font-medium">Window</th>
+                                        <th className="py-2 pe-3 font-medium">Status</th>
+                                        <th className="py-2 pe-3 font-medium">Counts</th>
+                                        <th className="py-2 font-medium">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {snapshots.map((snap) => (
+                                        <tr
+                                            key={snap.id}
+                                            className={`border-b border-gray-50 ${snap.id === selectedId ? 'bg-blue-50' : ''}`}
                                         >
-                                            {windowLabel(snap)}
-                                        </button>
-                                    </td>
-                                    <td className="py-2 pe-3">
-                                        <StatusBadge tone={toneForSnapshot(snap.status)}>{snap.status}</StatusBadge>
-                                        {snap.status === 'EXTRACTING' && (snap.phase || snap.progress) ? (
-                                            <span className="ms-2 text-gray-500">
-                                                {[
-                                                    snap.phase,
-                                                    snap.progress
-                                                        ? `${snap.progress.done} / ${snap.progress.total}`
-                                                        : null,
-                                                ]
-                                                    .filter(Boolean)
-                                                    .join(' · ')}
-                                            </span>
-                                        ) : null}
-                                        {snap.error_message ? (
-                                            <span className="ms-2 text-danger">{snap.error_message}</span>
-                                        ) : null}
-                                    </td>
-                                    <td className="py-2 pe-3 text-gray-500">
-                                        {snap.counts
-                                            ? `${snap.counts.products ?? 0}p / ${snap.counts.customers ?? 0}c / ${snap.counts.suppliers ?? 0}s`
-                                            : '—'}
-                                    </td>
-                                    <td className="py-2">
-                                        <div className="flex flex-wrap gap-2">
-                                            {snap.status === 'READY' ? (
+                                            <td className="py-2 pe-3">
                                                 <button
                                                     type="button"
-                                                    className="text-blue-600 hover:underline max-md:min-h-touch"
-                                                    onClick={() => void handleDownload(snap.id)}
+                                                    className="text-start text-blue-600 hover:underline max-md:min-h-touch"
+                                                    onClick={() => setSelectedId(snap.id)}
                                                 >
-                                                    Download
+                                                    {windowLabel(snap)}
                                                 </button>
-                                            ) : null}
-                                            {snap.status !== 'EXTRACTING' ? (
-                                                <button
-                                                    type="button"
-                                                    className="text-danger hover:underline max-md:min-h-touch"
-                                                    onClick={() => void handleDelete(snap.id)}
-                                                >
-                                                    Delete
-                                                </button>
-                                            ) : null}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                                            </td>
+                                            <td className="py-2 pe-3">
+                                                <StatusBadge tone={toneForSnapshot(snap.status)}>{snap.status}</StatusBadge>
+                                                {snap.status === 'EXTRACTING' && (snap.phase || snap.progress) ? (
+                                                    <span className="ms-2 text-gray-500">
+                                                        {[
+                                                            snap.phase,
+                                                            snap.progress
+                                                                ? `${snap.progress.done} / ${snap.progress.total}`
+                                                                : null,
+                                                        ]
+                                                            .filter(Boolean)
+                                                            .join(' · ')}
+                                                    </span>
+                                                ) : null}
+                                                {snap.error_message ? (
+                                                    <span className="ms-2 text-danger">{snap.error_message}</span>
+                                                ) : null}
+                                            </td>
+                                            <td className="py-2 pe-3 text-gray-500">
+                                                {snap.counts
+                                                    ? `${snap.counts.products ?? 0}p / ${snap.counts.customers ?? 0}c / ${snap.counts.suppliers ?? 0}s`
+                                                    : '—'}
+                                            </td>
+                                            <td className="py-2">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {snap.status === 'READY' ? (
+                                                        <button
+                                                            type="button"
+                                                            className="text-blue-600 hover:underline max-md:min-h-touch"
+                                                            onClick={() => void handleDownload(snap.id)}
+                                                        >
+                                                            Download
+                                                        </button>
+                                                    ) : null}
+                                                    {snap.status !== 'EXTRACTING' ? (
+                                                        <button
+                                                            type="button"
+                                                            className="text-danger hover:underline max-md:min-h-touch"
+                                                            onClick={() => void handleDelete(snap.id)}
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </>
+            ) : null}
 
-            {selectedReadyId ? (
+            {showMapping && selectedReadyId ? (
                 <div className="space-y-3">
                     <div className="flex flex-wrap gap-1 border-b border-gray-100">
                         {ENTITY_TABS.map((item) => (
@@ -486,6 +575,24 @@ export function SnapshotImportPanel({
                             placeholder="Search by name"
                             className="w-48"
                         />
+                        <Select
+                            aria-label="Bulk action"
+                            className="w-48"
+                            value={bulkAction}
+                            onChange={(event) => setBulkAction(event.target.value as BulkMatchAction | '')}
+                        >
+                            <option value="">Bulk action…</option>
+                            <option value="accept">Accept suggestion</option>
+                            <option value="new">Create as new</option>
+                            <option value="skip">Skip</option>
+                        </Select>
+                        <Button
+                            variant="secondary"
+                            onClick={handleBulkApply}
+                            disabled={!bulkAction || visibleRows.length === 0}
+                        >
+                            Apply
+                        </Button>
                     </div>
 
                     {isLoadingCandidates ? (
@@ -493,40 +600,85 @@ export function SnapshotImportPanel({
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             Scoring matches
                         </div>
+                    ) : visibleRows.length === 0 && filter === 'needs' ? (
+                        <p className="text-xs text-gray-500">No rows need a decision in this tab.</p>
                     ) : (
-                        <>
-                            {visibleRows.length === 0 && filter === 'needs' ? (
-                                <p className="text-xs text-gray-500">No rows need a decision in this tab.</p>
-                            ) : (
-                                <ul className="space-y-2">
-                                    {visibleRows.map((row) => (
-                                        <MatchRow
-                                            key={decisionKey(row.entity, row.externalId)}
-                                            row={row}
-                                            value={decisions[decisionKey(row.entity, row.externalId)] ?? ''}
-                                            onChange={(value) => setDecision(row, value)}
-                                        />
-                                    ))}
-                                </ul>
-                            )}
-
-                            {filter === 'needs' ? (
-                                <>
-                                    <CollapsedGroup
-                                        title={`Auto-matched (${autoRows.length})`}
-                                        rows={autoRows}
-                                        decisions={decisions}
-                                        onChange={setDecision}
-                                    />
-                                    <CollapsedGroup
-                                        title={`Create as new (${newRows.length})`}
-                                        rows={newRows}
-                                        decisions={decisions}
-                                        onChange={setDecision}
-                                    />
-                                </>
-                            ) : null}
-                        </>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-start text-gray-500 border-b border-gray-100">
+                                        <th className="py-1 pe-2 w-8 font-medium">
+                                            <Checkbox
+                                                aria-label="Select all visible"
+                                                checked={allVisibleSelected}
+                                                onChange={(event) => toggleAllVisible(event.target.checked)}
+                                            />
+                                        </th>
+                                        <th className="py-1 pe-2 font-medium">Source</th>
+                                        <th className="py-1 pe-2 font-medium">Extra</th>
+                                        <th className="py-1 pe-2 font-medium">Suggested</th>
+                                        <th className="py-1 pe-2 font-medium">Confidence</th>
+                                        <th className="py-1 font-medium">Decision</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visibleRows.map((row) => {
+                                        const key = decisionKey(row.entity, row.externalId);
+                                        const value = decisions[key] ?? '';
+                                        return (
+                                            <tr key={key} className="border-b border-gray-50 h-8">
+                                                <td className="py-0.5 pe-2">
+                                                    <Checkbox
+                                                        aria-label={`Select ${row.sourceName}`}
+                                                        checked={selectedKeys.has(key)}
+                                                        onChange={(event) => toggleRow(key, event.target.checked)}
+                                                    />
+                                                </td>
+                                                <td className="py-0.5 pe-2 font-medium text-gray-900 whitespace-nowrap">
+                                                    {row.sourceName}
+                                                </td>
+                                                <td className="py-0.5 pe-2 text-gray-500 whitespace-nowrap">
+                                                    {row.sourceExtra || '—'}
+                                                </td>
+                                                <td className="py-0.5 pe-2 text-gray-800 whitespace-nowrap">
+                                                    {row.suggestedMatch ?? '—'}
+                                                </td>
+                                                <td className="py-0.5 pe-2 whitespace-nowrap">
+                                                    <StatusBadge tone={confidenceTone(row.confidence)}>
+                                                        {confidenceLabel(row.confidence)}
+                                                    </StatusBadge>
+                                                    <span className="ms-1 text-gray-500">{scorePercent(row.score)}</span>
+                                                </td>
+                                                <td className="py-0.5 min-w-[10rem]">
+                                                    <Select
+                                                        aria-label={`Decision for ${row.sourceName}`}
+                                                        className="py-0.5 text-xs"
+                                                        value={value}
+                                                        onChange={(event) =>
+                                                            setDecision(row, event.target.value as MatchDecision | '')
+                                                        }
+                                                    >
+                                                        <option value="">Choose…</option>
+                                                        {row.matchId ? (
+                                                            <option value="accept">
+                                                                {row.suggestedMatch ?? 'Accept suggested'}
+                                                            </option>
+                                                        ) : null}
+                                                        {row.altIds.map((id, index) => (
+                                                            <option key={id} value={`alt${index + 1}`}>
+                                                                {row.altCandidates[index] ?? `Alternative ${index + 1}`}
+                                                            </option>
+                                                        ))}
+                                                        <option value="new">Create as new</option>
+                                                        <option value="skip">Skip</option>
+                                                    </Select>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -535,7 +687,7 @@ export function SnapshotImportPanel({
                             loading={isConfirming}
                             disabled={!confirmReady || isConfirming || rows.length === 0}
                         >
-                            Confirm matches
+                            Confirm and continue
                         </Button>
                         <Button
                             variant="secondary"
@@ -549,24 +701,26 @@ export function SnapshotImportPanel({
                 </div>
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
-                    <Checkbox checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-                    Dry run (count only, change nothing)
-                </label>
-                <Button
-                    icon={<Play className="w-3.5 h-3.5" />}
-                    onClick={() => void handleStartRun()}
-                    loading={isStarting}
-                    disabled={!selectedReadyId || busy || steps.length === 0}
-                >
-                    {dryRun ? 'Start dry run' : 'Start import'}
-                </Button>
-                {!selectedReadyId ? (
-                    <span className="text-xs text-gray-500">Select a ready snapshot first</span>
-                ) : null}
-                {steps.length === 0 ? <span className="text-xs text-gray-500">Pick at least one step</span> : null}
-            </div>
+            {showImport ? (
+                <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
+                        <Checkbox checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+                        Dry run (count only, change nothing)
+                    </label>
+                    <Button
+                        icon={<Play className="w-3.5 h-3.5" />}
+                        onClick={() => void handleStartRun()}
+                        loading={isStarting}
+                        disabled={!selectedReadyId || busy || steps.length === 0}
+                    >
+                        {dryRun ? 'Start dry run' : 'Start import'}
+                    </Button>
+                    {!selectedReadyId ? (
+                        <span className="text-xs text-gray-500">Select a ready snapshot first</span>
+                    ) : null}
+                    {steps.length === 0 ? <span className="text-xs text-gray-500">Pick at least one step</span> : null}
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -591,81 +745,5 @@ function FilterButton({
         >
             {label}
         </button>
-    );
-}
-
-function MatchRow({
-    row,
-    value,
-    onChange,
-}: {
-    row: CandidateRow;
-    value: MatchDecision | '';
-    onChange: (value: MatchDecision | '') => void;
-}) {
-    return (
-        <li className="rounded-lg border border-gray-100 p-3">
-            <div className="grid gap-2 md:grid-cols-3">
-                <div>
-                    <p className="text-sm font-medium text-gray-900">{row.sourceName}</p>
-                    {row.sourceExtra ? <p className="text-xs text-gray-500">{row.sourceExtra}</p> : null}
-                </div>
-                <div>
-                    <p className="text-xs text-gray-500">Suggested</p>
-                    <p className="text-sm text-gray-800">{row.suggestedMatch ?? '—'}</p>
-                </div>
-                <Field label="Decision">
-                    <Select
-                        aria-label={`Decision for ${row.sourceName}`}
-                        className="min-h-touch"
-                        value={value}
-                        onChange={(event) => onChange(event.target.value as MatchDecision | '')}
-                    >
-                        <option value="">Choose…</option>
-                        {row.matchId ? (
-                            <option value="accept">{row.suggestedMatch ?? 'Accept suggested'}</option>
-                        ) : null}
-                        {row.altIds.map((id, index) => (
-                            <option key={id} value={`alt${index + 1}`}>
-                                {row.altCandidates[index] ?? `Alternative ${index + 1}`}
-                            </option>
-                        ))}
-                        <option value="new">Create as new</option>
-                        <option value="skip">Skip</option>
-                    </Select>
-                </Field>
-            </div>
-        </li>
-    );
-}
-
-function CollapsedGroup({
-    title,
-    rows,
-    decisions,
-    onChange,
-}: {
-    title: string;
-    rows: CandidateRow[];
-    decisions: Record<string, MatchDecision | ''>;
-    onChange: (row: CandidateRow, value: MatchDecision | '') => void;
-}) {
-    if (rows.length === 0) return null;
-    return (
-        <details className="rounded-lg border border-gray-100 p-3">
-            <summary className="cursor-pointer text-xs font-medium text-gray-700 max-md:min-h-touch">
-                {title}
-            </summary>
-            <ul className="mt-2 space-y-2">
-                {rows.map((row) => (
-                    <MatchRow
-                        key={decisionKey(row.entity, row.externalId)}
-                        row={row}
-                        value={decisions[decisionKey(row.entity, row.externalId)] ?? ''}
-                        onChange={(value) => onChange(row, value)}
-                    />
-                ))}
-            </ul>
-        </details>
     );
 }

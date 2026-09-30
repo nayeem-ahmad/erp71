@@ -265,6 +265,15 @@ export const componentsMessages = {
             revokeSuccess: "লিংক বাতিল করা হয়েছে।",
             revokeError: "লিংক বাতিল করা যায়নি। আবার চেষ্টা করুন।",
         },
+        shareMessageModal: {
+            title: "{subject} শেয়ার করুন",
+            description: "বার্তাটি কপি হবে বা হোয়াটসঅ্যাপে খুলবে। সম্পাদনা করলে রিপোর্ট বদলায় না।",
+            copy: "কপি করুন",
+            copied: "কপি হয়েছে",
+            whatsapp: "হোয়াটসঅ্যাপ",
+            close: "বন্ধ করুন",
+            previewLabel: "বার্তা",
+        },
         shortLinkManager: {
             shortLinkColumn: "শর্ট লিংক",
             targetColumn: "গন্তব্য",

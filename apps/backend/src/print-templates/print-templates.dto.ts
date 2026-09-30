@@ -46,6 +46,7 @@ export enum PrintDocType {
     /// invoice, so it belongs in the existing template family rather than
     /// getting a print path of its own.
     PAYSLIP = 'PAYSLIP',
+    DAILY_REPORT = 'DAILY_REPORT',
 }
 
 export enum PaperSize {

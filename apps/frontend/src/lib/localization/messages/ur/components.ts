@@ -268,6 +268,15 @@ export const componentsMessages = {
         revokeSuccess: "لنک منسوخ ہو گیا۔",
         revokeError: "لنک منسوخ نہیں ہو سکا۔ براہِ کرم دوبارہ کوشش کریں۔",
     },
+    shareMessageModal: {
+        title: 'Share {subject}',
+        description: 'The message is copied or opened in WhatsApp. Editing it does not change the report.',
+        copy: 'Copy',
+        copied: 'Copied',
+        whatsapp: 'WhatsApp',
+        close: 'Close',
+        previewLabel: 'Message',
+    },
     shortLinkManager: {
         shortLinkColumn: "مختصر لنک",
         targetColumn: "ہدف",

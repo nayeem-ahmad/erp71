@@ -174,6 +174,7 @@ describe('DashboardPage — Business Monitor v2', () => {
         expect(await screen.findByText('Sales by category')).toBeInTheDocument();
         expect(await screen.findByText('Top selling products')).toBeInTheDocument();
         expect(await screen.findByText('Top customers')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /today's report/i })).toHaveAttribute('href', '/sales/daily-report');
     });
 
     it('renders the greeting and range toggle and fetches financial data', async () => {
@@ -291,6 +292,7 @@ describe('DashboardPage — variant selection', () => {
         // No retail panel, and none of the retail endpoints are touched.
         expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
         expect(screen.queryByText('Sales by category')).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: /today's report/i })).not.toBeInTheDocument();
         expect(api.getLowStockCount).not.toHaveBeenCalled();
         expect(api.getSalesList).not.toHaveBeenCalled();
         expect(api.getSalesByCategory).not.toHaveBeenCalled();
