@@ -130,6 +130,7 @@ export const purchasesMessages = {
                 CANCELLED: 'বাতিল',
             },
             printInvoice: "ইনভয়েস প্রিন্ট",
+            printLoadFailed: "প্রিন্ট করতে ক্রয় লোড করা যায়নি।",
             modal: {
                 title: "ক্রয় রেকর্ড করুন",
                 subtitle: "স্টক গ্রহণ, সরবরাহকারী সংরক্ষণ এবং ইনভেন্টরি আপডেট",

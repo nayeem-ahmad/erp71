@@ -11,7 +11,35 @@ jest.mock('@/lib/api', () => ({
         // CANCEL_ENTRY → the action is hidden, which is the default here.
         getMe: jest.fn().mockResolvedValue({ tenants: [] }),
         cancelPurchase: jest.fn(),
+        // Printing a row fetches the full invoice, because the list payload
+        // may omit payments and invoice-level charges.
+        getPurchaseInvoice: jest.fn().mockResolvedValue({
+            purchase: {
+                id: 'purchase-1',
+                purchase_number: 'PUR-00001',
+                created_at: '2026-03-20T10:00:00.000Z',
+                subtotal_amount: '42',
+                tax_amount: '0',
+                discount_amount: '0',
+                freight_amount: '0',
+                total_amount: '42',
+                supplier: { name: 'Fresh Farms' },
+                items: [
+                    { id: 'item-1', quantity: 2, unit_cost: '10', line_total: '20', product: { name: 'Coffee Beans' } },
+                ],
+                payments: [],
+            },
+            tenant: { name: 'Demo Store' },
+        }),
+        getSalesSettings: jest.fn().mockResolvedValue({}),
     },
+}));
+
+// The printers open a popup and write a document into it; the assertions here
+// are about which document was asked for, not what it renders.
+jest.mock('@/lib/purchase-print-actions', () => ({
+    ...jest.requireActual('@/lib/purchase-print-actions'),
+    printPurchaseInvoiceFromRecord: jest.fn(),
 }));
 
 const replace = jest.fn();
@@ -62,6 +90,45 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
 
         const link = await screen.findByTitle('Duplicate purchase');
         expect(link).toHaveAttribute('href', '/purchases/new?duplicate=purchase-1');
+    });
+
+    it('prints from the row icon without opening an invoice page', async () => {
+        const { api } = require('@/lib/api');
+        const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');
+
+        render(<PurchasesPage />);
+        await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
+
+        const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href'));
+        expect(hrefs).not.toContain('/purchases/purchase-1/invoice');
+        expect(screen.queryByRole('menuitem', { name: /open invoice page/i })).toBeNull();
+
+        fireEvent.click(screen.getByTitle('Print Invoice'));
+
+        await waitFor(() => expect(api.getPurchaseInvoice).toHaveBeenCalledWith('purchase-1'));
+        await waitFor(() => expect(printPurchaseInvoiceFromRecord).toHaveBeenCalled());
+    });
+
+    it('sets the paper size from the header rather than from a row', async () => {
+        const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');
+
+        render(<PurchasesPage />);
+        await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole('button', { name: /print settings/i }));
+
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.change(within(dialog).getByRole('combobox'), {
+            target: { value: 'Thermal80' },
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByTitle('Print Invoice'));
+
+        await waitFor(() => expect(printPurchaseInvoiceFromRecord).toHaveBeenCalled());
+        expect(printPurchaseInvoiceFromRecord.mock.calls.at(-1)?.[1]).toBe('Thermal80');
     });
 
     it('forwards the legacy ?new=1 deep link to the entry page', async () => {

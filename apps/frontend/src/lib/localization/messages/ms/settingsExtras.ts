@@ -211,6 +211,7 @@ export const settingsExtrasMessages = {
             SALES_RETURN: "Pulangan jualan",
             DELIVERY_CHALLAN: "Nota penghantaran",
             PURCHASE_ORDER: "Pesanan belian",
+            PURCHASE_INVOICE: "Invois belian",
             PURCHASE_RETURN: "Pulangan belian",
             LIST_REPORT: "Laporan senarai",
             PROFORMA_INVOICE: "Invois proforma",

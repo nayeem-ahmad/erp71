@@ -211,6 +211,7 @@ export const settingsExtrasMessages = {
             SALES_RETURN: "বিক্রয় ফেরত",
             DELIVERY_CHALLAN: "ডেলিভারি চালান",
             PURCHASE_ORDER: "ক্রয় আদেশ",
+            PURCHASE_INVOICE: "ক্রয় ইনভয়েস",
             PURCHASE_RETURN: "ক্রয় ফেরত",
             LIST_REPORT: "তালিকা রিপোর্ট",
             PROFORMA_INVOICE: "প্রোফর্মা ইনভয়েস",

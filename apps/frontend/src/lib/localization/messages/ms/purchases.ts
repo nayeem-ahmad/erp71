@@ -130,6 +130,7 @@ export const purchasesMessages = {
                 CANCELLED: 'Dibatalkan',
             },
             printInvoice: 'Cetak Invois',
+            printLoadFailed: 'Tidak dapat memuatkan belian untuk dicetak.',
             modal: {
                 title: 'Rekod Pembelian',
                 subtitle: 'Terima stok, tangkap maklumat pembekal, dan kemas kini inventori',

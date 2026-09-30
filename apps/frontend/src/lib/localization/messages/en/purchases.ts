@@ -130,6 +130,7 @@ export const purchasesMessages = {
             CANCELLED: 'Cancelled',
         },
         printInvoice: 'Print Invoice',
+        printLoadFailed: 'Could not load the purchase to print.',
         modal: {
             title: 'Record Purchase',
             subtitle: 'Receive stock, capture supplier, and update inventory',

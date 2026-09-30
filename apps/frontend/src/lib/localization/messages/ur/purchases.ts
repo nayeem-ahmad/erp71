@@ -130,6 +130,7 @@ export const purchasesMessages = {
             CANCELLED: 'منسوخ',
         },
         printInvoice: "انوائس چھاپیں",
+        printLoadFailed: "خریداری پرنٹ کے لیے لوڈ نہیں ہو سکی۔",
         modal: {
             title: "خریداری درج کریں",
             subtitle: "اسٹاک وصول کریں، سپلائر درج کریں اور انوینٹری اپ ڈیٹ کریں",

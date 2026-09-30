@@ -36,6 +36,10 @@ export enum PrintDocType {
     /// rider carries, so it gets its own assignable type.
     DELIVERY_CHALLAN = 'DELIVERY_CHALLAN',
     PURCHASE_ORDER = 'PURCHASE_ORDER',
+    /// The purchase bill printed from the purchases list. Separate from
+    /// PURCHASE_ORDER: a tenant usually wants a different letterhead on the
+    /// receipt they file than on the order they send.
+    PURCHASE_INVOICE = 'PURCHASE_INVOICE',
     PURCHASE_RETURN = 'PURCHASE_RETURN',
     LIST_REPORT = 'LIST_REPORT',
     /// HRIS Phase 6. A payslip carries the same tenant letterhead as an

@@ -19,6 +19,8 @@ import { toast } from '@/lib/toast';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
+import PrintSettingsModal from '../../sales/components/PrintSettingsModal';
+import { usePurchasePrinting } from '@/lib/hooks/usePurchasePrinting';
 
 interface PurchaseItem {
     id: string;
@@ -62,6 +64,21 @@ export default function PurchasesPage() {
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Purchase | null>(null);
+    const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
+
+    // Paper size and the preview opt-out are settings, not per-row choices, so
+    // they are set once from the header rather than re-picked on every print.
+    // Shared with sales: the printer next to this browser is one printer.
+    const {
+        paperSize,
+        setPaperSize,
+        skipPreview,
+        setSkipPreview,
+        density,
+        setDensity,
+        busyId,
+        printInvoice,
+    } = usePurchasePrinting();
 
     // Cancelling reverses stock, the payable and the ledger, so the action is
     // hidden without CANCEL_ENTRY rather than shown and left to 403. OWNER
@@ -184,13 +201,16 @@ export default function PurchasesPage() {
                 header: '',
                 cell: ({ row }) => (
                     <div className="flex items-center gap-0.5">
-                        <Link
-                            href={`/purchases/${row.original.id}/invoice`}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light transition-colors inline-flex"
+                        <button
+                            type="button"
+                            onClick={() => void printInvoice(row.original.id, paperSize)}
+                            disabled={busyId === row.original.id}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary-light disabled:text-gray-300 transition-colors inline-flex"
                             title={t.purchases.printInvoice}
+                            aria-label={t.purchases.printInvoice}
                         >
-                            <Printer className="w-4 h-4" />
-                        </Link>
+                            <Printer className={`${busyId === row.original.id ? 'animate-pulse' : ''} w-4 h-4`} />
+                        </button>
                         <Link
                             href={`/purchases/new?duplicate=${row.original.id}`}
                             className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors inline-flex"
@@ -215,7 +235,7 @@ export default function PurchasesPage() {
                 size: 120,
             }),
         ],
-        [t, locale, canCancel],
+        [t, locale, canCancel, paperSize, busyId, printInvoice],
     );
 
     return (
@@ -230,13 +250,23 @@ export default function PurchasesPage() {
                         'purchases',
                     )}
                     actions={(
-                        <Link
-                            href={routes.purchases.newPurchase}
-                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
-                        >
-                            <Plus className="w-4 h-4 me-2" />
-                            {t.purchases.recordPurchase}
-                        </Link>
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setPrintSettingsOpen(true)}
+                                className="flex items-center rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                            >
+                                <Printer className="w-4 h-4 me-2" />
+                                {t.sales.printSettings.action}
+                            </button>
+                            <Link
+                                href={routes.purchases.newPurchase}
+                                className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
+                            >
+                                <Plus className="w-4 h-4 me-2" />
+                                {t.purchases.recordPurchase}
+                            </Link>
+                        </>
                     )}
                 />
 
@@ -254,6 +284,21 @@ export default function PurchasesPage() {
                     emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.purchases.searchPlaceholder}
                 />
+
+                {printSettingsOpen && (
+                    <PrintSettingsModal
+                        paperSize={paperSize}
+                        skipPreview={skipPreview}
+                        density={density}
+                        onSave={(next) => {
+                            setPaperSize(next.paperSize);
+                            setSkipPreview(next.skipPreview);
+                            setDensity(next.density);
+                            toast.success(t.sales.printSettings.saved);
+                        }}
+                        onClose={() => setPrintSettingsOpen(false)}
+                    />
+                )}
 
                 {cancelTarget && (
                     <CancelEntryModal

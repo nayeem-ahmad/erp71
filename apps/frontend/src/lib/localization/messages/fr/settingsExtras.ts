@@ -211,6 +211,7 @@ export const settingsExtrasMessages = {
             SALES_RETURN: "Retours clients",
             DELIVERY_CHALLAN: "Bons de livraison",
             PURCHASE_ORDER: "Commandes fournisseurs",
+            PURCHASE_INVOICE: "Factures d'achat",
             PURCHASE_RETURN: "Retours fournisseurs",
             LIST_REPORT: "Rapports de liste",
             PROFORMA_INVOICE: "Factures proforma",
