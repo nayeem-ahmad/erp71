@@ -105,4 +105,12 @@ describe('checksum and counts', () => {
         (doc as { formatVersion: number }).formatVersion = 2;
         expect(() => assertFormatVersion(doc)).toThrow(/format/i);
     });
+
+    it('refuses a gzip that expands past the snapshot JSON ceiling', async () => {
+        const { promisify } = await import('util');
+        const { gzip } = await import('zlib');
+        const { gunzipSnapshot } = await import('./snapshot-file');
+        const compressed = await promisify(gzip)(Buffer.alloc(2_000, 0x61));
+        await expect(gunzipSnapshot(compressed, 100)).rejects.toThrow();
+    });
 });

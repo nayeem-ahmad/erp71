@@ -68,6 +68,7 @@ function makeDb() {
             update: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
                 Promise.resolve({ ...SNAPSHOT, ...data }),
             ),
+            delete: jest.fn().mockResolvedValue({}),
         },
         externalSyncRun: {
             findFirst: jest.fn().mockResolvedValue(null),
@@ -105,6 +106,20 @@ describe('ExternalSyncSnapshotService', () => {
             (call) => call[0].data.status === 'READY',
         );
         expect(ready).toBeTruthy();
+    });
+
+    it('rewrites phase as collections complete', async () => {
+        await service.executeExtract('snap-1');
+        const phases = db.externalSyncSnapshot.update.mock.calls
+            .map((call) => call[0].data.phase)
+            .filter((phase): phase is string => typeof phase === 'string' && phase.length > 0);
+        expect(phases).toEqual(
+            expect.arrayContaining(['Products', 'Customers', 'Suppliers', 'Sales', 'Purchases']),
+        );
+        const withProgress = db.externalSyncSnapshot.update.mock.calls.find(
+            (call) => call[0].data.progress && call[0].data.phase === 'Products',
+        );
+        expect(withProgress?.[0].data.progress).toEqual({ done: 1, total: 8 });
     });
 
     it('marks FAILED and deletes the file when fetchProducts throws', async () => {
@@ -239,6 +254,13 @@ describe('ExternalSyncSnapshotService upload/download/delete', () => {
         expect(db.externalSyncSnapshot.create).toHaveBeenCalled();
         const stored = await readSnapshotFile(path.join(tmp, 'tenant-1', 'snap-up-1.json.gz'));
         expect(stored.products).toEqual([{ id: 1 }]);
+    });
+
+    it('deletes the READY row when the gzip cannot be stored on the snapshot volume', async () => {
+        const buf = await gzipOf(sampleDoc());
+        await fs.writeFile(path.join(tmp, 'tenant-1'), 'not a directory');
+        await expect(service.uploadSnapshot('tenant-1', undefined, buf)).rejects.toThrow();
+        expect(db.externalSyncSnapshot.delete).toHaveBeenCalledWith({ where: { id: 'snap-up-1' } });
     });
 
     it('openFile throws when the gzip is missing on disk', async () => {

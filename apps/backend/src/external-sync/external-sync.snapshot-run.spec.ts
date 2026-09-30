@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
+import { ConflictException } from '@nestjs/common';
 import { getProviderDefinition } from './provider-adapter';
 import { ExternalSyncService } from './external-sync.service';
 
@@ -84,6 +85,15 @@ describe('startRun snapshot vs live', () => {
         ).rejects.toThrow(/snapshot/i);
         expect(createClient).not.toHaveBeenCalled();
         expect(db.externalSyncRun.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a scheduled run while an extract is in flight', async () => {
+        snapshots.assertNoInFlight.mockRejectedValue(
+            new ConflictException('An extract is already running (started 2026-09-30T00:00:00.000Z)'),
+        );
+        await expect(service.startRun('tenant-1', {}, 'SCHEDULED')).rejects.toBeInstanceOf(ConflictException);
+        expect(db.externalSyncRun.create).not.toHaveBeenCalled();
+        expect(createClient).not.toHaveBeenCalled();
     });
 
     it('a scheduled run without snapshotId still uses the live client', async () => {

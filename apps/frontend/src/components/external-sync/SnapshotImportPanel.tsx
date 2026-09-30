@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Loader2, Play, Upload } from 'lucide-react';
-import { Button, Checkbox, Field, Select, StatusBadge } from '@/components/ui';
+import { Button, Checkbox, Field, Input, Select, StatusBadge } from '@/components/ui';
 import { toast } from '@/lib/toast';
 import { downloadMatchWorkbook } from '@/lib/match-workbook';
 import {
@@ -106,6 +106,7 @@ export function SnapshotImportPanel({
     const [decisions, setDecisions] = useState<Record<string, MatchDecision | ''>>({});
     const [tab, setTab] = useState<MatchEntity>('PRODUCT');
     const [filter, setFilter] = useState<FilterChip>('needs');
+    const [search, setSearch] = useState('');
     const [dryRun, setDryRun] = useState(dryRunDefault);
     const [isExtracting, setIsExtracting] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
@@ -190,7 +191,16 @@ export function SnapshotImportPanel({
         () => tabRows.filter((row) => row.confidence === 'low' || row.confidence === 'none'),
         [tabRows],
     );
-    const visibleRows = filter === 'needs' ? mediumRows : tabRows;
+    const visibleRows = useMemo(() => {
+        const base = filter === 'needs' ? mediumRows : tabRows;
+        const query = search.trim().toLowerCase();
+        if (!query) return base;
+        return base.filter(
+            (row) =>
+                row.sourceName.toLowerCase().includes(query) ||
+                (row.sourceExtra ?? '').toLowerCase().includes(query),
+        );
+    }, [filter, mediumRows, tabRows, search]);
     const confirmReady = isConfirmReady(rows, decisions);
     const busy = extracting || importRunning || isExtracting || isStarting || isUploading;
 
@@ -389,6 +399,18 @@ export function SnapshotImportPanel({
                                     </td>
                                     <td className="py-2 pe-3">
                                         <StatusBadge tone={toneForSnapshot(snap.status)}>{snap.status}</StatusBadge>
+                                        {snap.status === 'EXTRACTING' && (snap.phase || snap.progress) ? (
+                                            <span className="ms-2 text-gray-500">
+                                                {[
+                                                    snap.phase,
+                                                    snap.progress
+                                                        ? `${snap.progress.done} / ${snap.progress.total}`
+                                                        : null,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(' · ')}
+                                            </span>
+                                        ) : null}
                                         {snap.error_message ? (
                                             <span className="ms-2 text-danger">{snap.error_message}</span>
                                         ) : null}
@@ -446,7 +468,7 @@ export function SnapshotImportPanel({
                         ))}
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-end gap-2">
                         <FilterButton
                             active={filter === 'needs'}
                             onClick={() => setFilter('needs')}
@@ -456,6 +478,13 @@ export function SnapshotImportPanel({
                             active={filter === 'all'}
                             onClick={() => setFilter('all')}
                             label={`All (${tabRows.length})`}
+                        />
+                        <Input
+                            aria-label="Search"
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Search by name"
+                            className="w-48"
                         />
                     </div>
 
@@ -476,7 +505,6 @@ export function SnapshotImportPanel({
                                             row={row}
                                             value={decisions[decisionKey(row.entity, row.externalId)] ?? ''}
                                             onChange={(value) => setDecision(row, value)}
-                                            interactive={row.confidence === 'medium'}
                                         />
                                     ))}
                                 </ul>
@@ -484,8 +512,18 @@ export function SnapshotImportPanel({
 
                             {filter === 'needs' ? (
                                 <>
-                                    <CollapsedGroup title={`Auto-matched (${autoRows.length})`} rows={autoRows} />
-                                    <CollapsedGroup title={`Create as new (${newRows.length})`} rows={newRows} />
+                                    <CollapsedGroup
+                                        title={`Auto-matched (${autoRows.length})`}
+                                        rows={autoRows}
+                                        decisions={decisions}
+                                        onChange={setDecision}
+                                    />
+                                    <CollapsedGroup
+                                        title={`Create as new (${newRows.length})`}
+                                        rows={newRows}
+                                        decisions={decisions}
+                                        onChange={setDecision}
+                                    />
                                 </>
                             ) : null}
                         </>
@@ -560,12 +598,10 @@ function MatchRow({
     row,
     value,
     onChange,
-    interactive,
 }: {
     row: CandidateRow;
     value: MatchDecision | '';
     onChange: (value: MatchDecision | '') => void;
-    interactive: boolean;
 }) {
     return (
         <li className="rounded-lg border border-gray-100 p-3">
@@ -578,50 +614,56 @@ function MatchRow({
                     <p className="text-xs text-gray-500">Suggested</p>
                     <p className="text-sm text-gray-800">{row.suggestedMatch ?? '—'}</p>
                 </div>
-                {interactive ? (
-                    <Field label="Decision">
-                        <Select
-                            aria-label={`Decision for ${row.sourceName}`}
-                            className="min-h-touch"
-                            value={value}
-                            onChange={(event) => onChange(event.target.value as MatchDecision | '')}
-                        >
-                            <option value="">Choose…</option>
-                            {row.matchId ? (
-                                <option value="accept">{row.suggestedMatch ?? 'Accept suggested'}</option>
-                            ) : null}
-                            {row.altIds.map((id, index) => (
-                                <option key={id} value={`alt${index + 1}`}>
-                                    {row.altCandidates[index] ?? `Alternative ${index + 1}`}
-                                </option>
-                            ))}
-                            <option value="new">Create as new</option>
-                            <option value="skip">Skip</option>
-                        </Select>
-                    </Field>
-                ) : (
-                    <p className="text-xs text-gray-500 self-center">
-                        {row.confidence === 'high' ? 'Auto-matched' : 'Will be created as new'}
-                    </p>
-                )}
+                <Field label="Decision">
+                    <Select
+                        aria-label={`Decision for ${row.sourceName}`}
+                        className="min-h-touch"
+                        value={value}
+                        onChange={(event) => onChange(event.target.value as MatchDecision | '')}
+                    >
+                        <option value="">Choose…</option>
+                        {row.matchId ? (
+                            <option value="accept">{row.suggestedMatch ?? 'Accept suggested'}</option>
+                        ) : null}
+                        {row.altIds.map((id, index) => (
+                            <option key={id} value={`alt${index + 1}`}>
+                                {row.altCandidates[index] ?? `Alternative ${index + 1}`}
+                            </option>
+                        ))}
+                        <option value="new">Create as new</option>
+                        <option value="skip">Skip</option>
+                    </Select>
+                </Field>
             </div>
         </li>
     );
 }
 
-function CollapsedGroup({ title, rows }: { title: string; rows: CandidateRow[] }) {
+function CollapsedGroup({
+    title,
+    rows,
+    decisions,
+    onChange,
+}: {
+    title: string;
+    rows: CandidateRow[];
+    decisions: Record<string, MatchDecision | ''>;
+    onChange: (row: CandidateRow, value: MatchDecision | '') => void;
+}) {
     if (rows.length === 0) return null;
     return (
         <details className="rounded-lg border border-gray-100 p-3">
             <summary className="cursor-pointer text-xs font-medium text-gray-700 max-md:min-h-touch">
                 {title}
             </summary>
-            <ul className="mt-2 space-y-1 text-xs text-gray-600">
+            <ul className="mt-2 space-y-2">
                 {rows.map((row) => (
-                    <li key={decisionKey(row.entity, row.externalId)}>
-                        {row.sourceName}
-                        {row.suggestedMatch ? ` → ${row.suggestedMatch}` : ''}
-                    </li>
+                    <MatchRow
+                        key={decisionKey(row.entity, row.externalId)}
+                        row={row}
+                        value={decisions[decisionKey(row.entity, row.externalId)] ?? ''}
+                        onChange={(value) => onChange(row, value)}
+                    />
                 ))}
             </ul>
         </details>

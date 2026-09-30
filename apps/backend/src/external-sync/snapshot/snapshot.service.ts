@@ -6,8 +6,6 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { promises as fs } from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import { EncryptionService } from '../../common/encryption.service';
 import { toDateString } from '../external-sync.mapper';
@@ -18,10 +16,12 @@ import {
 } from './snapshot.types';
 import {
     countsOf,
+    readSnapshotBuffer,
     readSnapshotFile,
     removeIfExists,
     snapshotFilePath,
     writeSnapshotFile,
+    writeSnapshotGzip,
 } from './snapshot-file';
 import { resolveSyncWindow } from './window';
 
@@ -122,16 +122,29 @@ export class ExternalSyncSnapshotService {
                 );
             }
 
+            const chunks = def.planWindows(snapshot.window_from, snapshot.window_to);
+            const total = 3 + chunks.length * 5;
+            let done = 0;
+            const mark = async (phase: string) => {
+                done += 1;
+                await this.db.externalSyncSnapshot.update({
+                    where: { id: snapshotId },
+                    data: { phase, progress: { done, total } },
+                });
+            };
+
             const products = await client.fetchProducts();
+            await mark('Products');
             await this.throwIfCancelled(snapshotId);
 
             const customers = await client.fetchCustomers();
+            await mark('Customers');
             await this.throwIfCancelled(snapshotId);
 
             const suppliers = await client.fetchSuppliers();
+            await mark('Suppliers');
             await this.throwIfCancelled(snapshotId);
 
-            const chunks = def.planWindows(snapshot.window_from, snapshot.window_to);
             const sales: unknown[] = [];
             const purchases: unknown[] = [];
             const customerPayments: unknown[] = [];
@@ -140,14 +153,19 @@ export class ExternalSyncSnapshotService {
 
             for (const chunk of chunks) {
                 sales.push(...(await client.fetchSaleDocuments(chunk)));
+                await mark('Sales');
                 await this.throwIfCancelled(snapshotId);
                 purchases.push(...(await client.fetchPurchaseDocuments(chunk)));
+                await mark('Purchases');
                 await this.throwIfCancelled(snapshotId);
                 customerPayments.push(...(await client.fetchPayments(chunk, 'CUSTOMER')));
+                await mark('Customer payments');
                 await this.throwIfCancelled(snapshotId);
                 supplierPayments.push(...(await client.fetchPayments(chunk, 'SUPPLIER')));
+                await mark('Supplier payments');
                 await this.throwIfCancelled(snapshotId);
                 saleReturns.push(...(await client.fetchSaleReturnDocuments(chunk)));
+                await mark('Sale returns');
                 await this.throwIfCancelled(snapshotId);
             }
 
@@ -261,55 +279,50 @@ export class ExternalSyncSnapshotService {
             throw new NotFoundException(`No ${def.label} connection configured for this tenant`);
         }
 
-        const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snap-upload-'));
-        const tmpPath = path.join(tmpDir, 'upload.json.gz');
+        let doc;
         try {
-            await fs.writeFile(tmpPath, buffer);
-            let doc;
-            try {
-                doc = await readSnapshotFile(tmpPath);
-            } catch (error) {
-                throw new BadRequestException(
-                    `This file is not a valid snapshot: ${(error as Error).message ?? error}`,
-                );
-            }
-
-            if (doc.manifest.tenantId !== tenantId) {
-                throw new BadRequestException('This snapshot belongs to a different workspace.');
-            }
-            if (doc.manifest.connectionId !== connection.id) {
-                throw new BadRequestException('This snapshot was extracted for a different connection.');
-            }
-            if (doc.manifest.provider !== connection.provider) {
-                throw new BadRequestException('This snapshot was extracted for a different provider.');
-            }
-            if (connection.external_org_id && doc.manifest.externalOrgId !== connection.external_org_id) {
-                throw new BadRequestException(
-                    `Provider organization mismatch (expected ${connection.external_org_id}, file has ${doc.manifest.externalOrgId}).`,
-                );
-            }
-
-            const row = await this.db.externalSyncSnapshot.create({
-                data: {
-                    tenant_id: tenantId,
-                    connection_id: connection.id,
-                    status: 'READY',
-                    window_from: new Date(`${doc.manifest.windowFrom}T00:00:00.000Z`),
-                    window_to: new Date(`${doc.manifest.windowTo}T00:00:00.000Z`),
-                    counts: doc.manifest.counts as object,
-                    byte_size: buffer.length,
-                    sha256: doc.manifest.sha256,
-                    finished_at: new Date(),
-                },
-            });
-            const dest = snapshotFilePath(tenantId, row.id);
-            await fs.mkdir(path.dirname(dest), { recursive: true });
-            await fs.rename(tmpPath, dest);
-            return row;
-        } finally {
-            await removeIfExists(tmpPath);
-            await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+            doc = await readSnapshotBuffer(buffer);
+        } catch (error) {
+            throw new BadRequestException(
+                `This file is not a valid snapshot: ${(error as Error).message ?? error}`,
+            );
         }
+
+        if (doc.manifest.tenantId !== tenantId) {
+            throw new BadRequestException('This snapshot belongs to a different workspace.');
+        }
+        if (doc.manifest.connectionId !== connection.id) {
+            throw new BadRequestException('This snapshot was extracted for a different connection.');
+        }
+        if (doc.manifest.provider !== connection.provider) {
+            throw new BadRequestException('This snapshot was extracted for a different provider.');
+        }
+        if (connection.external_org_id && doc.manifest.externalOrgId !== connection.external_org_id) {
+            throw new BadRequestException(
+                `Provider organization mismatch (expected ${connection.external_org_id}, file has ${doc.manifest.externalOrgId}).`,
+            );
+        }
+
+        const row = await this.db.externalSyncSnapshot.create({
+            data: {
+                tenant_id: tenantId,
+                connection_id: connection.id,
+                status: 'READY',
+                window_from: new Date(`${doc.manifest.windowFrom}T00:00:00.000Z`),
+                window_to: new Date(`${doc.manifest.windowTo}T00:00:00.000Z`),
+                counts: doc.manifest.counts as object,
+                byte_size: buffer.length,
+                sha256: doc.manifest.sha256,
+                finished_at: new Date(),
+            },
+        });
+        try {
+            await writeSnapshotGzip(snapshotFilePath(tenantId, row.id), buffer);
+        } catch (error) {
+            await this.db.externalSyncSnapshot.delete({ where: { id: row.id } }).catch(() => undefined);
+            throw error;
+        }
+        return row;
     }
 
     async openFile(tenantId: string, snapshotId: string) {

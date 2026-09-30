@@ -14,6 +14,16 @@ export { SNAPSHOT_FORMAT_VERSION };
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
+/** Ceiling on uncompressed snapshot JSON. A 100MB gzip can otherwise expand into process memory. */
+export const DEFAULT_SNAPSHOT_GUNZIP_MAX_BYTES = 512 * 1024 * 1024;
+
+export function gunzipSnapshot(
+    compressed: Buffer,
+    maxOutputLength = DEFAULT_SNAPSHOT_GUNZIP_MAX_BYTES,
+): Promise<Buffer> {
+    return gunzipAsync(compressed, { maxOutputLength }) as Promise<Buffer>;
+}
+
 const DEFAULT_SNAPSHOT_DIR = '/var/lib/erp71/external-sync-snapshots';
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 
@@ -123,12 +133,28 @@ export async function writeSnapshotFile(
     }
 }
 
-export async function readSnapshotFile(absPath: string): Promise<SnapshotDocument> {
-    const compressed = await fs.readFile(absPath);
-    const raw = await gunzipAsync(compressed);
+export async function writeSnapshotGzip(absPath: string, gzipBytes: Buffer): Promise<number> {
+    const tmpPath = `${absPath}.tmp`;
+    try {
+        await fs.mkdir(path.dirname(absPath), { recursive: true });
+        await fs.writeFile(tmpPath, gzipBytes);
+        await fs.rename(tmpPath, absPath);
+        return gzipBytes.length;
+    } catch (error) {
+        await removeIfExists(tmpPath);
+        throw error;
+    }
+}
+
+export async function readSnapshotBuffer(compressed: Buffer): Promise<SnapshotDocument> {
+    const raw = await gunzipSnapshot(compressed);
     const doc = JSON.parse(raw.toString('utf8')) as SnapshotDocument;
     assertFormatVersion(doc);
     assertChecksum(doc);
     assertCounts(doc);
     return doc;
+}
+
+export async function readSnapshotFile(absPath: string): Promise<SnapshotDocument> {
+    return readSnapshotBuffer(await fs.readFile(absPath));
 }

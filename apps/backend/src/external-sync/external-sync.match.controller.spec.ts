@@ -1,4 +1,4 @@
-import { ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { ExternalSyncController } from './external-sync.controller';
 import { TenantExternalSyncController } from './tenant-external-sync.controller';
 import type { ApplyMatchDecisionsDto } from './external-sync.match.dto';
@@ -14,13 +14,20 @@ function makeMatchService() {
 
 describe('match routes — platform admin', () => {
     const matchService = makeMatchService();
-    const controller = new ExternalSyncController({} as any, matchService as any);
+    const controller = new ExternalSyncController({} as any, matchService as any, {} as any);
 
     beforeEach(() => jest.clearAllMocks());
 
     it('passes the tenantId from the URL to getCandidates', async () => {
         await controller.getMatchCandidates('tenant-1', 'snap-1');
         expect(matchService.getCandidates).toHaveBeenCalledWith('tenant-1', 'snap-1');
+    });
+
+    it('rejects candidates without snapshotId', () => {
+        expect(() => controller.getMatchCandidates('tenant-1', undefined as unknown as string)).toThrow(
+            BadRequestException,
+        );
+        expect(matchService.getCandidates).not.toHaveBeenCalled();
     });
 
     it('passes the tenantId from the URL to applyMatchDecisions', async () => {
@@ -32,7 +39,12 @@ describe('match routes — platform admin', () => {
 describe('match routes — tenant facing', () => {
     const matchService = makeMatchService();
     const platformSettings = { isFeatureEnabledForTenant: jest.fn().mockResolvedValue(true) };
-    const controller = new TenantExternalSyncController({} as any, platformSettings as any, matchService as any);
+    const controller = new TenantExternalSyncController(
+        {} as any,
+        platformSettings as any,
+        matchService as any,
+        {} as any,
+    );
 
     const owner = { tenantId: 'tenant-1', userRole: 'OWNER', userId: 'u1' } as any;
     const manager = { tenantId: 'tenant-1', userRole: 'MANAGER', userId: 'u2' } as any;
@@ -45,6 +57,11 @@ describe('match routes — tenant facing', () => {
     it('uses the interceptor tenant, never a client-supplied id', async () => {
         await controller.getMatchCandidates(owner, 'snap-1');
         expect(matchService.getCandidates).toHaveBeenCalledWith('tenant-1', 'snap-1');
+    });
+
+    it('rejects tenant candidates without snapshotId', async () => {
+        await expect(controller.getMatchCandidates(owner, '')).rejects.toBeInstanceOf(BadRequestException);
+        expect(matchService.getCandidates).not.toHaveBeenCalled();
     });
 
     it('rejects a non-owner reading candidates', async () => {

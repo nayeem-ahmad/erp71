@@ -50,6 +50,7 @@ export class ExternalSyncController {
      */
     @Get('match-candidates')
     getMatchCandidates(@Param('tenantId') tenantId: string, @Query('snapshotId') snapshotId: string) {
+        if (!snapshotId?.trim()) throw new BadRequestException('snapshotId is required');
         return this.matchService.getCandidates(tenantId, snapshotId);
     }
 

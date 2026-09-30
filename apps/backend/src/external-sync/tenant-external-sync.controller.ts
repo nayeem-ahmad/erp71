@@ -79,6 +79,7 @@ export class TenantExternalSyncController {
     @Get('match-candidates')
     async getMatchCandidates(@Tenant() tenant: TenantContext, @Query('snapshotId') snapshotId: string) {
         await this.assertAllowed(tenant);
+        if (!snapshotId?.trim()) throw new BadRequestException('snapshotId is required');
         return this.matchService.getCandidates(tenant.tenantId, snapshotId);
     }
 

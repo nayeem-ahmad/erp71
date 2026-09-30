@@ -342,12 +342,13 @@ export class ExternalSyncService {
             throw new BadRequestException('Manual imports run from a snapshot. Extract or upload one first.');
         }
 
+        await this.snapshots.assertNoInFlight(connection.id);
+
         let from: Date;
         let to: Date;
         let snapshotId: string | null = null;
 
         if (trigger === 'MANUAL' && dto.snapshotId) {
-            await this.snapshots.assertNoInFlight(connection.id);
             const snapshot = await this.db.externalSyncSnapshot.findFirst({
                 where: {
                     id: dto.snapshotId,
@@ -363,15 +364,6 @@ export class ExternalSyncService {
             to = snapshot.window_to;
             snapshotId = snapshot.id;
         } else {
-            const inFlight = await this.db.externalSyncRun.findFirst({
-                where: { connection_id: connection.id, status: 'RUNNING' },
-                select: { id: true, started_at: true },
-            });
-            if (inFlight) {
-                throw new ConflictException(
-                    `An import is already running (started ${inFlight.started_at.toISOString()})`,
-                );
-            }
             ({ from, to } = resolveSyncWindow(connection, dto));
         }
 
