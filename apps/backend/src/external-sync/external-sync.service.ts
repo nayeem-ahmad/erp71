@@ -42,6 +42,7 @@ import {
     TestExternalSyncConnectionDto,
     UpsertExternalSyncConnectionDto,
 } from './external-sync.dto';
+import { resolveSyncWindow } from './snapshot/window';
 
 type EntityType =
     | 'PRODUCT'
@@ -341,7 +342,7 @@ export class ExternalSyncService {
             throw new ConflictException(`An import is already running (started ${inFlight.started_at.toISOString()})`);
         }
 
-        const { from, to } = this.resolveWindow(connection, dto);
+        const { from, to } = resolveSyncWindow(connection, dto);
         const steps = this.resolveSteps(dto.steps);
 
         const run = await this.db.externalSyncRun.create({
@@ -378,33 +379,6 @@ export class ExternalSyncService {
         // Keep canonical order regardless of how they were listed — returns
         // must still run after sales.
         return SYNC_STEPS.filter((step) => requested.includes(step));
-    }
-
-    private resolveWindow(
-        connection: { window_days: number; history_start_date: Date | null },
-        dto: RunExternalSyncDto,
-    ): { from: Date; to: Date } {
-        const today = new Date();
-        const to = dto.dateTo ? new Date(dto.dateTo) : today;
-
-        let from: Date;
-        if (dto.dateFrom) {
-            from = new Date(dto.dateFrom);
-        } else if (dto.fullResync) {
-            // Full history: back to the configured start, or five years as a
-            // bounded fallback so we never ask for an open-ended range.
-            from = connection.history_start_date ?? new Date(to.getTime() - 5 * 365 * 24 * 60 * 60 * 1000);
-        } else {
-            from = new Date(to.getTime() - connection.window_days * 24 * 60 * 60 * 1000);
-        }
-
-        if (connection.history_start_date && from < connection.history_start_date) {
-            from = connection.history_start_date;
-        }
-        if (from > to) {
-            throw new BadRequestException('dateFrom must not be after dateTo');
-        }
-        return { from, to };
     }
 
     // ------------------------------------------------------------- execution
