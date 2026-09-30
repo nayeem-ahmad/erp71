@@ -4,7 +4,7 @@ import type { CandidateRow, MatchManifest } from '@/types/match';
 import type { ExternalSyncSnapshot } from '@/lib/api';
 
 jest.mock('@/lib/toast', () => ({
-    toast: { success: jest.fn(), error: jest.fn() },
+    toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
 const READY: ExternalSyncSnapshot = {
@@ -182,5 +182,125 @@ describe('SnapshotImportPanel', () => {
 
         expect(await screen.findByText(/Products/)).toBeInTheDocument();
         expect(screen.getByText(/1 \/ 8/)).toBeInTheDocument();
+    });
+
+    it('renders a compact mapping table with a confidence column', async () => {
+        render(
+            <SnapshotImportPanel
+                provider="EXPRESS_RETAIL_PRO"
+                providerLabel="Express Retail Pro"
+                connectionId="conn-1"
+                adapter={makeAdapter()}
+                steps={['MASTERS']}
+                windowForm={{ dateFrom: '', dateTo: '', fullResync: false }}
+                phase="mapping"
+            />,
+        );
+
+        await screen.findByLabelText(/decision for napa 500mg/i);
+        expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /confidence/i })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /decision/i })).toBeInTheDocument();
+        expect(screen.getByText('Medium')).toBeInTheDocument();
+        expect(screen.getByText('60%')).toBeInTheDocument();
+    });
+
+    it('applies a bulk create-as-new decision to selected rows', async () => {
+        render(
+            <SnapshotImportPanel
+                provider="EXPRESS_RETAIL_PRO"
+                providerLabel="Express Retail Pro"
+                connectionId="conn-1"
+                adapter={makeAdapter()}
+                steps={['MASTERS']}
+                windowForm={{ dateFrom: '', dateTo: '', fullResync: false }}
+                phase="mapping"
+            />,
+        );
+
+        const napa = await screen.findByLabelText(/decision for napa 500mg/i);
+        fireEvent.click(screen.getByLabelText(/select napa 500mg/i));
+        fireEvent.change(screen.getByLabelText(/bulk action/i), { target: { value: 'new' } });
+        fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+        expect(napa).toHaveValue('new');
+    });
+
+    it('bulk-accepts only rows that have a suggested match', async () => {
+        const adapter = makeAdapter({
+            getMatchCandidates: jest.fn().mockResolvedValue({
+                manifest,
+                rows: [
+                    row(),
+                    row({
+                        externalId: '2',
+                        sourceName: 'Unknown syrup',
+                        suggestedMatch: null,
+                        matchId: null,
+                        altIds: [],
+                        altCandidates: [],
+                        confidence: 'medium',
+                        decision: '',
+                    }),
+                ],
+            }),
+        });
+        render(
+            <SnapshotImportPanel
+                provider="EXPRESS_RETAIL_PRO"
+                providerLabel="Express Retail Pro"
+                connectionId="conn-1"
+                adapter={adapter}
+                steps={['MASTERS']}
+                windowForm={{ dateFrom: '', dateTo: '', fullResync: false }}
+                phase="mapping"
+            />,
+        );
+
+        await screen.findByLabelText(/decision for napa 500mg/i);
+        fireEvent.change(screen.getByLabelText(/bulk action/i), { target: { value: 'accept' } });
+        fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+        expect(screen.getByLabelText(/decision for napa 500mg/i)).toHaveValue('accept');
+        expect(screen.getByLabelText(/decision for unknown syrup/i)).toHaveValue('');
+    });
+
+    it('confirms matches and continues when the mapping step finishes', async () => {
+        const onMatchesConfirmed = jest.fn();
+        const adapter = makeAdapter();
+        render(
+            <SnapshotImportPanel
+                provider="EXPRESS_RETAIL_PRO"
+                providerLabel="Express Retail Pro"
+                connectionId="conn-1"
+                adapter={adapter}
+                steps={['MASTERS']}
+                windowForm={{ dateFrom: '', dateTo: '', fullResync: false }}
+                phase="mapping"
+                onMatchesConfirmed={onMatchesConfirmed}
+            />,
+        );
+
+        fireEvent.change(await screen.findByLabelText(/decision for napa 500mg/i), { target: { value: 'new' } });
+        fireEvent.click(screen.getByRole('button', { name: /confirm and continue/i }));
+        await waitFor(() => expect(adapter.applyMatchDecisions).toHaveBeenCalledTimes(1));
+        expect(onMatchesConfirmed).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides mapping review while the extract step is showing', async () => {
+        render(
+            <SnapshotImportPanel
+                provider="EXPRESS_RETAIL_PRO"
+                providerLabel="Express Retail Pro"
+                connectionId="conn-1"
+                adapter={makeAdapter()}
+                steps={['MASTERS']}
+                windowForm={{ dateFrom: '', dateTo: '', fullResync: false }}
+                phase="extract"
+            />,
+        );
+
+        expect(await screen.findByRole('button', { name: /extract from express retail pro/i })).toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: /confidence/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /start import/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /start dry run/i })).not.toBeInTheDocument();
     });
 });

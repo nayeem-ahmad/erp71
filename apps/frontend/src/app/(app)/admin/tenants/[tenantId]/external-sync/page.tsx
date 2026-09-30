@@ -1,15 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Loader2, PlugZap, RefreshCw, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
+import { ImportWizardFrame } from '@/components/external-sync/ImportStepper';
 import {
     SnapshotImportPanel,
     type SnapshotImportAdapter,
 } from '@/components/external-sync/SnapshotImportPanel';
+import {
+    canAdvanceImportStep,
+    canVisitImportStep,
+    initialImportStep,
+    nextImportStep,
+    type ImportWizardStep,
+} from '@/lib/import-wizard';
 import {
     api,
     type ExternalSyncConnection,
@@ -77,6 +85,10 @@ export default function TenantExternalSyncPage() {
 
     const [runForm, setRunForm] = useState({ dateFrom: '', dateTo: '', fullResync: false });
     const [selectedSteps, setSelectedSteps] = useState<ExternalSyncStep[]>(STEPS.map((s) => s.key));
+    const [wizardStep, setWizardStep] = useState<ImportWizardStep>('connection');
+    const [hasReadySnapshot, setHasReadySnapshot] = useState(false);
+    const [matchesConfirmed, setMatchesConfirmed] = useState(false);
+    const wizardReady = useRef(false);
     const [isCancelling, setIsCancelling] = useState(false);
 
     const activeRun = useMemo(() => runs.find((run) => run.status === 'RUNNING') ?? null, [runs]);
@@ -109,6 +121,15 @@ export default function TenantExternalSyncPage() {
         }),
         [tenantId, provider, loadRuns],
     );
+
+    const lastReadySnapshotId = useRef<string | null>(null);
+    const handleSelectedReadyChange = useCallback((id: string | null) => {
+        setHasReadySnapshot(Boolean(id));
+        if (lastReadySnapshotId.current !== id) {
+            lastReadySnapshotId.current = id;
+            setMatchesConfirmed(false);
+        }
+    }, []);
 
     const load = useCallback(
         async (selectProvider?: string) => {
@@ -177,8 +198,42 @@ export default function TenantExternalSyncPage() {
     // one per provider) and reseeds the form.
     const handleProviderChange = (next: string) => {
         if (next === provider) return;
+        wizardReady.current = false;
+        lastReadySnapshotId.current = null;
+        setHasReadySnapshot(false);
+        setMatchesConfirmed(false);
         void load(next);
     };
+
+    useEffect(() => {
+        if (isLoading) return;
+        if (!wizardReady.current) {
+            setWizardStep(
+                initialImportStep({
+                    hasConnection: Boolean(connection),
+                    hasReadySnapshot: false,
+                    matchesConfirmed: false,
+                }),
+            );
+            wizardReady.current = true;
+        }
+    }, [isLoading, connection]);
+
+    const wizardContext = {
+        hasConnection: Boolean(connection),
+        hasReadySnapshot,
+        matchesConfirmed,
+    };
+
+    function selectWizardStep(next: ImportWizardStep) {
+        if (canVisitImportStep(next, wizardContext)) setWizardStep(next);
+    }
+
+    function goNext() {
+        if (!canAdvanceImportStep(wizardStep, wizardContext)) return;
+        const next = nextImportStep(wizardStep);
+        if (next) setWizardStep(next);
+    }
 
     // While an import is in flight the run row is the only progress channel.
     useEffect(() => {
@@ -265,6 +320,10 @@ export default function TenantExternalSyncPage() {
         try {
             await api.deleteExternalSync(tenantId, provider);
             setConnection(null);
+            setWizardStep('connection');
+            lastReadySnapshotId.current = null;
+            setHasReadySnapshot(false);
+            setMatchesConfirmed(false);
             toast.success('Connection removed — imported documents were left in place');
             await load();
         } catch (err: unknown) {
@@ -311,6 +370,15 @@ export default function TenantExternalSyncPage() {
                 exercise, otherwise imported history would double-count against them.
             </Alert>
 
+            <ImportWizardFrame
+                current={wizardStep}
+                context={wizardContext}
+                onSelect={selectWizardStep}
+                showNext={wizardStep === 'connection' || wizardStep === 'extract'}
+                nextDisabled={!canAdvanceImportStep(wizardStep, wizardContext)}
+                onNext={goNext}
+            >
+            {wizardStep === 'connection' ? (
             <CompactSection title="Connection">
                 <div className="grid gap-3 md:grid-cols-2">
                     <Field
@@ -453,97 +521,117 @@ export default function TenantExternalSyncPage() {
                     ) : null}
                 </div>
             </CompactSection>
+            ) : null}
 
-            {connection ? (
-                <CompactSection title="Extract, review and import">
-                    <p className="text-xs text-gray-600 mb-3">
-                        Extract a snapshot from {providerLabel} (or upload one), confirm unclear matches,
-                        then import from that file. The other system is not contacted again after extract.
-                    </p>
-                    <div className="grid gap-3 md:grid-cols-3">
-                        <Field label="From" hint="Blank uses the rolling window">
-                            <Input
-                                type="date"
-                                value={runForm.dateFrom}
-                                onChange={(e) => setRunForm({ ...runForm, dateFrom: e.target.value })}
-                            />
-                        </Field>
-                        <Field label="To" hint="Blank means today">
-                            <Input
-                                type="date"
-                                value={runForm.dateTo}
-                                onChange={(e) => setRunForm({ ...runForm, dateTo: e.target.value })}
-                            />
-                        </Field>
-                        <div className="flex items-end">
-                            <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
-                                <Checkbox
-                                    checked={runForm.fullResync}
-                                    onChange={(e) => setRunForm({ ...runForm, fullResync: e.target.checked })}
-                                />
-                                Full history re-sync
-                            </label>
-                        </div>
-                    </div>
+            {connection && wizardStep !== 'connection' ? (
+                <CompactSection
+                    title={
+                        wizardStep === 'extract'
+                            ? 'Extract / Upload'
+                            : wizardStep === 'mapping'
+                              ? 'Mapping Decisions'
+                              : 'Import'
+                    }
+                >
+                    {wizardStep === 'extract' ? (
+                        <>
+                            <p className="text-xs text-gray-600 mb-3">
+                                Extract a snapshot from {providerLabel} (or upload one). The other system is not
+                                contacted again after extract.
+                            </p>
+                            <div className="grid gap-3 md:grid-cols-3 mb-4">
+                                <Field label="From" hint="Blank uses the rolling window">
+                                    <Input
+                                        type="date"
+                                        value={runForm.dateFrom}
+                                        onChange={(e) => setRunForm({ ...runForm, dateFrom: e.target.value })}
+                                    />
+                                </Field>
+                                <Field label="To" hint="Blank means today">
+                                    <Input
+                                        type="date"
+                                        value={runForm.dateTo}
+                                        onChange={(e) => setRunForm({ ...runForm, dateTo: e.target.value })}
+                                    />
+                                </Field>
+                                <div className="flex items-end">
+                                    <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
+                                        <Checkbox
+                                            checked={runForm.fullResync}
+                                            onChange={(e) => setRunForm({ ...runForm, fullResync: e.target.checked })}
+                                        />
+                                        Full history re-sync
+                                    </label>
+                                </div>
+                            </div>
+                        </>
+                    ) : null}
 
-                    <div className="mt-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-gray-700">Steps to run</p>
-                            <div className="flex gap-3 text-xs">
-                                <button
-                                    type="button"
-                                    className="text-blue-600 hover:underline"
-                                    onClick={() => setSelectedSteps(STEPS.map((step) => step.key))}
-                                >
-                                    All
-                                </button>
-                                <button
-                                    type="button"
-                                    className="text-blue-600 hover:underline"
-                                    onClick={() => setSelectedSteps([])}
-                                >
-                                    None
-                                </button>
+                    {wizardStep === 'import' ? (
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-medium text-gray-700">Steps to run</p>
+                                <div className="flex gap-3 text-xs">
+                                    <button
+                                        type="button"
+                                        className="text-blue-600 hover:underline"
+                                        onClick={() => setSelectedSteps(STEPS.map((step) => step.key))}
+                                    >
+                                        All
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="text-blue-600 hover:underline"
+                                        onClick={() => setSelectedSteps([])}
+                                    >
+                                        None
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="grid gap-2 md:grid-cols-2 mt-2">
+                                {STEPS.map((step) => (
+                                    <label
+                                        key={step.key}
+                                        className="flex items-start gap-2 text-xs text-gray-700 max-md:min-h-touch"
+                                    >
+                                        <Checkbox
+                                            checked={selectedSteps.includes(step.key)}
+                                            onChange={(e) =>
+                                                setSelectedSteps((prev) =>
+                                                    e.target.checked
+                                                        ? [...prev, step.key]
+                                                        : prev.filter((key) => key !== step.key),
+                                                )
+                                            }
+                                        />
+                                        <span>
+                                            {step.label}
+                                            <span className="block text-gray-500">{step.hint}</span>
+                                        </span>
+                                    </label>
+                                ))}
                             </div>
                         </div>
-                        <div className="grid gap-2 md:grid-cols-2 mt-2">
-                            {STEPS.map((step) => (
-                                <label
-                                    key={step.key}
-                                    className="flex items-start gap-2 text-xs text-gray-700 max-md:min-h-touch"
-                                >
-                                    <Checkbox
-                                        checked={selectedSteps.includes(step.key)}
-                                        onChange={(e) =>
-                                            setSelectedSteps((prev) =>
-                                                e.target.checked
-                                                    ? [...prev, step.key]
-                                                    : prev.filter((key) => key !== step.key),
-                                            )
-                                        }
-                                    />
-                                    <span>
-                                        {step.label}
-                                        <span className="block text-gray-500">{step.hint}</span>
-                                    </span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
+                    ) : null}
 
-                    <div className="mt-4">
-                        <SnapshotImportPanel
-                            provider={provider}
-                            providerLabel={providerLabel}
-                            connectionId={connection.id}
-                            adapter={snapshotAdapter}
-                            steps={selectedSteps}
-                            windowForm={runForm}
-                            importRunning={Boolean(activeRun)}
-                        />
-                    </div>
+                    <SnapshotImportPanel
+                        provider={provider}
+                        providerLabel={providerLabel}
+                        connectionId={connection.id}
+                        adapter={snapshotAdapter}
+                        steps={selectedSteps}
+                        windowForm={runForm}
+                        importRunning={Boolean(activeRun)}
+                        phase={wizardStep === 'mapping' ? 'mapping' : wizardStep === 'import' ? 'import' : 'extract'}
+                        onSelectedReadyChange={handleSelectedReadyChange}
+                        onMatchesConfirmed={() => {
+                            setMatchesConfirmed(true);
+                            setWizardStep('import');
+                        }}
+                        onMatchesInvalidated={() => setMatchesConfirmed(false)}
+                    />
 
-                    {activeRun ? (
+                    {wizardStep === 'import' && activeRun ? (
                         <div className="mt-4 flex flex-wrap items-center gap-2">
                             <Button variant="secondary" onClick={() => void handleCancel()} loading={isCancelling}>
                                 Stop after current step
@@ -551,11 +639,11 @@ export default function TenantExternalSyncPage() {
                         </div>
                     ) : null}
 
-                    {activeRun ? <RunProgress run={activeRun} /> : null}
+                    {wizardStep === 'import' && activeRun ? <RunProgress run={activeRun} /> : null}
                 </CompactSection>
             ) : null}
 
-            {runs.length > 0 ? (
+            {wizardStep === 'import' && runs.length > 0 ? (
                 <CompactSection title="Recent runs">
                     <div className="overflow-x-auto">
                         <table className="w-full text-xs">
@@ -581,6 +669,7 @@ export default function TenantExternalSyncPage() {
                     </div>
                 </CompactSection>
             ) : null}
+            </ImportWizardFrame>
 
             <ConfirmDialog
                 open={confirmDelete}
