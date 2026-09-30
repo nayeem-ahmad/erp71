@@ -7,5 +7,6 @@ import { CountersModule } from '../counters/counters.module';
   imports: [CountersModule],
   controllers: [CashierSessionsController],
   providers: [CashierSessionsService],
+  exports: [CashierSessionsService],
 })
 export class CashierSessionsModule {}
