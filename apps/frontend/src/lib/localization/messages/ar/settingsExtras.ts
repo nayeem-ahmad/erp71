@@ -216,6 +216,7 @@ export const settingsExtrasMessages = {
             LIST_REPORT: "تقارير القوائم",
             PROFORMA_INVOICE: "الفواتير الأولية",
             PAYSLIP: "قسائم الرواتب",
+            DAILY_REPORT: "Daily reports",
         },
     },
     tax: {

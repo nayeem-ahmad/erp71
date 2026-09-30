@@ -64,7 +64,8 @@ export type PrintDocType =
     | 'PURCHASE_INVOICE'
     | 'PURCHASE_RETURN'
     | 'LIST_REPORT'
-    | 'PAYSLIP';
+    | 'PAYSLIP'
+    | 'DAILY_REPORT';
 
 export type HeaderLayout =
     | 'logo-left'      // logo + company on the left, document block on the right
