@@ -1048,6 +1048,23 @@ export type ExternalSyncStep =
     | 'SUPPLIER_PAYMENTS'
     | 'SALE_RETURNS';
 
+export type ExternalSyncSnapshot = {
+    id: string;
+    tenant_id: string;
+    connection_id: string;
+    status: 'EXTRACTING' | 'READY' | 'FAILED';
+    window_from: string;
+    window_to: string;
+    counts: Record<string, number> | null;
+    byte_size: number | null;
+    sha256: string | null;
+    error_message: string | null;
+    phase: string | null;
+    progress: { done: number; total: number } | null;
+    created_at: string;
+    finished_at: string | null;
+};
+
 export type ExternalSyncRun = {
     id: string;
     trigger: 'MANUAL' | 'SCHEDULED';
@@ -3482,6 +3499,7 @@ export const api = {
     }),
     startExternalSyncRun: (tenantId: string, data: {
         provider?: string;
+        snapshotId?: string;
         dateFrom?: string;
         dateTo?: string;
         dryRun?: boolean;
@@ -3496,6 +3514,62 @@ export const api = {
         fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs?limit=${limit}`),
     cancelExternalSyncRun: (tenantId: string, runId: string): Promise<{ cancelling: boolean }> =>
         fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/runs/${runId}/cancel`, { method: 'POST' }),
+    startSnapshotExtract: (
+        tenantId: string,
+        data: { provider?: string; dateFrom?: string; dateTo?: string; fullResync?: boolean },
+    ): Promise<ExternalSyncSnapshot> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/snapshots`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    listSnapshots: (tenantId: string, provider?: string): Promise<ExternalSyncSnapshot[]> =>
+        fetchWithAuth(
+            `/admin/tenants/${tenantId}/external-sync/snapshots${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`,
+        ),
+    getSnapshot: (tenantId: string, id: string): Promise<ExternalSyncSnapshot> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/snapshots/${id}`),
+    cancelSnapshotExtract: (tenantId: string, id: string): Promise<{ cancelling: boolean }> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/snapshots/${id}/cancel`, { method: 'POST' }),
+    downloadSnapshotFile: (tenantId: string, id: string): Promise<{ blob: Blob; filename: string }> =>
+        fetchBlobWithAuth(`/admin/tenants/${tenantId}/external-sync/snapshots/${id}/file`),
+    uploadSnapshot: (tenantId: string, file: File, provider?: string): Promise<ExternalSyncSnapshot> => {
+        const body = new FormData();
+        body.append('file', file);
+        const qs = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+        return fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/snapshots/upload${qs}`, {
+            method: 'POST',
+            body,
+        });
+    },
+    deleteSnapshot: (tenantId: string, id: string): Promise<{ deleted: boolean }> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/snapshots/${id}`, { method: 'DELETE' }),
+    getMatchCandidates: (
+        tenantId: string,
+        snapshotId: string,
+    ): Promise<{ manifest: MatchManifest; rows: CandidateRow[] }> =>
+        fetchWithAuth(
+            `/admin/tenants/${tenantId}/external-sync/match-candidates?snapshotId=${encodeURIComponent(snapshotId)}`,
+        ),
+    applyMatchDecisions: (
+        tenantId: string,
+        payload: {
+            manifest: MatchManifest;
+            rows: {
+                entity: string;
+                externalId: string;
+                decision: string;
+                matchId?: string | null;
+                altIds?: string[];
+                notes?: string;
+            }[];
+        },
+    ): Promise<{ applied: number; skipped: number }> =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/external-sync/match-decisions`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // --- External ERP import, tenant-facing (Settings > Data Management).
     // Same shapes as the admin calls above; the tenant route resolves the
     // workspace from the session instead of taking a tenant id, and refuses
@@ -3533,6 +3607,7 @@ export const api = {
     }),
     startMyExternalSyncRun: (data: {
         provider?: string;
+        snapshotId: string;
         dateFrom?: string;
         dateTo?: string;
         dryRun?: boolean;
@@ -3547,9 +3622,36 @@ export const api = {
         fetchWithAuth(`/tenants/external-sync/runs?limit=${limit}`),
     cancelMyExternalSyncRun: (runId: string): Promise<{ cancelling: boolean }> =>
         fetchWithAuth(`/tenants/external-sync/runs/${runId}/cancel`, { method: 'POST' }),
-    /** Proposed matches for the review workbook. Reads the provider; writes nothing. */
-    getMyMatchCandidates: (provider?: string): Promise<{ manifest: MatchManifest; rows: CandidateRow[] }> =>
-        fetchWithAuth(`/tenants/external-sync/match-candidates${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
+    startMySnapshotExtract: (data: {
+        provider?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        fullResync?: boolean;
+    }): Promise<ExternalSyncSnapshot> =>
+        fetchWithAuth('/tenants/external-sync/snapshots', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    listMySnapshots: (provider?: string): Promise<ExternalSyncSnapshot[]> =>
+        fetchWithAuth(`/tenants/external-sync/snapshots${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
+    getMySnapshot: (id: string): Promise<ExternalSyncSnapshot> =>
+        fetchWithAuth(`/tenants/external-sync/snapshots/${id}`),
+    cancelMySnapshotExtract: (id: string): Promise<{ cancelling: boolean }> =>
+        fetchWithAuth(`/tenants/external-sync/snapshots/${id}/cancel`, { method: 'POST' }),
+    downloadMySnapshotFile: (id: string): Promise<{ blob: Blob; filename: string }> =>
+        fetchBlobWithAuth(`/tenants/external-sync/snapshots/${id}/file`),
+    uploadMySnapshot: (file: File, provider?: string): Promise<ExternalSyncSnapshot> => {
+        const body = new FormData();
+        body.append('file', file);
+        const qs = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+        return fetchWithAuth(`/tenants/external-sync/snapshots/upload${qs}`, { method: 'POST', body });
+    },
+    deleteMySnapshot: (id: string): Promise<{ deleted: boolean }> =>
+        fetchWithAuth(`/tenants/external-sync/snapshots/${id}`, { method: 'DELETE' }),
+    /** Proposed matches for the review. Reads the snapshot; writes nothing. */
+    getMyMatchCandidates: (snapshotId: string): Promise<{ manifest: MatchManifest; rows: CandidateRow[] }> =>
+        fetchWithAuth(`/tenants/external-sync/match-candidates?snapshotId=${encodeURIComponent(snapshotId)}`),
     /** The reviewed workbook. Rejected whole if any row is untrustworthy. */
     applyMyMatchDecisions: (payload: {
         manifest: MatchManifest;
