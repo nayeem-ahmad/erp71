@@ -19,8 +19,8 @@ describe('match routes — platform admin', () => {
     beforeEach(() => jest.clearAllMocks());
 
     it('passes the tenantId from the URL to getCandidates', async () => {
-        await controller.getMatchCandidates('tenant-1', 'EXPRESS_RETAIL_PRO');
-        expect(matchService.getCandidates).toHaveBeenCalledWith('tenant-1', 'EXPRESS_RETAIL_PRO');
+        await controller.getMatchCandidates('tenant-1', 'snap-1');
+        expect(matchService.getCandidates).toHaveBeenCalledWith('tenant-1', 'snap-1');
     });
 
     it('passes the tenantId from the URL to applyMatchDecisions', async () => {
@@ -43,12 +43,12 @@ describe('match routes — tenant facing', () => {
     });
 
     it('uses the interceptor tenant, never a client-supplied id', async () => {
-        await controller.getMatchCandidates(owner, undefined);
-        expect(matchService.getCandidates).toHaveBeenCalledWith('tenant-1', undefined);
+        await controller.getMatchCandidates(owner, 'snap-1');
+        expect(matchService.getCandidates).toHaveBeenCalledWith('tenant-1', 'snap-1');
     });
 
     it('rejects a non-owner reading candidates', async () => {
-        await expect(controller.getMatchCandidates(manager, undefined)).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(controller.getMatchCandidates(manager, 'snap-1')).rejects.toBeInstanceOf(ForbiddenException);
         expect(matchService.getCandidates).not.toHaveBeenCalled();
     });
 
@@ -59,7 +59,7 @@ describe('match routes — tenant facing', () => {
 
     it('rejects when the externalImport feature is off for the tenant', async () => {
         platformSettings.isFeatureEnabledForTenant.mockResolvedValue(false);
-        await expect(controller.getMatchCandidates(owner, undefined)).rejects.toBeInstanceOf(
+        await expect(controller.getMatchCandidates(owner, 'snap-1')).rejects.toBeInstanceOf(
             ServiceUnavailableException,
         );
         expect(matchService.getCandidates).not.toHaveBeenCalled();

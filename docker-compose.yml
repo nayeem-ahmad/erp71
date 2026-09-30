@@ -46,6 +46,9 @@ services:
       - DATABASE_URL=postgresql://postgres:password123@db:5432/erp71
       # Relaxed for local E2E (sidebar route sweep hits many /auth/me calls per IP).
       - THROTTLE_LIMIT=100000
+      - EXTERNAL_SYNC_SNAPSHOT_DIR=/var/lib/erp71/external-sync-snapshots
+    volumes:
+      - external_sync_snapshots:/var/lib/erp71/external-sync-snapshots
     depends_on:
       - db
     restart: always
@@ -55,3 +58,4 @@ services:
 
 volumes:
   postgres_data:
+  external_sync_snapshots:

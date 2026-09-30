@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Body,
     Controller,
     Delete,
@@ -9,17 +10,23 @@ import {
     Put,
     Query,
     ServiceUnavailableException,
+    StreamableFile,
+    UploadedFile,
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { createReadStream } from 'fs';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ExternalSyncMatchService } from './external-sync.match.service';
 import { ExternalSyncService } from './external-sync.service';
+import { ExternalSyncSnapshotService } from './snapshot/snapshot.service';
 import { ApplyMatchDecisionsDto } from './external-sync.match.dto';
 import {
+    CreateSnapshotDto,
     ListExternalSyncRunsQueryDto,
     RunExternalSyncDto,
     TestExternalSyncConnectionDto,
@@ -51,6 +58,7 @@ export class TenantExternalSyncController {
         private readonly externalSyncService: ExternalSyncService,
         private readonly platformSettings: PlatformSettingsService,
         private readonly matchService: ExternalSyncMatchService,
+        private readonly snapshots: ExternalSyncSnapshotService,
     ) {}
 
     private async assertAllowed(tenant: TenantContext) {
@@ -69,9 +77,9 @@ export class TenantExternalSyncController {
      * the provider's.
      */
     @Get('match-candidates')
-    async getMatchCandidates(@Tenant() tenant: TenantContext, @Query('provider') provider?: string) {
+    async getMatchCandidates(@Tenant() tenant: TenantContext, @Query('snapshotId') snapshotId: string) {
         await this.assertAllowed(tenant);
-        return this.matchService.getCandidates(tenant.tenantId, provider);
+        return this.matchService.getCandidates(tenant.tenantId, snapshotId);
     }
 
     /** The reviewed workbook, applied as mappings a later run will honour. */
@@ -131,5 +139,57 @@ export class TenantExternalSyncController {
     async cancelRun(@Tenant() tenant: TenantContext, @Param('runId') runId: string) {
         await this.assertAllowed(tenant);
         return this.externalSyncService.cancelRun(tenant.tenantId, runId);
+    }
+
+    @Post('snapshots')
+    async startExtract(@Tenant() tenant: TenantContext, @Body() dto: CreateSnapshotDto) {
+        await this.assertAllowed(tenant);
+        return this.snapshots.startExtract(tenant.tenantId, dto, tenant.userId);
+    }
+
+    @Get('snapshots')
+    async listSnapshots(@Tenant() tenant: TenantContext, @Query('provider') provider?: string) {
+        await this.assertAllowed(tenant);
+        return this.snapshots.listSnapshots(tenant.tenantId, provider);
+    }
+
+    @Get('snapshots/:id')
+    async getSnapshot(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.assertAllowed(tenant);
+        return this.snapshots.getSnapshot(tenant.tenantId, id);
+    }
+
+    @Post('snapshots/:id/cancel')
+    async cancelExtract(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.assertAllowed(tenant);
+        return this.snapshots.cancelExtract(tenant.tenantId, id);
+    }
+
+    @Get('snapshots/:id/file')
+    async downloadSnapshot(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.assertAllowed(tenant);
+        const file = await this.snapshots.openFile(tenant.tenantId, id);
+        return new StreamableFile(createReadStream(file.path), {
+            type: 'application/gzip',
+            disposition: `attachment; filename="${file.filename}"`,
+        });
+    }
+
+    @Post('snapshots/upload')
+    @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
+    async uploadSnapshot(
+        @Tenant() tenant: TenantContext,
+        @Query('provider') provider: string | undefined,
+        @UploadedFile() file?: Express.Multer.File,
+    ) {
+        await this.assertAllowed(tenant);
+        if (!file) throw new BadRequestException('No file uploaded');
+        return this.snapshots.uploadSnapshot(tenant.tenantId, provider, file.buffer);
+    }
+
+    @Delete('snapshots/:id')
+    async deleteSnapshot(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+        await this.assertAllowed(tenant);
+        return this.snapshots.deleteSnapshot(tenant.tenantId, id);
     }
 }

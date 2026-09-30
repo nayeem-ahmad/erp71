@@ -60,6 +60,13 @@ export const OPEN_ROUTES: Record<string, string> = {
     'TenantExternalSyncController.startRun': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/runs
     'TenantExternalSyncController.listRuns': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/runs
     'TenantExternalSyncController.cancelRun': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/runs/:runId/cancel
+    'TenantExternalSyncController.startExtract': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/snapshots
+    'TenantExternalSyncController.listSnapshots': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/snapshots
+    'TenantExternalSyncController.getSnapshot': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/snapshots/:id
+    'TenantExternalSyncController.cancelExtract': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/snapshots/:id/cancel
+    'TenantExternalSyncController.downloadSnapshot': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/snapshots/:id/file
+    'TenantExternalSyncController.uploadSnapshot': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/snapshots/upload
+    'TenantExternalSyncController.deleteSnapshot': "every handler asserts OWNER in the service (assertAllowed)", // DELETE /tenants/external-sync/snapshots/:id
     'FeedbackController.create': "any member may submit feedback", // POST /feedback
     'InvitationsController.listMembers': "permission is enforced in the service layer, not by a decorator", // GET /invitations/members
     'InvitationsController.listPending': "permission is enforced in the service layer, not by a decorator", // GET /invitations/pending
