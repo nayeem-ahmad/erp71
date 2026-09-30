@@ -6,7 +6,7 @@ import { ExternalSyncService, SYNC_STEPS } from './external-sync.service';
  * validation rules are worth pinning independently of the import itself.
  */
 describe('external-sync step selection', () => {
-    const service = new ExternalSyncService({} as any, {} as any);
+    const service = new ExternalSyncService({} as any, {} as any, {} as any);
     const resolve = (requested?: string[]) => (service as any).resolveSteps(requested);
 
     it('defaults to the whole import', () => {

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { getProviderDefinition } from './provider-adapter';
@@ -9,6 +9,8 @@ import {
 } from './match/candidates';
 import type { ApplyMatchDecisionsDto, MatchDecisionRowDto } from './external-sync.match.dto';
 import type { CandidateRow, ExistingRecord, MatchEntity, SourceRecord } from './match/match.types';
+import type { SnapshotCounts } from './snapshot/snapshot.types';
+import { readSnapshotFile, snapshotFilePath } from './snapshot/snapshot-file';
 
 /** Which table each entity's ids live in, for the existence check. */
 const ENTITY_MODEL = {
@@ -43,45 +45,40 @@ export class ExternalSyncMatchService {
     ) {}
 
     /**
-     * Pulls the provider's masters, pairs them against what the tenant already
-     * has, and returns one candidate row per source record for the reviewer's
-     * workbook. Reads only — nothing here writes.
+     * Scores the snapshot's masters against what the tenant already has and
+     * returns one candidate row per source record. Reads only — nothing here
+     * writes, and the live provider is never contacted.
      */
-    async getCandidates(tenantId: string, provider?: string) {
-        const connection = await this.db.externalSyncConnection.findUnique({
-            where: {
-                tenant_id_provider: {
-                    tenant_id: tenantId,
-                    provider: provider ?? 'EXPRESS_RETAIL_PRO',
-                },
-            },
+    async getCandidates(tenantId: string, snapshotId: string) {
+        const snapshot = await this.db.externalSyncSnapshot.findFirst({
+            where: { id: snapshotId, tenant_id: tenantId, status: 'READY' },
         });
-        if (!connection) {
+        if (!snapshot) {
+            throw new NotFoundException('Snapshot is not READY or was not found');
+        }
+
+        const connection = await this.db.externalSyncConnection.findUnique({
+            where: { id: snapshot.connection_id },
+        });
+        if (!connection || connection.tenant_id !== tenantId) {
             throw new NotFoundException('No connection configured for this tenant and provider');
         }
 
         const def = getProviderDefinition(connection.provider);
-        const client = def.createClient({
-            baseUrl: connection.base_url,
-            username: connection.username,
-            password: this.encryption.decrypt(connection.password_encrypted),
-        });
-
-        const session = await client.login();
-        // The same guard a run applies: a mis-typed credential must not pull
-        // another company's masters into this tenant's review workbook.
-        if (connection.external_org_id && connection.external_org_id !== session.organizationId) {
-            throw new ConflictException(
-                `Provider organization changed (expected ${connection.external_org_id}, got ${session.organizationId}). ` +
-                    'Refusing to read — reset the connection if this is intentional.',
-            );
+        let rawProducts: unknown[];
+        let rawCustomers: unknown[];
+        let rawSuppliers: unknown[];
+        try {
+            const doc = await readSnapshotFile(snapshotFilePath(tenantId, snapshotId));
+            rawProducts = doc.products;
+            rawCustomers = doc.customers;
+            rawSuppliers = doc.suppliers;
+        } catch (error: unknown) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                throw new NotFoundException('Snapshot file is missing on disk');
+            }
+            throw error;
         }
-
-        const [rawProducts, rawCustomers, rawSuppliers] = await Promise.all([
-            client.fetchProducts(),
-            client.fetchCustomers(),
-            client.fetchSuppliers(),
-        ]);
 
         // The mappers disambiguate codes against a claimed set, exactly as a run
         // does, so the external ids here are the ones a run would write.
@@ -129,6 +126,7 @@ export class ExternalSyncMatchService {
                 tenantId,
                 connectionId: connection.id,
                 provider: connection.provider,
+                snapshotId,
                 generatedAt: new Date().toISOString(),
                 rowCount: rows.length,
             },
@@ -137,6 +135,12 @@ export class ExternalSyncMatchService {
     }
 
     async applyDecisions(tenantId: string, dto: ApplyMatchDecisionsDto) {
+        if (!dto.manifest.snapshotId) {
+            throw new BadRequestException(
+                'This workbook is missing a snapshot id. Download a fresh one from a READY snapshot and review it again.',
+            );
+        }
+
         const connection = await this.db.externalSyncConnection.findUnique({
             where: {
                 tenant_id_provider: { tenant_id: tenantId, provider: dto.manifest.provider },
@@ -160,6 +164,30 @@ export class ExternalSyncMatchService {
             throw new BadRequestException(
                 `Row count mismatch: the manifest says ${dto.manifest.rowCount} rows but the file has ${dto.rows.length}. ` +
                     'Rows were added or removed after the workbook was generated — download a fresh one.',
+            );
+        }
+
+        const snapshot = await this.db.externalSyncSnapshot.findFirst({
+            where: {
+                id: dto.manifest.snapshotId,
+                tenant_id: tenantId,
+                connection_id: connection.id,
+                status: 'READY',
+            },
+        });
+        if (!snapshot) {
+            throw new BadRequestException(
+                'This workbook was generated for a snapshot that is not READY for this connection.',
+            );
+        }
+
+        const counts = snapshot.counts as unknown as SnapshotCounts | null;
+        const masterCount =
+            (counts?.products ?? 0) + (counts?.customers ?? 0) + (counts?.suppliers ?? 0);
+        if (dto.rows.length !== masterCount) {
+            throw new BadRequestException(
+                `Row count mismatch: the snapshot has ${masterCount} master records but the file has ${dto.rows.length}. ` +
+                    'Confirming only the medium subset is not allowed — send every candidate row.',
             );
         }
 

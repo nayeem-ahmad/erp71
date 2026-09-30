@@ -1,10 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, Loader2, Play, PlugZap, Trash2, Upload } from 'lucide-react';
+import { Loader2, PlugZap, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
+import {
+    SnapshotImportPanel,
+    type SnapshotImportAdapter,
+} from '@/components/external-sync/SnapshotImportPanel';
 import {
     api,
     type ExternalSyncConnection,
@@ -15,7 +19,6 @@ import {
 } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
-import { downloadMatchWorkbook, parseMatchWorkbook } from '@/lib/match-workbook';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 
 const RUN_POLL_MS = 5000;
@@ -68,14 +71,10 @@ export default function TenantExternalImportPage() {
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
-    const [isStarting, setIsStarting] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
-    const [runForm, setRunForm] = useState({ dateFrom: '', dateTo: '', dryRun: true, fullResync: false });
-    const [downloadingWorkbook, setDownloadingWorkbook] = useState(false);
-    const [uploadingWorkbook, setUploadingWorkbook] = useState(false);
-    const workbookBusy = downloadingWorkbook || uploadingWorkbook;
+    const [runForm, setRunForm] = useState({ dateFrom: '', dateTo: '', fullResync: false });
     const [selectedSteps, setSelectedSteps] = useState<ExternalSyncStep[]>(STEPS.map((step) => step.key));
 
     const activeRun = useMemo(() => runs.find((run) => run.status === 'RUNNING') ?? null, [runs]);
@@ -87,6 +86,26 @@ export default function TenantExternalImportPage() {
             // A failed poll is not worth interrupting the page for.
         }
     }, []);
+
+    const snapshotAdapter = useMemo<SnapshotImportAdapter>(
+        () => ({
+            listSnapshots: (chosen) => api.listMySnapshots(chosen),
+            startExtract: (body) => api.startMySnapshotExtract(body),
+            getSnapshot: (id) => api.getMySnapshot(id),
+            cancelExtract: (id) => api.cancelMySnapshotExtract(id),
+            downloadFile: (id) => api.downloadMySnapshotFile(id),
+            uploadFile: (file, chosen) => api.uploadMySnapshot(file, chosen),
+            deleteSnapshot: (id) => api.deleteMySnapshot(id),
+            getMatchCandidates: (snapshotId) => api.getMyMatchCandidates(snapshotId),
+            applyMatchDecisions: (payload) => api.applyMyMatchDecisions(payload),
+            startRun: async (body) => {
+                const run = await api.startMyExternalSyncRun({ provider, ...body });
+                await loadRuns();
+                return run;
+            },
+        }),
+        [provider, loadRuns],
+    );
 
     const load = useCallback(
         async (selectProvider?: string) => {
@@ -215,26 +234,6 @@ export default function TenantExternalImportPage() {
         }
     }
 
-    async function handleRun() {
-        setIsStarting(true);
-        try {
-            await api.startMyExternalSyncRun({
-                provider,
-                ...(runForm.dateFrom ? { dateFrom: runForm.dateFrom } : {}),
-                ...(runForm.dateTo ? { dateTo: runForm.dateTo } : {}),
-                dryRun: runForm.dryRun,
-                fullResync: runForm.fullResync,
-                steps: selectedSteps,
-            });
-            toast.success(runForm.dryRun ? 'Dry run started' : 'Import started');
-            await loadRuns();
-        } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Could not start the import');
-        } finally {
-            setIsStarting(false);
-        }
-    }
-
     async function handleCancel() {
         if (!activeRun) return;
         setIsCancelling(true);
@@ -246,58 +245,6 @@ export default function TenantExternalImportPage() {
             toast.error(err instanceof Error ? err.message : 'Could not cancel the run');
         } finally {
             setIsCancelling(false);
-        }
-    }
-
-    async function handleDownloadWorkbook() {
-        setDownloadingWorkbook(true);
-        try {
-            const { manifest, rows } = await api.getMyMatchCandidates(provider);
-            if (rows.length === 0) {
-                toast.error('This source returned no products, customers or suppliers to review');
-                return;
-            }
-            downloadMatchWorkbook(manifest, rows);
-            const needingReview = rows.filter((row) => row.confidence === 'medium').length;
-            toast.success(
-                needingReview > 0
-                    ? `${rows.length} rows — ${needingReview} need a decision`
-                    : `${rows.length} rows, none ambiguous`,
-            );
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Could not build the review workbook');
-        } finally {
-            setDownloadingWorkbook(false);
-        }
-    }
-
-    async function handleUploadWorkbook(event: React.ChangeEvent<HTMLInputElement>) {
-        const file = event.target.files?.[0];
-        // Reset immediately so re-picking the same file fires onChange again.
-        event.target.value = '';
-        if (!file) return;
-
-        setUploadingWorkbook(true);
-        try {
-            const { manifest, rows } = await parseMatchWorkbook(file);
-            const result = await api.applyMyMatchDecisions({
-                manifest,
-                rows: rows.map((row) => ({
-                    entity: row.entity,
-                    externalId: row.externalId,
-                    decision: row.decision,
-                    matchId: row.matchId,
-                    altIds: row.altIds,
-                    notes: row.notes,
-                })),
-            });
-            toast.success(
-                `${result.applied} match${result.applied === 1 ? '' : 'es'} recorded, ${result.skipped} to be created fresh`,
-            );
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Could not apply the reviewed workbook');
-        } finally {
-            setUploadingWorkbook(false);
         }
     }
 
@@ -452,8 +399,12 @@ export default function TenantExternalImportPage() {
             </CompactSection>
 
             {connection ? (
-                <CompactSection title="Run an import">
-                    <div className="grid gap-3 md:grid-cols-4">
+                <CompactSection title="Extract, review and import">
+                    <p className="text-xs text-gray-600 mb-3">
+                        Extract a snapshot from {providerLabel} (or upload one), confirm unclear matches,
+                        then import from that file. The other system is not contacted again after extract.
+                    </p>
+                    <div className="grid gap-3 md:grid-cols-3">
                         <Field label="From" hint="Blank uses the rolling window">
                             <Input
                                 type="date"
@@ -468,15 +419,6 @@ export default function TenantExternalImportPage() {
                                 onChange={(e) => setRunForm({ ...runForm, dateTo: e.target.value })}
                             />
                         </Field>
-                        <div className="flex items-end">
-                            <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
-                                <Checkbox
-                                    checked={runForm.dryRun}
-                                    onChange={(e) => setRunForm({ ...runForm, dryRun: e.target.checked })}
-                                />
-                                Dry run (count only, change nothing)
-                            </label>
-                        </div>
                         <div className="flex items-end">
                             <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
                                 <Checkbox
@@ -533,76 +475,27 @@ export default function TenantExternalImportPage() {
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 mt-4">
-                        <Button
-                            icon={<Play className="w-3.5 h-3.5" />}
-                            onClick={() => void handleRun()}
-                            loading={isStarting}
-                            disabled={Boolean(activeRun) || selectedSteps.length === 0}
-                        >
-                            {runForm.dryRun ? 'Start dry run' : 'Start import'}
-                        </Button>
-                        {selectedSteps.length === 0 ? (
-                            <span className="text-xs text-gray-500">Pick at least one step</span>
-                        ) : null}
-                        {activeRun ? (
+                    <div className="mt-4">
+                        <SnapshotImportPanel
+                            provider={provider}
+                            providerLabel={providerLabel}
+                            connectionId={connection.id}
+                            adapter={snapshotAdapter}
+                            steps={selectedSteps}
+                            windowForm={runForm}
+                            importRunning={Boolean(activeRun)}
+                        />
+                    </div>
+
+                    {activeRun ? (
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
                             <Button variant="secondary" onClick={() => void handleCancel()} loading={isCancelling}>
                                 Stop after current step
                             </Button>
-                        ) : null}
-                    </div>
+                        </div>
+                    ) : null}
 
                     {activeRun ? <RunProgress run={activeRun} /> : null}
-                </CompactSection>
-            ) : null}
-
-            {connection ? (
-                <CompactSection title="Review matches">
-                    <p className="text-xs text-gray-600 mb-3">
-                        Download the workbook to see which of this source&apos;s products, customers and
-                        suppliers already exist here. Fill in the <span className="font-medium">decision</span>{' '}
-                        column, then upload it — the import will follow those choices instead of guessing.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            className="min-h-touch"
-                            onClick={handleDownloadWorkbook}
-                            disabled={workbookBusy || !!activeRun}
-                        >
-                            {downloadingWorkbook ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Download className="h-4 w-4" />
-                            )}
-                            Download review workbook
-                        </Button>
-                        <label className="inline-flex">
-                            <span className="sr-only">Upload reviewed workbook</span>
-                            <input
-                                type="file"
-                                accept=".xlsx,.xls"
-                                className="hidden"
-                                onChange={handleUploadWorkbook}
-                                disabled={workbookBusy || !!activeRun}
-                            />
-                            <span
-                                className={`inline-flex items-center justify-center gap-2 min-h-touch px-3 rounded-md border text-sm cursor-pointer ${
-                                    workbookBusy || activeRun
-                                        ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                }`}
-                            >
-                                {uploadingWorkbook ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Upload className="h-4 w-4" />
-                                )}
-                                Upload decisions
-                            </span>
-                        </label>
-                    </div>
                 </CompactSection>
             ) : null}
 

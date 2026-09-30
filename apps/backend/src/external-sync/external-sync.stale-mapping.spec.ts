@@ -57,7 +57,7 @@ describe('external-sync stale mapping repair', () => {
 
     it('re-imports the record and repairs the link when the mapped row is gone', async () => {
         const db = makeDb(0); // nothing updated => the mapped product no longer exists
-        const service = new ExternalSyncService(db, {} as any);
+        const service = new ExternalSyncService(db, {} as any, {} as any);
         const stats = emptyStats();
         const warnings: any[] = [];
 
@@ -78,7 +78,7 @@ describe('external-sync stale mapping repair', () => {
 
     it('updates in place and leaves the mapping alone when the row is still there', async () => {
         const db = makeDb(1);
-        const service = new ExternalSyncService(db, {} as any);
+        const service = new ExternalSyncService(db, {} as any, {} as any);
         const stats = emptyStats();
         const warnings: any[] = [];
 
@@ -92,7 +92,7 @@ describe('external-sync stale mapping repair', () => {
 
     it('scopes the update to the tenant, so a mapping cannot reach across tenants', async () => {
         const db = makeDb(1);
-        const service = new ExternalSyncService(db, {} as any);
+        const service = new ExternalSyncService(db, {} as any, {} as any);
 
         await (service as any).syncProducts(connection, client, emptyStats(), [], false);
 

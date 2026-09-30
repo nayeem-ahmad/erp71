@@ -117,6 +117,7 @@ export async function parseMatchWorkbook(
         tenantId: manifestFields.tenantId ?? '',
         connectionId: manifestFields.connectionId ?? '',
         provider: manifestFields.provider ?? '',
+        snapshotId: manifestFields.snapshotId ?? '',
         generatedAt: manifestFields.generatedAt ?? '',
         rowCount: Number(manifestFields.rowCount ?? 0),
     };

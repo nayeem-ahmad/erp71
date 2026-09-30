@@ -46,6 +46,8 @@ COPY --from=builder /app/packages/database ./packages/database
 COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 
+RUN mkdir -p /var/lib/erp71/external-sync-snapshots
+
 EXPOSE 4000
 ENV PORT=4000
 ENV HOSTNAME="0.0.0.0"

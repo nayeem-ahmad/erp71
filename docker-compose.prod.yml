@@ -25,6 +25,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
+      EXTERNAL_SYNC_SNAPSHOT_DIR: /var/lib/erp71/external-sync-snapshots
+    volumes:
+      - external_sync_snapshots:/var/lib/erp71/external-sync-snapshots
     depends_on:
       db:
         condition: service_healthy
@@ -83,3 +86,4 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  external_sync_snapshots:

@@ -57,6 +57,25 @@ export class UpsertExternalSyncConnectionDto {
     historyStartDate?: string;
 }
 
+export class CreateSnapshotDto {
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    provider?: string;
+
+    @IsOptional()
+    @IsDateString()
+    dateFrom?: string;
+
+    @IsOptional()
+    @IsDateString()
+    dateTo?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    fullResync?: boolean;
+}
+
 export class RunExternalSyncDto {
     /** Which configured connection to run. Defaults to Express Retail Pro. */
     @IsOptional()
@@ -91,6 +110,12 @@ export class RunExternalSyncDto {
     @IsArray()
     @IsString({ each: true })
     steps?: string[];
+
+    /** Required for a manual import; ignored on the scheduled live pull. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    snapshotId?: string;
 }
 
 export class ListExternalSyncRunsQueryDto {

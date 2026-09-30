@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, Loader2, Play, PlugZap, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, PlugZap, RefreshCw, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
+import {
+    SnapshotImportPanel,
+    type SnapshotImportAdapter,
+} from '@/components/external-sync/SnapshotImportPanel';
 import {
     api,
     type ExternalSyncConnection,
@@ -69,10 +73,9 @@ export default function TenantExternalSyncPage() {
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
-    const [isStarting, setIsStarting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
-    const [runForm, setRunForm] = useState({ dateFrom: '', dateTo: '', dryRun: true, fullResync: false });
+    const [runForm, setRunForm] = useState({ dateFrom: '', dateTo: '', fullResync: false });
     const [selectedSteps, setSelectedSteps] = useState<ExternalSyncStep[]>(STEPS.map((s) => s.key));
     const [isCancelling, setIsCancelling] = useState(false);
 
@@ -86,6 +89,26 @@ export default function TenantExternalSyncPage() {
             // A failed poll is not worth interrupting the page for.
         }
     }, [tenantId]);
+
+    const snapshotAdapter = useMemo<SnapshotImportAdapter>(
+        () => ({
+            listSnapshots: (chosen) => api.listSnapshots(tenantId, chosen),
+            startExtract: (body) => api.startSnapshotExtract(tenantId, body),
+            getSnapshot: (id) => api.getSnapshot(tenantId, id),
+            cancelExtract: (id) => api.cancelSnapshotExtract(tenantId, id),
+            downloadFile: (id) => api.downloadSnapshotFile(tenantId, id),
+            uploadFile: (file, chosen) => api.uploadSnapshot(tenantId, file, chosen),
+            deleteSnapshot: (id) => api.deleteSnapshot(tenantId, id),
+            getMatchCandidates: (snapshotId) => api.getMatchCandidates(tenantId, snapshotId),
+            applyMatchDecisions: (payload) => api.applyMatchDecisions(tenantId, payload),
+            startRun: async (body) => {
+                const run = await api.startExternalSyncRun(tenantId, { provider, ...body });
+                await loadRuns();
+                return run;
+            },
+        }),
+        [tenantId, provider, loadRuns],
+    );
 
     const load = useCallback(
         async (selectProvider?: string) => {
@@ -220,26 +243,6 @@ export default function TenantExternalSyncPage() {
             toast.error(err instanceof Error ? err.message : 'Connection test failed');
         } finally {
             setIsTesting(false);
-        }
-    }
-
-    async function handleRun() {
-        setIsStarting(true);
-        try {
-            await api.startExternalSyncRun(tenantId, {
-                provider,
-                ...(runForm.dateFrom ? { dateFrom: runForm.dateFrom } : {}),
-                ...(runForm.dateTo ? { dateTo: runForm.dateTo } : {}),
-                dryRun: runForm.dryRun,
-                fullResync: runForm.fullResync,
-                steps: selectedSteps,
-            });
-            toast.success(runForm.dryRun ? 'Dry run started' : 'Import started');
-            await loadRuns();
-        } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Could not start the import');
-        } finally {
-            setIsStarting(false);
         }
     }
 
@@ -452,8 +455,12 @@ export default function TenantExternalSyncPage() {
             </CompactSection>
 
             {connection ? (
-                <CompactSection title="Run an import">
-                    <div className="grid gap-3 md:grid-cols-4">
+                <CompactSection title="Extract, review and import">
+                    <p className="text-xs text-gray-600 mb-3">
+                        Extract a snapshot from {providerLabel} (or upload one), confirm unclear matches,
+                        then import from that file. The other system is not contacted again after extract.
+                    </p>
+                    <div className="grid gap-3 md:grid-cols-3">
                         <Field label="From" hint="Blank uses the rolling window">
                             <Input
                                 type="date"
@@ -468,15 +475,6 @@ export default function TenantExternalSyncPage() {
                                 onChange={(e) => setRunForm({ ...runForm, dateTo: e.target.value })}
                             />
                         </Field>
-                        <div className="flex items-end">
-                            <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
-                                <Checkbox
-                                    checked={runForm.dryRun}
-                                    onChange={(e) => setRunForm({ ...runForm, dryRun: e.target.checked })}
-                                />
-                                Dry run (count only, write nothing)
-                            </label>
-                        </div>
                         <div className="flex items-end">
                             <label className="flex items-center gap-2 text-xs text-gray-700 max-md:min-h-touch">
                                 <Checkbox
@@ -533,24 +531,25 @@ export default function TenantExternalSyncPage() {
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 mt-4">
-                        <Button
-                            icon={<Play className="w-3.5 h-3.5" />}
-                            onClick={() => void handleRun()}
-                            loading={isStarting}
-                            disabled={Boolean(activeRun) || selectedSteps.length === 0}
-                        >
-                            {runForm.dryRun ? 'Start dry run' : 'Start import'}
-                        </Button>
-                        {selectedSteps.length === 0 ? (
-                            <span className="text-xs text-gray-500">Pick at least one step</span>
-                        ) : null}
-                        {activeRun ? (
+                    <div className="mt-4">
+                        <SnapshotImportPanel
+                            provider={provider}
+                            providerLabel={providerLabel}
+                            connectionId={connection.id}
+                            adapter={snapshotAdapter}
+                            steps={selectedSteps}
+                            windowForm={runForm}
+                            importRunning={Boolean(activeRun)}
+                        />
+                    </div>
+
+                    {activeRun ? (
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
                             <Button variant="secondary" onClick={() => void handleCancel()} loading={isCancelling}>
                                 Stop after current step
                             </Button>
-                        ) : null}
-                    </div>
+                        </div>
+                    ) : null}
 
                     {activeRun ? <RunProgress run={activeRun} /> : null}
                 </CompactSection>

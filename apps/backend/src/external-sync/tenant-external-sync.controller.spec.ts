@@ -24,7 +24,7 @@ describe('TenantExternalSyncController', () => {
         return {
             // The match service is unused by these cases; the match routes have
             // their own spec in external-sync.match.controller.spec.ts.
-            controller: new TenantExternalSyncController(service as any, platformSettings as any, {} as any),
+            controller: new TenantExternalSyncController(service as any, platformSettings as any, {} as any, {} as any),
             service,
             platformSettings,
         };

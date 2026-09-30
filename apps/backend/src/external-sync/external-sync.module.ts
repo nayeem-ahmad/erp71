@@ -6,13 +6,20 @@ import { TenantExternalSyncController } from './tenant-external-sync.controller'
 import { ExternalSyncMatchService } from './external-sync.match.service';
 import { ExternalSyncScheduler } from './external-sync.scheduler';
 import { ExternalSyncService } from './external-sync.service';
+import { ExternalSyncSnapshotService } from './snapshot/snapshot.service';
 
 @Module({
     // PlatformSettingsModule supplies the per-tenant `externalImport` switch
     // that gates the tenant-facing controller.
     imports: [PlatformSettingsModule],
     controllers: [ExternalSyncController, TenantExternalSyncController],
-    providers: [ExternalSyncService, ExternalSyncMatchService, ExternalSyncScheduler, PlatformAdminGuard],
-    exports: [ExternalSyncService, ExternalSyncMatchService],
+    providers: [
+        ExternalSyncService,
+        ExternalSyncMatchService,
+        ExternalSyncSnapshotService,
+        ExternalSyncScheduler,
+        PlatformAdminGuard,
+    ],
+    exports: [ExternalSyncService, ExternalSyncMatchService, ExternalSyncSnapshotService],
 })
 export class ExternalSyncModule {}
