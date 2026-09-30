@@ -5,6 +5,7 @@ const manifest: MatchManifest = {
     tenantId: 'tenant-1',
     connectionId: 'conn-1',
     provider: 'EXPRESS_RETAIL_PRO',
+    snapshotId: 'snap-1',
     generatedAt: '2026-09-21T00:00:00.000Z',
     rowCount: 0,
 };
@@ -49,6 +50,7 @@ describe('match workbook round-trip', () => {
         const parsed = await parseMatchWorkbook(asFile(buildWorkbookBuffer(manifest, [row()])));
         expect(parsed.manifest.connectionId).toBe('conn-1');
         expect(parsed.manifest.provider).toBe('EXPRESS_RETAIL_PRO');
+        expect(parsed.manifest.snapshotId).toBe('snap-1');
     });
 
     it('keeps an edited decision and note', async () => {

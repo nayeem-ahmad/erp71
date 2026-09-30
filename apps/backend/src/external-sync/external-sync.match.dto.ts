@@ -29,6 +29,9 @@ export class MatchManifestDto {
     provider!: string;
 
     @IsString()
+    snapshotId!: string;
+
+    @IsString()
     generatedAt!: string;
 
     @Type(() => Number)

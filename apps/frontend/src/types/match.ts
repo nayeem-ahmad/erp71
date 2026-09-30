@@ -29,6 +29,7 @@ export interface MatchManifest {
     tenantId: string;
     connectionId: string;
     provider: string;
+    snapshotId: string;
     generatedAt: string;
     rowCount: number;
 }

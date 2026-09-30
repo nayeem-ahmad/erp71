@@ -1,23 +1,118 @@
 import { BadRequestException } from '@nestjs/common';
 import { ExternalSyncMatchService } from './external-sync.match.service';
 import type { ApplyMatchDecisionsDto } from './external-sync.match.dto';
+import { getProviderDefinition } from './provider-adapter';
+import { readSnapshotFile } from './snapshot/snapshot-file';
+import { SNAPSHOT_FORMAT_VERSION } from './snapshot/snapshot.types';
+import type { SnapshotDocument } from './snapshot/snapshot.types';
+
+jest.mock('./snapshot/snapshot-file', () => ({
+    ...jest.requireActual('./snapshot/snapshot-file'),
+    readSnapshotFile: jest.fn(),
+}));
+
+jest.mock('./provider-adapter', () => {
+    const actual = jest.requireActual('./provider-adapter');
+    return {
+        ...actual,
+        getProviderDefinition: jest.fn((provider: string) => actual.getProviderDefinition(provider)),
+    };
+});
+
+const mockedReadSnapshot = readSnapshotFile as jest.MockedFunction<typeof readSnapshotFile>;
+const mockedGetDef = getProviderDefinition as jest.MockedFunction<typeof getProviderDefinition>;
 
 const CONNECTION = {
     id: 'conn-1',
     tenant_id: 'tenant-1',
     provider: 'EXPRESS_RETAIL_PRO',
     store_id: 'store-1',
+    base_url: 'https://example.test',
+    username: 'user',
+    password_encrypted: 'cipher',
+    external_org_id: 'org-9',
 };
+
+const READY_SNAPSHOT = {
+    id: 'snap-1',
+    tenant_id: 'tenant-1',
+    connection_id: 'conn-1',
+    status: 'READY',
+    counts: {
+        products: 1,
+        customers: 0,
+        suppliers: 0,
+        sales: 0,
+        purchases: 0,
+        customerPayments: 0,
+        supplierPayments: 0,
+        saleReturns: 0,
+    },
+};
+
+function snapshotDoc(overrides: Partial<SnapshotDocument> = {}): SnapshotDocument {
+    const products = overrides.products ?? [
+        {
+            id: 1,
+            code: 'NAPA',
+            name: 'Napa 500mg',
+            purchase_rate: '8',
+            sale_rate: '10',
+            vat: null,
+            reorder: null,
+            is_service: 'false',
+            status: '1',
+            organization_id: 'org-9',
+            updated_at: null,
+        },
+    ];
+    return {
+        formatVersion: SNAPSHOT_FORMAT_VERSION,
+        manifest: {
+            formatVersion: SNAPSHOT_FORMAT_VERSION,
+            tenantId: 'tenant-1',
+            connectionId: 'conn-1',
+            provider: 'EXPRESS_RETAIL_PRO',
+            externalOrgId: 'org-9',
+            windowFrom: '2026-01-01',
+            windowTo: '2026-01-31',
+            extractedAt: '2026-09-30T00:00:00.000Z',
+            counts: {
+                products: products.length,
+                customers: 0,
+                suppliers: 0,
+                sales: 0,
+                purchases: 0,
+                customerPayments: 0,
+                supplierPayments: 0,
+                saleReturns: 0,
+            },
+            sha256: 'x',
+        },
+        products,
+        customers: [],
+        suppliers: [],
+        sales: [],
+        purchases: [],
+        customerPayments: [],
+        supplierPayments: [],
+        saleReturns: [],
+        ...overrides,
+    };
+}
 
 function makeDb() {
     return {
         externalSyncConnection: {
             findUnique: jest.fn().mockResolvedValue(CONNECTION),
         },
+        externalSyncSnapshot: {
+            findFirst: jest.fn().mockResolvedValue(READY_SNAPSHOT),
+        },
         externalSyncMapping: {
             upsert: jest.fn().mockResolvedValue({}),
         },
-        product: { findMany: jest.fn().mockResolvedValue([{ id: 'p1' }]) },
+        product: { findMany: jest.fn().mockResolvedValue([{ id: 'p1', name: 'Napa 500mg', sku: 'NAPA' }]) },
         customer: { findMany: jest.fn().mockResolvedValue([]) },
         supplier: { findMany: jest.fn().mockResolvedValue([]) },
         $transaction: jest.fn((ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
@@ -50,22 +145,70 @@ function file(
             provider: 'EXPRESS_RETAIL_PRO',
             generatedAt: '2026-09-21T00:00:00.000Z',
             rowCount: rowCount ?? rows.length,
+            snapshotId: 'snap-1',
             ...manifest,
         },
         rows,
     };
 }
 
-describe('ExternalSyncMatchService.applyDecisions', () => {
+describe('ExternalSyncMatchService', () => {
     let db: Db;
     let service: ExternalSyncMatchService;
+    let decrypt: jest.Mock;
 
     beforeEach(() => {
         db = makeDb();
-        // applyDecisions never decrypts anything; the encryption service is
-        // only reached by getCandidates, which these tests do not exercise.
-        service = new ExternalSyncMatchService(db as any, { decrypt: jest.fn() } as any);
+        decrypt = jest.fn().mockReturnValue('secret');
+        service = new ExternalSyncMatchService(db as any, { decrypt } as any);
+        mockedReadSnapshot.mockReset();
+        mockedGetDef.mockImplementation((provider: string) =>
+            jest.requireActual('./provider-adapter').getProviderDefinition(provider),
+        );
     });
+
+    describe('getCandidates', () => {
+        it('maps from the snapshot and never decrypts the connection password', async () => {
+            const liveClient = {
+                login: jest.fn().mockResolvedValue({
+                    organizationId: 'org-9',
+                    user: { name: 'a', username: 'a', role: 'OWNER' },
+                }),
+                fetchProducts: jest.fn().mockResolvedValue([
+                    {
+                        id: 99,
+                        code: 'LIVE',
+                        name: 'From the live provider',
+                        purchase_rate: '1',
+                        sale_rate: '2',
+                        vat: null,
+                        reorder: null,
+                        is_service: 'false',
+                        status: '1',
+                        organization_id: 'org-9',
+                        updated_at: null,
+                    },
+                ]),
+                fetchCustomers: jest.fn().mockResolvedValue([]),
+                fetchSuppliers: jest.fn().mockResolvedValue([]),
+            };
+            const actual = jest.requireActual('./provider-adapter');
+            const def = actual.getProviderDefinition('EXPRESS_RETAIL_PRO');
+            mockedGetDef.mockReturnValue({ ...def, createClient: jest.fn(() => liveClient) });
+            mockedReadSnapshot.mockResolvedValue(snapshotDoc());
+
+            const result = await service.getCandidates('tenant-1', 'snap-1');
+
+            expect(decrypt).not.toHaveBeenCalled();
+            expect(liveClient.login).not.toHaveBeenCalled();
+            expect(result.manifest.snapshotId).toBe('snap-1');
+            expect(result.rows).toHaveLength(1);
+            expect(result.rows[0].externalId).toBe('1');
+            expect(result.rows[0].sourceName).toBe('Napa 500mg');
+        });
+    });
+
+    describe('applyDecisions', () => {
 
     describe('rejects a file it cannot trust', () => {
         it('rejects a manifest naming a different connection', async () => {
@@ -79,6 +222,10 @@ describe('ExternalSyncMatchService.applyDecisions', () => {
         });
 
         it('rejects a duplicated external_id', async () => {
+            db.externalSyncSnapshot.findFirst.mockResolvedValue({
+                ...READY_SNAPSHOT,
+                counts: { ...READY_SNAPSHOT.counts, products: 2 },
+            });
             const dto = file();
             dto.rows = [dto.rows[0], { ...dto.rows[0] }];
             dto.manifest.rowCount = 2;
@@ -114,6 +261,52 @@ describe('ExternalSyncMatchService.applyDecisions', () => {
             await expect(service.applyDecisions('tenant-1', file({}, {}, 99))).rejects.toBeInstanceOf(
                 BadRequestException,
             );
+        });
+
+        it('rejects applyDecisions when snapshotId is missing', async () => {
+            const dto = file();
+            delete (dto.manifest as { snapshotId?: string }).snapshotId;
+            await expect(service.applyDecisions('tenant-1', dto)).rejects.toThrow(/snapshot/i);
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('rejects applyDecisions when snapshotId does not match a READY snapshot for the connection', async () => {
+            db.externalSyncSnapshot.findFirst.mockResolvedValue(null);
+            await expect(service.applyDecisions('tenant-1', file({}, { snapshotId: 'snap-other' }))).rejects.toThrow(
+                /snapshot/i,
+            );
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('rejects applyDecisions when rowCount is the medium subset only', async () => {
+            db.externalSyncSnapshot.findFirst.mockResolvedValue({
+                ...READY_SNAPSHOT,
+                counts: { ...READY_SNAPSHOT.counts, products: 2 },
+            });
+            await expect(
+                service.applyDecisions('tenant-1', file({}, { snapshotId: 'snap-1', rowCount: 1 })),
+            ).rejects.toThrow(/count/i);
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('rejects a body whose row count does not equal snapshot master counts', async () => {
+            db.externalSyncSnapshot.findFirst.mockResolvedValue({
+                ...READY_SNAPSHOT,
+                counts: {
+                    products: 10,
+                    customers: 4,
+                    suppliers: 2,
+                    sales: 0,
+                    purchases: 0,
+                    customerPayments: 0,
+                    supplierPayments: 0,
+                    saleReturns: 0,
+                },
+            });
+            await expect(service.applyDecisions('tenant-1', file({}, { snapshotId: 'snap-1' }))).rejects.toThrow(
+                /count/i,
+            );
+            expect(db.$transaction).not.toHaveBeenCalled();
         });
     });
 
@@ -161,5 +354,6 @@ describe('ExternalSyncMatchService.applyDecisions', () => {
                 }),
             );
         });
+    });
     });
 });
