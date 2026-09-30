@@ -181,7 +181,7 @@ export class ExternalSyncMatchService {
             );
         }
 
-        const counts = snapshot.counts as SnapshotCounts | null;
+        const counts = snapshot.counts as unknown as SnapshotCounts | null;
         const masterCount =
             (counts?.products ?? 0) + (counts?.customers ?? 0) + (counts?.suppliers ?? 0);
         if (dto.rows.length !== masterCount) {
