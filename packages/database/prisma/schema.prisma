@@ -967,6 +967,7 @@ model Tenant {
   externalSyncConnections    ExternalSyncConnection[]
   externalSyncMappings       ExternalSyncMapping[]
   externalSyncRuns           ExternalSyncRun[]
+  externalSyncSnapshots      ExternalSyncSnapshot[]
   projects                   Project[]
   projectTypes               ProjectType[]
   projectMembers             ProjectMember[]
@@ -1111,10 +1112,11 @@ model ExternalSyncConnection {
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
 
-  tenant   Tenant                @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  store    Store                 @relation(fields: [store_id], references: [id])
-  runs     ExternalSyncRun[]
-  mappings ExternalSyncMapping[]
+  tenant    Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store     Store                  @relation(fields: [store_id], references: [id])
+  runs      ExternalSyncRun[]
+  mappings  ExternalSyncMapping[]
+  snapshots ExternalSyncSnapshot[]
 
   @@unique([tenant_id, provider])
   @@index([enabled])
@@ -1176,11 +1178,42 @@ model ExternalSyncRun {
   finished_at      DateTime?
   triggered_by     String?
 
-  tenant     Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  connection ExternalSyncConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  tenant      Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  connection  ExternalSyncConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  snapshot_id String?
+  snapshot    ExternalSyncSnapshot?  @relation(fields: [snapshot_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, started_at])
   @@index([connection_id, started_at])
+}
+
+/// A durable extract of a provider pull. Manual imports write from this file
+/// so the live ERP does not have to stay reachable after extract.
+model ExternalSyncSnapshot {
+  id               String    @id @default(uuid())
+  tenant_id        String
+  connection_id    String
+  /// EXTRACTING | READY | FAILED
+  status           String    @default("EXTRACTING")
+  window_from      DateTime
+  window_to        DateTime
+  counts           Json?
+  byte_size        Int?
+  sha256           String?
+  error_message    String?
+  phase            String?
+  progress         Json?
+  cancel_requested Boolean   @default(false)
+  extracted_by     String?
+  created_at       DateTime  @default(now())
+  finished_at      DateTime?
+
+  tenant     Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  connection ExternalSyncConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  runs       ExternalSyncRun[]
+
+  @@index([tenant_id, created_at])
+  @@index([connection_id, created_at])
 }
 
 model PaymentMethod {
