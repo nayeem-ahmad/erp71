@@ -1,6 +1,7 @@
 'use client';
 
 import { Clock } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
@@ -9,6 +10,7 @@ import { previousWindow, rangeToWindow } from '@/lib/dashboard-range';
 import { periodDelta } from '@/lib/dashboard-delta';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
 import { DashboardHeader, type DashboardRange } from '@/components/dashboard/DashboardHeader';
+import { routes } from '@/lib/routes';
 import { HealthKpiTile } from '@/components/dashboard/HealthKpiTile';
 import { AttentionStrip, type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { SalesByCategoryDonut, type CategoryRow } from '@/components/dashboard/SalesByCategoryDonut';
@@ -330,6 +332,14 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                     range={range}
                     onRangeChange={setRange}
                     labels={{ today: copy.rangeToday, week: copy.rangeWeek, month: copy.rangeMonth }}
+                    toolbar={
+                        <Link
+                            href={routes.sales.dailyReport}
+                            className="inline-flex min-h-touch items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:bg-gray-50"
+                        >
+                            {copy.todaysReport}
+                        </Link>
+                    }
                 />
 
                 <FrequentQuickLinks />
