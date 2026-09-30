@@ -268,6 +268,15 @@ export const componentsMessages = {
         revokeSuccess: "Enlace revocado.",
         revokeError: "No se pudo revocar el enlace. Inténtelo de nuevo.",
     },
+    shareMessageModal: {
+        title: 'Share {subject}',
+        description: 'The message is copied or opened in WhatsApp. Editing it does not change the report.',
+        copy: 'Copy',
+        copied: 'Copied',
+        whatsapp: 'WhatsApp',
+        close: 'Close',
+        previewLabel: 'Message',
+    },
     shortLinkManager: {
         shortLinkColumn: "Enlace corto",
         targetColumn: "Destino",

@@ -268,6 +268,15 @@ export const componentsMessages = {
         revokeSuccess: "लिंक रद्द कर दिया गया।",
         revokeError: "लिंक रद्द नहीं हो सका। कृपया फिर कोशिश करें।",
     },
+    shareMessageModal: {
+        title: 'Share {subject}',
+        description: 'The message is copied or opened in WhatsApp. Editing it does not change the report.',
+        copy: 'Copy',
+        copied: 'Copied',
+        whatsapp: 'WhatsApp',
+        close: 'Close',
+        previewLabel: 'Message',
+    },
     shortLinkManager: {
         shortLinkColumn: "छोटा लिंक",
         targetColumn: "लक्ष्य",
