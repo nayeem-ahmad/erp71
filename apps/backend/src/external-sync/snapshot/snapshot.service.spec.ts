@@ -1,10 +1,12 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { getProviderDefinition } from '../provider-adapter';
 import { ExternalSyncSnapshotService } from './snapshot.service';
-import { readSnapshotFile } from './snapshot-file';
+import { SNAPSHOT_FORMAT_VERSION } from './snapshot.types';
+import { readSnapshotFile, writeSnapshotFile } from './snapshot-file';
+import type { SnapshotDocument } from './snapshot.types';
 
 jest.mock('../provider-adapter', () => ({
     getProviderDefinition: jest.fn(),
@@ -149,5 +151,118 @@ describe('ExternalSyncSnapshotService', () => {
             service.startExtract('tenant-1', { dateFrom: '2026-01-01', dateTo: '2026-01-31' }, 'u1'),
         ).rejects.toBeInstanceOf(ConflictException);
         expect(db.externalSyncSnapshot.create).not.toHaveBeenCalled();
+    });
+});
+
+function sampleDoc(overrides: Partial<SnapshotDocument['manifest']> = {}): SnapshotDocument {
+    return {
+        formatVersion: SNAPSHOT_FORMAT_VERSION,
+        manifest: {
+            formatVersion: SNAPSHOT_FORMAT_VERSION,
+            tenantId: 'tenant-1',
+            connectionId: 'conn-1',
+            provider: 'EXPRESS_RETAIL_PRO',
+            externalOrgId: 'org-9',
+            windowFrom: '2026-01-01',
+            windowTo: '2026-01-31',
+            extractedAt: '2026-09-30T00:00:00.000Z',
+            counts: {
+                products: 1, customers: 0, suppliers: 0, sales: 0,
+                purchases: 0, customerPayments: 0, supplierPayments: 0, saleReturns: 0,
+            },
+            sha256: '',
+            ...overrides,
+        },
+        products: [{ id: 1 }],
+        customers: [],
+        suppliers: [],
+        sales: [],
+        purchases: [],
+        customerPayments: [],
+        supplierPayments: [],
+        saleReturns: [],
+    };
+}
+
+async function gzipOf(doc: SnapshotDocument): Promise<Buffer> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snap-up-'));
+    const dest = path.join(dir, 'x.json.gz');
+    await writeSnapshotFile(dest, doc);
+    return fs.readFile(dest);
+}
+
+describe('ExternalSyncSnapshotService upload/download/delete', () => {
+    let db: ReturnType<typeof makeDb>;
+    let service: ExternalSyncSnapshotService;
+    let tmp: string;
+
+    beforeEach(async () => {
+        tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snap-up-svc-'));
+        process.env.EXTERNAL_SYNC_SNAPSHOT_DIR = tmp;
+        db = makeDb();
+        mockedGetDef.mockReturnValue({
+            provider: 'EXPRESS_RETAIL_PRO',
+            label: 'Express Retail Pro',
+            planWindows: () => [{ from: '2026-01-01', to: '2026-01-31' }],
+            createClient: () => makeClient(),
+        });
+        db.externalSyncSnapshot.create.mockResolvedValue({
+            ...SNAPSHOT,
+            id: 'snap-up-1',
+            status: 'READY',
+        });
+        service = new ExternalSyncSnapshotService(db as any, { decrypt: jest.fn() } as any);
+    });
+
+    it('rejects an upload whose manifest tenantId disagrees', async () => {
+        const buf = await gzipOf(sampleDoc({ tenantId: 'other-tenant' }));
+        await expect(service.uploadSnapshot('tenant-1', undefined, buf)).rejects.toBeInstanceOf(BadRequestException);
+        expect(db.externalSyncSnapshot.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an upload whose provider disagrees with the connection', async () => {
+        const buf = await gzipOf(sampleDoc({ provider: 'DIZI_CASHIER' }));
+        await expect(service.uploadSnapshot('tenant-1', undefined, buf)).rejects.toBeInstanceOf(BadRequestException);
+        expect(db.externalSyncSnapshot.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an upload whose externalOrgId disagrees', async () => {
+        const buf = await gzipOf(sampleDoc({ externalOrgId: 'org-other' }));
+        await expect(service.uploadSnapshot('tenant-1', undefined, buf)).rejects.toBeInstanceOf(BadRequestException);
+        expect(db.externalSyncSnapshot.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a READY row for a valid gzip', async () => {
+        const buf = await gzipOf(sampleDoc());
+        const row = await service.uploadSnapshot('tenant-1', undefined, buf);
+        expect(row.status).toBe('READY');
+        expect(db.externalSyncSnapshot.create).toHaveBeenCalled();
+        const stored = await readSnapshotFile(path.join(tmp, 'tenant-1', 'snap-up-1.json.gz'));
+        expect(stored.products).toEqual([{ id: 1 }]);
+    });
+
+    it('openFile throws when the gzip is missing on disk', async () => {
+        db.externalSyncSnapshot.findFirst.mockResolvedValue({
+            ...SNAPSHOT,
+            status: 'READY',
+            window_from: new Date('2026-01-01T00:00:00.000Z'),
+            window_to: new Date('2026-01-31T00:00:00.000Z'),
+            connection: CONNECTION,
+        });
+        await expect(service.openFile('tenant-1', 'snap-1')).rejects.toThrow(/missing/i);
+    });
+
+    it('deleteSnapshot refuses EXTRACTING', async () => {
+        db.externalSyncSnapshot.findFirst.mockResolvedValue({ ...SNAPSHOT, status: 'EXTRACTING' });
+        await expect(service.deleteSnapshot('tenant-1', 'snap-1')).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('deleteConnection removes the gzip files', async () => {
+        const dest = path.join(tmp, 'tenant-1', 'snap-1.json.gz');
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        await writeSnapshotFile(dest, sampleDoc());
+        db.externalSyncSnapshot.findMany.mockResolvedValue([{ id: 'snap-1', tenant_id: 'tenant-1' }]);
+        await service.removeFilesForConnection('tenant-1', 'conn-1');
+        await expect(fs.stat(dest)).rejects.toMatchObject({ code: 'ENOENT' });
     });
 });

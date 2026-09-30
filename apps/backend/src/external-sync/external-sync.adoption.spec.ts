@@ -116,7 +116,7 @@ describe('a decided mapping takes precedence over adoption', () => {
                 create: jest.fn().mockResolvedValue({ id: 'created-1' }),
             },
         };
-        const service = new ExternalSyncService(db as never, { decrypt: jest.fn() } as never);
+        const service = new ExternalSyncService(db as never, { decrypt: jest.fn() } as never, {} as never);
         return { db, service };
     }
 

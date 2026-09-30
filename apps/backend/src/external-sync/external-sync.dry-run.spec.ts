@@ -60,7 +60,7 @@ describe('external-sync dry run', () => {
                 deleteMany: jest.fn(async () => ({ count: 0 })),
             },
         } as any;
-        return new ExternalSyncService(db, {} as any);
+        return new ExternalSyncService(db, {} as any, {} as any);
     }
 
     it('does not warn that a party is unresolved when nothing was written', async () => {

@@ -1,9 +1,13 @@
 import {
+    BadRequestException,
     ConflictException,
     Injectable,
     Logger,
     NotFoundException,
 } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import { EncryptionService } from '../../common/encryption.service';
 import { toDateString } from '../external-sync.mapper';
@@ -14,6 +18,7 @@ import {
 } from './snapshot.types';
 import {
     countsOf,
+    readSnapshotFile,
     removeIfExists,
     snapshotFilePath,
     writeSnapshotFile,
@@ -245,6 +250,116 @@ export class ExternalSyncSnapshotService {
             orderBy: { created_at: 'desc' },
             take: 20,
         });
+    }
+
+    async uploadSnapshot(tenantId: string, provider: string | undefined, buffer: Buffer) {
+        const def = getProviderDefinition(provider ?? DEFAULT_PROVIDER);
+        const connection = await this.db.externalSyncConnection.findUnique({
+            where: { tenant_id_provider: { tenant_id: tenantId, provider: def.provider } },
+        });
+        if (!connection) {
+            throw new NotFoundException(`No ${def.label} connection configured for this tenant`);
+        }
+
+        const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snap-upload-'));
+        const tmpPath = path.join(tmpDir, 'upload.json.gz');
+        try {
+            await fs.writeFile(tmpPath, buffer);
+            let doc;
+            try {
+                doc = await readSnapshotFile(tmpPath);
+            } catch (error) {
+                throw new BadRequestException(
+                    `This file is not a valid snapshot: ${(error as Error).message ?? error}`,
+                );
+            }
+
+            if (doc.manifest.tenantId !== tenantId) {
+                throw new BadRequestException('This snapshot belongs to a different workspace.');
+            }
+            if (doc.manifest.connectionId !== connection.id) {
+                throw new BadRequestException('This snapshot was extracted for a different connection.');
+            }
+            if (doc.manifest.provider !== connection.provider) {
+                throw new BadRequestException('This snapshot was extracted for a different provider.');
+            }
+            if (connection.external_org_id && doc.manifest.externalOrgId !== connection.external_org_id) {
+                throw new BadRequestException(
+                    `Provider organization mismatch (expected ${connection.external_org_id}, file has ${doc.manifest.externalOrgId}).`,
+                );
+            }
+
+            const row = await this.db.externalSyncSnapshot.create({
+                data: {
+                    tenant_id: tenantId,
+                    connection_id: connection.id,
+                    status: 'READY',
+                    window_from: new Date(`${doc.manifest.windowFrom}T00:00:00.000Z`),
+                    window_to: new Date(`${doc.manifest.windowTo}T00:00:00.000Z`),
+                    counts: doc.manifest.counts as object,
+                    byte_size: buffer.length,
+                    sha256: doc.manifest.sha256,
+                    finished_at: new Date(),
+                },
+            });
+            const dest = snapshotFilePath(tenantId, row.id);
+            await fs.mkdir(path.dirname(dest), { recursive: true });
+            await fs.rename(tmpPath, dest);
+            return row;
+        } finally {
+            await removeIfExists(tmpPath);
+            await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+        }
+    }
+
+    async openFile(tenantId: string, snapshotId: string) {
+        const snapshot = await this.db.externalSyncSnapshot.findFirst({
+            where: { id: snapshotId, tenant_id: tenantId },
+            include: { connection: true },
+        });
+        if (!snapshot) throw new NotFoundException('Snapshot not found');
+        if (snapshot.status !== 'READY') {
+            throw new BadRequestException('Snapshot is not ready to download');
+        }
+        const filePath = snapshotFilePath(tenantId, snapshot.id);
+        try {
+            await fs.stat(filePath);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                throw new NotFoundException('Snapshot file is missing on disk');
+            }
+            throw error;
+        }
+        const from = toDateString(snapshot.window_from);
+        const to = toDateString(snapshot.window_to);
+        return {
+            path: filePath,
+            filename: `${snapshot.connection.provider}-${from}-to-${to}.json.gz`,
+            byteSize: snapshot.byte_size ?? 0,
+        };
+    }
+
+    async deleteSnapshot(tenantId: string, snapshotId: string) {
+        const snapshot = await this.db.externalSyncSnapshot.findFirst({
+            where: { id: snapshotId, tenant_id: tenantId },
+        });
+        if (!snapshot) throw new NotFoundException('Snapshot not found');
+        if (snapshot.status === 'EXTRACTING') {
+            throw new ConflictException('Cannot delete a snapshot while it is extracting');
+        }
+        await removeIfExists(snapshotFilePath(tenantId, snapshot.id));
+        await this.db.externalSyncSnapshot.delete({ where: { id: snapshot.id } });
+        return { deleted: true };
+    }
+
+    async removeFilesForConnection(tenantId: string, connectionId: string): Promise<void> {
+        const rows = await this.db.externalSyncSnapshot.findMany({
+            where: { tenant_id: tenantId, connection_id: connectionId },
+            select: { id: true, tenant_id: true },
+        });
+        for (const row of rows) {
+            await removeIfExists(snapshotFilePath(row.tenant_id, row.id));
+        }
     }
 
     private async throwIfCancelled(snapshotId: string): Promise<void> {

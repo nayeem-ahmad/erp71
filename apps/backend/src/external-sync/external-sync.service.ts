@@ -43,6 +43,7 @@ import {
     UpsertExternalSyncConnectionDto,
 } from './external-sync.dto';
 import { resolveSyncWindow } from './snapshot/window';
+import { ExternalSyncSnapshotService } from './snapshot/snapshot.service';
 
 type EntityType =
     | 'PRODUCT'
@@ -183,6 +184,7 @@ export class ExternalSyncService {
     constructor(
         private readonly db: DatabaseService,
         private readonly encryption: EncryptionService,
+        private readonly snapshots: ExternalSyncSnapshotService,
     ) {}
 
     // ---------------------------------------------------------------- config
@@ -279,9 +281,10 @@ export class ExternalSyncService {
         });
         if (!existing) throw new NotFoundException(`No ${def.label} connection configured for this tenant`);
 
-        // Mappings and runs cascade; the imported documents themselves are left
-        // in place deliberately — deleting a connection must not delete a
-        // tenant's sales.
+        // Mappings and runs cascade; snapshot rows cascade too. The gzip files
+        // do not — drop them first. Imported documents stay; deleting a
+        // connection must not delete a tenant's sales.
+        await this.snapshots.removeFilesForConnection(tenantId, existing.id);
         await this.db.externalSyncConnection.delete({ where: { id: existing.id } });
         return { deleted: true };
     }
