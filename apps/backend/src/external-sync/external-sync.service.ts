@@ -44,6 +44,7 @@ import {
 } from './external-sync.dto';
 import { resolveSyncWindow } from './snapshot/window';
 import { ExternalSyncSnapshotService } from './snapshot/snapshot.service';
+import { clientForRun } from './snapshot/client-for-run';
 
 type EntityType =
     | 'PRODUCT'
@@ -337,15 +338,43 @@ export class ExternalSyncService {
         });
         if (!connection) throw new NotFoundException(`No ${def.label} connection configured for this tenant`);
 
-        const inFlight = await this.db.externalSyncRun.findFirst({
-            where: { connection_id: connection.id, status: 'RUNNING' },
-            select: { id: true, started_at: true },
-        });
-        if (inFlight) {
-            throw new ConflictException(`An import is already running (started ${inFlight.started_at.toISOString()})`);
+        if (trigger === 'MANUAL' && !dto.snapshotId) {
+            throw new BadRequestException('Manual imports run from a snapshot. Extract or upload one first.');
         }
 
-        const { from, to } = resolveSyncWindow(connection, dto);
+        let from: Date;
+        let to: Date;
+        let snapshotId: string | null = null;
+
+        if (trigger === 'MANUAL' && dto.snapshotId) {
+            await this.snapshots.assertNoInFlight(connection.id);
+            const snapshot = await this.db.externalSyncSnapshot.findFirst({
+                where: {
+                    id: dto.snapshotId,
+                    tenant_id: tenantId,
+                    connection_id: connection.id,
+                    status: 'READY',
+                },
+            });
+            if (!snapshot) {
+                throw new BadRequestException('Snapshot is not READY or was not found for this connection');
+            }
+            from = snapshot.window_from;
+            to = snapshot.window_to;
+            snapshotId = snapshot.id;
+        } else {
+            const inFlight = await this.db.externalSyncRun.findFirst({
+                where: { connection_id: connection.id, status: 'RUNNING' },
+                select: { id: true, started_at: true },
+            });
+            if (inFlight) {
+                throw new ConflictException(
+                    `An import is already running (started ${inFlight.started_at.toISOString()})`,
+                );
+            }
+            ({ from, to } = resolveSyncWindow(connection, dto));
+        }
+
         const steps = this.resolveSteps(dto.steps);
 
         const run = await this.db.externalSyncRun.create({
@@ -360,13 +389,16 @@ export class ExternalSyncService {
                 window_to: to,
                 dry_run: dto.dryRun ?? false,
                 triggered_by: userId ?? null,
+                snapshot_id: snapshotId,
             },
         });
 
         // Intentionally not awaited — the run row is the progress channel.
-        void this.executeRun(run.id, connection.id, { from, to }, dto.dryRun ?? false, steps).catch((error) => {
-            this.logger.error(`External sync run ${run.id} crashed: ${error?.message ?? error}`, error?.stack);
-        });
+        void this.executeRun(run.id, connection.id, { from, to }, dto.dryRun ?? false, steps, snapshotId).catch(
+            (error) => {
+                this.logger.error(`External sync run ${run.id} crashed: ${error?.message ?? error}`, error?.stack);
+            },
+        );
 
         return run;
     }
@@ -386,12 +418,13 @@ export class ExternalSyncService {
 
     // ------------------------------------------------------------- execution
 
-    private async executeRun(
+    async executeRun(
         runId: string,
         connectionId: string,
         window: { from: Date; to: Date },
         dryRun: boolean,
         steps: SyncStep[],
+        snapshotId: string | null = null,
     ) {
         const stats: SyncStats = {
             products: emptyTally(),
@@ -416,10 +449,12 @@ export class ExternalSyncService {
         try {
             const def = getProviderDefinition(connection.provider);
             const mappers = def.mappers;
-            const client = def.createClient({
-                baseUrl: connection.base_url,
-                username: connection.username,
-                password: this.encryption.decrypt(connection.password_encrypted),
+            const client = await clientForRun({
+                snapshotId,
+                tenantId: connection.tenant_id,
+                connection,
+                decrypt: (cipher) => this.encryption.decrypt(cipher),
+                createLiveClient: (creds) => def.createClient(creds),
             });
             const session = await client.login();
 
@@ -438,7 +473,9 @@ export class ExternalSyncService {
                 });
             }
 
-            const chunks = def.planWindows(window.from, window.to);
+            const chunks = snapshotId
+                ? [{ from: toDateString(window.from), to: toDateString(window.to) }]
+                : def.planWindows(window.from, window.to);
             const windowedSteps = steps.filter((step) => step !== 'MASTERS');
             // One unit of work per master step plus one per chunk of each
             // windowed step, so the progress fraction means something.

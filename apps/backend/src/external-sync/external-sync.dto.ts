@@ -91,6 +91,12 @@ export class RunExternalSyncDto {
     @IsArray()
     @IsString({ each: true })
     steps?: string[];
+
+    /** Required for a manual import; ignored on the scheduled live pull. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    snapshotId?: string;
 }
 
 export class ListExternalSyncRunsQueryDto {
