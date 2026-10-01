@@ -24,6 +24,7 @@ import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
 import { BurndownRecorder } from './burndown-recorder.service';
+import { SprintMembershipService } from './sprint-membership.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectCommentsService } from './project-comments.service';
 import { ProjectAttachmentsService } from './project-attachments.service';
@@ -60,6 +61,7 @@ import { ProjectAttachmentsService } from './project-attachments.service';
         ProjectAttachmentsService,
         SprintsService,
         BurndownRecorder,
+        SprintMembershipService,
     ],
     exports: [ProjectsService, RemainingHoursService, ProjectAccessService],
 })

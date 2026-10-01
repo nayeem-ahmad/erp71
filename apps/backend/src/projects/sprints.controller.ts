@@ -21,6 +21,7 @@ import { SprintsService } from './sprints.service';
 import {
     AssignStoriesToSprintDto,
     AssignTasksToSprintDto,
+    CompleteSprintDto,
     CreateSprintDto,
     UpdateSprintDto,
 } from './project.dto';
@@ -100,8 +101,12 @@ export class SprintsController {
 
     @Post(':id/complete')
     @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
-    complete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.sprints.complete(tenant.tenantId, id);
+    complete(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CompleteSprintDto,
+    ) {
+        return this.sprints.complete(tenant.tenantId, id, dto ?? {});
     }
 
     @Post(':id/tasks')

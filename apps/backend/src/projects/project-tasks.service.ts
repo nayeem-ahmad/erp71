@@ -13,6 +13,7 @@ import { ActivityType, ProjectActivityService } from './project-activity.service
 import { BoardColumnsService, pickColumnForStatus } from './board-columns.service';
 import { syncStoryStatuses } from './story-status.util';
 import { BurndownRecorder } from './burndown-recorder.service';
+import { SprintMembershipService } from './sprint-membership.service';
 import {
     CreateChecklistItemDto,
     CreateTaskDto,
@@ -66,6 +67,7 @@ export class ProjectTasksService {
         private readonly access: ProjectAccessService,
         private readonly boardColumns: BoardColumnsService,
         private readonly burndown: BurndownRecorder,
+        private readonly membership: SprintMembershipService,
     ) {}
 
     /**
@@ -422,7 +424,6 @@ export class ProjectTasksService {
                 assignee_employee_id: dto.assigneeEmployeeId || null,
                 milestone_id: dto.milestoneId || null,
                 user_story_id: dto.userStoryId || null,
-                sprint_id: dto.sprintId || null,
                 parent_task_id: dto.parentTaskId || null,
                 start_date: dto.startDate ? new Date(dto.startDate) : null,
                 due_date: dto.dueDate ? new Date(dto.dueDate) : null,
@@ -433,6 +434,9 @@ export class ProjectTasksService {
             },
         });
 
+        // Through the membership service, not the create, so the task's sprint
+        // history opens with it.
+        if (dto.sprintId) await this.membership.moveTasks(this.db, tenantId, [task.id], dto.sprintId, 'REMOVED');
         if (dto.labelIds?.length) await this.setLabels(tenantId, task.id, dto.labelIds);
         await syncStoryStatuses(this.db as never, tenantId, [dto.userStoryId]);
 
@@ -639,7 +643,6 @@ export class ProjectTasksService {
                 : {}),
             ...(dto.milestoneId !== undefined ? { milestone_id: dto.milestoneId || null } : {}),
             ...(dto.userStoryId !== undefined ? { user_story_id: dto.userStoryId || null } : {}),
-            ...(dto.sprintId !== undefined ? { sprint_id: dto.sprintId || null } : {}),
             ...(dto.startDate !== undefined
                 ? { start_date: dto.startDate ? new Date(dto.startDate) : null }
                 : {}),
@@ -658,6 +661,7 @@ export class ProjectTasksService {
         // joining (or leaving) as its own step rather than folding it into
         // whatever re-estimate follows.
         if (dto.sprintId !== undefined && (dto.sprintId || null) !== task.sprint_id) {
+            await this.membership.moveTasks(this.db, tenantId, [taskId], dto.sprintId || null, 'REMOVED');
             await this.burndown.record(tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
             await this.burndown.record(tenantId, [dto.sprintId], 'TASK_ADDED', taskId);
         }
@@ -1022,7 +1026,6 @@ export class ProjectTasksService {
                         ...(ordered[i].id === taskId
                             ? {
                                   status_id: status.id,
-                                  sprint_id: sprintId,
                                   ...(isDone && !wasDone ? { completed_at: new Date() } : {}),
                                   ...(!isDone && wasDone ? { completed_at: null } : {}),
                               }
@@ -1030,6 +1033,8 @@ export class ProjectTasksService {
                     },
                 });
             }
+            // Dragging a card between sprint lanes changes its sprint.
+            await this.membership.moveTasks(tx, tenantId, [taskId], sprintId, 'REMOVED');
         });
 
         if (sprintId !== task.sprint_id) {
@@ -1096,6 +1101,9 @@ export class ProjectTasksService {
             where: { id: taskId },
             data: { deleted_at: new Date() },
         });
+        // A deleted task leaves its sprint, so the history says so rather than
+        // keeping an open row for a task nobody can see.
+        await this.membership.moveTasks(this.db, viewer.tenantId, [taskId], null, 'REMOVED');
         await syncStoryStatuses(this.db as never, viewer.tenantId, [task.user_story_id]);
         await this.burndown.record(viewer.tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
         return { success: true };
@@ -1129,12 +1137,19 @@ export class ProjectTasksService {
 
         const affected = await this.db.projectTask.findMany({
             where: where as never,
-            select: { user_story_id: true, sprint_id: true },
+            select: { id: true, user_story_id: true, sprint_id: true },
         });
         const { count } = await this.db.projectTask.updateMany({
             where: where as never,
             data: { deleted_at: new Date() },
         });
+        await this.membership.moveTasks(
+            this.db,
+            viewer.tenantId,
+            affected.filter((row) => row.sprint_id).map((row) => row.id),
+            null,
+            'REMOVED',
+        );
         await syncStoryStatuses(
             this.db as never,
             viewer.tenantId,
