@@ -71,7 +71,8 @@ function generateId(): string {
 
 export default function POSPage() {
     const { t } = useI18n();
-    const printHeader = usePrintHeader('POS_RECEIPT');
+    // The till rings up at the workspace store, so that branch's paper is fetched up front.
+    const printHeader = usePrintHeader('POS_RECEIPT', { storeId: getWorkspaceItem('store_id') || undefined });
     const [products, setProducts] = useState<any[]>([]);
     const [salesWarehouseId, setSalesWarehouseId] = useState<string | null>(null);
     const [cart, setCart] = useState<any[]>([]);
@@ -605,11 +606,14 @@ export default function POSPage() {
         if (!saleSnapshot) return;
         const { sale, cart: saleCart, payments, subtotal: sub, tax: taxAmt, total: tot, totalPaid: paid, changeDue: change } = saleSnapshot;
 
+        // A reprint of an earlier sale wears the letterhead of the store it was rung up at.
+        const header = await printHeader.resolve(sale?.store_id || undefined);
         await printPOSReceipt({
             invoiceId: sale?.id || '',
             serialNumber: sale?.serial_number || '',
-            storeName: printHeader.companyName,
-            headerConfig: printHeader.headerConfig,
+            companyName: header.companyName,
+            storeName: sale?.store?.name || header.companyName,
+            headerConfig: header.headerConfig,
             date: formatDateTime(sale?.created_at ?? new Date()),
             items: saleCart.map((item: any) => ({
                 name: item.name,

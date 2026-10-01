@@ -22,7 +22,7 @@ jest.mock('@/lib/api', () => ({
     api: {
         getLead: jest.fn(),
         updateLead: jest.fn(),
-        getTeamMembers: jest.fn().mockResolvedValue([]),
+        getCrmAssignees: jest.fn().mockResolvedValue([]),
         getCustomFields: jest.fn().mockResolvedValue([]),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         getCrmMessageTemplates: jest.fn().mockResolvedValue([]),
@@ -102,7 +102,7 @@ describe('LeadDetailPage — owner and address', () => {
         jest.clearAllMocks();
         api.getLead.mockResolvedValue(owned);
         api.updateLead.mockResolvedValue(owned);
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);

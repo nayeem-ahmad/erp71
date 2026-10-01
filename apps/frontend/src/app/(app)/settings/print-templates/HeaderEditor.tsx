@@ -23,7 +23,8 @@ import {
 
 const LAYOUTS: HeaderLayout[] = ['logo-left', 'logo-right', 'logo-center', 'logo-above', 'text-only'];
 const FONTS: PrintFontFamily[] = ['sans', 'serif', 'mono', 'bengali'];
-const DOC_TYPES: PrintDocType[] = [
+/** Every assignable document family, in the order the editor and the branch card list them. */
+export const DOC_TYPES: PrintDocType[] = [
     'SALES_INVOICE',
     'POS_RECEIPT',
     'QUOTE',

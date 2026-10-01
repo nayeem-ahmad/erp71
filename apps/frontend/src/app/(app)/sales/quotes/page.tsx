@@ -33,6 +33,7 @@ interface Quotation {
     notes?: string | null;
     items: any[];
     customer?: { name: string; phone?: string };
+    store_id?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -93,20 +94,22 @@ export default function QuotesPage() {
         }
     };
 
-    const handlePrint = (quote: Quotation) => {
+    const handlePrint = async (quote: Quotation) => {
+        // The quote's own branch letterhead, not the one resolved on mount.
+        const header = await printHeader.resolve(quote.store_id);
         const headerContext: HeaderContext = {
             docTitle: t.shared.print.salesQuotation,
             docNumber: quote.quote_number,
             docDate: formatDate(quote.created_at, locale),
-            companyName: printHeader.companyName,
+            companyName: header.companyName,
         };
 
         openPrintWindow({
             context: headerContext,
             title: quote.quote_number,
             paperSize: 'A4',
-            headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
+            headerConfig: header.headerConfig,
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,
@@ -259,7 +262,7 @@ export default function QuotesPage() {
                                 <Link2 className="w-4 h-4" />
                             </button>
                             <button
-                                onClick={() => handlePrint(quote)}
+                                onClick={() => void handlePrint(quote)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
                                 title={t.common.print}
                             >

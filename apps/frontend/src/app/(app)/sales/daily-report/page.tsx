@@ -75,7 +75,8 @@ export default function DailyReportPage() {
 
     const handlePrint = async () => {
         if (!report) return;
-        const header = await printHeader.resolve();
+        // The branch the report was loaded for; all stores prints company paper.
+        const header = await printHeader.resolve(getWorkspaceItem('store_id') || undefined);
         const headerContext = {
             docTitle: m.title,
             docDate: report.date,

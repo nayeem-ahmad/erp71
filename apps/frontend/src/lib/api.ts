@@ -1681,6 +1681,13 @@ export const api = {
     deletePrintTemplate: (id: string) => fetchWithAuth(`/print-templates/${id}`, {
         method: 'DELETE',
     }),
+    getPrintTemplateAssignments: () => fetchWithAuth('/print-templates/assignments'),
+    upsertPrintTemplateAssignment: (data: { storeId: string; docType: string; templateId: string | null }) =>
+        fetchWithAuth('/print-templates/assignments', {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     uploadFile: (file: File) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -1956,6 +1963,9 @@ export const api = {
         if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    // Every CRM person-picker reads this, not `getTeamMembers`: that one is the Team
+    // admin list and needs MANAGE_USERS, so for anyone else the pickers came up empty.
+    getCrmAssignees: () => fetchWithAuth('/crm/leads/assignees'),
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
     getLeadsSummary: () => fetchWithAuth('/crm/leads/summary'),
     createLead: (data: any) => fetchWithAuth('/crm/leads', {

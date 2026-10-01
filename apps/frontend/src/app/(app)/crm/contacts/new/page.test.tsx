@@ -16,7 +16,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getTeamMembers: jest.fn().mockResolvedValue([]),
+        getCrmAssignees: jest.fn().mockResolvedValue([]),
         createContact: jest.fn(),
         addContactAttachment: jest.fn(),
     },

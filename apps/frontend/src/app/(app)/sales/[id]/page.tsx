@@ -15,7 +15,7 @@ import SaleEntryLayout, {
     EMPTY_ADJUSTMENTS,
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
-import { availableQtyOf } from '@/components/document-entry/ProductSearch';
+import { availableQtyOf, stockByWarehouseOf } from '@/components/document-entry/ProductSearch';
 import SalePrintMenu from '../components/SalePrintMenu';
 import { toast } from '@/lib/toast';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
@@ -159,6 +159,7 @@ function SaleDetailPageContent() {
             discount: 0,
             availableQty: options?.availableQty
                 ?? (Array.isArray(product.stocks) ? availableQtyOf(product) : undefined),
+            stockByWarehouse: stockByWarehouseOf(product),
         });
     };
 
@@ -271,6 +272,9 @@ function SaleDetailPageContent() {
             })),
             payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
             previous_due: sale.previous_due ?? null,
+            // Prints on the branch it was rung up at, whatever branch is selected now.
+            store_id: sale.store_id,
+            store: sale.store,
         };
     }, [sale, saleDate, totals.total, description, customer, items, payments]);
 

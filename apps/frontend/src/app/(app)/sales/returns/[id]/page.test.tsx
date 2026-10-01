@@ -189,7 +189,8 @@ describe('ReturnDetailPage', () => {
         render(<ReturnDetailPage />);
         await waitFor(() => screen.getByRole('button', { name: /print preview/i }));
         fireEvent.click(screen.getByRole('button', { name: /print preview/i }));
-        expect(window.open).toHaveBeenCalled();
+        // Printing first resolves the return's own branch letterhead.
+        await waitFor(() => expect(window.open).toHaveBeenCalled());
     });
 
     describe('Edit mode', () => {

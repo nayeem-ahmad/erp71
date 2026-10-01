@@ -51,6 +51,17 @@ export class CrmLeadsController {
         return this.service.getStatusSummary(tenant.tenantId);
     }
 
+    /**
+     * Options for every CRM person-picker (lead owner, contact owner, activity
+     * assignee). Declared before `:id` so `/crm/leads/assignees` is never read
+     * as a lead id.
+     */
+    @RequireAnyStorePermission(...CRM_STAFF)
+    @Get('assignees')
+    listAssignees(@Tenant() tenant: TenantContext) {
+        return this.service.listAssignees(tenant.tenantId);
+    }
+
     @RequireAnyStorePermission(...CRM_STAFF)
     @Get(':id')
     findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
