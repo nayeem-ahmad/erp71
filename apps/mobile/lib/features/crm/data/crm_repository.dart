@@ -12,8 +12,8 @@ class Paged<T> {
   final bool hasMore;
 }
 
-/// The four tenant-configurable lists behind `/crm/lead-taxonomy/:kind`.
-enum TaxonomyKind { sources, categories, channels, purposes }
+/// The tenant-configurable lists behind `/crm/lead-taxonomy/:kind`.
+enum TaxonomyKind { sources, categories, channels, purposes, statuses }
 
 /// Marks "leave this field as it is" in the `copyWith`s below, where null is
 /// a real value (no filter).
@@ -24,6 +24,7 @@ const Object _keep = Object();
 class LeadQuery {
   const LeadQuery({
     this.status = openStatus,
+    this.statusId,
     this.search = '',
     this.mine = false,
     this.priority,
@@ -35,6 +36,9 @@ class LeadQuery {
 
   /// `open`, a [LeadStatus.code], or null for every status.
   final String? status;
+
+  /// One of the workspace's pipeline stages, by id. Used instead of [status].
+  final String? statusId;
   final String search;
   final bool mine;
   final LeadPriority? priority;
@@ -44,12 +48,14 @@ class LeadQuery {
 
   LeadQuery copyWith({
     Object? status = _keep,
+    Object? statusId = _keep,
     String? search,
     bool? mine,
     Object? priority = _keep,
     Object? staleDays = _keep,
   }) => LeadQuery(
     status: status == _keep ? this.status : status as String?,
+    statusId: statusId == _keep ? this.statusId : statusId as String?,
     search: search ?? this.search,
     mine: mine ?? this.mine,
     priority: priority == _keep ? this.priority : priority as LeadPriority?,
@@ -58,6 +64,7 @@ class LeadQuery {
 
   Map<String, Object?> toQuery() => {
     'status': status,
+    'statusId': statusId,
     'search': search.trim(),
     if (mine) 'mine': 'true',
     'priority': priority?.code,
@@ -68,13 +75,15 @@ class LeadQuery {
   bool operator ==(Object other) =>
       other is LeadQuery &&
       other.status == status &&
+      other.statusId == statusId &&
       other.search == search &&
       other.mine == mine &&
       other.priority == priority &&
       other.staleDays == staleDays;
 
   @override
-  int get hashCode => Object.hash(status, search, mine, priority, staleDays);
+  int get hashCode =>
+      Object.hash(status, statusId, search, mine, priority, staleDays);
 }
 
 /// The Activities tab's views.
@@ -191,6 +200,14 @@ class CrmRepository {
     'status': status.code,
     if (status == LeadStatus.lost) 'lost_reason': lostReason,
   });
+
+  /// Moves the lead to one of the workspace's stages. A stage whose
+  /// lifecycle is lost needs [lostReason].
+  Future<Lead> setLeadStage(String id, CrmOption stage, {String? lostReason}) =>
+      updateLead(id, {
+        'status_id': stage.id,
+        if (stage.lifecycleStatus == LeadStatus.lost) 'lost_reason': lostReason,
+      });
 
   /// Closes the lead as won and creates the customer from it. (A PATCH to
   /// CONVERTED closes it too, but creates no customer — and a converted lead

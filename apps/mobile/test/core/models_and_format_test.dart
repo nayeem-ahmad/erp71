@@ -114,6 +114,12 @@ void main() {
       expect(leadQueryFromLink({'stale': '-3'}).staleDays, isNull);
       expect(leadQueryFromLink(const {}), const LeadQuery());
     });
+
+    test('a funnel bar opens its stage', () {
+      final q = leadQueryFromLink({'statusId': 'st-neg'});
+      expect(q.statusId, 'st-neg');
+      expect(q.status, isNull);
+    });
   });
 
   group('formatting', () {
@@ -230,6 +236,66 @@ void main() {
       // ...but not from the evening of the 25th in Dhaka.
       expect(a.isOverdue(now: DateTime(2026, 9, 25, 22)), isFalse);
     });
+
+    test(
+      'a lead shows the workspace\'s stage, and its lifecycle drives the rules',
+      () {
+        final lead = Lead.fromJson({
+          ...leadJson(status: 'QUALIFIED'),
+          'statusOption': {
+            'id': 'st-neg',
+            'code': 'NEGOTIATION',
+            'name': 'Negotiation',
+            'lifecycle': 'QUALIFIED',
+            'is_system': false,
+          },
+        });
+
+        expect(lead.statusLabel, 'Negotiation');
+        expect(lead.status, LeadStatus.qualified);
+        expect(lead.status.isOpen, isTrue);
+      },
+    );
+
+    test('a lead not yet given a stage falls back to its lifecycle', () {
+      expect(Lead.fromJson(leadJson()).statusLabel, 'Contacted');
+    });
+
+    test(
+      'the overview reads the workspace\'s stages when the server sends them',
+      () {
+        final o = CrmOverview.fromJson({
+          ...overviewJson(),
+          'pipeline': {
+            ...(overviewJson()['pipeline']! as Map<String, Object?>),
+            'stages': [
+              {
+                'id': 'st-new',
+                'code': 'NEW',
+                'name': 'New',
+                'lifecycle': 'NEW',
+                'is_system': true,
+                'count': 4,
+              },
+              {
+                'id': 'st-neg',
+                'code': 'NEGOTIATION',
+                'name': 'Negotiation',
+                'lifecycle': 'QUALIFIED',
+                'is_system': false,
+                'count': 2,
+              },
+            ],
+          },
+        });
+
+        expect(o.stages.map((s) => (s.stage.name, s.count)).toList(), [
+          ('New', 4),
+          ('Negotiation', 2),
+        ]);
+        expect(CrmOverview.fromJson(overviewJson()).stages, isEmpty);
+      },
+    );
 
     test('the overview reads its snake_case sections', () {
       final o = CrmOverview.fromJson(overviewJson());

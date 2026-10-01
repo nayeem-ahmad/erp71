@@ -92,6 +92,41 @@ void main() {
       },
     );
 
+    test('moving a lead to a stage sends its id', () async {
+      backend.on(
+        'PATCH',
+        '/crm/leads/lead-1',
+        (_) => leadJson(status: 'QUALIFIED'),
+      );
+      const stage = CrmOption(
+        id: 'st-neg',
+        code: 'NEGOTIATION',
+        name: 'Negotiation',
+        lifecycle: 'QUALIFIED',
+      );
+
+      await repo.setLeadStage('lead-1', stage);
+
+      expect(backend.lastBody('PATCH', '/crm/leads/lead-1'), {
+        'status_id': 'st-neg',
+      });
+    });
+
+    test('filtering by one stage sends statusId instead of status', () async {
+      backend.on('GET', '/crm/leads', (_) => page(const []));
+
+      await repo.leads(
+        const LeadQuery(status: null, statusId: 'st-neg'),
+        page: 1,
+      );
+
+      expect(query('/crm/leads'), {
+        'statusId': 'st-neg',
+        'page': '1',
+        'limit': '20',
+      });
+    });
+
     test('losing a lead sends the reason with the status', () async {
       backend.on('PATCH', '/crm/leads/lead-1', (_) => leadJson(status: 'LOST'));
 

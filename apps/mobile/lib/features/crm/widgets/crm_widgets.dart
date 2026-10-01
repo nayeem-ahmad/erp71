@@ -220,7 +220,7 @@ class LeadTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          StatusBadge(lead.status.label, tone: lead.status.tone),
+          StatusBadge(lead.statusLabel, tone: lead.status.tone),
         ],
       ),
       subtitle: Column(

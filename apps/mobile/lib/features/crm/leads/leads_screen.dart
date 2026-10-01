@@ -23,6 +23,7 @@ class LeadsScreen extends ConsumerStatefulWidget {
 class _LeadsScreenState extends ConsumerState<LeadsScreen> {
   late LeadQuery _query = widget.initialQuery;
 
+  /// The five lifecycles, for a server that predates workspace stages.
   static const _statusChoices = <(String?, String)>[
     (LeadQuery.openStatus, 'Open'),
     ('NEW', 'New'),
@@ -35,9 +36,21 @@ class _LeadsScreenState extends ConsumerState<LeadsScreen> {
 
   bool get _isDefault => _query.copyWith(mine: false) == const LeadQuery();
 
+  /// A chip filtering on a lifecycle (`open`, a code, or null for all).
+  Widget _statusChip(String label, {required String? status}) => ChoiceChip(
+    label: Text(label),
+    selected: _query.statusId == null && _query.status == status,
+    onSelected: (_) => setState(
+      () => _query = _query.copyWith(status: status, statusId: null),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final mine = ref.watch(crmMineOnlyProvider);
+    final stages =
+        ref.watch(taxonomyProvider(TaxonomyKind.statuses)).value ??
+        const <CrmOption>[];
     final query = _query.copyWith(mine: mine);
     final state = ref.watch(leadsProvider(query));
     final controller = ref.read(leadsProvider(query).notifier);
@@ -87,14 +100,28 @@ class _LeadsScreenState extends ConsumerState<LeadsScreen> {
                   ),
                   const SizedBox(width: 8),
                 ],
-                for (final (status, label) in _statusChoices) ...[
-                  ChoiceChip(
-                    label: Text(label),
-                    selected: _query.status == status,
-                    onSelected: (_) => setState(
-                      () => _query = _query.copyWith(status: status),
+                if (stages.isEmpty)
+                  for (final (status, label) in _statusChoices) ...[
+                    _statusChip(label, status: status),
+                    const SizedBox(width: 8),
+                  ]
+                else ...[
+                  _statusChip('Open', status: LeadQuery.openStatus),
+                  const SizedBox(width: 8),
+                  for (final stage in stages) ...[
+                    ChoiceChip(
+                      label: Text(stage.name),
+                      selected: _query.statusId == stage.id,
+                      onSelected: (_) => setState(
+                        () => _query = _query.copyWith(
+                          status: null,
+                          statusId: stage.id,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                  ],
+                  _statusChip('All', status: null),
                   const SizedBox(width: 8),
                 ],
               ],
