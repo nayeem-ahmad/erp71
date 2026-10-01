@@ -12,7 +12,7 @@ import { ProjectSettingsService } from './project-settings.service';
 import { ActivityType, ProjectActivityService } from './project-activity.service';
 import { BoardColumnsService, pickColumnForStatus } from './board-columns.service';
 import { syncStoryStatuses } from './story-status.util';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 import {
     CreateChecklistItemDto,
     CreateTaskDto,
@@ -65,7 +65,7 @@ export class ProjectTasksService {
         private readonly activity: ProjectActivityService,
         private readonly access: ProjectAccessService,
         private readonly boardColumns: BoardColumnsService,
-        private readonly snapshots: SprintSnapshotService,
+        private readonly burndown: BurndownRecorder,
     ) {}
 
     /**
@@ -461,7 +461,7 @@ export class ProjectTasksService {
             });
         }
         // A task with no hours still raises the sprint's open-task count.
-        await this.snapshots.refresh(tenantId, [dto.sprintId]);
+        await this.burndown.record(tenantId, [dto.sprintId], 'TASK_ADDED', task.id);
 
         return this.findOne(viewer, task.id);
     }
@@ -654,6 +654,13 @@ export class ProjectTasksService {
             ? await this.db.$transaction((tx) => this.applyMove(tx, tenantId, task, move, data, statusId))
             : null;
         if (!moved) await this.db.projectTask.update({ where: { id: taskId }, data });
+        // Scope first, before any hours move, so the chart shows the task
+        // joining (or leaving) as its own step rather than folding it into
+        // whatever re-estimate follows.
+        if (dto.sprintId !== undefined && (dto.sprintId || null) !== task.sprint_id) {
+            await this.burndown.record(tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
+            await this.burndown.record(tenantId, [dto.sprintId], 'TASK_ADDED', taskId);
+        }
 
         if (dto.labelIds !== undefined) await this.setLabels(tenantId, taskId, dto.labelIds);
         if (statusId !== task.status_id || dto.userStoryId !== undefined || moved) {
@@ -747,10 +754,10 @@ export class ProjectTasksService {
             await this.burnDoneCrossing({ tenantId, userId, projectId, ...crossing });
         }
 
-        // Both sprints when it changed sprint: the one it left loses its hours
-        // and its task. And a Done crossing with no hours left to burn writes
-        // no remaining row, yet still changes the open-task count.
-        await this.snapshots.refresh(tenantId, [task.sprint_id, sprintId]);
+        // A Done crossing with no hours left to burn writes no remaining row,
+        // yet still changes the open-task count. A no-op edit records nothing:
+        // the recorder skips a point that repeats the last.
+        await this.burndown.record(tenantId, [task.sprint_id, sprintId], 'STATUS_CHANGED', taskId);
 
         return this.findOne(viewer, taskId);
     }
@@ -1025,6 +1032,11 @@ export class ProjectTasksService {
             }
         });
 
+        if (sprintId !== task.sprint_id) {
+            await this.burndown.record(tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
+            await this.burndown.record(tenantId, [sprintId], 'TASK_ADDED', taskId);
+        }
+
         if (status.id !== task.status_id) {
             await syncStoryStatuses(this.db as never, tenantId, [task.user_story_id]);
             await this.activity.record({
@@ -1073,7 +1085,7 @@ export class ProjectTasksService {
                 userId,
             });
         }
-        await this.snapshots.refresh(tenantId, [task.sprint_id, sprintId]);
+        await this.burndown.record(tenantId, [task.sprint_id, sprintId], 'STATUS_CHANGED', taskId);
 
         return this.findOne(viewer, taskId);
     }
@@ -1085,7 +1097,7 @@ export class ProjectTasksService {
             data: { deleted_at: new Date() },
         });
         await syncStoryStatuses(this.db as never, viewer.tenantId, [task.user_story_id]);
-        await this.snapshots.refresh(viewer.tenantId, [task.sprint_id]);
+        await this.burndown.record(viewer.tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
         return { success: true };
     }
 
@@ -1128,9 +1140,10 @@ export class ProjectTasksService {
             viewer.tenantId,
             affected.map((row) => row.user_story_id),
         );
-        await this.snapshots.refresh(
+        await this.burndown.record(
             viewer.tenantId,
             affected.map((row) => row.sprint_id),
+            'TASK_REMOVED',
         );
 
         return { success: true, deleted: count, skipped: ids.length - count };

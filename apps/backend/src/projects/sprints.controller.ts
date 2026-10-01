@@ -57,20 +57,6 @@ export class SprintsController {
         return this.sprints.burndown(tenant.tenantId, id);
     }
 
-    /**
-     * Repairs gaps by replaying the remaining-hours log. Available because the
-     * snapshots are a cache — without the log this endpoint could not exist.
-     */
-    @Post(':id/rebuild-snapshots')
-    @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
-    rebuild(
-        @Tenant() tenant: TenantContext,
-        @Param('id') id: string,
-        @Query('overwrite') overwrite?: string,
-    ) {
-        return this.sprints.rebuildSnapshots(tenant.tenantId, id, overwrite === 'true');
-    }
-
     @Patch(':id')
     @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
     update(

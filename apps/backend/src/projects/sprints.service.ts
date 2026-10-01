@@ -8,8 +8,9 @@ import {
     type BackgroundImageUpload,
 } from './background-image.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
-import { buildBurndownSeries, eachDate, toDateKey } from './burndown.util';
+import { BurndownRecorder } from './burndown-recorder.service';
+import { buildBurndownSeries, toDateKey } from './burndown.util';
+import { composeTaskKey } from './url-keys/task-key';
 import {
     AssignStoriesToSprintDto,
     AssignTasksToSprintDto,
@@ -18,6 +19,17 @@ import {
 } from './project.dto';
 
 /** Where an uploaded sprint background lands. Per tenant, like a board's. */
+/** One point on a sprint's burndown, as the chart reads it. */
+export interface BurndownTimelinePoint {
+    at: string;
+    remaining: number;
+    committed: number;
+    open: number;
+    /** Null on the synthetic "now" point appended while the sprint runs. */
+    cause: string | null;
+    task: { id: string; code: string | null; title: string } | null;
+}
+
 export function sprintBackgroundFolder(tenantId: string): string {
     return `${tenantId}/project-sprints`;
 }
@@ -26,7 +38,7 @@ export function sprintBackgroundFolder(tenantId: string): string {
 export class SprintsService {
     constructor(
         private readonly db: DatabaseService,
-        private readonly snapshots: SprintSnapshotService,
+        private readonly burndownRecorder: BurndownRecorder,
         private readonly access: ProjectAccessService,
         private readonly assets: AssetsService,
     ) {}
@@ -228,7 +240,7 @@ export class SprintsService {
             where: { id: sprintId },
             data: { status: 'ACTIVE' as never },
         });
-        await this.snapshots.snapshotToday(tenantId, sprintId);
+        await this.burndownRecorder.record(tenantId, [sprintId], 'STARTED');
         return withoutStorageKey(updated);
     }
 
@@ -240,7 +252,7 @@ export class SprintsService {
      */
     async complete(tenantId: string, sprintId: string) {
         const sprint = await this.assertSprint(tenantId, sprintId);
-        await this.snapshots.snapshotToday(tenantId, sprintId);
+        await this.burndownRecorder.record(tenantId, [sprintId], 'COMPLETED');
 
         const carried = await this.db.projectTask.findMany({
             where: {
@@ -282,7 +294,8 @@ export class SprintsService {
         // Any sprint these tasks are leaving loses them from its burndown.
         const leaving = await this.db.projectTask.findMany({ where, select: { sprint_id: true } });
         const result = await this.db.projectTask.updateMany({ where, data: { sprint_id: sprintId } });
-        await this.snapshots.refresh(tenantId, [sprintId, ...leaving.map((task) => task.sprint_id)]);
+        await this.burndownRecorder.record(tenantId, leaving.map((task) => task.sprint_id), 'TASK_REMOVED');
+        await this.burndownRecorder.record(tenantId, [sprintId], 'TASK_ADDED');
         return { assigned: result.count };
     }
 
@@ -308,7 +321,7 @@ export class SprintsService {
             } as never,
             data: { sprint_id: sprintId },
         });
-        await this.snapshots.refresh(tenantId, [sprintId]);
+        await this.burndownRecorder.record(tenantId, [sprintId], 'TASK_ADDED');
         return { assigned: result.count };
     }
 
@@ -324,7 +337,7 @@ export class SprintsService {
             } as never,
             data: { sprint_id: null },
         });
-        await this.snapshots.refresh(tenantId, [sprintId]);
+        await this.burndownRecorder.record(tenantId, [sprintId], 'TASK_REMOVED');
         return { removed: result.count };
     }
 
@@ -338,58 +351,71 @@ export class SprintsService {
         return { success: true };
     }
 
-    /** The three series the chart draws, plus the sprint's current totals. */
+    /**
+     * Every recorded point, plus the ideal line and the live totals.
+     *
+     * Points are the stored change-by-change totals (`SprintBurndownPoint`).
+     * While the sprint runs, the live figures are appended as a final point
+     * when they differ from the last stored one, so the line always reaches
+     * "now" even if the latest point failed to write.
+     *
+     * The ideal line is anchored to the committed total at the first point —
+     * the scope the sprint started with — not today's, which would hide the
+     * overrun the chart exists to show.
+     */
     async burndown(tenantId: string, sprintId: string) {
         const sprint = await this.assertSprint(tenantId, sprintId);
-        const today = SprintSnapshotService.todayKey();
-        const findRows = () =>
-            this.db.sprintSnapshot.findMany({
+        const [rows, current] = await Promise.all([
+            this.db.sprintBurndownPoint.findMany({
                 where: { tenant_id: tenantId, sprint_id: sprintId },
-                orderBy: { snapshot_date: 'asc' },
-            });
-        let rows = await findRows();
-
-        // A past day with no row — a night the cron missed, or a sprint that
-        // ran before points were recorded on every change — is filled from the
-        // remaining-hours log rather than left as a hole in the line.
-        if (sprint.status !== 'PLANNED') {
-            const have = new Set(rows.map((row) => toDateKey(row.snapshot_date)));
-            const missing = eachDate(sprint.start_date, sprint.end_date).some(
-                (day) => day < today && !have.has(day),
-            );
-            if (missing) {
-                await this.snapshots.rebuild(tenantId, sprintId);
-                rows = await findRows();
-            }
-        }
-
-        const snapshots = new Map(
-            rows.map((row) => [
-                toDateKey(row.snapshot_date),
-                {
-                    remaining: Number(row.remaining_hours),
-                    committed: Number(row.committed_hours),
-                    // Replayed days infer "done" from remaining reaching zero
-                    // (see `computeFromLog`); live snapshots read the column.
-                    open: Math.max(row.task_count - row.done_task_count, 0),
+                orderBy: { recorded_at: 'asc' },
+                include: {
+                    task: {
+                        select: { id: true, reference: true, title: true, project: { select: { code: true } } },
+                    },
                 },
-            ]),
-        );
+            }),
+            this.burndownRecorder.computeCurrent(tenantId, sprintId),
+        ]);
 
-        const current = await this.snapshots.computeCurrent(tenantId, sprintId);
-        // Today's point is the live figure while the sprint runs, so the chart
-        // is never a change behind whatever the stored row says.
+        const points: BurndownTimelinePoint[] = rows.map((row) => ({
+            at: row.recorded_at.toISOString(),
+            remaining: Number(row.remaining_hours),
+            committed: Number(row.committed_hours),
+            open: Math.max(row.task_count - row.done_task_count, 0),
+            cause: row.cause as string,
+            task: row.task
+                ? {
+                      id: row.task.id,
+                      code: row.task.project?.code ? composeTaskKey(row.task.project.code, row.task.reference) : null,
+                      title: row.task.title,
+                  }
+                : null,
+        }));
+
+        const live: BurndownTimelinePoint = {
+            at: new Date().toISOString(),
+            remaining: current.remaining_hours,
+            committed: current.committed_hours,
+            open: Math.max(current.task_count - current.done_task_count, 0),
+            cause: null,
+            task: null,
+        };
+        const last = points[points.length - 1];
         if (
             sprint.status === 'ACTIVE' &&
-            today >= toDateKey(sprint.start_date) &&
-            today <= toDateKey(sprint.end_date)
+            (!last || last.remaining !== live.remaining || last.committed !== live.committed || last.open !== live.open)
         ) {
-            snapshots.set(today, {
-                remaining: current.remaining_hours,
-                committed: current.committed_hours,
-                open: Math.max(current.task_count - current.done_task_count, 0),
-            });
+            points.push(live);
         }
+
+        const anchor = points[0]?.committed ?? current.committed_hours;
+        const ideal = buildBurndownSeries({
+            startDate: sprint.start_date,
+            endDate: sprint.end_date,
+            snapshots: new Map([[toDateKey(sprint.start_date), { remaining: anchor, committed: anchor }]]),
+        }).map((day) => ({ date: day.date, value: day.ideal, isWorkingDay: day.isWorkingDay }));
+
         return {
             sprint: {
                 id: sprint.id,
@@ -400,17 +426,9 @@ export class SprintsService {
                 end_date: sprint.end_date,
             },
             current,
-            series: buildBurndownSeries({
-                startDate: sprint.start_date,
-                endDate: sprint.end_date,
-                snapshots,
-            }),
+            ideal,
+            points,
         };
-    }
-
-    async rebuildSnapshots(tenantId: string, sprintId: string, overwrite = false) {
-        await this.assertSprint(tenantId, sprintId);
-        return this.snapshots.rebuild(tenantId, sprintId, { overwrite });
     }
 
     /** The whole row, storage key included — for this service's own use, never a response. */

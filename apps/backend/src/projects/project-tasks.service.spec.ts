@@ -6,7 +6,7 @@ import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectAccessService } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 import { OWNER, narrow, ownTaskOr, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
@@ -17,7 +17,7 @@ describe('ProjectTasksService', () => {
     let activity: { record: jest.Mock; watch: jest.Mock; notifyWatchers: jest.Mock };
     let settings: { defaultTaskStatus: jest.Mock; listTaskStatuses: jest.Mock };
     let boardColumns: { bindProject: jest.Mock };
-    let snapshots: { refresh: jest.Mock };
+    let burndown: { record: jest.Mock };
 
     const todo = { id: 'status-todo', category: 'TODO' };
     const doing = { id: 'status-doing', category: 'IN_PROGRESS' };
@@ -49,7 +49,7 @@ describe('ProjectTasksService', () => {
             listTaskStatuses: jest.fn().mockResolvedValue([todo, doing, done]),
         };
         boardColumns = { bindProject: jest.fn().mockResolvedValue(undefined) };
-        snapshots = { refresh: jest.fn().mockResolvedValue(undefined) };
+        burndown = { record: jest.fn().mockResolvedValue(undefined) };
 
         db = {
             project: {
@@ -129,7 +129,7 @@ describe('ProjectTasksService', () => {
                 { provide: ProjectActivityService, useValue: activity },
                 { provide: ProjectSettingsService, useValue: settings },
                 { provide: BoardColumnsService, useValue: boardColumns },
-                { provide: SprintSnapshotService, useValue: snapshots },
+                { provide: BurndownRecorder, useValue: burndown },
             ],
         }).compile();
 
@@ -763,14 +763,15 @@ describe('ProjectTasksService', () => {
             expect(moved[0].data.sprint_id).toBeNull();
         });
 
-        it('re-records the burndown of the sprint it left and the one it joined', async () => {
+        it('records the task leaving one sprint and joining the other', async () => {
             await service.move(OWNER, 'task-1', {
                 statusId: todo.id,
                 sortOrder: 0,
                 sprintId: 'sprint-2',
             } as never);
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-2']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-2'], 'TASK_ADDED', 'task-1');
         });
 
         it('re-records the burndown on Done even when there were no hours to burn', async () => {
@@ -780,7 +781,7 @@ describe('ProjectTasksService', () => {
 
             await service.move(OWNER, 'task-1', { statusId: done.id, sortOrder: 0 } as never);
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1'], 'STATUS_CHANGED', 'task-1');
         });
     });
 
@@ -790,13 +791,13 @@ describe('ProjectTasksService', () => {
 
             await service.update(OWNER, 'task-1', { statusId: done.id } as never);
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1'], 'STATUS_CHANGED', 'task-1');
         });
 
         it('re-records the sprint a deleted task was in', async () => {
             await service.remove(OWNER, 'task-1');
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
         });
     });
 

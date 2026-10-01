@@ -23,11 +23,10 @@ import { ProjectTimerService } from './project-timer.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { RemainingHoursService } from './remaining-hours.service';
 import { SprintsService } from './sprints.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectCommentsService } from './project-comments.service';
 import { ProjectAttachmentsService } from './project-attachments.service';
-import { ProjectsScheduler } from './projects.scheduler';
 
 @Module({
     imports: [DatabaseModule, NotificationsModule, AssetsModule],
@@ -60,8 +59,7 @@ import { ProjectsScheduler } from './projects.scheduler';
         ProjectCommentsService,
         ProjectAttachmentsService,
         SprintsService,
-        SprintSnapshotService,
-        ProjectsScheduler,
+        BurndownRecorder,
     ],
     exports: [ProjectsService, RemainingHoursService, ProjectAccessService],
 })
