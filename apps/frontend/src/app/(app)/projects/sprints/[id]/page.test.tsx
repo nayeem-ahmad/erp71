@@ -370,6 +370,32 @@ describe('Sprint detail page', () => {
             expect(cells.some((cell) => cell.textContent === '1')).toBe(false);
         });
 
+        it('still says a task was carried over when the sprint it went to is gone', async () => {
+            (api.getProjectTasks as jest.Mock).mockResolvedValue({
+                items: [
+                    {
+                        ...tasks[0],
+                        sprintMembership: {
+                            outcome: 'CARRIED_OVER',
+                            removed_at: '2026-08-04T17:59:00.000Z',
+                            remaining_at_close: '3',
+                            carried_to: null,
+                        },
+                    },
+                ],
+            });
+            render(<SprintDetailPage />);
+            const row = (await screen.findByText('Wire the bKash callback')).closest('tr')!;
+            expect(within(row).getByText('Carried over to the next sprint')).toBeInTheDocument();
+        });
+
+        it('shows no gap to the ideal line once the sprint is over', async () => {
+            render(<SprintDetailPage />);
+            const stats = await screen.findByTestId('sprint-stats');
+            await screen.findByText('Wire the bKash callback');
+            expect(within(stats).getByText('—')).toBeInTheDocument();
+        });
+
         it('no longer offers to take a task out', async () => {
             render(<SprintDetailPage />);
             await screen.findByText('Receipt email');

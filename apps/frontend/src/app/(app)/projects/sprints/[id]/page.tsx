@@ -252,11 +252,19 @@ export default function SprintDetailPage() {
     const lanes = useMemo(() => groupSprintTasks(visibleTasks, laneMode), [visibleTasks, laneMode]);
     const statusColumns = useMemo(() => buildStatusColumns(tasks, projectColumns), [tasks, projectColumns]);
     const totals = useMemo(() => sumHours(visibleTasks), [visibleTasks]);
-    const stats = useMemo(
-        () => sprintStats(tasks, burndown?.ideal ?? [], burndown?.current?.remaining_hours ?? null, today),
-        [tasks, burndown, today],
-    );
     const closed = sprint?.status === 'COMPLETED';
+    const stats = useMemo(
+        () =>
+            sprintStats(
+                tasks,
+                burndown?.ideal ?? [],
+                // A completed sprint's live total counts only the Done tasks
+                // left in it, so a gap to the ideal would be meaningless.
+                closed ? null : (burndown?.current?.remaining_hours ?? null),
+                today,
+            ),
+        [tasks, burndown, today, closed],
+    );
     const timeline = sprint ? sprintTimeline(sprint.start_date, sprint.end_date, today) : null;
 
     const returnToBacklog = async (task: SprintTask) => {
@@ -859,6 +867,17 @@ function CarriedBadge({ task }: { task: SprintTask }) {
             >
                 {fmt(m.carriedBadge, { name: membership.carried_to.name })}
             </Link>
+        );
+    }
+    if (membership?.outcome === 'CARRIED_OVER') {
+        // The sprint it went to has since been deleted.
+        return (
+            <span
+                className="mt-0.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700"
+                data-testid="carried-badge"
+            >
+                {m.outcomeCarried}
+            </span>
         );
     }
     if (membership?.outcome === 'RETURNED_TO_BACKLOG') {

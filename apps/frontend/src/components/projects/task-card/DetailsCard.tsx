@@ -221,16 +221,20 @@ export default function DetailsCard({ task, card }: { task: Task; card: TaskCard
                             )
                         }
                         tone={task.sprint ? 'default' : 'muted'}
-                        options={card.sprints.map((sprint) => ({
-                            value: sprint.id,
-                            label: sprint.name,
-                            subtitle:
-                                sprint.status === 'ACTIVE'
-                                    ? m.sprint.active
-                                    : sprint.status === 'COMPLETED'
-                                      ? m.sprint.completed
-                                      : m.sprint.planned,
-                        }))}
+                        // A completed sprint takes no new tasks, so it is not
+                        // offered — except the one the task already sits in.
+                        options={card.sprints
+                            .filter((sprint) => sprint.status !== 'COMPLETED' || sprint.id === task.sprint?.id)
+                            .map((sprint) => ({
+                                value: sprint.id,
+                                label: sprint.name,
+                                subtitle:
+                                    sprint.status === 'ACTIVE'
+                                        ? m.sprint.active
+                                        : sprint.status === 'COMPLETED'
+                                          ? m.sprint.completed
+                                          : m.sprint.planned,
+                            }))}
                         disabled={card.busy}
                         onOpen={card.onSprintsWanted}
                         onPick={card.changeSprint}

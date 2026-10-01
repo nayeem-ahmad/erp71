@@ -49,6 +49,10 @@ export default function SprintHistory({ stays }: { stays: SprintStay[] }) {
                             className={`hover:text-blue-600 hover:underline ${current ? 'font-medium text-gray-900' : ''}`}
                         >
                             {stay.sprint.name}
+                            {/* The title is hover-only; say it for screen readers too. */}
+                            <span className="sr-only">
+                                {` (${current ? m.currentSprint : stay.outcome ? outcome[stay.outcome] : ''})`}
+                            </span>
                         </Link>
                     </Fragment>
                 );

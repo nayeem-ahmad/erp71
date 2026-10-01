@@ -23,7 +23,12 @@ describe('SprintHistory', () => {
         );
 
         const links = screen.getAllByRole('link');
-        expect(links.map((link) => link.textContent)).toEqual(['Sprint 7', 'Sprint 8', 'Sprint 9']);
+        // The outcome is spoken too, not only shown on hover.
+        expect(links.map((link) => link.textContent)).toEqual([
+            'Sprint 7 (Carried over to the next sprint)',
+            'Sprint 8 (Carried over to the next sprint)',
+            'Sprint 9 (Current sprint)',
+        ]);
         expect(links[0]).toHaveAttribute('href', '/projects/sprints/s7');
         expect(links[0]).toHaveAttribute('title', 'Carried over to the next sprint');
         expect(links[2]).toHaveAttribute('aria-current', 'true');
@@ -40,9 +45,9 @@ describe('SprintHistory', () => {
                 ]}
             />,
         );
-        expect(screen.getByText('Sprint 1')).toHaveAttribute('title', 'Returned to the backlog');
-        expect(screen.getByText('Sprint 2')).toHaveAttribute('title', 'Taken out of the sprint');
-        expect(screen.getByText('Sprint 3')).toHaveAttribute('title', 'Finished in this sprint');
+        expect(screen.getByRole('link', { name: /Sprint 1/ })).toHaveAttribute('title', 'Returned to the backlog');
+        expect(screen.getByRole('link', { name: /Sprint 2/ })).toHaveAttribute('title', 'Taken out of the sprint');
+        expect(screen.getByRole('link', { name: /Sprint 3/ })).toHaveAttribute('title', 'Finished in this sprint');
     });
 });
 
