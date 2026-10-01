@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { mergePools } from '../database/product-cost.utils';
 
 /**
@@ -229,8 +230,8 @@ export async function planMerge(
         }
     }
 
-    // Missing products cannot be counted; other blockers still get a preview payload.
-    if (!source || !target) {
+    // Missing products cannot be counted; self-merge has nothing to preview.
+    if (!source || !target || sourceId === targetId) {
         return emptyPayload(source, target, blockers);
     }
 
@@ -466,16 +467,25 @@ async function combineStockRows(
     sourceId: string,
     targetId: string,
 ): Promise<number> {
+    const productIds = [sourceId, targetId];
+    // findMany is unlocked under Read Committed; a sale mid-merge must wait here.
+    await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM "ProductStock"
+        WHERE tenant_id = ${tenantId}
+          AND product_id IN (${Prisma.join(productIds)})
+        FOR UPDATE
+    `);
+
     const rows: Array<{ id: string; product_id: string; warehouse_id: string; quantity: number }> =
         await tx.productStock.findMany({
-            where: { tenant_id: tenantId, product_id: { in: [sourceId, targetId] } },
+            where: { tenant_id: tenantId, product_id: { in: productIds } },
         });
 
-    const keeperByWarehouse = new Map<string, { id: string; quantity: number }>();
+    const keeperByWarehouse = new Map<string, { id: string }>();
     const sourceRows: typeof rows = [];
     for (const row of rows) {
         if (row.product_id === targetId) {
-            keeperByWarehouse.set(row.warehouse_id, { id: row.id, quantity: Number(row.quantity) });
+            keeperByWarehouse.set(row.warehouse_id, { id: row.id });
         } else if (row.product_id === sourceId) {
             sourceRows.push(row);
         }
@@ -485,10 +495,9 @@ async function combineStockRows(
         const keeper = keeperByWarehouse.get(source.warehouse_id);
         const sourceQty = Number(source.quantity);
         if (keeper) {
-            keeper.quantity += sourceQty;
             await tx.productStock.update({
                 where: { id: keeper.id },
-                data: { quantity: keeper.quantity },
+                data: { quantity: { increment: sourceQty } },
             });
             await tx.productStock.delete({ where: { id: source.id } });
         } else {
@@ -496,12 +505,15 @@ async function combineStockRows(
                 where: { id: source.id },
                 data: { product_id: targetId },
             });
-            keeperByWarehouse.set(source.warehouse_id, { id: source.id, quantity: sourceQty });
+            keeperByWarehouse.set(source.warehouse_id, { id: source.id });
         }
     }
 
+    const keeperRows: Array<{ quantity: number }> = await tx.productStock.findMany({
+        where: { tenant_id: tenantId, product_id: targetId },
+    });
     let sum = 0;
-    for (const row of keeperByWarehouse.values()) sum += row.quantity;
+    for (const row of keeperRows) sum += Number(row.quantity);
     return sum;
 }
 
@@ -735,6 +747,14 @@ export async function commitMerge(
     const targetId = dto.targetId;
 
     const result = await db.$transaction(async (tx: any) => {
+        // Second merge waits here, then planMerge sees deleted_at.
+        await tx.$queryRaw(Prisma.sql`
+            SELECT id FROM "Product"
+            WHERE tenant_id = ${tenantId}
+              AND id IN (${Prisma.join([sourceId, targetId])})
+            FOR UPDATE
+        `);
+
         const plan = await planMerge(tx, tenantId, sourceId, targetId);
         throwIfBlocked(plan, 'commit');
 

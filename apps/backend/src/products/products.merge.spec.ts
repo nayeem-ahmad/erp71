@@ -47,8 +47,26 @@ function dbWith(source: any, target: any, extra: Record<string, any> = {}) {
     for (const [key, value] of Object.entries(extra)) {
         db[key] = { ...(base[key] ?? {}), ...value };
     }
+    db.$queryRaw = jest.fn().mockResolvedValue([]);
+    db.$executeRaw = jest.fn().mockResolvedValue(0);
     db.$transaction = (fn: any) => fn(db);
     return db;
+}
+
+function queryRawSql(call: unknown[]): string {
+    const first = call[0] as { sql?: string; strings?: string[] } | string[] | undefined;
+    if (first && typeof first === 'object' && !Array.isArray(first) && typeof first.sql === 'string') {
+        return first.sql;
+    }
+    if (Array.isArray(first)) return first.join(' ');
+    return '';
+}
+
+function lockedForUpdate(tx: any, table: string): boolean {
+    return tx.$queryRaw.mock.calls.some((call) => {
+        const sql = queryRawSql(call);
+        return sql.includes(`"${table}"`) && sql.includes('FOR UPDATE');
+    });
 }
 
 function writable(over: Record<string, any> = {}) {
@@ -157,8 +175,10 @@ describe('planMerge guards', () => {
 
     it('blocks merge into self', async () => {
         const p = product({ id: 'src' });
-        const plan = await planMerge(dbWith(p, p), 't1', 'src', 'src');
+        const saleItem = { count: jest.fn().mockResolvedValue(12) };
+        const plan = await planMerge(dbWith(p, p, { saleItem }), 't1', 'src', 'src');
         expect(plan.blockers.map((b) => b.code)).toContain('SAME_PRODUCT');
+        expect(saleItem.count).not.toHaveBeenCalled();
     });
 
     it('blocks GOODS into SERVICE', async () => {
@@ -461,9 +481,13 @@ describe('commitMerge', () => {
         });
         const db = { $transaction: (fn: any) => fn(tx) };
         await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        expect(lockedForUpdate(tx, 'Product')).toBe(true);
+        expect(lockedForUpdate(tx, 'ProductStock')).toBe(true);
+        expect(tx.$queryRaw.mock.invocationCallOrder[0])
+            .toBeLessThan(tx.product.findFirst.mock.invocationCallOrder[0]);
         expect(tx.productStock.update).toHaveBeenCalledWith({
             where: { id: 'ts' },
-            data: { quantity: 48 },
+            data: { quantity: { increment: 8 } },
         });
         expect(tx.productStock.delete).toHaveBeenCalledWith({ where: { id: 'ss' } });
         expect(tx.productCost.upsert).toHaveBeenCalledWith(expect.objectContaining({
