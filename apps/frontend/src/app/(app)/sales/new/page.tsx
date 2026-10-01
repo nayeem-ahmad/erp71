@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, toDatetimeLocal } from '@/lib/format';
-import { availableQtyOf } from '@/components/document-entry/ProductSearch';
+import { availableQtyOf, stockByWarehouseOf } from '@/components/document-entry/ProductSearch';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import { newCustomerPayload, type NewCustomerDraft } from '../components/CustomerSelection';
 import SaleEntryLayout, {
@@ -274,6 +274,7 @@ function NewSalePageContent() {
             // undefined there rather than claiming zero stock.
             availableQty: options?.availableQty
                 ?? (Array.isArray(product.stocks) ? availableQtyOf(product) : undefined),
+            stockByWarehouse: stockByWarehouseOf(product),
         });
     };
 

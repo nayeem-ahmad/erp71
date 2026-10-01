@@ -54,6 +54,11 @@ interface LineItemsTableProps {
     warehouses?: WarehouseOption[];
     /** Name of the document's own warehouse, for the "same as entry" option. */
     entryWarehouseName?: string;
+    /**
+     * The document's own warehouse. Lines that carry `stockByWarehouse` show
+     * availability for it — or for their own override, when the column is on.
+     */
+    entryWarehouseId?: string;
     warehouseLabel?: string;
 }
 
@@ -116,11 +121,17 @@ export default function LineItemsTable({
     historyPartyName,
     warehouses = [],
     entryWarehouseName,
+    entryWarehouseId,
     warehouseLabel = 'Warehouse',
 }: LineItemsTableProps) {
     const priceFrozen = readOnly || readOnlyPrice;
     const showHistory = !!historyType && !priceFrozen;
     const showWarehouse = warehouses.length > 0;
+    const availableOf = (item: LineItem) => {
+        const warehouseId = (showWarehouse && item.warehouseId) || entryWarehouseId;
+        if (!item.stockByWarehouse || !warehouseId) return item.availableQty;
+        return item.stockByWarehouse[warehouseId] ?? 0;
+    };
     // #, Name, Price, Qty, Total and the remove button are always rendered;
     // Avail, Disc % and Warehouse are the opt-in ones. The group used to have a
     // column of its own and now rides under the product name.
@@ -225,11 +236,14 @@ export default function LineItemsTable({
                                     )}
                                     {showAvailable && (
                                         <td className="px-2 py-1 text-end text-xs hidden md:table-cell">
-                                            {item.availableQty == null ? (
+                                            {availableOf(item) == null ? (
                                                 <span className="text-gray-400">—</span>
                                             ) : (
-                                                <span className={item.quantity > item.availableQty ? 'text-amber-600 font-medium' : 'text-gray-500'}>
-                                                    {item.availableQty}
+                                                <span
+                                                    data-testid="line-available"
+                                                    className={item.quantity > availableOf(item)! ? 'text-amber-600 font-medium' : 'text-gray-500'}
+                                                >
+                                                    {availableOf(item)}
                                                 </span>
                                             )}
                                         </td>
