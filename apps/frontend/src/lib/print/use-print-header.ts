@@ -13,9 +13,11 @@ export interface PrintHeader {
     companyName?: string;
     /**
      * Resolves the stored template on demand — for callers that print rarely
-     * and skip the eager fetch. Falls back to the branding header on failure.
+     * and skip the eager fetch. Pass the document's store so that branch's
+     * letterhead wins; it defaults to the hook's own `storeId`. Falls back to
+     * the branding header on failure.
      */
-    resolve: () => Promise<PrintHeader>;
+    resolve: (storeId?: string) => Promise<PrintHeader>;
 }
 
 interface ResolvedTemplate {
@@ -25,8 +27,8 @@ interface ResolvedTemplate {
 }
 
 /**
- * One in-flight request per document type, shared by every component that
- * prints — clicking Print must never wait on a round trip it already made.
+ * One in-flight request per document type and store, shared by every component
+ * that prints — clicking Print must never wait on a round trip it already made.
  */
 const cache = new Map<string, Promise<ResolvedTemplate | null>>();
 
@@ -35,10 +37,13 @@ export function clearPrintTemplateCache(): void {
     cache.clear();
 }
 
-function resolveTemplate(docType?: PrintDocType): Promise<ResolvedTemplate | null> {
-    const key = docType ?? 'DEFAULT';
+function resolveTemplate(docType?: PrintDocType, storeId?: string): Promise<ResolvedTemplate | null> {
+    const key = `${docType ?? 'DEFAULT'}:${storeId ?? ''}`;
     if (!cache.has(key)) {
-        const query = docType ? `?docType=${encodeURIComponent(docType)}` : '';
+        const params = new URLSearchParams();
+        if (docType) params.set('docType', docType);
+        if (storeId) params.set('storeId', storeId);
+        const query = params.toString() ? `?${params.toString()}` : '';
         cache.set(
             key,
             Promise.resolve()
@@ -57,6 +62,11 @@ export interface UsePrintHeaderOptions {
      * pages but print rarely (list tables) — they call `resolve()` on click.
      */
     eager?: boolean;
+    /**
+     * The store this page prints for, when it is one store at mount (POS, a
+     * daily report). Omit for company-wide prints.
+     */
+    storeId?: string;
 }
 
 /**
@@ -66,7 +76,7 @@ export interface UsePrintHeaderOptions {
  */
 export function usePrintHeader(
     docType?: PrintDocType,
-    { eager = true }: UsePrintHeaderOptions = {},
+    { eager = true, storeId }: UsePrintHeaderOptions = {},
 ): PrintHeader {
     const branding = useBranding();
     const [stored, setStored] = useState<DeepPartial<PrintHeaderConfig> | null>(null);
@@ -83,17 +93,19 @@ export function usePrintHeader(
     useEffect(() => {
         if (!eager) return;
         let active = true;
-        void resolveTemplate(docType).then((resolved) => {
+        void resolveTemplate(docType, storeId).then((resolved) => {
             if (active && resolved?.config) setStored(resolved.config);
         });
         return () => {
             active = false;
         };
-    }, [docType, eager]);
+    }, [docType, storeId, eager]);
 
-    const resolve = useCallback(async (): Promise<PrintHeader> => {
-        const resolved = await resolveTemplate(docType);
-        if (resolved?.config) setStored(resolved.config);
+    const resolve = useCallback(async (nextStoreId?: string): Promise<PrintHeader> => {
+        const id = nextStoreId ?? storeId;
+        const resolved = await resolveTemplate(docType, id);
+        // A row of another branch must not repaint this hook's own header.
+        if (resolved?.config && id === storeId) setStored(resolved.config);
         return {
             headerConfig: resolved?.config ?? fallbackConfig,
             companyName,
@@ -101,7 +113,7 @@ export function usePrintHeader(
         };
         // `resolve` referencing itself is fine — useCallback keeps it stable.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [docType, fallbackConfig, companyName]);
+    }, [docType, storeId, fallbackConfig, companyName]);
 
     return useMemo(
         () => ({ headerConfig: stored ?? fallbackConfig, companyName, resolve }),

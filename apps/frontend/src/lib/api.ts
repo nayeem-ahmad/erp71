@@ -1681,6 +1681,13 @@ export const api = {
     deletePrintTemplate: (id: string) => fetchWithAuth(`/print-templates/${id}`, {
         method: 'DELETE',
     }),
+    getPrintTemplateAssignments: () => fetchWithAuth('/print-templates/assignments'),
+    upsertPrintTemplateAssignment: (data: { storeId: string; docType: string; templateId: string | null }) =>
+        fetchWithAuth('/print-templates/assignments', {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     uploadFile: (file: File) => {
         const formData = new FormData();
         formData.append('file', file);
