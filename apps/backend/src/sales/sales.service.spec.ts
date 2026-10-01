@@ -1236,6 +1236,21 @@ describe('SalesService', () => {
   });
 
   describe('getInvoiceData()', () => {
+    it('loads the branch address, so the letterhead can print it', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });
+      db.tenant.findUnique.mockResolvedValue({ name: 'Rahim Store' });
+
+      await service.getInvoiceData('tenant-1', 's1');
+
+      expect(db.sale.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            store: { select: { id: true, name: true, address: true } },
+          }),
+        }),
+      );
+    });
+
     it('puts the previous due on the sale, worked back past later payments', async () => {
       db.sale.findFirst.mockResolvedValue({
         id: 's1',

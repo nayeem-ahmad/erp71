@@ -271,6 +271,9 @@ function SaleDetailPageContent() {
             })),
             payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
             previous_due: sale.previous_due ?? null,
+            // Prints on the branch it was rung up at, whatever branch is selected now.
+            store_id: sale.store_id,
+            store: sale.store,
         };
     }, [sale, saleDate, totals.total, description, customer, items, payments]);
 

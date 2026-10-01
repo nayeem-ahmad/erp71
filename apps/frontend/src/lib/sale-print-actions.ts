@@ -193,6 +193,8 @@ export function printSaleChallan(
             invoiceNumber: sale.serial_number,
             date: formatDate(sale.sale_date ?? sale.created_at, ctx.locale),
             companyName: ctx.challanHeader.companyName,
+            storeName: sale.store?.name,
+            companyAddress: sale.store?.address || undefined,
             headerConfig: ctx.challanHeader.headerConfig,
             customerName: sale.customer?.name,
             customerPhone: sale.customer?.phone ?? undefined,

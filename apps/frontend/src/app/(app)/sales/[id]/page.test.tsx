@@ -572,3 +572,33 @@ describe('SaleDetailPage — delete', () => {
         expect(mockPush).not.toHaveBeenCalledWith('/sales/list');
     });
 });
+
+describe('SaleDetailPage \u2014 branch letterhead', () => {
+    it('prints a branch\u2019s sale on that branch\u2019s letterhead, with its address', async () => {
+        getApi().getSale.mockResolvedValue({
+            ...mockSale,
+            store_id: 'store-gulshan',
+            store: { id: 'store-gulshan', name: 'Gulshan', address: '12 Gulshan Avenue' },
+        });
+        const write = jest.fn();
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        await renderPage();
+        fireEvent.click(screen.getByTitle('Print options'));
+        fireEvent.click(await screen.findByRole('menuitem', { name: /delivery challan/i }));
+
+        await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+        expect(require('@/lib/api').fetchWithAuth).toHaveBeenCalledWith(
+            '/print-templates/resolve?docType=DELIVERY_CHALLAN&storeId=store-gulshan',
+        );
+        // The default letterhead prints {{address}}; on the rider's copy it is the branch's.
+        expect(write.mock.calls[0][0]).toContain('12 Gulshan Avenue');
+        open.mockRestore();
+    });
+});

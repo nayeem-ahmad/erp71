@@ -154,6 +154,20 @@ describe('the sale\u2019s store on the letterhead', () => {
         expect((printSalesInvoice as jest.Mock).mock.calls[0][0].companyAddress).toBeUndefined();
     });
 
+    it('carries the sale\u2019s store name and address onto the challan', () => {
+        printSaleChallan(
+            { ...listShapedSale, store: { name: 'Gulshan', address: '12 Gulshan Ave' } },
+            'A4',
+            ctx,
+            true,
+        );
+        expect(printDeliveryChallan).toHaveBeenCalledWith(
+            expect.objectContaining({ storeName: 'Gulshan', companyAddress: '12 Gulshan Ave' }),
+            'A4',
+            undefined,
+        );
+    });
+
     it('keeps the company name and the store name apart on the receipt', async () => {
         await printSaleReceipt({ ...listShapedSale, store: { name: 'Gulshan' } }, 'Thermal80', ctx, true);
         expect(printPOSReceipt).toHaveBeenCalledWith(

@@ -1449,7 +1449,8 @@ export class SalesService {
                     items: { include: { product: true } },
                     payments: true,
                     customer: true,
-                    store: { select: { name: true } },
+                    // The branch's name and address print on its letterhead.
+                    store: { select: { id: true, name: true, address: true } },
                 },
             }),
             this.db.tenant.findUnique({
