@@ -34,10 +34,29 @@ describe('AccountingController — Story 30.1', () => {
         retryPostingException: jest.fn(),
     };
 
+
+/**
+ * The single row the shared membership loader's joined query returns. The
+ * guards read the membership through that loader rather than a Prisma
+ * `findUnique`, so this is the shape to mock — see tenant-membership.loader.ts.
+ */
+const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'user-1') =>
+    role === null
+        ? []
+        : [
+              {
+                  tenant_id: tenantId,
+                  user_id: userId,
+                  role,
+                  tenant_deleted_at: null,
+                  tenant_timezone: null,
+                  roles: [],
+              },
+          ];
+
     const db = {
-        tenantUser: {
-            findUnique: jest.fn(),
-        },
+        // The membership is read through the shared loader's joined query.
+        $queryRaw: jest.fn(),
         userStorePermission: {
             findMany: jest.fn(),
             findFirst: jest.fn(),
@@ -212,7 +231,7 @@ describe('AccountingController — Story 30.1', () => {
     });
 
     it('allows OWNER users to access accounting overview', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER' });
+        db.$queryRaw.mockResolvedValue(membershipRows('OWNER'));
         db.userStoreAccess.findMany.mockResolvedValue([]);
 
         await request(app.getHttpServer())
@@ -226,18 +245,14 @@ describe('AccountingController — Story 30.1', () => {
                 expect(body.tenantId).toBe('tenant-1');
             });
 
-        expect(db.tenantUser.findUnique).toHaveBeenCalledWith({
-            where: {
-                tenant_id_user_id: {
-                    tenant_id: 'tenant-1',
-                    user_id: 'user-owner',
-                },
-            },
-        });
+        // The loader binds the tenant and user into its joined query; that they
+        // are the ones from the request is what this ever checked.
+        expect(db.$queryRaw).toHaveBeenCalled();
+        expect(db.$queryRaw.mock.calls[0].slice(1)).toEqual(['tenant-1', 'user-owner']);
     });
 
     it('allows users with VIEW_LEDGER permission to access write routes', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ role: 'MANAGER' });
+        db.$queryRaw.mockResolvedValue(membershipRows('MANAGER'));
         db.userStorePermission.findMany.mockResolvedValue([{ permission: StorePermission.VIEW_LEDGER }]);
 
         await request(app.getHttpServer())
@@ -278,7 +293,7 @@ describe('AccountingController — Story 30.1', () => {
     });
 
     it('returns the next voucher number preview for authorized users', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER' });
+        db.$queryRaw.mockResolvedValue(membershipRows('OWNER'));
         db.userStoreAccess.findMany.mockResolvedValue([]);
 
         await request(app.getHttpServer())
@@ -297,7 +312,7 @@ describe('AccountingController — Story 30.1', () => {
     });
 
     it('returns paginated journal results and voucher details for authorized users', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER' });
+        db.$queryRaw.mockResolvedValue(membershipRows('OWNER'));
         db.userStoreAccess.findMany.mockResolvedValue([]);
 
         await request(app.getHttpServer())
@@ -381,7 +396,7 @@ describe('AccountingController — Story 30.1', () => {
     });
 
     it('rejects users without VIEW_LEDGER permission from accounting endpoints', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ role: 'CASHIER' });
+        db.$queryRaw.mockResolvedValue(membershipRows('CASHIER'));
         db.userStorePermission.findMany.mockResolvedValue([]);
 
         await request(app.getHttpServer())
@@ -397,7 +412,7 @@ describe('AccountingController — Story 30.1', () => {
     });
 
     it('rejects missing tenant membership', async () => {
-        db.tenantUser.findUnique.mockResolvedValue(null);
+        db.$queryRaw.mockResolvedValue([]);
 
         await request(app.getHttpServer())
             .get('/accounting')

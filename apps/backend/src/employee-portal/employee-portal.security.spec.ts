@@ -67,9 +67,30 @@ describe('EmployeePortal — security', () => {
         listDesignations: jest.fn().mockResolvedValue([]),
     } as any;
 
+
+/**
+ * The single row the shared membership loader's joined query returns. The
+ * guards read the membership through that loader rather than a Prisma
+ * `findUnique`, so this is the shape to mock — see tenant-membership.loader.ts.
+ */
+const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'user-1') =>
+    role === null
+        ? []
+        : [
+              {
+                  tenant_id: tenantId,
+                  user_id: userId,
+                  role,
+                  tenant_deleted_at: null,
+                  tenant_timezone: null,
+                  roles: [],
+              },
+          ];
+
     const db = {
         employee: { findFirst: jest.fn() },
-        tenantUser: { findUnique: jest.fn().mockResolvedValue({ role: 'CASHIER' }) },
+        // The membership is read through the shared loader's joined query.
+        $queryRaw: jest.fn().mockResolvedValue(membershipRows('CASHIER')),
         userStoreAccess: { findMany: jest.fn().mockResolvedValue([]) },
         userStorePermission: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
@@ -92,7 +113,7 @@ describe('EmployeePortal — security', () => {
     beforeEach(async () => {
         jest.clearAllMocks();
         db.employee.findFirst.mockResolvedValue(EMPLOYEE);
-        db.tenantUser.findUnique.mockResolvedValue({ role: 'CASHIER' });
+        db.$queryRaw.mockResolvedValue(membershipRows('CASHIER'));
         db.userStorePermission.findMany.mockResolvedValue([]);
 
         const module = await Test.createTestingModule({

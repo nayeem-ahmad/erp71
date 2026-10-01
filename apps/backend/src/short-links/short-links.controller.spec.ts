@@ -128,13 +128,16 @@ describe('ShortLinksController', () => {
          */
         describe('against a tenant subscription', () => {
             const db = {
-                tenantUser: { findUnique: jest.fn() },
+                // The membership is read through the shared loader's joined query.
+                $queryRaw: jest.fn(),
                 tenantSubscription: { findUnique: jest.fn() },
                 tenantAddonSubscription: { findMany: jest.fn() },
             };
 
             const onPlan = (code: string, features_json: Record<string, unknown>) => {
-                db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+                db.$queryRaw.mockResolvedValue([
+                    { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+                ]);
                 db.tenantAddonSubscription.findMany.mockResolvedValue([]);
                 db.tenantSubscription.findUnique.mockResolvedValue({ status: 'ACTIVE', plan: { code, features_json } });
             };

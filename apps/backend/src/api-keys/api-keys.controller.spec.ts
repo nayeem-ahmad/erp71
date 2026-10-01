@@ -20,7 +20,8 @@ describe('ApiKeysController — subscription guard', () => {
     } as any;
 
     const db = {
-        tenantUser: { findUnique: jest.fn() },
+        // The membership is read through the shared loader's joined query.
+        $queryRaw: jest.fn(),
         tenantSubscription: { findUnique: jest.fn() },
         tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
@@ -59,7 +60,9 @@ describe('ApiKeysController — subscription guard', () => {
     afterEach(() => app?.close());
 
     it('allows access for PREMIUM plan with apiAccess feature', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'PREMIUM', features_json: { apiAccess: true } },
@@ -74,7 +77,9 @@ describe('ApiKeysController — subscription guard', () => {
     });
 
     it('blocks STANDARD plan (no apiAccess feature) with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'STANDARD', features_json: { premiumAccounting: true } },
@@ -89,7 +94,9 @@ describe('ApiKeysController — subscription guard', () => {
     });
 
     it('blocks BASIC plan with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'BASIC', features_json: {} },
@@ -104,7 +111,9 @@ describe('ApiKeysController — subscription guard', () => {
     });
 
     it('blocks PAST_DUE subscriptions even with PREMIUM plan with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'PAST_DUE',
             plan: { code: 'PREMIUM', features_json: { apiAccess: true } },
@@ -119,7 +128,7 @@ describe('ApiKeysController — subscription guard', () => {
     });
 
     it('blocks a user who is not a member of the requested tenant with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue(null);
+        db.$queryRaw.mockResolvedValue([]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'PREMIUM', features_json: { apiAccess: true } },

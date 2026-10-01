@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../database/database.service';
 import { resolveCoarseRolesForNames } from '@erp71/shared-types';
 import { TENANT_ROLES_KEY } from './tenant-roles.decorator';
+import { loadTenantMembership } from '../database/tenant-membership.loader';
 
 @Injectable()
 export class TenantRoleGuard implements CanActivate {
@@ -35,15 +36,9 @@ export class TenantRoleGuard implements CanActivate {
             throw new ForbiddenException('Missing tenant context');
         }
 
-        const membership = await this.db.tenantUser.findUnique({
-            where: {
-                tenant_id_user_id: {
-                    tenant_id: tenantId,
-                    user_id: userId,
-                },
-            },
-            include: { roles: { select: { tenantRole: { select: { name: true } } } } },
-        });
+        // Shared with `SubscriptionAccessGuard` and `TenantInterceptor`, which
+        // read the same row on the same request — see the loader.
+        const membership = await loadTenantMembership(this.db, request, tenantId, userId);
 
         if (!membership) {
             throw new ForbiddenException('Invalid tenant context');
