@@ -962,6 +962,7 @@ model Tenant {
   salesSettings              SalesSettings?
   accountingSettings         AccountingSettings?
   printTemplates             PrintTemplate[]
+  printTemplateStoreAssignments PrintTemplateStoreAssignment[]
   navLayout                  TenantNavLayout?
   referralSignup             ReferralSignup?
   externalSyncConnections    ExternalSyncConnection[]
@@ -1248,10 +1249,32 @@ model PrintTemplate {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant           Tenant                         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  storeAssignments PrintTemplateStoreAssignment[]
 
   @@index([tenant_id])
   @@map("print_templates")
+}
+
+/// Per-store override of which letterhead a document type prints.
+/// Empty means that branch follows the tenant assignment.
+model PrintTemplateStoreAssignment {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  store_id    String
+  doc_type    String
+  template_id String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant   Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store    Store         @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  template PrintTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, store_id, doc_type])
+  @@index([tenant_id, store_id])
+  @@index([template_id])
+  @@map("print_template_store_assignments")
 }
 
 model SalesSettings {
@@ -1443,6 +1466,8 @@ model Store {
   // every store picker show the name alone, so a repeat leaves "which branch am
   // I looking at?" with no answer. Case folding is the service's job — Postgres
   // compares these bytewise.
+  printTemplateAssignments PrintTemplateStoreAssignment[]
+
   @@unique([tenant_id, name])
 }
 

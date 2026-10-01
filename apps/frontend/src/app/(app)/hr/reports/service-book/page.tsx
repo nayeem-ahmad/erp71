@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { PageShell, PageHeader, Select, CompactSection } from '@/components/ui';
+import { PageShell, PageHeader, CompactSection } from '@/components/ui';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import DataTable from '@/components/data-table/DataTable';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -183,19 +184,18 @@ export default function ServiceBookPage() {
                 )}
             />
 
-            <Select
-                value={employeeId}
-                onChange={(event) => setEmployeeId(event.target.value)}
-                className="md:w-72"
-                aria-label={c.employee}
-            >
-                <option value="">{sb.pickEmployee}</option>
-                {employees.map((option) => (
-                    <option key={option.id} value={option.id}>
-                        {option.employee_code} · {option.name}
-                    </option>
-                ))}
-            </Select>
+            <div className="md:w-72">
+                <IdSearchSelect
+                    items={employees}
+                    value={employeeId}
+                    onChange={setEmployeeId}
+                    placeholder={sb.pickEmployee}
+                    emptyLabel={sb.pickEmployee}
+                    noMatchLabel={t.common.noData}
+                    ariaLabel={c.employee}
+                    subtitle={(option) => option.employee_code ?? ''}
+                />
+            </div>
 
             {!employeeId ? (
                 <p className="text-sm text-gray-500">{sb.pickEmployee}</p>

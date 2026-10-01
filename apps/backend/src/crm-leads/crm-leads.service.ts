@@ -714,6 +714,24 @@ export class CrmLeadsService {
         throw new BadRequestException('Unsupported bulk action.');
     }
 
+    /**
+     * The people a lead, contact or activity can be assigned to: every member of
+     * the workspace, as id, name and email only.
+     *
+     * The CRM pickers used to read `/team/members`, which is the Team admin
+     * screen's list and asserts MANAGE_USERS — so for anyone but an admin it
+     * 403'd, the pickers came up empty, and the current owner showed as a raw
+     * user id. Roles, branches and permission counts stay behind that endpoint.
+     */
+    async listAssignees(tenantId: string) {
+        const members = await this.db.tenantUser.findMany({
+            where: { tenant_id: tenantId },
+            select: { user: { select: { id: true, name: true, email: true } } },
+            orderBy: [{ user: { name: 'asc' } }, { user: { email: 'asc' } }],
+        });
+        return members.map(({ user }) => ({ userId: user.id, name: user.name, email: user.email }));
+    }
+
     /** Counts of leads per pipeline stage, for the CRM hub dashboard. */
     async getStatusSummary(tenantId: string) {
         const grouped = await this.db.lead.groupBy({

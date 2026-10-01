@@ -21,6 +21,7 @@ import {
     ConfirmDialog,
 } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import {
     dayHeading,
     dayKeyOfDate,
@@ -261,19 +262,18 @@ export default function AttendancePage() {
                     placeholder={a.searchPlaceholder}
                     className="md:max-w-xs"
                 />
-                <Select
-                    value={filterEmployee}
-                    onChange={(e) => setFilterEmployee(e.target.value)}
-                    aria-label={a.columns.employee}
-                    className="md:w-56"
-                >
-                    <option value="">{a.allEmployees}</option>
-                    {employees.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.employee_code})
-                        </option>
-                    ))}
-                </Select>
+                <div className="md:w-56">
+                    <IdSearchSelect
+                        items={employees}
+                        value={filterEmployee}
+                        onChange={setFilterEmployee}
+                        placeholder={a.allEmployees}
+                        emptyLabel={a.allEmployees}
+                        noMatchLabel={t.common.noData}
+                        ariaLabel={a.columns.employee}
+                        subtitle={(emp) => emp.employee_code ?? ''}
+                    />
+                </div>
             </div>
 
             <p className="text-xs text-gray-500">{a.workedHint}</p>
@@ -389,19 +389,16 @@ export default function AttendancePage() {
                         {error && <Alert tone="danger">{error}</Alert>}
 
                         <Field label={a.modal.employee} required htmlFor="attendance-employee">
-                            <Select
+                            <IdSearchSelect
                                 id="attendance-employee"
-                                required
+                                items={employees}
                                 value={form.employee_id}
-                                onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
-                            >
-                                <option value="">{a.modal.selectEmployee}</option>
-                                {employees.map((emp) => (
-                                    <option key={emp.id} value={emp.id}>
-                                        {emp.name} ({emp.employee_code})
-                                    </option>
-                                ))}
-                            </Select>
+                                onChange={(id) => setForm({ ...form, employee_id: id })}
+                                placeholder={a.modal.selectEmployee}
+                                emptyLabel={a.modal.selectEmployee}
+                                noMatchLabel={t.common.noData}
+                                subtitle={(emp) => emp.employee_code ?? ''}
+                            />
                         </Field>
 
                         <Field label={a.modal.date} required htmlFor="attendance-date">

@@ -73,7 +73,7 @@ describe('SupplierPaymentsPage — duplicate', () => {
         expect(screen.getByText(/Copied from SP-00007/)).toBeInTheDocument();
 
         expect(screen.getByDisplayValue('Pay to supplier')).toBeInTheDocument();
-        expect(screen.getByDisplayValue('Fresh Farms (01710000000)')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Fresh Farms')).toBeInTheDocument();
         expect(screen.getByLabelText('Amount')).toHaveValue(250);
         expect(screen.getByLabelText('Notes')).toHaveValue('Advance against beans');
     });

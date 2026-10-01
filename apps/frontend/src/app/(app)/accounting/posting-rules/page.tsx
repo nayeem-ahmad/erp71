@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { Button } from '@/components/ui';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
@@ -316,18 +317,14 @@ export default function PostingRulesPage() {
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.debit} side="right" />
                                         </span>
                                     </label>
-                                    <select
+                                    <AccountSelect
+                                        accounts={accounts}
                                         value={form.debitAccountId}
-                                        onChange={(e) => setForm((f) => ({ ...f, debitAccountId: e.target.value }))}
+                                        onChange={(id) => setForm((f) => ({ ...f, debitAccountId: id }))}
+                                        ariaLabel="Debit Account"
+                                        placeholder={t.accountingShared.selectAccountPlaceholder}
                                         className={compactDensity.formField}
-                                    >
-                                        <option value="">Select account</option>
-                                        {accounts.map((a) => (
-                                            <option key={a.id} value={a.id}>
-                                                {a.code ? `[${a.code}] ` : ''}{a.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
                                 <div>
                                     <label className={`${compactDensity.formLabel} block mb-1`}>
@@ -336,18 +333,14 @@ export default function PostingRulesPage() {
                                             <HelpTooltip text={POSTING_RULES_FIELD_HELP.credit} side="right" />
                                         </span>
                                     </label>
-                                    <select
+                                    <AccountSelect
+                                        accounts={accounts}
                                         value={form.creditAccountId}
-                                        onChange={(e) => setForm((f) => ({ ...f, creditAccountId: e.target.value }))}
+                                        onChange={(id) => setForm((f) => ({ ...f, creditAccountId: id }))}
+                                        ariaLabel="Credit Account"
+                                        placeholder={t.accountingShared.selectAccountPlaceholder}
                                         className={compactDensity.formField}
-                                    >
-                                        <option value="">Select account</option>
-                                        {accounts.map((a) => (
-                                            <option key={a.id} value={a.id}>
-                                                {a.code ? `[${a.code}] ` : ''}{a.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
                             </div>
 

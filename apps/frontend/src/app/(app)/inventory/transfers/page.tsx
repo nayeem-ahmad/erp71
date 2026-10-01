@@ -12,6 +12,7 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 interface WarehouseTransfer {
     id: string;
@@ -334,10 +335,16 @@ export default function InventoryTransfersPage() {
                         <option value="">{t.inventoryTransfers.allDestinations}</option>
                         {warehouseOptions}
                     </select>
-                    <select value={productId} onChange={(e) => setProductId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryTransfers.allProducts}</option>
-                        {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-                    </select>
+                    <IdSearchSelect
+                        items={products}
+                        value={productId}
+                        onChange={setProductId}
+                        placeholder={t.inventoryTransfers.allProducts}
+                        emptyLabel={t.pos.searchPlaceholder}
+                        noMatchLabel={t.common.noData}
+                        ariaLabel={t.inventoryTransfers.allProducts}
+                        subtitle={(product) => product.sku ?? ''}
+                    />
                     {/* Only a multi-branch tenant has a scope to filter by. */}
                     {warehouseGroups.length > 1 ? (
                         <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
@@ -394,11 +401,16 @@ export default function InventoryTransfersPage() {
                         {form.items.map((item: any, index: number) => (
                             <div key={index} className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-end">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.product}</label>
-                                    <select required value={item.productId} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                                        <option value="">{t.inventoryTransfers.selectProduct}</option>
-                                        {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-                                    </select>
+                                    <IdSearchSelect
+                                        items={products}
+                                        value={item.productId}
+                                        onChange={(id) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: id } : line) }))}
+                                        label={t.common.product}
+                                        placeholder={t.inventoryTransfers.selectProduct}
+                                        emptyLabel={t.pos.searchPlaceholder}
+                                        noMatchLabel={t.common.noData}
+                                        subtitle={(product) => product.sku ?? ''}
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.quantity}</label>

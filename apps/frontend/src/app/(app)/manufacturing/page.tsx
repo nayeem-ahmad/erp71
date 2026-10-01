@@ -7,7 +7,8 @@ import { formatDate } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button, Field, Input, Select, Alert } from '@/components/ui';
+import { PageShell, Button, Field, Input, Alert } from '@/components/ui';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import {
     EMPTY_BOM_FORM,
@@ -256,28 +257,29 @@ export default function ManufacturingBomsPage() {
                         {saveError && <Alert tone="danger">{saveError}</Alert>}
 
                         <Field label={t.manufacturing.outputProductId} htmlFor="bom-output-product">
-                            <Select
+                            <IdSearchSelect
                                 id="bom-output-product"
+                                items={products.map((product) => ({
+                                    id: product.id,
+                                    name: productLabel(product),
+                                    sku: product.sku,
+                                }))}
                                 value={form.productId}
-                                onChange={(e) =>
+                                onChange={(id) =>
                                     setForm((f) => ({
                                         ...f,
-                                        productId: e.target.value,
+                                        productId: id,
                                         // Clear any component row that has just become the output.
                                         components: f.components.map((c) =>
-                                            c.productId === e.target.value ? { ...c, productId: '' } : c,
+                                            c.productId === id ? { ...c, productId: '' } : c,
                                         ),
                                     }))
                                 }
-                                disabled={!!editingId}
-                            >
-                                <option value="">{t.manufacturing.placeholders.productId}</option>
-                                {products.map((product) => (
-                                    <option key={product.id} value={product.id}>
-                                        {productLabel(product)}
-                                    </option>
-                                ))}
-                            </Select>
+                                placeholder={t.manufacturing.placeholders.productId}
+                                emptyLabel={t.pos.searchPlaceholder}
+                                noMatchLabel={t.common.noData}
+                                readOnly={!!editingId}
+                            />
                         </Field>
 
                         <Field label={t.manufacturing.outputQuantity} hint={t.manufacturing.outputQtyHint}>
@@ -323,21 +325,21 @@ export default function ManufacturingBomsPage() {
                                 <div className="space-y-2">
                                     {form.components.map((comp, i) => (
                                         <div key={i} className="flex gap-2 items-center">
-                                            <Select
-                                                aria-label={t.manufacturing.placeholders.componentProductId}
-                                                value={comp.productId}
-                                                onChange={(e) =>
-                                                    updateComponent(i, 'productId', e.target.value)
-                                                }
-                                                className="flex-1 min-w-0"
-                                            >
-                                                <option value="">{t.manufacturing.placeholders.componentProductId}</option>
-                                                {componentOptions.map((product) => (
-                                                    <option key={product.id} value={product.id}>
-                                                        {productLabel(product)}
-                                                    </option>
-                                                ))}
-                                            </Select>
+                                            <div className="flex-1 min-w-0">
+                                                <IdSearchSelect
+                                                    ariaLabel={t.manufacturing.placeholders.componentProductId}
+                                                    items={componentOptions.map((product) => ({
+                                                        id: product.id,
+                                                        name: productLabel(product),
+                                                        sku: product.sku,
+                                                    }))}
+                                                    value={comp.productId}
+                                                    onChange={(id) => updateComponent(i, 'productId', id)}
+                                                    placeholder={t.manufacturing.placeholders.componentProductId}
+                                                    emptyLabel={t.pos.searchPlaceholder}
+                                                    noMatchLabel={t.common.noData}
+                                                />
+                                            </div>
                                             <Input
                                                 type="number"
                                                 min={0.0001}

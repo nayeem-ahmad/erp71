@@ -86,6 +86,7 @@ describe('route authorization by role', () => {
             'POST /discount-codes/validate',
             'POST /sales-returns',
             'GET /print-templates/resolve',
+            'GET /print-templates/assignments',
         ]);
 
         cannotReach('the Cashier', cashier, [
@@ -104,6 +105,9 @@ describe('route authorization by role', () => {
             'POST /price-lists',
             'GET /manufacturing/jobs',
             'POST /crm/campaigns/:id/send',
+            'GET /products/:sourceId/merge-preview',
+            'POST /products/:sourceId/merge',
+            'PUT /print-templates/assignments',
         ]);
     });
 
@@ -120,6 +124,7 @@ describe('route authorization by role', () => {
             'POST /products',
             'POST /price-lists',
             'POST /counters',
+            'PUT /print-templates/assignments',
             'POST /stock-takes',
             'POST /crm/campaigns/:id/send',
         ]);
@@ -212,6 +217,16 @@ describe('route authorization by role', () => {
             'PATCH /tenants/branding',
             'POST /payment-methods',
         ]);
+    });
+
+    describe('product merge', () => {
+        const mergeRoutes = ['GET /products/:sourceId/merge-preview', 'POST /products/:sourceId/merge'];
+        cannotReach('the legacy Cashier', legacy(UserRole.CASHIER), mergeRoutes);
+        cannotReach('the legacy Manager', legacy(UserRole.MANAGER), mergeRoutes);
+        cannotReach('a Sales User', template('sales_user'), mergeRoutes);
+        canReach('a Tenant Admin', template('tenant_admin'), mergeRoutes);
+        canReach('a User Manager', template('administration_manager'), mergeRoutes);
+        canReach('a role granted only MANAGE_USERS', [StorePermission.MANAGE_USERS], mergeRoutes);
     });
 
     describe('a Project User', () => {

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ServiceBookPage from './page';
+import { pickSearchOption } from '@/test-utils/id-search-select';
 
 const getServiceBook = jest.fn();
 
@@ -44,15 +45,21 @@ describe('Service book', () => {
     it('fetches nothing until an employee is chosen', async () => {
         render(<ServiceBookPage />);
 
-        await waitFor(() => expect(screen.getByText('EMP-001 · Rina Akter')).toBeInTheDocument());
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Employee'));
+            expect(screen.getByText('Rina Akter')).toBeInTheDocument();
+        });
         expect(getServiceBook).not.toHaveBeenCalled();
     });
 
     it('loads the chosen employee record', async () => {
         render(<ServiceBookPage />);
-        await waitFor(() => expect(screen.getByText('EMP-001 · Rina Akter')).toBeInTheDocument());
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Employee'));
+            expect(screen.getByText('Rina Akter')).toBeInTheDocument();
+        });
 
-        fireEvent.change(screen.getByLabelText('Employee'), { target: { value: 'e1' } });
+        pickSearchOption('Employee', 'Rina Akter');
 
         await waitFor(() => expect(getServiceBook).toHaveBeenCalledWith('e1'));
         expect(await screen.findByText('Annual review')).toBeInTheDocument();
@@ -61,9 +68,12 @@ describe('Service book', () => {
 
     it('renders the caveat the endpoint ships with its figures', async () => {
         render(<ServiceBookPage />);
-        await waitFor(() => expect(screen.getByText('EMP-001 · Rina Akter')).toBeInTheDocument());
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Employee'));
+            expect(screen.getByText('Rina Akter')).toBeInTheDocument();
+        });
 
-        fireEvent.change(screen.getByLabelText('Employee'), { target: { value: 'e1' } });
+        pickSearchOption('Employee', 'Rina Akter');
 
         // The note is load-bearing: without it the page implies a job history
         // the system does not actually record.
@@ -74,9 +84,12 @@ describe('Service book', () => {
     it('says so when the employee has no record', async () => {
         getServiceBook.mockResolvedValue(null);
         render(<ServiceBookPage />);
-        await waitFor(() => expect(screen.getByText('EMP-001 · Rina Akter')).toBeInTheDocument());
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Employee'));
+            expect(screen.getByText('Rina Akter')).toBeInTheDocument();
+        });
 
-        fireEvent.change(screen.getByLabelText('Employee'), { target: { value: 'e1' } });
+        pickSearchOption('Employee', 'Rina Akter');
 
         expect(await screen.findByText('No record for this employee.')).toBeInTheDocument();
     });

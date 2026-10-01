@@ -22,7 +22,8 @@ interface InvoiceData {
         total_amount: string;
         amount_paid: string;
         note: string | null;
-        store: { name: string } | null;
+        store_id?: string;
+        store: { id?: string; name: string; address?: string | null } | null;
         customer: {
             name: string;
             email: string | null;
@@ -98,6 +99,9 @@ export default function InvoicePage() {
             items: data.sale.items,
             payments: data.sale.payments,
             previous_due: data.sale.previous_due ?? null,
+            // Prints on the branch it was rung up at, whatever branch is selected now.
+            store_id: data.sale.store_id,
+            store: data.sale.store,
         };
     }, [data]);
 

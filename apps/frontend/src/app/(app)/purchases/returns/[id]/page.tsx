@@ -79,7 +79,7 @@ function PurchaseReturnDetailPageContent() {
 
     useEffect(() => {
         if (shouldAutoPrint && purchaseReturn && !isEditMode) {
-            window.setTimeout(() => handlePrint(), 150);
+            window.setTimeout(() => void handlePrint(), 150);
         }
     }, [shouldAutoPrint, purchaseReturn, isEditMode]);
 
@@ -167,10 +167,11 @@ function PurchaseReturnDetailPageContent() {
         }
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         if (!purchaseReturn) {
             return;
         }
+        const header = await printHeader.resolve(purchaseReturn.store_id ?? undefined);
 
         const itemRows = (purchaseReturn.items || [])
             .map(
@@ -189,15 +190,15 @@ function PurchaseReturnDetailPageContent() {
             docTitle: t.purchaseReturns.detail.printFooter,
             docNumber: purchaseReturn.return_number,
             docDate: formatDate(purchaseReturn.created_at, locale),
-            companyName: printHeader.companyName,
+            companyName: header.companyName,
         };
 
         openPrintWindow({
             context: headerContext,
             title: purchaseReturn.return_number,
             paperSize: 'A4',
-            headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
+            headerConfig: header.headerConfig,
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
             styles: `${SIMPLE_DOC_STYLES}
                 .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
                 .meta-box { padding: 12px; background: #f9f9f9; border-radius: 8px; }
@@ -312,7 +313,7 @@ function PurchaseReturnDetailPageContent() {
                                 <span>{t.common.edit}</span>
                             </button>
                             <button
-                                onClick={handlePrint}
+                                onClick={() => void handlePrint()}
                                 className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"
                             >
                                 <Printer className="w-4 h-4" />

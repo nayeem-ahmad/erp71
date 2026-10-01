@@ -6,7 +6,8 @@ import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Input, Select, Field, Button, Alert } from '@/components/ui';
+import { Input, Field, Button, Alert } from '@/components/ui';
+import AccountSelect from '@/components/accounting/AccountSelect';
 
 /**
  * Settling the LC with the bank.
@@ -131,19 +132,16 @@ export default function SettleLcModal({
                     </Alert>
                 )}
 
-                <Field label={copy.paidFrom} htmlFor="settle-account">
-                    <Select
-                        id="settle-account"
+                <Field label={copy.paidFrom}>
+                    <AccountSelect
+                        accounts={accounts}
                         value={paidFromAccountId}
-                        onChange={(e) => setPaidFromAccountId(e.target.value)}
-                    >
-                        <option value="">—</option>
-                        {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>
-                                {account.name}
-                            </option>
-                        ))}
-                    </Select>
+                        onChange={setPaidFromAccountId}
+                        ariaLabel={copy.paidFrom}
+                        placeholder="—"
+                        allowClear
+                        clearLabel="—"
+                    />
                 </Field>
 
                 <Field label={copy.settledAt} htmlFor="settle-date">

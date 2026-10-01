@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ProductDemandsPage from './page';
+import { pickSearchOption } from '@/test-utils/id-search-select';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -150,7 +151,7 @@ describe('ProductDemandsPage', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /New Demand/ }));
         // The default warehouse is preselected, so only the line needs filling.
-        fireEvent.change(screen.getByLabelText(/^Product/), { target: { value: 'prod-1' } });
+        pickSearchOption(/^Product/, 'Rice 5kg');
         fireEvent.change(screen.getByLabelText(/^Quantity/), { target: { value: '6' } });
         fireEvent.click(screen.getByRole('button', { name: 'Submit for Approval' }));
 

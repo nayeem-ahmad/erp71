@@ -21,6 +21,8 @@ export interface ReceiptData {
     invoiceId: string;
     serialNumber: string;
     date: string;
+    /** Tenant business name. Older callers pass only `storeName`, which then stands in. */
+    companyName?: string;
     storeName?: string;
     /** Tenant header design; falls back to the built-in default when omitted. */
     headerConfig?: DeepPartial<PrintHeaderConfig>;
@@ -114,7 +116,7 @@ export async function printPOSReceipt(
 
     const headerContext: HeaderContext = {
         docTitle: 'Sales Invoice',
-        companyName: data.storeName || 'RETAIL STORE',
+        companyName: data.companyName || data.storeName || 'RETAIL STORE',
         storeName: data.storeName,
     };
     const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);

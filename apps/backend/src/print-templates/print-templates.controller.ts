@@ -6,6 +6,7 @@ import {
     Param,
     Patch,
     Post,
+    Put,
     Query,
     UseGuards,
     UseInterceptors,
@@ -16,10 +17,12 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { PrintTemplatesService } from './print-templates.service';
 import {
     CreatePrintTemplateDto,
+    PrintTemplateAssignmentDto,
     PrintTemplateResponseDto,
     ResolvePrintTemplateQueryDto,
     ResolvedPrintTemplateDto,
     UpdatePrintTemplateDto,
+    UpsertPrintTemplateAssignmentDto,
 } from './print-templates.dto';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
@@ -37,14 +40,33 @@ export class PrintTemplatesController {
         return this.printTemplatesService.list(tenant.tenantId);
     }
 
-    /** Effective header config for a document type — what printers call. */
+    /**
+     * Effective header config for a document type — what printers call. Pass the
+     * document's `storeId` so that branch's pin, if any, wins.
+     */
     @RequireAnyStorePermission(...PRINT_READ)
     @Get('resolve')
     async resolve(
         @Tenant() tenant: TenantContext,
         @Query() query: ResolvePrintTemplateQueryDto,
     ): Promise<ResolvedPrintTemplateDto> {
-        return this.printTemplatesService.resolve(tenant.tenantId, query.docType);
+        return this.printTemplatesService.resolve(tenant.tenantId, query.docType, query.storeId);
+    }
+
+    /** Every per-branch pin of a document type to a named template. */
+    @RequireAnyStorePermission(...PRINT_READ)
+    @Get('assignments')
+    async listAssignments(@Tenant() tenant: TenantContext): Promise<PrintTemplateAssignmentDto[]> {
+        return this.printTemplatesService.listAssignments(tenant.tenantId);
+    }
+
+    @RequireAnyStorePermission(...SETTINGS_ADMIN)
+    @Put('assignments')
+    async upsertAssignment(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpsertPrintTemplateAssignmentDto,
+    ): Promise<{ success: true }> {
+        return this.printTemplatesService.upsertAssignment(tenant.tenantId, dto);
     }
 
     @RequireAnyStorePermission(...PRINT_READ)

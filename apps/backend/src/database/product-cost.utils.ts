@@ -170,6 +170,25 @@ export function applyToPool(
     };
 }
 
+/**
+ * Blend a duplicate product's cost pool into the keeper's.
+ *
+ * A side with qty but `avgCost: null` is quantity-only: missing cost is never
+ * treated as zero, which would drag the surviving average toward free stock.
+ */
+export function mergePools(keeper: CostPool, duplicate: CostPool | null): CostPool {
+    if (!duplicate) return { avgCost: keeper.avgCost, qtyOnHand: keeper.qtyOnHand };
+    const qty = keeper.qtyOnHand + duplicate.qtyOnHand;
+    const keeperHas = keeper.qtyOnHand > 0 && keeper.avgCost !== null;
+    const dupHas = duplicate.qtyOnHand > 0 && duplicate.avgCost !== null;
+    if (keeperHas && dupHas) {
+        const avg = (keeper.qtyOnHand * keeper.avgCost! + duplicate.qtyOnHand * duplicate.avgCost!) / (keeper.qtyOnHand + duplicate.qtyOnHand);
+        return { avgCost: round4(avg), qtyOnHand: qty };
+    }
+    if (dupHas && !keeperHas) return { avgCost: duplicate.avgCost, qtyOnHand: qty };
+    return { avgCost: keeper.avgCost, qtyOnHand: qty };
+}
+
 type DbLike = any;
 
 /**

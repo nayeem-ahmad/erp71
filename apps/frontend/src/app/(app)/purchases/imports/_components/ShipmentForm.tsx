@@ -12,6 +12,7 @@ import { toast } from '@/lib/toast';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Input, Select, Field, Alert } from '@/components/ui';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { getWorkspaceItem } from '@/lib/session-store';
 
@@ -196,18 +197,15 @@ export default function ShipmentForm({ shipment }: { shipment?: any }) {
                             </Select>
                         </Field>
                         <Field label={copy.columns.supplier} htmlFor="shipment-supplier">
-                            <Select
+                            <IdSearchSelect
                                 id="shipment-supplier"
+                                items={suppliers}
                                 value={supplierId}
-                                onChange={(e) => setSupplierId(e.target.value)}
-                            >
-                                <option value="">—</option>
-                                {suppliers.map((supplier) => (
-                                    <option key={supplier.id} value={supplier.id}>
-                                        {supplier.name}
-                                    </option>
-                                ))}
-                            </Select>
+                                onChange={setSupplierId}
+                                placeholder="—"
+                                emptyLabel={t.supplierPayments.noSuppliers}
+                                noMatchLabel={t.supplierPayments.noSuppliers}
+                            />
                         </Field>
                         <Field label={copy.columns.currency} htmlFor="shipment-currency">
                             <Select
@@ -318,18 +316,16 @@ export default function ShipmentForm({ shipment }: { shipment?: any }) {
                         {lines.map((line, index) => (
                             <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
                                 <div className="sm:col-span-6">
-                                    <Select
+                                    <IdSearchSelect
+                                        items={products}
                                         value={line.productId}
-                                        onChange={(e) => updateLine(index, { productId: e.target.value })}
-                                        aria-label={copy.detail.items}
-                                    >
-                                        <option value="">—</option>
-                                        {products.map((product) => (
-                                            <option key={product.id} value={product.id}>
-                                                {product.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                        onChange={(id) => updateLine(index, { productId: id })}
+                                        placeholder="—"
+                                        emptyLabel={t.pos.searchPlaceholder}
+                                        noMatchLabel={t.common.noData}
+                                        ariaLabel={copy.detail.items}
+                                        subtitle={(product) => product.sku ?? ''}
+                                    />
                                 </div>
                                 <div className="sm:col-span-2">
                                     <Input

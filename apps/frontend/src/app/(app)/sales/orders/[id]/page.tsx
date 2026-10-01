@@ -14,6 +14,7 @@ import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { PageShell, Button } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 interface EditItem {
     productId: string;
@@ -191,23 +192,24 @@ function OrderDetailsPageContent() {
         }
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         const printContent = printRef.current;
         if (!printContent) return;
+        const header = await printHeader.resolve(order?.store_id ?? undefined);
 
         const headerContext: HeaderContext = {
             docTitle: t.shared.print.salesOrder,
             docNumber: order?.order_number,
             docDate: order?.created_at ? formatDate(order.created_at, locale) : undefined,
-            companyName: printHeader.companyName,
+            companyName: header.companyName,
         };
 
         openPrintWindow({
             context: headerContext,
             title: `${t.shared.print.salesOrder} ${order?.order_number ?? ''}`,
             paperSize: 'A4',
-            headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
+            headerConfig: header.headerConfig,
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,
@@ -299,7 +301,7 @@ function OrderDetailsPageContent() {
                                     </button>
                                 )}
                                 <button
-                                    onClick={handlePrint}
+                                    onClick={() => void handlePrint()}
                                     className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"
                                 >
                                     <Printer className="w-4 h-4" />
@@ -404,19 +406,15 @@ function OrderDetailsPageContent() {
                     <div className="bg-white rounded-lg shadow-sm p-6">
                         <h2 className="text-lg font-bold tracking-tight mb-4">{t.orders.detail.orderDetails}</h2>
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.common.customer}</label>
-                                <select
-                                    value={editCustomerId}
-                                    onChange={(e) => setEditCustomerId(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
-                                >
-                                    <option value="">{t.shared.walkInCustomer}</option>
-                                    {customers.map((c: any) => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            <IdSearchSelect
+                                items={customers}
+                                value={editCustomerId}
+                                onChange={setEditCustomerId}
+                                label={t.common.customer}
+                                placeholder={t.shared.walkInCustomer}
+                                emptyLabel={t.customerPayments.noCustomers}
+                                noMatchLabel={t.customerPayments.noCustomers}
+                            />
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.shared.form.deliveryDate}</label>
                                 <input

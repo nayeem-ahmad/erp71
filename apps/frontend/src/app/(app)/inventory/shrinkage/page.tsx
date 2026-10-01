@@ -17,6 +17,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { Alert, Button, Field, Input, Select, StatusBadge } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 /**
  * LOSS writes stock off; FOUND puts a surplus back. They are the same document
@@ -391,17 +392,16 @@ export default function InventoryShrinkagePage() {
                                                 error={errors.items[index]?.productId}
                                                 htmlFor={`shrinkage-product-${index}`}
                                             >
-                                                <Select
+                                                <IdSearchSelect
                                                     id={`shrinkage-product-${index}`}
-                                                    error={Boolean(errors.items[index]?.productId)}
+                                                    items={products}
                                                     value={item.productId}
-                                                    onChange={(event) => setLine(index, { productId: event.target.value })}
-                                                >
-                                                    <option value="">{t.inventoryShrinkage.selectProduct}</option>
-                                                    {products.map((product) => (
-                                                        <option key={product.id} value={product.id}>{product.name}</option>
-                                                    ))}
-                                                </Select>
+                                                    onChange={(id) => setLine(index, { productId: id })}
+                                                    placeholder={t.inventoryShrinkage.selectProduct}
+                                                    emptyLabel={t.pos.searchPlaceholder}
+                                                    noMatchLabel={t.common.noData}
+                                                    subtitle={(product) => product.sku ?? ''}
+                                                />
                                             </Field>
                                             <Field
                                                 label={t.inventoryShrinkage.columns.totalQty}

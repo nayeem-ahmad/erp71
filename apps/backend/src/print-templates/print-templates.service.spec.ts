@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrintTemplatesService } from './print-templates.service';
 import { DatabaseService } from '../database/database.service';
 import { PrintDocType } from './print-templates.dto';
@@ -38,6 +38,13 @@ describe('PrintTemplatesService', () => {
             tenant: {
                 findUnique: jest.fn(),
             },
+            printTemplateStoreAssignment: {
+                findUnique: jest.fn(),
+                findMany: jest.fn(),
+                upsert: jest.fn(),
+                deleteMany: jest.fn(),
+            },
+            store: { findFirst: jest.fn() },
             $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
         };
 
@@ -263,6 +270,179 @@ describe('PrintTemplatesService', () => {
                 where: { tenant_id: 'ten1' },
                 orderBy: [{ is_default: 'desc' }, { name: 'asc' }],
             });
+        });
+    });
+    describe('resolve() with a store', () => {
+        it('prefers a store override over the tenant doc-type template', async () => {
+            db.store.findFirst.mockResolvedValue({ id: 's1' });
+            db.printTemplateStoreAssignment.findUnique.mockResolvedValue({
+                template: template({ id: 'gulshan', is_default: false, doc_types: [] }),
+            });
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'default', is_default: true }),
+                template({ id: 'invoice', is_default: false, doc_types: ['SALES_INVOICE'] }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.SALES_INVOICE, 's1');
+            expect(result.template_id).toBe('gulshan');
+            expect(db.printTemplateStoreAssignment.findUnique).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        tenant_id_store_id_doc_type: {
+                            tenant_id: 'ten1',
+                            store_id: 's1',
+                            doc_type: 'SALES_INVOICE',
+                        },
+                    },
+                }),
+            );
+        });
+
+        it('falls back to the tenant chain when the store has no override', async () => {
+            db.store.findFirst.mockResolvedValue({ id: 's1' });
+            db.printTemplateStoreAssignment.findUnique.mockResolvedValue(null);
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'invoice', is_default: false, doc_types: ['SALES_INVOICE'] }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.SALES_INVOICE, 's1');
+            expect(result.template_id).toBe('invoice');
+        });
+
+        it('ignores a storeId that is not this tenant\u2019s store', async () => {
+            db.store.findFirst.mockResolvedValue(null);
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'invoice', is_default: false, doc_types: ['SALES_INVOICE'] }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.SALES_INVOICE, 'foreign');
+            expect(result.template_id).toBe('invoice');
+            expect(db.store.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: 'foreign', tenant_id: 'ten1' } }),
+            );
+            expect(db.printTemplateStoreAssignment.findUnique).not.toHaveBeenCalled();
+        });
+
+        it('skips the override step when storeId is omitted', async () => {
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'invoice', is_default: false, doc_types: ['SALES_INVOICE'] }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.SALES_INVOICE);
+            expect(result.template_id).toBe('invoice');
+            expect(db.store.findFirst).not.toHaveBeenCalled();
+            expect(db.printTemplateStoreAssignment.findUnique).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('upsertAssignment()', () => {
+        const uuidStore = '11111111-1111-4111-8111-111111111111';
+        const uuidTpl = '22222222-2222-4222-8222-222222222222';
+        const key = {
+            tenant_id_store_id_doc_type: {
+                tenant_id: 'ten1',
+                store_id: uuidStore,
+                doc_type: 'SALES_INVOICE',
+            },
+        };
+
+        it('upserts a pin to a named template', async () => {
+            db.store.findFirst.mockResolvedValue({ id: uuidStore });
+            db.printTemplate.findFirst.mockResolvedValue(template({ id: uuidTpl, is_default: false }));
+            db.printTemplateStoreAssignment.upsert.mockResolvedValue({});
+
+            await service.upsertAssignment('ten1', {
+                storeId: uuidStore,
+                docType: PrintDocType.SALES_INVOICE,
+                templateId: uuidTpl,
+            });
+
+            expect(db.printTemplateStoreAssignment.upsert).toHaveBeenCalledWith({
+                where: key,
+                create: {
+                    tenant_id: 'ten1',
+                    store_id: uuidStore,
+                    doc_type: 'SALES_INVOICE',
+                    template_id: uuidTpl,
+                },
+                update: { template_id: uuidTpl },
+            });
+        });
+
+        it('stores a pin even when the named template is the company default', async () => {
+            db.store.findFirst.mockResolvedValue({ id: uuidStore });
+            db.printTemplate.findFirst.mockResolvedValue(template({ id: uuidTpl, is_default: true }));
+            db.printTemplateStoreAssignment.upsert.mockResolvedValue({});
+
+            await service.upsertAssignment('ten1', {
+                storeId: uuidStore,
+                docType: PrintDocType.SALES_INVOICE,
+                templateId: uuidTpl,
+            });
+
+            expect(db.printTemplateStoreAssignment.upsert).toHaveBeenCalled();
+            expect(db.printTemplateStoreAssignment.deleteMany).not.toHaveBeenCalled();
+        });
+
+        it('clears a missing pin as a no-op', async () => {
+            db.store.findFirst.mockResolvedValue({ id: uuidStore });
+            db.printTemplateStoreAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+            await expect(
+                service.upsertAssignment('ten1', {
+                    storeId: uuidStore,
+                    docType: PrintDocType.SALES_INVOICE,
+                    templateId: null,
+                }),
+            ).resolves.toEqual({ success: true });
+            expect(db.printTemplateStoreAssignment.deleteMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'ten1', store_id: uuidStore, doc_type: 'SALES_INVOICE' },
+            });
+            expect(db.printTemplateStoreAssignment.upsert).not.toHaveBeenCalled();
+        });
+
+        it('rejects a template from another tenant', async () => {
+            db.store.findFirst.mockResolvedValue({ id: uuidStore });
+            db.printTemplate.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.upsertAssignment('ten1', {
+                    storeId: uuidStore,
+                    docType: PrintDocType.SALES_INVOICE,
+                    templateId: uuidTpl,
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.printTemplate.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: uuidTpl, tenant_id: 'ten1' } }),
+            );
+            expect(db.printTemplateStoreAssignment.upsert).not.toHaveBeenCalled();
+        });
+
+        it('rejects a store from another tenant', async () => {
+            db.store.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.upsertAssignment('ten1', {
+                    storeId: uuidStore,
+                    docType: PrintDocType.SALES_INVOICE,
+                    templateId: uuidTpl,
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.printTemplateStoreAssignment.upsert).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('listAssignments()', () => {
+        it('returns the tenant\u2019s override rows', async () => {
+            db.printTemplateStoreAssignment.findMany.mockResolvedValue([
+                { store_id: 's1', doc_type: 'SALES_INVOICE', template_id: 'tpl1' },
+            ]);
+            expect(await service.listAssignments('ten1')).toEqual([
+                { store_id: 's1', doc_type: 'SALES_INVOICE', template_id: 'tpl1' },
+            ]);
+            expect(db.printTemplateStoreAssignment.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { tenant_id: 'ten1' } }),
+            );
         });
     });
 });

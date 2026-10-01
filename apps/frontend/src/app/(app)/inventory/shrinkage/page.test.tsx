@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import InventoryShrinkagePage from './page';
+import { pickSearchOption } from '@/test-utils/id-search-select';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -50,7 +51,7 @@ async function renderOpenForm() {
 async function fillEntry({ notes }: { notes: string }) {
     fireEvent.change(screen.getByLabelText(/warehouse/i), { target: { value: 'wh-1' } });
     fireEvent.change(screen.getByLabelText(/^reason/i), { target: { value: 'rsn-loss' } });
-    fireEvent.change(screen.getByLabelText(/select product/i), { target: { value: 'prod-1' } });
+    pickSearchOption(/select product/i, 'Rice 5kg');
     if (notes) fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: notes } });
 }
 
@@ -115,7 +116,7 @@ describe('InventoryShrinkagePage', () => {
         const api = await renderOpenForm();
 
         fireEvent.change(screen.getByLabelText(/warehouse/i), { target: { value: 'wh-1' } });
-        fireEvent.change(screen.getByLabelText(/select product/i), { target: { value: 'prod-1' } });
+        pickSearchOption(/select product/i, 'Rice 5kg');
         fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Crushed in bay 3' } });
         fireEvent.click(screen.getByRole('button', { name: /post shrinkage/i }));
 
@@ -175,7 +176,7 @@ describe('InventoryShrinkagePage', () => {
         fireEvent.change(screen.getByLabelText(/^entry type/i), { target: { value: 'FOUND' } });
         fireEvent.change(screen.getByLabelText(/warehouse/i), { target: { value: 'wh-1' } });
         fireEvent.change(screen.getByLabelText(/^reason/i), { target: { value: 'rsn-found' } });
-        fireEvent.change(screen.getByLabelText(/select product/i), { target: { value: 'prod-1' } });
+        pickSearchOption(/select product/i, 'Rice 5kg');
         fireEvent.change(screen.getByLabelText(/^notes/i), { target: { value: 'Two cartons behind the rack' } });
         fireEvent.click(screen.getByRole('button', { name: /post found stock/i }));
 

@@ -138,9 +138,11 @@ function AccountingVouchersListPageContent() {
     const handlePrint = useCallback(async (voucher: VoucherRow) => {
         try {
             const detail = await api.getVoucher(voucher.id);
+            // The voucher's branch letterhead when it has one; company paper otherwise.
+            const header = await printHeader.resolve(detail.store_id ?? undefined);
             printVoucher({
                 businessName,
-                headerConfig: printHeader.headerConfig,
+                headerConfig: header.headerConfig,
                 voucherNumber: detail.voucher_number,
                 voucherType: detail.voucher_type,
                 date: formatDate(detail.date, locale),

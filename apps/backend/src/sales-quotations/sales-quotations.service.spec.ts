@@ -532,6 +532,9 @@ describe('SalesQuotationsService', () => {
       const result = await service.findByShareToken('some-token');
 
       expect(printTemplates.resolve).toHaveBeenCalledWith('tenant-1', 'QUOTE');
+      // Company paper on the public link: no store id, so a branch's pinned
+      // letterhead never reaches a page anyone with the token can open.
+      expect(printTemplates.resolve.mock.calls[0]).toHaveLength(2);
       expect(result.letterhead?.config).toEqual({ lines: [{ text: '{{address}}' }] });
       // The design prints the address and nothing else, so the VAT number and
       // TIN this tenant holds stay off a page anyone with the link can open.

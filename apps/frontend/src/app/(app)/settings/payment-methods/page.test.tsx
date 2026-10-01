@@ -154,9 +154,8 @@ describe('PaymentMethodsSettingsPage', () => {
         render(<PaymentMethodsSettingsPage />);
         fireEvent.click(await screen.findByRole('button', { name: /add method/i }));
 
-        await waitFor(() => {
-            expect(screen.getByRole('option', { name: '[110101] Cash in Hand' })).toBeInTheDocument();
-        });
+        fireEvent.click(await screen.findByLabelText('Account'));
+        expect(await screen.findByRole('option', { name: /Cash in Hand/ })).toBeInTheDocument();
     });
 
     // Regression: the form sent `undefined` for "no account linked", which the

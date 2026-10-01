@@ -971,6 +971,8 @@ export class SalesService {
                 // from and link back to it.
                 quotation: { select: { id: true, quote_number: true, doc_kind: true } },
                 salesOrder: { select: { id: true, order_number: true } },
+                // The branch's name and address print on its letterhead.
+                store: { select: { id: true, name: true, address: true } },
             },
         });
 
@@ -1447,7 +1449,8 @@ export class SalesService {
                     items: { include: { product: true } },
                     payments: true,
                     customer: true,
-                    store: { select: { name: true } },
+                    // The branch's name and address print on its letterhead.
+                    store: { select: { id: true, name: true, address: true } },
                 },
             }),
             this.db.tenant.findUnique({

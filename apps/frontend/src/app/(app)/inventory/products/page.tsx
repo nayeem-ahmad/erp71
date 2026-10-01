@@ -1,12 +1,15 @@
 'use client';
 
 import { useRef, useState, useEffect, useMemo } from 'react';
-import Link from 'next/link';
-import { Package, Pencil, Plus, ShoppingBasket, Trash2, Truck, Upload } from 'lucide-react';
+import { Package, Plus, Upload } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { isOwner, hasPermission } from '@/lib/permissions';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import AddProductModal from '../AddProductModal';
+import MergeProductModal from '../MergeProductModal';
+import ProductRowActions from './ProductRowActions';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
@@ -16,7 +19,6 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { Button, Input, Select } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useServerList } from '@/hooks/useServerList';
-import { routes } from '@/lib/routes';
 
 interface Product {
     id: string;
@@ -42,12 +44,15 @@ const columnHelper = createColumnHelper<Product>();
 
 export default function InventoryPage() {
     const { t, locale, fmt } = useI18n();
+    const { role, permissions } = useTenantPlanFeatures();
+    const canMerge = isOwner(role) || hasPermission(permissions, 'MANAGE_USERS');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const csvInputRef = useRef<HTMLInputElement>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+    const [mergeSource, setMergeSource] = useState<{ id: string; name: string } | null>(null);
     const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([]);
     const [subgroups, setSubgroups] = useState<Array<{ id: string; name: string; group_id: string }>>([]);
     const [selectedGroupId, setSelectedGroupId] = useState('');
@@ -136,6 +141,18 @@ export default function InventoryPage() {
     const openEditProduct = (product: Product) => {
         setEditingProduct(product);
         setIsEditModalOpen(true);
+    };
+
+    const openMergeProduct = (product: { id: string; name: string }) => {
+        setMergeSource({ id: product.id, name: product.name });
+    };
+
+    const handleMerged = (result: { targetId: string; targetName: string }) => {
+        const keeperName =
+            result.targetName || products.find((product) => product.id === result.targetId)?.name || '';
+        setImportStatus(fmt(t.inventory.merge.success, { name: keeperName }));
+        setMergeSource(null);
+        void loadProducts();
     };
 
     const handleCsvFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -299,44 +316,21 @@ export default function InventoryPage() {
                 id: 'actions',
                 header: t.inventory.columns.actions,
                 cell: (info) => (
-                    <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                        <button
-                            onClick={() => openEditProduct(info.row.original)}
-                            className="p-1.5 rounded-lg text-primary hover:bg-primary-light transition-colors"
-                            title={t.inventory.actions.editProduct}
-                        >
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                        <Link
-                            href={`${routes.purchases.newPurchase}?productId=${info.row.original.id}&from=products`}
-                            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
-                            title={t.inventory.actions.addStock}
-                        >
-                            <ShoppingBasket className="w-4 h-4" />
-                        </Link>
-                        <Link
-                            href={`/inventory/transfers?productId=${info.row.original.id}`}
-                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={t.inventory.actions.transferHistory}
-                        >
-                            <Truck className="w-4 h-4" />
-                        </Link>
-                        <button
-                            onClick={() => handleDelete(info.row.original.id)}
-                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                            title={t.inventory.actions.delete}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <ProductRowActions
+                        product={info.row.original}
+                        canMerge={canMerge}
+                        onEdit={() => openEditProduct(info.row.original)}
+                        onMerge={() => openMergeProduct(info.row.original)}
+                        onDelete={() => handleDelete(info.row.original.id)}
+                    />
                 ),
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 90,
+                size: 110,
             }),
         ],
-        [t, locale],
+        [t, locale, canMerge],
     );
 
     // Server-side equivalents of the old client-side filter presets. They must be sent to
@@ -516,7 +510,22 @@ export default function InventoryPage() {
                     mode="edit"
                     initialProduct={editingProduct}
                     onSubmit={handleUpdateProduct}
+                    showMerge={canMerge}
+                    onMergeClick={() => {
+                        if (!editingProduct) return;
+                        setIsEditModalOpen(false);
+                        openMergeProduct(editingProduct);
+                    }}
                 />
+
+                {mergeSource && (
+                    <MergeProductModal
+                        isOpen
+                        source={mergeSource}
+                        onClose={() => setMergeSource(null)}
+                        onMerged={handleMerged}
+                    />
+                )}
 
                 <DataTable<Product>
                     tableId="products"

@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button, Field, Input, Select, FormFooter, Alert } from '@/components/ui';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
 interface Employee { id: string; name: string; employee_code: string; }
@@ -351,20 +352,17 @@ export default function LeavesPage() {
                                         <option value="CANCELLED">{t.leaves.cancel}</option>
                                     </select>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-gray-500 block">{t.leaves.columns.employee}</label>
-                                    <select
+                                <div className="min-w-[180px]">
+                                    <IdSearchSelect
+                                        items={employees}
                                         value={employeeFilter}
-                                        onChange={(e) => setEmployeeFilter(e.target.value)}
-                                        className="bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-3 text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all appearance-none min-w-[180px]"
-                                    >
-                                        <option value="">{t.leaves.allEmployees}</option>
-                                        {employees.map((emp) => (
-                                            <option key={emp.id} value={emp.id}>
-                                                {emp.name} ({emp.employee_code})
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={setEmployeeFilter}
+                                        label={t.leaves.columns.employee}
+                                        placeholder={t.leaves.allEmployees}
+                                        emptyLabel={t.leaves.allEmployees}
+                                        noMatchLabel={t.common.noData}
+                                        subtitle={(emp) => emp.employee_code ?? ''}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -473,17 +471,17 @@ export default function LeavesPage() {
                     <form onSubmit={handleCreateRequest} className="p-4 space-y-4 overflow-y-auto">
                         {reqError && <Alert tone="danger">{reqError}</Alert>}
 
-                        <Field label={t.leaves.columns.employee} required>
-                            <Select
-                                required
+                        <Field label={t.leaves.columns.employee} required htmlFor="leave-employee">
+                            <IdSearchSelect
+                                id="leave-employee"
+                                items={employees}
                                 value={requestForm.employee_id}
-                                onChange={(e) => setRequestForm({ ...requestForm, employee_id: e.target.value })}
-                            >
-                                <option value="">{t.leaves.selectEmployee}</option>
-                                {employees.map((emp) => (
-                                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_code})</option>
-                                ))}
-                            </Select>
+                                onChange={(id) => setRequestForm({ ...requestForm, employee_id: id })}
+                                placeholder={t.leaves.selectEmployee}
+                                emptyLabel={t.leaves.selectEmployee}
+                                noMatchLabel={t.common.noData}
+                                subtitle={(emp) => emp.employee_code ?? ''}
+                            />
                         </Field>
 
                         <Field label={t.leaves.columns.leaveType} required>

@@ -10,6 +10,7 @@ import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 interface Product {
     id: string;
@@ -232,13 +233,14 @@ export default function CreatePurchaseQuotationModal({ isOpen, onClose, onSucces
                         <div className="space-y-5">
                             <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-4 space-y-3">
                                 <h3 className="text-sm font-bold tracking-tight">{t.common.supplier}</h3>
-                                <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
-                                    <option value="">{t.purchaseShared.noSupplier}</option>
-                                    {suppliers.map((s) => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
+                                <IdSearchSelect
+                                    items={suppliers}
+                                    value={supplierId}
+                                    onChange={setSupplierId}
+                                    placeholder={t.purchaseShared.noSupplier}
+                                    emptyLabel={t.supplierPayments.noSuppliers}
+                                    noMatchLabel={t.supplierPayments.noSuppliers}
+                                />
                                 <div>
                                     <label className="text-xs font-medium text-gray-500 block mb-1">Valid Until</label>
                                     <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}

@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
-import { CreateProductDto, UpdateProductDto } from './product.dto';
+import { CreateProductDto, MergeProductDto, UpdateProductDto } from './product.dto';
 import { CsvProductRow } from './import-products.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -22,7 +22,7 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
-import { CATALOG_READ, PRODUCT_WRITE } from '../auth/permission-sets';
+import { CATALOG_READ, PRODUCT_MERGE, PRODUCT_WRITE } from '../auth/permission-sets';
 /**
  * Minimal CSV line parser that handles double-quoted fields (including commas
  * inside quotes) and trims surrounding whitespace from unquoted values.
@@ -227,6 +227,19 @@ export class ProductsController {
             partyId: partyId || undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
         });
+    }
+
+    @RequireAnyStorePermission(...PRODUCT_MERGE)
+    @Get(':sourceId/merge-preview')
+    previewMerge(@Tenant() tenant: TenantContext, @Param('sourceId') sourceId: string, @Query('targetId') targetId: string) {
+        if (!targetId) throw new BadRequestException('targetId is required');
+        return this.productsService.previewMerge(tenant.tenantId, sourceId, targetId);
+    }
+
+    @RequireAnyStorePermission(...PRODUCT_MERGE)
+    @Post(':sourceId/merge')
+    mergeProduct(@Tenant() tenant: TenantContext, @Param('sourceId') sourceId: string, @Body() dto: MergeProductDto) {
+        return this.productsService.mergeProduct(tenant.tenantId, sourceId, dto);
     }
 
     @RequireAnyStorePermission(...CATALOG_READ)

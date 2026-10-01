@@ -19,6 +19,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import InvoicePage from './page';
 
 jest.mock('@/lib/api', () => ({
+    // The print-header hook resolves the letterhead through this.
+    fetchWithAuth: jest.fn().mockResolvedValue(null),
     api: {
         getSaleInvoice: jest.fn(),
     },
@@ -54,6 +56,7 @@ const mockInvoiceData = {
         total_amount: '11500',
         amount_paid: '11500',
         note: null,
+        store_id: 'store-gulshan',
         store: { name: 'Main Store' },
         customer: {
             name: 'Mohammed Rahman',
@@ -529,5 +532,35 @@ describe('InvoicePage — customer dues', () => {
 
         await waitFor(() => expect(screen.getByText('Mohammed Rahman')).toBeInTheDocument());
         expect(screen.queryByText('Total Due')).not.toBeInTheDocument();
+    });
+});
+
+describe('InvoicePage \u2014 branch letterhead', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        // Earlier prints in this file already resolved this branch's headers.
+        require('@/lib/print/use-print-header').clearPrintTemplateCache();
+        getApi().getSaleInvoice.mockResolvedValue(mockInvoiceData);
+    });
+
+    it('prints on the letterhead of the sale\u2019s own branch', async () => {
+        const open = jest.spyOn(window, 'open').mockReturnValue({
+            document: { write: jest.fn(), close: jest.fn(), images: [] },
+            print: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        } as unknown as Window);
+
+        render(<InvoicePage />);
+        fireEvent.click(await screen.findByTitle('Print options'));
+        fireEvent.click(await screen.findByRole('menuitem', { name: /delivery challan/i }));
+
+        await waitFor(() =>
+            expect(require('@/lib/api').fetchWithAuth).toHaveBeenCalledWith(
+                '/print-templates/resolve?docType=DELIVERY_CHALLAN&storeId=store-gulshan',
+            ),
+        );
+        open.mockRestore();
     });
 });

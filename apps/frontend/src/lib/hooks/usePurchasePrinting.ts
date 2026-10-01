@@ -51,7 +51,15 @@ export function usePurchasePrinting() {
                     toast.error(t.purchases.printLoadFailed);
                     return;
                 }
-                printPurchaseInvoiceFromRecord(data.purchase, size, ctx, skipPreview);
+                // The purchase's own branch letterhead, not the one resolved on mount.
+                const storeId = data.purchase.store_id ?? data.purchase.store?.id ?? undefined;
+                const purchaseHeader = await header.resolve(storeId);
+                printPurchaseInvoiceFromRecord(
+                    data.purchase,
+                    size,
+                    { ...ctx, header: purchaseHeader },
+                    skipPreview,
+                );
             } catch (error) {
                 console.error('Failed to print purchase document', error);
                 toast.error(t.purchases.printLoadFailed);
@@ -59,7 +67,7 @@ export function usePurchasePrinting() {
                 setBusyId(null);
             }
         },
-        [ctx, skipPreview, t],
+        [ctx, header, skipPreview, t],
     );
 
     return {

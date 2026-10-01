@@ -14,8 +14,9 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell, Button, Alert } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 interface CustomerOption {
     id: string;
@@ -70,6 +71,10 @@ function CustomerPaymentsContent() {
 
     const [payments, setPayments] = useState<CustomerCreditPayment[]>([]);
     const [customers, setCustomers] = useState<CustomerOption[]>([]);
+    // Tracked apart from the payments' `loading`: the full customer list takes
+    // several requests on a large shop, and the form must not read "still
+    // loading" or "failed" as "this shop has no customers".
+    const [customersStatus, setCustomersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [customerFilter, setCustomerFilter] = useState(preselectedCustomerId ?? '');
@@ -94,16 +99,12 @@ function CustomerPaymentsContent() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [paymentsData, customersData] = await Promise.all([
-                api.getCustomerCreditPayments({
-                    from: applyCreatedRangeQuery(createdRange).createdFrom,
-                    to: applyCreatedRangeQuery(createdRange).createdTo,
-                    customerId: customerFilter || undefined,
-                }),
-                api.getCustomers(),
-            ]);
+            const paymentsData = await api.getCustomerCreditPayments({
+                from: applyCreatedRangeQuery(createdRange).createdFrom,
+                to: applyCreatedRangeQuery(createdRange).createdTo,
+                customerId: customerFilter || undefined,
+            });
             setPayments((Array.isArray(paymentsData) ? paymentsData : []) as CustomerCreditPayment[]);
-            setCustomers(customersData ?? []);
         } catch (error) {
             console.error('Failed to load customer payments', error);
             setToast({ type: 'error', message: copy.loadFailed });
@@ -112,10 +113,28 @@ function CustomerPaymentsContent() {
         }
     };
 
+    // The customer list does not depend on the payment filters, so it loads
+    // once, on its own — a failed payments fetch can no longer empty the picker.
+    const loadCustomers = useCallback(async () => {
+        setCustomersStatus('loading');
+        try {
+            const customersData = await api.getCustomers();
+            setCustomers(customersData ?? []);
+            setCustomersStatus('ready');
+        } catch (error) {
+            console.error('Failed to load customers', error);
+            setCustomersStatus('error');
+        }
+    }, []);
+
     useEffect(() => {
         void loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [createdRange, customerFilter]);
+
+    useEffect(() => {
+        void loadCustomers();
+    }, [loadCustomers]);
 
     useEffect(() => {
         if (preselectedCustomerId) {
@@ -444,15 +463,18 @@ function CustomerPaymentsContent() {
                                 <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
                                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                             </div>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.filterCustomer}</span>
-                                <select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-                                    <option value="">{copy.allCustomers}</option>
-                                    {customers.map((customer) => (
-                                        <option key={customer.id} value={customer.id}>{customer.name}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <div className="space-y-1">
+                                <IdSearchSelect
+                                    items={customers}
+                                    value={customerFilter}
+                                    onChange={setCustomerFilter}
+                                    loading={customersStatus === 'loading'}
+                                    label={copy.filterCustomer}
+                                    placeholder={copy.allCustomers}
+                                    emptyLabel={copy.noCustomers}
+                                    noMatchLabel={copy.noCustomers}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -488,7 +510,19 @@ function CustomerPaymentsContent() {
                                     {copy.duplicateNotice.replace('{paymentNumber}', duplicatedFrom)}
                                 </p>
                             ) : null}
-                            {customers.length === 0 ? (
+                            {customersStatus === 'loading' ? (
+                                <p className="flex items-center text-sm text-gray-500 p-3">
+                                    <Loader2 className="w-4 h-4 animate-spin me-2" />
+                                    {copy.loadingCustomers}
+                                </p>
+                            ) : customersStatus === 'error' ? (
+                                <Alert tone="danger">
+                                    <span>{copy.customersLoadFailed}</span>
+                                    <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => void loadCustomers()}>
+                                        {copy.retry}
+                                    </Button>
+                                </Alert>
+                            ) : customers.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
                                     {copy.noCustomers}
                                 </p>
@@ -505,22 +539,15 @@ function CustomerPaymentsContent() {
                                             <option value="pay">{copy.directionPay}</option>
                                         </select>
                                     </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.selectCustomer}</span>
-                                        <select
-                                            value={formCustomerId}
-                                            onChange={(e) => setFormCustomerId(e.target.value)}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
-                                            required
-                                        >
-                                            <option value="">{copy.pickCustomerOption}</option>
-                                            {customers.map((customer) => (
-                                                <option key={customer.id} value={customer.id}>
-                                                    {customer.name} ({customer.phone})
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
+                                    <IdSearchSelect
+                                        items={customers}
+                                        value={formCustomerId}
+                                        onChange={setFormCustomerId}
+                                        label={copy.selectCustomer}
+                                        placeholder={copy.pickCustomerOption}
+                                        emptyLabel={copy.noCustomers}
+                                        noMatchLabel={copy.noCustomers}
+                                    />
                                     {selectedFormCustomer ? (
                                         <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3 text-sm">
                                             <span className="text-gray-600">

@@ -11,7 +11,7 @@ jest.mock('@/lib/api', () => ({
         setCrmActivityApproval: jest.fn(),
         getLeadTaxonomy: jest.fn(),
         getCrmMessageTemplates: jest.fn().mockResolvedValue([]),
-        getTeamMembers: jest.fn(),
+        getCrmAssignees: jest.fn(),
         getMe: jest.fn(),
     },
 }));
@@ -67,7 +67,7 @@ beforeEach(() => {
     api.completeCrmActivity.mockResolvedValue({ completed: {}, next: null });
     api.cancelCrmActivity.mockResolvedValue({});
     api.updateCrmActivity.mockResolvedValue({});
-    api.getTeamMembers.mockResolvedValue([
+    api.getCrmAssignees.mockResolvedValue([
         { userId: 'user-1', name: 'Nayeem' },
         { userId: 'user-2', name: 'Rifat' },
     ]);

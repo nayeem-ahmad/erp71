@@ -8,7 +8,7 @@ jest.mock('@/lib/api', () => ({
         createCrmActivity: jest.fn(),
         getLeadTaxonomy: jest.fn(),
         getCrmMessageTemplates: jest.fn(),
-        getTeamMembers: jest.fn(),
+        getCrmAssignees: jest.fn(),
         getMe: jest.fn(),
     },
 }));
@@ -40,7 +40,7 @@ beforeEach(() => {
     api.getLeads.mockResolvedValue({ items: [{ id: 'lead-1', name: 'Karim Traders', mobile: '01700000000' }] });
     api.searchCustomers.mockResolvedValue([{ id: 'cust-1', name: 'Karim Store', phone: '01800000000' }]);
     api.createCrmActivity.mockResolvedValue({ id: 'new' });
-    api.getTeamMembers.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
+    api.getCrmAssignees.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
     api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem', tenants: [{ id: 'tenant-1', name: 'Dhaka Electronics' }] });
     // No templates by default: every pre-existing case here asserts against a
     // dialog with no picker in it.

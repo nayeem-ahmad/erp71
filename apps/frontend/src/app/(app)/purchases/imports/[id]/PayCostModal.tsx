@@ -6,7 +6,8 @@ import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Input, Select, Field, Button } from '@/components/ui';
+import { Input, Field, Button } from '@/components/ui';
+import AccountSelect from '@/components/accounting/AccountSelect';
 
 /**
  * Paying a charge that was recorded before the money left.
@@ -83,19 +84,16 @@ export default function PayCostModal({
                     {cost.description && <p className="mt-1 text-xs text-gray-500">{cost.description}</p>}
                 </div>
 
-                <Field label={copy.paidFrom} htmlFor="pay-account">
-                    <Select
-                        id="pay-account"
+                <Field label={copy.paidFrom}>
+                    <AccountSelect
+                        accounts={accounts}
                         value={paidFromAccountId}
-                        onChange={(e) => setPaidFromAccountId(e.target.value)}
-                    >
-                        <option value="">—</option>
-                        {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>
-                                {account.name}
-                            </option>
-                        ))}
-                    </Select>
+                        onChange={setPaidFromAccountId}
+                        ariaLabel={copy.paidFrom}
+                        placeholder="—"
+                        allowClear
+                        clearLabel="—"
+                    />
                 </Field>
 
                 <Field label={copy.paidOn} hint={copy.paidOnHint} htmlFor="pay-date">

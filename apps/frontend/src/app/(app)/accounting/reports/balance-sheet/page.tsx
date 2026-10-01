@@ -140,7 +140,8 @@ export default function BalanceSheetPage() {
 
         // Resolve on click rather than on mount: the template is only needed by
         // the people who actually print, and this page loads for everyone.
-        const header = await printHeader.resolve();
+        // One branch prints on that branch's paper; company and compare do not.
+        const header = await printHeader.resolve(scope === 'branch' && storeId ? storeId : undefined);
 
         printStatementReport(
             {

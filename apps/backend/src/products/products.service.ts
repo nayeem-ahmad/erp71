@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { CreateProductDto, ProductTypeDto, UpdateProductDto } from './product.dto';
+import { CreateProductDto, MergeProductDto, ProductTypeDto, UpdateProductDto } from './product.dto';
+import { commitMerge, parseTakeFields, planMerge, throwIfBlocked } from './products.merge';
 import { CsvProductRow } from './import-products.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
 import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
@@ -655,6 +656,19 @@ export class ProductsService {
             ...p,
             qty_sold: qtySoldMap.get(p.id) ?? 0,
         })).sort((a, b) => b.qty_sold - a.qty_sold);
+    }
+
+    async previewMerge(tenantId: string, sourceId: string, targetId: string) {
+        const plan = await planMerge(this.db, tenantId, sourceId, targetId);
+        throwIfBlocked(plan, 'preview');
+        return plan;
+    }
+
+    async mergeProduct(tenantId: string, sourceId: string, dto: MergeProductDto) {
+        return commitMerge(this.db, this.redis, tenantId, sourceId, {
+            targetId: dto.targetId,
+            takeFields: parseTakeFields(dto.takeFields ?? []),
+        });
     }
 
     private productInclude() {

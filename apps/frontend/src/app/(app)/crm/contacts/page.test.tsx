@@ -29,7 +29,7 @@ jest.mock('./BusinessCardScanner', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getContacts: jest.fn(),
-        getTeamMembers: jest.fn(),
+        getCrmAssignees: jest.fn(),
         deleteContact: jest.fn(),
         bulkContactAction: jest.fn(),
         importContacts: jest.fn(),
@@ -71,7 +71,7 @@ describe('ContactsPage — only mine', () => {
         jest.clearAllMocks();
         localStorage.clear();
         api.getContacts.mockResolvedValue({ items: contacts, total: 1 });
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);
@@ -117,7 +117,7 @@ describe('ContactsPage — only mine', () => {
 
         jest.clearAllMocks();
         api.getContacts.mockResolvedValue({ items: contacts, total: 1 });
-        api.getTeamMembers.mockResolvedValue([]);
+        api.getCrmAssignees.mockResolvedValue([]);
 
         render(<ContactsPage />);
         await screen.findByText('Karim Rahman');

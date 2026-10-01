@@ -15,6 +15,7 @@ import { DEFAULT_HEADER_CONFIG, PAPER_SIZES, resolveHeaderConfig } from '@/lib/p
 import { clearPrintTemplateCache } from '@/lib/print/use-print-header';
 import type { DeepPartial, HeaderContext, PaperSize, PrintDocType, PrintHeaderConfig } from '@/lib/print';
 import { formatDate } from '@/lib/format';
+import BranchAssignments from './BranchAssignments';
 import HeaderEditor from './HeaderEditor';
 import HeaderPreview from './HeaderPreview';
 
@@ -187,6 +188,8 @@ export default function PrintTemplatesPage() {
                 </div>
             ) : (
                 <div className="mt-4 space-y-4">
+                    <BranchAssignments templates={templates} />
+
                     {templates.length === 0 ? (
                         <p className="rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-500 md:p-4">
                             {copy.empty}

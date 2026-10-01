@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import InventoryTransfersPage from './page';
+import { pickSearchOption } from '@/test-utils/id-search-select';
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn() }),
@@ -181,8 +182,10 @@ describe('InventoryTransfersPage', () => {
     it('loads products and shows them in select', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => {
-            expect(screen.getAllByText('Widget A').length).toBeGreaterThan(0);
+            expect(screen.getByPlaceholderText('All Products')).toBeInTheDocument();
         });
+        fireEvent.focus(screen.getByPlaceholderText('All Products'));
+        expect(screen.getByText('Widget A')).toBeInTheDocument();
     });
 
     it('calls getWarehouseTransfers on mount', async () => {
@@ -285,9 +288,7 @@ describe('InventoryTransfersPage', () => {
         const destSelectEl = destLabel.closest('div')!.querySelector('select')!;
         fireEvent.change(destSelectEl, { target: { value: 'w2' } });
 
-        const productLabel = screen.getByText('Product');
-        const productSelectEl = productLabel.closest('div')!.querySelector('select')!;
-        fireEvent.change(productSelectEl, { target: { value: 'p1' } });
+        pickSearchOption('Product', 'Widget A');
 
         await act(async () => {
             fireEvent.submit(screen.getByRole('button', { name: /Create Transfer/ }).closest('form')!);

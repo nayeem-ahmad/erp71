@@ -11,6 +11,11 @@ export interface LineItem {
     /** Stock on hand when the product was picked — shown for reference only. */
     availableQty?: number;
     /**
+     * Stock on hand per warehouse id when the product was picked. Where set,
+     * the line's availability follows its warehouse instead of `availableQty`.
+     */
+    stockByWarehouse?: Record<string, number>;
+    /**
      * The product's unit type (`kg_g`, `dozen_pcs`, …). Only documents that opt
      * into compound quantity entry read it; everything else counts in the base
      * unit as before.
