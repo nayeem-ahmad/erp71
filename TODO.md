@@ -1642,6 +1642,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Customer Ledger customer picker is searchable** — done 2026-10-01. `/sales/customer-ledger` used a native `<select>` of every customer. It now uses the shared `PartySearchSelect` typeahead (name or phone). Copy in all nine locales. Frontend tests: customer-ledger page, PartySearchSelect, catalog completeness.
+
 - [x] **Product merge — collapse a duplicate into an existing product (2026-10-01).** Spec docs/superpowers/specs/2026-10-01-product-merge-design.md.
 
 - [x] **Imported purchases skipped the credit purchase posting rule** — done 2026-10-01. `applyPurchaseImpacts` posted with no condition, so `autoPostFromRules` looked for Purchase/`none` (which bootstrap never creates). It now emits `payment_mode=credit`, the same tuple native purchases use.

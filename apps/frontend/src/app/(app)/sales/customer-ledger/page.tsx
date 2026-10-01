@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell } from '@/components/ui';
+import PartySearchSelect from '@/components/document-entry/PartySearchSelect';
 
 type CustomerOption = {
     id: string;
@@ -301,22 +302,19 @@ function CustomerLedgerContent() {
 
                 <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <label className="space-y-1">
-                            <span className="text-xs font-medium text-gray-500">{copy.pickCustomer}</span>
-                            <select
-                                value={customerId}
-                                onChange={(e) => setCustomerId(e.target.value)}
-                                disabled={loadingCustomers}
-                                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                            >
-                                <option value="">{copy.allCustomers}</option>
-                                {customers.map((customer) => (
-                                    <option key={customer.id} value={customer.id}>
-                                        {customer.name} ({customer.phone})
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                        <div className="space-y-1">
+                            <PartySearchSelect
+                                parties={customers}
+                                loading={loadingCustomers}
+                                selected={selectedCustomer}
+                                onSelect={(party) => setCustomerId(party?.id ?? '')}
+                                label={copy.pickCustomer}
+                                placeholder={copy.searchPlaceholder}
+                                emptyLabel={copy.noCustomers}
+                                noMatchLabel={copy.noCustomers}
+                                clearLabel={copy.clearCustomer}
+                            />
+                        </div>
                         <label className="space-y-1">
                             <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
                             <input
