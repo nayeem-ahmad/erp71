@@ -52,8 +52,17 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
         [invoiceHeader, challanHeader, locale, t],
     );
 
+    /**
+     * Loads the sale, then resolves both letterheads for the sale's own store —
+     * never the headers resolved on mount, which belong to no store. Reprinting
+     * a Dhanmondi sale while the switcher is on Gulshan still prints Dhanmondi
+     * paper.
+     */
     const withSale = useCallback(
-        async (saleId: string, print: (sale: PrintableSale) => void | Promise<void>) => {
+        async (
+            saleId: string,
+            print: (sale: PrintableSale, ctx: SalePrintContext) => void | Promise<void>,
+        ) => {
             setBusyId(saleId);
             try {
                 const sale = await resolve(saleId);
@@ -61,7 +70,12 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                     toast.error(t.sales.printMenu.loadFailed);
                     return;
                 }
-                await print(sale);
+                const storeId = sale.store_id ?? sale.store?.id ?? undefined;
+                const [invoice, challan] = await Promise.all([
+                    invoiceHeader.resolve(storeId),
+                    challanHeader.resolve(storeId),
+                ]);
+                await print(sale, { ...ctx, invoiceHeader: invoice, challanHeader: challan });
             } catch (error) {
                 console.error('Failed to print sale document', error);
                 toast.error(t.sales.printMenu.loadFailed);
@@ -69,25 +83,25 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                 setBusyId(null);
             }
         },
-        [resolve, t],
+        [resolve, t, ctx, invoiceHeader, challanHeader],
     );
 
     const printInvoice = useCallback(
         (saleId: string, size: PaperSize) =>
-            withSale(saleId, (sale) => printSaleInvoice(sale, size, ctx, skipPreview)),
-        [withSale, ctx, skipPreview],
+            withSale(saleId, (sale, saleCtx) => printSaleInvoice(sale, size, saleCtx, skipPreview)),
+        [withSale, skipPreview],
     );
 
     const printChallan = useCallback(
         (saleId: string, size: PaperSize) =>
-            withSale(saleId, (sale) => printSaleChallan(sale, size, ctx, skipPreview)),
-        [withSale, ctx, skipPreview],
+            withSale(saleId, (sale, saleCtx) => printSaleChallan(sale, size, saleCtx, skipPreview)),
+        [withSale, skipPreview],
     );
 
     const printReceipt = useCallback(
         (saleId: string, size: PaperSize) =>
-            withSale(saleId, (sale) => printSaleReceipt(sale, size, ctx, skipPreview)),
-        [withSale, ctx, skipPreview],
+            withSale(saleId, (sale, saleCtx) => printSaleReceipt(sale, size, saleCtx, skipPreview)),
+        [withSale, skipPreview],
     );
 
     // `skipPreview` is passed back out so a screen can offer it as a setting

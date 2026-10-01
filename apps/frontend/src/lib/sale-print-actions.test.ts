@@ -1,11 +1,15 @@
-import { printSaleChallan, printSaleInvoice, type PrintableSale, type SalePrintContext } from './sale-print-actions';
+import { printSaleChallan, printSaleInvoice, printSaleReceipt, type PrintableSale, type SalePrintContext } from './sale-print-actions';
 import { printSalesInvoice } from './sales-invoice-printer';
 import { printDeliveryChallan } from './delivery-challan-printer';
+import { printPOSReceipt } from './pos-receipt-printer';
 import { enMessages } from './localization/messages/en';
 
 jest.mock('./sales-invoice-printer', () => ({
     ...jest.requireActual('./sales-invoice-printer'),
     printSalesInvoice: jest.fn(),
+}));
+jest.mock('./pos-receipt-printer', () => ({
+    printPOSReceipt: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('./delivery-challan-printer', () => ({
     ...jest.requireActual('./delivery-challan-printer'),
@@ -123,6 +127,40 @@ describe('printSaleInvoice', () => {
 
         expect(data.total).toBe(2900);
         expect(data.rounding).toBeCloseTo(-100);
+    });
+});
+
+describe('the sale\u2019s store on the letterhead', () => {
+    it('passes the sale\u2019s store name and address onto the invoice', () => {
+        printSaleInvoice(
+            { ...listShapedSale, store: { name: 'Gulshan', address: '12 Gulshan Ave' } },
+            'A4',
+            ctx,
+            true,
+        );
+        expect(printSalesInvoice).toHaveBeenCalledWith(
+            expect.objectContaining({
+                companyName: 'Acme Traders',
+                storeName: 'Gulshan',
+                companyAddress: '12 Gulshan Ave',
+            }),
+            'A4',
+            undefined,
+        );
+    });
+
+    it('leaves the address alone when the store has none', () => {
+        printSaleInvoice({ ...listShapedSale, store: { name: 'Gulshan', address: '' } }, 'A4', ctx, true);
+        expect((printSalesInvoice as jest.Mock).mock.calls[0][0].companyAddress).toBeUndefined();
+    });
+
+    it('keeps the company name and the store name apart on the receipt', async () => {
+        await printSaleReceipt({ ...listShapedSale, store: { name: 'Gulshan' } }, 'Thermal80', ctx, true);
+        expect(printPOSReceipt).toHaveBeenCalledWith(
+            expect.objectContaining({ companyName: 'Acme Traders', storeName: 'Gulshan' }),
+            'Thermal80',
+            undefined,
+        );
     });
 });
 

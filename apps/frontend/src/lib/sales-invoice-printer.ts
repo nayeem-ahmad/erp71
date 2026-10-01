@@ -30,6 +30,8 @@ export interface InvoiceData {
     referenceNumber: string;
     date: string;
     companyName?: string;
+    /** The branch the sale belongs to — fills the {{store_name}} token. */
+    storeName?: string;
     companyAddress?: string;
     companyPhone?: string;
     /** Tenant header design; falls back to the built-in default when omitted. */
@@ -300,6 +302,7 @@ export function printSalesInvoice(
         docNumber: data.referenceNumber,
         docDate: data.date,
         companyName: data.companyName || 'RETAIL STORE',
+        storeName: data.storeName,
         address: data.companyAddress,
         phone: data.companyPhone,
     };

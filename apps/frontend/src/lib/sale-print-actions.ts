@@ -45,6 +45,12 @@ export interface PrintableSale {
      * dues at all.
      */
     previous_due?: number | null;
+    /**
+     * The branch the sale was rung up at. Its letterhead and name print on the
+     * sale's documents, whatever branch the operator has selected now.
+     */
+    store_id?: string | null;
+    store?: { id?: string; name?: string; address?: string | null } | null;
 }
 
 /** Letterhead and labels the caller has already resolved from its hooks. */
@@ -147,6 +153,8 @@ export function printSaleInvoice(
             referenceNumber: sale.reference_number || sale.serial_number,
             date: formatDate(sale.sale_date ?? sale.created_at, ctx.locale),
             companyName: ctx.invoiceHeader.companyName,
+            storeName: sale.store?.name,
+            companyAddress: sale.store?.address || undefined,
             headerConfig: ctx.invoiceHeader.headerConfig,
             customerName: sale.customer?.name,
             customerPhone: sale.customer?.phone ?? undefined,
@@ -220,7 +228,8 @@ export async function printSaleReceipt(
         {
             invoiceId: sale.id,
             serialNumber: sale.serial_number,
-            storeName: ctx.invoiceHeader.companyName,
+            companyName: ctx.invoiceHeader.companyName,
+            storeName: sale.store?.name,
             headerConfig: ctx.invoiceHeader.headerConfig,
             date: formatDateTime(sale.sale_date ?? sale.created_at, ctx.locale),
             customerName: sale.customer?.name,

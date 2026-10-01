@@ -1219,6 +1219,20 @@ describe('SalesService', () => {
 
       await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
+
+    it('loads the sale’s store, so its documents print that branch’s name and address', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });
+
+      await service.findOne('tenant-1', 's1');
+
+      expect(db.sale.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            store: { select: { id: true, name: true, address: true } },
+          }),
+        }),
+      );
+    });
   });
 
   describe('getInvoiceData()', () => {

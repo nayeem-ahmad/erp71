@@ -244,3 +244,14 @@ describe('compact invoice', () => {
         expect(html).not.toContain('html.p71-compact .items-table');
     });
 });
+
+describe('store tokens', () => {
+    it('substitutes {{store_name}} from the sale\u2019s store', () => {
+        const html = render({
+            ...baseInvoice,
+            storeName: 'Gulshan Branch',
+            headerConfig: { lines: [{ text: 'Branch: {{store_name}}' }] },
+        });
+        expect(html).toContain('Branch: Gulshan Branch');
+    });
+});
