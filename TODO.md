@@ -1642,6 +1642,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Product merge — collapse a duplicate into an existing product (2026-10-01).** Spec docs/superpowers/specs/2026-10-01-product-merge-design.md.
+
 - [x] **Imported purchases skipped the credit purchase posting rule** — done 2026-10-01. `applyPurchaseImpacts` posted with no condition, so `autoPostFromRules` looked for Purchase/`none` (which bootstrap never creates). It now emits `payment_mode=credit`, the same tuple native purchases use.
 
 - [x] **Confirm and continue rejected `manifest.tenantId`** — done 2026-10-01. GET match-candidates returns a manifest that includes `tenantId`; Confirm posts that object back. `MatchManifestDto` omitted the field, so the global `forbidNonWhitelisted` pipe 400'd with `manifest.property tenantId should not exist`. DTO now accepts `tenantId`; applyDecisions still refuses a workbook for a different tenant.

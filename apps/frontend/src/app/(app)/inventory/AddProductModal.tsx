@@ -14,9 +14,11 @@ interface AddProductModalProps {
     mode?: 'create' | 'edit';
     initialProduct?: any | null;
     onSubmit: (product: any) => Promise<void> | void;
+    showMerge?: boolean;
+    onMergeClick?: () => void;
 }
 
-export default function AddProductModal({ isOpen, onClose, mode = 'create', initialProduct = null, onSubmit }: AddProductModalProps) {
+export default function AddProductModal({ isOpen, onClose, mode = 'create', initialProduct = null, onSubmit, showMerge = false, onMergeClick }: AddProductModalProps) {
     const { t } = useI18n();
     const [activeTab, setActiveTab] = useState<'basic' | 'storefront'>('basic');
     const [formData, setFormData] = useState({
@@ -621,6 +623,11 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 </div>
 
                 <ModalFooter className="flex-shrink-0">
+                    {mode === 'edit' && showMerge ? (
+                        <Button type="button" variant="secondary" onClick={onMergeClick}>
+                            {t.inventory.actions.mergeInto}
+                        </Button>
+                    ) : null}
                     <Button type="button" variant="secondary" onClick={onClose}>
                         Cancel
                     </Button>

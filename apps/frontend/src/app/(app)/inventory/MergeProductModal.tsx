@@ -33,6 +33,7 @@ type MergeProductModalProps = {
     source: { id: string; name: string };
     onMerged: (result: {
         targetId: string;
+        targetName: string;
         counts: { saleLines: number; purchaseLines: number };
         combinedStock: number;
     }) => void;
@@ -130,6 +131,7 @@ export default function MergeProductModal({ isOpen, onClose, source, onMerged }:
             });
             onMerged({
                 targetId: result.targetId,
+                targetName: preview.target.name,
                 counts: {
                     saleLines: result.counts.saleLines,
                     purchaseLines: result.counts.purchaseLines,
