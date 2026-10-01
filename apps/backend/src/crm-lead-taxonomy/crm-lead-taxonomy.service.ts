@@ -184,13 +184,17 @@ export class CrmLeadTaxonomyService {
             where: { tenant_id: tenantId },
             _max: { sort_order: true },
         });
+        const sortOrder =
+            dto.sort_order ??
+            (kind === LeadTaxonomyKind.STATUS ? await this.openStageSlot(tenantId) : null) ??
+            (max._max.sort_order ?? 0) + 1;
 
         return this.model(kind).create({
             data: {
                 tenant_id: tenantId,
                 code,
                 name: dto.name,
-                sort_order: dto.sort_order ?? (max._max.sort_order ?? 0) + 1,
+                sort_order: sortOrder,
                 is_system: false,
                 is_active: true,
                 ...(kind === LeadTaxonomyKind.SOURCE
@@ -204,6 +208,28 @@ export class CrmLeadTaxonomyService {
                 ...(kind === LeadTaxonomyKind.STATUS ? { lifecycle: CUSTOM_STATUS_LIFECYCLE } : {}),
             },
         });
+    }
+
+    /**
+     * Where a new stage goes: just ahead of the first closing stage, so a tenant
+     * adding "Negotiation" sees it among the open stages rather than after Won and
+     * Lost. The closing stages and anything after them shift down one. Null when
+     * the tenant has no closing stage, and the new row simply goes last.
+     */
+    private async openStageSlot(tenantId: string): Promise<number | null> {
+        const rows: { sort_order: number; lifecycle: string }[] =
+            await this.db.leadStatusOption.findMany({
+                where: { tenant_id: tenantId },
+                select: { sort_order: true, lifecycle: true },
+            });
+        const closed = rows.filter((r) => !OPEN_LIFECYCLES.has(r.lifecycle));
+        if (closed.length === 0) return null;
+        const slot = Math.min(...closed.map((r) => r.sort_order));
+        await this.db.leadStatusOption.updateMany({
+            where: { tenant_id: tenantId, sort_order: { gte: slot } },
+            data: { sort_order: { increment: 1 } },
+        });
+        return slot;
     }
 
     private async findOwned(tenantId: string, kind: LeadTaxonomyKind, id: string) {

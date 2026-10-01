@@ -260,11 +260,20 @@ class _Pipeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Open stages in the workspace's order, then won, then lost — the same
+    // shape as the web funnel, whatever order the stages were arranged in.
+    final ranked = [...overview.stages.indexed]
+      ..sort((a, b) {
+        final byOutcome =
+            _outcomeRank(a.$2.stage.lifecycleStatus) -
+            _outcomeRank(b.$2.stage.lifecycleStatus);
+        return byOutcome != 0 ? byOutcome : a.$1 - b.$1;
+      });
     // The workspace's own stages when the server sends them; the five
     // lifecycles from a server that predates stages.
     final rows = overview.stages.isNotEmpty
         ? [
-            for (final s in overview.stages)
+            for (final (_, s) in ranked)
               (
                 label: s.stage.name,
                 tone: s.stage.lifecycleStatus?.tone ?? Tone.neutral,
@@ -335,6 +344,12 @@ class _Pipeline extends StatelessWidget {
     );
   }
 }
+
+int _outcomeRank(LeadStatus? lifecycle) => switch (lifecycle) {
+  LeadStatus.converted => 1,
+  LeadStatus.lost => 2,
+  _ => 0,
+};
 
 class _StatLine extends StatelessWidget {
   const _StatLine({required this.label, required this.value});

@@ -89,6 +89,7 @@ describe('AuthService', () => {
         leadCategoryOption: { createMany: jest.fn() },
         conversationChannel: { createMany: jest.fn() },
         crmActivityPurpose: { createMany: jest.fn() },
+        leadStatusOption: { createMany: jest.fn() },
         store: { create: jest.fn() },
         tenantSubscription: { create: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
         userStoreAccess: { create: jest.fn() },
@@ -363,6 +364,17 @@ describe('AuthService', () => {
                 data: expect.arrayContaining([
                     expect.objectContaining({ tenant_id: 'tenant-1', code: 'CALL', name: 'Call', icon: '📞', is_system: true }),
                     expect.objectContaining({ tenant_id: 'tenant-1', code: 'WHATSAPP', name: 'WhatsApp' }),
+                ]),
+            }),
+        );
+        // Every lead starts on NEW and closes on CONVERTED or LOST, so a tenant
+        // needs its stages from the first lead it files.
+        expect(db.leadStatusOption.createMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipDuplicates: true,
+                data: expect.arrayContaining([
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'NEW', lifecycle: 'NEW', is_system: true }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', code: 'LOST', lifecycle: 'LOST' }),
                 ]),
             }),
         );

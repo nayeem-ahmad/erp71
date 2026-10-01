@@ -218,6 +218,8 @@ export const crmHrMessages = {
             addPurpose: 'Tambah tujuan',
             addStatus: 'Tambah status',
             protectedStatus: 'Terbina dalam — namakan semula sahaja',
+            moveUp: 'Alih ke atas',
+            moveDown: 'Alih ke bawah',
             lifecycle: {
                 open: 'Terbuka',
                 won: 'Menang',

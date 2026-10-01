@@ -218,6 +218,8 @@ export const crmHrMessages = {
             addPurpose: "Añadir propósito",
             addStatus: "Añadir estado",
             protectedStatus: "Integrado — solo renombrar",
+            moveUp: "Subir",
+            moveDown: "Bajar",
             lifecycle: {
                 open: "Abierto",
                 won: "Ganado",

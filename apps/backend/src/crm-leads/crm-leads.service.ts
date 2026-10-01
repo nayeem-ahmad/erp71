@@ -801,13 +801,20 @@ export class CrmLeadsService {
          * the tenant has no row for still lands on that lifecycle, and anything
          * unrecognised falls back to NEW — the importer's behaviour before stages.
          */
-        const importStage = (raw: unknown): ResolvedStage | undefined => {
+        type ImportStage = ResolvedStage & { seeded: boolean };
+        const importStage = (raw: unknown): ImportStage | undefined => {
             if (raw == null || String(raw).trim() === '') return undefined;
             const row = lookupTaxonomy(statusIndex, raw);
-            if (row?.lifecycle) return { id: row.id, lifecycle: row.lifecycle as LeadStatus };
+            if (row?.lifecycle) {
+                return {
+                    id: row.id,
+                    lifecycle: row.lifecycle as LeadStatus,
+                    seeded: row.code === row.lifecycle,
+                };
+            }
             const lifecycle =
                 this.resolveEnum(raw, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW;
-            return { id: seededStageId(lifecycle), lifecycle: lifecycle as LeadStatus };
+            return { id: seededStageId(lifecycle), lifecycle: lifecycle as LeadStatus, seeded: true };
         };
         const sourceIndex = buildTaxonomyIndex(sourceRows);
         const categoryIndex = buildTaxonomyIndex(categoryRows);
@@ -927,6 +934,19 @@ export class CrmLeadsService {
                 );
             },
             update: async (id, row) => {
+                // A seeded stage naming the lifecycle the lead already has is not a
+                // move — the same rule LeadStatusResolver.forUpdate applies. A sheet
+                // that says "Qualified" for a lead on "Negotiation" (an export from
+                // before stage names were exported, or hand-typed) must not pull
+                // the lead off the tenant's own stage on every upsert.
+                let stage = row.stage;
+                if (stage?.seeded) {
+                    const current = await this.db.lead.findUnique({
+                        where: { id },
+                        select: { status: true },
+                    });
+                    if (current?.status === stage.lifecycle) stage = undefined;
+                }
                 await this.db.lead.update({
                     where: { id },
                     data: {
@@ -963,8 +983,8 @@ export class CrmLeadsService {
                         // won deal on every import. A lead moved to CONVERTED this
                         // way still counts in the all-time totals, just not in
                         // won-this-period until someone edits it for real.
-                        ...(row.stage !== undefined
-                            ? { status: row.stage.lifecycle, status_id: row.stage.id }
+                        ...(stage !== undefined
+                            ? { status: stage.lifecycle, status_id: stage.id }
                             : {}),
                         ...(row.linkedin_url !== null
                             ? { linkedin_url: row.linkedin_url, linkedin_norm: row.identity.linkedin_norm }

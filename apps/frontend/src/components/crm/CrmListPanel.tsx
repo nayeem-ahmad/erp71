@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, EyeOff, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, EyeOff, Eye, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button, Input, Field, Select, StatusBadge } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
@@ -174,6 +174,31 @@ export default function CrmListPanel({
         }
     };
 
+    /**
+     * Stages are an ordered pipeline, so they can be moved. The whole list is
+     * renumbered 1..n and every row whose position changed is saved — rows
+     * created at the same time can share a sort_order, and swapping two tied
+     * values would change nothing.
+     */
+    const move = async (index: number, delta: -1 | 1) => {
+        const next = [...rows];
+        const [moved] = next.splice(index, 1);
+        next.splice(index + delta, 0, moved);
+        const changed = next
+            .map((row, i) => ({ row, order: i + 1 }))
+            .filter(({ row, order }) => row.sort_order !== order);
+        setRows(next.map((row, i) => ({ ...row, sort_order: i + 1 })));
+        try {
+            await Promise.all(
+                changed.map(({ row, order }) => api.updateLeadTaxonomy(kind, row.id, { sort_order: order })),
+            );
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : m.saveFailed);
+        } finally {
+            await load();
+        }
+    };
+
     const confirmDelete = async () => {
         if (!deleting) return;
         if (inUseCount > 0 && !reassignTo) {
@@ -211,7 +236,7 @@ export default function CrmListPanel({
             ) : (
                 <div className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
                     <ul className="divide-y divide-gray-50">
-                        {rows.map((row) => (
+                        {rows.map((row, index) => (
                             <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
@@ -244,6 +269,28 @@ export default function CrmListPanel({
                                 </div>
                                 {canManage && (
                                     <div className="flex shrink-0 items-center gap-1">
+                                        {isStatuses && (
+                                            <>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => move(index, -1)}
+                                                    disabled={index === 0}
+                                                    aria-label={m.moveUp}
+                                                >
+                                                    <ArrowUp className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => move(index, 1)}
+                                                    disabled={index === rows.length - 1}
+                                                    aria-label={m.moveDown}
+                                                >
+                                                    <ArrowDown className="h-4 w-4" />
+                                                </Button>
+                                            </>
+                                        )}
                                         <Button
                                             variant="ghost"
                                             size="sm"

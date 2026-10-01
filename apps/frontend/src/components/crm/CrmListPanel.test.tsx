@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CrmListPanel from './CrmListPanel';
 
 jest.mock('@/lib/api', () => ({
@@ -68,5 +68,25 @@ describe('CrmListPanel — statuses', () => {
         const select = await screen.findByRole('combobox');
         const options = within(select).getAllByRole('option').map((o) => o.textContent);
         expect(options).toEqual(['Choose a replacement…', 'New', 'Contacted']);
+    });
+
+    it('reorders a stage by renumbering the whole list', async () => {
+        api.updateLeadTaxonomy.mockResolvedValue({});
+        render(<CrmListPanel kind="statuses" canManage />);
+
+        fireEvent.click(within(await rowOf('Negotiation')).getByRole('button', { name: 'Move up' }));
+
+        // New, Negotiation, Contacted, Paused, Converted, Lost — every row whose
+        // position changed is saved, so ties left by earlier inserts cannot stick.
+        await waitFor(() => expect(api.updateLeadTaxonomy).toHaveBeenCalledTimes(5));
+        expect(api.updateLeadTaxonomy).toHaveBeenCalledWith('statuses', 'st-neg', { sort_order: 2 });
+        expect(api.updateLeadTaxonomy).toHaveBeenCalledWith('statuses', 'st-con', { sort_order: 3 });
+    });
+
+    it('cannot move the first stage up or the last one down', async () => {
+        render(<CrmListPanel kind="statuses" canManage />);
+
+        expect(within(await rowOf('New')).getByRole('button', { name: 'Move up' })).toBeDisabled();
+        expect(within(await rowOf('Lost')).getByRole('button', { name: 'Move down' })).toBeDisabled();
     });
 });

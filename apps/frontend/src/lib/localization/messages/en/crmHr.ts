@@ -222,6 +222,8 @@ export const crmHrMessages = {
             addPurpose: 'Add purpose',
             addStatus: 'Add status',
             protectedStatus: 'Built in — rename only',
+            moveUp: 'Move up',
+            moveDown: 'Move down',
             lifecycle: {
                 open: 'Open',
                 won: 'Won',

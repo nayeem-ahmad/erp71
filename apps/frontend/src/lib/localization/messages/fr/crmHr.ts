@@ -218,6 +218,8 @@ export const crmHrMessages = {
             addPurpose: "Ajouter un objet",
             addStatus: "Ajouter un statut",
             protectedStatus: "Intégré — renommage uniquement",
+            moveUp: "Monter",
+            moveDown: "Descendre",
             lifecycle: {
                 open: "Ouvert",
                 won: "Gagné",

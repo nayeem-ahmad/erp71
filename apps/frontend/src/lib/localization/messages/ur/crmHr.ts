@@ -218,6 +218,8 @@ export const crmHrMessages = {
             addPurpose: 'مقصد شامل کریں',
             addStatus: 'اسٹیٹس شامل کریں',
             protectedStatus: 'بلٹ اِن — صرف نام بدلیں',
+            moveUp: 'اوپر لے جائیں',
+            moveDown: 'نیچے لے جائیں',
             lifecycle: {
                 open: 'کھلا',
                 won: 'جیتا',

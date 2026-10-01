@@ -303,7 +303,11 @@ function LeadsPage() {
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const { options: sourceOptions } = useLeadTaxonomy('sources');
     const { options: categoryOptions } = useLeadTaxonomy('categories');
-    const { options: statusOptions } = useLeadTaxonomy('statuses');
+    // Hidden stages too: a funnel bar or a remembered filter can point at one
+    // that still holds leads, and the filter must be able to show it. Forms and
+    // the bulk action offer only the active ones.
+    const { options: allStatusOptions, loading: statusesLoading } = useLeadTaxonomy('statuses', true);
+    const statusOptions = useMemo(() => allStatusOptions.filter((o) => o.is_active), [allStatusOptions]);
     const [selectionEpoch, setSelectionEpoch] = useState(0);
     const [bulkBusy, setBulkBusy] = useState(false);
     const [total, setTotal] = useState(0);
@@ -396,6 +400,16 @@ function LeadsPage() {
     }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort, filtersReady, scopeReady]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
+
+    // A remembered stage id the tenant has since deleted (or one from another
+    // workspace) would filter the list down to nothing behind a select reading
+    // "All statuses". Drop it once the stage list is in. Only when the list
+    // actually loaded — an empty list is also what a failed fetch looks like.
+    useEffect(() => {
+        if (!filtersReady || statusesLoading || allStatusOptions.length === 0) return;
+        const { statusId } = statusQuery(statusFilter);
+        if (statusId && !allStatusOptions.some((o) => o.id === statusId)) setFilter('status', '');
+    }, [filtersReady, statusesLoading, allStatusOptions, statusFilter, setFilter]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
@@ -506,11 +520,14 @@ function LeadsPage() {
                 </span>
             ),
         }),
-        columnHelper.accessor('status', {
+        // The stage's own name is the value, so a CSV export says "Negotiation"
+        // rather than the lifecycle — and re-imports onto the same stage.
+        columnHelper.accessor((row) => leadStatusLabel(row, m.statuses), {
+            id: 'status',
             header: m.columns.status,
             cell: (info) => (
-                <StatusBadge tone={leadStatusTone(info.getValue())}>
-                    {leadStatusLabel(info.row.original, m.statuses)}
+                <StatusBadge tone={leadStatusTone(info.row.original.status)}>
+                    {info.getValue() as string}
                 </StatusBadge>
             ),
         }),
@@ -700,14 +717,18 @@ function LeadsPage() {
                         three working stages as one choice — what the dashboard's
                         attention tiles count, and so what their links open. */}
                     <option value={OPEN_STATUS_FILTER}>{m.openPipeline}</option>
-                    {statusOptions.length > 0 ? (
+                    {allStatusOptions.length > 0 ? (
                         <>
                             {/* A lifecycle from an older link stays visible as the selection. */}
                             {LEAD_STATUSES.includes(statusFilter as (typeof LEAD_STATUSES)[number]) && (
                                 <option value={statusFilter}>{statusLabel(statusFilter)}</option>
                             )}
-                            {statusOptions.map((o) => (
-                                <option key={o.id} value={o.id}>{stageOptionLabel(o, m.statuses)}</option>
+                            {allStatusOptions.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                    {o.is_active
+                                        ? stageOptionLabel(o, m.statuses)
+                                        : `${stageOptionLabel(o, m.statuses)} (${t.crm.leadTaxonomy.inactive})`}
+                                </option>
                             ))}
                         </>
                     ) : (

@@ -218,6 +218,8 @@ export const crmHrMessages = {
             addPurpose: 'إضافة غرض',
             addStatus: 'إضافة حالة',
             protectedStatus: 'مدمجة — إعادة التسمية فقط',
+            moveUp: 'نقل لأعلى',
+            moveDown: 'نقل لأسفل',
             lifecycle: {
                 open: 'مفتوح',
                 won: 'ربح',

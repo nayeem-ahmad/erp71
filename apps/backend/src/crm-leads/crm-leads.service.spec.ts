@@ -1662,6 +1662,42 @@ describe('CrmLeadsService', () => {
             expect(db.lead.findMany.mock.calls[0][0].orderBy).toEqual({ statusOption: { sort_order: 'asc' } });
         });
 
+        it('keeps a custom stage when a re-imported sheet names only its lifecycle', async () => {
+            // An export taken before stage names were exported says QUALIFIED for a
+            // lead on "Negotiation"; re-importing it must not pull the lead off.
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01800000079'));
+            db.lead.findUnique.mockResolvedValue({ status: 'QUALIFIED' });
+            db.lead.update.mockResolvedValue({ id: 'lead-existing' });
+
+            await service.importRows('tenant-1', [
+                { name: 'Imp', mobile: '01800000079', status: 'QUALIFIED' },
+            ], 'upsert', 'Asia/Dhaka');
+
+            const data = db.lead.update.mock.calls[0][0].data;
+            expect(data).not.toHaveProperty('status_id');
+            expect(data).not.toHaveProperty('status');
+        });
+
+        it('still moves a lead when the re-imported lifecycle differs', async () => {
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01800000080'));
+            db.lead.findUnique.mockResolvedValue({ status: 'QUALIFIED' });
+            db.lead.update.mockResolvedValue({ id: 'lead-existing' });
+
+            await service.importRows('tenant-1', [
+                { name: 'Imp', mobile: '01800000080', status: 'Contacted' },
+            ], 'upsert', 'Asia/Dhaka');
+
+            expect(db.lead.update.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({ status: 'CONTACTED', status_id: 'st-con' }),
+            );
+        });
+
         it('imports a status cell naming a custom stage', async () => {
             taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
                 kind === 'statuses' ? STAGES : [],

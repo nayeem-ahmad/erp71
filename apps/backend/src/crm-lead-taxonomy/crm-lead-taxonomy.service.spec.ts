@@ -469,6 +469,28 @@ describe('CrmLeadTaxonomyService', () => {
             });
         });
 
+        it('slots a new stage in after the open ones, ahead of Converted and Lost', async () => {
+            db.leadStatusOption.findMany.mockImplementation(async ({ select }: any) =>
+                select?.lifecycle
+                    ? [
+                        { id: 'n', sort_order: 1, lifecycle: 'NEW' },
+                        { id: 'q', sort_order: 3, lifecycle: 'QUALIFIED' },
+                        { id: 'w', sort_order: 4, lifecycle: 'CONVERTED' },
+                        { id: 'l', sort_order: 5, lifecycle: 'LOST' },
+                    ]
+                    : [],
+            );
+            db.leadStatusOption.updateMany = jest.fn();
+
+            await service.create('tenant-1', LeadTaxonomyKind.STATUS, { name: 'Negotiation' });
+
+            expect(db.leadStatusOption.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', sort_order: { gte: 4 } },
+                data: { sort_order: { increment: 1 } },
+            });
+            expect(db.leadStatusOption.create.mock.calls[0][0].data.sort_order).toBe(4);
+        });
+
         it.each(['NEW', 'CONVERTED', 'LOST'])('refuses to hide the %s status', async (code) => {
             db.leadStatusOption.findFirst.mockResolvedValue(
                 stage({ code, name: code, lifecycle: code, is_system: true }),

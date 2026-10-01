@@ -714,6 +714,33 @@ describe('LeadsPage — tenant stages', () => {
         );
     });
 
+    it('shows a hidden stage it was linked at, rather than pretending to show everything', async () => {
+        api.getLeadTaxonomy.mockImplementation(async (kind: string) =>
+            kind === 'statuses'
+                ? [...STAGES, { id: 'st-old', code: 'OLD', name: 'Paused', lifecycle: 'QUALIFIED', sort_order: 4, is_system: false, is_active: false }]
+                : [],
+        );
+        searchParams = new URLSearchParams('statusId=st-old');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() => expect(selectByOption('All statuses').value).toBe('st-old'));
+        expect(screen.getByRole('option', { name: 'Paused (Hidden)' })).toBeInTheDocument();
+    });
+
+    it('drops a remembered stage that no longer exists', async () => {
+        searchParams = new URLSearchParams('statusId=st-deleted');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenLastCalledWith(
+                expect.objectContaining({ statusId: undefined }),
+            ),
+        );
+        expect(selectByOption('All statuses').value).toBe('');
+    });
+
     it('offers only open stages to the bulk status action', async () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
