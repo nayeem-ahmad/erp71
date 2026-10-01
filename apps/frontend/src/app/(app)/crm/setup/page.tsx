@@ -13,7 +13,7 @@ import { hasPermission, isOwner } from '@/lib/permissions';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { getWorkspaceItem } from '@/lib/session-store';
 
-const TABS = ['channels', 'purposes', 'templates', 'sources', 'categories', 'customFields'] as const;
+const TABS = ['channels', 'purposes', 'templates', 'statuses', 'sources', 'categories', 'customFields'] as const;
 type Tab = (typeof TABS)[number];
 
 function isTab(value: string | null): value is Tab {

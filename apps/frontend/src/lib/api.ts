@@ -988,7 +988,7 @@ export type CustomFieldDef = { key: string; label: string; order: number };
  * The tenant-managed CRM lookup lists, all served by `/crm/lead-taxonomy/:kind`
  * and all edited from the CRM Setup screen.
  */
-export type CrmListKind = 'sources' | 'categories' | 'channels' | 'purposes';
+export type CrmListKind = 'sources' | 'categories' | 'channels' | 'purposes' | 'statuses';
 
 /**
  * A CRM message template as the API accepts it. `channel_id` / `purpose_id` are

@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import type { LeadTaxonomyKind, LeadTaxonomyOption } from '@/lib/use-lead-taxonomy';
+import { isOpenLifecycle, leadStatusTone } from '@/lib/lead-status';
 
 type EditorState = {
     id?: string;
@@ -19,8 +20,16 @@ type EditorState = {
 const MAX_SCORE_WEIGHT = 25;
 
 /**
- * One tenant-managed CRM lookup list — sources, categories or conversation
- * channels — rendered as a tab body inside CRM Setup.
+ * Mirrors PROTECTED_STATUS_CODES in lead-taxonomy.seed.ts: every lead starts on
+ * NEW and closes on CONVERTED or LOST, so the API refuses to hide or delete them.
+ * Hiding the controls here just stops offering a button that can only fail.
+ */
+const PROTECTED_STATUS_CODES = new Set(['NEW', 'CONVERTED', 'LOST']);
+
+/**
+ * One tenant-managed CRM lookup list — sources, categories, lead statuses,
+ * conversation channels or activity purposes — rendered as a tab body inside
+ * CRM Setup.
  *
  * All three are the same CRUD surface over `/crm/lead-taxonomy/:kind`; the only
  * per-list differences are the two optional columns (`score_weight` on sources,
@@ -49,6 +58,9 @@ export default function CrmListPanel({
     const isSources = kind === 'sources';
     const isChannels = kind === 'channels';
     const isPurposes = kind === 'purposes';
+    const isStatuses = kind === 'statuses';
+    const isProtected = (row: LeadTaxonomyOption) =>
+        isStatuses && row.is_system && PROTECTED_STATUS_CODES.has(row.code);
     // Channels and purposes both carry an emoji; the two lead lists do not.
     const hasIcon = isChannels || isPurposes;
     const addLabel = isSources
@@ -57,7 +69,9 @@ export default function CrmListPanel({
             ? m.addChannel
             : isPurposes
                 ? m.addPurpose
-                : m.addCategory;
+                : isStatuses
+                    ? m.addStatus
+                    : m.addCategory;
     // Channels and purposes are counted against activities, the two lead lists
     // against leads.
     const usageTemplate = hasIcon ? m.activitiesUsing : m.leadsUsing;
@@ -86,8 +100,15 @@ export default function CrmListPanel({
 
     const inUseCount = deleting ? (usage[deleting.id] ?? 0) : 0;
     const reassignTargets = useMemo(
-        () => rows.filter((r) => r.id !== deleting?.id && r.is_active),
-        [rows, deleting],
+        () => rows.filter(
+            (r) =>
+                r.id !== deleting?.id &&
+                r.is_active &&
+                // Leads moved off a stage are still being worked; the API refuses
+                // to close them as a side effect, so only open stages are offered.
+                (!isStatuses || isOpenLifecycle(r.lifecycle)),
+        ),
+        [rows, deleting, isStatuses],
     );
 
     const openCreate = () => {
@@ -202,6 +223,15 @@ export default function CrmListPanel({
                                         <span className="truncate text-sm font-medium text-gray-800">
                                             {row.name}
                                         </span>
+                                        {isStatuses && row.lifecycle && (
+                                            <StatusBadge tone={leadStatusTone(row.lifecycle)}>
+                                                {row.lifecycle === 'CONVERTED'
+                                                    ? m.lifecycle.won
+                                                    : row.lifecycle === 'LOST'
+                                                        ? m.lifecycle.lost
+                                                        : m.lifecycle.open}
+                                            </StatusBadge>
+                                        )}
                                         {!row.is_active && (
                                             <StatusBadge tone="neutral">{m.inactive}</StatusBadge>
                                         )}
@@ -209,6 +239,7 @@ export default function CrmListPanel({
                                     <p className="mt-0.5 text-xs text-gray-400">
                                         {isSources && `${m.weight}: ${row.score_weight ?? 0} · `}
                                         {usageTemplate.replace('{count}', String(usage[row.id] ?? 0))}
+                                        {isProtected(row) && ` · ${m.protectedStatus}`}
                                     </p>
                                 </div>
                                 {canManage && (
@@ -221,25 +252,29 @@ export default function CrmListPanel({
                                         >
                                             <Pencil className="h-4 w-4" />
                                         </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => toggleActive(row)}
-                                            aria-label={row.is_active ? m.deactivate : m.activate}
-                                        >
-                                            {row.is_active
-                                                ? <EyeOff className="h-4 w-4" />
-                                                : <Eye className="h-4 w-4" />}
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => { setDeleting(row); setReassignTo(''); }}
-                                            aria-label={m.delete.action}
-                                            className="text-danger"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        {!isProtected(row) && (
+                                            <>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => toggleActive(row)}
+                                                    aria-label={row.is_active ? m.deactivate : m.activate}
+                                                >
+                                                    {row.is_active
+                                                        ? <EyeOff className="h-4 w-4" />
+                                                        : <Eye className="h-4 w-4" />}
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => { setDeleting(row); setReassignTo(''); }}
+                                                    aria-label={m.delete.action}
+                                                    className="text-danger"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </li>
