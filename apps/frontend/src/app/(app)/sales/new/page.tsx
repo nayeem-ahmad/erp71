@@ -22,6 +22,7 @@ import {
     type PaperSize,
 } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 import { toast } from '@/lib/toast';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import PaperSizeMenu from '../components/PaperSizeMenu';
@@ -206,6 +207,7 @@ function NewSalePageContent() {
 
     // The sale is rung up at the workspace store, so it prints on that branch's paper.
     const printHeader = usePrintHeader('SALES_INVOICE', { storeId: getWorkspaceItem('store_id') || undefined });
+    const { prefs: invoiceLayout } = useInvoicePrintPrefs();
 
     /**
      * What is on the screen right now, as an invoice. Printed straight from the
@@ -253,7 +255,7 @@ function NewSalePageContent() {
 
     const handlePrint = (size?: PaperSize) => {
         const selectedSize = size ?? paperSize;
-        printSalesInvoice(buildInvoiceData(), selectedSize);
+        printSalesInvoice(buildInvoiceData(), selectedSize, undefined, invoiceLayout);
     };
 
     const handleAddItem = (
@@ -575,7 +577,7 @@ function NewSalePageContent() {
                 paperSize={paperSize}
                 onPaperSizeChange={setPaperSize}
                 onPrint={() => {
-                    printSalesInvoice(printPrompt.invoice, paperSize);
+                    printSalesInvoice(printPrompt.invoice, paperSize, undefined, invoiceLayout);
                     setPrintPrompt(null);
                 }}
                 onDismiss={() => setPrintPrompt(null)}

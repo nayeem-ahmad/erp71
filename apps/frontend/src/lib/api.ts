@@ -5200,6 +5200,13 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    // The signed-in member's own invoice layout (see useInvoicePrintPrefs).
+    getMyInvoicePrint: () => fetchWithAuth('/sales-settings/my-invoice-print'),
+    updateMyInvoicePrint: (data: Record<string, unknown>) => fetchWithAuth('/sales-settings/my-invoice-print', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     // New Sales
     createNewSale: (data: any) => fetchWithAuth('/sales', {
         method: 'POST',
