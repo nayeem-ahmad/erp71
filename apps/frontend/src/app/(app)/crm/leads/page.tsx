@@ -321,7 +321,7 @@ function LeadsPage() {
 
     useEffect(() => {
         api.getCustomFields('LEAD').then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : [])).catch(() => setCustomFieldDefs([]));
-        api.getTeamMembers().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
+        api.getCrmAssignees().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
     }, []);
 
     // Debounce free-text search before it triggers a server request. Kept in

@@ -1870,7 +1870,7 @@ export const api = {
             },
         );
     },
-    recordCreditPayment: (id: string, data: { amount: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -1889,7 +1889,7 @@ export const api = {
         return fetchAllPages(`/customers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerCreditPayment: (paymentId: string) => fetchWithAuth(`/customers/credit/payments/${paymentId}`),
-    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -1964,6 +1964,9 @@ export const api = {
         if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    // Every CRM person-picker reads this, not `getTeamMembers`: that one is the Team
+    // admin list and needs MANAGE_USERS, so for anyone else the pickers came up empty.
+    getCrmAssignees: () => fetchWithAuth('/crm/leads/assignees'),
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
     getLeadsSummary: () => fetchWithAuth('/crm/leads/summary'),
     createLead: (data: any) => fetchWithAuth('/crm/leads', {
@@ -2710,6 +2713,7 @@ export const api = {
     },
     recordSupplierCreditPayment: (id: string, data: {
         amount: number;
+        discount?: number;
         direction?: 'pay' | 'receive';
         notes?: string;
         allocations?: { purchaseId: string; amount: number }[];
@@ -2742,7 +2746,7 @@ export const api = {
         return fetchAllPages(`/suppliers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSupplierCreditPayment: (paymentId: string) => fetchWithAuth(`/suppliers/credit/payments/${paymentId}`),
-    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
+    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
         fetchWithAuth(`/suppliers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -5193,6 +5197,13 @@ export const api = {
     // Sales Settings
     getSalesSettings: () => fetchWithAuth('/sales-settings'),
     updateSalesSettings: (data: any) => fetchWithAuth('/sales-settings', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    // The signed-in member's own invoice layout (see useInvoicePrintPrefs).
+    getMyInvoicePrint: () => fetchWithAuth('/sales-settings/my-invoice-print'),
+    updateMyInvoicePrint: (data: Record<string, unknown>) => fetchWithAuth('/sales-settings/my-invoice-print', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },

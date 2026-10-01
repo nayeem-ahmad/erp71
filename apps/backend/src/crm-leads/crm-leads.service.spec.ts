@@ -725,6 +725,28 @@ describe('CrmLeadsService', () => {
         });
     });
 
+    describe('listAssignees()', () => {
+        it('lists every member of the workspace as id, name and email — nothing else', async () => {
+            db.tenantUser = {
+                findMany: jest.fn().mockResolvedValue([
+                    { user: { id: 'u-1', name: 'Asha', email: 'asha@example.com' } },
+                    { user: { id: 'u-2', name: null, email: 'bilal@example.com' } },
+                ]),
+            };
+
+            await expect(service.listAssignees('tenant-1')).resolves.toEqual([
+                { userId: 'u-1', name: 'Asha', email: 'asha@example.com' },
+                { userId: 'u-2', name: null, email: 'bilal@example.com' },
+            ]);
+            expect(db.tenantUser.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id: 'tenant-1' },
+                    select: { user: { select: { id: true, name: true, email: true } } },
+                }),
+            );
+        });
+    });
+
     describe('importRows()', () => {
         it('creates a new lead from a valid row with defaults applied', async () => {
             db.lead.findFirst.mockResolvedValueOnce(null);

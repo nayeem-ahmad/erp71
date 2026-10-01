@@ -270,10 +270,10 @@ export default function SaleEntryLayout({
                     <>
                         {onVoiceResult ? (
                             <VoiceEntryInput entryType="sale" onResult={onVoiceResult} inline>
-                                <ProductSearch onProductSelect={onAddProduct} {...history} />
+                                <ProductSearch onProductSelect={onAddProduct} warehouseId={warehouseId || undefined} {...history} />
                             </VoiceEntryInput>
                         ) : (
-                            <ProductSearch onProductSelect={onAddProduct} {...history} />
+                            <ProductSearch onProductSelect={onAddProduct} warehouseId={warehouseId || undefined} {...history} />
                         )}
                     </>
                 )
@@ -286,6 +286,7 @@ export default function SaleEntryLayout({
                     readOnly={readOnly}
                     warehouses={perLineWarehouse ? warehouses : []}
                     entryWarehouseName={entryWarehouseName}
+                    entryWarehouseId={warehouseId || undefined}
                     {...history}
                 />
             }

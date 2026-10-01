@@ -17,6 +17,7 @@ import { PageShell, Button, Select } from '@/components/ui';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import CrmActivityPanel from '@/components/crm/CrmActivityPanel';
 import WriteOffDebtModal from '@/components/customers/WriteOffDebtModal';
+import { PaymentDiscountField, paymentDiscountError } from '@/components/payments/PaymentDiscountField';
 import { toast } from '@/lib/toast';
 
 type Tab = 'history' | 'activities' | 'credit';
@@ -55,6 +56,7 @@ export default function CustomerProfile() {
     const [creditLoading, setCreditLoading] = useState(false);
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [paymentAmount, setPaymentAmount] = useState('');
+    const [paymentDiscount, setPaymentDiscount] = useState('');
     const [paymentNote, setPaymentNote] = useState('');
     const [savingPayment, setSavingPayment] = useState(false);
     const [showWriteOff, setShowWriteOff] = useState(false);
@@ -129,13 +131,28 @@ export default function CustomerProfile() {
 
 
 
+    const paymentDueBefore = creditLedger ? Number(creditLedger.due_balance) : null;
+    const paymentDiscountProblem = paymentDiscountError(
+        paymentDueBefore,
+        paymentAmount,
+        paymentDiscount,
+        t.customerPayments.discount.tooLarge,
+    );
+
     const savePayment = async () => {
-        const amt = parseFloat(paymentAmount);
-        if (isNaN(amt) || amt <= 0) return;
+        const amt = paymentAmount.trim() === '' ? 0 : parseFloat(paymentAmount);
+        const discount = paymentDiscount.trim() === '' ? 0 : parseFloat(paymentDiscount);
+        if (isNaN(amt) || isNaN(discount) || amt < 0 || discount < 0 || amt + discount <= 0) return;
+        if (paymentDiscountProblem) return;
         setSavingPayment(true);
         try {
-            await api.recordCreditPayment(id as string, { amount: amt, notes: paymentNote });
+            await api.recordCreditPayment(id as string, {
+                amount: amt,
+                discount: discount > 0 ? discount : undefined,
+                notes: paymentNote,
+            });
             setPaymentAmount('');
+            setPaymentDiscount('');
             setPaymentNote('');
             setShowPaymentForm(false);
             await loadCredit();
@@ -423,10 +440,18 @@ export default function CustomerProfile() {
                                                         className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
                                                     />
                                                 </div>
+                                                <PaymentDiscountField
+                                                    id="customer-profile-payment-discount"
+                                                    value={paymentDiscount}
+                                                    onChange={setPaymentDiscount}
+                                                    amount={paymentAmount}
+                                                    dueBefore={paymentDueBefore}
+                                                    labels={t.customerPayments.discount}
+                                                />
                                                 <div className="flex gap-2">
                                                     <button
                                                         onClick={savePayment}
-                                                        disabled={savingPayment || !paymentAmount}
+                                                        disabled={savingPayment || (!paymentAmount && !paymentDiscount)}
                                                         className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
                                                     >
                                                         {t.customers.profile.confirmPayment}
@@ -466,6 +491,11 @@ export default function CustomerProfile() {
                                                         </td>
                                                         <td className={`px-4 py-3 text-end font-bold ${tx.type === 'PAYMENT' ? 'text-emerald-600' : 'text-danger'}`}>
                                                             {tx.type === 'PAYMENT' ? '-' : '+'}{formatBDT(Number(tx.amount))}
+                                                            {Number(tx.discount_amount ?? 0) > 0 ? (
+                                                                <span className="block text-xs font-normal text-gray-500">
+                                                                    {t.customerPayments.discount.label}: {formatBDT(Number(tx.discount_amount))}
+                                                                </span>
+                                                            ) : null}
                                                         </td>
                                                         <td className="px-4 py-3 text-end text-gray-700 font-medium">{formatBDT(Number(tx.balance_after))}</td>
                                                         <td className="px-4 py-3 text-gray-400">{tx.notes ?? '—'}</td>

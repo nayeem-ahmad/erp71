@@ -13,6 +13,8 @@ export interface CustomerPaymentReceiptData {
     customerPhone?: string;
     customerCode?: string;
     amount: number;
+    /** Settled alongside the money; printed only when non-zero. */
+    discount?: number;
     balanceAfter?: number;
     notes?: string;
     recordedBy?: string;
@@ -24,6 +26,7 @@ export interface CustomerPaymentReceiptData {
         date: string;
         customer: string;
         amount: string;
+        discount: string;
         balanceAfter: string;
         notes: string;
         recordedBy: string;
@@ -89,6 +92,7 @@ export function printCustomerPaymentReceipt(
         <div class="amount-label">${escHtml(data.labels.amount)}</div>
         <div class="amount-value">${formatBDT(data.amount)}</div>
     </div>
+    ${data.discount && data.discount > 0 ? `<table class="info-table"><tr><td>${escHtml(data.labels.discount)}</td><td>${formatBDT(data.discount)}</td></tr></table>` : ''}
 
     ${data.balanceAfter !== undefined ? `
     <table class="info-table">

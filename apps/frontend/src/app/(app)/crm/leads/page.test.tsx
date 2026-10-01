@@ -37,7 +37,7 @@ jest.mock('@/lib/api', () => ({
     api: {
         getLeads: jest.fn(),
         getCustomFields: jest.fn().mockResolvedValue([]),
-        getTeamMembers: jest.fn().mockResolvedValue([]),
+        getCrmAssignees: jest.fn().mockResolvedValue([]),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         deleteLead: jest.fn(),
         bulkLeadAction: jest.fn(),
@@ -83,7 +83,7 @@ describe('LeadsPage — lead owner', () => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
         api.getLeads.mockResolvedValue({ items: leads, total: 2 });
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);
@@ -130,7 +130,7 @@ describe('LeadsPage — email', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         api.getLeads.mockResolvedValue({ items: leads, total: 2 });
-        api.getTeamMembers.mockResolvedValue([]);
+        api.getCrmAssignees.mockResolvedValue([]);
     });
 
     it('shows an Email column with the address, and a dash where there is none', async () => {
@@ -191,7 +191,7 @@ describe('LeadsPage — filters arriving in the URL', () => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
         api.getLeads.mockResolvedValue({ items: leads, total: 2 });
-        api.getTeamMembers.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
     });
 
     it('opens showing only unowned leads still in the open pipeline', async () => {
@@ -340,7 +340,7 @@ describe('LeadsPage — address, remarks and web links', () => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
         api.getLeads.mockResolvedValue({ items: detailed, total: 2 });
-        api.getTeamMembers.mockResolvedValue([]);
+        api.getCrmAssignees.mockResolvedValue([]);
     });
 
     /** The cell under a header, on the row whose Name cell reads `leadName`. */
@@ -397,7 +397,7 @@ describe('LeadsPage — remembered filters', () => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
         api.getLeads.mockResolvedValue({ items: leads, total: 2 });
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);
@@ -523,7 +523,7 @@ describe('LeadsPage — only mine', () => {
         sessionStorage.clear();
         searchParams = new URLSearchParams();
         api.getLeads.mockResolvedValue({ items: leads, total: 2 });
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);
@@ -594,7 +594,7 @@ describe('LeadsPage — only mine', () => {
 
         jest.clearAllMocks();
         api.getLeads.mockResolvedValue({ items: leads, total: 2 });
-        api.getTeamMembers.mockResolvedValue([]);
+        api.getCrmAssignees.mockResolvedValue([]);
 
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');

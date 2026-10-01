@@ -93,7 +93,7 @@ export default function ContactsPage() {
     const loadSeq = useRef(0);
 
     useEffect(() => {
-        api.getTeamMembers().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
+        api.getCrmAssignees().then((d: any) => setTeamMembers(Array.isArray(d) ? d : [])).catch(() => setTeamMembers([]));
     }, []);
 
     useEffect(() => {

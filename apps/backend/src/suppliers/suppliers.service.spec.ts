@@ -1,10 +1,11 @@
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn().mockResolvedValue({ postingStatus: 'skipped' }),
+    voidAutoPostedVoucher: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { DatabaseService } from '../database/database.service';
 import { SupplierPaymentDirectionDto } from './supplier.dto';
 import { SuppliersService } from './suppliers.service';
@@ -467,6 +468,175 @@ describe('SuppliersService', () => {
                     unapplied_amount: 0,
                 }),
             );
+        });
+    });
+
+    describe('payment discount', () => {
+        function mockTx(opts: { bills?: any[] } = {}) {
+            const tx = {
+                supplierCreditTransaction: {
+                    create: jest.fn().mockResolvedValue({
+                        id: 'tx-1', type: 'PAYMENT', payment_number: 'SPY-00001',
+                        created_at: new Date('2026-09-30T00:00:00Z'),
+                    }),
+                    findFirst: jest.fn().mockResolvedValue(null),
+                    update: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 'tx-1', ...data })),
+                    delete: jest.fn().mockResolvedValue({}),
+                },
+                supplier: {
+                    findFirst: jest.fn(),
+                    update: jest.fn().mockResolvedValue({}),
+                },
+                purchase: {
+                    findMany: jest.fn().mockResolvedValue(opts.bills ?? []),
+                    update: jest.fn().mockResolvedValue({}),
+                },
+                supplierPaymentAllocation: { create: jest.fn().mockResolvedValue({}) },
+            };
+            db.$transaction.mockImplementation((fn: (t: any) => Promise<unknown>) => fn(tx));
+            return tx;
+        }
+
+        const postedCalls = () => (autoPostFromRules as jest.Mock).mock.calls.map((c: any[]) => c[0]);
+
+        beforeEach(() => {
+            (autoPostFromRules as jest.Mock).mockClear();
+            (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'skipped' });
+            (voidAutoPostedVoucher as jest.Mock).mockClear();
+        });
+
+        it('settles amount + discount, posts the discount leg, and lets both clear a bill', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 5000, name: 'ACME' });
+            const tx = mockTx({ bills: [{ id: 'purchase-1', total_amount: 5000, paid_amount: 0, purchase_number: 'PUR-1' }] });
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                amount: 4998,
+                discount: 2,
+                allocations: [{ purchaseId: 'purchase-1', amount: 5000 }],
+            });
+
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ amount: 4998, discount_amount: 2, balance_after: 0 }),
+            }));
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: 0 } });
+            expect(tx.purchase.update).toHaveBeenCalledWith({
+                where: { id: 'purchase-1' },
+                data: { paid_amount: 5000, payment_status: 'PAID' },
+            });
+
+            const calls = postedCalls();
+            expect(calls).toHaveLength(2);
+            expect(calls[0]).toMatchObject({ conditionValue: 'pay', amount: 4998 });
+            expect(calls[0].legKey).toBeUndefined();
+            expect(calls[1]).toMatchObject({
+                eventType: 'supplier_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: 'discount',
+                legKey: 'discount',
+                sourceId: 'tx-1',
+                amount: 2,
+                partyType: 'SUPPLIER',
+                partyId: 'sup-1',
+            });
+        });
+
+        it('allows a discount-only settlement and posts no cash leg', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 2, name: 'ACME' });
+            mockTx();
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 0, discount: 2 });
+
+            const calls = postedCalls();
+            expect(calls).toHaveLength(1);
+            expect(calls[0]).toMatchObject({ conditionValue: 'discount', legKey: 'discount', amount: 2 });
+        });
+
+        it('rejects a discount on money received from the supplier', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 100, name: 'ACME' });
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                amount: 50, discount: 1, direction: SupplierPaymentDirectionDto.RECEIVE,
+            })).rejects.toThrow(BadRequestException);
+        });
+
+        it('rejects a discount larger than what is left after the payment', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 100, name: 'ACME' });
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 95, discount: 6 }))
+                .rejects.toThrow(BadRequestException);
+        });
+
+        it('rejects allocations beyond amount + discount', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 5000, name: 'ACME' });
+            mockTx({ bills: [{ id: 'purchase-1', total_amount: 5000, paid_amount: 0, purchase_number: 'PUR-1' }] });
+
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', {
+                amount: 4990, discount: 2, allocations: [{ purchaseId: 'purchase-1', amount: 5000 }],
+            })).rejects.toThrow(BadRequestException);
+        });
+
+        // Regression: editing a supplier payment used to leave its original
+        // voucher in the GL, so the books and due_balance drifted apart.
+        it('update voids both legs and reposts them at the payment\'s own date', async () => {
+            const createdAt = new Date('2026-09-01T00:00:00Z');
+            db.supplierCreditTransaction.findFirst.mockResolvedValue({
+                id: 'tx-1', tenant_id: 'tenant-1', supplier_id: 'sup-1', type: 'PAYMENT',
+                amount: 200, discount_amount: 5, payment_number: 'SPY-00001', notes: null, created_at: createdAt,
+                supplier: { id: 'sup-1', name: 'ACME' }, creator: null,
+            });
+            db.supplierPaymentAllocation.aggregate.mockResolvedValue({ _sum: { amount: null } });
+            const tx = mockTx();
+            // Due after the original payment: 1000 - 200 - 5
+            tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'ACME', due_balance: 795 });
+
+            await service.updateCreditPayment('tenant-1', 'tx-1', { amount: 300, discount: 2 });
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'tx-1');
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'tx-1', 'discount');
+            expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ amount: 300, discount_amount: 2, balance_after: 698 }),
+            }));
+            const calls = postedCalls();
+            expect(calls.map((c: any) => c.legKey)).toEqual([undefined, 'discount']);
+            expect(calls[0]).toMatchObject({ amount: 300, date: createdAt, referenceNumber: 'SPY-00001' });
+            expect(calls[1]).toMatchObject({ amount: 2, date: createdAt });
+        });
+
+        it('update refuses to shrink amount + discount below what is allocated', async () => {
+            db.supplierCreditTransaction.findFirst.mockResolvedValue({
+                id: 'tx-1', supplier_id: 'sup-1', type: 'PAYMENT', amount: 200, discount_amount: 5,
+                supplier: { id: 'sup-1' }, creator: null,
+            });
+            db.supplierPaymentAllocation.aggregate.mockResolvedValue({ _sum: { amount: 205 } });
+
+            await expect(service.updateCreditPayment('tenant-1', 'tx-1', { discount: 0 }))
+                .rejects.toThrow(BadRequestException);
+        });
+
+        it('delete reverses amount + discount and voids both legs', async () => {
+            db.supplierCreditTransaction.findFirst.mockResolvedValue({
+                id: 'tx-1', supplier_id: 'sup-1', type: 'PAYMENT', amount: 200, discount_amount: 5,
+                supplier: { id: 'sup-1' }, creator: null,
+            });
+            db.supplierPaymentAllocation.count = jest.fn().mockResolvedValue(0);
+            const tx = mockTx();
+            tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 795 });
+
+            await service.deleteCreditPayment('tenant-1', 'tx-1');
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'tx-1');
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'tx-1', 'discount');
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: 1000 } });
+        });
+
+        it('counts the discount as applicable when reporting the unapplied advance', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'ACME', due_balance: 0 });
+            db.purchase.findMany.mockResolvedValue([]);
+            db.supplierCreditTransaction.findMany.mockResolvedValue([
+                { id: 'tx-1', amount: 98, discount_amount: 2, allocations: [{ amount: 60 }] },
+            ]);
+
+            const summary = await service.getBillingSummary('tenant-1', 'sup-1');
+
+            expect(summary.unallocated_advance).toBe(40);
         });
     });
 });

@@ -354,6 +354,24 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                     },
                 ],
             },
+            {
+                name: 'Other Income',
+                code: '4103',
+                accounts: [
+                    // A supplier letting the shop off a small remainder when it
+                    // pays — "keep the ৳20". Income rather than a reduction of
+                    // Purchases: it is a settlement concession recorded at
+                    // payment time, long after the bill was booked. Not named
+                    // with "payable" for the same reason Bad Debt Expense avoids
+                    // "receivable" — see PAYABLE_ACCOUNT_PATTERN.
+                    {
+                        name: 'Discount Received',
+                        code: '410301',
+                        type: AccountType.REVENUE,
+                        category: AccountCategory.GENERAL,
+                    },
+                ],
+            },
         ],
     },
     {
@@ -437,6 +455,17 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.EXPENSE,
                         category: AccountCategory.GENERAL,
                     },
+                    // The mirror of Discount Received: the shop letting a
+                    // customer off a small remainder when they pay. The sale's
+                    // revenue stays as invoiced; the concession is an expense of
+                    // collecting it, exactly like a bad-debt write-off but
+                    // agreed with the customer rather than given up on.
+                    {
+                        name: 'Discount Allowed',
+                        code: '510205',
+                        type: AccountType.EXPENSE,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
         ],
@@ -505,6 +534,12 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // account from the payment method is tracked in TODO.md.
     { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Purchase Payable', credit_account: 'Cash in Hand', priority: 10 },
     { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Purchase Payable', priority: 20 },
+    // The discount leg of a supplier payment: the part of the payable settled
+    // without money. Posted as its own JOURNAL voucher (legKey 'discount') so
+    // the cash voucher above stays cash-only. 'discount' is not a direction —
+    // it reuses the payment_direction key so no new PostingRuleConditionKey
+    // enum value is needed; resolveVoucherType treats it as the journal leg.
+    { event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'discount', debit_account: 'Purchase Payable', credit_account: 'Discount Received', priority: 30 },
 
     // ── Depreciation ─────────────────────────────────────────────────────────
     // Monthly non-cash charge: Dr Depreciation Expense / Cr Accumulated
@@ -533,6 +568,9 @@ export const DEFAULT_POSTING_RULES: DefaultPostingRuleDefinition[] = [
     // mechanism the money-model / posting-contract guards can see.
     { event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Accounts Receivable', priority: 10 },
     { event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Accounts Receivable', credit_account: 'Cash in Hand', priority: 20 },
+    // The discount leg of a customer receipt — see the supplier_payment
+    // discount rule above for why it rides on payment_direction.
+    { event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'discount', debit_account: 'Discount Allowed', credit_account: 'Accounts Receivable', priority: 30 },
 
     // ── Bad debt ─────────────────────────────────────────────────────────────
     // Forgiving a customer's due. Unconditional: there is one way to write a

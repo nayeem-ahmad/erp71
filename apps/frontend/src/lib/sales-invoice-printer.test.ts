@@ -1,3 +1,4 @@
+import { DEFAULT_INVOICE_PRINT_PREFS, type InvoicePrintPrefs } from '@erp71/shared-types';
 import { printSalesInvoice, type InvoiceData, type PaperSize } from './sales-invoice-printer';
 import { formatBDT } from './format';
 
@@ -16,7 +17,11 @@ const baseInvoice: InvoiceData = {
     total: 290,
 };
 
-function render(data: InvoiceData = baseInvoice, paperSize?: PaperSize): string {
+function render(
+    data: InvoiceData = baseInvoice,
+    paperSize?: PaperSize,
+    layout?: Partial<InvoicePrintPrefs>,
+): string {
     const write = jest.fn();
     const mockWindow = {
         document: { write, close: jest.fn(), images: [] },
@@ -27,7 +32,8 @@ function render(data: InvoiceData = baseInvoice, paperSize?: PaperSize): string 
     };
     jest.spyOn(window, 'open').mockReturnValue(mockWindow as unknown as Window);
 
-    if (paperSize) printSalesInvoice(data, paperSize);
+    if (layout) printSalesInvoice(data, paperSize ?? 'A4', undefined, { ...DEFAULT_INVOICE_PRINT_PREFS, ...layout });
+    else if (paperSize) printSalesInvoice(data, paperSize);
     else printSalesInvoice(data);
 
     expect(write).toHaveBeenCalledTimes(1);
@@ -101,25 +107,25 @@ describe('sales invoice layout', () => {
     });
 });
 
+/** The totals block as [label, amount] pairs, top to bottom. */
+function totalsRows(html: string): [string, string][] {
+    const table = html.match(/<table class="totals-table">([\s\S]*?)<\/table>/)?.[1] ?? '';
+    return [...table.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g)]
+        .map(([, label, amount]) => [label, amount]);
+}
+
+/** A ৳4,800 credit sale with ৳3,000 paid, to a customer who owed ৳2,000. */
+const creditSale: InvoiceData = {
+    ...baseInvoice,
+    items: [{ name: 'Rice 25kg', quantity: 2, unitPrice: 2400 }],
+    payments: [{ method: 'Cash', amount: 3000 }],
+    subtotal: 4800,
+    total: 4800,
+    amountPaid: 3000,
+    previousDue: 2000,
+};
+
 describe('customer dues', () => {
-    /** The totals block as [label, amount] pairs, top to bottom. */
-    function totalsRows(html: string): [string, string][] {
-        const table = html.match(/<table class="totals-table">([\s\S]*?)<\/table>/)?.[1] ?? '';
-        return [...table.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g)]
-            .map(([, label, amount]) => [label, amount]);
-    }
-
-    /** A ৳4,800 credit sale with ৳3,000 paid, to a customer who owed ৳2,000. */
-    const creditSale: InvoiceData = {
-        ...baseInvoice,
-        items: [{ name: 'Rice 25kg', quantity: 2, unitPrice: 2400 }],
-        payments: [{ method: 'Cash', amount: 3000 }],
-        subtotal: 4800,
-        total: 4800,
-        amountPaid: 3000,
-        previousDue: 2000,
-    };
-
     it('closes on paid, this invoice\'s due, the previous due and the total due', () => {
         const rows = totalsRows(render(creditSale));
 
@@ -253,5 +259,152 @@ describe('store tokens', () => {
             headerConfig: { lines: [{ text: 'Branch: {{store_name}}' }] },
         });
         expect(html).toContain('Branch: Gulshan Branch');
+    });
+});
+
+describe('member layout preferences', () => {
+    /** The item table's header labels, left to right. */
+    function headerLabels(html: string): string[] {
+        const head = html.match(/<table class="items-table[^"]*">\s*<thead>([\s\S]*?)<\/thead>/)?.[1] ?? '';
+        return [...head.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(([, label]) => label);
+    }
+
+    it('prints exactly as before when the member has saved nothing', () => {
+        expect(render(baseInvoice, 'A4', {})).toBe(render(baseInvoice, 'A4'));
+    });
+
+    describe('padding', () => {
+        it.each([
+            ['narrow', '2mm 1mm'],
+            ['normal', '6mm 4mm'],
+            ['wide', '12mm 8mm'],
+        ] as const)('%s pads the body by %s', (padding, value) => {
+            expect(ruleFor(render(baseInvoice, 'A4', { padding }), '.invoice-body')).toContain(`padding:${value}`);
+        });
+
+        it('leaves a roll unpadded whatever the setting', () => {
+            expect(ruleFor(render(baseInvoice, 'Thermal80', { padding: 'wide' }), '.invoice-body')).toContain('padding:0');
+        });
+    });
+
+    describe('customer balance', () => {
+        it('when-owed keeps today\'s behaviour', () => {
+            const labels = totalsRows(render(creditSale, 'A4', { balance: 'when-owed' })).map(([l]) => l);
+            expect(labels).toEqual(expect.arrayContaining(['Previous Due', 'Total Due']));
+        });
+
+        it('never hides the running balance but keeps what this invoice leaves unpaid', () => {
+            const rows = totalsRows(render(creditSale, 'A4', { balance: 'never' }));
+            const labels = rows.map(([l]) => l);
+
+            expect(labels).not.toContain('Previous Due');
+            expect(labels).not.toContain('Total Due');
+            expect(rows.slice(-2)).toEqual([
+                ['Paid', formatBDT(3000)],
+                ['Due', formatBDT(1800)],
+            ]);
+        });
+
+        it('never prints no dues at all for an invoice paid in full', () => {
+            const labels = totalsRows(render({ ...creditSale, amountPaid: 4800 }, 'A4', { balance: 'never' }))
+                .map(([l]) => l);
+            expect(labels).not.toContain('Paid');
+            expect(labels).not.toContain('Previous Due');
+        });
+
+        it('always shows a zero balance for a customer who owes nothing', () => {
+            const rows = totalsRows(
+                render({ ...baseInvoice, amountPaid: 290, previousDue: 0 }, 'A4', { balance: 'always' }),
+            );
+            expect(rows.slice(-3)).toEqual([
+                ['Paid', formatBDT(290)],
+                ['Previous Due', formatBDT(0)],
+                ['Total Due', formatBDT(0)],
+            ]);
+        });
+
+        it('always still prints no balance for a walk-in, who has no account', () => {
+            const labels = totalsRows(render(baseInvoice, 'A4', { balance: 'always' })).map(([l]) => l);
+            expect(labels).not.toContain('Total Due');
+        });
+    });
+
+    describe('table style', () => {
+        it.each(['striped', 'grid', 'shaded-header'] as const)('marks the table %s, with a rule to match', (style) => {
+            const html = render(baseInvoice, 'A4', { table_style: style });
+            expect(html).toContain(`<table class="items-table items-table--${style}">`);
+            expect(html).toMatch(new RegExp(`\\.items-table--${style}[^{]*\\{[^}]*(background|border)`));
+        });
+
+        it('shades every other row when striped', () => {
+            const html = render(baseInvoice, 'A4', { table_style: 'striped' });
+            expect(html).toMatch(/\.items-table--striped tbody tr:nth-child\(even\) td\s*\{[^}]*background/);
+        });
+
+        it('keeps a roll plain, where grey only prints as dither', () => {
+            const html = render(baseInvoice, 'Thermal80', { table_style: 'striped' });
+            expect(html).toContain('<table class="items-table">');
+        });
+    });
+
+    it('numbers the rows in an SL column', () => {
+        const html = render(baseInvoice, 'A4', { serial_column: true });
+        expect(headerLabels(html)[0]).toBe('SL');
+        expect(html).toContain('<td class="item-sl">1</td>');
+        expect(html).toContain('<td class="item-sl">2</td>');
+    });
+
+    it('drops the Discount column when no line has a discount', () => {
+        const html = render(baseInvoice, 'A4', { hide_empty_discount: true });
+        expect(headerLabels(html)).not.toContain('Discount');
+        expect(html).not.toContain('class="item-disc item-disc--empty"');
+    });
+
+    it('keeps the Discount column when any line has one', () => {
+        const withDiscount = {
+            ...baseInvoice,
+            items: [...baseInvoice.items, { name: 'Soap', quantity: 1, unitPrice: 50, discount: 5 }],
+        };
+        expect(headerLabels(render(withDiscount, 'A4', { hide_empty_discount: true }))).toContain('Discount');
+    });
+
+    it('writes the total out in words', () => {
+        const html = render(creditSale, 'A4', { amount_in_words: true });
+        expect(html).toContain('Taka Four Thousand Eight Hundred Only');
+    });
+
+    it('draws customer and authorised signature lines on a sheet, not a roll', () => {
+        const html = render(baseInvoice, 'A4', { signature_lines: true });
+        expect(html).toContain('Customer\'s Signature');
+        expect(html).toContain('Authorised Signature');
+        expect(render(baseInvoice, 'Thermal80', { signature_lines: true })).not.toContain('Authorised Signature');
+    });
+
+    describe('footer text', () => {
+        it('prints the built-in thank-you by default', () => {
+            expect(render(baseInvoice, 'A4', { footer_text: null })).toContain('Thank you for your business!');
+        });
+
+        it('prints the member\'s own text instead, escaped, keeping its line breaks', () => {
+            const html = render(baseInvoice, 'A4', { footer_text: 'No returns <after> 7 days\nWarranty: 1 year' });
+            expect(html).not.toContain('Thank you for your business!');
+            expect(html).toContain('No returns &lt;after&gt; 7 days\nWarranty: 1 year');
+            expect(ruleFor(html, '.invoice-note')).toContain('white-space:pre-line');
+        });
+
+        it('prints the member\'s text even under a letterhead with its own footer band', () => {
+            const html = render(
+                { ...baseInvoice, headerConfig: { version: 3, footer: { lines: [{ text: 'Letterhead footer' }] } } as any },
+                'A4',
+                { footer_text: 'Goods once sold are not returnable' },
+            );
+            expect(html).toContain('Goods once sold are not returnable');
+        });
+
+        it('prints no footer at all when the member cleared it', () => {
+            const html = render(baseInvoice, 'A4', { footer_text: '' });
+            expect(html).not.toContain('Thank you for your business!');
+            expect(html).not.toContain('class="invoice-note"');
+        });
     });
 });

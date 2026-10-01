@@ -42,7 +42,7 @@ export default function NewLeadPage() {
     }, [sourceOptions]);
 
     useEffect(() => {
-        api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+        api.getCrmAssignees().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
     }, []);
 
     // A lead belongs to whoever files it unless they say otherwise — the same

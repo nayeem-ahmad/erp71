@@ -20,7 +20,7 @@ export function useTeamMemberOptions(meLabel: string) {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
     useEffect(() => {
-        api.getTeamMembers()
+        api.getCrmAssignees()
             .then((d: any) => setMembers(Array.isArray(d) ? d : []))
             .catch(() => setMembers([]));
         api.getMe()

@@ -16,7 +16,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getMe: jest.fn().mockResolvedValue({ id: 'user-1', name: 'Nayeem' }),
-        getTeamMembers: jest.fn().mockResolvedValue([
+        getCrmAssignees: jest.fn().mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]),

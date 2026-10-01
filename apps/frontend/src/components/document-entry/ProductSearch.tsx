@@ -28,12 +28,36 @@ interface ProductSearchProps {
     /** The customer/supplier on the document, so their own rates lead the list. */
     historyPartyId?: string;
     historyPartyName?: string;
+    /**
+     * Warehouse the document draws from. Availability is shown for it alone;
+     * unset, it is the total across every warehouse.
+     */
+    warehouseId?: string;
 }
 
-/** Stock on hand across every warehouse the product is stocked in. */
-export function availableQtyOf(product: any): number {
+/**
+ * Stock on hand in `warehouseId`, or across every warehouse the product is
+ * stocked in when no warehouse is given.
+ */
+export function availableQtyOf(product: any, warehouseId?: string): number {
     if (!Array.isArray(product?.stocks)) return 0;
-    return product.stocks.reduce((sum: number, stock: any) => sum + Number(stock.quantity || 0), 0);
+    return product.stocks
+        .filter((stock: any) => !warehouseId || stock.warehouse_id === warehouseId)
+        .reduce((sum: number, stock: any) => sum + Number(stock.quantity || 0), 0);
+}
+
+/**
+ * Stock on hand per warehouse id. A cart line keeps this rather than a single
+ * figure, so its availability can follow the warehouse after it is added.
+ */
+export function stockByWarehouseOf(product: any): Record<string, number> | undefined {
+    if (!Array.isArray(product?.stocks)) return undefined;
+    if (product.stocks.some((stock: any) => !stock.warehouse_id)) return undefined;
+    const byWarehouse: Record<string, number> = {};
+    for (const stock of product.stocks) {
+        byWarehouse[stock.warehouse_id] = (byWarehouse[stock.warehouse_id] ?? 0) + Number(stock.quantity || 0);
+    }
+    return byWarehouse;
 }
 
 export default function ProductSearch({
@@ -44,6 +68,7 @@ export default function ProductSearch({
     historyType,
     historyPartyId,
     historyPartyName,
+    warehouseId,
 }: ProductSearchProps) {
     const [query, setQuery] = useState('');
     const [products, setProducts] = useState<any[]>([]);
@@ -136,7 +161,7 @@ export default function ProductSearch({
         const price = parseFloat(stagedPrice);
         if (!(quantity > 0) || !(price >= 0)) return;
 
-        onProductSelect(staged, { quantity, price, availableQty: availableQtyOf(staged) });
+        onProductSelect(staged, { quantity, price, availableQty: availableQtyOf(staged, warehouseId) });
         clearStaged();
         inputRef.current?.focus();
     };
@@ -175,7 +200,7 @@ export default function ProductSearch({
         }
     };
 
-    const stagedAvailable = staged ? availableQtyOf(staged) : 0;
+    const stagedAvailable = staged ? availableQtyOf(staged, warehouseId) : 0;
     const stagedQtyNum = parseFloat(stagedQty) || 0;
     const numberInput = 'px-2 py-1 border rounded text-sm text-end min-h-touch sm:min-h-0';
 
@@ -246,7 +271,7 @@ export default function ProductSearch({
                                             </div>
                                         )}
                                         {products.map((product, index) => {
-                                            const stock = availableQtyOf(product);
+                                            const stock = availableQtyOf(product, warehouseId);
                                             return (
                                                 <div
                                                     key={product.id}

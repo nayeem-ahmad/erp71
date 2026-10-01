@@ -176,6 +176,16 @@ function resolveVoucherType(
     conditionKey?: AutoPostInput['conditionKey'],
     conditionValue?: string | null,
 ): string {
+    // The discount leg of a customer or supplier payment moves no money, so it
+    // is a journal voucher — numbering it CR/CP would put a non-cash entry in
+    // the cash-voucher series.
+    if (
+        (eventType === 'customer_payment' || eventType === 'supplier_payment')
+        && conditionKey === 'payment_direction'
+        && conditionValue === 'discount'
+    ) {
+        return VoucherType.JOURNAL;
+    }
     if (eventType === 'customer_payment' && conditionKey === 'payment_direction' && conditionValue === 'pay') {
         return VoucherType.CASH_PAYMENT;
     }

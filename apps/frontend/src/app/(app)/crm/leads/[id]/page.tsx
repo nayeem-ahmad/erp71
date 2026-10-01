@@ -96,7 +96,7 @@ export default function LeadDetailPage() {
     }, [defaultChannel]);
 
     useEffect(() => {
-        api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+        api.getCrmAssignees().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
     }, []);
 
     useEffect(() => {

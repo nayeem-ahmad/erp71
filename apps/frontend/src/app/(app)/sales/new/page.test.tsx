@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import NewSalePage from './page';
 import { api } from '@/lib/api';
 
@@ -171,6 +172,7 @@ describe('NewSalePage — product staging and drafts', () => {
         jest.clearAllMocks();
         setSearchParams();
         (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 } });
+        (api.getOpenCashierSession as jest.Mock).mockResolvedValue(null);
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
@@ -218,13 +220,25 @@ describe('NewSalePage — product staging and drafts', () => {
     };
 
     it('stages the picked product with its price and available stock', async () => {
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
+            {
+                id: 'prod-1',
+                name: 'Rice 5kg',
+                sku: 'R5KG',
+                price: '100.00',
+                stocks: [
+                    { warehouse_id: 'wh-main', quantity: 7 },
+                    { warehouse_id: 'wh-other-branch', quantity: 5 },
+                ],
+            },
+        ]);
         await act(async () => { render(<NewSalePage />); });
         await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
 
         await stageProduct();
 
-        // Stock is summed across warehouses
-        expect(screen.getByText(/Available 12/)).toBeInTheDocument();
+        // Only the warehouse the sale draws from counts, not every warehouse.
+        expect(screen.getByText(/Available 7/)).toBeInTheDocument();
         const priceInput = screen.getByLabelText('Unit Price') as HTMLInputElement;
         expect(priceInput.value).toBe('100');
     });
@@ -268,6 +282,45 @@ describe('NewSalePage — product staging and drafts', () => {
                 }),
             );
         });
+    });
+
+    it('shows stock for the chosen warehouse and follows it when the warehouse changes', async () => {
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
+            {
+                id: 'prod-1',
+                name: 'Rice 5kg',
+                sku: 'R5KG',
+                price: '100.00',
+                stocks: [
+                    { warehouse_id: 'wh-main', quantity: 7 },
+                    { warehouse_id: 'wh-annex', quantity: 5 },
+                ],
+            },
+        ]);
+
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+
+        const picker = await screen.findByLabelText('Warehouse') as HTMLSelectElement;
+        await waitFor(() => expect(picker.value).toBe('wh-main'));
+
+        await stageProduct();
+        expect(screen.getByText(/Available 7/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        const lineRow = () => screen.getByText('Rice 5kg', { selector: 'div' }).closest('tr') as HTMLElement;
+        expect(within(lineRow()).getByTestId('line-available')).toHaveTextContent('7');
+
+        fireEvent.change(picker, { target: { value: 'wh-annex' } });
+        expect(within(lineRow()).getByTestId('line-available')).toHaveTextContent('5');
+
+        // A per-line override reads that line's own warehouse.
+        fireEvent.click(screen.getByLabelText('Per-line warehouse'));
+        fireEvent.change(screen.getByLabelText('Warehouse — Rice 5kg'), {
+            target: { value: 'wh-main' },
+        });
+        expect(within(lineRow()).getByTestId('line-available')).toHaveTextContent('7');
     });
 
     it('adds the item with the edited unit price and quantity', async () => {
@@ -696,6 +749,8 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
                 total: 100,
             }),
             'A4',
+            undefined,
+            DEFAULT_INVOICE_PRINT_PREFS,
         );
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
@@ -717,6 +772,8 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(printSalesInvoice).toHaveBeenCalledWith(
             expect.objectContaining({ total: 100, amountPaid: 100, previousDue: 750 }),
             'A4',
+            undefined,
+            DEFAULT_INVOICE_PRINT_PREFS,
         );
     });
 
@@ -735,6 +792,8 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(printSalesInvoice).toHaveBeenCalledWith(
             expect.objectContaining({ previousDue: null }),
             'A4',
+            undefined,
+            DEFAULT_INVOICE_PRINT_PREFS,
         );
     });
 
@@ -747,7 +806,7 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
             fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
         });
 
-        expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'Thermal80');
+        expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'Thermal80', undefined, DEFAULT_INVOICE_PRINT_PREFS);
     });
 
     it('prints nothing when the operator declines', async () => {

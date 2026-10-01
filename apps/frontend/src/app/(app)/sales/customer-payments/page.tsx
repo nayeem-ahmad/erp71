@@ -14,9 +14,10 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell, Button, Alert } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
+import { PaymentDiscountField, paymentDiscountError } from '@/components/payments/PaymentDiscountField';
 
 interface CustomerOption {
     id: string;
@@ -33,6 +34,8 @@ interface CustomerCreditPayment {
     type?: string;
     payment_number?: string | null;
     amount: string | number;
+    /** Settled with the money; only ever set on a receipt. */
+    discount_amount?: string | number;
     balance_after?: string | number;
     notes?: string | null;
     created_at: string;
@@ -40,6 +43,7 @@ interface CustomerCreditPayment {
     creator?: { id: string; name: string } | null;
     voucher_id?: string | null;
     accounting_voucher_number?: string | null;
+    discount_voucher_number?: string | null;
 }
 
 const columnHelper = createColumnHelper<CustomerCreditPayment>();
@@ -61,6 +65,17 @@ function directionFromType(type?: string): PaymentDirection {
     return type === 'PAYOUT' ? 'pay' : 'receive';
 }
 
+function discountOf(payment: CustomerCreditPayment): number {
+    return Number(payment.discount_amount ?? 0);
+}
+
+/** A form value as a non-negative number, or NaN when it is not one. */
+function parseNonNegative(value: string): number {
+    if (value.trim() === '') return 0;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : Number.NaN;
+}
+
 function CustomerPaymentsContent() {
     const { t, locale } = useI18n();
     const copy = t.customerPayments;
@@ -71,6 +86,10 @@ function CustomerPaymentsContent() {
 
     const [payments, setPayments] = useState<CustomerCreditPayment[]>([]);
     const [customers, setCustomers] = useState<CustomerOption[]>([]);
+    // Tracked apart from the payments' `loading`: the full customer list takes
+    // several requests on a large shop, and the form must not read "still
+    // loading" or "failed" as "this shop has no customers".
+    const [customersStatus, setCustomersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [customerFilter, setCustomerFilter] = useState(preselectedCustomerId ?? '');
@@ -81,6 +100,7 @@ function CustomerPaymentsContent() {
     const [formCustomerId, setFormCustomerId] = useState('');
     const [formDirection, setFormDirection] = useState<PaymentDirection>('receive');
     const [formAmount, setFormAmount] = useState('');
+    const [formDiscount, setFormDiscount] = useState('');
     const [formNotes, setFormNotes] = useState('');
     // Set when the create form was opened as a copy of an existing payment;
     // names the source in the modal so a duplicate is never mistaken for it.
@@ -90,21 +110,18 @@ function CustomerPaymentsContent() {
     const [editPayment, setEditPayment] = useState<CustomerCreditPayment | null>(null);
     const [editDirection, setEditDirection] = useState<PaymentDirection>('receive');
     const [editAmount, setEditAmount] = useState('');
+    const [editDiscount, setEditDiscount] = useState('');
     const [editNotes, setEditNotes] = useState('');
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const [paymentsData, customersData] = await Promise.all([
-                api.getCustomerCreditPayments({
-                    from: applyCreatedRangeQuery(createdRange).createdFrom,
-                    to: applyCreatedRangeQuery(createdRange).createdTo,
-                    customerId: customerFilter || undefined,
-                }),
-                api.getCustomers(),
-            ]);
+            const paymentsData = await api.getCustomerCreditPayments({
+                from: applyCreatedRangeQuery(createdRange).createdFrom,
+                to: applyCreatedRangeQuery(createdRange).createdTo,
+                customerId: customerFilter || undefined,
+            });
             setPayments((Array.isArray(paymentsData) ? paymentsData : []) as CustomerCreditPayment[]);
-            setCustomers(customersData ?? []);
         } catch (error) {
             console.error('Failed to load customer payments', error);
             setToast({ type: 'error', message: copy.loadFailed });
@@ -113,10 +130,28 @@ function CustomerPaymentsContent() {
         }
     };
 
+    // The customer list does not depend on the payment filters, so it loads
+    // once, on its own — a failed payments fetch can no longer empty the picker.
+    const loadCustomers = useCallback(async () => {
+        setCustomersStatus('loading');
+        try {
+            const customersData = await api.getCustomers();
+            setCustomers(customersData ?? []);
+            setCustomersStatus('ready');
+        } catch (error) {
+            console.error('Failed to load customers', error);
+            setCustomersStatus('error');
+        }
+    }, []);
+
     useEffect(() => {
         void loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [createdRange, customerFilter]);
+
+    useEffect(() => {
+        void loadCustomers();
+    }, [loadCustomers]);
 
     useEffect(() => {
         if (preselectedCustomerId) {
@@ -136,6 +171,7 @@ function CustomerPaymentsContent() {
         setFormCustomerId(initialCustomerId);
         setFormDirection('receive');
         setFormAmount('');
+        setFormDiscount('');
         setFormNotes('');
         setDuplicatedFrom('');
     };
@@ -151,6 +187,9 @@ function CustomerPaymentsContent() {
         setFormCustomerId(payment.customer?.id ?? '');
         setFormDirection(directionFromType(payment.type));
         setFormAmount(String(payment.amount));
+        // Not copied: a discount settles one particular remainder, and the
+        // copy will be settling a different one.
+        setFormDiscount('');
         setFormNotes(payment.notes ?? '');
         setDuplicatedFrom(payment.payment_number ?? '');
         setShowForm(true);
@@ -159,21 +198,33 @@ function CustomerPaymentsContent() {
     const selectedFormCustomer = customers.find((c) => c.id === formCustomerId) ?? null;
     const dueBalance = selectedFormCustomer ? Number(selectedFormCustomer.due_balance ?? 0) : 0;
 
+    const formDiscountApplies = formDirection === 'receive';
+    const formDiscountError = formDiscountApplies && selectedFormCustomer
+        ? paymentDiscountError(dueBalance, formAmount, formDiscount, copy.discount.tooLarge)
+        : null;
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formCustomerId || !formAmount) {
+        if (!formCustomerId || formAmount === '') {
             setToast({ type: 'error', message: copy.requiredFields });
             return;
         }
-        const amt = Number(formAmount);
-        if (Number.isNaN(amt) || amt <= 0) {
+        const amt = parseNonNegative(formAmount);
+        const discount = formDiscountApplies ? parseNonNegative(formDiscount) : 0;
+        if (Number.isNaN(amt) || Number.isNaN(discount)) {
             setToast({ type: 'error', message: copy.invalidAmount });
             return;
         }
+        if (amt + discount <= 0 || (!formDiscountApplies && amt <= 0)) {
+            setToast({ type: 'error', message: formDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
+            return;
+        }
+        if (formDiscountError) return;
         setSaving(true);
         try {
             await api.recordCreditPayment(formCustomerId, {
                 amount: amt,
+                discount: discount > 0 ? discount : undefined,
                 direction: formDirection,
                 notes: formNotes.trim() || undefined,
             });
@@ -195,21 +246,43 @@ function CustomerPaymentsContent() {
         setEditPayment(payment);
         setEditDirection(directionFromType(payment.type));
         setEditAmount(String(payment.amount));
+        setEditDiscount(discountOf(payment) > 0 ? String(discountOf(payment)) : '');
         setEditNotes(payment.notes ?? '');
     };
+
+    const editDiscountApplies = editDirection === 'receive';
+    // The due the edited payment settles against: today's due with this
+    // payment taken back out.
+    const editDueBefore = (() => {
+        if (!editPayment) return null;
+        const customer = customers.find((c) => c.id === editPayment.customer?.id);
+        if (!customer) return null;
+        const settled = Number(editPayment.amount) + discountOf(editPayment);
+        return Number(customer.due_balance ?? 0) + (editPayment.type === 'PAYOUT' ? -Number(editPayment.amount) : settled);
+    })();
+    const editDiscountError = editDiscountApplies
+        ? paymentDiscountError(editDueBefore, editAmount, editDiscount, copy.discount.tooLarge)
+        : null;
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editPayment) return;
-        const amt = Number(editAmount);
-        if (Number.isNaN(amt) || amt <= 0) {
+        const amt = parseNonNegative(editAmount);
+        const discount = editDiscountApplies ? parseNonNegative(editDiscount) : 0;
+        if (Number.isNaN(amt) || Number.isNaN(discount)) {
             setToast({ type: 'error', message: copy.invalidAmount });
             return;
         }
+        if (amt + discount <= 0 || (!editDiscountApplies && amt <= 0)) {
+            setToast({ type: 'error', message: editDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
+            return;
+        }
+        if (editDiscountError) return;
         setSaving(true);
         try {
             await api.updateCustomerCreditPayment(editPayment.id, {
                 amount: amt,
+                discount,
                 direction: editDirection,
                 notes: editNotes.trim() || undefined,
             });
@@ -254,6 +327,7 @@ function CustomerPaymentsContent() {
             customerPhone: payment.customer?.phone,
             customerCode: payment.customer?.customer_code,
             amount: Number(payment.amount),
+            discount: discountOf(payment),
             balanceAfter: payment.balance_after !== undefined ? Number(payment.balance_after) : undefined,
             notes: payment.notes ?? undefined,
             recordedBy: payment.creator?.name,
@@ -265,6 +339,7 @@ function CustomerPaymentsContent() {
                 date: copy.columns.dateTime,
                 customer: copy.columns.customer,
                 amount: copy.columns.amount,
+                discount: copy.discount.label,
                 balanceAfter: copy.balanceAfter,
                 notes: copy.columns.notes,
                 recordedBy: copy.columns.recordedBy,
@@ -322,10 +397,18 @@ function CustomerPaymentsContent() {
                 header: copy.columns.amount,
                 cell: (info) => {
                     const isPayout = info.row.original.type === 'PAYOUT';
+                    const discount = discountOf(info.row.original);
                     return (
-                        <span className={`text-sm font-bold ${isPayout ? 'text-danger' : 'text-emerald-600'}`}>
-                            {isPayout ? '−' : '+'}{formatBDT(Number(info.getValue()))}
-                        </span>
+                        <div>
+                            <span className={`text-sm font-bold ${isPayout ? 'text-danger' : 'text-emerald-600'}`}>
+                                {isPayout ? '−' : '+'}{formatBDT(Number(info.getValue()))}
+                            </span>
+                            {discount > 0 ? (
+                                <span className="block text-xs text-gray-500">
+                                    {copy.discount.label}: {formatBDT(discount)}
+                                </span>
+                            ) : null}
+                        </div>
                     );
                 },
                 sortingFn: (a, b) => Number(a.getValue('amount')) - Number(b.getValue('amount')),
@@ -450,6 +533,7 @@ function CustomerPaymentsContent() {
                                     items={customers}
                                     value={customerFilter}
                                     onChange={setCustomerFilter}
+                                    loading={customersStatus === 'loading'}
                                     label={copy.filterCustomer}
                                     placeholder={copy.allCustomers}
                                     emptyLabel={copy.noCustomers}
@@ -491,7 +575,19 @@ function CustomerPaymentsContent() {
                                     {copy.duplicateNotice.replace('{paymentNumber}', duplicatedFrom)}
                                 </p>
                             ) : null}
-                            {customers.length === 0 ? (
+                            {customersStatus === 'loading' ? (
+                                <p className="flex items-center text-sm text-gray-500 p-3">
+                                    <Loader2 className="w-4 h-4 animate-spin me-2" />
+                                    {copy.loadingCustomers}
+                                </p>
+                            ) : customersStatus === 'error' ? (
+                                <Alert tone="danger">
+                                    <span>{copy.customersLoadFailed}</span>
+                                    <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => void loadCustomers()}>
+                                        {copy.retry}
+                                    </Button>
+                                </Alert>
+                            ) : customers.length === 0 ? (
                                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
                                     {copy.noCustomers}
                                 </p>
@@ -536,7 +632,7 @@ function CustomerPaymentsContent() {
                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.amount}</span>
                                         <input
                                             type="number"
-                                            min="0.01"
+                                            min={formDiscountApplies ? '0' : '0.01'}
                                             step="0.01"
                                             value={formAmount}
                                             onChange={(e) => setFormAmount(e.target.value)}
@@ -545,6 +641,16 @@ function CustomerPaymentsContent() {
                                             required
                                         />
                                     </label>
+                                    {formDiscountApplies ? (
+                                        <PaymentDiscountField
+                                            id="customer-payment-discount"
+                                            value={formDiscount}
+                                            onChange={setFormDiscount}
+                                            amount={formAmount}
+                                            dueBefore={selectedFormCustomer ? dueBalance : null}
+                                            labels={copy.discount}
+                                        />
+                                    ) : null}
                                     <label className="block space-y-1">
                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                         <textarea
@@ -608,6 +714,12 @@ function CustomerPaymentsContent() {
                                     {formatBDT(Number(viewPayment.amount))}
                                 </span>
                             </div>
+                            {discountOf(viewPayment) > 0 && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">{copy.discount.label}</span>
+                                    <span className="font-medium">{formatBDT(discountOf(viewPayment))}</span>
+                                </div>
+                            )}
                             {viewPayment.balance_after !== undefined && (
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">{copy.balanceAfter}</span>
@@ -618,6 +730,12 @@ function CustomerPaymentsContent() {
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">{copy.voucherNumber}</span>
                                     <span className="font-mono text-xs">{viewPayment.accounting_voucher_number}</span>
+                                </div>
+                            )}
+                            {viewPayment.discount_voucher_number && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">{copy.discount.voucher}</span>
+                                    <span className="font-mono text-xs">{viewPayment.discount_voucher_number}</span>
                                 </div>
                             )}
                             <div className="flex justify-between">
@@ -703,7 +821,7 @@ function CustomerPaymentsContent() {
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.amount}</span>
                                 <input
                                     type="number"
-                                    min="0.01"
+                                    min={editDiscountApplies ? '0' : '0.01'}
                                     step="0.01"
                                     value={editAmount}
                                     onChange={(e) => setEditAmount(e.target.value)}
@@ -711,6 +829,16 @@ function CustomerPaymentsContent() {
                                     required
                                 />
                             </label>
+                            {editDiscountApplies ? (
+                                <PaymentDiscountField
+                                    id="customer-payment-edit-discount"
+                                    value={editDiscount}
+                                    onChange={setEditDiscount}
+                                    amount={editAmount}
+                                    dueBefore={editDueBefore}
+                                    labels={copy.discount}
+                                />
+                            ) : null}
                             <label className="block space-y-1">
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                 <textarea

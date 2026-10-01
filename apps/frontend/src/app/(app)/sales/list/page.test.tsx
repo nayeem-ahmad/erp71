@@ -250,7 +250,7 @@ describe('SalesListPage — Sales Transaction List', () => {
         fireEvent.click(screen.getByRole('button', { name: /print settings/i }));
 
         const dialog = await screen.findByRole('dialog');
-        fireEvent.change(within(dialog).getByRole('combobox'), {
+        fireEvent.change(within(dialog).getByLabelText('Paper size'), {
             target: { value: 'Thermal80' },
         });
         fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));

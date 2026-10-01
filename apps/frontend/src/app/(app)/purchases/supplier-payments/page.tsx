@@ -18,6 +18,7 @@ import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
+import { PaymentDiscountField, paymentDiscountError } from '@/components/payments/PaymentDiscountField';
 
 interface SupplierOption {
     id: string;
@@ -33,6 +34,8 @@ interface SupplierCreditPayment {
     type?: string;
     payment_number?: string | null;
     amount: string | number;
+    /** Settled with the money; only ever set on a payment to the supplier. */
+    discount_amount?: string | number;
     balance_after?: string | number;
     notes?: string | null;
     created_at: string;
@@ -71,6 +74,17 @@ function directionFromType(type?: string): PaymentDirection {
     return type === 'PAYOUT' ? 'receive' : 'pay';
 }
 
+function discountOf(payment: SupplierCreditPayment): number {
+    return Number(payment.discount_amount ?? 0);
+}
+
+/** A form value as a non-negative number, or NaN when it is not one. */
+function parseNonNegative(value: string): number {
+    if (value.trim() === '') return 0;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : Number.NaN;
+}
+
 function SupplierPaymentsContent() {
     const { t, locale } = useI18n();
     const copy = t.supplierPayments;
@@ -91,6 +105,7 @@ function SupplierPaymentsContent() {
     const [formSupplierId, setFormSupplierId] = useState('');
     const [formDirection, setFormDirection] = useState<PaymentDirection>('pay');
     const [formAmount, setFormAmount] = useState('');
+    const [formDiscount, setFormDiscount] = useState('');
     const [formNotes, setFormNotes] = useState('');
     const [openBills, setOpenBills] = useState<OpenBill[]>([]);
     const [billAllocations, setBillAllocations] = useState<Record<string, string>>({});
@@ -108,6 +123,7 @@ function SupplierPaymentsContent() {
     const [editPayment, setEditPayment] = useState<SupplierCreditPayment | null>(null);
     const [editDirection, setEditDirection] = useState<PaymentDirection>('pay');
     const [editAmount, setEditAmount] = useState('');
+    const [editDiscount, setEditDiscount] = useState('');
     const [editNotes, setEditNotes] = useState('');
 
     const loadData = async () => {
@@ -154,6 +170,7 @@ function SupplierPaymentsContent() {
         setFormSupplierId(initialSupplierId);
         setFormDirection('pay');
         setFormAmount('');
+        setFormDiscount('');
         setFormNotes('');
         setBillAllocations({});
         setDuplicatedFrom('');
@@ -170,6 +187,9 @@ function SupplierPaymentsContent() {
         setFormSupplierId(payment.supplier?.id ?? '');
         setFormDirection(directionFromType(payment.type));
         setFormAmount(String(payment.amount));
+        // Not copied, for the same reason as the allocations: a discount
+        // settles one particular remainder.
+        setFormDiscount('');
         setFormNotes(payment.notes ?? '');
         setBillAllocations({});
         setDuplicatedFrom(payment.payment_number ?? '');
@@ -192,19 +212,31 @@ function SupplierPaymentsContent() {
     }, [showForm, formDirection, formSupplierId]);
 
     const totalBillAllocated = Object.values(billAllocations).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    const formDiscountApplies = formDirection === 'pay';
+    const formDiscountError = formDiscountApplies && selectedFormSupplier
+        ? paymentDiscountError(dueBalance, formAmount, formDiscount, copy.discount.tooLarge)
+        : null;
+    // A discount settles bills exactly as money does.
+    const formSettles = (Number(formAmount) || 0) + (formDiscountApplies ? Number(formDiscount) || 0 : 0);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formSupplierId || !formAmount) {
+        if (!formSupplierId || formAmount === '') {
             setToast({ type: 'error', message: copy.requiredFields });
             return;
         }
-        const amt = Number(formAmount);
-        if (Number.isNaN(amt) || amt <= 0) {
+        const amt = parseNonNegative(formAmount);
+        const discount = formDiscountApplies ? parseNonNegative(formDiscount) : 0;
+        if (Number.isNaN(amt) || Number.isNaN(discount)) {
             setToast({ type: 'error', message: copy.invalidAmount });
             return;
         }
-        if (totalBillAllocated - amt > 0.005) {
+        if (amt + discount <= 0 || (!formDiscountApplies && amt <= 0)) {
+            setToast({ type: 'error', message: formDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
+            return;
+        }
+        if (formDiscountError) return;
+        if (totalBillAllocated - (amt + discount) > 0.005) {
             setToast({ type: 'error', message: copy.allocation.exceedsAmount });
             return;
         }
@@ -215,6 +247,7 @@ function SupplierPaymentsContent() {
         try {
             await api.recordSupplierCreditPayment(formSupplierId, {
                 amount: amt,
+                discount: discount > 0 ? discount : undefined,
                 direction: formDirection,
                 notes: formNotes.trim() || undefined,
                 allocations: allocations.length > 0 ? allocations : undefined,
@@ -237,21 +270,43 @@ function SupplierPaymentsContent() {
         setEditPayment(payment);
         setEditDirection(directionFromType(payment.type));
         setEditAmount(String(payment.amount));
+        setEditDiscount(discountOf(payment) > 0 ? String(discountOf(payment)) : '');
         setEditNotes(payment.notes ?? '');
     };
+
+    const editDiscountApplies = editDirection === 'pay';
+    // The payable the edited payment settles against: today's with this
+    // payment taken back out.
+    const editDueBefore = (() => {
+        if (!editPayment) return null;
+        const supplier = suppliers.find((sup) => sup.id === editPayment.supplier?.id);
+        if (!supplier) return null;
+        const settled = Number(editPayment.amount) + discountOf(editPayment);
+        return Number(supplier.due_balance ?? 0) + (editPayment.type === 'PAYOUT' ? -Number(editPayment.amount) : settled);
+    })();
+    const editDiscountError = editDiscountApplies
+        ? paymentDiscountError(editDueBefore, editAmount, editDiscount, copy.discount.tooLarge)
+        : null;
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editPayment) return;
-        const amt = Number(editAmount);
-        if (Number.isNaN(amt) || amt <= 0) {
+        const amt = parseNonNegative(editAmount);
+        const discount = editDiscountApplies ? parseNonNegative(editDiscount) : 0;
+        if (Number.isNaN(amt) || Number.isNaN(discount)) {
             setToast({ type: 'error', message: copy.invalidAmount });
             return;
         }
+        if (amt + discount <= 0 || (!editDiscountApplies && amt <= 0)) {
+            setToast({ type: 'error', message: editDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
+            return;
+        }
+        if (editDiscountError) return;
         setSaving(true);
         try {
             await api.updateSupplierCreditPayment(editPayment.id, {
                 amount: amt,
+                discount,
                 direction: editDirection,
                 notes: editNotes.trim() || undefined,
             });
@@ -330,6 +385,7 @@ function SupplierPaymentsContent() {
             supplierName: payment.supplier?.name ?? '—',
             supplierPhone: payment.supplier?.phone ?? undefined,
             amount: Number(payment.amount),
+            discount: discountOf(payment),
             balanceAfter: payment.balance_after !== undefined ? Number(payment.balance_after) : undefined,
             notes: payment.notes ?? undefined,
             recordedBy: payment.creator?.name,
@@ -340,6 +396,7 @@ function SupplierPaymentsContent() {
                 date: copy.columns.dateTime,
                 supplier: copy.columns.supplier,
                 amount: copy.columns.amount,
+                discount: copy.discount.label,
                 balanceAfter: copy.balanceAfter,
                 notes: copy.columns.notes,
                 recordedBy: copy.columns.recordedBy,
@@ -396,10 +453,18 @@ function SupplierPaymentsContent() {
                 header: copy.columns.amount,
                 cell: (info) => {
                     const isPayment = info.row.original.type === 'PAYMENT';
+                    const discount = discountOf(info.row.original);
                     return (
-                        <span className={`text-sm font-bold ${isPayment ? 'text-danger' : 'text-emerald-600'}`}>
-                            {isPayment ? '−' : '+'}{formatBDT(Number(info.getValue()))}
-                        </span>
+                        <div>
+                            <span className={`text-sm font-bold ${isPayment ? 'text-danger' : 'text-emerald-600'}`}>
+                                {isPayment ? '−' : '+'}{formatBDT(Number(info.getValue()))}
+                            </span>
+                            {discount > 0 ? (
+                                <span className="block text-xs text-gray-500">
+                                    {copy.discount.label}: {formatBDT(discount)}
+                                </span>
+                            ) : null}
+                        </div>
                     );
                 },
                 sortingFn: (a, b) => Number(a.getValue('amount')) - Number(b.getValue('amount')),
@@ -615,7 +680,7 @@ function SupplierPaymentsContent() {
                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.amount}</span>
                                         <input
                                             type="number"
-                                            min="0.01"
+                                            min={formDiscountApplies ? '0' : '0.01'}
                                             step="0.01"
                                             value={formAmount}
                                             onChange={(e) => setFormAmount(e.target.value)}
@@ -624,6 +689,16 @@ function SupplierPaymentsContent() {
                                             required
                                         />
                                     </label>
+                                    {formDiscountApplies ? (
+                                        <PaymentDiscountField
+                                            id="supplier-payment-discount"
+                                            value={formDiscount}
+                                            onChange={setFormDiscount}
+                                            amount={formAmount}
+                                            dueBefore={selectedFormSupplier ? dueBalance : null}
+                                            labels={copy.discount}
+                                        />
+                                    ) : null}
                                     <label className="block space-y-1">
                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                         <textarea
@@ -658,9 +733,9 @@ function SupplierPaymentsContent() {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <p className={`text-xs ${totalBillAllocated - (Number(formAmount) || 0) > 0.005 ? 'text-danger font-bold' : 'text-gray-400'}`}>
+                                            <p className={`text-xs ${totalBillAllocated - formSettles > 0.005 ? 'text-danger font-bold' : 'text-gray-400'}`}>
                                                 {formatMessage(copy.allocation.remainingToAllocate, {
-                                                    amount: formatBDT(Math.max(0, (Number(formAmount) || 0) - totalBillAllocated)),
+                                                    amount: formatBDT(Math.max(0, formSettles - totalBillAllocated)),
                                                 })}
                                             </p>
                                         </div>
@@ -771,6 +846,12 @@ function SupplierPaymentsContent() {
                                     {formatBDT(Number(viewPayment.amount))}
                                 </span>
                             </div>
+                            {discountOf(viewPayment) > 0 && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">{copy.discount.label}</span>
+                                    <span className="font-medium">{formatBDT(discountOf(viewPayment))}</span>
+                                </div>
+                            )}
                             {viewPayment.balance_after !== undefined && (
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">{copy.balanceAfter}</span>
@@ -854,7 +935,7 @@ function SupplierPaymentsContent() {
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.amount}</span>
                                 <input
                                     type="number"
-                                    min="0.01"
+                                    min={editDiscountApplies ? '0' : '0.01'}
                                     step="0.01"
                                     value={editAmount}
                                     onChange={(e) => setEditAmount(e.target.value)}
@@ -862,6 +943,16 @@ function SupplierPaymentsContent() {
                                     required
                                 />
                             </label>
+                            {editDiscountApplies ? (
+                                <PaymentDiscountField
+                                    id="supplier-payment-edit-discount"
+                                    value={editDiscount}
+                                    onChange={setEditDiscount}
+                                    amount={editAmount}
+                                    dueBefore={editDueBefore}
+                                    labels={copy.discount}
+                                />
+                            ) : null}
                             <label className="block space-y-1">
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                 <textarea
