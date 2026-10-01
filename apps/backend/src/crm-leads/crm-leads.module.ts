@@ -7,6 +7,7 @@ import { CrmLeadTaxonomyModule } from '../crm-lead-taxonomy/crm-lead-taxonomy.mo
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { AssetsModule } from '../assets/assets.module';
 import { CrmPhotosModule } from '../crm-photos/crm-photos.module';
+import { LeadStatusResolver } from './lead-status.resolver';
 
 @Module({
     imports: [
@@ -17,7 +18,7 @@ import { CrmPhotosModule } from '../crm-photos/crm-photos.module';
         CrmPhotosModule,
     ],
     controllers: [CrmLeadsController],
-    providers: [CrmLeadsService, SubscriptionAccessGuard],
-    exports: [CrmLeadsService],
+    providers: [CrmLeadsService, LeadStatusResolver, SubscriptionAccessGuard],
+    exports: [CrmLeadsService, LeadStatusResolver],
 })
 export class CrmLeadsModule {}

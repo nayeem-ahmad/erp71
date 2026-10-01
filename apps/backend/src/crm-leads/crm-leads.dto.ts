@@ -138,9 +138,19 @@ export class CreateLeadDto {
     @IsString()
     source?: string;
 
+    /**
+     * The bare lifecycle code. Kept for clients that predate tenant-managed
+     * stages; it maps onto the tenant's seeded stage of that code. Current
+     * clients send `status_id` instead, which wins when both are present.
+     */
     @IsOptional()
     @IsEnum(LeadStatus)
     status?: LeadStatus;
+
+    /** A `LeadStatusOption` id — the tenant's pipeline stage. */
+    @IsOptional()
+    @IsString()
+    status_id?: string;
 
     @IsOptional()
     @IsString()
@@ -244,9 +254,19 @@ export class UpdateLeadDto {
     @IsString()
     source?: string;
 
+    /**
+     * The bare lifecycle code. Kept for clients that predate tenant-managed
+     * stages; it maps onto the tenant's seeded stage of that code. Current
+     * clients send `status_id` instead, which wins when both are present.
+     */
     @IsOptional()
     @IsEnum(LeadStatus)
     status?: LeadStatus;
+
+    /** A `LeadStatusOption` id — the tenant's pipeline stage. */
+    @IsOptional()
+    @IsString()
+    status_id?: string;
 
     @IsOptional()
     @IsString()
@@ -343,6 +363,15 @@ export class ListLeadsDto {
     @Transform(emptyToUndefined)
     @IsIn(LIST_STATUS_VALUES)
     status?: string;
+
+    /**
+     * One pipeline stage (a `LeadStatusOption` id). `status` above filters on the
+     * lifecycle instead — the "open pipeline" sentinel and older clients use it.
+     */
+    @IsOptional()
+    @Transform(emptyToUndefined)
+    @IsString()
+    statusId?: string;
 
     /**
      * "Nobody has touched this lead in N days" — the list-side half of the
