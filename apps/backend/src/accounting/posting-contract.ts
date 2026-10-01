@@ -83,6 +83,7 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // exist.
     { eventType: 'purchase', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'purchases.service.ts:140', expectation: 'rule' },
     { eventType: 'purchase', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'purchase-orders.service.ts:137', expectation: 'rule' },
+    { eventType: 'purchase', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'external-sync.impacts.ts:applyPurchaseImpacts', expectation: 'rule' },
 
     // ── purchase returns ─────────────────────────────────────────────────────
     { eventType: 'purchase_return', conditionKey: 'none', conditionValue: null, emittedBy: 'purchase-returns.service.ts:83', expectation: 'rule' },

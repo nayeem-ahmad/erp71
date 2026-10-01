@@ -220,6 +220,27 @@ describe('external-sync impacts', () => {
 
             expect(autoPostFromRules.mock.calls[0][0].partyType).toBe('SUPPLIER');
         });
+
+        it('posts the bill against the credit purchase rule native purchases use', async () => {
+            await applyPurchaseImpacts({
+                tx: makeTx(),
+                tenantId: 't1',
+                storeId: 's1',
+                purchaseId: 'pur-1',
+                purchaseNumber: 'XR-2601096',
+                supplierId: 'sup-1',
+                totalAmount: 1000,
+                paidAmount: 250,
+                purchaseDate: SALE_DATE,
+                items: [{ product_id: 'p1', quantity: 10, unit_cost: 100 }],
+            });
+
+            const posted = autoPostFromRules.mock.calls[0][0];
+            expect(posted.eventType).toBe('purchase');
+            expect(posted.conditionKey).toBe('payment_mode');
+            expect(posted.conditionValue).toBe('credit');
+            expect(posted.amount).toBe(1000);
+        });
     });
 
     describe('payments', () => {

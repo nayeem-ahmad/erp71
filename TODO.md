@@ -1642,6 +1642,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Imported purchases skipped the credit purchase posting rule** — done 2026-10-01. `applyPurchaseImpacts` posted with no condition, so `autoPostFromRules` looked for Purchase/`none` (which bootstrap never creates). It now emits `payment_mode=credit`, the same tuple native purchases use.
+
 - [x] **Confirm and continue rejected `manifest.tenantId`** — done 2026-10-01. GET match-candidates returns a manifest that includes `tenantId`; Confirm posts that object back. `MatchManifestDto` omitted the field, so the global `forbidNonWhitelisted` pipe 400'd with `manifest.property tenantId should not exist`. DTO now accepts `tenantId`; applyDecisions still refuses a workbook for a different tenant.
 
 - [x] **External ERP import is a 4-step wizard with a compact mapping table** — done 2026-10-01. Settings › Data Management and the admin tenant page walk Connection → Extract/Upload → Mapping Decisions → Import instead of stacking every control on one page. Mapping rows are a compact table with a confidence column (High/Medium/Low/None + percent) and bulk Accept suggestion / Create as new / Skip. Confirm and continue still writes every row all-or-nothing, then opens Import. Frontend tests 29/29 on the wizard files; full frontend suite green; lint clean on the touched files. Not driven in a browser (local frontend/API were not running).
