@@ -217,4 +217,6 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'ProjectTaskRemainingLog', exempt: 'Audit trail of remaining hours; no monetary amount.' },
     { model: 'ProjectTimeEntry', exempt: 'Logged hours; costing them against payroll is Phase 2.' },
     { model: 'SprintSnapshot', exempt: 'Daily burndown totals in hours.' },
+    { model: 'SprintBurndownPoint', exempt: 'Burndown totals in hours, one per sprint change.' },
+    { model: 'SprintTask', exempt: 'A task\'s stay in a sprint; remaining_at_close is hours.' },
 ];
