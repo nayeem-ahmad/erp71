@@ -1,17 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { round2 } from './burndown.util';
+import { burndownCauseForSource, type BurndownCauseName } from './sprint-backfill.util';
 
-/** Mirrors the `BurndownCause` enum, so callers need not import Prisma's. */
-export type BurndownCauseName =
-    | 'STARTED'
-    | 'WORK_LOGGED'
-    | 'RE_ESTIMATED'
-    | 'TASK_ADDED'
-    | 'TASK_REMOVED'
-    | 'STATUS_CHANGED'
-    | 'COMPLETED'
-    | 'BACKFILLED';
+export type { BurndownCauseName };
 
 export interface BurndownFigures {
     remaining_hours: number;
@@ -42,20 +34,7 @@ export class BurndownRecorder {
 
     /** Which cause a remaining-hours log source amounts to on the chart. */
     static causeForSource(source: string): BurndownCauseName {
-        switch (source) {
-            case 'TIME_LOGGED':
-            case 'TIME_ENTRY_DELETED':
-                return 'WORK_LOGGED';
-            case 'TASK_COMPLETED':
-            case 'TASK_REOPENED':
-                return 'STATUS_CHANGED';
-            // A task's opening hours only ever land as it is created, which in
-            // a sprint is the task joining it.
-            case 'TASK_CREATED':
-                return 'TASK_ADDED';
-            default:
-                return 'RE_ESTIMATED';
-        }
+        return burndownCauseForSource(source);
     }
 
     /** The sprint's figures as they stand right now. */
