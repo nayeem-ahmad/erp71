@@ -10,6 +10,7 @@ import { seedDemoAccount, DEMO_ACCOUNT_EMAIL } from './seed-demo';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole, resolveBaseUserRole, SYSTEM_TENANT_ROLE_TO_USER_ROLE } from '@erp71/shared-types';
 import { seedDefaultTenantRoles } from './tenant-role.seed';
 import { seedPlatformReferenceData } from './seed-platform';
+import { DEFAULT_FOUND_REASONS } from './inventory-reasons.seed';
 
 const prisma = new PrismaClient();
 
@@ -312,10 +313,9 @@ async function main() {
         // FOUND is the mirror of SHRINKAGE: stock the shelf holds and the book
         // does not. Its own catalogue on purpose — "Theft" cannot explain a
         // surplus, and offering it would invite a nonsense audit trail.
-        { type: 'FOUND', code: 'MISCOUNT', label: 'Miscount' },
-        { type: 'FOUND', code: 'UNRECORDED_RETURN', label: 'Unrecorded Customer Return' },
-        { type: 'FOUND', code: 'UNRECORDED_RECEIPT', label: 'Unrecorded Supplier Receipt' },
-        { type: 'FOUND', code: 'UNKNOWN', label: 'Unknown Surplus' },
+        // Shared with sync-found-reasons.ts, which carries the same list to
+        // tenants created before FOUND existed; two copies would drift.
+        ...DEFAULT_FOUND_REASONS.map((reason) => ({ type: 'FOUND', ...reason })),
         { type: 'DISCREPANCY', code: 'COUNT_ERROR', label: 'Count Error' },
         { type: 'DISCREPANCY', code: 'RECONCILIATION', label: 'Reconciliation Adjustment' },
     ];
