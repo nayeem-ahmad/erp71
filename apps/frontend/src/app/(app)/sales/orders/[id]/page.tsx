@@ -192,23 +192,24 @@ function OrderDetailsPageContent() {
         }
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         const printContent = printRef.current;
         if (!printContent) return;
+        const header = await printHeader.resolve(order?.store_id ?? undefined);
 
         const headerContext: HeaderContext = {
             docTitle: t.shared.print.salesOrder,
             docNumber: order?.order_number,
             docDate: order?.created_at ? formatDate(order.created_at, locale) : undefined,
-            companyName: printHeader.companyName,
+            companyName: header.companyName,
         };
 
         openPrintWindow({
             context: headerContext,
             title: `${t.shared.print.salesOrder} ${order?.order_number ?? ''}`,
             paperSize: 'A4',
-            headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
+            headerConfig: header.headerConfig,
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,
@@ -300,7 +301,7 @@ function OrderDetailsPageContent() {
                                     </button>
                                 )}
                                 <button
-                                    onClick={handlePrint}
+                                    onClick={() => void handlePrint()}
                                     className="bg-gray-900 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all"
                                 >
                                     <Printer className="w-4 h-4" />

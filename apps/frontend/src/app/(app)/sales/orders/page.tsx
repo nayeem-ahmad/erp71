@@ -34,6 +34,7 @@ interface SalesOrder {
     items: any[];
     deposits: any[];
     customer?: { name: string; phone?: string };
+    store_id?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -101,20 +102,22 @@ export default function OrdersPage() {
         }
     };
 
-    const handlePrint = (order: SalesOrder) => {
+    const handlePrint = async (order: SalesOrder) => {
+        // The order's own branch letterhead, not the one resolved on mount.
+        const header = await printHeader.resolve(order.store_id);
         const headerContext: HeaderContext = {
             docTitle: t.shared.print.salesOrder,
             docNumber: order.order_number,
             docDate: formatDate(order.created_at, locale),
-            companyName: printHeader.companyName,
+            companyName: header.companyName,
         };
 
         openPrintWindow({
             context: headerContext,
             title: order.order_number,
             paperSize: 'A4',
-            headerConfig: printHeader.headerConfig,
-            headerHtml: renderHeaderHtml(printHeader.headerConfig, headerContext, 'A4'),
+            headerConfig: header.headerConfig,
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,
@@ -226,7 +229,7 @@ export default function OrdersPage() {
                                 <ReceiptText className="w-4 h-4" />
                             </Link>
                             <button
-                                onClick={() => handlePrint(row)}
+                                onClick={() => void handlePrint(row)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
                                 title={t.common.print}
                             >

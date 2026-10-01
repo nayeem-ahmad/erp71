@@ -204,7 +204,8 @@ function NewSalePageContent() {
         }
     };
 
-    const printHeader = usePrintHeader('SALES_INVOICE');
+    // The sale is rung up at the workspace store, so it prints on that branch's paper.
+    const printHeader = usePrintHeader('SALES_INVOICE', { storeId: getWorkspaceItem('store_id') || undefined });
 
     /**
      * What is on the screen right now, as an invoice. Printed straight from the
