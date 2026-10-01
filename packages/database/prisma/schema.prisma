@@ -990,6 +990,8 @@ model Tenant {
   projectTimers              ProjectTimer[]
   sprints                    Sprint[]
   sprintSnapshots            SprintSnapshot[]
+  sprintTasks                SprintTask[]
+  sprintBurndownPoints       SprintBurndownPoint[]
   projectComments            ProjectComment[]
   projectAttachments         ProjectAttachment[]
   shortLinks                 ShortLink[]
@@ -7423,6 +7425,10 @@ model ProjectTask {
   timeEntries    ProjectTimeEntry[]
   timers         ProjectTimer[]
   remainingLogs  ProjectTaskRemainingLog[]
+  /// Every sprint this task has been in — the current one included, as the
+  /// open row. `sprint_id` above stays the current sprint; this is history.
+  sprintMemberships SprintTask[]
+  burndownPoints    SprintBurndownPoint[]
   comments       ProjectComment[]
   attachments    ProjectAttachment[]
   boardCards     BoardTask[]
@@ -7886,12 +7892,87 @@ model Sprint {
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
-  tasks         ProjectTask[]
-  snapshots     SprintSnapshot[]
-  remainingLogs ProjectTaskRemainingLog[]
+  tasks          ProjectTask[]
+  snapshots      SprintSnapshot[]
+  remainingLogs  ProjectTaskRemainingLog[]
+  memberships    SprintTask[]          @relation("SprintTaskSprint")
+  carriedIn      SprintTask[]          @relation("SprintTaskCarriedTo")
+  burndownPoints SprintBurndownPoint[]
 
   @@index([tenant_id, status])
   @@map("sprints")
+}
+
+enum SprintTaskOutcome {
+  DONE
+  CARRIED_OVER
+  RETURNED_TO_BACKLOG
+  REMOVED
+}
+
+/// One task's stay in one sprint. A task is in at most one open sprint at a
+/// time (`removed_at IS NULL`, enforced by the partial unique index
+/// `sprint_tasks_one_open` in the migration — Prisma cannot express it), and
+/// that open row always names `ProjectTask.sprint_id`. Closed rows are the
+/// history: a task carried through three sprints has three rows. Written only
+/// by `SprintMembershipService`.
+model SprintTask {
+  id                   String             @id @default(uuid())
+  tenant_id            String
+  sprint_id            String
+  task_id              String
+  added_at             DateTime           @default(now())
+  removed_at           DateTime?
+  outcome              SprintTaskOutcome?
+  /// The task's remaining hours when its stay ended — what a completed sprint
+  /// reports for it, since the task's live figure keeps moving afterwards.
+  remaining_at_close   Decimal?           @db.Decimal(8, 2)
+  carried_to_sprint_id String?
+
+  tenant     Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  sprint     Sprint      @relation("SprintTaskSprint", fields: [sprint_id], references: [id], onDelete: Cascade)
+  task       ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  carried_to Sprint?     @relation("SprintTaskCarriedTo", fields: [carried_to_sprint_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, sprint_id])
+  @@index([task_id, added_at])
+  @@map("sprint_tasks")
+}
+
+enum BurndownCause {
+  STARTED
+  WORK_LOGGED
+  RE_ESTIMATED
+  TASK_ADDED
+  TASK_REMOVED
+  STATUS_CHANGED
+  COMPLETED
+  BACKFILLED
+}
+
+/// One burndown point per change to an active sprint's totals. Each row holds
+/// the sprint's full totals at `recorded_at`, recomputed from its tasks — never
+/// a delta — so a point that failed to write is corrected by the next one.
+/// Replaces `SprintSnapshot`, which held one point per day.
+model SprintBurndownPoint {
+  id              String        @id @default(uuid())
+  tenant_id       String
+  sprint_id       String
+  recorded_at     DateTime      @default(now())
+  remaining_hours Decimal       @db.Decimal(10, 2)
+  committed_hours Decimal       @db.Decimal(10, 2)
+  task_count      Int
+  done_task_count Int
+  cause           BurndownCause
+  /// The task whose change this was; null for bulk and sprint-level changes.
+  task_id         String?
+
+  tenant Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  sprint Sprint       @relation(fields: [sprint_id], references: [id], onDelete: Cascade)
+  task   ProjectTask? @relation(fields: [task_id], references: [id], onDelete: SetNull)
+
+  @@index([sprint_id, recorded_at])
+  @@map("sprint_burndown_points")
 }
 
 /// One burndown point per sprint per day. A cache, not the source of truth —
