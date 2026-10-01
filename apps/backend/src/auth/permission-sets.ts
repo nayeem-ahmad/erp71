@@ -115,6 +115,7 @@ export const SUPPLIER_CREDIT_WRITE: P[] = [P.CREATE_PURCHASE, P.CREATE_VOUCHER];
 // Inventory & catalogue -----------------------------------------------------
 export const CATALOG_READ: P[] = [P.VIEW_PRODUCT_CATALOG];
 export const PRODUCT_WRITE: P[] = [P.EDIT_PRODUCTS, P.EDIT_PRODUCT_PRICES];
+export const PRODUCT_MERGE: P[] = [P.MANAGE_USERS];
 export const BRAND_WRITE: P[] = [P.EDIT_BRANDS, P.EDIT_PRODUCTS];
 export const INVENTORY_STAFF: P[] = [
     P.CREATE_INVENTORY_MOVEMENTS,

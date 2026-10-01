@@ -1,5 +1,6 @@
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { planMerge, throwIfBlocked, TAKE_FIELDS, commitMerge, parseTakeFields } from './products.merge';
+import { ProductsService } from './products.service';
 
 function product(over: Record<string, unknown> = {}) {
     return { id: 'src', tenant_id: 't1', deleted_at: null, type: 'GOODS', name: 'Dup', sku: 'D', price: 16, ...over };
@@ -623,6 +624,18 @@ describe('commitMerge', () => {
             data: { quantity: 5, unit_cost: 16 },
         });
         expect(tx.inventoryShrinkageItem.delete).toHaveBeenCalledWith({ where: { id: 'sh-src' } });
+    });
+});
+
+describe('ProductsService merge wrappers', () => {
+    it('previewMerge 404s a missing source', async () => {
+        const service = new ProductsService(
+            dbWith(null, product({ id: 'tgt' })) as any,
+            { invalidatePattern: jest.fn() } as any,
+            {} as any,
+            {} as any,
+        );
+        await expect(service.previewMerge('t1', 'src', 'tgt')).rejects.toBeInstanceOf(NotFoundException);
     });
 });
 
