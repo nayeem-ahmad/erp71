@@ -57,6 +57,10 @@ function writable(over: Record<string, any> = {}) {
         delete: jest.fn().mockResolvedValue({}),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         upsert: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
         ...over,
     };
 }
@@ -65,6 +69,13 @@ function makeCommitTx(opts: {
     onSaleUpdateMany?: (args: any) => void;
     stocks?: Array<{ id: string; product_id: string; warehouse_id: string; quantity: number }>;
     costs?: Array<{ product_id: string; avg_cost: number; qty_on_hand: number }>;
+    transfers?: any[];
+    shrinkages?: any[];
+    stockTakes?: any[];
+    demands?: any[];
+    priceListItems?: any[];
+    productPrices?: any[];
+    bomComponents?: any[];
 } = {}) {
     const stocks = opts.stocks ?? [];
     const costs = opts.costs ?? [];
@@ -89,7 +100,29 @@ function makeCommitTx(opts: {
         productionJob: writable(),
         productionWastage: writable(),
         productSerial: writable(),
-        productPrice: writable(),
+        productPrice: writable({
+            findMany: jest.fn().mockResolvedValue(opts.productPrices ?? []),
+        }),
+        warehouseTransferItem: writable({
+            findMany: jest.fn().mockResolvedValue(opts.transfers ?? []),
+        }),
+        inventoryShrinkageItem: writable({
+            findMany: jest.fn().mockResolvedValue(opts.shrinkages ?? []),
+        }),
+        stockTakeCountLine: writable({
+            findMany: jest.fn().mockResolvedValue(opts.stockTakes ?? []),
+        }),
+        productDemandItem: writable({
+            findMany: jest.fn().mockResolvedValue(opts.demands ?? []),
+        }),
+        priceListItem: writable({
+            findMany: jest.fn().mockResolvedValue(opts.priceListItems ?? []),
+        }),
+        bomComponent: writable({
+            findMany: jest.fn().mockResolvedValue(opts.bomComponents ?? []),
+        }),
+        bomRecipe: writable(),
+        externalSyncMapping: writable(),
         productStock: writable({
             findMany: jest.fn().mockResolvedValue(stocks),
         }),
@@ -463,6 +496,133 @@ describe('commitMerge', () => {
         await expect(commitMerge(dbWith(src, product({ id: 'tgt' })), redis, 't1', 'src', { targetId: 'tgt', takeFields: [] }))
             .rejects.toBeInstanceOf(NotFoundException);
         expect(redis.invalidatePattern).not.toHaveBeenCalled();
+    });
+
+    it('folds two transfer lines on the same transfer', async () => {
+        const tx = makeCommitTx({
+            transfers: [
+                { id: 'ti-src', transfer_id: 'tr1', product_id: 'src', quantity_sent: 2, quantity_received: 2 },
+                { id: 'ti-tgt', transfer_id: 'tr1', product_id: 'tgt', quantity_sent: 3, quantity_received: 3 },
+            ],
+        });
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        expect(tx.warehouseTransferItem.update).toHaveBeenCalledWith({
+            where: { id: 'ti-tgt' },
+            data: { quantity_sent: 5, quantity_received: 5 },
+        });
+        expect(tx.warehouseTransferItem.delete).toHaveBeenCalledWith({ where: { id: 'ti-src' } });
+    });
+
+    it('drops the duplicate price-list row and keeps the keeper price', async () => {
+        const tx = makeCommitTx({
+            priceListItems: [
+                { id: 'pli-src', price_list_id: 'L', product_id: 'src', selling_price: 16 },
+                { id: 'pli-tgt', price_list_id: 'L', product_id: 'tgt', selling_price: 15 },
+            ],
+        });
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        expect(tx.priceListItem.delete).toHaveBeenCalledWith({ where: { id: 'pli-src' } });
+        expect(tx.priceListItem.update).not.toHaveBeenCalled();
+        expect(tx.priceListItem.delete).not.toHaveBeenCalledWith({ where: { id: 'pli-tgt' } });
+    });
+
+    it('copies only name and sku when takeFields says so', async () => {
+        const tx = makeCommitTx({});
+        const db = { $transaction: (fn: any) => fn(tx) };
+        const redis = { invalidatePattern: jest.fn() };
+        const result = await commitMerge(db, redis, 't1', 'src', { targetId: 'tgt', takeFields: ['name', 'sku'] });
+        expect(result.targetId).toBe('tgt');
+        expect(tx.product.update).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: 'tgt' },
+            data: expect.objectContaining({ name: 'Dup', sku: 'D' }),
+        }));
+        const calls = tx.product.update.mock.calls.map((c: any) => c[0]);
+        const srcNull = calls.findIndex((a: any) => a.where.id === 'src' && a.data.sku === null);
+        const tgtSku = calls.findIndex((a: any) => a.where.id === 'tgt' && a.data.sku === 'D');
+        expect(srcNull).toBeGreaterThanOrEqual(0);
+        expect(tgtSku).toBeGreaterThan(srcNull);
+    });
+
+    it('leaves keeper name unchanged when takeFields is empty', async () => {
+        const tx = makeCommitTx({});
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        const keeperUpdates = tx.product.update.mock.calls.filter((c: any) => c[0].where.id === 'tgt');
+        for (const [args] of keeperUpdates) {
+            expect(args.data).not.toHaveProperty('name');
+        }
+    });
+
+    it('400s an unknown takeFields value', async () => {
+        const tx = makeCommitTx({});
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await expect(commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: ['nope'] as any }))
+            .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('retargets ExternalSyncMapping PRODUCT internal_id', async () => {
+        const tx = makeCommitTx({});
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        expect(tx.externalSyncMapping.updateMany).toHaveBeenCalledWith({
+            where: { tenant_id: 't1', entity_type: 'PRODUCT', internal_id: 'src' },
+            data: { internal_id: 'tgt' },
+        });
+    });
+
+    it('closes the duplicate open ProductPrice when the keeper already has one for that store', async () => {
+        const tx = makeCommitTx({
+            productPrices: [
+                { id: 'pp-src', product_id: 'src', store_id: 's1', effective_to: null, price: 16 },
+                { id: 'pp-tgt', product_id: 'tgt', store_id: 's1', effective_to: null, price: 15 },
+            ],
+        });
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        expect(tx.productPrice.update).toHaveBeenCalledWith({
+            where: { id: 'pp-src' },
+            data: { effective_to: expect.any(Date) },
+        });
+        expect(tx.productPrice.updateMany).toHaveBeenCalledWith({
+            where: { product_id: 'src' },
+            data: { product_id: 'tgt' },
+        });
+        expect(tx.productPrice.update.mock.invocationCallOrder[0])
+            .toBeLessThan(tx.productPrice.updateMany.mock.invocationCallOrder[0]);
+    });
+
+    it('keeps the only counted stock-take number and recomputes variance', async () => {
+        const tx = makeCommitTx({
+            stockTakes: [
+                { id: 'st-src', session_id: 'st1', product_id: 'src', expected_quantity: 10, counted_quantity: 8, variance_quantity: -2 },
+                { id: 'st-tgt', session_id: 'st1', product_id: 'tgt', expected_quantity: 5, counted_quantity: null, variance_quantity: null },
+            ],
+        });
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        expect(tx.stockTakeCountLine.update).toHaveBeenCalledWith({
+            where: { id: 'st-tgt' },
+            data: { expected_quantity: 15, counted_quantity: 8, variance_quantity: -7 },
+        });
+        expect(tx.stockTakeCountLine.delete).toHaveBeenCalledWith({ where: { id: 'st-src' } });
+    });
+
+    it('weights shrinkage unit_cost by quantity when both sides have a cost', async () => {
+        const tx = makeCommitTx({
+            shrinkages: [
+                { id: 'sh-src', shrinkage_id: 'sh1', product_id: 'src', quantity: 2, unit_cost: 10 },
+                { id: 'sh-tgt', shrinkage_id: 'sh1', product_id: 'tgt', quantity: 3, unit_cost: 20 },
+            ],
+        });
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
+        expect(tx.inventoryShrinkageItem.update).toHaveBeenCalledWith({
+            where: { id: 'sh-tgt' },
+            data: { quantity: 5, unit_cost: 16 },
+        });
+        expect(tx.inventoryShrinkageItem.delete).toHaveBeenCalledWith({ where: { id: 'sh-src' } });
     });
 });
 

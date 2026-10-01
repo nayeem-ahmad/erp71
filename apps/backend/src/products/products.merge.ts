@@ -420,12 +420,19 @@ const REPOINT_PRODUCT_ID = [
     'inventoryMovement',
     'productSerial',
     'productPrice',
+    'warehouseTransferItem',
+    'inventoryShrinkageItem',
+    'stockTakeCountLine',
+    'productDemandItem',
+    'priceListItem',
 ] as const;
 
 const REPOINT_PRODUCT_ID_CAMEL = [
     'storefrontOrderItem',
     'productionJob',
     'productionWastage',
+    'bomComponent',
+    'bomRecipe',
 ] as const;
 
 const PRODUCT_INCLUDE = {
@@ -545,6 +552,171 @@ async function writeCombinedCost(
     return combined;
 }
 
+function presentNumber(value: unknown): number | null {
+    if (value == null || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+function addOptional(a: unknown, b: unknown): number | null {
+    const an = presentNumber(a);
+    const bn = presentNumber(b);
+    if (an != null && bn != null) return an + bn;
+    if (an != null) return an;
+    if (bn != null) return bn;
+    return null;
+}
+
+function weightedUnitCost(keeper: any, source: any): number | null {
+    const keeperCost = presentNumber(keeper.unit_cost);
+    const sourceCost = presentNumber(source.unit_cost);
+    if (keeperCost != null && sourceCost != null) {
+        const keeperQty = Number(keeper.quantity) || 0;
+        const sourceQty = Number(source.quantity) || 0;
+        const denom = keeperQty + sourceQty;
+        if (denom === 0) return keeperCost;
+        return (keeperQty * keeperCost + sourceQty * sourceCost) / denom;
+    }
+    if (keeperCost != null) return keeperCost;
+    if (sourceCost != null) return sourceCost;
+    return null;
+}
+
+type FoldGroup = { sources: any[]; targets: any[] };
+
+function groupsByParent(
+    rows: any[],
+    sourceId: string,
+    targetId: string,
+    parentKey: string,
+    productKey: string,
+): FoldGroup[] {
+    const byParent = new Map<string, FoldGroup>();
+    for (const row of rows) {
+        const parentId = String(row[parentKey]);
+        const group = byParent.get(parentId) ?? { sources: [], targets: [] };
+        if (row[productKey] === sourceId) group.sources.push(row);
+        else if (row[productKey] === targetId) group.targets.push(row);
+        byParent.set(parentId, group);
+    }
+    return [...byParent.values()];
+}
+
+async function foldCollidingRows(
+    tx: any,
+    model: string,
+    parentKey: string,
+    productKey: string,
+    sourceId: string,
+    targetId: string,
+    merge: (keeper: any, source: any) => Record<string, unknown> | null,
+): Promise<void> {
+    const rows = await tx[model].findMany({
+        where: { [productKey]: { in: [sourceId, targetId] } },
+    });
+    for (const group of groupsByParent(rows, sourceId, targetId, parentKey, productKey)) {
+        if (group.sources.length === 0 || group.targets.length === 0) continue;
+        let keeper = group.targets[0];
+        for (const source of group.sources) {
+            const data = merge(keeper, source);
+            if (data) {
+                await tx[model].update({ where: { id: keeper.id }, data });
+                keeper = { ...keeper, ...data };
+            }
+            await tx[model].delete({ where: { id: source.id } });
+        }
+    }
+}
+
+async function closeDuplicateOpenPrices(tx: any, sourceId: string, targetId: string): Promise<void> {
+    const open: Array<{ id: string; product_id: string; store_id: string | null }> =
+        await tx.productPrice.findMany({
+            where: {
+                product_id: { in: [sourceId, targetId] },
+                effective_to: null,
+            },
+        });
+    const keeperStores = new Set(
+        open.filter((row) => row.product_id === targetId).map((row) => row.store_id ?? null),
+    );
+    for (const row of open) {
+        if (row.product_id !== sourceId) continue;
+        if (!keeperStores.has(row.store_id ?? null)) continue;
+        await tx.productPrice.update({
+            where: { id: row.id },
+            data: { effective_to: new Date() },
+        });
+    }
+}
+
+async function foldUniqueChildren(tx: any, sourceId: string, targetId: string): Promise<void> {
+    await foldCollidingRows(tx, 'warehouseTransferItem', 'transfer_id', 'product_id', sourceId, targetId, (keeper, source) => ({
+        quantity_sent: Number(keeper.quantity_sent) + Number(source.quantity_sent),
+        quantity_received: Number(keeper.quantity_received) + Number(source.quantity_received),
+    }));
+    await foldCollidingRows(tx, 'inventoryShrinkageItem', 'shrinkage_id', 'product_id', sourceId, targetId, (keeper, source) => ({
+        quantity: Number(keeper.quantity) + Number(source.quantity),
+        unit_cost: weightedUnitCost(keeper, source),
+    }));
+    await foldCollidingRows(tx, 'stockTakeCountLine', 'session_id', 'product_id', sourceId, targetId, (keeper, source) => {
+        const expected = Number(keeper.expected_quantity) + Number(source.expected_quantity);
+        const counted = addOptional(keeper.counted_quantity, source.counted_quantity);
+        return {
+            expected_quantity: expected,
+            counted_quantity: counted,
+            variance_quantity: counted != null ? counted - expected : null,
+        };
+    });
+    await foldCollidingRows(tx, 'productDemandItem', 'demand_id', 'product_id', sourceId, targetId, (keeper, source) => ({
+        quantity_requested: Number(keeper.quantity_requested) + Number(source.quantity_requested),
+        quantity_approved: addOptional(keeper.quantity_approved, source.quantity_approved),
+    }));
+    await foldCollidingRows(tx, 'priceListItem', 'price_list_id', 'product_id', sourceId, targetId, () => null);
+    await foldCollidingRows(tx, 'bomComponent', 'recipeId', 'productId', sourceId, targetId, (keeper, source) => ({
+        quantity: Number(keeper.quantity) + Number(source.quantity),
+    }));
+    await closeDuplicateOpenPrices(tx, sourceId, targetId);
+}
+
+function takeFieldsPatch(source: any, fields: TakeField[]): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    for (const key of fields) {
+        switch (key) {
+            case 'name': data.name = source.name; break;
+            case 'sku': data.sku = source.sku; break;
+            case 'price': data.price = source.price; break;
+            case 'compareAtPrice': data.compare_at_price = source.compare_at_price; break;
+            case 'brand': data.brand_id = source.brand_id; break;
+            case 'category':
+                data.group_id = source.group_id;
+                data.subgroup_id = source.subgroup_id;
+                break;
+            case 'image': data.image_url = source.image_url; break;
+            case 'gallery': data.images_gallery = source.images_gallery; break;
+            case 'description': data.description = source.description; break;
+            case 'unitType': data.unit_type = source.unit_type; break;
+            case 'vatRate': data.vat_rate = source.vat_rate; break;
+            case 'sdRate': data.sd_rate = source.sd_rate; break;
+            case 'warranty':
+                data.warranty_enabled = source.warranty_enabled;
+                data.warranty_duration_days = source.warranty_duration_days;
+                break;
+            case 'reorder':
+                data.reorder_level = source.reorder_level;
+                data.safety_stock = source.safety_stock;
+                data.lead_time_days = source.lead_time_days;
+                break;
+            case 'hsCode': data.hs_code = source.hs_code; break;
+            case 'origin': data.country_of_origin = source.country_of_origin; break;
+            case 'weight':
+                data.net_weight_kg = source.net_weight_kg;
+                data.cbm = source.cbm;
+                break;
+        }
+    }
+    return data;
+}
+
 export async function commitMerge(
     db: any,
     redis: { invalidatePattern(pattern: string): Promise<void> },
@@ -559,13 +731,14 @@ export async function commitMerge(
     combinedStock: number;
     combinedCost: MergePlan['cost']['combined'];
 }> {
-    parseTakeFields(dto.takeFields);
+    const takeFields = parseTakeFields(dto.takeFields);
     const targetId = dto.targetId;
 
     const result = await db.$transaction(async (tx: any) => {
         const plan = await planMerge(tx, tenantId, sourceId, targetId);
         throwIfBlocked(plan, 'commit');
 
+        await foldUniqueChildren(tx, sourceId, targetId);
         await repointForeignKeys(tx, sourceId, targetId);
 
         const combinedStock = await combineStockRows(tx, tenantId, sourceId, targetId);
@@ -574,6 +747,19 @@ export async function commitMerge(
         await tx.product.update({
             where: { id: sourceId },
             data: { sku: null, deleted_at: new Date() },
+        });
+
+        const overlay = takeFieldsPatch(plan.source, takeFields);
+        if (Object.keys(overlay).length > 0) {
+            await tx.product.update({
+                where: { id: targetId },
+                data: overlay,
+            });
+        }
+
+        await tx.externalSyncMapping.updateMany({
+            where: { tenant_id: tenantId, entity_type: 'PRODUCT', internal_id: sourceId },
+            data: { internal_id: targetId },
         });
 
         const product = await tx.product.findFirst({
