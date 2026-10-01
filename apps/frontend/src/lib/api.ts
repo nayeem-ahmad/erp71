@@ -1274,6 +1274,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    previewProductMerge: (sourceId: string, targetId: string) =>
+        fetchWithAuth(`/products/${sourceId}/merge-preview?targetId=${encodeURIComponent(targetId)}`),
+    mergeProduct: (sourceId: string, body: { targetId: string; takeFields: string[] }) =>
+        fetchWithAuth(`/products/${sourceId}/merge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        }),
     updateProduct: (id: string, data: any) => fetchWithAuth(`/products/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
