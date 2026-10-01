@@ -214,6 +214,8 @@ export async function applyPurchaseImpacts(input: PurchaseImpactInput): Promise<
         tx,
         tenantId,
         eventType: 'purchase',
+        conditionKey: 'payment_mode',
+        conditionValue: 'credit',
         sourceModule: 'external-sync',
         sourceType: 'purchase',
         sourceId: purchaseId,
