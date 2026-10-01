@@ -380,3 +380,217 @@ export function throwIfBlocked(plan: MergePlan, mode: 'preview' | 'commit'): voi
     const first = plan.blockers[0];
     throw new BadRequestException({ code: first.code, message: first.message });
 }
+
+const TAKE_FIELD_SET = new Set<string>(TAKE_FIELDS);
+
+function isTakeField(value: unknown): value is TakeField {
+    return typeof value === 'string' && TAKE_FIELD_SET.has(value);
+}
+
+export function parseTakeFields(raw: unknown): TakeField[] {
+    if (raw == null) return [];
+    if (!Array.isArray(raw)) {
+        throw new BadRequestException('takeFields must be an array.');
+    }
+    const seen = new Set<TakeField>();
+    const fields: TakeField[] = [];
+    for (const item of raw) {
+        if (!isTakeField(item)) {
+            throw new BadRequestException(`Unknown takeFields value: ${String(item)}`);
+        }
+        if (!seen.has(item)) {
+            seen.add(item);
+            fields.push(item);
+        }
+    }
+    return fields;
+}
+
+const REPOINT_PRODUCT_ID = [
+    'saleItem',
+    'salesReturnItem',
+    'purchaseItem',
+    'purchaseReturnItem',
+    'salesOrderItem',
+    'quotationItem',
+    'purchaseOrderItem',
+    'purchaseQuotationItem',
+    'importShipmentItem',
+    'warrantyClaim',
+    'inventoryMovement',
+    'productSerial',
+    'productPrice',
+] as const;
+
+const REPOINT_PRODUCT_ID_CAMEL = [
+    'storefrontOrderItem',
+    'productionJob',
+    'productionWastage',
+] as const;
+
+const PRODUCT_INCLUDE = {
+    brand: true,
+    group: true,
+    subgroup: { include: { group: true } },
+    stocks: {
+        include: { warehouse: true },
+        orderBy: [{ warehouse: { is_default: 'desc' as const } }, { warehouse: { name: 'asc' as const } }],
+    },
+};
+
+async function repointForeignKeys(tx: any, sourceId: string, targetId: string): Promise<void> {
+    for (const model of REPOINT_PRODUCT_ID) {
+        await tx[model].updateMany({
+            where: { product_id: sourceId },
+            data: { product_id: targetId },
+        });
+    }
+    for (const model of REPOINT_PRODUCT_ID_CAMEL) {
+        await tx[model].updateMany({
+            where: { productId: sourceId },
+            data: { productId: targetId },
+        });
+    }
+}
+
+async function combineStockRows(
+    tx: any,
+    tenantId: string,
+    sourceId: string,
+    targetId: string,
+): Promise<number> {
+    const rows: Array<{ id: string; product_id: string; warehouse_id: string; quantity: number }> =
+        await tx.productStock.findMany({
+            where: { tenant_id: tenantId, product_id: { in: [sourceId, targetId] } },
+        });
+
+    const keeperByWarehouse = new Map<string, { id: string; quantity: number }>();
+    const sourceRows: typeof rows = [];
+    for (const row of rows) {
+        if (row.product_id === targetId) {
+            keeperByWarehouse.set(row.warehouse_id, { id: row.id, quantity: Number(row.quantity) });
+        } else if (row.product_id === sourceId) {
+            sourceRows.push(row);
+        }
+    }
+
+    for (const source of sourceRows) {
+        const keeper = keeperByWarehouse.get(source.warehouse_id);
+        const sourceQty = Number(source.quantity);
+        if (keeper) {
+            keeper.quantity += sourceQty;
+            await tx.productStock.update({
+                where: { id: keeper.id },
+                data: { quantity: keeper.quantity },
+            });
+            await tx.productStock.delete({ where: { id: source.id } });
+        } else {
+            await tx.productStock.update({
+                where: { id: source.id },
+                data: { product_id: targetId },
+            });
+            keeperByWarehouse.set(source.warehouse_id, { id: source.id, quantity: sourceQty });
+        }
+    }
+
+    let sum = 0;
+    for (const row of keeperByWarehouse.values()) sum += row.quantity;
+    return sum;
+}
+
+async function writeCombinedCost(
+    tx: any,
+    tenantId: string,
+    sourceId: string,
+    targetId: string,
+    stockSum: number,
+): Promise<MergePlan['cost']['combined']> {
+    const [sourceCostRow, targetCostRow] = await Promise.all([
+        tx.productCost.findUnique({ where: { product_id: sourceId } }),
+        tx.productCost.findUnique({ where: { product_id: targetId } }),
+    ]);
+    const merged = mergePools(
+        costSide(targetCostRow),
+        sourceCostRow ? costSide(sourceCostRow) : null,
+    );
+    const combined: MergePlan['cost']['combined'] = {
+        avgCost: merged.avgCost,
+        qtyOnHand: stockSum,
+    };
+
+    if (targetCostRow || sourceCostRow) {
+        if (combined.avgCost !== null) {
+            await tx.productCost.upsert({
+                where: { product_id: targetId },
+                update: { avg_cost: combined.avgCost, qty_on_hand: combined.qtyOnHand },
+                create: {
+                    tenant_id: tenantId,
+                    product_id: targetId,
+                    avg_cost: combined.avgCost,
+                    qty_on_hand: combined.qtyOnHand,
+                },
+            });
+        } else if (targetCostRow && combined.qtyOnHand !== Number(targetCostRow.qty_on_hand)) {
+            await tx.productCost.update({
+                where: { product_id: targetId },
+                data: { qty_on_hand: combined.qtyOnHand },
+            });
+        }
+    }
+
+    if (sourceCostRow) {
+        await tx.productCost.delete({ where: { product_id: sourceId } });
+    }
+
+    return combined;
+}
+
+export async function commitMerge(
+    db: any,
+    redis: { invalidatePattern(pattern: string): Promise<void> },
+    tenantId: string,
+    sourceId: string,
+    dto: { targetId: string; takeFields: TakeField[] },
+): Promise<{
+    product: any;
+    sourceId: string;
+    targetId: string;
+    counts: MergePlan['counts'];
+    combinedStock: number;
+    combinedCost: MergePlan['cost']['combined'];
+}> {
+    parseTakeFields(dto.takeFields);
+    const targetId = dto.targetId;
+
+    const result = await db.$transaction(async (tx: any) => {
+        const plan = await planMerge(tx, tenantId, sourceId, targetId);
+        throwIfBlocked(plan, 'commit');
+
+        await repointForeignKeys(tx, sourceId, targetId);
+
+        const combinedStock = await combineStockRows(tx, tenantId, sourceId, targetId);
+        const combinedCost = await writeCombinedCost(tx, tenantId, sourceId, targetId, combinedStock);
+
+        await tx.product.update({
+            where: { id: sourceId },
+            data: { sku: null, deleted_at: new Date() },
+        });
+
+        const product = await tx.product.findFirst({
+            where: { id: targetId, tenant_id: tenantId, deleted_at: null },
+            include: PRODUCT_INCLUDE,
+        });
+
+        return {
+            product,
+            sourceId,
+            targetId,
+            counts: plan.counts,
+            combinedStock,
+            combinedCost,
+        };
+    });
+
+    await redis.invalidatePattern(`products:${tenantId}:`);
+    return result;
+}
