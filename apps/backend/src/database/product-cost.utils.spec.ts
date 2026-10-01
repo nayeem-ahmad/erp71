@@ -2,6 +2,7 @@ import {
     applyToPool,
     applyCostMovement,
     costBehaviourFor,
+    mergePools,
     resolveProductCosts,
     type CostPool,
 } from './product-cost.utils';
@@ -397,5 +398,42 @@ describe('resolveProductCosts', () => {
 
         expect((await call(tx, [])).size).toBe(0);
         expect(tx.inventorySettings.findUnique).not.toHaveBeenCalled();
+    });
+});
+
+describe('mergePools', () => {
+    it('blends two positive pools to 4dp', () => {
+        const keeper: CostPool = { avgCost: 10, qtyOnHand: 40 };
+        const dup: CostPool = { avgCost: 13, qtyOnHand: 8 };
+        expect(mergePools(keeper, dup)).toEqual({
+            avgCost: 10.5, // (40*10 + 8*13) / 48
+            qtyOnHand: 48,
+        });
+    });
+
+    it('keeps the positive side’s average when the other qty is not positive', () => {
+        expect(mergePools({ avgCost: 12, qtyOnHand: 10 }, { avgCost: 99, qtyOnHand: -3 })).toEqual({
+            avgCost: 12,
+            qtyOnHand: 7,
+        });
+    });
+
+    it('does not zero the keeper average when the duplicate has qty but no basis', () => {
+        expect(mergePools({ avgCost: 20, qtyOnHand: 5 }, { avgCost: null, qtyOnHand: 5 })).toEqual({
+            avgCost: 20,
+            qtyOnHand: 10,
+        });
+    });
+
+    it('returns the keeper unchanged when there is no duplicate pool', () => {
+        const keeper: CostPool = { avgCost: 7.5, qtyOnHand: 3 };
+        expect(mergePools(keeper, null)).toEqual(keeper);
+    });
+
+    it('keeps the keeper average when both quantities are not positive', () => {
+        expect(mergePools({ avgCost: 11, qtyOnHand: -2 }, { avgCost: 50, qtyOnHand: -1 })).toEqual({
+            avgCost: 11,
+            qtyOnHand: -3,
+        });
     });
 });
