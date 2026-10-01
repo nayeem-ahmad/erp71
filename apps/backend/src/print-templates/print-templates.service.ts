@@ -1,11 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
     CreatePrintTemplateDto,
     PrintDocType,
+    PrintTemplateAssignmentDto,
     PrintTemplateResponseDto,
     ResolvedPrintTemplateDto,
     UpdatePrintTemplateDto,
+    UpsertPrintTemplateAssignmentDto,
 } from './print-templates.dto';
 
 const DEFAULT_ACCENT = '#1d4ed8';
@@ -109,11 +111,22 @@ export class PrintTemplatesService {
     }
 
     /**
-     * The header config to print a document with: the template assigned to that
-     * document type, else the tenant default, else one derived from branding so
-     * printing always has a sensible letterhead.
+     * The header config to print a document with: the store's own pin for that
+     * document type, else the template assigned to that document type, else the
+     * tenant default, else one derived from branding so printing always has a
+     * sensible letterhead. A store that is not this tenant's is ignored rather
+     * than refused — printing must still produce paper.
      */
-    async resolve(tenantId: string, docType?: PrintDocType): Promise<ResolvedPrintTemplateDto> {
+    async resolve(
+        tenantId: string,
+        docType?: PrintDocType,
+        storeId?: string,
+    ): Promise<ResolvedPrintTemplateDto> {
+        if (storeId && docType) {
+            const override = await this.storeOverride(tenantId, storeId, docType);
+            if (override) return override;
+        }
+
         const templates = await this.db.printTemplate.findMany({
             where: { tenant_id: tenantId },
         });
@@ -136,6 +149,91 @@ export class PrintTemplatesService {
             name: null,
             config: await this.brandingFallback(tenantId),
         };
+    }
+
+    private async storeOverride(
+        tenantId: string,
+        storeId: string,
+        docType: PrintDocType,
+    ): Promise<ResolvedPrintTemplateDto | null> {
+        const store = await this.db.store.findFirst({
+            where: { id: storeId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!store) return null;
+
+        const override = await this.db.printTemplateStoreAssignment.findUnique({
+            where: {
+                tenant_id_store_id_doc_type: {
+                    tenant_id: tenantId,
+                    store_id: storeId,
+                    doc_type: docType,
+                },
+            },
+            include: { template: true },
+        });
+        if (!override?.template) return null;
+
+        return {
+            template_id: override.template.id,
+            name: override.template.name,
+            config: override.template.config as Record<string, unknown>,
+        };
+    }
+
+    async listAssignments(tenantId: string): Promise<PrintTemplateAssignmentDto[]> {
+        return this.db.printTemplateStoreAssignment.findMany({
+            where: { tenant_id: tenantId },
+            select: { store_id: true, doc_type: true, template_id: true },
+        });
+    }
+
+    /**
+     * Pin a branch's document type to a named template, or clear the pin
+     * (`templateId: null`) so the branch follows company paper. Naming the
+     * current company default is still a pin: the branch stays on it if
+     * company paper later moves.
+     */
+    async upsertAssignment(
+        tenantId: string,
+        dto: UpsertPrintTemplateAssignmentDto,
+    ): Promise<{ success: true }> {
+        const store = await this.db.store.findFirst({
+            where: { id: dto.storeId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!store) throw new BadRequestException('Store not found');
+
+        if (dto.templateId === null) {
+            await this.db.printTemplateStoreAssignment.deleteMany({
+                where: { tenant_id: tenantId, store_id: dto.storeId, doc_type: dto.docType },
+            });
+            return { success: true };
+        }
+
+        const template = await this.db.printTemplate.findFirst({
+            where: { id: dto.templateId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!template) throw new BadRequestException('Print template not found');
+
+        await this.db.printTemplateStoreAssignment.upsert({
+            where: {
+                tenant_id_store_id_doc_type: {
+                    tenant_id: tenantId,
+                    store_id: dto.storeId,
+                    doc_type: dto.docType,
+                },
+            },
+            create: {
+                tenant_id: tenantId,
+                store_id: dto.storeId,
+                doc_type: dto.docType,
+                template_id: dto.templateId,
+            },
+            update: { template_id: dto.templateId },
+        });
+        return { success: true };
     }
 
     /**
