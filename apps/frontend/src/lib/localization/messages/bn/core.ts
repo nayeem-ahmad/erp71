@@ -1329,6 +1329,15 @@ export const coreMessages = {
             printVoucher: "পেমেন্ট ভাউচার প্রিন্ট",
             voucherNumber: "ভাউচার নং",
             balanceAfter: "পরবর্তী ব্যালেন্স",
+            discount: {
+                label: "প্রদত্ত ছাড়",
+                hint: "গ্রাহককে সামান্য বাকি বা ভগ্নাংশ ছাড় দিন। নগদ ছাড়াই বকেয়া কমায় এবং প্রদত্ত ছাড় হিসেবে লিপিবদ্ধ হয়।",
+                fillRemainder: "বাকিটুকু ছাড় দিন",
+                settles: "মোট নিষ্পত্তি {amount}",
+                tooLarge: "এই পেমেন্টের পর বাকি {amount}-এর বেশি ছাড় দেওয়া যাবে না।",
+                amountOrDiscount: "পরিমাণ, ছাড় বা দুটোই লিখুন।",
+                voucher: "ছাড়ের ভাউচার",
+            },
             print: {
                 moneyReceipt: "মানি রসিদ",
                 paymentVoucher: "পেমেন্ট ভাউচার",
@@ -1428,6 +1437,15 @@ export const coreMessages = {
             printVoucher: "পেমেন্ট ভাউচার প্রিন্ট",
             voucherNumber: "ভাউচার নং",
             balanceAfter: "পরবর্তী ব্যালেন্স",
+            discount: {
+                label: "প্রাপ্ত ছাড়",
+                hint: "সরবরাহকারী যে সামান্য বাকি ছাড় দিয়েছেন। নগদ ছাড়াই দেনা কমায় এবং প্রাপ্ত ছাড় হিসেবে লিপিবদ্ধ হয়।",
+                fillRemainder: "বাকিটুকু ছাড় দিন",
+                settles: "মোট নিষ্পত্তি {amount}",
+                tooLarge: "এই পেমেন্টের পর বাকি {amount}-এর বেশি ছাড় দেওয়া যাবে না।",
+                amountOrDiscount: "পরিমাণ, ছাড় বা দুটোই লিখুন।",
+                voucher: "ছাড়ের ভাউচার",
+            },
             print: {
                 moneyReceipt: "মানি রসিদ",
                 paymentVoucher: "পেমেন্ট ভাউচার",

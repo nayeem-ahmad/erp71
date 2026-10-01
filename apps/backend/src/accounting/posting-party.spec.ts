@@ -160,3 +160,33 @@ describe('autoPostFromRules — payment-method account override', () => {
             .rejects.toThrow('AUTO_POSTING_ACCOUNT_INVALID');
     });
 });
+
+describe('autoPostFromRules — payment discount leg', () => {
+    it.each(['customer_payment', 'supplier_payment'] as const)(
+        'posts the %s discount leg as a JOURNAL voucher, not a cash one',
+        async (eventType) => {
+            const { tx } = buildTx({ ar: null, revenue: null });
+
+            await autoPostFromRules(baseInput(tx, {
+                eventType,
+                conditionKey: 'payment_direction',
+                conditionValue: 'discount',
+                legKey: 'discount',
+            }));
+
+            expect(tx.voucher.create.mock.calls[0][0].data.voucher_type).toBe('journal');
+        },
+    );
+
+    it('keeps the cash leg of a customer receipt a CASH_RECEIVE voucher', async () => {
+        const { tx } = buildTx({ ar: null, revenue: null });
+
+        await autoPostFromRules(baseInput(tx, {
+            eventType: 'customer_payment',
+            conditionKey: 'payment_direction',
+            conditionValue: 'receive',
+        }));
+
+        expect(tx.voucher.create.mock.calls[0][0].data.voucher_type).toBe('cash_receive');
+    });
+});

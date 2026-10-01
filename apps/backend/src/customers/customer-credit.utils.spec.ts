@@ -1,4 +1,4 @@
-import { assertCustomerCreditForSale, creditDueAmount } from './customer-credit.utils';
+import { assertCustomerCreditForSale, creditDueAmount, customerLedgerDueDelta } from './customer-credit.utils';
 import { BadRequestException } from '@nestjs/common';
 
 describe('customer-credit.utils', () => {
@@ -22,5 +22,13 @@ describe('customer-credit.utils', () => {
             { due_balance: 4800, credit_limit: 5000 },
             400,
         )).toThrow(/Credit limit exceeded/);
+    });
+
+    it('a payment settles its discount along with its money', () => {
+        expect(customerLedgerDueDelta('PAYMENT', 100, 3)).toBe(-103);
+        expect(customerLedgerDueDelta('PAYMENT', 100)).toBe(-100);
+        // Only a payment carries a discount; nothing else may pick one up.
+        expect(customerLedgerDueDelta('CREDIT_SALE', 100, 3)).toBe(100);
+        expect(customerLedgerDueDelta('PAYOUT', 100, 3)).toBe(100);
     });
 });

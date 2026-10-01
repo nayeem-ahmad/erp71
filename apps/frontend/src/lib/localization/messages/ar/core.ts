@@ -1329,6 +1329,15 @@ export const coreMessages = {
         printVoucher: 'طباعة سند صرف',
         voucherNumber: 'رقم السند',
         balanceAfter: 'الرصيد بعدها',
+        discount: {
+            label: 'خصم ممنوح',
+            hint: 'تجاوز عن مبلغ متبقٍ صغير للعميل أو قرّب المبلغ. يخفض المستحق دون نقد ويُقيد كخصم ممنوح.',
+            fillRemainder: 'خصم المتبقي',
+            settles: 'يسوّي {amount}',
+            tooLarge: 'لا يمكن أن يتجاوز الخصم مبلغ {amount} المتبقي بعد هذه الدفعة.',
+            amountOrDiscount: 'أدخل مبلغًا أو خصمًا أو كليهما.',
+            voucher: 'قيد الخصم',
+        },
         print: {
             moneyReceipt: 'سند قبض',
             paymentVoucher: 'سند صرف',
@@ -1428,6 +1437,15 @@ export const coreMessages = {
         printVoucher: 'طباعة سند صرف',
         voucherNumber: 'رقم السند',
         balanceAfter: 'الرصيد بعدها',
+        discount: {
+            label: 'خصم مكتسب',
+            hint: 'مبلغ متبقٍ صغير تجاوز عنه المورد. يخفض المستحق دون نقد ويُقيد كخصم مكتسب.',
+            fillRemainder: 'خصم المتبقي',
+            settles: 'يسوّي {amount}',
+            tooLarge: 'لا يمكن أن يتجاوز الخصم مبلغ {amount} المتبقي بعد هذه الدفعة.',
+            amountOrDiscount: 'أدخل مبلغًا أو خصمًا أو كليهما.',
+            voucher: 'قيد الخصم',
+        },
         print: {
             moneyReceipt: 'سند قبض',
             paymentVoucher: 'سند صرف',

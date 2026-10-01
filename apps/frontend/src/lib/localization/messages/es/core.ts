@@ -1329,6 +1329,15 @@ export const coreMessages = {
         printVoucher: "Imprimir comprobante de pago",
         voucherNumber: "N.º de comprobante",
         balanceAfter: "Saldo posterior",
+        discount: {
+            label: "Descuento concedido",
+            hint: "Perdone al cliente un pequeño saldo o redondee. Reduce la deuda sin efectivo y se registra como descuento concedido.",
+            fillRemainder: "Descontar el resto",
+            settles: "Liquida {amount}",
+            tooLarge: "El descuento no puede superar los {amount} pendientes tras este pago.",
+            amountOrDiscount: "Introduzca un importe, un descuento o ambos.",
+            voucher: "Comprobante de descuento",
+        },
         print: {
             moneyReceipt: "Recibo de dinero",
             paymentVoucher: "Comprobante de pago",
@@ -1428,6 +1437,15 @@ export const coreMessages = {
         printVoucher: "Imprimir comprobante de pago",
         voucherNumber: "N.º de comprobante",
         balanceAfter: "Saldo posterior",
+        discount: {
+            label: "Descuento recibido",
+            hint: "Un pequeño saldo que el proveedor le perdonó. Reduce la cuenta por pagar sin efectivo y se registra como descuento recibido.",
+            fillRemainder: "Descontar el resto",
+            settles: "Liquida {amount}",
+            tooLarge: "El descuento no puede superar los {amount} pendientes tras este pago.",
+            amountOrDiscount: "Introduzca un importe, un descuento o ambos.",
+            voucher: "Comprobante de descuento",
+        },
         print: {
             moneyReceipt: "Recibo de dinero",
             paymentVoucher: "Comprobante de pago",

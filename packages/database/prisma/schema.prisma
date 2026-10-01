@@ -2135,7 +2135,12 @@ model SupplierCreditTransaction {
   tenant_id      String
   supplier_id    String
   type           String // CREDIT_PURCHASE | PAYMENT | PAYOUT | ADJUSTMENT
+  /// Money that actually changed hands. Never includes discount_amount.
   amount         Decimal  @db.Decimal(12, 2)
+  /// PAYMENT only: discount received from the supplier, settled with the
+  /// money (e.g. a rounding remainder dropped). Lowers due_balance alongside
+  /// amount; posts Dr Purchase Payable / Cr Discount Received as its own leg.
+  discount_amount Decimal @default(0) @db.Decimal(12, 2)
   balance_after  Decimal  @db.Decimal(12, 2)
   reference_type String?
   reference_id   String?
@@ -3447,7 +3452,12 @@ model CustomerCreditTransaction {
   tenant_id      String
   customer_id    String
   type           String // CREDIT_SALE | PAYMENT | ADJUSTMENT
+  /// Money that actually changed hands. Never includes discount_amount.
   amount         Decimal  @db.Decimal(12, 2)
+  /// PAYMENT only: discount allowed to the customer, settled with the money
+  /// (e.g. a rounding remainder dropped). Lowers due_balance alongside amount;
+  /// posts Dr Discount Allowed / Cr Accounts Receivable as its own leg.
+  discount_amount Decimal @default(0) @db.Decimal(12, 2)
   balance_after  Decimal  @db.Decimal(12, 2)
   reference_type String?
   reference_id   String?

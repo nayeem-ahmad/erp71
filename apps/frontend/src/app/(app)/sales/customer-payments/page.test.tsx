@@ -102,3 +102,59 @@ describe('CustomerPaymentsPage — duplicate', () => {
         expect(screen.queryByText(/Copied from/)).not.toBeInTheDocument();
     });
 });
+
+describe('CustomerPaymentsPage — discount', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (api.getCustomerCreditPayments as jest.Mock).mockResolvedValue([]);
+        (api.getCustomers as jest.Mock).mockResolvedValue([
+            { id: 'cust-1', name: 'Alice Corp', phone: '01700000001', due_balance: 10003 },
+        ]);
+        (api.recordCreditPayment as jest.Mock).mockResolvedValue({ id: 'pay-2' });
+    });
+
+    const openNewPayment = async () => {
+        render(<CustomerPaymentsPage />);
+        // The form defaults to the first customer, so wait for them to load.
+        await screen.findByText('No customer payments in this period');
+        fireEvent.click(screen.getByRole('button', { name: /new customer payment/i }));
+        await screen.findByLabelText('Amount');
+    };
+
+    it('discounts the remainder in one click and sends it with the receipt', async () => {
+        await openNewPayment();
+
+        fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '10000' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Discount the remainder' }));
+        expect(screen.getByLabelText('Discount allowed')).toHaveValue(3);
+
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        await waitFor(() => {
+            expect(api.recordCreditPayment).toHaveBeenCalledWith('cust-1', expect.objectContaining({
+                amount: 10000,
+                discount: 3,
+                direction: 'receive',
+            }));
+        });
+    });
+
+    it('blocks a discount larger than what the payment leaves due', async () => {
+        await openNewPayment();
+
+        fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '10000' } });
+        fireEvent.change(screen.getByLabelText('Discount allowed'), { target: { value: '5' } });
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/still due after this payment/);
+        expect(api.recordCreditPayment).not.toHaveBeenCalled();
+    });
+
+    it('offers no discount on a payout', async () => {
+        await openNewPayment();
+
+        fireEvent.change(screen.getByDisplayValue('Receive from customer'), { target: { value: 'pay' } });
+
+        expect(screen.queryByLabelText('Discount allowed')).not.toBeInTheDocument();
+    });
+});

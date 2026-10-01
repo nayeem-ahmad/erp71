@@ -1329,6 +1329,15 @@ export const coreMessages = {
         printVoucher: 'Print payment voucher',
         voucherNumber: 'Voucher no.',
         balanceAfter: 'Balance after',
+        discount: {
+            label: 'Discount allowed',
+            hint: 'Let the customer off a small remainder or round off. Lowers the due without cash and is booked as Discount Allowed.',
+            fillRemainder: 'Discount the remainder',
+            settles: 'Settles {amount}',
+            tooLarge: 'Discount cannot be more than the {amount} still due after this payment.',
+            amountOrDiscount: 'Enter an amount, a discount, or both.',
+            voucher: 'Discount voucher',
+        },
         print: {
             moneyReceipt: 'Money Receipt',
             paymentVoucher: 'Payment Voucher',
@@ -1428,6 +1437,15 @@ export const coreMessages = {
         printVoucher: 'Print payment voucher',
         voucherNumber: 'Voucher no.',
         balanceAfter: 'Balance after',
+        discount: {
+            label: 'Discount received',
+            hint: 'A small remainder the supplier let you off. Lowers the payable without cash and is booked as Discount Received.',
+            fillRemainder: 'Discount the remainder',
+            settles: 'Settles {amount}',
+            tooLarge: 'Discount cannot be more than the {amount} still due after this payment.',
+            amountOrDiscount: 'Enter an amount, a discount, or both.',
+            voucher: 'Discount voucher',
+        },
         print: {
             moneyReceipt: 'Money Receipt',
             paymentVoucher: 'Payment Voucher',

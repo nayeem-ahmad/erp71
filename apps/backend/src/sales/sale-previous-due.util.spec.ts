@@ -21,7 +21,10 @@ describe('resolveSalePreviousDue', () => {
     });
 
     /** One `groupBy` bucket: the summed amount of every later row of a type. */
-    const later = (type: string, amount: number) => ({ type, _sum: { amount } });
+    const later = (type: string, amount: number, discount_amount: number | null = null) => ({
+        type,
+        _sum: { amount, discount_amount },
+    });
 
     beforeEach(() => {
         db = {
@@ -87,6 +90,13 @@ describe('resolveSalePreviousDue', () => {
         await expect(resolveSalePreviousDue(db, 'tenant-1', sale(), 880)).resolves.toBe(1000);
     });
 
+    it('counts a later payment\'s discount as settling due along with its money', async () => {
+        db.customerCreditTransaction.groupBy.mockResolvedValue([later('PAYMENT', 997, 3)]);
+
+        // Owed 1,000 before a paid sale; since then 997 paid and the last 3 let off.
+        await expect(resolveSalePreviousDue(db, 'tenant-1', sale(), 0)).resolves.toBe(1000);
+    });
+
     it('places a paid sale at its own creation time, having no ledger row of its own', async () => {
         await resolveSalePreviousDue(db, 'tenant-1', sale(), 1000);
 
@@ -98,7 +108,7 @@ describe('resolveSalePreviousDue', () => {
                 created_at: { gt: postedAt },
                 id: { notIn: [] },
             },
-            _sum: { amount: true },
+            _sum: { amount: true, discount_amount: true },
         });
     });
 

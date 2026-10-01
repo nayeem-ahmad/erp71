@@ -231,6 +231,20 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 					},
 				],
 			},
+			{
+				name: 'Other Income',
+				code: '4103',
+				accounts: [
+					// A supplier letting the shop off a small remainder when it pays.
+					// Not named with "payable" — see PAYABLE_ACCOUNT_PATTERN.
+					{
+						name: 'Discount Received',
+						code: '410301',
+						type: AccountType.REVENUE,
+						category: AccountCategory.GENERAL,
+					},
+				],
+			},
 		],
 	},
 	{
@@ -282,6 +296,13 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 					{
 						name: 'Bad Debt Expense',
 						code: '510204',
+						type: AccountType.EXPENSE,
+						category: AccountCategory.GENERAL,
+					},
+					// The shop letting a customer off a small remainder when they pay.
+					{
+						name: 'Discount Allowed',
+						code: '510205',
 						type: AccountType.EXPENSE,
 						category: AccountCategory.GENERAL,
 					},
@@ -341,6 +362,8 @@ const DEFAULT_POSTING_RULES = [
 	// account from the payment method is tracked in TODO.md.
 	{ event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Purchase Payable', credit_account: 'Cash in Hand', priority: 10 },
 	{ event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Purchase Payable', priority: 20 },
+	// Discount leg of a supplier payment (legKey 'discount'), a JOURNAL voucher.
+	{ event_type: 'supplier_payment', condition_key: 'payment_direction', condition_value: 'discount', debit_account: 'Purchase Payable', credit_account: 'Discount Received', priority: 30 },
 	{ event_type: 'depreciation', condition_key: 'none', condition_value: null, debit_account: 'Depreciation Expense', credit_account: 'Accumulated Depreciation', priority: 10 },
 	{ event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'cash', debit_account: 'Fixed Assets', credit_account: 'Cash in Hand', priority: 10 },
 	{ event_type: 'asset_acquisition', condition_key: 'payment_mode', condition_value: 'bank', debit_account: 'Fixed Assets', credit_account: 'Main Bank Account', priority: 20 },
@@ -350,6 +373,8 @@ const DEFAULT_POSTING_RULES = [
 	{ event_type: 'fund_transfer', condition_key: 'transfer_scope', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Due to Branches', priority: 20 },
 	{ event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'receive', debit_account: 'Cash in Hand', credit_account: 'Accounts Receivable', priority: 10 },
 	{ event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'pay', debit_account: 'Accounts Receivable', credit_account: 'Cash in Hand', priority: 20 },
+	// Discount leg of a customer receipt (legKey 'discount'), a JOURNAL voucher.
+	{ event_type: 'customer_payment', condition_key: 'payment_direction', condition_value: 'discount', debit_account: 'Discount Allowed', credit_account: 'Accounts Receivable', priority: 30 },
 	// Forgiving a customer's due. Unconditional: there is one way to write a
 	// receivable off, and the reason rides on the transaction rather than in
 	// the rule. Reversing a write-off deletes this voucher rather than

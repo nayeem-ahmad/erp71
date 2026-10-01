@@ -1329,6 +1329,15 @@ export const coreMessages = {
         printVoucher: "भुगतान वाउचर प्रिंट करें",
         voucherNumber: "वाउचर सं.",
         balanceAfter: "बाद का शेष",
+        discount: {
+            label: "दी गई छूट",
+            hint: "ग्राहक को छोटी बकाया राशि की छूट दें या राउंड ऑफ़ करें। बिना नकद के बकाया घटाता है और दी गई छूट के रूप में दर्ज होता है।",
+            fillRemainder: "शेष राशि पर छूट दें",
+            settles: "कुल निपटान {amount}",
+            tooLarge: "छूट इस भुगतान के बाद बकाया {amount} से अधिक नहीं हो सकती।",
+            amountOrDiscount: "राशि, छूट या दोनों दर्ज करें।",
+            voucher: "छूट वाउचर",
+        },
         print: {
             moneyReceipt: "मनी रसीद",
             paymentVoucher: "भुगतान वाउचर",
@@ -1428,6 +1437,15 @@ export const coreMessages = {
         printVoucher: "भुगतान वाउचर प्रिंट करें",
         voucherNumber: "वाउचर सं.",
         balanceAfter: "बाद का शेष",
+        discount: {
+            label: "प्राप्त छूट",
+            hint: "आपूर्तिकर्ता द्वारा छोड़ी गई छोटी बकाया राशि। बिना नकद के देय घटाता है और प्राप्त छूट के रूप में दर्ज होता है।",
+            fillRemainder: "शेष राशि पर छूट दें",
+            settles: "कुल निपटान {amount}",
+            tooLarge: "छूट इस भुगतान के बाद बकाया {amount} से अधिक नहीं हो सकती।",
+            amountOrDiscount: "राशि, छूट या दोनों दर्ज करें।",
+            voucher: "छूट वाउचर",
+        },
         print: {
             moneyReceipt: "मनी रसीद",
             paymentVoucher: "भुगतान वाउचर",

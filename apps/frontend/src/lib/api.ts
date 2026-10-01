@@ -1863,7 +1863,7 @@ export const api = {
             },
         );
     },
-    recordCreditPayment: (id: string, data: { amount: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -1882,7 +1882,7 @@ export const api = {
         return fetchAllPages(`/customers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerCreditPayment: (paymentId: string) => fetchWithAuth(`/customers/credit/payments/${paymentId}`),
-    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -2702,6 +2702,7 @@ export const api = {
     },
     recordSupplierCreditPayment: (id: string, data: {
         amount: number;
+        discount?: number;
         direction?: 'pay' | 'receive';
         notes?: string;
         allocations?: { purchaseId: string; amount: number }[];
@@ -2734,7 +2735,7 @@ export const api = {
         return fetchAllPages(`/suppliers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSupplierCreditPayment: (paymentId: string) => fetchWithAuth(`/suppliers/credit/payments/${paymentId}`),
-    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
+    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
         fetchWithAuth(`/suppliers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),

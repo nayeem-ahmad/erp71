@@ -13,6 +13,8 @@ export interface SupplierPaymentReceiptData {
     supplierName: string;
     supplierPhone?: string;
     amount: number;
+    /** Settled alongside the money; printed only when non-zero. */
+    discount?: number;
     balanceAfter?: number;
     notes?: string;
     recordedBy?: string;
@@ -23,6 +25,7 @@ export interface SupplierPaymentReceiptData {
         date: string;
         supplier: string;
         amount: string;
+        discount: string;
         balanceAfter: string;
         notes: string;
         recordedBy: string;
@@ -59,6 +62,7 @@ export function printSupplierPaymentReceipt(
         <div class="amount-label">${escHtml(data.labels.amount)}</div>
         <div class="amount-value">${formatBDT(data.amount)}</div>
     </div>
+    ${data.discount && data.discount > 0 ? `<table class="info-table"><tr><td>${escHtml(data.labels.discount)}</td><td>${formatBDT(data.discount)}</td></tr></table>` : ''}
     ${data.balanceAfter !== undefined ? `<table class="info-table"><tr><td>${escHtml(data.labels.balanceAfter)}</td><td>${formatBDT(data.balanceAfter)}</td></tr></table>` : ''}
     ${data.notes ? `<div class="note-box">${escHtml(data.labels.notes)}: ${escHtml(data.notes)}</div>` : ''}
     <div class="signatures">

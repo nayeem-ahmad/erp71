@@ -1330,6 +1330,15 @@ export const coreMessages = {
             printVoucher: "Cetak baucar bayaran",
             voucherNumber: "No. baucar",
             balanceAfter: "Baki selepas",
+            discount: {
+                label: "Diskaun diberi",
+                hint: "Lepaskan baki kecil pelanggan atau bundarkan. Mengurangkan hutang tanpa tunai dan direkod sebagai Diskaun Diberi.",
+                fillRemainder: "Diskaunkan baki",
+                settles: "Menyelesaikan {amount}",
+                tooLarge: "Diskaun tidak boleh melebihi {amount} yang masih tertunggak selepas bayaran ini.",
+                amountOrDiscount: "Masukkan jumlah, diskaun, atau kedua-duanya.",
+                voucher: "Baucar diskaun",
+            },
             print: {
                 moneyReceipt: "Resit Wang",
                 paymentVoucher: "Baucar Bayaran",
@@ -1429,6 +1438,15 @@ export const coreMessages = {
             printVoucher: "Cetak baucar bayaran",
             voucherNumber: "No. baucar",
             balanceAfter: "Baki selepas",
+            discount: {
+                label: "Diskaun diterima",
+                hint: "Baki kecil yang dilepaskan oleh pembekal. Mengurangkan hutang tanpa tunai dan direkod sebagai Diskaun Diterima.",
+                fillRemainder: "Diskaunkan baki",
+                settles: "Menyelesaikan {amount}",
+                tooLarge: "Diskaun tidak boleh melebihi {amount} yang masih tertunggak selepas bayaran ini.",
+                amountOrDiscount: "Masukkan jumlah, diskaun, atau kedua-duanya.",
+                voucher: "Baucar diskaun",
+            },
             print: {
                 moneyReceipt: "Resit Wang",
                 paymentVoucher: "Baucar Bayaran",

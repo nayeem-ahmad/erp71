@@ -49,6 +49,12 @@ const CREDIT_TRANSACTION_PREFIXES = {
 /** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
 const AMOUNT_EPSILON = 0.005;
 
+/**
+ * The legKey of a payment's discount voucher. The cash voucher stays keyless,
+ * so payments recorded before discounts existed keep their idempotency keys.
+ */
+const DISCOUNT_LEG = 'discount';
+
 @Injectable()
 export class CustomersService {
     constructor(
@@ -127,8 +133,108 @@ export class CustomersService {
         throw new BadRequestException('Could not allocate a unique customer code. Please try again.');
     }
 
-    private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number): number {
-        return type === 'PAYOUT' ? amount : -amount;
+    private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number, discount = 0): number {
+        return customerLedgerDueDelta(type, amount, discount);
+    }
+
+    /**
+     * A payment may carry a discount — the remainder the shop lets the customer
+     * off — but only on money coming in, and never more than what the payment
+     * leaves due: a discount that pushed the customer into credit would be the
+     * shop handing out store credit and booking it as an expense.
+     */
+    private assertPaymentSplit(type: 'PAYMENT' | 'PAYOUT', amount: number, discount: number, dueBefore: number) {
+        if (amount < 0 || discount < 0) throw new BadRequestException('Amount and discount cannot be negative');
+        if (type === 'PAYOUT') {
+            if (discount > AMOUNT_EPSILON) {
+                throw new BadRequestException('A discount can only be given on a payment received from the customer.');
+            }
+            if (amount < AMOUNT_EPSILON) throw new BadRequestException('Amount must be positive');
+            return;
+        }
+        if (amount + discount < AMOUNT_EPSILON) {
+            throw new BadRequestException('Enter an amount received, a discount, or both.');
+        }
+        const leftAfterPayment = Math.max(0, dueBefore - amount);
+        if (discount - leftAfterPayment > AMOUNT_EPSILON) {
+            throw new BadRequestException(
+                `Discount of ৳${discount.toFixed(2)} is more than the ৳${leftAfterPayment.toFixed(2)} still due after this payment.`,
+            );
+        }
+    }
+
+    /**
+     * Posts a payment's vouchers: the money on the keyless cash leg, the
+     * discount as its own JOURNAL voucher (Dr Discount Allowed / Cr AR) on
+     * legKey 'discount'. Two vouchers rather than one three-line entry so the
+     * cash voucher stays pure cash and the discount stays a rule a tenant can
+     * repoint. A discount-only settlement posts no cash voucher at all.
+     */
+    private async postPaymentLegs(
+        tx: any,
+        input: {
+            tenantId: string;
+            customerId: string;
+            customerName: string;
+            paymentId: string;
+            paymentNumber: string;
+            type: 'PAYMENT' | 'PAYOUT';
+            amount: number;
+            discount: number;
+            storeId?: string;
+        },
+    ) {
+        const isPayout = input.type === 'PAYOUT';
+        const common = {
+            tx,
+            tenantId: input.tenantId,
+            eventType: 'customer_payment' as const,
+            conditionKey: 'payment_direction' as const,
+            sourceModule: 'customers',
+            sourceId: input.paymentId,
+            referenceNumber: input.paymentNumber,
+            storeId: input.storeId,
+            partyType: 'CUSTOMER' as const,
+            partyId: input.customerId,
+        };
+
+        const cash = input.amount > AMOUNT_EPSILON
+            ? await autoPostFromRules({
+                ...common,
+                conditionValue: this.directionFromType(input.type),
+                sourceType: isPayout ? 'customer_payout' : 'customer_payment',
+                amount: input.amount,
+                description: isPayout
+                    ? `Customer payout — ${input.customerName}`
+                    : `Customer payment — ${input.customerName}`,
+            })
+            : null;
+
+        const discount = input.discount > AMOUNT_EPSILON
+            ? await autoPostFromRules({
+                ...common,
+                conditionValue: 'discount',
+                legKey: DISCOUNT_LEG,
+                sourceType: 'customer_payment_discount',
+                amount: input.discount,
+                description: `Discount allowed — ${input.customerName}`,
+            })
+            : null;
+
+        const primary = cash ?? discount;
+        return {
+            posting_status: primary?.postingStatus ?? 'skipped',
+            voucher_id: primary?.voucherId ?? null,
+            voucher_number: primary?.voucherNumber ?? null,
+            discount_voucher_id: discount?.voucherId ?? null,
+            discount_voucher_number: discount?.voucherNumber ?? null,
+        };
+    }
+
+    /** Takes back both of a payment's vouchers. Either may be absent. */
+    private async voidPaymentLegs(tx: any, tenantId: string, paymentId: string) {
+        await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', paymentId);
+        await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', paymentId, DISCOUNT_LEG);
     }
 
     private directionFromType(type: string): CustomerPaymentDirectionDto {
@@ -156,16 +262,26 @@ export class CustomersService {
             include: { voucher: { select: { id: true, voucher_number: true } } },
         });
 
+        // A payment with a discount has two events on the same source id; the
+        // discount one is told apart by its leg suffix.
+        const isDiscountLeg = (event: { idempotency_key?: string | null }) =>
+            !!event.idempotency_key?.endsWith(`:${DISCOUNT_LEG}`);
         const voucherByPaymentId = new Map(
-            events.map((event) => [event.source_id, event.voucher]),
+            events.filter((event) => !isDiscountLeg(event)).map((event) => [event.source_id, event.voucher]),
+        );
+        const discountVoucherByPaymentId = new Map(
+            events.filter(isDiscountLeg).map((event) => [event.source_id, event.voucher]),
         );
 
         return items.map((item) => {
             const voucher = voucherByPaymentId.get(item.id);
+            const discountVoucher = discountVoucherByPaymentId.get(item.id);
             return {
                 ...item,
                 voucher_id: voucher?.id ?? null,
                 accounting_voucher_number: voucher?.voucher_number ?? null,
+                discount_voucher_id: discountVoucher?.id ?? null,
+                discount_voucher_number: discountVoucher?.voucher_number ?? null,
             };
         });
     }
@@ -578,7 +694,8 @@ export class CustomersService {
                 ...tx,
                 amount,
                 balance_after: balanceAfter,
-                balance_before: balanceAfter - customerLedgerDueDelta(tx.type, amount),
+                discount_amount: Number(tx.discount_amount ?? 0),
+                balance_before: balanceAfter - customerLedgerDueDelta(tx.type, amount, Number(tx.discount_amount ?? 0)),
             };
         });
 
@@ -660,14 +777,14 @@ export class CustomersService {
         const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
+        const oldDiscount = Number(payment.discount_amount ?? 0);
         const customerId = payment.customer_id;
 
         const newDirection = dto.direction ?? this.directionFromType(oldType);
         const newType = this.typeFromDirection(newDirection);
         const newAmount = dto.amount ?? oldAmount;
+        const newDiscount = dto.discount ?? oldDiscount;
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
-
-        if (newAmount <= 0) throw new BadRequestException('Amount must be positive');
 
         return this.db.$transaction(async (tx) => {
             const customer = await tx.customer.findFirst({
@@ -676,19 +793,19 @@ export class CustomersService {
             });
             if (!customer) throw new NotFoundException('Customer not found');
 
-            const reverseDelta = -this.dueDelta(oldType, oldAmount);
-            let currentDue = Number(customer.due_balance) + reverseDelta;
+            const dueWithoutPayment = Number(customer.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
+            this.assertPaymentSplit(newType, newAmount, newDiscount, dueWithoutPayment);
 
-            await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', paymentId);
+            await this.voidPaymentLegs(tx, tenantId, paymentId);
 
-            const balanceAfter = currentDue + this.dueDelta(newType, newAmount);
-            const isPayout = newType === 'PAYOUT';
+            const balanceAfter = dueWithoutPayment + this.dueDelta(newType, newAmount, newDiscount);
 
             const updated = await tx.customerCreditTransaction.update({
                 where: { id: paymentId },
                 data: {
                     type: newType,
                     amount: newAmount,
+                    discount_amount: newDiscount,
                     balance_after: balanceAfter,
                     notes: newNotes,
                 },
@@ -703,30 +820,25 @@ export class CustomersService {
                 data: { due_balance: balanceAfter },
             });
 
-            const posting = await autoPostFromRules({
-                tx,
+            const posting = await this.postPaymentLegs(tx, {
                 tenantId,
-                eventType: 'customer_payment',
-                conditionKey: 'payment_direction',
-                conditionValue: newDirection,
-                sourceModule: 'customers',
-                sourceType: isPayout ? 'customer_payout' : 'customer_payment',
-                sourceId: paymentId,
+                customerId,
+                customerName: customer.name,
+                paymentId,
+                paymentNumber: payment.payment_number ?? paymentId,
+                type: newType,
                 amount: newAmount,
-                description: isPayout
-                    ? `Customer payout — ${customer.name}`
-                    : `Customer payment — ${customer.name}`,
-                referenceNumber: payment.payment_number ?? paymentId,
+                discount: newDiscount,
                 storeId,
-                partyType: 'CUSTOMER',
-                partyId: customerId,
             });
 
             return {
                 ...updated,
-                posting_status: posting.postingStatus,
-                voucher_id: posting.voucherId ?? null,
-                accounting_voucher_number: posting.voucherNumber ?? null,
+                posting_status: posting.posting_status,
+                voucher_id: posting.voucher_id,
+                accounting_voucher_number: posting.voucher_number,
+                discount_voucher_id: posting.discount_voucher_id,
+                discount_voucher_number: posting.discount_voucher_number,
             };
         });
     }
@@ -735,6 +847,7 @@ export class CustomersService {
         const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
+        const oldDiscount = Number(payment.discount_amount ?? 0);
 
         return this.db.$transaction(async (tx) => {
             const customer = await tx.customer.findFirst({
@@ -743,10 +856,9 @@ export class CustomersService {
             });
             if (!customer) throw new NotFoundException('Customer not found');
 
-            const reverseDelta = -this.dueDelta(oldType, oldAmount);
-            const newDue = Number(customer.due_balance) + reverseDelta;
+            const newDue = Number(customer.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
 
-            await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', paymentId);
+            await this.voidPaymentLegs(tx, tenantId, paymentId);
 
             await tx.customerCreditTransaction.delete({ where: { id: paymentId } });
 
@@ -773,13 +885,12 @@ export class CustomersService {
         if (!customer) throw new NotFoundException('Customer not found');
 
         const direction = dto.direction ?? CustomerPaymentDirectionDto.RECEIVE;
-        const isPayout = direction === CustomerPaymentDirectionDto.PAY;
-        const txType = isPayout ? 'PAYOUT' : 'PAYMENT';
-
-        if (dto.amount <= 0) throw new BadRequestException('Amount must be positive');
+        const txType = this.typeFromDirection(direction);
+        const discount = dto.discount ?? 0;
 
         const currentDue = Number(customer.due_balance);
-        const balanceAfter = isPayout ? currentDue + dto.amount : currentDue - dto.amount;
+        this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
+        const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
 
         return this.db.$transaction(async (tx) => {
             const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
@@ -790,6 +901,7 @@ export class CustomersService {
                     customer_id: id,
                     type: txType,
                     amount: dto.amount,
+                    discount_amount: discount,
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
@@ -806,31 +918,19 @@ export class CustomersService {
                 data: { due_balance: balanceAfter },
             });
 
-            const posting = await autoPostFromRules({
-                tx,
+            const posting = await this.postPaymentLegs(tx, {
                 tenantId,
-                eventType: 'customer_payment',
-                conditionKey: 'payment_direction',
-                conditionValue: direction,
-                sourceModule: 'customers',
-                sourceType: txType === 'PAYOUT' ? 'customer_payout' : 'customer_payment',
-                sourceId: payment.id,
+                customerId: id,
+                customerName: customer.name,
+                paymentId: payment.id,
+                paymentNumber: payment_number,
+                type: txType,
                 amount: dto.amount,
-                description: isPayout
-                    ? `Customer payout — ${customer.name}`
-                    : `Customer payment — ${customer.name}`,
-                referenceNumber: payment_number,
+                discount,
                 storeId,
-                partyType: 'CUSTOMER',
-                partyId: id,
             });
 
-            return {
-                ...payment,
-                posting_status: posting.postingStatus,
-                voucher_id: posting.voucherId ?? null,
-                voucher_number: posting.voucherNumber ?? null,
-            };
+            return { ...payment, ...posting };
         });
     }
 
@@ -1059,6 +1159,7 @@ export class CustomersService {
                 customer_id: true,
                 type: true,
                 amount: true,
+                discount_amount: true,
                 created_at: true,
                 customer: { select: { id: true, name: true, phone: true } },
             },
@@ -1078,7 +1179,7 @@ export class CustomersService {
             }
             bucket.entries.push({
                 date: tx.created_at,
-                delta: customerLedgerDueDelta(tx.type, Number(tx.amount)),
+                delta: customerLedgerDueDelta(tx.type, Number(tx.amount), Number(tx.discount_amount ?? 0)),
             });
         }
 

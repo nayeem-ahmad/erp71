@@ -52,9 +52,23 @@ export enum SupplierPaymentDirectionDto {
 }
 
 export class RecordSupplierCreditPaymentDto {
+    /**
+     * Money paid (or received). May be 0 only when `discount` settles the
+     * whole remainder on its own.
+     */
     @IsNumber()
-    @Min(0.01)
+    @Min(0)
     amount: number;
+
+    /**
+     * Payments only: a remainder the supplier lets the shop off, settled with
+     * this payment. Lowers the due alongside `amount`, can be allocated to bills
+     * like money, and posts to Discount Received, never to cash.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    discount?: number;
 
     @IsOptional()
     @IsEnum(SupplierPaymentDirectionDto)
@@ -85,8 +99,14 @@ export class AllocateSupplierPaymentDto {
 export class UpdateSupplierCreditPaymentDto {
     @IsOptional()
     @IsNumber()
-    @Min(0.01)
+    @Min(0)
     amount?: number;
+
+    /** Omitted keeps the payment's current discount; 0 removes it. */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    discount?: number;
 
     @IsOptional()
     @IsEnum(SupplierPaymentDirectionDto)
