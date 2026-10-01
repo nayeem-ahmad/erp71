@@ -7,6 +7,7 @@ import {
     CircleDot,
     Flag,
     FolderKanban,
+    History,
     Layers,
     Milestone,
     Repeat,
@@ -23,6 +24,7 @@ import { relativeTime, type Task } from './model';
 import type { TaskCard } from './useTaskCard';
 import { AssigneeField, DueDateField, LabelsField, ProjectField, UserStoryField } from './fields';
 import StatusDot from './StatusDot';
+import SprintHistory, { hasSprintHistory } from './SprintHistory';
 
 /**
  * Priority as the colour of its flag — the one place on the card a priority
@@ -236,6 +238,14 @@ export default function DetailsCard({ task, card }: { task: Task; card: TaskCard
                         filterable
                     />
                 </Property>
+
+                {/* Read-only: the sprints it was attempted in. Shown once one of
+                    them has ended — before that, the Sprint field says it all. */}
+                {hasSprintHistory(task.sprintHistory) && (
+                    <Property icon={History} label={m.sprint.history}>
+                        <SprintHistory stays={task.sprintHistory} />
+                    </Property>
+                )}
 
                 {/* Read-only, unlike the sprint: milestones have no list
                     endpoint, so there is nothing to populate a picker from. */}

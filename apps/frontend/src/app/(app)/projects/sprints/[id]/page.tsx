@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Eye, LayoutGrid, Pencil, Plus, Search, Settings, Table2, Trash2, Undo2 } from 'lucide-react';
+import { CheckCircle2, Eye, LayoutGrid, Pencil, Plus, Search, Settings, Table2, Trash2, Undo2 } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
@@ -13,7 +13,9 @@ import {
     ConfirmDialog,
     Input,
 } from '@/components/ui';
-import BurndownChart, { type BurndownPoint } from '@/components/projects/BurndownChart';
+import SprintBurndownChart from '@/components/projects/SprintBurndownChart';
+import CompleteSprintModal from '@/components/projects/CompleteSprintModal';
+import type { IdealDay, TimelinePoint } from '@/components/projects/burndown-steps';
 import SprintBacklogModal from '@/components/projects/SprintBacklogModal';
 import SprintCardBoard from '@/components/projects/SprintCardBoard';
 import SprintLaneHeading from '@/components/projects/SprintLaneHeading';
@@ -91,6 +93,22 @@ function writeStored(key: string, value: string) {
     }
 }
 
+interface SprintBurndown {
+    points: TimelinePoint[];
+    ideal: IdealDay[];
+    current: { remaining_hours: number } | null;
+}
+
+/**
+ * A completed sprint reports each task as it stood when the sprint closed,
+ * not as it stands now: a carried task keeps burning in its next sprint, and
+ * this sprint's totals must not move with it.
+ */
+function asClosed(task: SprintCardTask): SprintCardTask {
+    const closing = task.sprintMembership?.remaining_at_close;
+    return closing == null ? task : { ...task, remaining_hours: closing };
+}
+
 const cellNum = (value: number | null | undefined) =>
     value == null ? '' : String(Math.round(value * 100) / 100);
 
@@ -107,7 +125,8 @@ export default function SprintDetailPage() {
     const [viewMode, setViewMode] = useState<SprintViewMode>('table');
     // `all`, or an assignee key as `laneKeyOf(task, 'assignee')` gives it.
     const [assignee, setAssignee] = useState('all');
-    const [burndown, setBurndown] = useState<BurndownPoint[] | null>(null);
+    const [burndown, setBurndown] = useState<SprintBurndown | null>(null);
+    const [completing, setCompleting] = useState(false);
     const [laneMode, setLaneMode] = useState<SprintLaneMode>('none');
     // Folded lanes, as `laneStorageId(mode, key)`, remembered per sprint in
     // this browser. The board's lane store, under a `sprint:` key.
@@ -136,9 +155,16 @@ export default function SprintDetailPage() {
                 api.getProjectTasks({ sprintId, limit: 200 }),
                 api.getSprintBurndown(sprintId).catch(() => null),
             ]);
-            setSprint(detail as Sprint);
-            setTasks((sprintPage?.items ?? []) as SprintCardTask[]);
-            setBurndown((burndownRes as { series?: BurndownPoint[] } | null)?.series ?? []);
+            const loaded = detail as Sprint;
+            const items = (sprintPage?.items ?? []) as SprintCardTask[];
+            setSprint(loaded);
+            setTasks(loaded.status === 'COMPLETED' ? items.map(asClosed) : items);
+            const chart = burndownRes as Partial<SprintBurndown> | null;
+            setBurndown(
+                chart
+                    ? { points: chart.points ?? [], ideal: chart.ideal ?? [], current: chart.current ?? null }
+                    : null,
+            );
         } catch (error) {
             toast.error(error instanceof Error ? error.message : m.sprint.loadFailed);
         }
@@ -226,7 +252,11 @@ export default function SprintDetailPage() {
     const lanes = useMemo(() => groupSprintTasks(visibleTasks, laneMode), [visibleTasks, laneMode]);
     const statusColumns = useMemo(() => buildStatusColumns(tasks, projectColumns), [tasks, projectColumns]);
     const totals = useMemo(() => sumHours(visibleTasks), [visibleTasks]);
-    const stats = useMemo(() => sprintStats(tasks, burndown ?? [], today), [tasks, burndown, today]);
+    const stats = useMemo(
+        () => sprintStats(tasks, burndown?.ideal ?? [], burndown?.current?.remaining_hours ?? null, today),
+        [tasks, burndown, today],
+    );
+    const closed = sprint?.status === 'COMPLETED';
     const timeline = sprint ? sprintTimeline(sprint.start_date, sprint.end_date, today) : null;
 
     const returnToBacklog = async (task: SprintTask) => {
@@ -342,6 +372,16 @@ export default function SprintDetailPage() {
                                 {(m.sprint[sprint.status.toLowerCase() as keyof typeof m.sprint] as string)
                                     ?? sprint.status}
                             </StatusBadge>
+                            {sprint.status === 'ACTIVE' && (
+                                <Button
+                                    variant="secondary"
+                                    className="min-h-touch"
+                                    onClick={() => setCompleting(true)}
+                                >
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    {m.sprint.complete}
+                                </Button>
+                            )}
                             {sprint.status !== 'COMPLETED' && (
                                 <Button className="min-h-touch" onClick={() => setAdding(true)}>
                                     <Plus className="h-4 w-4" />
@@ -534,6 +574,7 @@ export default function SprintDetailPage() {
                                                                     .filter(Boolean)
                                                                     .join(' · ')}
                                                             </span>
+                                                            {closed && <CarriedBadge task={task} />}
                                                         </td>
                                                         <td className="px-2 py-2 text-end tabular-nums">
                                                             {cellNum(hours(task.estimate_hours))}
@@ -568,16 +609,19 @@ export default function SprintDetailPage() {
                                                                 >
                                                                     <Pencil className="mx-auto h-4 w-4" />
                                                                 </button>
-                                                                <button
-                                                                    type="button"
-                                                                    aria-label={m.sprint.removeFromSprint}
-                                                                    title={m.sprint.removeFromSprint}
-                                                                    disabled={busy}
-                                                                    onClick={() => void returnToBacklog(task)}
-                                                                    className={`${iconButton} text-amber-600 hover:bg-amber-50`}
-                                                                >
-                                                                    <Undo2 className="mx-auto h-4 w-4" />
-                                                                </button>
+                                                                {/* A completed sprint's membership is history. */}
+                                                                {!closed && (
+                                                                    <button
+                                                                        type="button"
+                                                                        aria-label={m.sprint.removeFromSprint}
+                                                                        title={m.sprint.removeFromSprint}
+                                                                        disabled={busy}
+                                                                        onClick={() => void returnToBacklog(task)}
+                                                                        className={`${iconButton} text-amber-600 hover:bg-amber-50`}
+                                                                    >
+                                                                        <Undo2 className="mx-auto h-4 w-4" />
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     type="button"
                                                                     aria-label={t.common.delete}
@@ -615,10 +659,16 @@ export default function SprintDetailPage() {
                                 so keeps it from reading as one project's progress. */}
                             <span className="text-xs text-gray-500">{m.burndown.tenantScope}</span>
                         </div>
-                        {burndown && burndown.length > 0 ? (
-                            <BurndownChart series={burndown} compact />
+                        {sprint && burndown ? (
+                            <SprintBurndownChart
+                                startDate={sprint.start_date}
+                                endDate={sprint.end_date}
+                                points={burndown.points}
+                                ideal={burndown.ideal}
+                                compact
+                            />
                         ) : (
-                            <p className="text-sm text-gray-500">{m.burndown.noData}</p>
+                            <p className="text-sm text-gray-500">{m.burndown.noPoints}</p>
                         )}
                     </section>
 
@@ -726,6 +776,17 @@ export default function SprintDetailPage() {
                 </aside>
             </div>
 
+            {completing && sprint && (
+                <CompleteSprintModal
+                    sprint={sprint}
+                    onClose={() => setCompleting(false)}
+                    onCompleted={() => {
+                        setCompleting(false);
+                        void load();
+                    }}
+                />
+            )}
+
             {adding && sprint && (
                 <SprintBacklogModal
                     sprintId={sprintId}
@@ -778,4 +839,37 @@ export default function SprintDetailPage() {
             )}
         </PageShell>
     );
+}
+
+/**
+ * Where a task went when this sprint completed, under its title: the sprint it
+ * was carried to (a link), or the backlog. Nothing for a task finished here.
+ */
+function CarriedBadge({ task }: { task: SprintTask }) {
+    const { t, fmt } = useI18n();
+    const m = t.projects.sprint;
+    const membership = task.sprintMembership;
+    if (membership?.outcome === 'CARRIED_OVER' && membership.carried_to) {
+        return (
+            <Link
+                href={routes.projects.sprintDetail(membership.carried_to.id)}
+                className="mt-0.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 hover:underline"
+                title={m.outcomeCarried}
+                data-testid="carried-badge"
+            >
+                {fmt(m.carriedBadge, { name: membership.carried_to.name })}
+            </Link>
+        );
+    }
+    if (membership?.outcome === 'RETURNED_TO_BACKLOG') {
+        return (
+            <span
+                className="mt-0.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                data-testid="carried-badge"
+            >
+                {m.outcomeReturned}
+            </span>
+        );
+    }
+    return null;
 }
