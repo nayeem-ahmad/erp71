@@ -14,6 +14,7 @@ import {
     staleLeadWhere,
 } from '../crm-leads/crm-leads.dto';
 import { CrmDashboardQueryDto } from './crm-dashboard.dto';
+import { STAGE_OPTION_SELECT, stageCounts } from '../crm-leads/lead-stages.util';
 import {
     addCalendarDays,
     startOfZonedToday,
@@ -128,7 +129,7 @@ export class CrmDashboardService {
         const closedInWindow = { gte: window.fromDate, lte: window.toDate };
         const mine = ownedBy(ownerId);
 
-        const [grouped, createdInPeriod, converted, lost, unassigned, stale] = await Promise.all([
+        const [grouped, createdInPeriod, converted, lost, unassigned, stale, byStage, stageOptions] = await Promise.all([
             this.db.lead.groupBy({
                 by: ['status'],
                 where: { tenant_id: tenantId, ...mine },
@@ -164,6 +165,15 @@ export class CrmDashboardService {
                     ...staleLeadWhere(staleBefore),
                 },
             }),
+            this.db.lead.groupBy({
+                by: ['status_id'],
+                where: { tenant_id: tenantId, ...mine },
+                _count: { _all: true },
+            }),
+            this.db.leadStatusOption.findMany({
+                where: { tenant_id: tenantId },
+                select: STAGE_OPTION_SELECT,
+            }),
         ]);
 
         const counts: Record<string, number> = {};
@@ -190,6 +200,9 @@ export class CrmDashboardService {
             unassigned,
             stale,
             stale_after_days: STALE_AFTER_DAYS,
+            // The funnel's bars: the tenant's own stages. `counts` above stays
+            // keyed by lifecycle for older clients that only know the five codes.
+            stages: stageCounts(stageOptions, byStage as any),
         };
     }
 

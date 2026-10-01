@@ -25,6 +25,7 @@ describe('CrmDashboardService', () => {
                 findMany: jest.fn().mockResolvedValue([]),
             },
             leadSourceOption: { findMany: jest.fn().mockResolvedValue([]) },
+            leadStatusOption: { findMany: jest.fn().mockResolvedValue([]) },
             conversationChannel: { findMany: jest.fn().mockResolvedValue([]) },
             crmCampaign: {
                 aggregate: jest.fn().mockResolvedValue({ _count: { _all: 0 }, _sum: {} }),
@@ -53,6 +54,27 @@ describe('CrmDashboardService', () => {
                 NEW: 3, CONTACTED: 0, QUALIFIED: 0, LOST: 0, CONVERTED: 0,
             });
             expect(result.pipeline.open).toBe(3);
+        });
+
+        it('reports the tenant\'s own stages for the funnel, under the same owner scope', async () => {
+            db.lead.groupBy.mockImplementation(async ({ by }: any) =>
+                by[0] === 'status_id'
+                    ? [{ status_id: 'st-neg', _count: { _all: 5 } }]
+                    : [],
+            );
+            db.leadStatusOption.findMany.mockResolvedValue([
+                { id: 'st-new', code: 'NEW', name: 'New', lifecycle: 'NEW', is_system: true, is_active: true, sort_order: 1 },
+                { id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED', is_system: false, is_active: true, sort_order: 2 },
+            ]);
+
+            const result = await service.getOverview(TENANT, {}, 'Asia/Dhaka', USER);
+
+            expect(result.pipeline.stages).toEqual([
+                expect.objectContaining({ id: 'st-new', count: 0 }),
+                expect.objectContaining({ id: 'st-neg', name: 'Negotiation', lifecycle: 'QUALIFIED', count: 5 }),
+            ]);
+            const stageQuery = db.lead.groupBy.mock.calls.find((c: any) => c[0].by[0] === 'status_id');
+            expect(stageQuery[0].where).toEqual(expect.objectContaining({ tenant_id: TENANT, assigned_to: USER }));
         });
 
         it('rates conversion against closed deals only, not the open pipeline', async () => {

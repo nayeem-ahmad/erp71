@@ -43,6 +43,7 @@ import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.s
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 import { LeadStatusResolver, ResolvedStage } from './lead-status.resolver';
+import { STAGE_OPTION_SELECT, stageCounts } from './lead-stages.util';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import {
     buildTaxonomyIndex,
@@ -733,13 +734,28 @@ export class CrmLeadsService {
         throw new BadRequestException('Unsupported bulk action.');
     }
 
-    /** Counts of leads per pipeline stage, for the CRM hub dashboard. */
+    /**
+     * Counts of leads for the CRM hub: `counts`/`open` by lifecycle (what older
+     * clients read; custom stages count under QUALIFIED), and `stages` by the
+     * tenant's own pipeline stages.
+     */
     async getStatusSummary(tenantId: string) {
-        const grouped = await this.db.lead.groupBy({
-            by: ['status'],
-            where: { tenant_id: tenantId },
-            _count: { _all: true },
-        });
+        const [grouped, byStage, options] = await Promise.all([
+            this.db.lead.groupBy({
+                by: ['status'],
+                where: { tenant_id: tenantId },
+                _count: { _all: true },
+            }),
+            this.db.lead.groupBy({
+                by: ['status_id'],
+                where: { tenant_id: tenantId },
+                _count: { _all: true },
+            }),
+            this.db.leadStatusOption.findMany({
+                where: { tenant_id: tenantId },
+                select: STAGE_OPTION_SELECT,
+            }),
+        ]);
 
         const counts: Record<string, number> = {};
         for (const status of Object.values(LeadStatus)) {
@@ -750,7 +766,7 @@ export class CrmLeadsService {
         }
 
         const open = counts.NEW + counts.CONTACTED + counts.QUALIFIED;
-        return { counts, open };
+        return { counts, open, stages: stageCounts(options, byStage as any) };
     }
 
     private resolveEnum<T extends string>(raw: unknown, allowed: T[]): T | undefined {

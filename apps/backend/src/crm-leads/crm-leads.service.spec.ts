@@ -61,6 +61,7 @@ describe('CrmLeadsService', () => {
                         (where.code === undefined || r.code === where.code),
                     ) ?? null,
                 ),
+                findMany: jest.fn().mockResolvedValue([]),
             },
             lead: {
                 findUnique: jest.fn(),
@@ -71,7 +72,7 @@ describe('CrmLeadsService', () => {
                 update: jest.fn(),
                 delete: jest.fn(),
                 deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
-                groupBy: jest.fn(),
+                groupBy: jest.fn().mockResolvedValue([]),
             },
             leadConversation: {
                 count: jest.fn().mockResolvedValue(0),
@@ -701,6 +702,26 @@ describe('CrmLeadsService', () => {
                 CONVERTED: 5,
             });
             expect(result.open).toBe(6);
+        });
+
+        it('adds the tenant\'s stages with their own counts', async () => {
+            db.lead.groupBy
+                .mockResolvedValueOnce([{ status: LeadStatus.QUALIFIED, _count: { _all: 3 } }])
+                .mockResolvedValueOnce([
+                    { status_id: 'st-qual', _count: { _all: 1 } },
+                    { status_id: 'st-neg', _count: { _all: 2 } },
+                ]);
+            db.leadStatusOption.findMany.mockResolvedValue([
+                { id: 'st-qual', code: 'QUALIFIED', name: 'Qualified', lifecycle: 'QUALIFIED', is_system: true, is_active: true, sort_order: 3 },
+                { id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED', is_system: false, is_active: true, sort_order: 4 },
+            ]);
+
+            const result = await service.getStatusSummary('tenant-1');
+
+            expect(result.stages.map((s: any) => [s.name, s.count])).toEqual([
+                ['Qualified', 1],
+                ['Negotiation', 2],
+            ]);
         });
     });
 
