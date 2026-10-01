@@ -65,8 +65,15 @@ function queryRawSql(call: unknown[]): string {
 function lockedForUpdate(tx: any, table: string): boolean {
     return tx.$queryRaw.mock.calls.some((call) => {
         const sql = queryRawSql(call);
-        return sql.includes(`"${table}"`) && sql.includes('FOR UPDATE');
+        return sql.includes(`"${table}"`) && /ORDER BY id/i.test(sql) && sql.includes('FOR UPDATE');
     });
+}
+
+function lockInList(tx: any, table: string): unknown[] {
+    const call = tx.$queryRaw.mock.calls.find((c: unknown[]) => queryRawSql(c).includes(`"${table}"`));
+    const first = call?.[0] as { values?: unknown[] } | undefined;
+    const values = first && Array.isArray(first.values) ? first.values : [];
+    return values.filter((v) => v === 'src' || v === 'tgt');
 }
 
 function writable(over: Record<string, any> = {}) {
@@ -483,6 +490,8 @@ describe('commitMerge', () => {
         await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'src', { targetId: 'tgt', takeFields: [] });
         expect(lockedForUpdate(tx, 'Product')).toBe(true);
         expect(lockedForUpdate(tx, 'ProductStock')).toBe(true);
+        expect(lockInList(tx, 'Product')).toEqual(['src', 'tgt']);
+        expect(lockInList(tx, 'ProductStock')).toEqual(['src', 'tgt']);
         expect(tx.$queryRaw.mock.invocationCallOrder[0])
             .toBeLessThan(tx.product.findFirst.mock.invocationCallOrder[0]);
         expect(tx.productStock.update).toHaveBeenCalledWith({
@@ -495,6 +504,16 @@ describe('commitMerge', () => {
             update: { avg_cost: 10.5, qty_on_hand: 48 },
         }));
         expect(tx.productCost.delete).toHaveBeenCalledWith({ where: { product_id: 'src' } });
+    });
+
+    it('locks product ids in lexicographic order so A→B and B→A share a sequence', async () => {
+        const tx = makeCommitTx({});
+        const db = { $transaction: (fn: any) => fn(tx) };
+        await commitMerge(db, { invalidatePattern: jest.fn() }, 't1', 'tgt', { targetId: 'src', takeFields: [] });
+        expect(lockInList(tx, 'Product')).toEqual(['src', 'tgt']);
+        expect(lockInList(tx, 'ProductStock')).toEqual(['src', 'tgt']);
+        expect(lockedForUpdate(tx, 'Product')).toBe(true);
+        expect(lockedForUpdate(tx, 'ProductStock')).toBe(true);
     });
 
     it('re-points camelCase productId rows', async () => {

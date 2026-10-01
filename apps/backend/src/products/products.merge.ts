@@ -461,18 +461,23 @@ async function repointForeignKeys(tx: any, sourceId: string, targetId: string): 
     }
 }
 
+function sortedIds(sourceId: string, targetId: string): string[] {
+    return sourceId <= targetId ? [sourceId, targetId] : [targetId, sourceId];
+}
+
 async function combineStockRows(
     tx: any,
     tenantId: string,
     sourceId: string,
     targetId: string,
 ): Promise<number> {
-    const productIds = [sourceId, targetId];
+    const productIds = sortedIds(sourceId, targetId);
     // findMany is unlocked under Read Committed; a sale mid-merge must wait here.
     await tx.$queryRaw(Prisma.sql`
         SELECT id FROM "ProductStock"
         WHERE tenant_id = ${tenantId}
           AND product_id IN (${Prisma.join(productIds)})
+        ORDER BY id
         FOR UPDATE
     `);
 
@@ -748,10 +753,12 @@ export async function commitMerge(
 
     const result = await db.$transaction(async (tx: any) => {
         // Second merge waits here, then planMerge sees deleted_at.
+        // Sorted ids + ORDER BY id: A→B and B→A take the same lock sequence.
         await tx.$queryRaw(Prisma.sql`
             SELECT id FROM "Product"
             WHERE tenant_id = ${tenantId}
-              AND id IN (${Prisma.join([sourceId, targetId])})
+              AND id IN (${Prisma.join(sortedIds(sourceId, targetId))})
+            ORDER BY id
             FOR UPDATE
         `);
 
