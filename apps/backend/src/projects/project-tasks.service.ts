@@ -41,6 +41,52 @@ const TASK_SORTABLE: SortableMap = {
     sort_order: (dir) => ({ sort_order: dir }),
 };
 
+/**
+ * The tasks a sprint's list shows: those in it now, plus those whose stay in it
+ * ended other than by removal — done there, carried on, or returned to the
+ * backlog when it completed. So a completed sprint still lists the work it was
+ * committed to, and a task taken out mid-sprint drops out as it always did.
+ *
+ * Current members are matched on `sprint_id`, not on an open history row, so
+ * the list is right even for tasks that joined before history was recorded.
+ */
+function inSprint(sprintId: string) {
+    return {
+        OR: [
+            { sprint_id: sprintId },
+            {
+                sprintMemberships: {
+                    some: {
+                        sprint_id: sprintId,
+                        removed_at: { not: null },
+                        outcome: { in: ['DONE', 'CARRIED_OVER', 'RETURNED_TO_BACKLOG'] },
+                    },
+                },
+            },
+        ],
+    };
+}
+
+/** A task's latest stay in one sprint — a task re-added after removal has two. */
+function membershipIn(sprintId: string) {
+    return {
+        where: { sprint_id: sprintId },
+        orderBy: { added_at: 'desc' },
+        take: 1,
+        select: {
+            outcome: true,
+            removed_at: true,
+            remaining_at_close: true,
+            carried_to: { select: { id: true, name: true } },
+        },
+    } as const;
+}
+
+function withSprintMembership(task: TaskRow): TaskRow {
+    const { sprintMemberships, ...rest } = task as TaskRow & { sprintMemberships?: unknown[] };
+    return { ...rest, sprintMembership: sprintMemberships?.[0] ?? null } as TaskRow;
+}
+
 /** How many readings the list sparkline draws. Enough for a shape, not a chart. */
 const TREND_POINTS = 10;
 
@@ -164,7 +210,7 @@ export class ProjectTasksService {
             ...(query.labelId ? { labels: { some: { label_id: query.labelId } } } : {}),
         };
         if (query.backlogOnly === 'true') where.sprint_id = null;
-        else if (query.sprintId) where.sprint_id = query.sprintId;
+        else if (query.sprintId) where.AND = [inSprint(query.sprintId)];
 
         const search = query.search?.trim();
         if (search) where.title = { contains: search, mode: 'insensitive' };
@@ -187,12 +233,15 @@ export class ProjectTasksService {
                 ]) as never,
                 skip: (page - 1) * limit,
                 take: limit,
-                include: TASK_INCLUDE as never,
+                include: (query.sprintId
+                    ? { ...TASK_INCLUDE, sprintMemberships: membershipIn(query.sprintId) }
+                    : TASK_INCLUDE) as never,
             }),
             this.db.projectTask.count({ where: scoped as never }),
         ]);
 
-        const withLogged = await this.attachLoggedHours(tenantId, items as TaskRow[]);
+        const rows = query.sprintId ? (items as TaskRow[]).map(withSprintMembership) : items;
+        const withLogged = await this.attachLoggedHours(tenantId, rows as TaskRow[]);
         const withTrend = await this.attachRemainingTrend(tenantId, withLogged as TaskRow[]);
         return paginate(withTrend, total, page, limit);
     }
@@ -366,15 +415,29 @@ export class ProjectTasksService {
                     orderBy: { work_date: 'desc' },
                     include: { user: { select: { id: true, name: true } } },
                 },
+                // Every sprint it was attempted in, the current one included.
+                sprintMemberships: {
+                    orderBy: { added_at: 'asc' },
+                    select: {
+                        added_at: true,
+                        removed_at: true,
+                        outcome: true,
+                        sprint: { select: { id: true, name: true, status: true } },
+                    },
+                },
             } as never,
         });
         if (!task) throw new NotFoundException('Task not found');
         // The viewer's watcher row is folded into a flag rather than returned:
         // a `watchers` array holding one person would read as the whole list.
-        const { watchers, ...row } = task as TaskRow & { watchers?: unknown[] };
+        const { watchers, sprintMemberships, ...row } = task as TaskRow & {
+            watchers?: unknown[];
+            sprintMemberships?: unknown[];
+        };
         const [withLogged] = await this.attachLoggedHours(tenantId, [row as TaskRow]);
         return {
             ...withLogged,
+            sprintHistory: sprintMemberships ?? [],
             viewer_watching: Array.isArray(watchers) && watchers.length > 0,
         };
     }

@@ -1224,6 +1224,37 @@ describe('ProjectTasksService', () => {
         });
     });
 
+    describe('sprint history on the card', () => {
+        it('lists every sprint the task was in, oldest first, as sprintHistory', async () => {
+            db.projectTask.findFirst.mockResolvedValue({
+                ...task(),
+                sprintMemberships: [
+                    {
+                        added_at: new Date('2026-08-02T03:00:00.000Z'),
+                        removed_at: new Date('2026-08-13T18:00:00.000Z'),
+                        outcome: 'CARRIED_OVER',
+                        sprint: { id: 'sprint-7', name: 'Sprint 7', status: 'COMPLETED' },
+                    },
+                    {
+                        added_at: new Date('2026-08-13T18:00:00.000Z'),
+                        removed_at: null,
+                        outcome: null,
+                        sprint: { id: 'sprint-8', name: 'Sprint 8', status: 'ACTIVE' },
+                    },
+                ],
+            });
+
+            const result: any = await service.findOne(OWNER, 'task-1');
+
+            expect(db.projectTask.findFirst.mock.calls.at(-1)[0].include.sprintMemberships).toMatchObject({
+                orderBy: { added_at: 'asc' },
+            });
+            expect(result.sprintHistory.map((row: any) => row.sprint.name)).toEqual(['Sprint 7', 'Sprint 8']);
+            expect(result.sprintHistory[0].outcome).toBe('CARRIED_OVER');
+            expect(result).not.toHaveProperty('sprintMemberships');
+        });
+    });
+
     describe('list filters', () => {
         const whereOf = () => db.projectTask.findMany.mock.calls.at(-1)[0].where;
 
@@ -1249,6 +1280,70 @@ describe('ProjectTasksService', () => {
             } as never);
 
             expect(whereOf().assignee_id).toBeNull();
+        });
+
+        describe('by sprint', () => {
+            it('takes the tasks in the sprint now, and those whose stay in it ended other than by removal', async () => {
+                await service.list(OWNER, { sprintId: 'sprint-7' } as never);
+
+                expect(whereOf()).not.toHaveProperty('sprint_id');
+                expect(whereOf().AND).toContainEqual({
+                    OR: [
+                        { sprint_id: 'sprint-7' },
+                        {
+                            sprintMemberships: {
+                                some: {
+                                    sprint_id: 'sprint-7',
+                                    removed_at: { not: null },
+                                    outcome: { in: ['DONE', 'CARRIED_OVER', 'RETURNED_TO_BACKLOG'] },
+                                },
+                            },
+                        },
+                    ],
+                });
+            });
+
+            it("gives each task its latest stay in that sprint, with where a carried task went", async () => {
+                // The list also draws each row's remaining sparkline from a raw query.
+                db.$queryRaw = jest.fn().mockResolvedValue([]);
+                db.projectTask.findMany.mockResolvedValue([
+                    {
+                        id: 'task-1',
+                        sprintMemberships: [
+                            {
+                                outcome: 'CARRIED_OVER',
+                                removed_at: new Date('2026-08-13T18:00:00.000Z'),
+                                remaining_at_close: 5,
+                                carried_to: { id: 'sprint-8', name: 'Sprint 8' },
+                            },
+                        ],
+                    },
+                    { id: 'task-2', sprintMemberships: [] },
+                ]);
+
+                const result = await service.list(OWNER, { sprintId: 'sprint-7' } as never);
+
+                const include = db.projectTask.findMany.mock.calls.at(-1)[0].include;
+                expect(include.sprintMemberships).toMatchObject({
+                    where: { sprint_id: 'sprint-7' },
+                    orderBy: { added_at: 'desc' },
+                    take: 1,
+                });
+                expect(result.items[0]).toMatchObject({
+                    sprintMembership: {
+                        outcome: 'CARRIED_OVER',
+                        remaining_at_close: 5,
+                        carried_to: { id: 'sprint-8', name: 'Sprint 8' },
+                    },
+                });
+                expect(result.items[0]).not.toHaveProperty('sprintMemberships');
+                expect(result.items[1].sprintMembership).toBeNull();
+            });
+
+            it('asks for no history when no sprint is named', async () => {
+                await service.list(OWNER, {} as never);
+                expect(db.projectTask.findMany.mock.calls.at(-1)[0].include).not.toHaveProperty('sprintMemberships');
+            });
         });
 
         it('filters on priority', async () => {
