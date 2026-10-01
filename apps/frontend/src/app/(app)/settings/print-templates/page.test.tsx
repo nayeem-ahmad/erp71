@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import PrintTemplatesPage from './page';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -10,6 +11,9 @@ jest.mock('@/lib/api', () => ({
         updatePrintTemplate: jest.fn(),
         deletePrintTemplate: jest.fn(),
         uploadFile: jest.fn(),
+        getStores: jest.fn(),
+        getPrintTemplateAssignments: jest.fn(),
+        upsertPrintTemplateAssignment: jest.fn(),
     },
 }));
 
@@ -40,6 +44,8 @@ describe('PrintTemplatesPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         (mockApi.getPrintTemplates as jest.Mock).mockResolvedValue([storedTemplate]);
+        (mockApi.getStores as jest.Mock).mockResolvedValue([{ id: 's1', name: 'Main' }]);
+        (mockApi.getPrintTemplateAssignments as jest.Mock).mockResolvedValue([]);
     });
 
     it('lists saved templates and marks the default', async () => {
@@ -196,5 +202,100 @@ describe('PrintTemplatesPage', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Remove image' }));
         expect(screen.queryByLabelText('Image URL')).not.toBeInTheDocument();
+    });
+    describe('what each branch prints', () => {
+        const twoStores = [
+            { id: 's1', name: 'Gulshan' },
+            { id: 's2', name: 'Dhanmondi' },
+        ];
+        const invoiceSelect = () =>
+            screen.getByRole('combobox', { name: 'Sales invoices' }) as HTMLSelectElement;
+
+        it('hides branch assignment when the tenant has one store', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+            expect(screen.queryByText('What each branch prints')).not.toBeInTheDocument();
+        });
+
+        it('shows branch assignment when the tenant has two stores', async () => {
+            (mockApi.getStores as jest.Mock).mockResolvedValue(twoStores);
+            render(<PrintTemplatesPage />);
+            expect(await screen.findByText('What each branch prints')).toBeInTheDocument();
+            // Company is selected first and only explains where company paper lives.
+            expect(screen.queryByRole('combobox', { name: 'Sales invoices' })).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Gulshan' }));
+            expect(invoiceSelect().value).toBe('');
+            expect(invoiceSelect()).toHaveTextContent('Company default');
+        });
+
+        it('selects a branch\u2019s existing pin', async () => {
+            (mockApi.getStores as jest.Mock).mockResolvedValue(twoStores);
+            (mockApi.getPrintTemplateAssignments as jest.Mock).mockResolvedValue([
+                { store_id: 's1', doc_type: 'SALES_INVOICE', template_id: 'tpl1' },
+            ]);
+            render(<PrintTemplatesPage />);
+            await screen.findByText('What each branch prints');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Gulshan' }));
+            expect(invoiceSelect().value).toBe('tpl1');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Dhanmondi' }));
+            expect(invoiceSelect().value).toBe('');
+        });
+
+        it('PUTs a named template for the selected branch and type', async () => {
+            (mockApi.getStores as jest.Mock).mockResolvedValue(twoStores);
+            (mockApi.upsertPrintTemplateAssignment as jest.Mock).mockResolvedValue({ success: true });
+            render(<PrintTemplatesPage />);
+            await screen.findByText('What each branch prints');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Gulshan' }));
+            fireEvent.change(invoiceSelect(), { target: { value: 'tpl1' } });
+
+            await waitFor(() =>
+                expect(mockApi.upsertPrintTemplateAssignment).toHaveBeenCalledWith({
+                    storeId: 's1',
+                    docType: 'SALES_INVOICE',
+                    templateId: 'tpl1',
+                }),
+            );
+            expect(invoiceSelect().value).toBe('tpl1');
+            expect(mockApi.updatePrintTemplate).not.toHaveBeenCalled();
+        });
+
+        it('PUTs templateId null for Company default', async () => {
+            (mockApi.getStores as jest.Mock).mockResolvedValue(twoStores);
+            (mockApi.getPrintTemplateAssignments as jest.Mock).mockResolvedValue([
+                { store_id: 's1', doc_type: 'SALES_INVOICE', template_id: 'tpl1' },
+            ]);
+            (mockApi.upsertPrintTemplateAssignment as jest.Mock).mockResolvedValue({ success: true });
+            render(<PrintTemplatesPage />);
+            await screen.findByText('What each branch prints');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Gulshan' }));
+            fireEvent.change(invoiceSelect(), { target: { value: '' } });
+
+            await waitFor(() =>
+                expect(mockApi.upsertPrintTemplateAssignment).toHaveBeenCalledWith({
+                    storeId: 's1',
+                    docType: 'SALES_INVOICE',
+                    templateId: null,
+                }),
+            );
+        });
+
+        it('reverts the select and says so when the PUT fails', async () => {
+            (mockApi.getStores as jest.Mock).mockResolvedValue(twoStores);
+            (mockApi.upsertPrintTemplateAssignment as jest.Mock).mockRejectedValue(new Error('nope'));
+            render(<PrintTemplatesPage />);
+            await screen.findByText('What each branch prints');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Gulshan' }));
+            fireEvent.change(invoiceSelect(), { target: { value: 'tpl1' } });
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to save the branch letterhead.'));
+            expect(invoiceSelect().value).toBe('');
+        });
     });
 });
