@@ -93,6 +93,15 @@ export const settingsExtrasMessages = {
         delete: "Löschen",
         uploadFailed: "Das Logo konnte nicht hochgeladen werden.",
         previewBody: "Der Dokumentinhalt erscheint unterhalb des Kopfs.",
+        assignments: {
+            title: "What each branch prints",
+            company: "Company",
+            companyHelp: "Company paper is assigned on each template via document types, below.",
+            hint: "Company default follows the template assigned to that document type. A named template stays on this branch if company paper later changes.",
+            companyDefault: "Company default",
+            saveFailed: "Failed to save the branch letterhead.",
+            loadFailed: "Failed to load branch letterheads.",
+        },
         sections: {
             images: "Bilder im Kopf",
             footer: "Fußzeile",
