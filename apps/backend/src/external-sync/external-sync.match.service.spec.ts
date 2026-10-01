@@ -141,6 +141,7 @@ function file(
 
     return {
         manifest: {
+            tenantId: 'tenant-1',
             connectionId: 'conn-1',
             provider: 'EXPRESS_RETAIL_PRO',
             generatedAt: '2026-09-21T00:00:00.000Z',
@@ -214,6 +215,12 @@ describe('ExternalSyncMatchService', () => {
         it('rejects a manifest naming a different connection', async () => {
             await expect(service.applyDecisions('tenant-1', file({}, { connectionId: 'other' }))).rejects.toThrow(
                 /different connection/i,
+            );
+        });
+
+        it('rejects a manifest naming a different tenant', async () => {
+            await expect(service.applyDecisions('tenant-1', file({}, { tenantId: 'other' }))).rejects.toThrow(
+                /different tenant/i,
             );
         });
 

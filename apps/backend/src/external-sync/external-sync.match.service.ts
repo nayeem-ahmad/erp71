@@ -141,6 +141,12 @@ export class ExternalSyncMatchService {
             );
         }
 
+        if (dto.manifest.tenantId && dto.manifest.tenantId !== tenantId) {
+            throw new BadRequestException(
+                'This workbook was generated for a different tenant. Download a fresh one and review it again.',
+            );
+        }
+
         const connection = await this.db.externalSyncConnection.findUnique({
             where: {
                 tenant_id_provider: { tenant_id: tenantId, provider: dto.manifest.provider },
