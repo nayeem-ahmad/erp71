@@ -105,6 +105,30 @@ describe('SprintMembershipService', () => {
             expect(result).toEqual({ moved: 3, leftSprintIds: ['sprint-1', 'sprint-0'] });
         });
 
+        it('closes a stale open row even for a task the backlog holds', async () => {
+            tasks([{ id: 't1', sprint_id: null, remaining_hours: 2 }]);
+
+            await service.moveTasks(db, 'tenant-1', ['t1'], 'sprint-2', 'REMOVED', { at });
+
+            expect(db.sprintTask.updateMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { tenant_id: 'tenant-1', task_id: { in: ['t1'] }, removed_at: null } }),
+            );
+            expect(db.sprintTask.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+                db.sprintTask.createMany.mock.invocationCallOrder[0],
+            );
+        });
+
+        it('runs as one transaction when handed the root client', async () => {
+            const tx = db;
+            const root = { ...db, $transaction: jest.fn(async (run: (t: unknown) => unknown) => run(tx)) };
+            tasks([{ id: 't1', sprint_id: 'sprint-1' }]);
+
+            const result = await service.moveTasks(root, 'tenant-1', ['t1'], 'sprint-2', 'REMOVED');
+
+            expect(root.$transaction).toHaveBeenCalledTimes(1);
+            expect(result.moved).toBe(1);
+        });
+
         it('asks nothing of the database for an empty list', async () => {
             expect(await service.moveTasks(db, 'tenant-1', [], 'sprint-2', 'REMOVED')).toEqual({
                 moved: 0,

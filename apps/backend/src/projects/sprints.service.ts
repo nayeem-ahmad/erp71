@@ -273,9 +273,12 @@ export class SprintsService {
             throw new BadRequestException('A sprint cannot end before it starts.');
         }
 
-        // While the sprint is still ACTIVE, so the recorder takes it: the last
-        // point shows what was left undone, before any of it leaves.
-        await this.burndownRecorder.record(tenantId, [sprintId], 'COMPLETED');
+        if (carryTo.kind === 'new' && carryTo.start) await this.assertNoOtherActive(tenantId, sprintId);
+
+        // Read now, while the work is still in it, so the last point shows what
+        // was left undone; written only after the completion commits, so a
+        // completion that fails leaves no COMPLETED marker on a running sprint.
+        const finalFigures = await this.burndownRecorder.computeCurrent(tenantId, sprintId);
 
         const at = new Date();
         const { updated, carried, target } = await this.db.$transaction(async (tx) => {
@@ -347,6 +350,9 @@ export class SprintsService {
             return { updated: row!, carried: unfinished.length, target: next };
         });
 
+        if (sprint.status === 'ACTIVE') {
+            await this.burndownRecorder.recordFigures(tenantId, sprintId, finalFigures, 'COMPLETED');
+        }
         if (target?.status === 'ACTIVE') await this.burndownRecorder.record(tenantId, [target.id], 'STARTED');
         return {
             ...withoutStorageKey(updated),
@@ -458,9 +464,9 @@ export class SprintsService {
      * Every recorded point, plus the ideal line and the live totals.
      *
      * Points are the stored change-by-change totals (`SprintBurndownPoint`).
-     * While the sprint runs, the live figures are appended as a final point
-     * when they differ from the last stored one, so the line always reaches
-     * "now" even if the latest point failed to write.
+     * While the sprint runs, the live figures are appended as a final point,
+     * so the line always reaches "now" — flat after a quiet spell, and right
+     * even if the latest point failed to write.
      *
      * The ideal line is anchored to the committed total at the first point —
      * the scope the sprint started with — not today's, which would hide the
@@ -504,13 +510,9 @@ export class SprintsService {
             cause: null,
             task: null,
         };
-        const last = points[points.length - 1];
-        if (
-            sprint.status === 'ACTIVE' &&
-            (!last || last.remaining !== live.remaining || last.committed !== live.committed || last.open !== live.open)
-        ) {
-            points.push(live);
-        }
+        // Always, even when nothing moved since the last point: the line has
+        // to reach "now", or three quiet days read as a chart that stopped.
+        if (sprint.status === 'ACTIVE') points.push(live);
 
         const anchor = points[0]?.committed ?? current.committed_hours;
         const ideal = buildBurndownSeries({

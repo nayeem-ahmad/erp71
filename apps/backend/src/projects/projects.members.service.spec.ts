@@ -42,7 +42,11 @@ describe('ProjectsService — members and deletion', () => {
                 findFirst: jest.fn().mockResolvedValue({ id: 'emp-1' }),
                 findMany: jest.fn().mockResolvedValue([]),
             },
-            $transaction: jest.fn((run: (tx: unknown) => unknown) => run(db)),
+            // A transaction's client, like Prisma's, has no `$transaction` of its own.
+            $transaction: jest.fn((run: (tx: unknown) => unknown) => {
+                const { $transaction: _root, ...tx } = db;
+                return run(tx);
+            }),
         };
 
         const module: TestingModule = await Test.createTestingModule({

@@ -77,6 +77,21 @@ describe('replayPoints', () => {
         });
     });
 
+    it('files a log row under its Dhaka day, as the old snapshots were', () => {
+        // 03:00 Dhaka on 4 Aug is 21:00 UTC on 3 Aug.
+        const points = replayPoints({
+            logs: [{ taskId: 't1', hours: 5, source: 'TIME_LOGGED', changedAt: at('2026-08-03T21:00:00Z') }],
+            snapshots: [
+                { date: '2026-08-03', remaining: 9, committed: 9, taskCount: 1, doneTaskCount: 0 },
+                { date: '2026-08-04', remaining: 5, committed: 12, taskCount: 1, doneTaskCount: 0 },
+            ],
+        });
+        // The 4 Aug snapshot has a log row that day, so it adds no point of its
+        // own; the log point reads the 4 Aug committed figure.
+        expect(points.map((p) => p.cause)).toEqual(['BACKFILLED', 'WORK_LOGGED']);
+        expect(points[1].committed).toBe(12);
+    });
+
     it('keeps only points before a cut-off, so live points recorded since deploy are not duplicated', () => {
         const points = replayPoints({
             logs: [

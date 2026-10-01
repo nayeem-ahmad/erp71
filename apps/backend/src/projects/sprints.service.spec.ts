@@ -17,7 +17,7 @@ describe('SprintsService', () => {
     let service: SprintsService;
     let db: any;
     let assets: { isEnabled: jest.Mock; uploadBuffer: jest.Mock; deleteFile: jest.Mock };
-    let burndown: { computeCurrent: jest.Mock; record: jest.Mock };
+    let burndown: { computeCurrent: jest.Mock; record: jest.Mock; recordFigures: jest.Mock };
     let membership: { moveTasks: jest.Mock; closeInPlace: jest.Mock };
 
     const sprint = (overrides: Record<string, unknown> = {}) => ({
@@ -41,6 +41,7 @@ describe('SprintsService', () => {
                 done_task_count: 2,
             }),
             record: jest.fn().mockResolvedValue(undefined),
+            recordFigures: jest.fn().mockResolvedValue(undefined),
         };
         membership = {
             moveTasks: jest.fn().mockResolvedValue({ moved: 0, leftSprintIds: [] }),
@@ -178,13 +179,27 @@ describe('SprintsService', () => {
             ]);
         });
 
-        it('records the final point while the work is still in the sprint', async () => {
+        it('reads the final figures before the work leaves, and writes them once it has', async () => {
             await service.complete('tenant-1', 'sprint-1');
 
-            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'COMPLETED');
-            expect(burndown.record.mock.invocationCallOrder[0]).toBeLessThan(
+            expect(burndown.computeCurrent.mock.invocationCallOrder[0]).toBeLessThan(
                 db.$transaction.mock.invocationCallOrder[0],
             );
+            expect(burndown.recordFigures).toHaveBeenCalledWith(
+                'tenant-1',
+                'sprint-1',
+                expect.objectContaining({ remaining_hours: 12 }),
+                'COMPLETED',
+            );
+            expect(burndown.recordFigures.mock.invocationCallOrder[0]).toBeGreaterThan(
+                db.$transaction.mock.invocationCallOrder[0],
+            );
+        });
+
+        it('leaves no COMPLETED point when the completion fails', async () => {
+            db.sprint.updateMany.mockResolvedValue({ count: 0 });
+            await expect(service.complete('tenant-1', 'sprint-1')).rejects.toBeInstanceOf(ConflictException);
+            expect(burndown.recordFigures).not.toHaveBeenCalled();
         });
 
         it('with no body, returns unfinished tasks to the backlog — what it always did', async () => {
@@ -272,6 +287,8 @@ describe('SprintsService', () => {
                     carryTo: { kind: 'new', name: 'Sprint 8', startDate: '2026-08-14', endDate: '2026-08-25', start: true },
                 } as never),
             ).rejects.toBeInstanceOf(ConflictException);
+            // Caught before anything is written, not halfway through.
+            expect(db.$transaction).not.toHaveBeenCalled();
         });
 
         it('refuses a new sprint that ends before it starts, before closing anything', async () => {
@@ -305,7 +322,7 @@ describe('SprintsService', () => {
             await expect(
                 service.complete('tenant-1', 'sprint-1', { carryTo: { kind: 'sprint', sprintId: 'sprint-x' } } as never),
             ).rejects.toBeInstanceOf(BadRequestException);
-            expect(burndown.record).not.toHaveBeenCalled();
+            expect(burndown.recordFigures).not.toHaveBeenCalled();
         });
 
         it('refuses to carry a sprint into itself', async () => {
@@ -402,11 +419,20 @@ describe('SprintsService', () => {
             expect(result.points[1]).toMatchObject({ remaining: 12, committed: 40, open: 3, cause: null });
         });
 
-        it('does not append a live point that repeats the last one', async () => {
+        it('still reaches "now" after a quiet spell, drawing flat', async () => {
             db.sprint.findFirst.mockResolvedValue(sprint({ status: 'ACTIVE' }));
             db.sprintBurndownPoint.findMany.mockResolvedValue([
                 point('2026-08-02T03:00:00.000Z', 12, { done_task_count: 2 }),
             ]);
+
+            const result = await service.burndown('tenant-1', 'sprint-1');
+            expect(result.points).toHaveLength(2);
+            expect(result.points[1]).toMatchObject({ remaining: 12, cause: null });
+        });
+
+        it('appends no live point to a completed sprint', async () => {
+            db.sprint.findFirst.mockResolvedValue(sprint({ status: 'COMPLETED' }));
+            db.sprintBurndownPoint.findMany.mockResolvedValue([point('2026-08-02T03:00:00.000Z', 12)]);
 
             const result = await service.burndown('tenant-1', 'sprint-1');
             expect(result.points).toHaveLength(1);

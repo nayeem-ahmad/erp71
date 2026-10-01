@@ -26,10 +26,14 @@
  *     still pointing at it, `RETURNED_TO_BACKLOG` for those that left. A task
  *     carried out of a completed sprint that never had a log row (no estimate,
  *     no time) cannot be recovered; it held no hours, so no chart changes.
+ *     Days are Dhaka days, as the old snapshots were.
  *   - **Points.** For each active/completed sprint, one point per log row with
  *     the running totals, plus a `BACKFILLED` point for each old daily snapshot
  *     on a day with no log row. Only before the sprint's earliest existing
  *     point, so live points recorded since the deploy are not duplicated.
+ *     A task that joined without a log row in the sprint is missing from log
+ *     points but counted in snapshot points, so an old line can dip and rise
+ *     between such days — the old data never said when tasks joined.
  *
  * Idempotent: rows and points already present are skipped, so a second run
  * writes nothing. Deleted tasks are left out.
@@ -167,6 +171,13 @@ async function main() {
         written += count;
     }
     for (const row of rows.filter((candidate) => !candidate.removedAt)) {
+        // Re-checked at write time: a task moved since the scan must not get an
+        // open row in a sprint it has already left.
+        const still = await prisma.projectTask.count({ where: { id: row.taskId, sprint_id: row.sprintId } });
+        if (still === 0) {
+            skipped += 1;
+            continue;
+        }
         try {
             await prisma.sprintTask.create({ data: toRow(row) });
             written += 1;
@@ -195,7 +206,7 @@ async function main() {
     }
 
     console.log(
-        `${TAG} Wrote ${written} history row(s)${skipped ? ` (${skipped} skipped: task already had an open row)` : ''} ` +
+        `${TAG} Wrote ${written} history row(s)${skipped ? ` (${skipped} skipped: task moved since the scan, or already had an open row)` : ''} ` +
             `and ${pointsWritten} burndown point(s).`,
     );
 }

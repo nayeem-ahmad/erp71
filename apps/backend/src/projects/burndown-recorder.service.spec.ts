@@ -129,6 +129,24 @@ describe('BurndownRecorder', () => {
         });
     });
 
+    describe('recordFigures', () => {
+        const figures = { remaining_hours: 5, committed_hours: 13, task_count: 2, done_task_count: 1 };
+
+        it('writes the figures it is given, whatever the sprint is by now', async () => {
+            await recorder.recordFigures('tenant-1', 'sprint-1', figures, 'COMPLETED');
+
+            expect(db.sprint.findMany).not.toHaveBeenCalled();
+            expect(db.sprintBurndownPoint.create).toHaveBeenCalledWith({
+                data: { tenant_id: 'tenant-1', sprint_id: 'sprint-1', ...figures, cause: 'COMPLETED', task_id: null },
+            });
+        });
+
+        it('never throws', async () => {
+            db.sprintBurndownPoint.create.mockRejectedValue(new Error('db down'));
+            await expect(recorder.recordFigures('tenant-1', 'sprint-1', figures, 'COMPLETED')).resolves.toBeUndefined();
+        });
+    });
+
     describe('causeForSource', () => {
         it.each([
             ['TIME_LOGGED', 'WORK_LOGGED'],

@@ -459,7 +459,7 @@ export class ProjectTasksService {
             }
         }
         if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, dto.projectId);
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
+        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId, { joining: true });
 
         const sortOrder = await this.nextSortOrder(tenantId, dto.projectId, statusId);
         const estimate = dto.estimateHours ?? null;
@@ -693,7 +693,9 @@ export class ProjectTasksService {
         }
 
         if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, projectId);
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
+        if (dto.sprintId) {
+            await this.assertSprint(tenantId, dto.sprintId, { joining: dto.sprintId !== task.sprint_id });
+        }
 
         const data = {
             ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
@@ -1059,7 +1061,9 @@ export class ProjectTasksService {
         const userId = viewer.userId;
         const task = await this.assertTask(viewer, taskId);
         const status = await this.assertStatus(tenantId, dto.statusId, task.project_id);
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
+        if (dto.sprintId) {
+            await this.assertSprint(tenantId, dto.sprintId, { joining: dto.sprintId !== task.sprint_id });
+        }
 
         const sprintId = dto.clearSprint ? null : (dto.sprintId ?? task.sprint_id);
         const wasDone = task.status?.category === 'DONE';
@@ -1593,13 +1597,21 @@ export class ProjectTasksService {
      * A sprint is tenant-level, so a task from any project may join it. The old
      * same-project check was removed with `Sprint.project_id` — the tenant scope
      * below is now the only thing that matters.
+     *
+     * `joining` refuses a completed sprint: its membership is history, and a
+     * task joining it would open a stay no completion will ever close. Naming
+     * the sprint a task is already in (a Done task in a finished sprint) is
+     * not joining, so it passes.
      */
-    private async assertSprint(tenantId: string, sprintId: string) {
+    private async assertSprint(tenantId: string, sprintId: string, opts: { joining?: boolean } = {}) {
         const sprint = await this.db.sprint.findFirst({
             where: { id: sprintId, tenant_id: tenantId },
-            select: { id: true },
+            select: { id: true, status: true },
         });
         if (!sprint) throw new NotFoundException('Sprint not found');
+        if (opts.joining && sprint.status === 'COMPLETED') {
+            throw new BadRequestException('That sprint is complete; tasks can no longer join it.');
+        }
         return sprint;
     }
 }

@@ -83,6 +83,12 @@ export interface ReplayedPoint {
  * latest snapshot's figure (the true sum of estimates, which the log knows
  * nothing about) and the sum of each task's opening figure (which catches a
  * task that joined after that snapshot).
+ *
+ * Known limit: a task that joined the sprint without a log row there (estimated
+ * in the backlog, then assigned) is missing from log points but counted in a
+ * snapshot point, so a backfilled line can dip on log days and rise on snapshot
+ * days. The old data never recorded when tasks joined, so it cannot be fixed
+ * here; live points recorded since the release do not have the problem.
  */
 export function replayPoints(input: {
     logs: ReplayLog[];
@@ -100,7 +106,7 @@ export function replayPoints(input: {
     for (const log of logs) {
         latest.set(log.taskId, log.hours);
         if (!opening.has(log.taskId)) opening.set(log.taskId, log.hours);
-        const day = log.changedAt.toISOString().slice(0, 10);
+        const day = dhakaDay(log.changedAt);
         daysWithLogs.add(day);
 
         const snapshot = lastOnOrBefore(snapshots, day);
@@ -229,6 +235,16 @@ export function historyRows(input: {
         }
     }
     return rows;
+}
+
+const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * The Dhaka calendar day of an instant — the day the retired snapshots were
+ * keyed by. A UTC day would file a 03:00 Dhaka edit under the day before.
+ */
+function dhakaDay(at: Date): string {
+    return new Date(at.getTime() + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 function lastOnOrBefore(snapshots: ReplaySnapshot[], day: string): ReplaySnapshot | undefined {

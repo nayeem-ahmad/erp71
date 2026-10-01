@@ -255,6 +255,14 @@ describe('ProjectTasksService', () => {
             expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_ADDED', 'task-new');
         });
 
+        it('refuses to create a task straight into a completed sprint', async () => {
+            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-old', status: 'COMPLETED' });
+            await expect(
+                service.create(OWNER, { projectId: 'project-1', title: 'Late', sprintId: 'sprint-old' } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.projectTask.create).not.toHaveBeenCalled();
+        });
+
         it('opens no sprint history for a task created in the backlog', async () => {
             await service.create(OWNER, { projectId: 'project-1', title: 'Backlog' } as never);
             expect(membership.moveTasks).not.toHaveBeenCalled();
@@ -825,6 +833,26 @@ describe('ProjectTasksService', () => {
             expect(db.projectTask.update.mock.calls[0][0].data).not.toHaveProperty('sprint_id');
             expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
             expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-2'], 'TASK_ADDED', 'task-1');
+        });
+
+        it('refuses to move a task into a completed sprint, from the card or the board', async () => {
+            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-old', status: 'COMPLETED' });
+
+            await expect(service.update(OWNER, 'task-1', { sprintId: 'sprint-old' } as never)).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            await expect(
+                service.move(OWNER, 'task-1', { statusId: todo.id, sortOrder: 0, sprintId: 'sprint-old' } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(membership.moveTasks).not.toHaveBeenCalled();
+        });
+
+        it('still lets a task in a completed sprint be edited, naming the sprint it is in', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ sprint_id: 'sprint-old' }));
+            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-old', status: 'COMPLETED' });
+
+            await service.update(OWNER, 'task-1', { sprintId: 'sprint-old', title: 'Renamed' } as never);
+            expect(membership.moveTasks).not.toHaveBeenCalled();
         });
 
         it('leaves membership alone when an edit names the sprint the task is already in', async () => {

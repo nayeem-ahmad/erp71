@@ -5,7 +5,10 @@ import type { DatabaseService } from '../database/database.service';
 export type SprintTaskOutcomeName = 'DONE' | 'CARRIED_OVER' | 'RETURNED_TO_BACKLOG' | 'REMOVED';
 
 /** The root client or a transaction's — `moveTasks` runs inside either. */
-export type MembershipClient = Pick<DatabaseService, 'projectTask' | 'sprintTask'>;
+export type MembershipClient = Pick<DatabaseService, 'projectTask' | 'sprintTask'> & {
+    /** Present on the root client only; a transaction's client has none. */
+    $transaction?: DatabaseService['$transaction'];
+};
 
 interface TaskRow {
     id: string;
@@ -43,6 +46,14 @@ export class SprintMembershipService {
     ): Promise<{ moved: number; leftSprintIds: string[] }> {
         const ids = [...new Set(taskIds)];
         if (ids.length === 0) return { moved: 0, leftSprintIds: [] };
+        // Read, close, re-point and open as one unit. Apart, two moves racing
+        // for the same task could leave `sprint_id` rewritten with no open row
+        // to match it — or the reverse.
+        if (client.$transaction) {
+            return client.$transaction((tx) =>
+                this.moveTasks(tx as unknown as MembershipClient, tenantId, ids, toSprintId, closeAs, opts),
+            );
+        }
 
         const rows = (await client.projectTask.findMany({
             where: { tenant_id: tenantId, id: { in: ids } },
@@ -53,7 +64,11 @@ export class SprintMembershipService {
 
         const at = opts.at ?? new Date();
         const carriedTo = closeAs === 'CARRIED_OVER' ? toSprintId : null;
-        await this.close(client, tenantId, moving.filter((row) => row.sprint_id), closeAs, at, carriedTo);
+        // Every moving task's open row closes, whatever `sprint_id` says: an
+        // open row left behind by anything (a crash, the backfill racing a
+        // move) would otherwise block the task from ever joining a sprint again,
+        // since the one-open-row index refuses the new one.
+        await this.close(client, tenantId, moving, closeAs, at, carriedTo);
 
         const movingIds = moving.map((row) => row.id);
         await client.projectTask.updateMany({

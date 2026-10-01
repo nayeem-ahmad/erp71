@@ -102,6 +102,30 @@ export class BurndownRecorder {
         }
     }
 
+    /**
+     * Writes a point from figures already taken, whatever the sprint's status
+     * is by now. For completing a sprint: its final figures are read before
+     * the work leaves it, and written only once the completion has committed,
+     * so a completion that fails leaves no COMPLETED marker behind. Never throws.
+     */
+    async recordFigures(
+        tenantId: string,
+        sprintId: string,
+        figures: BurndownFigures,
+        cause: BurndownCauseName,
+    ): Promise<void> {
+        try {
+            await this.db.sprintBurndownPoint.create({
+                data: { tenant_id: tenantId, sprint_id: sprintId, ...figures, cause: cause as never, task_id: null },
+            });
+        } catch (error) {
+            this.logger.error(
+                `Burndown point failed for ${sprintId} (${cause})`,
+                error instanceof Error ? error.stack : String(error),
+            );
+        }
+    }
+
     private async repeatsLatest(sprintId: string, figures: BurndownFigures): Promise<boolean> {
         const latest = await this.db.sprintBurndownPoint.findFirst({
             where: { sprint_id: sprintId },
