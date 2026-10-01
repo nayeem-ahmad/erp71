@@ -22,6 +22,7 @@ import ModuleDashboard, {
 } from '@/components/dashboard/ModuleDashboard';
 import { type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { PipelineFunnel, type FunnelStage } from '@/components/dashboard/PipelineFunnel';
+import { stageOptionLabel } from '@/lib/lead-status';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import { ActivityHeatmap, type ActivityHeatmapPoint } from '@/components/dashboard/ActivityHeatmap';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
@@ -33,6 +34,15 @@ type OverviewResponse = {
     filters: { from: string; to: string; mine: boolean };
     pipeline: {
         counts: Record<string, number>;
+        /** The tenant's own stages, in its order. Absent from an older API. */
+        stages?: {
+            id: string;
+            code: string;
+            name: string;
+            lifecycle: string;
+            is_system: boolean;
+            count: number;
+        }[];
         open: number;
         created_in_period: number;
         converted_in_period: number;
@@ -310,6 +320,22 @@ export default function CrmDashboard({
     }, [overview, followUps, pipeline, campaigns, crm]);
 
     const funnelStages = useMemo<FunnelStage[]>(() => {
+        // The tenant's stages: open ones in its order, then the won and lost
+        // outcomes below the rule. Each bar opens the list on exactly its stage.
+        if (pipeline?.stages?.length) {
+            const outcome = (lifecycle: string) =>
+                lifecycle === 'CONVERTED' ? 'won' as const : lifecycle === 'LOST' ? 'lost' as const : undefined;
+            const rank = (lifecycle: string) => (lifecycle === 'CONVERTED' ? 1 : lifecycle === 'LOST' ? 2 : 0);
+            return [...pipeline.stages]
+                .sort((a, b) => rank(a.lifecycle) - rank(b.lifecycle))
+                .map((s) => ({
+                    id: s.id,
+                    label: stageOptionLabel(s, leadStatusLabels),
+                    count: s.count,
+                    href: `${routes.crm.leads}?statusId=${s.id}`,
+                    outcome: outcome(s.lifecycle),
+                }));
+        }
         const counts = pipeline?.counts ?? {};
         const stage = (id: string, label: string, outcome?: 'won' | 'lost'): FunnelStage => ({
             id,

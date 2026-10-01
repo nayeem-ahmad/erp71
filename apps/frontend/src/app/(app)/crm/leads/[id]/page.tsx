@@ -8,7 +8,7 @@ import {
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import { PageShell, PageHeader, Button, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { PageShell, PageHeader, Button, Select, StatusBadge } from '@/components/ui';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -22,14 +22,7 @@ import {
     type LeadFormState,
 } from '../lead-form-fields';
 import { channelLabel, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
-
-const leadStatusTone: Record<string, StatusBadgeTone> = {
-    NEW: 'info',
-    CONTACTED: 'neutral',
-    QUALIFIED: 'neutral',
-    LOST: 'danger',
-    CONVERTED: 'success',
-};
+import { leadStatusLabel, leadStatusTone } from '@/lib/lead-status';
 
 const priorityColors: Record<string, string> = {
     LOW: 'bg-gray-50 text-gray-600',
@@ -88,6 +81,7 @@ export default function LeadDetailPage() {
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
     const { options: sourceOptions } = useLeadTaxonomy('sources');
     const { options: categoryOptions } = useLeadTaxonomy('categories');
+    const { options: statusOptions } = useLeadTaxonomy('statuses');
     const { options: channels } = useLeadTaxonomy('channels');
     // The tenant's first channel, in their own sort order. Both selects below start
     // here rather than on a hardcoded 'CALL' that a tenant may have retired.
@@ -218,7 +212,8 @@ export default function LeadDetailPage() {
     }
 
     const isConverted = lead.status === 'CONVERTED';
-    const statusLabel = (m.statuses as Record<string, string>)[lead.status] ?? lead.status;
+    // The tenant's stage name; translated while it is still a seeded default.
+    const statusLabel = leadStatusLabel(lead, m.statuses);
     // Names come from the tenant's own taxonomy rows and are shown verbatim.
     // The legacy enum value is the fallback for a lead not yet backfilled.
     const sourceLabel = lead.sourceOption?.name ?? lead.source;
@@ -260,7 +255,7 @@ export default function LeadDetailPage() {
                     <div className="flex-1 min-w-0">
                         <p className="text-base font-semibold text-gray-900">{lead.name}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                            <StatusBadge tone={leadStatusTone[lead.status] ?? 'neutral'}>{statusLabel}</StatusBadge>
+                            <StatusBadge tone={leadStatusTone(lead.status)}>{statusLabel}</StatusBadge>
                             <StatusBadge tone="neutral">{sourceLabel}</StatusBadge>
                             {categoryLabel && (
                                 <StatusBadge tone="info">{categoryLabel}</StatusBadge>
@@ -442,6 +437,7 @@ export default function LeadDetailPage() {
                             errors={editFormErrors}
                             sourceOptions={sourceOptions}
                             categoryOptions={categoryOptions}
+                            statusOptions={statusOptions}
                             showNextStep={false}
                         />
                         {saveLeadError && <p role="alert" className="text-xs text-danger">{saveLeadError}</p>}

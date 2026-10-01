@@ -1943,9 +1943,10 @@ export const api = {
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
     /** `mine` narrows to the caller's own leads; the server resolves the id. */
-    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    getLeads: (params?: { status?: string; statusId?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
+        if (params?.statusId) query.set('statusId', params.statusId);
         if (params?.source) query.set('source', params.source);
         if (params?.category) query.set('category', params.category);
         if (params?.priority) query.set('priority', params.priority);
