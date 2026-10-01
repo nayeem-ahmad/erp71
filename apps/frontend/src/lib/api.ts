@@ -1963,6 +1963,9 @@ export const api = {
         if (params?.createdTo) query.set('createdTo', params.createdTo);
         return fetchPaginated(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    // Every CRM person-picker reads this, not `getTeamMembers`: that one is the Team
+    // admin list and needs MANAGE_USERS, so for anyone else the pickers came up empty.
+    getCrmAssignees: () => fetchWithAuth('/crm/leads/assignees'),
     getLead: (id: string) => fetchWithAuth(`/crm/leads/${id}`),
     getLeadsSummary: () => fetchWithAuth('/crm/leads/summary'),
     createLead: (data: any) => fetchWithAuth('/crm/leads', {

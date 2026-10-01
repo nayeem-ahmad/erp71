@@ -20,7 +20,7 @@ jest.mock('@/lib/api', () => ({
         getCrmActivitySummary: jest.fn(),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         getCrmMessageTemplates: jest.fn().mockResolvedValue([]),
-        getTeamMembers: jest.fn(),
+        getCrmAssignees: jest.fn(),
         getMe: jest.fn(),
         getLeads: jest.fn(),
         searchCustomers: jest.fn(),
@@ -80,7 +80,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
         jest.clearAllMocks();
         api.getAllCrmActivities.mockResolvedValue([activity]);
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);
@@ -206,7 +206,7 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
         jest.clearAllMocks();
         api.getAllCrmActivities.mockResolvedValue([activity]);
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
-        api.getTeamMembers.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
         api.getLeads.mockResolvedValue({ items: [{ id: 'lead-1', name: 'Karim Traders', mobile: '01700000000' }] });
         api.searchCustomers.mockResolvedValue([]);
@@ -268,7 +268,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
         jest.clearAllMocks();
         api.getAllCrmActivities.mockResolvedValue([activity]);
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
-        api.getTeamMembers.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
     });
 
@@ -360,7 +360,7 @@ describe('CrmActivitiesPage — activity approval', () => {
         window.sessionStorage.clear();
         api.getAllCrmActivities.mockResolvedValue([activity]);
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
-        api.getTeamMembers.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
         api.getMe.mockResolvedValue({ id: 'user-1', tenants: [] });
         api.setCrmActivityApproval.mockResolvedValue({ id: 'act-1', is_approved: true });
     });
@@ -452,7 +452,7 @@ describe('CrmActivitiesPage — only mine', () => {
         sessionStorage.clear();
         api.getAllCrmActivities.mockResolvedValue([activity]);
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);
@@ -510,7 +510,7 @@ describe('CrmActivitiesPage — only mine', () => {
         jest.clearAllMocks();
         api.getAllCrmActivities.mockResolvedValue([activity]);
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
-        api.getTeamMembers.mockResolvedValue([]);
+        api.getCrmAssignees.mockResolvedValue([]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
 
         render(<ActivitiesPage />);
@@ -570,7 +570,7 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
             Promise.resolve(params?.leadId === 'lead-1' ? [leadTimeline] : [activity]),
         );
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 1, overdue: 0, total: 1 });
-        api.getTeamMembers.mockResolvedValue([
+        api.getCrmAssignees.mockResolvedValue([
             { userId: 'user-1', name: 'Nayeem' },
             { userId: 'user-2', name: 'Rifat' },
         ]);

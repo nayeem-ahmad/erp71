@@ -39,7 +39,7 @@ export default function NewContactPage() {
     const [cardImage, setCardImage] = useState<ScannedCardImage | null>(null);
 
     useEffect(() => {
-        api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+        api.getCrmAssignees().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
     }, []);
 
     // Drain a scan handed over from the contacts list. Removed immediately so a

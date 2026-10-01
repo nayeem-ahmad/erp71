@@ -76,7 +76,7 @@ export default function ContactDetailPage() {
     useEffect(() => { void load(); }, [load]);
 
     useEffect(() => {
-        api.getTeamMembers().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
+        api.getCrmAssignees().then((data) => setTeamMembers(Array.isArray(data) ? data : [])).catch(() => null);
     }, []);
 
     const save = async () => {
