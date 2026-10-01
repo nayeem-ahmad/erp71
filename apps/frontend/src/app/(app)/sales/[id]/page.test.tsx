@@ -365,6 +365,7 @@ describe('SaleDetailPage — view mode', () => {
             expect.objectContaining({ total: 3000, amountPaid: 1000, previousDue: 500 }),
             expect.anything(),
             expect.anything(),
+            expect.anything(),
         );
     });
 

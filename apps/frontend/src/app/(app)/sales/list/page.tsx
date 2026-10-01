@@ -23,6 +23,7 @@ import SaleRowPrintButtons from '../components/SaleRowPrintButtons';
 import SaleRowOverflowMenu from '../components/SaleRowOverflowMenu';
 import PrintSettingsModal from '../components/PrintSettingsModal';
 import { useSalePrinting, fetchPrintableSale } from '@/lib/hooks/useSalePrinting';
+import { useInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 
 interface Sale {
     id: string;
@@ -78,6 +79,8 @@ export default function SalesPage() {
         printChallan,
         printReceipt,
     } = useSalePrinting({ resolve: fetchPrintableSale });
+    // The member's own invoice layout — edited in the same Print settings.
+    const invoiceLayout = useInvoicePrintPrefs();
 
     // Paper size and the preview opt-out are settings, not per-row choices, so
     // they are set once from the header rather than re-picked on every print.
@@ -425,6 +428,7 @@ export default function SalesPage() {
                             toast.success(t.sales.printSettings.saved);
                         }}
                         onClose={() => setPrintSettingsOpen(false)}
+                        invoiceLayout={invoiceLayout}
                     />
                 )}
 

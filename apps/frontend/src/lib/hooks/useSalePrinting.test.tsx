@@ -29,6 +29,13 @@ jest.mock('./useSalePrintPrefs', () => ({
     }),
 }));
 
+const memberLayout = { version: 1, padding: 'wide', table_style: 'grid' };
+const resolveLayout = jest.fn();
+
+jest.mock('./useInvoicePrintPrefs', () => ({
+    useInvoicePrintPrefs: () => ({ prefs: memberLayout, resolve: resolveLayout, save: jest.fn() }),
+}));
+
 jest.mock('@/lib/sale-print-actions', () => ({
     printSaleInvoice: jest.fn(),
     printSaleChallan: jest.fn(),
@@ -51,6 +58,21 @@ describe('useSalePrinting', () => {
         jest.clearAllMocks();
         invoiceResolve.mockResolvedValue({ headerConfig: { layout: 'gulshan-invoice' }, companyName: 'Acme' });
         challanResolve.mockResolvedValue({ headerConfig: { layout: 'gulshan-challan' }, companyName: 'Acme' });
+        resolveLayout.mockResolvedValue(memberLayout);
+    });
+
+    it('prints the invoice in the layout the member saved', async () => {
+        const { result } = renderHook(() => useSalePrinting({ resolve: async () => gulshanSale }));
+
+        await act(() => result.current.printInvoice('sale-1', 'A4'));
+
+        expect(resolveLayout).toHaveBeenCalled();
+        expect(printSaleInvoice).toHaveBeenCalledWith(
+            gulshanSale,
+            'A4',
+            expect.objectContaining({ invoiceLayout: memberLayout }),
+            true,
+        );
     });
 
     it('prints a list row on the letterhead of the sale’s own store', async () => {

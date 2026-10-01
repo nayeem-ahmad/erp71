@@ -1963,3 +1963,4 @@ export * from './password-policy';
 export * from './board-background';
 export * from './placeholder-email';
 export * from './mushak';
+export * from './invoice-print';

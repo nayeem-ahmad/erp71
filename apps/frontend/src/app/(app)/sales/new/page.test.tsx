@@ -1,3 +1,4 @@
+import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import NewSalePage from './page';
 import { api } from '@/lib/api';
@@ -748,6 +749,8 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
                 total: 100,
             }),
             'A4',
+            undefined,
+            DEFAULT_INVOICE_PRINT_PREFS,
         );
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
@@ -769,6 +772,8 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(printSalesInvoice).toHaveBeenCalledWith(
             expect.objectContaining({ total: 100, amountPaid: 100, previousDue: 750 }),
             'A4',
+            undefined,
+            DEFAULT_INVOICE_PRINT_PREFS,
         );
     });
 
@@ -787,6 +792,8 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(printSalesInvoice).toHaveBeenCalledWith(
             expect.objectContaining({ previousDue: null }),
             'A4',
+            undefined,
+            DEFAULT_INVOICE_PRINT_PREFS,
         );
     });
 
@@ -799,7 +806,7 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
             fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
         });
 
-        expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'Thermal80');
+        expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'Thermal80', undefined, DEFAULT_INVOICE_PRINT_PREFS);
     });
 
     it('prints nothing when the operator declines', async () => {

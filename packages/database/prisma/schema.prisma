@@ -1329,6 +1329,11 @@ model TenantUser {
   /// derived from a name. The full set a member holds lives in `roles`, and
   /// their effective permissions are the union of all of them.
   tenant_role_id String?
+  /// How this member lays out the sales invoices they print — a versioned
+  /// InvoicePrintPrefs JSON (see packages/shared-types/invoice-print.ts). Held
+  /// on the membership so it follows the person to any till, per workspace.
+  /// Null means the built-in layout.
+  invoice_print_prefs Json?
 
   // Relations
   tenant     Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)

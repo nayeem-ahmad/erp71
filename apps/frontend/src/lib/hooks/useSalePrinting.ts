@@ -14,6 +14,7 @@ import {
     type SalePrintContext,
 } from '@/lib/sale-print-actions';
 import { useSalePrintPrefs } from './useSalePrintPrefs';
+import { useInvoicePrintPrefs } from './useInvoicePrintPrefs';
 
 /**
  * Wires the print menu to the printers, with the letterhead and labels already
@@ -36,6 +37,7 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
     const challanHeader = usePrintHeader('DELIVERY_CHALLAN');
     const { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity } =
         useSalePrintPrefs();
+    const { resolve: resolveInvoiceLayout } = useInvoicePrintPrefs();
 
     /** The row currently being fetched, so its trigger can show a spinner. */
     const [busyId, setBusyId] = useState<string | null>(null);
@@ -71,11 +73,14 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                     return;
                 }
                 const storeId = sale.store_id ?? sale.store?.id ?? undefined;
-                const [invoice, challan] = await Promise.all([
+                const [invoice, challan, invoiceLayout] = await Promise.all([
                     invoiceHeader.resolve(storeId),
                     challanHeader.resolve(storeId),
+                    // The member's own layout, waited on so the first print
+                    // after a page load is not the built-in one by accident.
+                    resolveInvoiceLayout(),
                 ]);
-                await print(sale, { ...ctx, invoiceHeader: invoice, challanHeader: challan });
+                await print(sale, { ...ctx, invoiceHeader: invoice, challanHeader: challan, invoiceLayout });
             } catch (error) {
                 console.error('Failed to print sale document', error);
                 toast.error(t.sales.printMenu.loadFailed);
@@ -83,7 +88,7 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                 setBusyId(null);
             }
         },
-        [resolve, t, ctx, invoiceHeader, challanHeader],
+        [resolve, t, ctx, invoiceHeader, challanHeader, resolveInvoiceLayout],
     );
 
     const printInvoice = useCallback(
