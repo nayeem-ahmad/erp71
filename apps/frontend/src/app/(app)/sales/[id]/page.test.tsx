@@ -17,7 +17,7 @@ jest.mock('@/lib/i18n', () => {
 const { enMessages } = require('@/lib/localization/messages/en');
 
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import SaleDetailPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -173,7 +173,8 @@ describe('SaleDetailPage — view mode', () => {
         await renderPage();
         await chooseFromPrintMenu(/delivery challan/i);
 
-        expect(write).toHaveBeenCalledTimes(1);
+        // Printing first resolves the sale's own branch letterhead.
+        await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
         const html = write.mock.calls[0][0] as string;
         expect(html).toContain('Delivery Challan');
         // Numbered off the sale so the rider's paper and the invoice match up.
@@ -205,7 +206,7 @@ describe('SaleDetailPage — view mode', () => {
 
         await chooseFromPrintMenu(/delivery challan/i);
 
-        expect(open).toHaveBeenCalledWith('', '_blank', 'width=670,height=600');
+        await waitFor(() => expect(open).toHaveBeenCalledWith('', '_blank', 'width=670,height=600'));
 
         open.mockRestore();
     });
@@ -224,6 +225,7 @@ describe('SaleDetailPage — view mode', () => {
         await renderPage();
         await chooseFromPrintMenu(/delivery challan/i);
 
+        await waitFor(() => expect(write).toHaveBeenCalled());
         const html = write.mock.calls[0][0] as string;
         expect(html).toContain('Gadget X');
         // Nobody to address it to, but somebody still signs for the goods.
