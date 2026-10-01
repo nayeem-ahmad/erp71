@@ -4,7 +4,12 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
-import { FALLBACK_SOURCE_CODE } from '@erp71/database';
+import {
+    CUSTOM_STATUS_LIFECYCLE,
+    FALLBACK_SOURCE_CODE,
+    OPEN_STATUS_LIFECYCLES,
+    PROTECTED_STATUS_CODES,
+} from '@erp71/database';
 import { DatabaseService } from '../database/database.service';
 import {
     CreateLeadTaxonomyDto,
@@ -19,6 +24,8 @@ export type TaxonomyOption = {
     name: string;
     score_weight?: number;
     icon?: string | null;
+    /** Statuses only: the `Lead.status` value a lead on this stage carries. */
+    lifecycle?: string;
     sort_order: number;
     is_system: boolean;
     is_active: boolean;
@@ -33,7 +40,7 @@ type Consumer = {
     /** Prisma delegate name on DatabaseService. */
     table: 'lead' | 'leadConversation' | 'crmActivity';
     /** FK column on that table pointing back at the list. */
-    fk: 'source_id' | 'category_id' | 'channel_id' | 'purpose_id';
+    fk: 'source_id' | 'category_id' | 'channel_id' | 'purpose_id' | 'status_id';
     /** Human noun used in "in use by N …" messages. */
     noun: string;
 };
@@ -41,6 +48,7 @@ type Consumer = {
 const CONSUMERS: Record<LeadTaxonomyKind, Consumer> = {
     [LeadTaxonomyKind.SOURCE]: { table: 'lead', fk: 'source_id', noun: 'lead' },
     [LeadTaxonomyKind.CATEGORY]: { table: 'lead', fk: 'category_id', noun: 'lead' },
+    [LeadTaxonomyKind.STATUS]: { table: 'lead', fk: 'status_id', noun: 'lead' },
     // Repointed from leadConversation to crmActivity in R1. sync-crm-activities
     // runs ahead of the API in the container start chain and mirrors every
     // conversation into an activity, so crmActivity is a superset — counting it
@@ -56,7 +64,19 @@ const LABELS: Record<LeadTaxonomyKind, string> = {
     [LeadTaxonomyKind.CATEGORY]: 'Lead category',
     [LeadTaxonomyKind.CHANNEL]: 'Conversation channel',
     [LeadTaxonomyKind.PURPOSE]: 'Activity purpose',
+    [LeadTaxonomyKind.STATUS]: 'Lead status',
 };
+
+const PROTECTED_STATUSES = new Set<string>(PROTECTED_STATUS_CODES);
+const OPEN_LIFECYCLES = new Set<string>(OPEN_STATUS_LIFECYCLES);
+
+/**
+ * NEW is where every lead starts and CONVERTED / LOST are the only ways to close
+ * one, so those three stay selectable whatever the tenant does to the rest.
+ */
+function isProtectedStatus(kind: LeadTaxonomyKind, row: { code: string; is_system: boolean }) {
+    return kind === LeadTaxonomyKind.STATUS && row.is_system && PROTECTED_STATUSES.has(row.code);
+}
 
 @Injectable()
 export class CrmLeadTaxonomyService {
@@ -72,6 +92,7 @@ export class CrmLeadTaxonomyService {
     private model(kind: LeadTaxonomyKind) {
         if (kind === LeadTaxonomyKind.SOURCE) return this.db.leadSourceOption as any;
         if (kind === LeadTaxonomyKind.CATEGORY) return this.db.leadCategoryOption as any;
+        if (kind === LeadTaxonomyKind.STATUS) return this.db.leadStatusOption as any;
         if (kind === LeadTaxonomyKind.PURPOSE) return this.db.crmActivityPurpose as any;
         return this.db.conversationChannel as any;
     }
@@ -178,6 +199,9 @@ export class CrmLeadTaxonomyService {
                 ...(kind === LeadTaxonomyKind.CHANNEL || kind === LeadTaxonomyKind.PURPOSE
                     ? { icon: dto.icon || null }
                     : {}),
+                // Tenants add in-progress stages only; won and lost stay the
+                // seeded pair, so every custom stage is an open one.
+                ...(kind === LeadTaxonomyKind.STATUS ? { lifecycle: CUSTOM_STATUS_LIFECYCLE } : {}),
             },
         });
     }
@@ -209,6 +233,12 @@ export class CrmLeadTaxonomyService {
         ) {
             throw new BadRequestException(
                 'The fallback lead source cannot be deactivated — it is used whenever no other source applies.',
+            );
+        }
+
+        if (dto.is_active === false && isProtectedStatus(kind, row)) {
+            throw new BadRequestException(
+                `The "${row.name}" status cannot be hidden — leads need it to start or to close.`,
             );
         }
 
@@ -280,6 +310,12 @@ export class CrmLeadTaxonomyService {
             );
         }
 
+        if (isProtectedStatus(kind, row)) {
+            throw new BadRequestException(
+                `The "${row.name}" status cannot be deleted — leads need it to start or to close.`,
+            );
+        }
+
         // Only when the row is still active — removing an already-hidden channel
         // does not change how many are selectable, so it must not be blocked.
         if (row.is_active) {
@@ -319,6 +355,7 @@ export class CrmLeadTaxonomyService {
                 throw new BadRequestException(`Cannot reassign ${noun}s to the row being removed.`);
             }
             const target = await this.findOwned(tenantId, kind, reassignTo);
+            if (kind === LeadTaxonomyKind.STATUS) this.assertStatusReassignTarget(target);
             await consumerModel.updateMany({
                 where: { tenant_id: tenantId, [fk]: id } as any,
                 // `CrmActivity.channel_code` mirrors the channel's code and is what every
@@ -327,6 +364,9 @@ export class CrmLeadTaxonomyService {
                 data: {
                     [fk]: target.id,
                     ...(kind === LeadTaxonomyKind.CHANNEL ? { channel_code: target.code } : {}),
+                    // The lifecycle column moves with the stage, or the leads would
+                    // sit on a stage that disagrees with what every rule reads.
+                    ...(kind === LeadTaxonomyKind.STATUS ? { status: target.lifecycle } : {}),
                 } as any,
             });
 
@@ -346,6 +386,22 @@ export class CrmLeadTaxonomyService {
 
         await this.model(kind).delete({ where: { id } });
         return { success: true, reassigned: blocking };
+    }
+
+    /**
+     * Leads moved off a deleted stage are still being worked, so they may only
+     * land on a stage that is open and selectable. Moving them to Lost or
+     * Converted would close a batch of deals as a side effect of tidying a list.
+     */
+    private assertStatusReassignTarget(target: { name: string; lifecycle: string; is_active: boolean }) {
+        if (!target.is_active) {
+            throw new BadRequestException(`Lead status "${target.name}" is hidden — pick an active one.`);
+        }
+        if (!OPEN_LIFECYCLES.has(target.lifecycle)) {
+            throw new BadRequestException(
+                `Leads can only be moved to an open status, not "${target.name}".`,
+            );
+        }
     }
 
     /**
