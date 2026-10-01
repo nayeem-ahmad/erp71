@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Input, Select, Field, Button, Checkbox } from '@/components/ui';
+import AccountSelect from '@/components/accounting/AccountSelect';
 
 /**
  * Kept in step with `IMPORT_COST_TYPES` and `CAPITALIZED_BY_DEFAULT` in the
@@ -204,19 +205,16 @@ export default function AddImportCostModal({
                     </Select>
                 </Field>
 
-                <Field label={copy.paidFrom} hint={copy.paidFromHint} htmlFor="cost-account">
-                    <Select
-                        id="cost-account"
+                <Field label={copy.paidFrom} hint={copy.paidFromHint}>
+                    <AccountSelect
+                        accounts={accounts}
                         value={paidFromAccountId}
-                        onChange={(e) => setPaidFromAccountId(e.target.value)}
-                    >
-                        <option value="">{copy.notPaidYet}</option>
-                        {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>
-                                {account.name}
-                            </option>
-                        ))}
-                    </Select>
+                        onChange={setPaidFromAccountId}
+                        ariaLabel={copy.paidFrom}
+                        placeholder={copy.notPaidYet}
+                        allowClear
+                        clearLabel={copy.notPaidYet}
+                    />
                 </Field>
 
                 {/* The duty report is dated on this, not on when the charge was

@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatBDT, formatDate } from '@/lib/format';
 import { PageShell, Button, Field, Input, Select } from '@/components/ui';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { toast } from '@/lib/toast';
 
@@ -256,15 +257,18 @@ export default function SalaryPaymentsPage() {
                                 <span className="text-xs font-medium text-gray-500">{t.common.date} (to)</span>
                                 <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
                             </label>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">Employee</span>
-                                <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-                                    <option value="">All employees</option>
-                                    {employees.map((emp) => (
-                                        <option key={emp.id} value={emp.id}>{emp.name}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <div className="space-y-1">
+                                <IdSearchSelect
+                                    items={employees}
+                                    value={employeeFilter}
+                                    onChange={setEmployeeFilter}
+                                    label="Employee"
+                                    placeholder="All employees"
+                                    emptyLabel={t.leaves.allEmployees}
+                                    noMatchLabel={t.common.noData}
+                                    subtitle={(emp) => emp.employee_code ?? ''}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -296,13 +300,17 @@ export default function SalaryPaymentsPage() {
                                 </p>
                             ) : (
                                 <>
-                                    <Field label="Employee" required>
-                                        <Select value={formEmployeeId} onChange={(e) => handleEmployeeChange(e.target.value)} required>
-                                            <option value="">Select employee…</option>
-                                            {employees.map((emp) => (
-                                                <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_code})</option>
-                                            ))}
-                                        </Select>
+                                    <Field label="Employee" required htmlFor="salary-employee">
+                                        <IdSearchSelect
+                                            id="salary-employee"
+                                            items={employees}
+                                            value={formEmployeeId}
+                                            onChange={handleEmployeeChange}
+                                            placeholder="Select employee…"
+                                            emptyLabel={t.leaves.selectEmployee}
+                                            noMatchLabel={t.common.noData}
+                                            subtitle={(emp) => emp.employee_code ?? ''}
+                                        />
                                     </Field>
                                     <Field label="Pay Period (month)" required>
                                         <Input type="month" value={formPayPeriod} onChange={(e) => setFormPayPeriod(e.target.value)} required />

@@ -14,6 +14,7 @@ import {
     Select, StatusBadge, Textarea,
 } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import {
     EMPLOYMENT_TYPES, JOB_POST_STATUSES, jobPostTone,
     type EmploymentType, type JobPost, type JobPostStatus, type RecruitmentSummary,
@@ -355,16 +356,15 @@ export default function JobPostsPage() {
                             </Field>
 
                             <Field label={copy.form.hiringManager} htmlFor="post-manager">
-                                <Select
+                                <IdSearchSelect
                                     id="post-manager"
+                                    items={employees}
                                     value={form.hiring_manager_id}
-                                    onChange={(event) => setForm((prev) => ({ ...prev, hiring_manager_id: event.target.value }))}
-                                >
-                                    <option value="">{copy.form.none}</option>
-                                    {employees.map((employee) => (
-                                        <option key={employee.id} value={employee.id}>{employee.name}</option>
-                                    ))}
-                                </Select>
+                                    onChange={(id) => setForm((prev) => ({ ...prev, hiring_manager_id: id }))}
+                                    placeholder={copy.form.none}
+                                    emptyLabel={copy.form.none}
+                                    noMatchLabel={t.common.noData}
+                                />
                             </Field>
 
                             <Field label={copy.form.employmentType} htmlFor="post-type">

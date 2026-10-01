@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { PageShell } from '@/components/ui';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
 import ProformaTermsFields, {
@@ -508,19 +509,15 @@ function QuoteDetailsPageContent() {
                             <h2 className="font-bold tracking-tight mb-4">{t.quotes.detail.targetAccount}</h2>
                             {isEditMode ? (
                                 <div className="space-y-4 print:hidden">
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.common.customer}</label>
-                                        <select
-                                            value={editCustomerId}
-                                            onChange={(e) => setEditCustomerId(e.target.value)}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
-                                        >
-                                            <option value="">{t.shared.walkInCustomer}</option>
-                                            {customers.map((customer: any) => (
-                                                <option key={customer.id} value={customer.id}>{customer.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <IdSearchSelect
+                                        items={customers}
+                                        value={editCustomerId}
+                                        onChange={setEditCustomerId}
+                                        label={t.common.customer}
+                                        placeholder={t.shared.walkInCustomer}
+                                        emptyLabel={t.customerPayments.noCustomers}
+                                        noMatchLabel={t.customerPayments.noCustomers}
+                                    />
                                     <div>
                                         <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.shared.form.validUntil}</label>
                                         <input

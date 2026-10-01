@@ -16,6 +16,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { PageShell, Button } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 interface CustomerOption {
     id: string;
@@ -444,15 +445,17 @@ function CustomerPaymentsContent() {
                                 <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
                                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                             </div>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.filterCustomer}</span>
-                                <select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-                                    <option value="">{copy.allCustomers}</option>
-                                    {customers.map((customer) => (
-                                        <option key={customer.id} value={customer.id}>{customer.name}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <div className="space-y-1">
+                                <IdSearchSelect
+                                    items={customers}
+                                    value={customerFilter}
+                                    onChange={setCustomerFilter}
+                                    label={copy.filterCustomer}
+                                    placeholder={copy.allCustomers}
+                                    emptyLabel={copy.noCustomers}
+                                    noMatchLabel={copy.noCustomers}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -505,22 +508,15 @@ function CustomerPaymentsContent() {
                                             <option value="pay">{copy.directionPay}</option>
                                         </select>
                                     </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.selectCustomer}</span>
-                                        <select
-                                            value={formCustomerId}
-                                            onChange={(e) => setFormCustomerId(e.target.value)}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
-                                            required
-                                        >
-                                            <option value="">{copy.pickCustomerOption}</option>
-                                            {customers.map((customer) => (
-                                                <option key={customer.id} value={customer.id}>
-                                                    {customer.name} ({customer.phone})
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
+                                    <IdSearchSelect
+                                        items={customers}
+                                        value={formCustomerId}
+                                        onChange={setFormCustomerId}
+                                        label={copy.selectCustomer}
+                                        placeholder={copy.pickCustomerOption}
+                                        emptyLabel={copy.noCustomers}
+                                        noMatchLabel={copy.noCustomers}
+                                    />
                                     {selectedFormCustomer ? (
                                         <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3 text-sm">
                                             <span className="text-gray-600">

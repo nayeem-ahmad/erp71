@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import ManufacturingBomsPage from './page';
+import { pickSearchOption } from '@/test-utils/id-search-select';
 
 jest.mock('@/lib/api', () => ({
     fetchWithAuth: jest.fn(),
@@ -20,6 +21,7 @@ jest.mock('lucide-react', () => ({
     RefreshCw: () => <span data-testid="icon-refresh" />,
     Cog: () => <span data-testid="icon-cog" />,
     Trash2: () => <span data-testid="icon-trash" />,
+    Search: () => <span data-testid="icon-search" />,
     ChevronRight: () => <span data-testid="icon-chevron-right" />,
     // Used by shared ui primitives (Alert, Button loading spinner) rendered by this page's modals.
     AlertTriangle: () => <span data-testid="icon-alert-triangle" />,
@@ -131,6 +133,7 @@ describe('ManufacturingBomsPage', () => {
         expect(screen.getByText('New BOM Recipe')).toBeInTheDocument();
         expect(screen.getByLabelText('Output Product *')).toBeInTheDocument();
         await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Output Product *'));
             expect(screen.getByText('Widget A (WGT-001)')).toBeInTheDocument();
         });
     });
@@ -181,10 +184,11 @@ describe('ManufacturingBomsPage', () => {
         render(<ManufacturingBomsPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
-        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
-        fireEvent.change(screen.getByLabelText('Output Product *'), {
-            target: { value: 'prod-1' },
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Output Product *'));
+            expect(screen.getByText('Widget A (WGT-001)')).toBeInTheDocument();
         });
+        pickSearchOption('Output Product *', 'Widget A (WGT-001)');
         await act(async () => {
             fireEvent.click(screen.getByText('Create'));
         });
@@ -201,10 +205,11 @@ describe('ManufacturingBomsPage', () => {
         render(<ManufacturingBomsPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
-        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
-        fireEvent.change(screen.getByLabelText('Output Product *'), {
-            target: { value: 'prod-1' },
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Output Product *'));
+            expect(screen.getByText('Widget A (WGT-001)')).toBeInTheDocument();
         });
+        pickSearchOption('Output Product *', 'Widget A (WGT-001)');
         await act(async () => {
             fireEvent.click(screen.getByText('Create'));
         });
@@ -218,17 +223,16 @@ describe('ManufacturingBomsPage', () => {
         render(<ManufacturingBomsPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
-        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Output Product *'));
+            expect(screen.getByText('Widget A (WGT-001)')).toBeInTheDocument();
+        });
+        pickSearchOption('Output Product *', 'Widget A (WGT-001)');
         fireEvent.click(screen.getByText('Add Component'));
 
-        const componentPicker = screen.getByLabelText('Select a component…');
-        expect(within(componentPicker).getByText('Widget A (WGT-001)')).toBeInTheDocument();
-
-        // Choosing Widget A as the output takes it off the component list: a
-        // recipe cannot consume the goods it produces.
-        fireEvent.change(screen.getByLabelText('Output Product *'), { target: { value: 'prod-1' } });
-        expect(within(componentPicker).queryByText('Widget A (WGT-001)')).not.toBeInTheDocument();
-        expect(within(componentPicker).getByText('Flour (FLR-1)')).toBeInTheDocument();
+        fireEvent.focus(screen.getByLabelText('Select a component…'));
+        expect(screen.queryByText('Widget A (WGT-001)')).not.toBeInTheDocument();
+        expect(screen.getByText('Flour (FLR-1)')).toBeInTheDocument();
     });
 
     it('clears a component row that the new output product has just become', async () => {
@@ -236,15 +240,18 @@ describe('ManufacturingBomsPage', () => {
         render(<ManufacturingBomsPage />);
         await waitFor(() => screen.getByText('New BOM'));
         fireEvent.click(screen.getByText('New BOM'));
-        await waitFor(() => screen.getByText('Widget A (WGT-001)'));
+        await waitFor(() => {
+            fireEvent.focus(screen.getByLabelText('Output Product *'));
+            expect(screen.getByText('Widget A (WGT-001)')).toBeInTheDocument();
+        });
         fireEvent.click(screen.getByText('Add Component'));
 
-        const componentPicker = screen.getByLabelText('Select a component…') as HTMLSelectElement;
-        fireEvent.change(componentPicker, { target: { value: 'prod-flour' } });
-        expect(componentPicker.value).toBe('prod-flour');
+        const componentPicker = screen.getByLabelText('Select a component…');
+        pickSearchOption('Select a component…', 'Flour (FLR-1)');
+        expect(componentPicker).toHaveAttribute('placeholder', 'Flour (FLR-1)');
 
-        fireEvent.change(screen.getByLabelText('Output Product *'), { target: { value: 'prod-flour' } });
-        expect(componentPicker.value).toBe('');
+        pickSearchOption('Output Product *', 'Flour (FLR-1)');
+        expect(componentPicker).toHaveAttribute('placeholder', 'Select a component…');
     });
 
     it('asks for BOM pages within the API\'s limit cap', async () => {

@@ -9,6 +9,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { toast } from '@/lib/toast';
 import { Button, Field, Input, PageShell, Select } from '@/components/ui';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import { PAYMENT_METHOD_TYPE_VALUES, PaymentMethodType } from '@erp71/shared-types';
 
 const IMPORT_FIELDS: ImportField[] = [
@@ -125,17 +126,15 @@ function MethodForm({ initial, accounts, accountsError, onSave, onCancel }: Meth
                         </>
                     )}
                 >
-                    <Select
+                    <AccountSelect
+                        accounts={accounts}
                         value={accountId}
-                        onChange={(e) => setAccountId(e.target.value)}
-                    >
-                        <option value="">— No account linked —</option>
-                        {accounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                                {acc.code ? `[${acc.code}] ` : ''}{acc.name}
-                            </option>
-                        ))}
-                    </Select>
+                        onChange={setAccountId}
+                        ariaLabel="Account"
+                        placeholder="— No account linked —"
+                        allowClear
+                        clearLabel="— No account linked —"
+                    />
                     {accountsError ? (
                         <p className="mt-1 text-xs text-amber-600">
                             Accounts could not be loaded, so this list is empty. The method still

@@ -17,6 +17,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 interface SupplierOption {
     id: string;
@@ -524,15 +525,17 @@ function SupplierPaymentsContent() {
                                 <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
                                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                             </div>
-                            <label className="space-y-1">
-                                <span className="text-xs font-medium text-gray-500">{copy.filterSupplier}</span>
-                                <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-                                    <option value="">{copy.allSuppliers}</option>
-                                    {suppliers.map((supplier) => (
-                                        <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                                    ))}
-                                </select>
-                            </label>
+                            <div className="space-y-1">
+                                <IdSearchSelect
+                                    items={suppliers}
+                                    value={supplierFilter}
+                                    onChange={setSupplierFilter}
+                                    label={copy.filterSupplier}
+                                    placeholder={copy.allSuppliers}
+                                    emptyLabel={copy.noSuppliers}
+                                    noMatchLabel={copy.noSuppliers}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -584,22 +587,15 @@ function SupplierPaymentsContent() {
                                             <option value="receive">{copy.directionReceive}</option>
                                         </select>
                                     </label>
-                                    <label className="block space-y-1">
-                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.selectSupplier}</span>
-                                        <select
-                                            value={formSupplierId}
-                                            onChange={(e) => setFormSupplierId(e.target.value)}
-                                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm"
-                                            required
-                                        >
-                                            <option value="">{copy.pickSupplierOption}</option>
-                                            {suppliers.map((supplier) => (
-                                                <option key={supplier.id} value={supplier.id}>
-                                                    {supplier.name}{supplier.phone ? ` (${supplier.phone})` : ''}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
+                                    <IdSearchSelect
+                                        items={suppliers}
+                                        value={formSupplierId}
+                                        onChange={setFormSupplierId}
+                                        label={copy.selectSupplier}
+                                        placeholder={copy.pickSupplierOption}
+                                        emptyLabel={copy.noSuppliers}
+                                        noMatchLabel={copy.noSuppliers}
+                                    />
                                     {selectedFormSupplier ? (
                                         <div className="rounded-xl bg-orange-50 border border-orange-100 px-4 py-3 text-sm">
                                             <span className="text-gray-600">

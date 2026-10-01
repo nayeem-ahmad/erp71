@@ -415,7 +415,7 @@ describe('QuoteDetailsPage', () => {
         it('shows customer select dropdown in edit mode', async () => {
             render(<QuoteDetailsPage />);
             await waitFor(() => {
-                expect(screen.getByText('Walk-in Customer')).toBeInTheDocument();
+                expect(screen.getByPlaceholderText('Walk-in Customer')).toBeInTheDocument();
             });
         });
 

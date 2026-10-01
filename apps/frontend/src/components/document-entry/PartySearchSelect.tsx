@@ -11,6 +11,13 @@ export interface PartyOption {
     [key: string]: any;
 }
 
+function partyMatches(party: PartyOption, query: string): boolean {
+    const term = query.trim().toLowerCase();
+    if (!term) return true;
+    return [party.name, party.phone, party.address, party.sku, party.code, party.employee_code]
+        .some((value) => String(value ?? '').toLowerCase().includes(term));
+}
+
 interface PartySearchSelectProps {
     /** Everything the picker can offer; filtering happens here, client-side. */
     parties: PartyOption[];
@@ -36,6 +43,8 @@ interface PartySearchSelectProps {
     /** Frozen view — an existing document's counterparty is not re-pickable. */
     readOnly?: boolean;
     readOnlyFallback?: string;
+    id?: string;
+    ariaLabel?: string;
 }
 
 const defaultSubtitle = (party: PartyOption): ReactNode => (
@@ -44,6 +53,28 @@ const defaultSubtitle = (party: PartyOption): ReactNode => (
         {party.address ? ` · ${party.address}` : ''}
     </>
 );
+
+/** Same typeahead, wired to an id string the parent already holds. */
+export function IdSearchSelect({
+    items,
+    value,
+    onChange,
+    ...rest
+}: {
+    items: PartyOption[];
+    value: string;
+    onChange: (id: string) => void;
+} & Omit<PartySearchSelectProps, 'parties' | 'selected' | 'onSelect'>) {
+    const selected = items.find((item) => item.id === value) ?? null;
+    return (
+        <PartySearchSelect
+            parties={items}
+            selected={selected}
+            onSelect={(party) => onChange(party?.id ?? '')}
+            {...rest}
+        />
+    );
+}
 
 /**
  * The counterparty picker used by every entry screen: type to filter, arrow
@@ -65,6 +96,8 @@ export default function PartySearchSelect({
     clearLabel = 'Clear selection',
     readOnly = false,
     readOnlyFallback = '—',
+    id,
+    ariaLabel,
 }: PartySearchSelectProps) {
     const [query, setQuery] = useState('');
     const [filtered, setFiltered] = useState<PartyOption[]>([]);
@@ -76,14 +109,7 @@ export default function PartySearchSelect({
     const optionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
-        const term = query.toLowerCase();
-        setFiltered(
-            parties.filter(
-                (party) =>
-                    party.name.toLowerCase().includes(term)
-                    || (party.phone?.includes(query) ?? false),
-            ),
-        );
+        setFiltered(parties.filter((party) => partyMatches(party, query)));
         setHighlight(0);
     }, [query, parties]);
 
@@ -134,8 +160,9 @@ export default function PartySearchSelect({
 
     // Same caption markup and spacing as the entry bar's field labels, so the
     // two boxes sit on one line.
+    const resolvedId = id ?? inputId;
     const caption = label ? (
-        <label htmlFor={inputId} className="block text-[11px] text-gray-500 mb-0.5">
+        <label htmlFor={resolvedId} className="block text-[11px] text-gray-500 mb-0.5">
             {label}
         </label>
     ) : null;
@@ -163,9 +190,10 @@ export default function PartySearchSelect({
                         <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <input
                             ref={inputRef}
-                            id={inputId}
+                            id={resolvedId}
                             type="text"
                             value={query}
+                            aria-label={ariaLabel}
                             onChange={(e) => {
                                 setQuery(e.target.value);
                                 setShowDropdown(true);

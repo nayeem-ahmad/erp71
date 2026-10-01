@@ -1642,6 +1642,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Long entity lists use a searchable picker** — done 2026-10-01. Native `<select>`s of customers, suppliers, products, accounts and employees on ledger/payments, order/quote edit, PO/PQ, import shipment, projects, inventory transfers/shrinkage/demands, manufacturing BOM, posting rules, import cost/pay/settle-LC, payment methods, platform expense categories, and HR salary/leave/attendance/punches/service-book/job-posts now use `PartySearchSelect` / `IdSearchSelect` or `AccountSelect`. Short enums (status, warehouse, branch, leave type, frequency) stay native. Matching includes name/phone/address/SKU/code/employee code.
+
 - [x] **Customer Ledger customer picker is searchable** — done 2026-10-01. `/sales/customer-ledger` used a native `<select>` of every customer. It now uses the shared `PartySearchSelect` typeahead (name or phone). Copy in all nine locales. Frontend tests: customer-ledger page, PartySearchSelect, catalog completeness.
 
 - [x] **Product merge — collapse a duplicate into an existing product (2026-10-01).** Spec docs/superpowers/specs/2026-10-01-product-merge-design.md.

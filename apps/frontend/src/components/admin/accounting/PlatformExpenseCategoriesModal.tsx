@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
-import { Button, Input, Select, StatusBadge } from '@/components/ui';
+import { Button, Input, StatusBadge } from '@/components/ui';
+import AccountSelect from '@/components/accounting/AccountSelect';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -118,18 +119,18 @@ export default function PlatformExpenseCategoriesModal({
                             </label>
                             <label className="flex flex-col gap-1">
                                 <span className="text-xs font-medium text-gray-500">{m.account}</span>
-                                <Select
-                                    value={form.accountName}
-                                    onChange={(event) => setForm({ ...form, accountName: event.target.value })}
-                                    required
-                                >
-                                    <option value="" disabled>—</option>
-                                    {accounts.map((account) => (
-                                        <option key={account.id} value={account.name}>
-                                            {account.code ? `${account.code} · ` : ''}{account.name}
-                                        </option>
-                                    ))}
-                                </Select>
+                                <AccountSelect
+                                    accounts={accounts}
+                                    value={accounts.find((account) => account.name === form.accountName)?.id ?? ''}
+                                    onChange={(id) =>
+                                        setForm({
+                                            ...form,
+                                            accountName: accounts.find((account) => account.id === id)?.name ?? '',
+                                        })
+                                    }
+                                    ariaLabel={m.account}
+                                    placeholder="—"
+                                />
                             </label>
                         </div>
                         {error ? <p className="text-xs text-red-600">{error}</p> : null}

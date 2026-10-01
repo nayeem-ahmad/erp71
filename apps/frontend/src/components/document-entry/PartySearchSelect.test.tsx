@@ -29,6 +29,31 @@ describe('PartySearchSelect', () => {
         expect(screen.getByTestId('entry-form')).not.toContainElement(option);
         expect(document.body).toContainElement(option);
     });
+
+    it('narrows by SKU or employee code as well as name', () => {
+        render(
+            <PartySearchSelect
+                parties={[
+                    { id: 'p1', name: 'Miniket Rice', sku: 'RICE-5' },
+                    { id: 'p2', name: 'Soybean Oil', sku: 'OIL-1' },
+                    { id: 'e1', name: 'Karim Ahmed', employee_code: 'EMP-09' },
+                ]}
+                selected={null}
+                onSelect={jest.fn()}
+                label="Pick"
+                placeholder="Search"
+            />,
+        );
+
+        const search = screen.getByLabelText('Pick');
+        fireEvent.change(search, { target: { value: 'rice-5' } });
+        expect(screen.getByText('Miniket Rice')).toBeInTheDocument();
+        expect(screen.queryByText('Soybean Oil')).not.toBeInTheDocument();
+
+        fireEvent.change(search, { target: { value: 'emp-09' } });
+        expect(screen.getByText('Karim Ahmed')).toBeInTheDocument();
+        expect(screen.queryByText('Miniket Rice')).not.toBeInTheDocument();
+    });
 });
 
 describe('PartySummaryCard', () => {

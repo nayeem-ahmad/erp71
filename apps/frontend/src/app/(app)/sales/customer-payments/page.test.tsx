@@ -70,7 +70,7 @@ describe('CustomerPaymentsPage — duplicate', () => {
 
         // Direction, customer, amount and notes all come across.
         expect(screen.getByDisplayValue('Pay to customer')).toBeInTheDocument();
-        expect(screen.getByDisplayValue('Alice Corp (01700000001)')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Alice Corp')).toBeInTheDocument();
         expect(screen.getByLabelText('Amount')).toHaveValue(250);
         expect(screen.getByLabelText('Notes')).toHaveValue('Refund for damaged goods');
     });

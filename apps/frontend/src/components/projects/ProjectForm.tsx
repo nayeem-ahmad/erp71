@@ -7,6 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 export interface ProjectFormValues {
     code: string;
@@ -254,15 +255,16 @@ export default function ProjectForm({
                         ))}
                     </Select>
                 </Field>
-                <Field label={m.fields.customer}>
-                    <Select value={form.customerId} onChange={set('customerId')}>
-                        <option value="">—</option>
-                        {customers.map((customer) => (
-                            <option key={customer.id} value={customer.id}>
-                                {customer.name}
-                            </option>
-                        ))}
-                    </Select>
+                <Field label={m.fields.customer} htmlFor="project-customer">
+                    <IdSearchSelect
+                        id="project-customer"
+                        items={customers}
+                        value={form.customerId}
+                        onChange={(id) => setForm((prev) => ({ ...prev, customerId: id }))}
+                        placeholder="—"
+                        emptyLabel={t.customerPayments.noCustomers}
+                        noMatchLabel={t.customerPayments.noCustomers}
+                    />
                 </Field>
                 <Field label={m.fields.status}>
                     <Select value={form.status} onChange={set('status')}>

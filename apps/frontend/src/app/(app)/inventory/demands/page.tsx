@@ -23,6 +23,7 @@ import {
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { useToastStore } from '@/lib/toast';
@@ -486,16 +487,16 @@ export default function ProductDemandsPage() {
                             {form.items.map((line, index) => (
                                 <div key={index} className="grid gap-2 md:grid-cols-[1fr_110px_1fr_auto] md:items-end">
                                     <Field label={t.common.product} htmlFor={`demand-product-${index}`} required={index === 0}>
-                                        <Select
+                                        <IdSearchSelect
                                             id={`demand-product-${index}`}
+                                            items={products}
                                             value={line.productId}
-                                            onChange={(e) => setLine(index, { productId: e.target.value })}
-                                        >
-                                            <option value="">{copy.form.selectProduct}</option>
-                                            {products.map((product: any) => (
-                                                <option key={product.id} value={product.id}>{product.name}</option>
-                                            ))}
-                                        </Select>
+                                            onChange={(id) => setLine(index, { productId: id })}
+                                            placeholder={copy.form.selectProduct}
+                                            emptyLabel={t.pos.searchPlaceholder}
+                                            noMatchLabel={t.common.noData}
+                                            subtitle={(product) => product.sku ?? ''}
+                                        />
                                     </Field>
                                     <Field label={t.common.quantity} htmlFor={`demand-quantity-${index}`}>
                                         <Input

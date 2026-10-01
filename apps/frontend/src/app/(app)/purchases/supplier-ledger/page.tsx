@@ -12,6 +12,7 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import PartySearchSelect from '@/components/document-entry/PartySearchSelect';
 
 type SupplierOption = {
     id: string;
@@ -352,22 +353,19 @@ function SupplierLedgerContent() {
 
                 <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <label className="space-y-1">
-                            <span className="text-xs font-medium text-gray-500">{copy.pickSupplier}</span>
-                            <select
-                                value={supplierId}
-                                onChange={(e) => setSupplierId(e.target.value)}
-                                disabled={loadingSuppliers}
-                                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                            >
-                                <option value="">{copy.allSuppliers}</option>
-                                {suppliers.map((supplier) => (
-                                    <option key={supplier.id} value={supplier.id}>
-                                        {supplier.name}{supplier.phone ? ` (${supplier.phone})` : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                        <div className="space-y-1">
+                            <PartySearchSelect
+                                parties={suppliers}
+                                loading={loadingSuppliers}
+                                selected={selectedSupplier}
+                                onSelect={(party) => setSupplierId(party?.id ?? '')}
+                                label={copy.pickSupplier}
+                                placeholder={copy.searchPlaceholder}
+                                emptyLabel={copy.noSuppliers}
+                                noMatchLabel={copy.noSuppliers}
+                                clearLabel={copy.clearSupplier}
+                            />
+                        </div>
                         <label className="space-y-1">
                             <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
                             <input

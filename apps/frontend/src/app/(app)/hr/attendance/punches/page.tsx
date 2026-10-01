@@ -13,6 +13,7 @@ import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { PageShell, Button, Field, Input, Select, FormGrid, FormFooter, Alert } from '@/components/ui';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
+import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 
 /**
  * In/out records — the raw punch log behind the attendance day rows.
@@ -317,12 +318,16 @@ export default function AttendancePunchesPage() {
                         <Input id="punch-filter-to" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                     </Field>
                     <Field label={copy.columns.employee} htmlFor="punch-filter-employee">
-                        <Select id="punch-filter-employee" value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)}>
-                            <option value="">{copy.filters.allEmployees}</option>
-                            {employees.map((emp) => (
-                                <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_code})</option>
-                            ))}
-                        </Select>
+                        <IdSearchSelect
+                            id="punch-filter-employee"
+                            items={employees}
+                            value={filterEmployee}
+                            onChange={setFilterEmployee}
+                            placeholder={copy.filters.allEmployees}
+                            emptyLabel={copy.filters.allEmployees}
+                            noMatchLabel={t.common.noData}
+                            subtitle={(emp) => emp.employee_code ?? ''}
+                        />
                     </Field>
                     <Field label={copy.columns.direction} htmlFor="punch-filter-direction">
                         <Select id="punch-filter-direction" value={filterDirection} onChange={(e) => setFilterDirection(e.target.value)}>
@@ -356,18 +361,17 @@ export default function AttendancePunchesPage() {
                         {formError && <Alert tone="danger">{formError}</Alert>}
 
                         <Field label={copy.columns.employee} htmlFor="punch-employee" required>
-                            <Select
+                            <IdSearchSelect
                                 id="punch-employee"
-                                required
+                                items={employees}
                                 value={form.employee_id}
-                                disabled={Boolean(modal.editing)}
-                                onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
-                            >
-                                <option value="">{copy.form.selectEmployee}</option>
-                                {employees.map((emp) => (
-                                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_code})</option>
-                                ))}
-                            </Select>
+                                onChange={(id) => setForm({ ...form, employee_id: id })}
+                                placeholder={copy.form.selectEmployee}
+                                emptyLabel={copy.form.selectEmployee}
+                                noMatchLabel={t.common.noData}
+                                subtitle={(emp) => emp.employee_code ?? ''}
+                                readOnly={Boolean(modal.editing)}
+                            />
                         </Field>
 
                         <FormGrid>
