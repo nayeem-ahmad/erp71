@@ -1642,6 +1642,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Confirm and continue rejected `manifest.tenantId`** — done 2026-10-01. GET match-candidates returns a manifest that includes `tenantId`; Confirm posts that object back. `MatchManifestDto` omitted the field, so the global `forbidNonWhitelisted` pipe 400'd with `manifest.property tenantId should not exist`. DTO now accepts `tenantId`; applyDecisions still refuses a workbook for a different tenant.
+
 - [x] **External ERP import is a 4-step wizard with a compact mapping table** — done 2026-10-01. Settings › Data Management and the admin tenant page walk Connection → Extract/Upload → Mapping Decisions → Import instead of stacking every control on one page. Mapping rows are a compact table with a confidence column (High/Medium/Low/None + percent) and bulk Accept suggestion / Create as new / Skip. Confirm and continue still writes every row all-or-nothing, then opens Import. Frontend tests 29/29 on the wizard files; full frontend suite green; lint clean on the touched files. Not driven in a browser (local frontend/API were not running).
 
 - [x] **Daily Report (print + WhatsApp tap-to-share)** — done 2026-10-01. Closed calendar-day shop snapshot at `/sales/daily-report`. Prints on letterhead (`PrintDocType.DAILY_REPORT`) and shares the same numbers via WhatsApp tap-to-share (`MessageShareModal` / `wa.me`). Spec: `docs/superpowers/specs/2026-10-01-daily-report-design.md`.

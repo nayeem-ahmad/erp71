@@ -22,6 +22,10 @@ export const MAX_DECISION_ROWS = 20000;
 export const MATCH_ENTITIES = ['PRODUCT', 'CUSTOMER', 'SUPPLIER'] as const;
 
 export class MatchManifestDto {
+    /** Echoed from GET match-candidates; Confirm posts the same object back. */
+    @IsString()
+    tenantId!: string;
+
     @IsString()
     connectionId!: string;
 
