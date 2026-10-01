@@ -102,3 +102,58 @@ describe('CustomerPaymentsPage — duplicate', () => {
         expect(screen.queryByText(/Copied from/)).not.toBeInTheDocument();
     });
 });
+
+describe('CustomerPaymentsPage — customer list loading', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (api.getCustomerCreditPayments as jest.Mock).mockResolvedValue([payment]);
+    });
+
+    const openNewPayment = async () => {
+        render(<CustomerPaymentsPage />);
+        fireEvent.click(await screen.findByRole('button', { name: /new customer payment/i }));
+    };
+
+    it('says the customers are loading, not that there are none, while they load', async () => {
+        // A shop with hundreds of customers takes several requests to load;
+        // the form must not claim the list is empty in the meantime.
+        (api.getCustomers as jest.Mock).mockReturnValue(new Promise(() => {}));
+
+        await openNewPayment();
+
+        expect(await screen.findByText('Loading customers…')).toBeInTheDocument();
+        expect(screen.queryByText('No customers found')).not.toBeInTheDocument();
+    });
+
+    it('shows the payments even when the customer list fails to load', async () => {
+        (api.getCustomers as jest.Mock).mockRejectedValue(new Error('boom'));
+
+        render(<CustomerPaymentsPage />);
+
+        expect(await screen.findByText('CP-00007')).toBeInTheDocument();
+    });
+
+    it('offers a retry when the customer list fails, and recovers', async () => {
+        (api.getCustomers as jest.Mock)
+            .mockRejectedValueOnce(new Error('boom'))
+            .mockResolvedValue([{ id: 'cust-1', name: 'Alice Corp', phone: '01700000001', due_balance: 0 }]);
+
+        await openNewPayment();
+
+        expect(await screen.findByText('Could not load customers')).toBeInTheDocument();
+        expect(screen.queryByText('No customers found')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+        expect(await screen.findByLabelText('Amount')).toBeInTheDocument();
+        expect(screen.queryByText('Could not load customers')).not.toBeInTheDocument();
+    });
+
+    it('still says there are no customers when the shop truly has none', async () => {
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+
+        await openNewPayment();
+
+        expect(await screen.findByText('No customers found')).toBeInTheDocument();
+    });
+});
