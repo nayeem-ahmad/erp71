@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CreatePrintTemplateDto } from './print-templates.dto';
+import { CreatePrintTemplateDto, ResolvePrintTemplateQueryDto, UpsertPrintTemplateAssignmentDto } from './print-templates.dto';
 
 /**
  * The letterhead config lands in a print window as HTML and CSS, so it is
@@ -160,5 +160,59 @@ describe('CreatePrintTemplateDto', () => {
                 (await parse({ ...base, lines: [{ text: 'Terms', letterSpacingPx: 99 }] })).length,
             ).toBeGreaterThan(0);
         });
+    });
+});
+
+describe('UpsertPrintTemplateAssignmentDto', () => {
+    const parse = (body: Record<string, unknown>) =>
+        validate(plainToInstance(UpsertPrintTemplateAssignmentDto, body), {
+            whitelist: true,
+            forbidNonWhitelisted: true,
+        });
+
+    const uuid = '11111111-1111-4111-8111-111111111111';
+    const tpl = '22222222-2222-4222-8222-222222222222';
+
+    it('accepts a pin to a named template', async () => {
+        expect(await parse({ storeId: uuid, docType: 'SALES_INVOICE', templateId: tpl })).toHaveLength(0);
+    });
+
+    it('accepts templateId null to follow company paper', async () => {
+        expect(await parse({ storeId: uuid, docType: 'SALES_INVOICE', templateId: null })).toHaveLength(0);
+    });
+
+    it('rejects an unknown property', async () => {
+        expect(
+            (await parse({ storeId: uuid, docType: 'SALES_INVOICE', templateId: tpl, extra: true })).length,
+        ).toBeGreaterThan(0);
+    });
+
+    it('rejects a document type the printer has no family for', async () => {
+        expect(
+            (await parse({ storeId: uuid, docType: 'DELIVERY_NOTE', templateId: tpl })).length,
+        ).toBeGreaterThan(0);
+    });
+
+    it('rejects a templateId that is neither a UUID nor null', async () => {
+        expect(
+            (await parse({ storeId: uuid, docType: 'SALES_INVOICE', templateId: 'nope' })).length,
+        ).toBeGreaterThan(0);
+    });
+
+    it('rejects a missing templateId', async () => {
+        expect((await parse({ storeId: uuid, docType: 'SALES_INVOICE' })).length).toBeGreaterThan(0);
+    });
+});
+
+describe('ResolvePrintTemplateQueryDto', () => {
+    it('accepts an optional storeId', async () => {
+        const errors = await validate(
+            plainToInstance(ResolvePrintTemplateQueryDto, {
+                docType: 'SALES_INVOICE',
+                storeId: '11111111-1111-4111-8111-111111111111',
+            }),
+            { whitelist: true, forbidNonWhitelisted: true },
+        );
+        expect(errors).toHaveLength(0);
     });
 });

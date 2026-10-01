@@ -12,9 +12,11 @@ import {
     IsOptional,
     IsString,
     IsUrl,
+    IsUUID,
     Max,
     MaxLength,
     Min,
+    ValidateIf,
     ValidateNested,
 } from 'class-validator';
 
@@ -420,6 +422,32 @@ export class ResolvePrintTemplateQueryDto {
     @IsOptional()
     @IsEnum(PrintDocType)
     docType?: PrintDocType;
+
+    /// The document's store. When it is this tenant's, its per-store override
+    /// wins; otherwise it is ignored and the company chain applies.
+    @IsOptional()
+    @IsUUID()
+    storeId?: string;
+}
+
+/// Pin a branch's document type to a named template, or clear the pin with
+/// `templateId: null` so that branch follows company paper again.
+export class UpsertPrintTemplateAssignmentDto {
+    @IsUUID()
+    storeId: string;
+
+    @IsEnum(PrintDocType)
+    docType: PrintDocType;
+
+    @ValidateIf((_o, value) => value !== null)
+    @IsUUID()
+    templateId: string | null;
+}
+
+export interface PrintTemplateAssignmentDto {
+    store_id: string;
+    doc_type: string;
+    template_id: string;
 }
 
 export interface PrintTemplateResponseDto {
