@@ -86,6 +86,7 @@ describe('route authorization by role', () => {
             'POST /discount-codes/validate',
             'POST /sales-returns',
             'GET /print-templates/resolve',
+            'GET /print-templates/assignments',
         ]);
 
         cannotReach('the Cashier', cashier, [
@@ -106,6 +107,7 @@ describe('route authorization by role', () => {
             'POST /crm/campaigns/:id/send',
             'GET /products/:sourceId/merge-preview',
             'POST /products/:sourceId/merge',
+            'PUT /print-templates/assignments',
         ]);
     });
 
@@ -122,6 +124,7 @@ describe('route authorization by role', () => {
             'POST /products',
             'POST /price-lists',
             'POST /counters',
+            'PUT /print-templates/assignments',
             'POST /stock-takes',
             'POST /crm/campaigns/:id/send',
         ]);
