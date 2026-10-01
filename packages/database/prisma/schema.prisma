@@ -938,6 +938,7 @@ model Tenant {
   leadConversations          LeadConversation[]
   leadSourceOptions          LeadSourceOption[]
   leadCategoryOptions        LeadCategoryOption[]
+  leadStatusOptions          LeadStatusOption[]
   conversationChannels       ConversationChannel[]
   crmContacts                CrmContact[]
   crmContactAttachments      CrmContactAttachment[]
@@ -2936,7 +2937,14 @@ model Lead {
   remarks               String?
   source                LeadSource    @default(OTHER)
   source_id             String?
+  /// The lead's *lifecycle* — open (NEW/CONTACTED/QUALIFIED), won (CONVERTED)
+  /// or lost (LOST). Every rule that cares whether a lead is still being worked
+  /// reads this. It is NOT legacy: it is always written from the chosen stage's
+  /// `LeadStatusOption.lifecycle`, so it and `status_id` never disagree.
   status                LeadStatus    @default(NEW)
+  /// The tenant-managed pipeline stage shown to users. Nullable only so it could
+  /// be added to a populated table; `sync-lead-taxonomy` backfills it on boot.
+  status_id             String?
   lost_reason           String?
   score                 Int           @default(0)
   linkedin_url          String?
@@ -2998,6 +3006,7 @@ model Lead {
   convertedCustomer  Customer?              @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
   sourceOption       LeadSourceOption?      @relation(fields: [source_id], references: [id], onDelete: Restrict)
   categoryOption     LeadCategoryOption?    @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  statusOption       LeadStatusOption?      @relation(fields: [status_id], references: [id], onDelete: Restrict)
   conversations      LeadConversation[]
   crmFollowUps       CrmFollowUp[]
   crmActivities      CrmActivity[]
@@ -3018,6 +3027,7 @@ model Lead {
   @@index([tenant_id, next_step_date])
   @@index([tenant_id, source_id])
   @@index([tenant_id, category_id])
+  @@index([tenant_id, status_id])
   // Serves the CRM dashboard's won/lost-in-period counts, which filter on
   // status + closed_at together.
   @@index([tenant_id, status, closed_at])
@@ -3045,6 +3055,34 @@ model LeadSourceOption {
   is_active    Boolean  @default(true)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  leads  Lead[]
+
+  @@unique([tenant_id, code])
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active, sort_order])
+}
+
+/// Tenant-editable lead pipeline stages, edited from CRM → Setup → Statuses.
+///
+/// Not a replacement for the `LeadStatus` enum: `Lead.status` stays as the
+/// lifecycle every open/won/lost rule reads, and each row here carries the
+/// fixed `lifecycle` written into it whenever a lead takes this stage. The five
+/// seeded rows reuse the enum codes and map to themselves; every tenant-created
+/// stage is an open stage (`QUALIFIED`). NEW, CONVERTED and LOST can be renamed
+/// but never hidden or deleted. See docs/crm/lead-taxonomy-rollout.md.
+model LeadStatusOption {
+  id         String     @id @default(uuid())
+  tenant_id  String
+  code       String
+  name       String
+  lifecycle  LeadStatus
+  sort_order Int        @default(0)
+  is_system  Boolean    @default(false)
+  is_active  Boolean    @default(true)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   leads  Lead[]

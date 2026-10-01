@@ -1,8 +1,9 @@
 /**
  * Brings every existing tenant's CRM lookup lists — lead sources, lead
- * categories and conversation channels — up to the current defaults, and
- * backfills `Lead.source_id` / `Lead.category_id` from the legacy enum columns
- * plus `LeadConversation.channel_id` from the code held in `type`.
+ * categories, lead statuses and conversation channels — up to the current
+ * defaults, and backfills `Lead.source_id` / `Lead.category_id` from the legacy
+ * enum columns, `Lead.status_id` from `Lead.status`, plus
+ * `LeadConversation.channel_id` from the code held in `type`.
  *
  * Why this exists
  * ---------------
@@ -51,6 +52,7 @@ import {
     DEFAULT_CONVERSATION_CHANNELS,
     DEFAULT_LEAD_CATEGORIES,
     DEFAULT_LEAD_SOURCES,
+    DEFAULT_LEAD_STATUSES,
     FALLBACK_SOURCE_CODE,
 } from './lead-taxonomy.seed';
 
@@ -70,12 +72,16 @@ type Delta = {
     categoriesCreated: string[];
     channelsCreated: string[];
     purposesCreated: string[];
+    statusesCreated: string[];
     leadsSourceBackfilled: number;
+    /** Leads given a stage: never-backfilled ones plus any whose stage disagreed with `status`. */
+    leadsStatusSynced: number;
     leadsCategoryBackfilled: number;
     conversationsChannelBackfilled: number;
     unresolvedSources: number;
     unresolvedCategories: number;
     unresolvedChannels: number;
+    unresolvedStatuses: number;
 };
 
 /** Thrown to abort the dry-run transaction. Never escapes previewTenant. */
@@ -124,12 +130,15 @@ async function syncTenant(
         categoriesCreated: [],
         channelsCreated: [],
         purposesCreated: [],
+        statusesCreated: [],
         leadsSourceBackfilled: 0,
+        leadsStatusSynced: 0,
         leadsCategoryBackfilled: 0,
         conversationsChannelBackfilled: 0,
         unresolvedSources: 0,
         unresolvedCategories: 0,
         unresolvedChannels: 0,
+        unresolvedStatuses: 0,
     };
 
     // --- 1. Seed the shipped defaults -------------------------------------
@@ -225,6 +234,31 @@ async function syncTenant(
         });
         delta.purposesCreated.push(...missingPurposes.map((p) => p.code));
         missingPurposes.forEach((p) => havePurpose.add(p.code));
+    }
+
+    // Lead statuses. Never deleted (system rows deactivate), so every LeadStatus
+    // member always has its row once this has run — which is what lets the
+    // backfill below match on code alone.
+    const existingStatuses = await tx.leadStatusOption.findMany({
+        where: { tenant_id: tenantId },
+        select: { code: true },
+    });
+    const haveStatus = new Set(existingStatuses.map((s: { code: string }) => s.code));
+    const missingStatuses = DEFAULT_LEAD_STATUSES.filter((s) => !haveStatus.has(s.code));
+    if (missingStatuses.length) {
+        await tx.leadStatusOption.createMany({
+            data: missingStatuses.map((s) => ({
+                tenant_id: tenantId,
+                code: s.code,
+                name: s.name,
+                lifecycle: s.lifecycle,
+                sort_order: s.sort_order,
+                is_system: true,
+                is_active: true,
+            })),
+            skipDuplicates: true,
+        });
+        delta.statusesCreated.push(...missingStatuses.map((s) => s.code));
     }
 
     // --- 2. Reconcile codes actually in use -------------------------------
@@ -342,6 +376,27 @@ async function syncTenant(
           AND c.channel_id IS NULL
     `;
 
+    // Not a one-off backfill: `Lead.status` (the lifecycle) is permanent, and a
+    // lead's stage must always carry the same lifecycle. Fills leads that have no
+    // stage yet AND repairs any whose stage disagrees with `status` — a write path
+    // that changed the lifecycle without the stage, or raw SQL. Either way the
+    // seeded row for the lead's lifecycle is the honest answer.
+    delta.leadsStatusSynced = await tx.$executeRaw`
+        UPDATE "Lead" l
+        SET status_id = o.id
+        FROM "LeadStatusOption" o
+        WHERE o.tenant_id = l.tenant_id
+          AND o.code = l."status"::text
+          AND l.tenant_id = ${tenantId}
+          AND (
+            l.status_id IS NULL
+            OR NOT EXISTS (
+                SELECT 1 FROM "LeadStatusOption" cur
+                WHERE cur.id = l.status_id AND cur.lifecycle = l."status"
+            )
+          )
+    `;
+
     // --- 4. Verify --------------------------------------------------------
     // Reported, never silently absorbed: this count is the gate the contract
     // release (dropping the enum columns) must see at zero.
@@ -365,6 +420,14 @@ async function syncTenant(
             WHERE tenant_id = ${tenantId} AND channel_id IS NULL
         `;
         delta.unresolvedChannels = Number(count);
+    }
+
+    {
+        const [{ count }] = await tx.$queryRaw<{ count: bigint }[]>`
+            SELECT count(*) AS count FROM "Lead"
+            WHERE tenant_id = ${tenantId} AND status_id IS NULL
+        `;
+        delta.unresolvedStatuses = Number(count);
     }
 
     return delta;
@@ -394,6 +457,9 @@ function isNoop(d: Delta) {
         d.categoriesCreated.length === 0 &&
         d.channelsCreated.length === 0 &&
         d.purposesCreated.length === 0 &&
+        d.statusesCreated.length === 0 &&
+        d.leadsStatusSynced === 0 &&
+        d.unresolvedStatuses === 0 &&
         d.leadsSourceBackfilled === 0 &&
         d.leadsCategoryBackfilled === 0 &&
         d.conversationsChannelBackfilled === 0 &&
@@ -410,6 +476,9 @@ function reportTenant(d: Delta, dryRun: boolean) {
     if (d.categoriesCreated.length) console.log(`    ${verb} categories: ${d.categoriesCreated.join(', ')}`);
     if (d.channelsCreated.length) console.log(`    ${verb} channels: ${d.channelsCreated.join(', ')}`);
     if (d.purposesCreated.length) console.log(`    ${verb} activity purposes: ${d.purposesCreated.join(', ')}`);
+    if (d.statusesCreated.length) console.log(`    ${verb} lead statuses: ${d.statusesCreated.join(', ')}`);
+    if (d.leadsStatusSynced) console.log(`    ${dryRun ? 'would set' : 'set'} status_id on ${d.leadsStatusSynced} lead(s)`);
+    if (d.unresolvedStatuses) console.log(`    !! ${d.unresolvedStatuses} lead(s) still have no status_id`);
     if (d.leadsSourceBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} source_id on ${d.leadsSourceBackfilled} lead(s)`);
     if (d.leadsCategoryBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} category_id on ${d.leadsCategoryBackfilled} lead(s)`);
     if (d.conversationsChannelBackfilled) console.log(`    ${dryRun ? 'would backfill' : 'backfilled'} channel_id on ${d.conversationsChannelBackfilled} conversation(s)`);
@@ -455,17 +524,18 @@ async function main() {
             categories: acc.categories + d.categoriesCreated.length,
             channels: acc.channels + d.channelsCreated.length,
             purposes: acc.purposes + d.purposesCreated.length,
-            leads: acc.leads + d.leadsSourceBackfilled + d.leadsCategoryBackfilled,
+            statuses: acc.statuses + d.statusesCreated.length,
+            leads: acc.leads + d.leadsSourceBackfilled + d.leadsCategoryBackfilled + d.leadsStatusSynced,
             conversations: acc.conversations + d.conversationsChannelBackfilled,
             unresolved: acc.unresolved + d.unresolvedSources + d.unresolvedCategories,
         }),
-        { sources: 0, categories: 0, channels: 0, purposes: 0, leads: 0, conversations: 0, unresolved: 0 },
+        { sources: 0, categories: 0, channels: 0, purposes: 0, statuses: 0, leads: 0, conversations: 0, unresolved: 0 },
     );
 
     console.log(
         `\n${dryRun ? 'Would sync' : 'Synced'} ${changed.length} of ${tenants.length} tenant(s): ` +
         `${totals.sources} source(s), ${totals.categories} category(ies), ${totals.channels} channel(s), ` +
-        `${totals.purposes} activity purpose(s), ` +
+        `${totals.purposes} activity purpose(s), ${totals.statuses} lead status(es), ` +
         `${totals.leads} lead backfill(s), ${totals.conversations} conversation backfill(s).`,
     );
 

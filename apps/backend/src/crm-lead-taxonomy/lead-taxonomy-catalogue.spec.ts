@@ -125,3 +125,42 @@ describe('activity purpose catalogue', () => {
         expect(pkg.DEFAULT_ACTIVITY_PURPOSES).toEqual(DEFAULT_ACTIVITY_PURPOSES);
     });
 });
+
+describe('lead status catalogue', () => {
+    const {
+        DEFAULT_LEAD_STATUSES,
+        PROTECTED_STATUS_CODES,
+        OPEN_STATUS_LIFECYCLES,
+        CUSTOM_STATUS_LIFECYCLE,
+    } = source as {
+        DEFAULT_LEAD_STATUSES: { code: string; name: string; lifecycle: string; sort_order: number }[];
+        PROTECTED_STATUS_CODES: readonly string[];
+        OPEN_STATUS_LIFECYCLES: readonly string[];
+        CUSTOM_STATUS_LIFECYCLE: string;
+    };
+
+    it('seeds one row per LeadStatus member, each mapping to itself', () => {
+        expect(DEFAULT_LEAD_STATUSES.map((s) => s.code).sort()).toEqual(
+            ['CONTACTED', 'CONVERTED', 'LOST', 'NEW', 'QUALIFIED'],
+        );
+        for (const row of DEFAULT_LEAD_STATUSES) expect(row.lifecycle).toBe(row.code);
+    });
+
+    it('has unique codes and names', () => {
+        const names = DEFAULT_LEAD_STATUSES.map((r) => r.name.toLowerCase());
+        expect(new Set(names).size).toBe(names.length);
+    });
+
+    it('protects the default and the two closing statuses, and files custom stages as open', () => {
+        expect([...PROTECTED_STATUS_CODES].sort()).toEqual(['CONVERTED', 'LOST', 'NEW']);
+        expect([...OPEN_STATUS_LIFECYCLES]).toEqual(['NEW', 'CONTACTED', 'QUALIFIED']);
+        expect(OPEN_STATUS_LIFECYCLES).toContain(CUSTOM_STATUS_LIFECYCLE);
+    });
+
+    it('keeps the .ts and .js mirrors in step', () => {
+        expect(pkg.DEFAULT_LEAD_STATUSES).toEqual(DEFAULT_LEAD_STATUSES);
+        expect(pkg.PROTECTED_STATUS_CODES).toEqual([...PROTECTED_STATUS_CODES]);
+        expect(pkg.OPEN_STATUS_LIFECYCLES).toEqual([...OPEN_STATUS_LIFECYCLES]);
+        expect(pkg.CUSTOM_STATUS_LIFECYCLE).toBe(CUSTOM_STATUS_LIFECYCLE);
+    });
+});

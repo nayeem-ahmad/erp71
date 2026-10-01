@@ -57,6 +57,22 @@ const DEFAULT_ACTIVITY_PURPOSES = [
     { code: 'REORDER_REMINDER', name: 'Reorder Reminder', icon: '🔁', sort_order: 4 },
 ];
 
+// Lead pipeline stages. `Lead.status` stays as the lifecycle column; `lifecycle`
+// is what gets written into it when a lead takes a stage.
+const DEFAULT_LEAD_STATUSES = [
+    { code: 'NEW', name: 'New', lifecycle: 'NEW', sort_order: 1 },
+    { code: 'CONTACTED', name: 'Contacted', lifecycle: 'CONTACTED', sort_order: 2 },
+    { code: 'QUALIFIED', name: 'Qualified', lifecycle: 'QUALIFIED', sort_order: 3 },
+    { code: 'CONVERTED', name: 'Converted', lifecycle: 'CONVERTED', sort_order: 4 },
+    { code: 'LOST', name: 'Lost', lifecycle: 'LOST', sort_order: 5 },
+];
+
+const PROTECTED_STATUS_CODES = ['NEW', 'CONVERTED', 'LOST'];
+
+const OPEN_STATUS_LIFECYCLES = ['NEW', 'CONTACTED', 'QUALIFIED'];
+
+const CUSTOM_STATUS_LIFECYCLE = 'QUALIFIED';
+
 // Idempotent: `skipDuplicates` honours @@unique([tenant_id, code]), so a tenant
 // that renamed a default keeps its label instead of gaining a second row.
 async function seedDefaultLeadTaxonomy(tx, tenantId) {
@@ -110,6 +126,19 @@ async function seedDefaultLeadTaxonomy(tx, tenantId) {
         })),
         skipDuplicates: true,
     });
+
+    await tx.leadStatusOption.createMany({
+        data: DEFAULT_LEAD_STATUSES.map((s) => ({
+            tenant_id: tenantId,
+            code: s.code,
+            name: s.name,
+            lifecycle: s.lifecycle,
+            sort_order: s.sort_order,
+            is_system: true,
+            is_active: true,
+        })),
+        skipDuplicates: true,
+    });
 }
 
 module.exports = {
@@ -121,4 +150,8 @@ module.exports = {
     LEGACY_LEAD_SOURCE_CODES,
     LEGACY_LEAD_CATEGORY_CODES,
     FALLBACK_SOURCE_CODE,
+    DEFAULT_LEAD_STATUSES,
+    PROTECTED_STATUS_CODES,
+    OPEN_STATUS_LIFECYCLES,
+    CUSTOM_STATUS_LIFECYCLE,
 };
