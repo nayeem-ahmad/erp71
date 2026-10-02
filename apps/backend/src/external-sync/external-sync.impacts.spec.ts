@@ -316,6 +316,44 @@ describe('external-sync impacts', () => {
             });
             expect(autoPostFromRules.mock.calls[0][0].eventType).toBe('supplier_payment');
         });
+
+        // The rules are keyed on which way the MONEY went, not on the row
+        // type: a supplier PAYMENT is money out ('pay' — Dr Purchase Payable /
+        // Cr Cash), the mirror of a customer PAYMENT. And the payment method's
+        // account must replace the CASH leg — the debit when money comes in,
+        // the credit when it goes out — never the control account.
+        it.each([
+            { party: 'CUSTOMER', type: 'PAYMENT', direction: 'receive', cashLeg: 'debit' },
+            { party: 'CUSTOMER', type: 'PAYOUT', direction: 'pay', cashLeg: 'credit' },
+            { party: 'SUPPLIER', type: 'PAYMENT', direction: 'pay', cashLeg: 'credit' },
+            { party: 'SUPPLIER', type: 'PAYOUT', direction: 'receive', cashLeg: 'debit' },
+        ] as const)(
+            'posts a $party $type as "$direction" with the method account on the $cashLeg leg',
+            async ({ party, type, direction, cashLeg }) => {
+                await applyPaymentImpacts({
+                    tx: makeTx(),
+                    tenantId: 't1',
+                    party,
+                    partyId: 'p-1',
+                    transactionId: 'tx-1',
+                    paymentNumber: 'XR-1',
+                    type,
+                    amount: 100,
+                    method: 'bkash',
+                    date: SALE_DATE,
+                });
+
+                const posted = autoPostFromRules.mock.calls[0][0];
+                expect(posted.conditionValue).toBe(direction);
+                if (cashLeg === 'debit') {
+                    expect(posted.overrideDebitAccountId).toBe('acct-cash');
+                    expect(posted.overrideCreditAccountId).toBeUndefined();
+                } else {
+                    expect(posted.overrideCreditAccountId).toBe('acct-cash');
+                    expect(posted.overrideDebitAccountId).toBeUndefined();
+                }
+            },
+        );
     });
 
     describe('sale returns', () => {
