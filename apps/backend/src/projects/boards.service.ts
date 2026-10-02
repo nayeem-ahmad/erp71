@@ -27,6 +27,9 @@ const CARD_TASK_INCLUDE = {
     // For the story swimlanes. The code and title are what a lane is headed
     // with; the board has no other way to name a story it only holds an id of.
     userStory: { select: { id: true, code: true, title: true } },
+    // For the sprint filter, which names its options off the cards: the bare
+    // `sprint_id` would leave the board holding ids it has no name for.
+    sprint: { select: { id: true, name: true, status: true } },
     labels: { include: { label: true } },
     checklistItems: { select: { id: true, is_done: true } },
     _count: { select: { subtasks: true, comments: true } },

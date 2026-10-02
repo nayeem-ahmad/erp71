@@ -17,6 +17,8 @@ import {
     matchesFilters,
     NO_FILTERS,
     projectLabelOf,
+    projectOptionsFrom,
+    sprintOptionsFrom,
     type BoardColumn,
     type BoardTask,
     type ProjectLabel,
@@ -217,6 +219,75 @@ describe('matchesFilters', () => {
         expect(
             matchesFilters(task({ labels: [{ label: blocked }] }), { ...NO_FILTERS, label: 'none' }),
         ).toBe(false);
+    });
+});
+
+describe('project and sprint filters', () => {
+    const alpha = { id: 'p1', code: 'ALP', name: 'Alpha' };
+    const beta = { id: 'p2', code: 'BET', name: 'Beta' };
+    const sprint4 = { id: 's4', name: 'Sprint 4', status: 'ACTIVE' };
+
+    it('filters by project', () => {
+        expect(matchesFilters(task({ project: alpha }), { ...NO_FILTERS, project: 'p1' })).toBe(true);
+        expect(matchesFilters(task({ project: beta }), { ...NO_FILTERS, project: 'p1' })).toBe(false);
+    });
+
+    it('filters by sprint', () => {
+        const planned = task({ sprint_id: 's4', sprint: sprint4 });
+        expect(matchesFilters(planned, { ...NO_FILTERS, sprint: 's4' })).toBe(true);
+        expect(matchesFilters(planned, { ...NO_FILTERS, sprint: 's5' })).toBe(false);
+        expect(matchesFilters(task(), { ...NO_FILTERS, sprint: 's4' })).toBe(false);
+    });
+
+    // The scalar arrives on every card even where the relation was not loaded.
+    it('reads the sprint off the bare id when the relation is missing', () => {
+        expect(matchesFilters(task({ sprint_id: 's4' }), { ...NO_FILTERS, sprint: 's4' })).toBe(true);
+    });
+
+    it('finds cards in no sprint', () => {
+        expect(matchesFilters(task(), { ...NO_FILTERS, sprint: 'none' })).toBe(true);
+        expect(
+            matchesFilters(task({ sprint_id: 's4', sprint: sprint4 }), { ...NO_FILTERS, sprint: 'none' }),
+        ).toBe(false);
+    });
+
+    it('counts either as an active filter', () => {
+        expect(hasActiveFilter({ ...NO_FILTERS, project: 'p1' })).toBe(true);
+        expect(hasActiveFilter({ ...NO_FILTERS, sprint: 'none' })).toBe(true);
+    });
+
+    it('lets the search box find a card by its sprint', () => {
+        expect(matchesText(task({ sprint_id: 's4', sprint: sprint4 }), 'sprint 4')).toBe(true);
+    });
+});
+
+describe('projectOptionsFrom', () => {
+    it('offers each project holding a card once, by name', () => {
+        const options = projectOptionsFrom([
+            task({ id: 'a', project: { id: 'p2', code: 'BET', name: 'Beta' } }),
+            task({ id: 'b', project: { id: 'p1', code: 'ALP', name: 'Alpha' } }),
+            task({ id: 'c', project: { id: 'p2', code: 'BET', name: 'Beta' } }),
+            task({ id: 'd', project: null }),
+        ]);
+        expect(options).toEqual([
+            { key: 'p1', label: 'Alpha' },
+            { key: 'p2', label: 'Beta' },
+        ]);
+    });
+});
+
+describe('sprintOptionsFrom', () => {
+    it('offers each sprint holding a card once, the running one first', () => {
+        const options = sprintOptionsFrom([
+            task({ id: 'a', sprint_id: 's10', sprint: { id: 's10', name: 'Sprint 10', status: 'PLANNED' } }),
+            task({ id: 'b', sprint_id: 's9', sprint: { id: 's9', name: 'Sprint 9', status: 'PLANNED' } }),
+            task({ id: 'c', sprint_id: 's8', sprint: { id: 's8', name: 'Sprint 8', status: 'ACTIVE' } }),
+            task({ id: 'd', sprint_id: 's9', sprint: { id: 's9', name: 'Sprint 9', status: 'PLANNED' } }),
+            task({ id: 'e' }),
+        ]);
+        // Numbers compare as numbers, so Sprint 9 comes before Sprint 10.
+        expect(options.map((option) => option.key)).toEqual(['s8', 's9', 's10']);
+        expect(options[0]).toEqual({ key: 's8', label: 'Sprint 8', status: 'ACTIVE' });
     });
 });
 

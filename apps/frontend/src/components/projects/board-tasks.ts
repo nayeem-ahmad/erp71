@@ -56,6 +56,13 @@ export interface BoardProject {
     short_name?: string | null;
 }
 
+export interface BoardSprint {
+    id: string;
+    name: string;
+    /** `PLANNED` / `ACTIVE` / `COMPLETED`. */
+    status: string;
+}
+
 export interface BoardTask {
     id: string;
     title: string;
@@ -76,6 +83,10 @@ export interface BoardTask {
     assigneeEmployee?: { id: string; name?: string | null } | null;
     /** The story the task delivers a piece of — what the story swimlanes group by. */
     userStory?: { id: string; code: string; title: string } | null;
+    /** The bare column — on every card, whether or not the relation below was loaded. */
+    sprint_id?: string | null;
+    /** For the sprint filter's options, which are named off the cards. */
+    sprint?: BoardSprint | null;
     checklistItems?: { id: string; is_done: boolean }[];
     _count?: { subtasks?: number; comments?: number } | null;
     status_id: string;
@@ -179,10 +190,13 @@ export function assigneeKeyOf(task: BoardTask): string {
     return 'none';
 }
 
-export interface AssigneeOption {
+/** A filter's choice: the id it narrows by, and the name it shows. */
+export interface FilterOption {
     key: string;
     label: string;
 }
+
+export type AssigneeOption = FilterOption;
 
 /**
  * Built from the cards on the board rather than from the project roster: you
@@ -202,6 +216,51 @@ export function assigneeOptionsFrom(columns: BoardColumn[]): AssigneeOption[] {
         .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/**
+ * The projects with a card on the board, for the project filter. From the cards
+ * for the same reason the assignee options are: a project with nothing here is
+ * a filter that can only ever empty the board.
+ */
+export function projectOptionsFrom(tasks: BoardTask[]): FilterOption[] {
+    const byId = new Map<string, string>();
+    for (const task of tasks) {
+        if (task.project) byId.set(task.project.id, task.project.name || projectLabelOf(task.project) || '');
+    }
+    return [...byId.entries()]
+        .map(([key, label]) => ({ key, label }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Which sprint a card is in, from the relation when it was loaded and the bare id when not. */
+export function sprintIdOf(task: Pick<BoardTask, 'sprint' | 'sprint_id'>): string | null {
+    return task.sprint?.id ?? task.sprint_id ?? null;
+}
+
+export interface SprintOption extends FilterOption {
+    status: string;
+}
+
+/** The running sprint first — it is the one a board is filtered to most — then planned, then finished. */
+const SPRINT_STATUS_RANK: Record<string, number> = { ACTIVE: 0, PLANNED: 1, COMPLETED: 2 };
+
+/**
+ * The sprints holding a card on the board, for the sprint filter. Names compare
+ * numerically, so "Sprint 9" sorts before "Sprint 10" rather than after it.
+ */
+export function sprintOptionsFrom(tasks: BoardTask[]): SprintOption[] {
+    const byId = new Map<string, BoardSprint>();
+    for (const task of tasks) {
+        if (task.sprint) byId.set(task.sprint.id, task.sprint);
+    }
+    return [...byId.values()]
+        .sort(
+            (a, b) =>
+                (SPRINT_STATUS_RANK[a.status] ?? 3) - (SPRINT_STATUS_RANK[b.status] ?? 3) ||
+                a.name.localeCompare(b.name, undefined, { numeric: true }),
+        )
+        .map((sprint) => ({ key: sprint.id, label: sprint.name, status: sprint.status }));
+}
+
 export type DueFilter = 'all' | 'overdue' | 'today' | 'week' | 'none';
 
 export interface BoardFilters {
@@ -209,6 +268,10 @@ export interface BoardFilters {
     priority: string;
     due: DueFilter;
     label: string;
+    /** A project id. No `none`: every task belongs to a project. */
+    project: string;
+    /** A sprint id, or `none` for the cards in no sprint. */
+    sprint: string;
     /** Free text, matched across everything a card carries. See `matchesText`. */
     text: string;
 }
@@ -218,6 +281,8 @@ export const NO_FILTERS: BoardFilters = {
     priority: 'all',
     due: 'all',
     label: 'all',
+    project: 'all',
+    sprint: 'all',
     text: '',
 };
 
@@ -227,6 +292,8 @@ export function hasActiveFilter(filters: BoardFilters): boolean {
         filters.priority !== 'all' ||
         filters.due !== 'all' ||
         filters.label !== 'all' ||
+        filters.project !== 'all' ||
+        filters.sprint !== 'all' ||
         filters.text.trim() !== ''
     );
 }
@@ -234,8 +301,8 @@ export function hasActiveFilter(filters: BoardFilters): boolean {
 /**
  * Everything on a card worth searching, as one lower-cased string: its title
  * and description, the project it belongs to (code, short name and full name,
- * because a card only shows one of the three), whoever holds it, and its
- * labels.
+ * because a card only shows one of the three), whoever holds it, its sprint
+ * and its labels.
  *
  * Description is included even though the card may not be showing it — someone
  * searching for a phrase they wrote in a task means the task, not the part of
@@ -249,6 +316,7 @@ function haystackOf(task: BoardTask): string {
         task.project?.short_name ?? '',
         task.project?.name ?? '',
         assigneeNameOf(task) ?? '',
+        task.sprint?.name ?? '',
         ...labelsOf(task).map((label) => label.name),
     ]
         .join(' ')
@@ -286,6 +354,11 @@ export function matchesFilters(task: BoardTask, filters: BoardFilters): boolean 
     if (!matchesText(task, filters.text)) return false;
     if (filters.assignee !== 'all' && assigneeKeyOf(task) !== filters.assignee) return false;
     if (filters.priority !== 'all' && task.priority !== filters.priority) return false;
+    if (filters.project !== 'all' && task.project?.id !== filters.project) return false;
+    if (filters.sprint === 'none' && sprintIdOf(task) !== null) return false;
+    if (filters.sprint !== 'all' && filters.sprint !== 'none' && sprintIdOf(task) !== filters.sprint) {
+        return false;
+    }
     if (filters.label === 'none' && labelsOf(task).length > 0) return false;
     if (
         filters.label !== 'all' &&

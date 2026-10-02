@@ -754,6 +754,28 @@ export type EmployeeLoginState = {
     must_change_password: boolean;
 };
 
+/**
+ * One change set for the board's bulk edit. An absent field is left alone and
+ * `null` clears it; labels are added and removed rather than replaced, since a
+ * selection rarely shares one label set.
+ */
+export interface BulkTaskChanges {
+    projectId?: string;
+    sprintId?: string | null;
+    /** `user:<id>` / `employee:<id>`; `null` unassigns. */
+    assignee?: string | null;
+    priority?: string;
+    dueDate?: string | null;
+    addLabelIds?: string[];
+    removeLabelIds?: string[];
+}
+
+export interface BulkTaskOutcome {
+    updated: number;
+    /** The tasks that refused, each with the server's reason. */
+    skipped: { id: string; reason: string }[];
+}
+
 export interface Paginated<T = any> {
     items: T[];
     total: number;
@@ -5731,6 +5753,17 @@ export const api = {
         fetchWithAuth('/project-tasks/bulk-delete', {
             method: 'POST',
             body: JSON.stringify({ ids }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * One change set over a selection, from any number of projects — the
+     * board's bulk edit. One request for the same rate-limit reason as
+     * `bulkDeleteProjectTasks`. Tasks that refuse are skipped and reported.
+     */
+    bulkUpdateProjectTasks: (data: BulkTaskChanges & { ids: string[] }): Promise<BulkTaskOutcome> =>
+        fetchWithAuth('/project-tasks/bulk-update', {
+            method: 'POST',
+            body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
     addTaskChecklistItem: (taskId: string, data: { text: string }) =>

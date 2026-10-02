@@ -3,9 +3,16 @@ import { boardFiltersKey, readStoredFilters } from './board-filter-storage';
 import { NO_FILTERS, type BoardFilters } from './board-tasks';
 import { useBoardFilters } from './use-board-filters';
 
-const options = (assignees: string[] = [], labels: string[] = []) => ({
+const options = (
+    assignees: string[] = [],
+    labels: string[] = [],
+    projects: string[] = ['p1'],
+    sprints: string[] = ['s1'],
+) => ({
     assignees: new Set(assignees),
     labels: new Set(labels),
+    projects: new Set(projects),
+    sprints: new Set(sprints),
 });
 
 /**
@@ -42,8 +49,27 @@ describe('useBoardFilters', () => {
             priority: 'HIGH',
             due: 'overdue',
             label: 'l1',
+            project: 'all',
+            sprint: 'all',
             text: '',
         });
+    });
+
+    it('remembers the project and sprint filters too', () => {
+        const { result, unmount } = setup();
+        act(() => result.current.setFilters({ ...NO_FILTERS, project: 'p1', sprint: 's1' }));
+        unmount();
+
+        const again = setup();
+        expect(again.result.current.filters.project).toBe('p1');
+        expect(again.result.current.filters.sprint).toBe('s1');
+    });
+
+    it('drops a remembered sprint no card here is in any more', () => {
+        localStorage.setItem(boardFiltersKey('b1'), JSON.stringify({ sprint: 'gone' }));
+
+        const { result } = setup();
+        expect(result.current.filters.sprint).toBe('all');
     });
 
     it('never restores the search box', () => {

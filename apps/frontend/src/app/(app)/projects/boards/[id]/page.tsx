@@ -11,6 +11,7 @@ import {
     GitBranch,
     GripVertical,
     MessageSquare,
+    Pencil,
     Play,
     Plus,
     Search,
@@ -22,6 +23,7 @@ import { PageShell, PageHeader, Button, Checkbox, Input, Select, StatusBadge } f
 import type { StatusBadgeTone } from '@/components/ui';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
+import BulkEditCardsModal from '@/components/projects/BulkEditCardsModal';
 import BoardCardComposer, {
     type ComposerDraft,
     type ComposerProject,
@@ -75,13 +77,18 @@ import {
     matchesFilters,
     NO_FILTERS,
     projectLabelOf,
+    projectOptionsFrom,
     sortCards,
+    sprintOptionsFrom,
+    type AssigneeOption,
     type BoardColumn,
+    type FilterOption,
     type BoardFilters,
     type BoardTask,
     type CardSort,
     type DueState,
     type ProjectLabel,
+    type SprintOption,
 } from '@/components/projects/board-tasks';
 import { useBoardFilters } from '@/components/projects/use-board-filters';
 import {
@@ -103,7 +110,7 @@ import { useIsTimerRunningFor } from '@/components/projects/TimerChip';
 import RunningClock from '@/components/projects/RunningClock';
 import { useProjectTimerActions } from '@/components/projects/use-project-timer';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, type BulkTaskChanges } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -240,6 +247,8 @@ export default function BoardPage() {
     const isMdUp = useIsMdUp();
     /** One guard over every bulk action: two in flight would race on the board. */
     const [busy, setBusy] = useState(false);
+    /** The bulk edit dialog, over the current selection. */
+    const [bulkEditing, setBulkEditing] = useState(false);
     /** The cards waiting on `RemoveCardsDialog`: off this board, or deleted outright. */
     const [pendingRemoval, setPendingRemoval] = useState<{ taskIds: string[]; title?: string } | null>(
         null,
@@ -275,18 +284,32 @@ export default function BoardPage() {
 
     const assigneeOptions = useMemo(() => assigneeOptionsFrom(columns), [columns]);
 
+    /** Every card on the board, columns and Unsorted alike. */
+    const boardTasks = useMemo(
+        () => columns.flatMap((column) => column.tasks).concat(unsorted),
+        [columns, unsorted],
+    );
+    /**
+     * The projects and sprints the board can be narrowed to — from the cards,
+     * like the assignees, so neither offers a choice that can only empty it.
+     */
+    const projectOptions = useMemo(() => projectOptionsFrom(boardTasks), [boardTasks]);
+    const sprintOptions = useMemo(() => sprintOptionsFrom(boardTasks), [boardTasks]);
+
     /**
      * What the remembered filters are checked against. A stored filter is an
-     * id, and the person or label it names can be gone by the next visit —
-     * without these the board would open on zero cards under a filter its own
-     * controls could not show.
+     * id, and the person, label, project or sprint it names can be gone by the
+     * next visit — without these the board would open on zero cards under a
+     * filter its own controls could not show.
      */
     const filterOptionIds = useMemo(
         () => ({
             assignees: new Set(assigneeOptions.map((option) => option.key)),
             labels: new Set(labels.map((label) => label.id)),
+            projects: new Set(projectOptions.map((option) => option.key)),
+            sprints: new Set(sprintOptions.map((option) => option.key)),
         }),
-        [assigneeOptions, labels],
+        [assigneeOptions, labels, projectOptions, sprintOptions],
     );
     /**
      * The filters this browser last left the board on. Restored only once both
@@ -330,12 +353,19 @@ export default function BoardPage() {
         : (mobileCells[0]?.id ?? null);
     const mobileColumn = visibleColumns.find((column) => column.id === mobileCellId);
 
-    /** Every card on the board, columns and Unsorted alike. */
-    const boardTasks = useMemo(
-        () => columns.flatMap((column) => column.tasks).concat(unsorted),
-        [columns, unsorted],
-    );
     const boardTaskIds = useMemo(() => boardTasks.map((task) => task.id), [boardTasks]);
+    /** The projects the selected cards come from — whose teams the bulk edit's assignee picker offers. */
+    const selectedProjectIds = useMemo(() => {
+        const picked = new Set(selection);
+        return [
+            ...new Set(
+                boardTasks
+                    .filter((task) => picked.has(task.id))
+                    .map((task) => task.project?.id)
+                    .filter((id): id is string => Boolean(id)),
+            ),
+        ];
+    }, [boardTasks, selection]);
     /**
      * The project the picker opens on. Only when every card on the board comes
      * from the same one: on a board that genuinely mixes projects there is no
@@ -467,6 +497,18 @@ export default function BoardPage() {
             .find((id) => id && projects.some((project) => project.id === id));
         setComposerProject(onBoard ?? projects[0].id);
     }, [projects, boardTasks, composerProject]);
+
+    /**
+     * A board filtered to one project is being worked one project at a time,
+     * so the composer follows it — the same reasoning that lands a composed
+     * card on the person the board is filtered to. Covers a restored filter
+     * as well as one picked on this visit.
+     */
+    useEffect(() => {
+        if (filters.project !== 'all' && projects.some((project) => project.id === filters.project)) {
+            setComposerProject(filters.project);
+        }
+    }, [filters.project, projects]);
 
     /**
      * The bulk bar acts on what is on screen. A filter typed (or a search run)
@@ -659,6 +701,31 @@ export default function BoardPage() {
             applyBoard(board);
             setSelection([]);
             toast.success(m.cardsMoved.replace('{count}', String(taskIds.length)));
+        });
+    };
+
+    /**
+     * The bulk edit dialog's change set, over the whole selection in one
+     * request. The server runs each card through the same update a single edit
+     * does and skips — rather than fails on — a card that refuses, so what
+     * comes back is a count of each, and the board is re-read either way.
+     */
+    const editCards = (changes: BulkTaskChanges) => {
+        const taskIds = selection;
+        if (taskIds.length === 0) return;
+        run(async () => {
+            const { updated, skipped } = await api.bulkUpdateProjectTasks({ ids: taskIds, ...changes });
+            if (updated > 0) toast.success(m.bulkUpdated.replace('{count}', String(updated)));
+            if (skipped.length > 0) {
+                toast.error(
+                    m.bulkSkipped
+                        .replace('{count}', String(skipped.length))
+                        .replace('{reason}', skipped[0].reason),
+                );
+            }
+            setBulkEditing(false);
+            setSelection([]);
+            await loadBoard();
         });
     };
 
@@ -1283,6 +1350,8 @@ export default function BoardPage() {
                                     onChange={changeFilters}
                                     assignees={assigneeOptions}
                                     labels={labels}
+                                    projects={projectOptions}
+                                    sprints={sprintOptions}
                                     shown={shown}
                                     total={total}
                                 />
@@ -1317,6 +1386,7 @@ export default function BoardPage() {
                         columns={columns}
                         busy={busy}
                         onMove={(columnId) => moveCards(selection, columnId)}
+                        onEdit={() => setBulkEditing(true)}
                         onRemove={() => setPendingRemoval({ taskIds: selection })}
                         onClear={() => setSelection([])}
                     />
@@ -1586,6 +1656,20 @@ export default function BoardPage() {
                 />
             )}
 
+            {bulkEditing && selection.length > 0 && (
+                <BulkEditCardsModal
+                    count={selection.length}
+                    projectIds={selectedProjectIds}
+                    projects={projects}
+                    labels={labels}
+                    assignees={assigneeOptions}
+                    projectMeta={projectMeta}
+                    busy={busy}
+                    onSubmit={editCards}
+                    onClose={() => setBulkEditing(false)}
+                />
+            )}
+
             <RemoveCardsDialog
                 open={pendingRemoval !== null}
                 count={pendingRemoval?.taskIds.length ?? 0}
@@ -1761,6 +1845,7 @@ function SelectionBar({
     columns,
     busy,
     onMove,
+    onEdit,
     onRemove,
     onClear,
 }: {
@@ -1768,6 +1853,8 @@ function SelectionBar({
     columns: BoardColumn[];
     busy: boolean;
     onMove: (columnId: string) => void;
+    /** Opens the bulk edit dialog: sprint, project, assignee, priority, due date, labels. */
+    onEdit: () => void;
     onRemove: () => void;
     onClear: () => void;
 }) {
@@ -1801,6 +1888,10 @@ function SelectionBar({
                 ))}
             </Select>
 
+            <Button variant="secondary" className="max-md:min-h-touch" disabled={busy} onClick={onEdit}>
+                <Pencil className="h-4 w-4" />
+                {m.editSelected}
+            </Button>
             <Button
                 variant="secondary"
                 className="max-md:min-h-touch"
@@ -1823,13 +1914,19 @@ function BoardFilterBar({
     onChange,
     assignees,
     labels,
+    projects,
+    sprints,
     shown,
     total,
 }: {
     filters: BoardFilters;
     onChange: (next: BoardFilters) => void;
-    assignees: { key: string; label: string }[];
+    assignees: AssigneeOption[];
     labels: ProjectLabel[];
+    /** The projects holding a card here. */
+    projects: FilterOption[];
+    /** The sprints holding a card here, the running one first. */
+    sprints: SprintOption[];
     shown: number;
     total: number;
 }) {
@@ -1840,7 +1937,7 @@ function BoardFilterBar({
 
     return (
         /* No card of its own any more: this sits among the header's buttons, so
-           a border and white fill around four selects would read as a panel
+           a border and white fill around a row of selects would read as a panel
            floating in the action row. The labels move onto the controls as
            `aria-label`, which keeps every select named for a screen reader
            without spending a line of height on visible label text — the point
@@ -1849,7 +1946,7 @@ function BoardFilterBar({
            `[&_select]:w-auto` is the load-bearing part: `Select` ships `w-full`
            from `compactDensity.formField`, which is right in a form column and
            wrong in a header row — each select claims the full width and the
-           four of them stack into a tall ladder instead of sitting in a line.
+           selects stack into a tall ladder instead of sitting in a line.
            Overriding it here rather than in `Select` keeps every form on the
            app untouched. The selects then size to their content, so the widest
            option label sets the width; `max-w-[9rem]` stops a long assignee
@@ -1868,7 +1965,7 @@ function BoardFilterBar({
         <div className="flex max-w-full flex-wrap items-center gap-2 [&_select]:w-auto [&_select]:max-w-[9rem]">
             {/* First in the row because it is what a full board is reached for:
                 on a board of two hundred cards, typing three letters is the
-                fastest of the five controls here and the only one that reaches
+                fastest of the controls here and the only one that reaches
                 a card's own words rather than its metadata. */}
             <span className="relative">
                 <Search
@@ -1884,6 +1981,50 @@ function BoardFilterBar({
                     onChange={(e) => onChange({ ...filters, text: e.target.value })}
                 />
             </span>
+
+            {/* The two coarse cuts — whose project, which sprint — before the
+                finer ones. Each only appears when it can narrow something: a
+                board drawn from one project has nothing for a project filter to
+                do, and one with no card in a sprint has nothing for the sprint
+                filter to split. A remembered choice keeps its select on screen,
+                so the filter that is hiding cards can always be cleared.
+
+                Named "Filter by …" rather than "Project": the card composer
+                has a "Project" select of its own, open beside these. */}
+            {(projects.length > 1 || filters.project !== 'all') && (
+                <Select
+                    aria-label={f.projectFilter}
+                    className="max-md:min-h-touch"
+                    value={filters.project}
+                    onChange={(e) => onChange({ ...filters, project: e.target.value })}
+                >
+                    <option value="all">{f.project}</option>
+                    {projects.map((option) => (
+                        <option key={option.key} value={option.key}>
+                            {option.label}
+                        </option>
+                    ))}
+                </Select>
+            )}
+
+            {(sprints.length > 0 || filters.sprint !== 'all') && (
+                <Select
+                    aria-label={f.sprintFilter}
+                    className="max-md:min-h-touch"
+                    value={filters.sprint}
+                    onChange={(e) => onChange({ ...filters, sprint: e.target.value })}
+                >
+                    <option value="all">{f.sprint}</option>
+                    <option value="none">{f.noSprint}</option>
+                    {sprints.map((option) => (
+                        <option key={option.key} value={option.key}>
+                            {option.status === 'ACTIVE'
+                                ? f.sprintActive.replace('{name}', option.label)
+                                : option.label}
+                        </option>
+                    ))}
+                </Select>
+            )}
 
             <Select
                 aria-label={f.assignee}

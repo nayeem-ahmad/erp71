@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
-import { ProjectTasksService } from './project-tasks.service';
+import { assigneePatch, ProjectTasksService } from './project-tasks.service';
 import { ProjectStoriesService } from './project-stories.service';
 import { ProjectEpicsService } from './project-epics.service';
 import { composeTaskKey } from './url-keys/task-key';
@@ -434,18 +434,4 @@ function assertEnum(value: string | null, allowed: string[], field: string) {
     if (!value || !allowed.includes(value)) {
         throw new BadRequestException(`Unknown ${field} "${value ?? ''}".`);
     }
-}
-
-/**
- * `user:<id>` / `employee:<id>` — the keys the task list already uses for an
- * assignee option — onto the pair of columns a task stores, clearing the other
- * so a task never ends up assigned to both.
- */
-function assigneePatch(value: string | null): Partial<UpdateTaskDto> {
-    if (!value) return { assigneeId: '', assigneeEmployeeId: '' };
-    const [kind, id] = value.split(':');
-    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) throw new BadRequestException('Unknown assignee.');
-    if (kind === 'user') return { assigneeId: id, assigneeEmployeeId: '' };
-    if (kind === 'employee') return { assigneeEmployeeId: id, assigneeId: '' };
-    throw new BadRequestException('Unknown assignee.');
 }

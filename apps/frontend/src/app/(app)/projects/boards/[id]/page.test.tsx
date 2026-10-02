@@ -52,6 +52,8 @@ jest.mock('@/lib/api', () => {
             moveBoardCards: jest.fn(),
             removeBoardCards: jest.fn(),
             bulkDeleteProjectTasks: jest.fn(),
+            bulkUpdateProjectTasks: jest.fn(),
+            getSprints: jest.fn(),
             setBoardColumnCardOrder: jest.fn(),
             getMe: jest.fn(),
             getProject: jest.fn(),
@@ -136,6 +138,12 @@ describe('BoardPage', () => {
             unsorted: [],
         });
         (api.bulkDeleteProjectTasks as jest.Mock).mockReset().mockResolvedValue({ deleted: 1, skipped: 0 });
+        (api.bulkUpdateProjectTasks as jest.Mock).mockReset().mockResolvedValue({ updated: 2, skipped: [] });
+        (api.getSprints as jest.Mock).mockReset().mockResolvedValue([
+            { id: 's4', name: 'Sprint 4', status: 'ACTIVE' },
+            { id: 's5', name: 'Sprint 5', status: 'PLANNED' },
+            { id: 's3', name: 'Sprint 3', status: 'COMPLETED' },
+        ]);
         (api.removeBoardCards as jest.Mock).mockReset().mockResolvedValue({
             id: 'b1',
             name: 'Release 4',
@@ -178,8 +186,10 @@ describe('BoardPage', () => {
     it('shows a project chip on every card, because a board spans projects', async () => {
         render(<BoardPage />);
         await screen.findByText('Fix login');
-        expect(screen.getByText('ALP')).toBeInTheDocument();
-        expect(screen.getByText('BET')).toBeInTheDocument();
+        // Read off the cards: the project filter's options carry the same names.
+        const card = (title: string) => screen.getByRole('button', { name: `Open task: ${title}` });
+        expect(within(card('Fix login')).getByText('ALP')).toBeInTheDocument();
+        expect(within(card('Ship docs')).getByText('BET')).toBeInTheDocument();
     });
 
     it('does not render the Unsorted column when nothing is unbound', async () => {
@@ -286,6 +296,91 @@ describe('BoardPage', () => {
         // just the mapped columns.
         expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
         expect(screen.queryByText('Other orphan')).not.toBeInTheDocument();
+    });
+
+    describe('the project and sprint filters', () => {
+        const sprint4 = { id: 's4', name: 'Sprint 4', status: 'ACTIVE' };
+
+        beforeEach(() => {
+            (api.getBoard as jest.Mock).mockResolvedValue({
+                id: 'b1',
+                name: 'Release 4',
+                columns: [
+                    {
+                        id: 'c1',
+                        name: 'To Do',
+                        category: 'TODO',
+                        wip_limit: null,
+                        tasks: [
+                            { ...task('k1', 'Fix login', { id: 'p1', code: 'ALP' }), sprint_id: 's4', sprint: sprint4 },
+                            task('k2', 'Ship docs', { id: 'p2', code: 'BET' }),
+                        ],
+                    },
+                ],
+                unsorted: [
+                    { ...task('k9', 'Orphan card', { id: 'p2', code: 'BET' }), sprint_id: 's4', sprint: sprint4 },
+                ],
+            });
+        });
+
+        it('narrows the board to one project, Unsorted included', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            fireEvent.change(screen.getByLabelText('Filter by project'), { target: { value: 'p2' } });
+
+            expect(screen.queryByText('Fix login')).not.toBeInTheDocument();
+            expect(screen.getByText('Ship docs')).toBeInTheDocument();
+            expect(screen.getByText('Orphan card')).toBeInTheDocument();
+            expect(screen.getByText('2 of 3 cards')).toBeInTheDocument();
+        });
+
+        it('narrows the board to a sprint, or to the cards in none', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            const sprint = screen.getByLabelText('Filter by sprint');
+            expect(within(sprint).getByRole('option', { name: 'Sprint 4 (active)' })).toBeInTheDocument();
+
+            fireEvent.change(sprint, { target: { value: 's4' } });
+            expect(screen.getByText('Fix login')).toBeInTheDocument();
+            expect(screen.getByText('Orphan card')).toBeInTheDocument();
+            expect(screen.queryByText('Ship docs')).not.toBeInTheDocument();
+
+            fireEvent.change(sprint, { target: { value: 'none' } });
+            expect(screen.getByText('Ship docs')).toBeInTheDocument();
+            expect(screen.queryByText('Fix login')).not.toBeInTheDocument();
+        });
+
+        it('offers no project filter on a board drawn from a single project', async () => {
+            (api.getBoard as jest.Mock).mockResolvedValue({
+                id: 'b1',
+                name: 'Release 4',
+                columns: [
+                    { id: 'c1', name: 'To Do', category: 'TODO', wip_limit: null, tasks: [task('k1', 'Fix login', { id: 'p1', code: 'ALP' })] },
+                ],
+                unsorted: [],
+            });
+
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            // One option would only ever show the whole board or nothing, and
+            // no card here is in a sprint for the other select to narrow by.
+            expect(screen.queryByLabelText('Filter by project')).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Filter by sprint')).not.toBeInTheDocument();
+        });
+
+        it('composes into the project the board is filtered to', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+
+            fireEvent.change(screen.getByLabelText('Filter by project'), { target: { value: 'p2' } });
+            const triggers = await screen.findAllByRole('button', { name: /add a card/i });
+            fireEvent.click(triggers[0]);
+
+            expect(screen.getByRole('combobox', { name: 'Project' })).toHaveValue('p2');
+        });
     });
 
     describe('composing a card in a column', () => {
@@ -1034,7 +1129,8 @@ describe('BoardPage', () => {
             await screen.findByText('Fix login');
 
             // The project chip is gone; the task it belongs to is not.
-            await waitFor(() => expect(screen.queryByText('ALP')).not.toBeInTheDocument());
+            const card = screen.getByRole('button', { name: 'Open task: Fix login' });
+            await waitFor(() => expect(within(card).queryByText('ALP')).not.toBeInTheDocument());
             expect(screen.getByText('Fix login')).toBeInTheDocument();
         });
 
@@ -1484,6 +1580,77 @@ describe('BoardPage', () => {
             fireEvent.change(screen.getByLabelText('Search cards'), { target: { value: 'docs' } });
 
             await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
+        });
+
+        describe('editing a selection', () => {
+            const selectBoth = async () => {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+                openColumnMenu('To Do');
+                fireEvent.click(screen.getByRole('menuitem', { name: 'Select all cards' }));
+                openColumnMenu('Done');
+                fireEvent.click(screen.getByRole('menuitem', { name: 'Select all cards' }));
+                fireEvent.click(
+                    within(screen.getByText('2 selected').parentElement as HTMLElement).getByRole('button', {
+                        name: 'Edit',
+                    }),
+                );
+                return screen.getByRole('dialog');
+            };
+
+            it('sends the changed fields for every selected card in one request, then reloads', async () => {
+                const success = jest.spyOn(toast, 'success').mockImplementation(() => '');
+                const dialog = await selectBoth();
+                expect(within(dialog).getByText('Edit 2 cards')).toBeInTheDocument();
+
+                const sprint = within(dialog).getByLabelText('Sprint');
+                await within(sprint).findByRole('option', { name: 'Sprint 5' });
+                fireEvent.change(sprint, { target: { value: 's5' } });
+                fireEvent.change(within(dialog).getByLabelText('Priority'), { target: { value: 'HIGH' } });
+                fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to 2 cards' }));
+
+                await waitFor(() =>
+                    expect(api.bulkUpdateProjectTasks).toHaveBeenCalledWith({
+                        ids: ['k1', 'k2'],
+                        sprintId: 's5',
+                        priority: 'HIGH',
+                    }),
+                );
+                await waitFor(() => expect(api.getBoard).toHaveBeenCalledTimes(2));
+                expect(success).toHaveBeenCalledWith('2 card(s) updated');
+                await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+                expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
+                success.mockRestore();
+            });
+
+            it('says which cards the server could not change, and why', async () => {
+                (api.bulkUpdateProjectTasks as jest.Mock).mockResolvedValue({
+                    updated: 1,
+                    skipped: [{ id: 'k2', reason: 'A subtask moves with its parent task.' }],
+                });
+                const error = jest.spyOn(toast, 'error').mockImplementation(() => '');
+                const dialog = await selectBoth();
+
+                fireEvent.change(within(dialog).getByLabelText('Project'), { target: { value: 'p2' } });
+                fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to 2 cards' }));
+
+                await waitFor(() =>
+                    expect(error).toHaveBeenCalledWith(
+                        '1 card(s) could not be updated: A subtask moves with its parent task.',
+                    ),
+                );
+                error.mockRestore();
+            });
+
+            it('leaves the board alone when the dialog is cancelled', async () => {
+                const dialog = await selectBoth();
+                fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+                expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+                expect(api.bulkUpdateProjectTasks).not.toHaveBeenCalled();
+                // Still selected: cancelling the edit is not clearing the selection.
+                expect(screen.getByText('2 selected')).toBeInTheDocument();
+            });
         });
 
         it('clears the selection without touching the cards', async () => {

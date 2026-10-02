@@ -1599,6 +1599,116 @@ describe('ProjectTasksService', () => {
         });
     });
 
+    describe('bulkUpdate', () => {
+        const EMPLOYEE = '7f9c2b1e-4a3d-4e5f-8a6b-1c2d3e4f5a6b';
+
+        it('applies one change set to every task, through the single-task update', async () => {
+            const result = await service.bulkUpdate(OWNER, { ids: ['task-1', 'task-2'], priority: 'HIGH' } as never);
+
+            const writes = db.projectTask.update.mock.calls.map(([call]: any[]) => call);
+            expect(writes.map((call: any) => call.where.id)).toEqual(['task-1', 'task-2']);
+            expect(writes.every((call: any) => call.data.priority === 'HIGH')).toBe(true);
+            expect(result).toEqual({ updated: 2, skipped: [] });
+        });
+
+        it('takes the tasks out of their sprint when sent null', async () => {
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], sprintId: null } as never);
+
+            const [{ data }] = db.projectTask.update.mock.calls.at(-1);
+            expect(data.sprint_id).toBeNull();
+            // Both sprints' burndowns: the one the task left loses its hours.
+            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', null]);
+        });
+
+        it('hands the tasks to an assignee key, clearing the other column', async () => {
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], assignee: `employee:${EMPLOYEE}` } as never);
+
+            const [{ data }] = db.projectTask.update.mock.calls.at(-1);
+            expect(data.assignee_employee_id).toBe(EMPLOYEE);
+            expect(data.assignee_id).toBeNull();
+        });
+
+        it('unassigns when sent null, and clears the due date the same way', async () => {
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], assignee: null, dueDate: null } as never);
+
+            const [{ data }] = db.projectTask.update.mock.calls.at(-1);
+            expect(data).toMatchObject({ assignee_id: null, assignee_employee_id: null, due_date: null });
+        });
+
+        it('adds and removes labels without touching the rest of each task’s set', async () => {
+            const held: Record<string, string[]> = { 'task-1': ['label-a', 'label-b'], 'task-2': ['label-b'] };
+            db.projectTaskLabel.findMany = jest.fn(({ where }: any) =>
+                Promise.resolve((held[where.task_id] ?? []).map((label_id) => ({ label_id }))),
+            );
+            db.projectLabel.count.mockImplementation(({ where }: any) => Promise.resolve(where.id.in.length));
+
+            await service.bulkUpdate(OWNER, {
+                ids: ['task-1', 'task-2'],
+                addLabelIds: ['label-c'],
+                removeLabelIds: ['label-b'],
+            } as never);
+
+            const written = db.projectTaskLabel.createMany.mock.calls.map(([{ data }]: any[]) =>
+                data.map((row: any) => `${row.task_id}:${row.label_id}`),
+            );
+            expect(written).toEqual([['task-1:label-a', 'task-1:label-c'], ['task-2:label-c']]);
+        });
+
+        it('reports a task that refuses and carries on with the rest', async () => {
+            db.projectTask.findFirst.mockImplementation(({ where }: any) =>
+                Promise.resolve(where.id === 'task-2' ? null : task({ id: where.id })),
+            );
+
+            const result = await service.bulkUpdate(OWNER, {
+                ids: ['task-1', 'task-2', 'task-3'],
+                priority: 'LOW',
+            } as never);
+
+            expect(result.updated).toBe(2);
+            expect(result.skipped).toEqual([{ id: 'task-2', reason: expect.stringMatching(/not found/i) }]);
+        });
+
+        it('moves a parent before its subtasks, so a subtask selected with it goes along', async () => {
+            // Picked subtask-first. Run in that order, the subtask would be
+            // refused ("moves with its parent") and then moved anyway by its
+            // parent, and the report would call a moved card skipped.
+            db.projectTask.findMany.mockResolvedValue([
+                { id: 'sub-1', parent_task_id: 'task-1' },
+                { id: 'task-1', parent_task_id: null },
+            ]);
+            const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+
+            await service.bulkUpdate(OWNER, { ids: ['sub-1', 'task-1'], projectId: 'project-2' } as never);
+
+            expect(update.mock.calls.map(([, id]) => id)).toEqual(['task-1', 'sub-1']);
+            expect(db.projectTask.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: { in: ['sub-1', 'task-1'] }, tenant_id: 'tenant-1' } }),
+            );
+        });
+
+        it('counts a repeated id once', async () => {
+            const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+
+            const result = await service.bulkUpdate(OWNER, { ids: ['task-1', 'task-1'], priority: 'LOW' } as never);
+
+            expect(update).toHaveBeenCalledTimes(1);
+            expect(result).toEqual({ updated: 1, skipped: [] });
+        });
+
+        it('refuses a request that changes nothing', async () => {
+            await expect(service.bulkUpdate(OWNER, { ids: ['task-1'] } as never)).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            expect(db.projectTask.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses an assignee that is not a user or employee key', async () => {
+            await expect(
+                service.bulkUpdate(OWNER, { ids: ['task-1'], assignee: 'robot:42' } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+        });
+    });
+
     /**
      * Record scope. Visibility decides which projects reach the list; this
      * decides whose rows are in it. The Tasks page's assignee filter is the

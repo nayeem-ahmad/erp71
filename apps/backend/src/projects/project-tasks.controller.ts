@@ -24,6 +24,7 @@ import { ProjectCommentsService } from './project-comments.service';
 import { ProjectAttachmentsService } from './project-attachments.service';
 import {
     BulkDeleteTasksDto,
+    BulkUpdateTasksDto,
     CreateAttachmentDto,
     CreateChecklistItemDto,
     CreateCommentDto,
@@ -89,6 +90,18 @@ export class ProjectTasksController {
     @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
     bulkRemove(@Tenant() tenant: TenantContext, @Body() dto: BulkDeleteTasksDto) {
         return this.tasks.bulkRemove(tenant, dto.ids);
+    }
+
+    /**
+     * One change set over a selection, from any number of projects: the
+     * board's bulk edit. One request rather than a PATCH per task, for the
+     * rate-limit reason `bulk-delete` gives, and declared before `:id` for the
+     * same routing reason.
+     */
+    @Post('bulk-update')
+    @RequireStorePermission(StorePermission.MANAGE_PROJECT_TASKS)
+    bulkUpdate(@Tenant() tenant: TenantContext, @Body() dto: BulkUpdateTasksDto) {
+        return this.tasks.bulkUpdate(tenant, dto);
     }
 
     /**

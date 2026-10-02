@@ -494,6 +494,46 @@ export class BulkDeleteTasksDto {
     ids!: string[];
 }
 
+/**
+ * One change set over a selection of tasks, from any number of projects — the
+ * board's bulk edit. Each field is optional and an absent one is left alone;
+ * `null` clears the ones that can be cleared. Labels are added and removed
+ * rather than replaced, because a selection rarely shares one label set and
+ * "tag these five Blocked" must not strip whatever else each of them carries.
+ */
+export class BulkUpdateTasksDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(200)
+    @IsUUID(undefined, { each: true })
+    ids!: string[];
+
+    /** Moves each task to this project — see `ProjectTasksService.update`. */
+    @IsOptional() @IsUUID()
+    projectId?: string;
+
+    /** `null` takes the tasks out of their sprint. */
+    @IsOptional() @IsUUID()
+    sprintId?: string | null;
+
+    /** `user:<id>` / `employee:<id>`, the key the task list uses; `null` unassigns. */
+    @IsOptional() @IsString() @MaxLength(80)
+    assignee?: string | null;
+
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
+    /** `null` clears the due date. */
+    @IsOptional() @IsDateString()
+    dueDate?: string | null;
+
+    @IsOptional() @IsArray() @ArrayMaxSize(50) @IsUUID(undefined, { each: true })
+    addLabelIds?: string[];
+
+    @IsOptional() @IsArray() @ArrayMaxSize(50) @IsUUID(undefined, { each: true })
+    removeLabelIds?: string[];
+}
+
 export class CreateTaskDto {
     @IsUUID()
     projectId!: string;
