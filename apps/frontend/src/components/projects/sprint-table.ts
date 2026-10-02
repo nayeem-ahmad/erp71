@@ -189,6 +189,29 @@ export function assigneeOptions(tasks: SprintTask[]): AssigneeOption[] {
     });
 }
 
+/**
+ * The project a task composed into the sprint most likely belongs to: the one
+ * with the most tasks in it already. A tie goes to the project whose task
+ * comes first. `allowed` drops a project the composer cannot offer — one
+ * outside the picker's list — so the answer is always selectable. Null for a
+ * sprint with nothing (allowed) in it yet.
+ */
+export function busiestProjectId(
+    tasks: SprintTask[],
+    allowed: (projectId: string) => boolean = () => true,
+): string | null {
+    const counts = new Map<string, number>();
+    for (const task of tasks) {
+        const id = task.project?.id;
+        if (id && allowed(id)) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    let best: string | null = null;
+    for (const [id, count] of counts) {
+        if (best === null || count > counts.get(best)!) best = id;
+    }
+    return best;
+}
+
 /** Today as a `YYYY-MM-DD` key in UTC — the form the sprint API's days use. */
 export function todayKey(now = new Date()): string {
     return now.toISOString().slice(0, 10);

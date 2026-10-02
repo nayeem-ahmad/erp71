@@ -1125,8 +1125,7 @@ export default function BoardPage() {
 
     const composerFor = (columnId: string) => (
         <BoardCardComposer
-            boardId={boardId}
-            columnId={columnId}
+            create={(card) => api.createBoardCard(boardId, columnId, card)}
             projects={projects}
             projectId={composerProject}
             onProjectChange={setComposerProject}
@@ -1186,8 +1185,7 @@ export default function BoardPage() {
         const projectId = story && lane.projectId ? lane.projectId : composerProject;
         return (
             <BoardCardComposer
-                boardId={boardId}
-                columnId={columnId}
+                create={(card) => api.createBoardCard(boardId, columnId, card)}
                 projects={projects}
                 projectId={projectId}
                 onProjectChange={setComposerProject}

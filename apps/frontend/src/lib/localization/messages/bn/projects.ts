@@ -850,6 +850,8 @@ export const projectsMessages = {
         projects: 'প্রকল্প',
         addWork: "কাজ যোগ করুন",
         addWorkTitle: "{name}-এ যোগ করুন",
+        addTask: "টাস্ক যোগ করুন",
+        entrySprint: "স্প্রিন্ট: {name}",
         tabTasks: "টাস্ক",
         tabStories: "ইউজার স্টোরি",
         searchBacklog: "ব্যাকলগে খুঁজুন",

@@ -850,6 +850,8 @@ export const projectsMessages = {
         projects: "Projekte",
         addWork: "Arbeit hinzufügen",
         addWorkTitle: "Zu {name} hinzufügen",
+        addTask: "Aufgabe hinzufügen",
+        entrySprint: "Sprint: {name}",
         tabTasks: "Aufgaben",
         tabStories: "User Stories",
         searchBacklog: "Backlog durchsuchen",

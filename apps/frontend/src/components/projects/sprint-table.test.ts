@@ -1,6 +1,7 @@
 import {
     NO_LANE,
     assigneeOptions,
+    busiestProjectId,
     groupSprintTasks,
     sprintStats,
     sprintTimeline,
@@ -111,5 +112,25 @@ describe('assigneeOptions', () => {
             { key: 'user:u2', label: 'Zara' },
             { key: NO_LANE, label: null },
         ]);
+    });
+});
+
+describe('busiestProjectId', () => {
+    const inProject = (id: string, projectId: string) =>
+        task(id, { project: { id: projectId, code: projectId.toUpperCase(), name: projectId } });
+
+    it('picks the project with the most tasks in the sprint', () => {
+        const tasks = [inProject('a', 'p1'), inProject('b', 'p2'), inProject('c', 'p2'), task('d')];
+        expect(busiestProjectId(tasks)).toBe('p2');
+    });
+
+    it('breaks a tie in favour of the project seen first', () => {
+        expect(busiestProjectId([inProject('a', 'p2'), inProject('b', 'p1')])).toBe('p2');
+    });
+
+    it('skips projects the caller cannot offer, and answers null for an empty sprint', () => {
+        const tasks = [inProject('a', 'p1'), inProject('b', 'p1'), inProject('c', 'p2')];
+        expect(busiestProjectId(tasks, (id) => id !== 'p1')).toBe('p2');
+        expect(busiestProjectId([])).toBeNull();
     });
 });

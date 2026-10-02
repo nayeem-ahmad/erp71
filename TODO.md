@@ -1708,6 +1708,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Add tasks from the sprint page, as on a board** — done 2026-10-02. The board's "Add a card" composer (`BoardCardComposer`, now handed a `create` callback instead of a board and column) sits under the sprint table ("Add a task", also in the empty and no-matches states) and at the foot of every card-view column. Tasks are created straight into the sprint; a card-view column adds its status for the chosen project, an assignee lane its person, a story lane its story and that story's project. The project opens on the one with the most tasks in the sprint (`busiestProjectId`), else the first in the workspace, then sticks to the last one picked; the assignee opens on the signed-in user, or on whoever the assignee filter names (the board's rule). "More fields" opens the New Task form. Hidden on completed sprints. Not checked in a browser — tests and type-check only.
+
 - [x] **Cleared the open PR list** — done 2026-10-01. Sixteen PRs were open.
   - **Landed in `dev`:**
     - #640 (release records)

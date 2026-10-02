@@ -850,6 +850,8 @@ export const projectsMessages = {
         projects: 'Projek',
         addWork: "Tambah kerja",
         addWorkTitle: "Tambah ke {name}",
+        addTask: "Tambah tugasan",
+        entrySprint: "Sprint: {name}",
         tabTasks: "Tugas",
         tabStories: "Cerita pengguna",
         searchBacklog: "Cari tunggakan",

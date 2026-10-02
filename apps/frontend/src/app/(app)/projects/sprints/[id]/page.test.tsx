@@ -37,6 +37,9 @@ jest.mock('@/lib/api', () => ({
         deleteProjectTask: jest.fn(),
         getProjectColumns: jest.fn(),
         moveProjectTask: jest.fn(),
+        getMe: jest.fn(),
+        createProjectTask: jest.fn(),
+        getProject: jest.fn(),
     },
 }));
 
@@ -100,6 +103,8 @@ beforeEach(() => {
     ]);
     (api.assignStoriesToSprint as jest.Mock).mockReset().mockResolvedValue({ assigned: 2 });
     (api.removeTasksFromSprint as jest.Mock).mockReset().mockResolvedValue({ removed: 1 });
+    (api.getMe as jest.Mock).mockReset().mockResolvedValue({ id: 'me' });
+    (api.createProjectTask as jest.Mock).mockReset().mockResolvedValue({ id: 't-new' });
 });
 
 describe('Sprint detail page', () => {
@@ -338,6 +343,87 @@ describe('Sprint detail page', () => {
             const lanes = screen.getAllByTestId('sprint-card-lane');
             expect(within(lanes[1]).queryAllByTestId('sprint-card-column')).toHaveLength(0);
             expect(within(lanes[0]).getAllByTestId('sprint-card-column').length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('adding a task', () => {
+        const projects = [
+            { id: 'p2', code: 'WEB', name: 'Website' },
+            { id: 'p1', code: 'OTB', name: 'Online' },
+        ];
+
+        beforeEach(() => {
+            (api.getProjects as jest.Mock).mockResolvedValue({ items: projects });
+        });
+
+        it('commits a task typed under the table to the sprint, for the signed-in user, in the busiest project', async () => {
+            render(<SprintDetailPage />);
+            await screen.findByText('Wire the bKash callback');
+
+            fireEvent.click(await screen.findByRole('button', { name: /add a task/i }));
+            // Both sprint tasks are OTB's, so it is chosen over the first project in the list.
+            await waitFor(() => expect(screen.getByRole('combobox', { name: /^project$/i })).toHaveValue('p1'));
+            await waitFor(() => expect(screen.getByRole('combobox', { name: /assign card to/i })).toHaveValue('user:me'));
+
+            const title = screen.getByRole('textbox', { name: /add a task/i });
+            fireEvent.change(title, { target: { value: 'Refund webhook' } });
+            fireEvent.keyDown(title, { key: 'Enter' });
+
+            await waitFor(() =>
+                expect(api.createProjectTask).toHaveBeenCalledWith({
+                    projectId: 'p1',
+                    title: 'Refund webhook',
+                    assigneeId: 'me',
+                    assigneeEmployeeId: '',
+                    sprintId: 's1',
+                }),
+            );
+            // Reloaded, so the new row and the totals come from the server.
+            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalledTimes(2));
+        });
+
+        it('opens on the first project when the sprint is empty', async () => {
+            (api.getProjectTasks as jest.Mock).mockResolvedValue({ items: [] });
+            render(<SprintDetailPage />);
+
+            fireEvent.click(await screen.findByRole('button', { name: /add a task/i }));
+            await waitFor(() => expect(screen.getByRole('combobox', { name: /^project$/i })).toHaveValue('p2'));
+        });
+
+        it('files a card typed into a card-view column under that column\'s status', async () => {
+            render(<SprintDetailPage />);
+            await screen.findByText('Wire the bKash callback');
+            fireEvent.click(screen.getByRole('button', { name: /^cards$/i }));
+            await waitFor(() => expect(screen.getAllByTestId('sprint-card-column')).toHaveLength(3));
+
+            const doing = screen.getAllByTestId('sprint-card-column')[1];
+            fireEvent.click(within(doing).getByRole('button', { name: /add a card/i }));
+            await waitFor(() =>
+                expect(within(doing).getByRole('combobox', { name: /^project$/i })).toHaveValue('p1'),
+            );
+            const title = within(doing).getByRole('textbox', { name: /add a card/i });
+            fireEvent.change(title, { target: { value: 'Retry failed payouts' } });
+            fireEvent.keyDown(title, { key: 'Enter' });
+
+            await waitFor(() =>
+                expect(api.createProjectTask).toHaveBeenCalledWith(
+                    expect.objectContaining({ projectId: 'p1', sprintId: 's1', statusId: 'st1' }),
+                ),
+            );
+        });
+
+        it('offers no composer on a completed sprint', async () => {
+            (api.getSprint as jest.Mock).mockResolvedValue({
+                id: 's1',
+                name: 'Sprint 7',
+                status: 'COMPLETED',
+                start_date: '2026-08-02',
+                end_date: '2026-08-04',
+            });
+            render(<SprintDetailPage />);
+            await screen.findByText('Wire the bKash callback');
+
+            expect(screen.queryByRole('button', { name: /add a task/i })).not.toBeInTheDocument();
         });
     });
 });

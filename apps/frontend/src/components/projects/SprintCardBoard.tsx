@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { FolderKanban, GitBranch, GripVertical, MessageSquare, Play, Undo2 } from 'lucide-react';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { formatDate } from '@/lib/format';
@@ -85,6 +85,7 @@ export default function SprintCardBoard({
     laneControls,
     view = DEFAULT_BOARD_VIEW,
     lift = '',
+    composer,
 }: {
     lanes: SprintLane[];
     laneMode: SprintLaneMode;
@@ -104,6 +105,13 @@ export default function SprintCardBoard({
         onToggle: (key: string) => void;
         onFocus: (key: string) => void;
     };
+    /**
+     * "Add a card" at the foot of each column, as on a board. The page builds
+     * it, since what a card composed here joins — the column's status, a
+     * person's or a story's lane — is the page's to decide. `lane` is null
+     * with swimlanes off.
+     */
+    composer?: (column: StatusColumn, lane: SprintLane | null) => ReactNode;
 }) {
     const { t, fmt } = useI18n();
     const m = t.projects;
@@ -191,7 +199,8 @@ export default function SprintCardBoard({
     const d = density(view);
     const widthClass = columnWidthClass(view.columnWidth);
 
-    const renderColumn = (column: StatusColumn, cards: SprintCardTask[], columnIndex: number, laneKey?: string) => {
+    const renderColumn = (column: StatusColumn, cards: SprintCardTask[], columnIndex: number, lane: SprintLane | null) => {
+        const laneKey = lane?.key;
         const tint = tintOf(view, column.category);
         const left = sumHours(cards).remaining;
         const isTarget =
@@ -202,7 +211,7 @@ export default function SprintCardBoard({
         return (
             <div
                 key={column.key}
-                className={`flex ${widthClass} shrink-0 flex-col rounded-md border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${
+                className={`group/cell flex ${widthClass} shrink-0 flex-col rounded-md border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${
                     isTarget ? 'border-blue-400 ring-1 ring-blue-300' : 'border-gray-200'
                 }`}
                 style={{ animationDelay: staggerDelay(view, columnIndex) }}
@@ -245,6 +254,7 @@ export default function SprintCardBoard({
                     })}
                     {isTarget && (drag?.target?.index ?? 0) >= others.length && <DropIndicator />}
                 </div>
+                {composer && <div className={`${d.columnPad} pt-0`}>{composer(column, lane)}</div>}
             </div>
         );
     };
@@ -288,7 +298,7 @@ export default function SprintCardBoard({
                                             column,
                                             byColumn[column.key] ?? [],
                                             columnIndex,
-                                            grouped ? lane.key : undefined,
+                                            grouped ? lane : null,
                                         ),
                                     )}
                                 </div>
