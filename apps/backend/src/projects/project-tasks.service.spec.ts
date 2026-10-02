@@ -1789,10 +1789,12 @@ describe('ProjectTasksService', () => {
         it('takes the tasks out of their sprint when sent null', async () => {
             await service.bulkUpdate(OWNER, { ids: ['task-1'], sprintId: null } as never);
 
-            const [{ data }] = db.projectTask.update.mock.calls.at(-1);
-            expect(data.sprint_id).toBeNull();
-            // Both sprints' burndowns: the one the task left loses its hours.
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', null]);
+            // Through the membership service, like a single edit, so the
+            // task's sprint history closes rather than the column being cleared.
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-1'], null, 'REMOVED');
+            expect(db.projectTask.update.mock.calls.at(-1)[0].data).not.toHaveProperty('sprint_id');
+            // The sprint the task left loses its hours on the burndown.
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
         });
 
         it('hands the tasks to an assignee key, clearing the other column', async () => {
