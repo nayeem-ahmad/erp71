@@ -13,6 +13,8 @@ export type LeadTaxonomyOption = {
     score_weight?: number;
     /** Channels only — the emoji shown beside the channel. */
     icon?: string | null;
+    /** Statuses only — NEW/CONTACTED/QUALIFIED (open), CONVERTED (won) or LOST. */
+    lifecycle?: string;
     sort_order: number;
     is_system: boolean;
     is_active: boolean;

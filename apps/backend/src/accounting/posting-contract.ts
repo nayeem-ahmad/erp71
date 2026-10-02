@@ -97,6 +97,8 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // ensureCustomerPaymentPostingSetup).
     { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'customers.service.ts:566', expectation: 'rule' },
     { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'customers.service.ts:669', expectation: 'rule' },
+    // Discount allowed alongside a receipt, posted on legKey 'discount'.
+    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'discount', emittedBy: 'customers.service.ts postPaymentLegs', expectation: 'rule' },
 
     // ── bad debt ─────────────────────────────────────────────────────────────
     // Unconditional: there is one way to forgive a receivable. The reason the
@@ -105,10 +107,16 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
 
     // ── supplier payments ────────────────────────────────────────────────────
     // Keyed on payment_direction rather than payment_mode because
-    // Keyed on payment_direction rather than payment_mode because
     // SupplierCreditTransaction has no payment_method column. See TODO.md.
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
+    // Imported payments (post_impacts on) emit all four direction tuples.
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
+    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
+    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
+    // Discount received alongside a payment, posted on legKey 'discount'.
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'discount', emittedBy: 'suppliers.service.ts postPaymentLegs', expectation: 'rule' },
     // A purchase paid at the counter posts the same 'pay' tuple, on legKey 'paid'
     // against the Purchase rather than a standalone SupplierCreditTransaction —
     // same rule, same accounts, so the payable is debited whichever screen the

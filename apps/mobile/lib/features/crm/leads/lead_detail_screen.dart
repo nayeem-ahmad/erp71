@@ -10,6 +10,7 @@ import '../../../ui/widgets.dart';
 import '../access.dart';
 import '../activities/activity_sheets.dart';
 import '../data/crm_providers.dart';
+import '../data/crm_repository.dart';
 import '../data/models.dart';
 import '../widgets/crm_widgets.dart';
 
@@ -162,7 +163,7 @@ class _IdentityCard extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              StatusBadge(lead.status.label, tone: lead.status.tone),
+              StatusBadge(lead.statusLabel, tone: lead.status.tone),
               StatusBadge(
                 '${lead.priority.label} priority',
                 tone: lead.priority.tone,
@@ -385,28 +386,58 @@ class _StatusOptionsState extends ConsumerState<_StatusOptions> {
   @override
   Widget build(BuildContext context) {
     final lead = widget.lead;
+    // The workspace's open stages; the three open lifecycles from a server
+    // that predates stages. Closing stays on the two actions below.
+    final openStages = [
+      for (final stage
+          in ref.watch(taxonomyProvider(TaxonomyKind.statuses)).value ??
+              const <CrmOption>[])
+        if (stage.lifecycleStatus?.isOpen ?? false) stage,
+    ];
+    final reopening = lead.status == LeadStatus.lost;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final status in LeadStatus.open)
-          if (status != lead.status)
+        for (final stage in openStages)
+          if (stage.id != lead.stage?.id)
             ListTile(
               enabled: !_busy,
               contentPadding: EdgeInsets.zero,
               tileColor: Colors.transparent,
-              leading: StatusBadge(status.label, tone: status.tone),
+              leading: StatusBadge(
+                stage.name,
+                tone: stage.lifecycleStatus?.tone ?? Tone.neutral,
+              ),
               title: Text(
-                lead.status == LeadStatus.lost
-                    ? 'Reopen as ${status.label.toLowerCase()}'
-                    : 'Move to ${status.label.toLowerCase()}',
+                reopening ? 'Reopen as ${stage.name}' : 'Move to ${stage.name}',
               ),
               onTap: () => _apply(
                 () => ref
                     .read(crmRepositoryProvider)
-                    .setLeadStatus(lead.id, status),
-                'Moved to ${status.label}',
+                    .setLeadStage(lead.id, stage),
+                'Moved to ${stage.name}',
               ),
             ),
+        if (openStages.isEmpty)
+          for (final status in LeadStatus.open)
+            if (status != lead.status)
+              ListTile(
+                enabled: !_busy,
+                contentPadding: EdgeInsets.zero,
+                tileColor: Colors.transparent,
+                leading: StatusBadge(status.label, tone: status.tone),
+                title: Text(
+                  lead.status == LeadStatus.lost
+                      ? 'Reopen as ${status.label.toLowerCase()}'
+                      : 'Move to ${status.label.toLowerCase()}',
+                ),
+                onTap: () => _apply(
+                  () => ref
+                      .read(crmRepositoryProvider)
+                      .setLeadStatus(lead.id, status),
+                  'Moved to ${status.label}',
+                ),
+              ),
         if (lead.status != LeadStatus.lost)
           ListTile(
             enabled: !_busy,

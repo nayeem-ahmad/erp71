@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { normalizeInvoicePrintPrefs, type InvoicePrintPrefs } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import {
   UpdateSalesSettingsDto,
   SalesSettingsResponseDto,
   PaperSize,
+  UpdateMemberInvoicePrintDto,
 } from './sales-settings.dto';
 
 @Injectable()
@@ -63,6 +65,36 @@ export class SalesSettingsService {
 
   async get(tenantId: string): Promise<SalesSettingsResponseDto> {
     return this.getOrCreate(tenantId);
+  }
+
+  /**
+   * The signed-in member's invoice layout in this workspace. Keyed on the
+   * membership, so the same person keeps separate answers per workspace and
+   * one member can never read another's.
+   */
+  async getMemberInvoicePrint(tenantId: string, userId: string): Promise<InvoicePrintPrefs> {
+    const member = await this.db.tenantUser.findUnique({
+      where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } },
+      select: { invoice_print_prefs: true },
+    });
+    if (!member) throw new NotFoundException('Not a member of this workspace.');
+    return normalizeInvoicePrintPrefs(member.invoice_print_prefs);
+  }
+
+  /** Merges the change onto what the member already saved, and stores the whole set. */
+  async updateMemberInvoicePrint(
+    tenantId: string,
+    userId: string,
+    dto: UpdateMemberInvoicePrintDto,
+  ): Promise<InvoicePrintPrefs> {
+    const current = await this.getMemberInvoicePrint(tenantId, userId);
+    const next = normalizeInvoicePrintPrefs({ ...current, ...dto });
+    const saved = await this.db.tenantUser.update({
+      where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } },
+      data: { invoice_print_prefs: next as any },
+      select: { invoice_print_prefs: true },
+    });
+    return normalizeInvoicePrintPrefs(saved.invoice_print_prefs);
   }
 
   private mapToResponse(settings: any): SalesSettingsResponseDto {

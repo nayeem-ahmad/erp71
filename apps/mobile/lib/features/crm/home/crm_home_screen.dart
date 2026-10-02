@@ -260,15 +260,44 @@ class _Pipeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final counts = overview.statusCounts;
-    final largest = counts.values.fold<int>(0, (a, b) => a > b ? a : b);
+    // Open stages in the workspace's order, then won, then lost — the same
+    // shape as the web funnel, whatever order the stages were arranged in.
+    final ranked = [...overview.stages.indexed]
+      ..sort((a, b) {
+        final byOutcome =
+            _outcomeRank(a.$2.stage.lifecycleStatus) -
+            _outcomeRank(b.$2.stage.lifecycleStatus);
+        return byOutcome != 0 ? byOutcome : a.$1 - b.$1;
+      });
+    // The workspace's own stages when the server sends them; the five
+    // lifecycles from a server that predates stages.
+    final rows = overview.stages.isNotEmpty
+        ? [
+            for (final (_, s) in ranked)
+              (
+                label: s.stage.name,
+                tone: s.stage.lifecycleStatus?.tone ?? Tone.neutral,
+                count: s.count,
+                link: '/leads?statusId=${s.stage.id}',
+              ),
+          ]
+        : [
+            for (final status in LeadStatus.values)
+              (
+                label: status.label,
+                tone: status.tone,
+                count: overview.statusCounts[status] ?? 0,
+                link: '/leads?status=${status.code}',
+              ),
+          ];
+    final largest = rows.fold<int>(0, (a, r) => a > r.count ? a : r.count);
     return SectionCard(
       title: 'Pipeline',
       child: Column(
         children: [
-          for (final status in LeadStatus.values)
+          for (final row in rows)
             InkWell(
-              onTap: () => context.go('/leads?status=${status.code}'),
+              onTap: () => context.go(row.link),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -276,7 +305,9 @@ class _Pipeline extends StatelessWidget {
                     SizedBox(
                       width: 88,
                       child: Text(
-                        status.label,
+                        row.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13),
                       ),
                     ),
@@ -285,20 +316,18 @@ class _Pipeline extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         child: LinearProgressIndicator(
                           minHeight: 8,
-                          value: largest == 0
-                              ? 0
-                              : (counts[status] ?? 0) / largest,
+                          value: largest == 0 ? 0 : row.count / largest,
                           backgroundColor: AppColors.neutralTint,
-                          color: status.tone == Tone.neutral
+                          color: row.tone == Tone.neutral
                               ? AppColors.primary
-                              : status.tone.foreground,
+                              : row.tone.foreground,
                         ),
                       ),
                     ),
                     SizedBox(
                       width: 48,
                       child: Text(
-                        formatCount(counts[status] ?? 0),
+                        formatCount(row.count),
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontSize: 13,
@@ -315,6 +344,12 @@ class _Pipeline extends StatelessWidget {
     );
   }
 }
+
+int _outcomeRank(LeadStatus? lifecycle) => switch (lifecycle) {
+  LeadStatus.converted => 1,
+  LeadStatus.lost => 2,
+  _ => 0,
+};
 
 class _StatLine extends StatelessWidget {
   const _StatLine({required this.label, required this.value});

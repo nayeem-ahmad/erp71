@@ -1332,6 +1332,15 @@ export const coreMessages = {
         printVoucher: "Imprimer le bon de paiement",
         voucherNumber: "N° de pièce",
         balanceAfter: "Solde après",
+        discount: {
+            label: "Remise accordée",
+            hint: "Faites grâce au client d’un petit reliquat ou arrondissez. Réduit le dû sans espèces et est comptabilisé en remise accordée.",
+            fillRemainder: "Remiser le reliquat",
+            settles: "Règle {amount}",
+            tooLarge: "La remise ne peut pas dépasser les {amount} encore dus après ce paiement.",
+            amountOrDiscount: "Saisissez un montant, une remise ou les deux.",
+            voucher: "Pièce de remise",
+        },
         print: {
             moneyReceipt: "Reçu",
             paymentVoucher: "Bon de paiement",
@@ -1431,6 +1440,15 @@ export const coreMessages = {
         printVoucher: "Imprimer le bon de paiement",
         voucherNumber: "N° de pièce",
         balanceAfter: "Solde après",
+        discount: {
+            label: "Remise obtenue",
+            hint: "Un petit reliquat dont le fournisseur vous a fait grâce. Réduit la dette sans espèces et est comptabilisé en remise obtenue.",
+            fillRemainder: "Remiser le reliquat",
+            settles: "Règle {amount}",
+            tooLarge: "La remise ne peut pas dépasser les {amount} encore dus après ce paiement.",
+            amountOrDiscount: "Saisissez un montant, une remise ou les deux.",
+            voucher: "Pièce de remise",
+        },
         print: {
             moneyReceipt: "Reçu",
             paymentVoucher: "Bon de paiement",

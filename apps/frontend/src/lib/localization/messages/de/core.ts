@@ -1332,6 +1332,15 @@ export const coreMessages = {
         printVoucher: "Zahlungsbeleg drucken",
         voucherNumber: "Beleg-Nr.",
         balanceAfter: "Saldo danach",
+        discount: {
+            label: "Gewährter Rabatt",
+            hint: "Erlassen Sie dem Kunden einen kleinen Restbetrag oder runden Sie ab. Senkt die Forderung ohne Bargeld und wird als gewährter Rabatt gebucht.",
+            fillRemainder: "Restbetrag als Rabatt",
+            settles: "Gleicht {amount} aus",
+            tooLarge: "Der Rabatt darf die nach dieser Zahlung noch offenen {amount} nicht übersteigen.",
+            amountOrDiscount: "Geben Sie einen Betrag, einen Rabatt oder beides ein.",
+            voucher: "Rabattbeleg",
+        },
         print: {
             moneyReceipt: "Quittung",
             paymentVoucher: "Zahlungsbeleg",
@@ -1431,6 +1440,15 @@ export const coreMessages = {
         printVoucher: "Zahlungsbeleg drucken",
         voucherNumber: "Beleg-Nr.",
         balanceAfter: "Saldo danach",
+        discount: {
+            label: "Erhaltener Rabatt",
+            hint: "Ein kleiner Restbetrag, den der Lieferant erlassen hat. Senkt die Verbindlichkeit ohne Bargeld und wird als erhaltener Rabatt gebucht.",
+            fillRemainder: "Restbetrag als Rabatt",
+            settles: "Gleicht {amount} aus",
+            tooLarge: "Der Rabatt darf die nach dieser Zahlung noch offenen {amount} nicht übersteigen.",
+            amountOrDiscount: "Geben Sie einen Betrag, einen Rabatt oder beides ein.",
+            voucher: "Rabattbeleg",
+        },
         print: {
             moneyReceipt: "Quittung",
             paymentVoucher: "Zahlungsbeleg",

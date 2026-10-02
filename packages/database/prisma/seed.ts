@@ -10,6 +10,7 @@ import { seedDemoAccount, DEMO_ACCOUNT_EMAIL } from './seed-demo';
 import { ROLE_DEFAULT_PERMISSIONS, UserRole, resolveBaseUserRole, SYSTEM_TENANT_ROLE_TO_USER_ROLE } from '@erp71/shared-types';
 import { seedDefaultTenantRoles } from './tenant-role.seed';
 import { seedPlatformReferenceData } from './seed-platform';
+import { DEFAULT_FOUND_REASONS } from './inventory-reasons.seed';
 
 const prisma = new PrismaClient();
 
@@ -312,10 +313,9 @@ async function main() {
         // FOUND is the mirror of SHRINKAGE: stock the shelf holds and the book
         // does not. Its own catalogue on purpose — "Theft" cannot explain a
         // surplus, and offering it would invite a nonsense audit trail.
-        { type: 'FOUND', code: 'MISCOUNT', label: 'Miscount' },
-        { type: 'FOUND', code: 'UNRECORDED_RETURN', label: 'Unrecorded Customer Return' },
-        { type: 'FOUND', code: 'UNRECORDED_RECEIPT', label: 'Unrecorded Supplier Receipt' },
-        { type: 'FOUND', code: 'UNKNOWN', label: 'Unknown Surplus' },
+        // Shared with sync-found-reasons.ts, which carries the same list to
+        // tenants created before FOUND existed; two copies would drift.
+        ...DEFAULT_FOUND_REASONS.map((reason) => ({ type: 'FOUND', ...reason })),
         { type: 'DISCREPANCY', code: 'COUNT_ERROR', label: 'Count Error' },
         { type: 'DISCREPANCY', code: 'RECONCILIATION', label: 'Reconciliation Adjustment' },
     ];
@@ -628,7 +628,9 @@ async function main() {
         {
             customer: customers[6], note: 'Catering order',
             items: [{ p: products[4], qty: 20 }, { p: products[6], qty: 10 }, { p: products[7], qty: 6 }],
-            payments: [{ method: 'CASH', amount: 2000 }, { method: 'BKASH', amount: 750 }],
+            // Pays the ৳2,250 bill exactly: the sale service rejects a payment
+            // above the total, so a seeded one would be a sale the app can't make.
+            payments: [{ method: 'CASH', amount: 1500 }, { method: 'BKASH', amount: 750 }],
         },
         {
             customer: customers[7], note: null,
@@ -718,6 +720,31 @@ async function main() {
             await prisma.customer.update({
                 where: { id: def.customer.id },
                 data: { total_spent: { increment: totalAmount } },
+            });
+        }
+
+        // Whatever was not paid is owed, exactly as SalesService books a
+        // credit sale: a CREDIT_SALE row on the customer's ledger and the same
+        // amount on their due balance. Without it the demo showed part-paid
+        // sales against customers who owed nothing.
+        const balanceDue = Math.round((totalAmount - amountPaid) * 100) / 100;
+        if (def.customer && balanceDue > 0.005) {
+            const { due_balance } = await prisma.customer.update({
+                where: { id: def.customer.id },
+                data: { due_balance: { increment: balanceDue } },
+                select: { due_balance: true },
+            });
+            await prisma.customerCreditTransaction.create({
+                data: {
+                    tenant_id: tenant.id,
+                    customer_id: def.customer.id,
+                    type: 'CREDIT_SALE',
+                    amount: balanceDue,
+                    balance_after: due_balance,
+                    reference_type: 'SALE',
+                    reference_id: sale.id,
+                    created_by: adminUser.id,
+                },
             });
         }
     }
@@ -879,7 +906,7 @@ async function main() {
         if (existing) continue;
 
         const subtotal = def.items.reduce((s, i) => s + i.qty * i.cost, 0);
-        await prisma.purchase.create({
+        const purchase = await prisma.purchase.create({
             data: {
                 tenant_id: tenant.id,
                 store_id: store.id,
@@ -896,6 +923,27 @@ async function main() {
                         line_total: i.qty * i.cost,
                     })),
                 },
+            },
+        });
+
+        // Seeded purchases are unpaid, so the whole bill is owed — booked the
+        // way PurchasesService books a credit purchase, so the supplier's
+        // payable and their open bills agree.
+        const { due_balance } = await prisma.supplier.update({
+            where: { id: def.supplier.id },
+            data: { due_balance: { increment: subtotal } },
+            select: { due_balance: true },
+        });
+        await prisma.supplierCreditTransaction.create({
+            data: {
+                tenant_id: tenant.id,
+                supplier_id: def.supplier.id,
+                type: 'CREDIT_PURCHASE',
+                amount: subtotal,
+                balance_after: due_balance,
+                reference_type: 'PURCHASE',
+                reference_id: purchase.id,
+                created_by: adminUser.id,
             },
         });
     }

@@ -1,5 +1,11 @@
+import {
+    DEFAULT_INVOICE_PRINT_PREFS,
+    type InvoicePadding,
+    type InvoicePrintPrefs,
+} from '@erp71/shared-types';
 import { formatBDT } from './format';
-import { invoiceDues } from './customer-credit';
+import { takaInWords } from './amount-in-words';
+import { invoiceDues, type InvoiceDues } from './customer-credit';
 import { paymentMethodLabel } from './payment-method-label';
 import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
@@ -68,14 +74,23 @@ function esc(str: string): string {
         .replaceAll('"', '&quot;');
 }
 
-function buildStyles(isThermal: boolean): string {
+const THANK_YOU = 'Thank you for your business!';
+
+/** The member's padding choice, vertical then horizontal. */
+const BODY_PADDING: Record<InvoicePadding, string> = {
+    narrow: '2mm 1mm',
+    normal: '6mm 4mm',
+    wide: '12mm 8mm',
+};
+
+function buildStyles(isThermal: boolean, layout: InvoicePrintPrefs): string {
     return `
         body { font-family: ${isThermal ? "'Courier New', Courier, monospace" : 'Arial, Helvetica, sans-serif'}; }
 
         /* Breathing room around the content. Stated here rather than on @page
            so it adds to the page margin instead of replacing it — a roll gets
            none, where padding would only waste paper. */
-        .invoice-body { ${isThermal ? 'padding:0;' : 'padding:6mm 4mm;'} }
+        .invoice-body { ${isThermal ? 'padding:0;' : `padding:${BODY_PADDING[layout.padding]};`} }
 
         /* Meta grid */
         .meta-grid { ${isThermal ? 'margin:4px 0;' : 'display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;'} }
@@ -118,6 +133,9 @@ function buildStyles(isThermal: boolean): string {
         .item-disc--empty { color:inherit; }
         .item-total { width:${isThermal ? '17%' : '18%'}; text-align:right; font-weight:bold; }
         .sku        { font-size:9px; color:#888; }
+        .item-sl    { width:${isThermal ? '8%' : '6%'}; text-align:center; color:#6b7280; }
+        .items-table thead th.item-sl { text-align:center; }
+        ${isThermal ? '' : tableStyles()}
 
         /* Totals */
         .totals-wrap { ${isThermal ? '' : 'display:flex; justify-content:flex-end; margin-bottom:20px;'} }
@@ -158,9 +176,33 @@ function buildStyles(isThermal: boolean): string {
                 : 'background:#fef9c3; border:1px solid #fde68a; border-radius:6px; padding:10px 14px; margin-bottom:20px;'}
         }
 
+        /* The total spelled out, so the figure cannot be misread or altered. */
+        .amount-words { font-size:${isThermal ? '10px' : '12px'}; color:#374151; margin:${isThermal ? '4px 0' : '0 0 20px 0'}; }
+
+        /* Two ruled lines to sign on, pushed apart to either edge. */
+        .signatures { display:flex; justify-content:space-between; gap:40px; margin-top:48px; }
+        .signature { flex:0 0 40%; border-top:1px solid #6b7280; padding-top:4px; text-align:center; font-size:11px; color:#374151; }
+
+        /* The member's own closing text, kept inside the body so it prints
+           even under a letterhead whose footer band replaces the default. */
+        .invoice-note { text-align:center; white-space:pre-line; font-size:${isThermal ? '10px' : '12px'}; color:#555; margin-top:${isThermal ? '10px' : '24px'}; }
+
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
         ${isThermal ? '' : compactStyles()}
     `;
+}
+
+/**
+ * The item table's optional looks. Every one is keyed on its own modifier
+ * class, so the default table carries none and prints exactly as it did.
+ * Sheet paper only: on a roll a grey fill prints as dither.
+ */
+function tableStyles(): string {
+    return `
+        .items-table--striped tbody tr:nth-child(even) td { background:#f3f4f6; }
+        .items-table--grid { border:1px solid #d1d5db; }
+        .items-table--grid thead th, .items-table--grid tbody td { border:1px solid #d1d5db; }
+        .items-table--shaded-header thead th { background:#f3f4f6; color:#111827; border-bottom:1px solid #d1d5db; }`;
 }
 
 /**
@@ -193,34 +235,76 @@ function compactStyles(): string {
         ${c} .pay-label, ${c} .pay-amount { font-size:11px; padding:1px 0; }
         ${c} .pay-ref { font-size:10px; }
         ${c} .note-box { font-size:11px; padding:5px 8px; margin-bottom:6px; }
+        ${c} .amount-words { font-size:11px; margin-bottom:6px; }
+        ${c} .signatures { margin-top:28px; }
+        ${c} .invoice-note { font-size:10px; margin-top:8px; }
         ${c} .footer { font-size:10px; margin-top:8px; padding-top:6px; }`;
 }
 
 /**
  * The memo's closing lines under the total: paid, this invoice's due, what the
- * customer owed before it, and the total due. Printed only for a customer who
- * owes something either way, so a settled invoice looks as it always has.
+ * customer owed before it, and the total due.
+ *
+ * Which of them print is the member's `balance` choice. By default
+ * (`when-owed`) they print only for a customer who owes something either way,
+ * so a settled invoice looks as it always has. `always` shows the running
+ * balance even at zero; `never` keeps it off the paper but still says what this
+ * invoice leaves unpaid. A walk-in has no account, so prints none of it.
  */
-function buildDueRows(data: InvoiceData): string {
+function buildDueRows(data: InvoiceData, layout: InvoicePrintPrefs): string {
     const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
-    const dues = invoiceDues(data.total, paid, data.previousDue);
+    let dues: InvoiceDues | null = invoiceDues(data.total, paid, data.previousDue);
+
+    // Null with an account behind it means nothing is owed either way.
+    if (!dues && layout.balance === 'always' && data.previousDue != null && Number.isFinite(data.previousDue)) {
+        dues = { paid, invoiceDue: 0, previousDue: data.previousDue, totalDue: data.previousDue };
+    }
     if (!dues) return '';
+
+    const owesOnThisInvoice = dues.invoiceDue > 0.005;
+    const dueRow = owesOnThisInvoice ? `<tr><td>Due</td><td>${formatBDT(dues.invoiceDue)}</td></tr>` : '';
+
+    if (layout.balance === 'never') {
+        return owesOnThisInvoice
+            ? `
+            <tr><td>Paid</td><td>${formatBDT(dues.paid)}</td></tr>
+            ${dueRow}`
+            : '';
+    }
 
     return `
             <tr><td>Paid</td><td>${formatBDT(dues.paid)}</td></tr>
-            ${dues.invoiceDue > 0.005 ? `<tr><td>Due</td><td>${formatBDT(dues.invoiceDue)}</td></tr>` : ''}
+            ${dueRow}
             <tr><td>Previous Due</td><td>${formatBDT(dues.previousDue)}</td></tr>
             <tr class="total-due"><td>Total Due</td><td>${formatBDT(dues.totalDue)}</td></tr>`;
 }
 
-function buildBody(data: InvoiceData, isThermal: boolean): string {
-    const itemRows = data.items.map((item) => {
+/**
+ * The member's closing text, or nothing. `null` is the built-in thank-you,
+ * which stays in the document footer where it always printed (and where a
+ * designed letterhead footer still replaces it); anything the member wrote
+ * prints in the body instead, so it is never hidden by a letterhead.
+ */
+function memberNoteHtml(layout: InvoicePrintPrefs): string {
+    return layout.footer_text ? `<div class="invoice-note">${esc(layout.footer_text)}</div>` : '';
+}
+
+function buildBody(data: InvoiceData, isThermal: boolean, layout: InvoicePrintPrefs): string {
+    const serial = layout.serial_column;
+    const showDiscount = !layout.hide_empty_discount || data.items.some((item) => !!item.discount);
+    const tableClass =
+        isThermal || layout.table_style === 'minimal'
+            ? 'items-table'
+            : `items-table items-table--${layout.table_style}`;
+
+    const itemRows = data.items.map((item, index) => {
         const lineTotal = item.quantity * item.unitPrice - (item.discount ?? 0);
         return `<tr>
+            ${serial ? `<td class="item-sl">${index + 1}</td>` : ''}
             <td class="item-name">${esc(item.name)}${item.sku ? `<br><span class="sku">${esc(item.sku)}</span>` : ''}</td>
             <td class="item-qty">${item.quantity}</td>
             <td class="item-price">${formatBDT(item.unitPrice)}</td>
-            <td class="${item.discount ? 'item-disc' : 'item-disc item-disc--empty'}">${item.discount ? formatBDT(item.discount) : '—'}</td>
+            ${showDiscount ? `<td class="${item.discount ? 'item-disc' : 'item-disc item-disc--empty'}">${item.discount ? formatBDT(item.discount) : '—'}</td>` : ''}
             <td class="item-total">${formatBDT(lineTotal)}</td>
         </tr>`;
     }).join('');
@@ -251,13 +335,14 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
 
     <hr class="divider">
 
-    <table class="items-table">
+    <table class="${tableClass}">
         <thead>
             <tr>
+                ${serial ? '<th class="item-sl">SL</th>' : ''}
                 <th class="item-name">Item</th>
                 <th class="item-qty">Qty</th>
                 <th class="item-price">Unit Price</th>
-                <th class="item-disc">Discount</th>
+                ${showDiscount ? '<th class="item-disc">Discount</th>' : ''}
                 <th class="item-total">Total</th>
             </tr>
         </thead>
@@ -275,9 +360,10 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
             ${data.laborCost ? `<tr><td>Labour</td><td>${formatBDT(data.laborCost)}</td></tr>` : ''}
             ${data.rounding ? `<tr><td>Rounding</td><td>${formatBDT(data.rounding)}</td></tr>` : ''}
             <tr class="grand-total"><td>TOTAL</td><td>${formatBDT(data.total)}</td></tr>
-            ${buildDueRows(data)}
+            ${buildDueRows(data, layout)}
         </table>
     </div>
+    ${layout.amount_in_words ? `<p class="amount-words"><strong>In words:</strong> ${takaInWords(data.total)}</p>` : ''}
 
     <hr class="divider">
 
@@ -287,13 +373,24 @@ function buildBody(data: InvoiceData, isThermal: boolean): string {
     </div>
 
     ${data.note ? `<div class="note-box"><strong>Note:</strong> ${esc(data.note)}</div>` : ''}
+    ${layout.signature_lines && !isThermal ? `
+    <div class="signatures">
+        <div class="signature">Customer's Signature</div>
+        <div class="signature">Authorised Signature</div>
+    </div>` : ''}
+    ${memberNoteHtml(layout)}
     </div>`;
 }
 
+/**
+ * @param layout The printing member's own layout choices (see
+ *   `useInvoicePrintPrefs`); the built-in layout when omitted.
+ */
 export function printSalesInvoice(
     data: InvoiceData,
     paperSize: PaperSize = 'A4',
     preview?: PrintPreviewOptions,
+    layout: InvoicePrintPrefs = DEFAULT_INVOICE_PRINT_PREFS,
 ): void {
     const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
 
@@ -314,9 +411,9 @@ export function printSalesInvoice(
         paperSize,
         headerConfig: data.headerConfig,
         headerHtml,
-        bodyHtml: buildBody(data, isThermal),
-        footerHtml: '<div class="footer">Thank you for your business!</div>',
-        styles: buildStyles(isThermal),
+        bodyHtml: buildBody(data, isThermal, layout),
+        footerHtml: layout.footer_text === null ? `<div class="footer">${THANK_YOU}</div>` : '',
+        styles: buildStyles(isThermal, layout),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
         // A long item list is exactly what compact is for.

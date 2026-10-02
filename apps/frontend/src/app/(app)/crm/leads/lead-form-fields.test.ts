@@ -1,4 +1,4 @@
-import { emptyLeadForm, leadFormToPayload, leadToFormState, setLeadOwner } from './lead-form-fields';
+import { emptyLeadForm, leadFormToPayload, leadToFormState, selectLeadStage, setLeadOwner, validateLeadForm } from './lead-form-fields';
 
 describe('lead photo fields', () => {
     it('starts empty', () => {
@@ -140,5 +140,38 @@ describe('lead address', () => {
         expect(leadFormToPayload({ ...emptyLeadForm(), name: 'Rahim', address: '  12 Gulshan Ave  ' }).address)
             .toBe('12 Gulshan Ave');
         expect(leadFormToPayload({ ...emptyLeadForm(), name: 'Rahim' }).address).toBe('');
+    });
+});
+
+describe('lead stage', () => {
+    const NEGOTIATION = {
+        id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED',
+        sort_order: 4, is_system: false, is_active: true,
+    };
+    const LOST = { id: 'st-lost', code: 'LOST', name: 'Lost', lifecycle: 'LOST', sort_order: 6, is_system: true, is_active: true };
+
+    it('reads the stage and its lifecycle off a lead', () => {
+        const form = leadToFormState({ name: 'R', status: 'QUALIFIED', status_id: 'st-neg' });
+        expect(form.status_id).toBe('st-neg');
+        expect(form.status).toBe('QUALIFIED');
+    });
+
+    it('sends the stage id rather than the lifecycle once a stage is chosen', () => {
+        const payload = leadFormToPayload({ ...emptyLeadForm(), name: 'R', status: 'QUALIFIED', status_id: 'st-neg' });
+        expect(payload.status_id).toBe('st-neg');
+        expect(payload).not.toHaveProperty('status');
+    });
+
+    it('falls back to the lifecycle code when the tenant has no stages yet', () => {
+        const payload = leadFormToPayload({ ...emptyLeadForm(), name: 'R' });
+        expect(payload.status).toBe('NEW');
+        expect(payload).not.toHaveProperty('status_id');
+    });
+
+    it('carries the chosen stage\'s lifecycle, so lost-reason rules follow it', () => {
+        const form = selectLeadStage({ ...emptyLeadForm(), name: 'R' }, 'st-lost', [NEGOTIATION, LOST]);
+        expect(form).toEqual(expect.objectContaining({ status_id: 'st-lost', status: 'LOST' }));
+        expect(validateLeadForm(form)).toBe('LOST_REASON_REQUIRED');
+        expect(leadFormToPayload({ ...form, lost_reason: 'Price' }).lost_reason).toBe('Price');
     });
 });

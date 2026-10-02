@@ -31,6 +31,7 @@ describe('StorefrontEnquiriesService', () => {
                 findFirst: jest.fn().mockResolvedValue({ id: 'src-web', code: 'WEBSITE', score_weight: 20 }),
             },
             conversationChannel: { findFirst: jest.fn().mockResolvedValue({ id: 'chan-note' }) },
+            leadStatusOption: { findFirst: jest.fn().mockResolvedValue({ id: 'st-new' }) },
         };
         taxonomy = { fallbackSource: jest.fn().mockResolvedValue({ id: 'src-other', code: 'OTHER' }) };
 
@@ -55,6 +56,7 @@ describe('StorefrontEnquiriesService', () => {
             source_id: 'src-web',
             source: 'WEBSITE',
             status: 'NEW',
+            status_id: 'st-new',
             // Nobody filed it, so nobody owns it — see the note in createLead.
             assigned_to: null,
             created_by: null,

@@ -988,7 +988,7 @@ export type CustomFieldDef = { key: string; label: string; order: number };
  * The tenant-managed CRM lookup lists, all served by `/crm/lead-taxonomy/:kind`
  * and all edited from the CRM Setup screen.
  */
-export type CrmListKind = 'sources' | 'categories' | 'channels' | 'purposes';
+export type CrmListKind = 'sources' | 'categories' | 'channels' | 'purposes' | 'statuses';
 
 /**
  * A CRM message template as the API accepts it. `channel_id` / `purpose_id` are
@@ -1870,7 +1870,7 @@ export const api = {
             },
         );
     },
-    recordCreditPayment: (id: string, data: { amount: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -1889,7 +1889,7 @@ export const api = {
         return fetchAllPages(`/customers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerCreditPayment: (paymentId: string) => fetchWithAuth(`/customers/credit/payments/${paymentId}`),
-    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -1943,9 +1943,10 @@ export const api = {
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
     /** `mine` narrows to the caller's own leads; the server resolves the id. */
-    getLeads: (params?: { status?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    getLeads: (params?: { status?: string; statusId?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
+        if (params?.statusId) query.set('statusId', params.statusId);
         if (params?.source) query.set('source', params.source);
         if (params?.category) query.set('category', params.category);
         if (params?.priority) query.set('priority', params.priority);
@@ -2712,6 +2713,7 @@ export const api = {
     },
     recordSupplierCreditPayment: (id: string, data: {
         amount: number;
+        discount?: number;
         direction?: 'pay' | 'receive';
         notes?: string;
         allocations?: { purchaseId: string; amount: number }[];
@@ -2744,7 +2746,7 @@ export const api = {
         return fetchAllPages(`/suppliers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSupplierCreditPayment: (paymentId: string) => fetchWithAuth(`/suppliers/credit/payments/${paymentId}`),
-    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
+    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
         fetchWithAuth(`/suppliers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -5195,6 +5197,13 @@ export const api = {
     // Sales Settings
     getSalesSettings: () => fetchWithAuth('/sales-settings'),
     updateSalesSettings: (data: any) => fetchWithAuth('/sales-settings', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    // The signed-in member's own invoice layout (see useInvoicePrintPrefs).
+    getMyInvoicePrint: () => fetchWithAuth('/sales-settings/my-invoice-print'),
+    updateMyInvoicePrint: (data: Record<string, unknown>) => fetchWithAuth('/sales-settings/my-invoice-print', {
         method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },

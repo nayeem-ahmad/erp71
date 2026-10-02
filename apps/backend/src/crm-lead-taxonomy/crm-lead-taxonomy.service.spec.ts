@@ -55,6 +55,14 @@ describe('CrmLeadTaxonomyService', () => {
                 count: jest.fn().mockResolvedValue(5),
                 aggregate: jest.fn().mockResolvedValue({ _max: { sort_order: 3 } }),
             },
+            leadStatusOption: {
+                findMany: jest.fn().mockResolvedValue([]),
+                findFirst: jest.fn().mockResolvedValue(null),
+                create: jest.fn(),
+                update: jest.fn(),
+                delete: jest.fn(),
+                aggregate: jest.fn().mockResolvedValue({ _max: { sort_order: 5 } }),
+            },
             crmActivityPurpose: {
                 findMany: jest.fn().mockResolvedValue([]),
                 findFirst: jest.fn().mockResolvedValue(null),
@@ -438,6 +446,143 @@ describe('CrmLeadTaxonomyService', () => {
             await service.remove('tenant-1', LeadTaxonomyKind.CATEGORY, 'cat-1');
 
             expect(db.leadCategoryOption.delete).toHaveBeenCalled();
+        });
+    });
+    describe('statuses', () => {
+        const stage = (over: Record<string, unknown>) => ({
+            id: 'st-x', tenant_id: 'tenant-1', code: 'X', name: 'X',
+            lifecycle: 'QUALIFIED', is_system: false, is_active: true, ...over,
+        });
+        const negotiation = stage({ id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation' });
+        const contacted = stage({ id: 'st-con', code: 'CONTACTED', name: 'Contacted', lifecycle: 'CONTACTED', is_system: true });
+
+        it('files every tenant-created stage as an open (QUALIFIED) stage', async () => {
+            await service.create('tenant-1', LeadTaxonomyKind.STATUS, { name: 'Proposal Sent' });
+
+            expect(db.leadStatusOption.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    code: 'PROPOSAL_SENT',
+                    lifecycle: 'QUALIFIED',
+                    is_system: false,
+                    sort_order: 6,
+                }),
+            });
+        });
+
+        it('slots a new stage in after the open ones, ahead of Converted and Lost', async () => {
+            db.leadStatusOption.findMany.mockImplementation(async ({ select }: any) =>
+                select?.lifecycle
+                    ? [
+                        { id: 'n', sort_order: 1, lifecycle: 'NEW' },
+                        { id: 'q', sort_order: 3, lifecycle: 'QUALIFIED' },
+                        { id: 'w', sort_order: 4, lifecycle: 'CONVERTED' },
+                        { id: 'l', sort_order: 5, lifecycle: 'LOST' },
+                    ]
+                    : [],
+            );
+            db.leadStatusOption.updateMany = jest.fn();
+
+            await service.create('tenant-1', LeadTaxonomyKind.STATUS, { name: 'Negotiation' });
+
+            expect(db.leadStatusOption.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', sort_order: { gte: 4 } },
+                data: { sort_order: { increment: 1 } },
+            });
+            expect(db.leadStatusOption.create.mock.calls[0][0].data.sort_order).toBe(4);
+        });
+
+        it.each(['NEW', 'CONVERTED', 'LOST'])('refuses to hide the %s status', async (code) => {
+            db.leadStatusOption.findFirst.mockResolvedValue(
+                stage({ code, name: code, lifecycle: code, is_system: true }),
+            );
+
+            await expect(
+                service.update('tenant-1', LeadTaxonomyKind.STATUS, 'st-x', { is_active: false }),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.leadStatusOption.update).not.toHaveBeenCalled();
+        });
+
+        it.each(['NEW', 'CONVERTED', 'LOST'])('refuses to delete the %s status', async (code) => {
+            db.leadStatusOption.findFirst.mockResolvedValue(
+                stage({ code, name: code, lifecycle: code, is_system: true }),
+            );
+
+            await expect(
+                service.remove('tenant-1', LeadTaxonomyKind.STATUS, 'st-x'),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('still lets the protected statuses be renamed', async () => {
+            db.leadStatusOption.findFirst.mockResolvedValue(
+                stage({ code: 'LOST', name: 'Lost', lifecycle: 'LOST', is_system: true }),
+            );
+
+            await service.update('tenant-1', LeadTaxonomyKind.STATUS, 'st-x', { name: 'Dropped' });
+
+            expect(db.leadStatusOption.update).toHaveBeenCalledWith({
+                where: { id: 'st-x' },
+                data: { name: 'Dropped' },
+            });
+        });
+
+        it('lets Contacted and Qualified be hidden', async () => {
+            db.leadStatusOption.findFirst.mockResolvedValue(contacted);
+
+            await service.update('tenant-1', LeadTaxonomyKind.STATUS, contacted.id, { is_active: false });
+
+            expect(db.leadStatusOption.update).toHaveBeenCalledWith({
+                where: { id: contacted.id },
+                data: { is_active: false },
+            });
+        });
+
+        it('counts usage against Lead.status_id', async () => {
+            db.lead.groupBy.mockResolvedValue([{ status_id: 'st-neg', _count: { _all: 4 } }]);
+
+            expect(await service.usage('tenant-1', LeadTaxonomyKind.STATUS)).toEqual({ 'st-neg': 4 });
+            expect(db.lead.groupBy).toHaveBeenCalledWith(
+                expect.objectContaining({ by: ['status_id'] }),
+            );
+        });
+
+        it('moves leads to the replacement stage and its lifecycle together', async () => {
+            db.leadStatusOption.findFirst.mockResolvedValueOnce(negotiation).mockResolvedValueOnce(contacted);
+            db.lead.count.mockResolvedValue(3);
+
+            await service.remove('tenant-1', LeadTaxonomyKind.STATUS, negotiation.id, contacted.id);
+
+            expect(db.lead.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', status_id: negotiation.id },
+                data: { status_id: contacted.id, status: 'CONTACTED' },
+            });
+            expect(db.leadStatusOption.delete).toHaveBeenCalledWith({ where: { id: negotiation.id } });
+        });
+
+        it.each(['CONVERTED', 'LOST'])(
+            'refuses to move open leads onto a %s stage — closing a lead is a deliberate act',
+            async (lifecycle) => {
+                db.leadStatusOption.findFirst
+                    .mockResolvedValueOnce(negotiation)
+                    .mockResolvedValueOnce(stage({ id: 'st-closed', code: lifecycle, lifecycle, is_system: true }));
+                db.lead.count.mockResolvedValue(3);
+
+                await expect(
+                    service.remove('tenant-1', LeadTaxonomyKind.STATUS, negotiation.id, 'st-closed'),
+                ).rejects.toThrow(BadRequestException);
+                expect(db.lead.updateMany).not.toHaveBeenCalled();
+            },
+        );
+
+        it('refuses to move leads onto a hidden stage', async () => {
+            db.leadStatusOption.findFirst
+                .mockResolvedValueOnce(negotiation)
+                .mockResolvedValueOnce({ ...contacted, is_active: false });
+            db.lead.count.mockResolvedValue(3);
+
+            await expect(
+                service.remove('tenant-1', LeadTaxonomyKind.STATUS, negotiation.id, contacted.id),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.lead.updateMany).not.toHaveBeenCalled();
         });
     });
 });

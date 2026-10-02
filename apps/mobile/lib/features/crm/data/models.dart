@@ -5,8 +5,12 @@ import '../../../ui/widgets.dart';
 // snake_case, embedded relations camelCase (`assignee`, `sourceOption`), and
 // every timestamp an ISO-8601 UTC string.
 
-/// A lead's place in the pipeline — a fixed enum on the server, not a
-/// configurable stage.
+/// A lead's *lifecycle*: open (new, contacted, qualified), won or lost. Every
+/// rule that cares whether a lead is still being worked reads this.
+///
+/// What the workspace calls the lead's stage is [Lead.stage], one of its own
+/// configurable pipeline stages; every stage maps onto one of these five, and
+/// a workspace's custom stages are all open ([qualified]).
 enum LeadStatus {
   newLead('NEW', 'New', Tone.primary),
   contacted('CONTACTED', 'Contacted', Tone.neutral),
@@ -87,6 +91,7 @@ class CrmOption {
     required this.code,
     required this.name,
     this.icon,
+    this.lifecycle,
     this.isActive = true,
   });
 
@@ -96,6 +101,7 @@ class CrmOption {
           code: (json['code'] as String?) ?? '',
           name: (json['name'] as String?) ?? '',
           icon: json['icon'] as String?,
+          lifecycle: json['lifecycle'] as String?,
           isActive: json['is_active'] != false,
         )
       : null;
@@ -106,7 +112,13 @@ class CrmOption {
 
   /// An emoji, on channels and purposes.
   final String? icon;
+
+  /// On lead stages: the [LeadStatus] code a lead on this stage carries.
+  final String? lifecycle;
   final bool isActive;
+
+  /// The lifecycle of a lead stage; null on the other lists.
+  LeadStatus? get lifecycleStatus => LeadStatus.parse(lifecycle);
 
   String get label => icon == null || icon!.isEmpty ? name : '$icon $name';
 }
@@ -118,6 +130,7 @@ class Lead {
     required this.status,
     required this.priority,
     required this.score,
+    this.stage,
     this.mobile,
     this.email,
     this.address,
@@ -147,6 +160,7 @@ class Lead {
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
       status: LeadStatus.parse(json['status']) ?? LeadStatus.newLead,
+      stage: CrmOption.fromJson(json['statusOption']),
       priority: LeadPriority.parse(json['priority']) ?? LeadPriority.medium,
       score: (json['score'] as num?)?.toInt() ?? 0,
       mobile: _text(json['mobile']),
@@ -178,6 +192,13 @@ class Lead {
   final String id;
   final String name;
   final LeadStatus status;
+
+  /// The workspace's pipeline stage. Null on a lead the server has not given
+  /// one yet, or from a server that predates stages.
+  final CrmOption? stage;
+
+  /// What to call the lead's status: the stage's name, else the lifecycle's.
+  String get statusLabel => stage?.name ?? status.label;
   final LeadPriority priority;
 
   /// 0–100, recomputed by the server on writes only, so it can lag.
@@ -393,6 +414,7 @@ class Activity {
 class CrmOverview {
   const CrmOverview({
     required this.statusCounts,
+    this.stages = const [],
     required this.open,
     required this.createdInPeriod,
     required this.convertedInPeriod,
@@ -417,6 +439,12 @@ class CrmOverview {
       statusCounts: {
         for (final status in LeadStatus.values) status: n(counts, status.code),
       },
+      stages: [
+        if (pipeline['stages'] case final List<dynamic> rows)
+          for (final row in rows)
+            if (CrmOption.fromJson(row) case final stage?)
+              StageCount(stage, ((row as Map)['count'] as num?)?.toInt() ?? 0),
+      ],
       open: n(pipeline, 'open'),
       createdInPeriod: n(pipeline, 'created_in_period'),
       convertedInPeriod: n(pipeline, 'converted_in_period'),
@@ -432,8 +460,12 @@ class CrmOverview {
     );
   }
 
-  /// The whole book, not windowed.
+  /// The whole book, not windowed, by lifecycle.
   final Map<LeadStatus, int> statusCounts;
+
+  /// The whole book by the workspace's own stages, in its order. Empty from a
+  /// server that predates stages.
+  final List<StageCount> stages;
   final int open;
 
   /// The last 30 days, the dashboard's default window.
@@ -450,6 +482,14 @@ class CrmOverview {
   final int overdue;
   final int totalPending;
   final int loggedInPeriod;
+}
+
+/// One pipeline stage and how many leads sit on it.
+class StageCount {
+  const StageCount(this.stage, this.count);
+
+  final CrmOption stage;
+  final int count;
 }
 
 Map<String, dynamic> _map(Object? value) =>

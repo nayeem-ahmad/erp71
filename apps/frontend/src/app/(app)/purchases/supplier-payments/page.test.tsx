@@ -106,3 +106,43 @@ describe('SupplierPaymentsPage — duplicate', () => {
         expect(screen.queryByText(/Copied from/)).not.toBeInTheDocument();
     });
 });
+
+describe('SupplierPaymentsPage — discount', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (api.getSupplierCreditPayments as jest.Mock).mockResolvedValue([]);
+        (api.getSuppliers as jest.Mock).mockResolvedValue([
+            { id: 'sup-1', name: 'Fresh Farms', phone: '01710000000', due_balance: 5000 },
+        ]);
+        (api.getSupplierBillingSummary as jest.Mock).mockResolvedValue({
+            open_bills: [
+                { id: 'pur-1', purchase_number: 'PUR-00001', total_amount: 5000, paid_amount: 0, balance_due: 5000, payment_status: 'UNPAID' },
+            ],
+        });
+        (api.recordSupplierCreditPayment as jest.Mock).mockResolvedValue({ id: 'pay-2' });
+    });
+
+    it('lets money plus discount settle a whole bill', async () => {
+        render(<SupplierPaymentsPage />);
+        // The form defaults to the first supplier, so wait for them to load.
+        await screen.findByText('No supplier payments in this period');
+        fireEvent.click(screen.getByRole('button', { name: /new supplier payment/i }));
+
+        fireEvent.change(await screen.findByLabelText('Amount'), { target: { value: '4998' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Discount the remainder' }));
+        expect(screen.getByLabelText('Discount received')).toHaveValue(2);
+
+        const billInput = (await screen.findAllByPlaceholderText('0.00')).find((el) => el.id !== 'supplier-payment-discount')!;
+        fireEvent.change(billInput, { target: { value: '5000' } });
+        fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
+
+        await waitFor(() => {
+            expect(api.recordSupplierCreditPayment).toHaveBeenCalledWith('sup-1', expect.objectContaining({
+                amount: 4998,
+                discount: 2,
+                direction: 'pay',
+                allocations: [{ purchaseId: 'pur-1', amount: 5000 }],
+            }));
+        });
+    });
+});

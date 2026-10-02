@@ -203,9 +203,23 @@ export class UpdateCustomerDto {
 }
 
 export class RecordCreditPaymentDto {
+    /**
+     * Money received (or paid out). May be 0 only when `discount` settles the
+     * whole remainder on its own — the leftover ৳3 nobody will ever collect.
+     */
     @IsNumber()
-    @Min(0.01)
+    @Min(0)
     amount: number;
+
+    /**
+     * Receipts only: a remainder the shop lets the customer off, settled with
+     * this payment. Lowers the due alongside `amount` and posts to Discount
+     * Allowed, never to cash.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    discount?: number;
 
     @IsOptional()
     @IsEnum(CustomerPaymentDirectionDto)
@@ -297,8 +311,14 @@ export class ListCustomerWriteOffsQueryDto extends PaginationDto {
 export class UpdateCreditPaymentDto {
     @IsOptional()
     @IsNumber()
-    @Min(0.01)
+    @Min(0)
     amount?: number;
+
+    /** Omitted keeps the payment's current discount; 0 removes it. */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    discount?: number;
 
     @IsOptional()
     @IsEnum(CustomerPaymentDirectionDto)

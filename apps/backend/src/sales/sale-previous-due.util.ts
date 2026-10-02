@@ -78,13 +78,17 @@ export async function resolveSalePreviousDue(
             // Already counted below, whenever they were written.
             id: { notIn: ownRows.map((row) => row.id) },
         },
-        _sum: { amount: true },
+        _sum: { amount: true, discount_amount: true },
     });
 
     const movedSince =
         ownRows.reduce((sum, row) => sum + customerLedgerDueDelta(row.type, Number(row.amount)), 0)
         + laterByType.reduce(
-            (sum, group) => sum + customerLedgerDueDelta(group.type, Number(group._sum.amount ?? 0)),
+            (sum, group) => sum + customerLedgerDueDelta(
+                group.type,
+                Number(group._sum.amount ?? 0),
+                Number(group._sum.discount_amount ?? 0),
+            ),
             0,
         );
 

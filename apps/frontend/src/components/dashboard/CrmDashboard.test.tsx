@@ -98,6 +98,35 @@ describe('CrmDashboard', () => {
         expect(screen.getByText('17 leads touched')).toBeInTheDocument();
     });
 
+    it('draws the funnel from the tenant\'s own stages, linking each bar at its stage', async () => {
+        (api.getCrmDashboardOverview as jest.Mock).mockResolvedValue(overview({
+            pipeline: {
+                ...overview().pipeline,
+                stages: [
+                    { id: 'st-new', code: 'NEW', name: 'New', lifecycle: 'NEW', is_system: true, count: 12 },
+                    { id: 'st-lost', code: 'LOST', name: 'Lost', lifecycle: 'LOST', is_system: true, count: 2 },
+                    { id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED', is_system: false, count: 3 },
+                    { id: 'st-won', code: 'CONVERTED', name: 'Won deal', lifecycle: 'CONVERTED', is_system: true, count: 6 },
+                ],
+            },
+        }));
+
+        render(<CrmDashboard {...identity} />);
+
+        const negotiation = await screen.findByRole('link', { name: /Negotiation/ });
+        expect(negotiation).toHaveAttribute('href', '/crm/leads?statusId=st-neg');
+        // Open stages first in the tenant's order, then won, then lost.
+        const order = screen.getAllByRole('link')
+            .map((a) => a.getAttribute('href'))
+            .filter((h) => h?.includes('statusId='));
+        expect(order).toEqual([
+            '/crm/leads?statusId=st-new',
+            '/crm/leads?statusId=st-neg',
+            '/crm/leads?statusId=st-won',
+            '/crm/leads?statusId=st-lost',
+        ]);
+    });
+
     it('raises overdue follow-ups, stale and unowned leads for attention', async () => {
         render(<CrmDashboard {...identity} />);
 

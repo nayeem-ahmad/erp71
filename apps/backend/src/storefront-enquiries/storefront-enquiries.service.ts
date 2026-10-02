@@ -158,6 +158,12 @@ export class StorefrontEnquiriesService {
             0,
         );
 
+        // A tenant not yet synced has no stages; the boot sync fills status_id in.
+        const newStage = await this.db.leadStatusOption.findFirst({
+            where: { tenant_id: tenantId, code: LeadStatus.NEW },
+            select: { id: true },
+        });
+
         const lead = await this.db.lead.create({
             data: {
                 tenant_id: tenantId,
@@ -168,6 +174,7 @@ export class StorefrontEnquiriesService {
                 source_id: source?.id ?? null,
                 source: coerceLegacySource(source?.code),
                 status: LeadStatus.NEW,
+                status_id: newStage?.id ?? null,
                 priority: 'MEDIUM',
                 score,
                 // Unassigned on purpose. Every other lead is owned by whoever

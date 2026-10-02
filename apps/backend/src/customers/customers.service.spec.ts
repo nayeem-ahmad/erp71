@@ -512,6 +512,157 @@ describe('CustomersService', () => {
     });
   });
 
+  describe('payment discount', () => {
+    const posting = () => require('../accounting/posting.utils');
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      posting().voidAutoPostedVoucher.mockClear();
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+    });
+
+    it('settles amount + discount and posts the discount as its own leg', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 10003 });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-d', payment_number: 'CPY-00001', created_at: new Date() });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 10000, discount: 3 });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: 10000, discount_amount: 3, balance_after: 0 }),
+        }),
+      );
+      expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { due_balance: 0 } });
+
+      const calls = posting().autoPostFromRules.mock.calls.map((c: any[]) => c[0]);
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toMatchObject({ eventType: 'customer_payment', conditionValue: 'receive', amount: 10000 });
+      expect(calls[0].legKey).toBeUndefined();
+      expect(calls[1]).toMatchObject({
+        eventType: 'customer_payment',
+        conditionKey: 'payment_direction',
+        conditionValue: 'discount',
+        legKey: 'discount',
+        sourceId: 'pay-d',
+        amount: 3,
+        partyType: 'CUSTOMER',
+        partyId: 'c1',
+      });
+    });
+
+    it('posts no discount leg when there is no discount', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 500 });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-n', payment_number: 'CPY-00001' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100 });
+
+      expect(posting().autoPostFromRules).toHaveBeenCalledTimes(1);
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ discount_amount: 0 }) }),
+      );
+    });
+
+    it('allows a discount-only settlement and posts no cash leg', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 3 });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-z', payment_number: 'CPY-00001' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 0, discount: 3 });
+
+      const calls = posting().autoPostFromRules.mock.calls.map((c: any[]) => c[0]);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toMatchObject({ conditionValue: 'discount', legKey: 'discount', amount: 3 });
+      expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { due_balance: 0 } });
+    });
+
+    it('rejects a payment with neither money nor discount', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 100 });
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 0 }))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a discount on a payout', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 100 });
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', {
+        amount: 50, discount: 1, direction: CustomerPaymentDirectionDto.PAY,
+      })).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a discount larger than what is left after the payment', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 100 });
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 95, discount: 6 }))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('update reverses the old discount, voids both legs and reposts both', async () => {
+      const existing = {
+        id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT',
+        amount: 200, discount_amount: 5, payment_number: 'CPY-00001', notes: null,
+        customer: { id: 'c1', name: 'Alice' }, creator: null,
+      };
+      db.customerCreditTransaction.findFirst.mockResolvedValue(existing);
+      // Due after the original payment: 1000 - 200 - 5
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 795 });
+      db.customerCreditTransaction.update.mockResolvedValue({ ...existing, amount: 300, discount_amount: 2 });
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 300, discount: 2 });
+
+      expect(posting().voidAutoPostedVoucher).toHaveBeenCalledWith(db, 'tenant-1', 'customer_payment', 'pay-1');
+      expect(posting().voidAutoPostedVoucher).toHaveBeenCalledWith(db, 'tenant-1', 'customer_payment', 'pay-1', 'discount');
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ amount: 300, discount_amount: 2, balance_after: 698 }) }),
+      );
+      expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { due_balance: 698 } });
+      const calls = posting().autoPostFromRules.mock.calls.map((c: any[]) => c[0]);
+      expect(calls.map((c: any) => c.legKey)).toEqual([undefined, 'discount']);
+      expect(calls[1].amount).toBe(2);
+    });
+
+    it('update keeps the existing discount when the request omits it', async () => {
+      const existing = {
+        id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT',
+        amount: 200, discount_amount: 5, payment_number: 'CPY-00001', notes: null,
+        customer: { id: 'c1', name: 'Alice' }, creator: null,
+      };
+      db.customerCreditTransaction.findFirst.mockResolvedValue(existing);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 795 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { notes: 'x' });
+
+      expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { due_balance: 795 } });
+    });
+
+    it('delete reverses amount + discount and voids both legs', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue({
+        id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT',
+        amount: 200, discount_amount: 5, customer: { id: 'c1' }, creator: null,
+      });
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', due_balance: 795 });
+
+      await service.deleteCreditPayment('tenant-1', 'pay-1');
+
+      expect(posting().voidAutoPostedVoucher).toHaveBeenCalledWith(db, 'tenant-1', 'customer_payment', 'pay-1', 'discount');
+      expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { due_balance: 1000 } });
+    });
+
+    it('enrichment keeps the cash voucher and the discount voucher apart', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'pay-1', type: 'PAYMENT' }]);
+      db.customerCreditTransaction.count.mockResolvedValue(1);
+      db.postingEvent.findMany.mockResolvedValue([
+        { source_id: 'pay-1', idempotency_key: 'tenant-1:customer_payment:pay-1', voucher: { id: 'v1', voucher_number: 'CR-1' } },
+        { source_id: 'pay-1', idempotency_key: 'tenant-1:customer_payment:pay-1:discount', voucher: { id: 'v2', voucher_number: 'JV-1' } },
+      ]);
+
+      const res = await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka' } as any);
+
+      expect(res.items[0]).toMatchObject({
+        accounting_voucher_number: 'CR-1',
+        discount_voucher_number: 'JV-1',
+      });
+    });
+  });
+
   // ─── importRows ─────────────────────────────────────────────────────────────
 
   describe('importRows', () => {

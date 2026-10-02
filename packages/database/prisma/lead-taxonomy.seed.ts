@@ -123,6 +123,40 @@ export const DEFAULT_ACTIVITY_PURPOSES: {
 ];
 
 /**
+ * Lead pipeline stages. Unlike the lists above these do not replace an enum:
+ * `Lead.status` stays as the lifecycle column every open/won/lost rule reads,
+ * and `lifecycle` here is what gets written into it when a lead takes a stage.
+ * The five seeded codes are the `LeadStatus` members and map to themselves.
+ */
+export const DEFAULT_LEAD_STATUSES: {
+    code: string;
+    name: string;
+    lifecycle: 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'CONVERTED' | 'LOST';
+    sort_order: number;
+}[] = [
+    { code: 'NEW', name: 'New', lifecycle: 'NEW', sort_order: 1 },
+    { code: 'CONTACTED', name: 'Contacted', lifecycle: 'CONTACTED', sort_order: 2 },
+    { code: 'QUALIFIED', name: 'Qualified', lifecycle: 'QUALIFIED', sort_order: 3 },
+    { code: 'CONVERTED', name: 'Converted', lifecycle: 'CONVERTED', sort_order: 4 },
+    { code: 'LOST', name: 'Lost', lifecycle: 'LOST', sort_order: 5 },
+];
+
+/**
+ * Stages that can be renamed and reordered but never hidden or deleted: NEW is
+ * where every new lead starts, and CONVERTED / LOST are the only ways to close one.
+ */
+export const PROTECTED_STATUS_CODES = ['NEW', 'CONVERTED', 'LOST'] as const;
+
+/** Lifecycles that mean "still being worked". */
+export const OPEN_STATUS_LIFECYCLES = ['NEW', 'CONTACTED', 'QUALIFIED'] as const;
+
+/**
+ * Lifecycle every tenant-created stage carries. Custom stages are always open;
+ * QUALIFIED is the open bucket an old client that only knows the enum shows them as.
+ */
+export const CUSTOM_STATUS_LIFECYCLE = 'QUALIFIED';
+
+/**
  * Idempotent: safe to call for an existing tenant. `skipDuplicates` honours
  * @@unique([tenant_id, code]), so a tenant that renamed "Facebook" to
  * "Meta Ads" keeps its label instead of having a second row created.
@@ -178,6 +212,19 @@ export async function seedDefaultLeadTaxonomy(tx: any, tenantId: string) {
             name: p.name,
             icon: p.icon,
             sort_order: p.sort_order,
+            is_system: true,
+            is_active: true,
+        })),
+        skipDuplicates: true,
+    });
+
+    await tx.leadStatusOption.createMany({
+        data: DEFAULT_LEAD_STATUSES.map((s) => ({
+            tenant_id: tenantId,
+            code: s.code,
+            name: s.name,
+            lifecycle: s.lifecycle,
+            sort_order: s.sort_order,
             is_system: true,
             is_active: true,
         })),

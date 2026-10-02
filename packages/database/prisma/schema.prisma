@@ -938,6 +938,7 @@ model Tenant {
   leadConversations          LeadConversation[]
   leadSourceOptions          LeadSourceOption[]
   leadCategoryOptions        LeadCategoryOption[]
+  leadStatusOptions          LeadStatusOption[]
   conversationChannels       ConversationChannel[]
   crmContacts                CrmContact[]
   crmContactAttachments      CrmContactAttachment[]
@@ -1329,6 +1330,11 @@ model TenantUser {
   /// derived from a name. The full set a member holds lives in `roles`, and
   /// their effective permissions are the union of all of them.
   tenant_role_id String?
+  /// How this member lays out the sales invoices they print — a versioned
+  /// InvoicePrintPrefs JSON (see packages/shared-types/invoice-print.ts). Held
+  /// on the membership so it follows the person to any till, per workspace.
+  /// Null means the built-in layout.
+  invoice_print_prefs Json?
 
   // Relations
   tenant     Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -2135,7 +2141,12 @@ model SupplierCreditTransaction {
   tenant_id      String
   supplier_id    String
   type           String // CREDIT_PURCHASE | PAYMENT | PAYOUT | ADJUSTMENT
+  /// Money that actually changed hands. Never includes discount_amount.
   amount         Decimal  @db.Decimal(12, 2)
+  /// PAYMENT only: discount received from the supplier, settled with the
+  /// money (e.g. a rounding remainder dropped). Lowers due_balance alongside
+  /// amount; posts Dr Purchase Payable / Cr Discount Received as its own leg.
+  discount_amount Decimal @default(0) @db.Decimal(12, 2)
   balance_after  Decimal  @db.Decimal(12, 2)
   reference_type String?
   reference_id   String?
@@ -2339,6 +2350,11 @@ model PurchaseReturnItem {
   purchaseItem   PurchaseItem?  @relation(fields: [purchase_item_id], references: [id])
   product        Product        @relation(fields: [product_id], references: [id])
   warehouse      Warehouse?     @relation("PurchaseReturnItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
+
+  @@index([return_id])
+  @@index([product_id])
+  @@index([purchase_item_id])
+  @@index([warehouse_id])
 }
 
 model PurchaseOrder {
@@ -2380,6 +2396,9 @@ model PurchaseOrderItem {
 
   purchaseOrder PurchaseOrder @relation(fields: [po_id], references: [id], onDelete: Cascade)
   product       Product       @relation(fields: [product_id], references: [id])
+
+  @@index([po_id])
+  @@index([product_id])
 }
 
 model PurchaseQuotation {
@@ -2415,6 +2434,9 @@ model PurchaseQuotationItem {
 
   purchaseQuotation PurchaseQuotation @relation(fields: [rfq_id], references: [id], onDelete: Cascade)
   product           Product           @relation(fields: [product_id], references: [id])
+
+  @@index([rfq_id])
+  @@index([product_id])
 }
 
 // ---------------------------------------------------------------------------
@@ -2936,7 +2958,14 @@ model Lead {
   remarks               String?
   source                LeadSource    @default(OTHER)
   source_id             String?
+  /// The lead's *lifecycle* — open (NEW/CONTACTED/QUALIFIED), won (CONVERTED)
+  /// or lost (LOST). Every rule that cares whether a lead is still being worked
+  /// reads this. It is NOT legacy: it is always written from the chosen stage's
+  /// `LeadStatusOption.lifecycle`, so it and `status_id` never disagree.
   status                LeadStatus    @default(NEW)
+  /// The tenant-managed pipeline stage shown to users. Nullable only so it could
+  /// be added to a populated table; `sync-lead-taxonomy` backfills it on boot.
+  status_id             String?
   lost_reason           String?
   score                 Int           @default(0)
   linkedin_url          String?
@@ -2998,6 +3027,7 @@ model Lead {
   convertedCustomer  Customer?              @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
   sourceOption       LeadSourceOption?      @relation(fields: [source_id], references: [id], onDelete: Restrict)
   categoryOption     LeadCategoryOption?    @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  statusOption       LeadStatusOption?      @relation(fields: [status_id], references: [id], onDelete: Restrict)
   conversations      LeadConversation[]
   crmFollowUps       CrmFollowUp[]
   crmActivities      CrmActivity[]
@@ -3018,6 +3048,7 @@ model Lead {
   @@index([tenant_id, next_step_date])
   @@index([tenant_id, source_id])
   @@index([tenant_id, category_id])
+  @@index([tenant_id, status_id])
   // Serves the CRM dashboard's won/lost-in-period counts, which filter on
   // status + closed_at together.
   @@index([tenant_id, status, closed_at])
@@ -3045,6 +3076,34 @@ model LeadSourceOption {
   is_active    Boolean  @default(true)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  leads  Lead[]
+
+  @@unique([tenant_id, code])
+  @@unique([tenant_id, name])
+  @@index([tenant_id, is_active, sort_order])
+}
+
+/// Tenant-editable lead pipeline stages, edited from CRM → Setup → Statuses.
+///
+/// Not a replacement for the `LeadStatus` enum: `Lead.status` stays as the
+/// lifecycle every open/won/lost rule reads, and each row here carries the
+/// fixed `lifecycle` written into it whenever a lead takes this stage. The five
+/// seeded rows reuse the enum codes and map to themselves; every tenant-created
+/// stage is an open stage (`QUALIFIED`). NEW, CONVERTED and LOST can be renamed
+/// but never hidden or deleted. See docs/crm/lead-taxonomy-rollout.md.
+model LeadStatusOption {
+  id         String     @id @default(uuid())
+  tenant_id  String
+  code       String
+  name       String
+  lifecycle  LeadStatus
+  sort_order Int        @default(0)
+  is_system  Boolean    @default(false)
+  is_active  Boolean    @default(true)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   leads  Lead[]
@@ -3447,7 +3506,12 @@ model CustomerCreditTransaction {
   tenant_id      String
   customer_id    String
   type           String // CREDIT_SALE | PAYMENT | ADJUSTMENT
+  /// Money that actually changed hands. Never includes discount_amount.
   amount         Decimal  @db.Decimal(12, 2)
+  /// PAYMENT only: discount allowed to the customer, settled with the money
+  /// (e.g. a rounding remainder dropped). Lowers due_balance alongside amount;
+  /// posts Dr Discount Allowed / Cr Accounts Receivable as its own leg.
+  discount_amount Decimal @default(0) @db.Decimal(12, 2)
   balance_after  Decimal  @db.Decimal(12, 2)
   reference_type String?
   reference_id   String?
@@ -3985,6 +4049,11 @@ model SalesReturnItem {
   sale_item SaleItem?   @relation(fields: [sale_item_id], references: [id])
   product   Product     @relation(fields: [product_id], references: [id])
   warehouse Warehouse?  @relation("SalesReturnItemWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
+
+  @@index([return_id])
+  @@index([product_id])
+  @@index([sale_item_id])
+  @@index([warehouse_id])
 }
 
 model SalesOrder {
@@ -4026,6 +4095,9 @@ model SalesOrderItem {
   // Relations
   order   SalesOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product Product    @relation(fields: [product_id], references: [id])
+
+  @@index([order_id])
+  @@index([product_id])
 }
 
 model OrderDeposit {
@@ -4037,6 +4109,8 @@ model OrderDeposit {
 
   // Relations
   order SalesOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
 }
 
 model Quotation {
@@ -4114,6 +4188,9 @@ model QuotationItem {
   // Relations
   quotation Quotation @relation(fields: [quotation_id], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [product_id], references: [id])
+
+  @@index([quotation_id])
+  @@index([product_id])
 }
 
 model SubscriptionPlan {
@@ -4238,6 +4315,9 @@ model CashTransaction {
   // Relations
   tenant  Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   session CashierSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@index([tenant_id])
 }
 
 model TenantSubscription {
@@ -4552,6 +4632,9 @@ model Feedback {
   thread SupportThread?
 
   @@map("feedbacks")
+
+  @@index([tenantId])
+  @@index([userId])
 }
 
 /// A single version of an agent-proposed implementation plan for a Feedback
@@ -4626,6 +4709,9 @@ model StorefrontOrderItem {
   product Product         @relation(fields: [productId], references: [id])
 
   @@map("storefront_order_items")
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model DeliveryOrder {
@@ -4681,6 +4767,9 @@ model BomComponent {
   product Product   @relation("BomComponent", fields: [productId], references: [id])
 
   @@map("bom_components")
+
+  @@index([recipeId])
+  @@index([productId])
 }
 
 // A production run: manufacture N units of a product

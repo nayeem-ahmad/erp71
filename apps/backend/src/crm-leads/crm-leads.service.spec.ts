@@ -9,6 +9,7 @@ import { LeadBulkAction, LeadStatus, OPEN_LEAD_STATUS_FILTER, UNASSIGNED_OWNER_F
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 import { normalizeLeadMobile } from '@erp71/shared-types';
+import { LeadStatusResolver } from './lead-status.resolver';
 
 describe('CrmLeadsService', () => {
     let service: CrmLeadsService;
@@ -41,8 +42,27 @@ describe('CrmLeadsService', () => {
         };
     }
 
+    /** The tenant's stages: the five seeded ones plus one custom open stage. */
+    const STAGES = [
+        { id: 'st-new', code: 'NEW', name: 'New', lifecycle: 'NEW', is_active: true },
+        { id: 'st-con', code: 'CONTACTED', name: 'Contacted', lifecycle: 'CONTACTED', is_active: true },
+        { id: 'st-qual', code: 'QUALIFIED', name: 'Qualified', lifecycle: 'QUALIFIED', is_active: true },
+        { id: 'st-won', code: 'CONVERTED', name: 'Converted', lifecycle: 'CONVERTED', is_active: true },
+        { id: 'st-lost', code: 'LOST', name: 'Lost', lifecycle: 'LOST', is_active: true },
+        { id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED', is_active: true },
+    ];
+
     beforeEach(async () => {
         db = {
+            leadStatusOption: {
+                findFirst: jest.fn(async ({ where }: any) =>
+                    STAGES.find((r) =>
+                        (where.id === undefined || r.id === where.id) &&
+                        (where.code === undefined || r.code === where.code),
+                    ) ?? null,
+                ),
+                findMany: jest.fn().mockResolvedValue([]),
+            },
             lead: {
                 findUnique: jest.fn(),
                 findFirst: jest.fn(),
@@ -52,7 +72,7 @@ describe('CrmLeadsService', () => {
                 update: jest.fn(),
                 delete: jest.fn(),
                 deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
-                groupBy: jest.fn(),
+                groupBy: jest.fn().mockResolvedValue([]),
             },
             leadConversation: {
                 count: jest.fn().mockResolvedValue(0),
@@ -90,6 +110,7 @@ describe('CrmLeadsService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CrmLeadsService,
+                LeadStatusResolver,
                 { provide: DatabaseService, useValue: db },
                 { provide: CustomersService, useValue: customersService },
                 { provide: CustomFieldsService, useValue: customFieldsService },
@@ -131,6 +152,7 @@ describe('CrmLeadsService', () => {
                 where: { id: 'lead-1' },
                 data: {
                     status: LeadStatus.CONVERTED,
+                    status_id: 'st-won',
                     converted_customer_id: 'cust-1',
                     closed_at: expect.any(Date),
                     score: 100,
@@ -680,6 +702,26 @@ describe('CrmLeadsService', () => {
                 CONVERTED: 5,
             });
             expect(result.open).toBe(6);
+        });
+
+        it('adds the tenant\'s stages with their own counts', async () => {
+            db.lead.groupBy
+                .mockResolvedValueOnce([{ status: LeadStatus.QUALIFIED, _count: { _all: 3 } }])
+                .mockResolvedValueOnce([
+                    { status_id: 'st-qual', _count: { _all: 1 } },
+                    { status_id: 'st-neg', _count: { _all: 2 } },
+                ]);
+            db.leadStatusOption.findMany.mockResolvedValue([
+                { id: 'st-qual', code: 'QUALIFIED', name: 'Qualified', lifecycle: 'QUALIFIED', is_system: true, is_active: true, sort_order: 3 },
+                { id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED', is_system: false, is_active: true, sort_order: 4 },
+            ]);
+
+            const result = await service.getStatusSummary('tenant-1');
+
+            expect(result.stages.map((s: any) => [s.name, s.count])).toEqual([
+                ['Qualified', 1],
+                ['Negotiation', 2],
+            ]);
         });
     });
 
@@ -1502,6 +1544,210 @@ describe('CrmLeadsService', () => {
 
             expect(assets.deleteFile).toHaveBeenCalledWith(KEY);
             expect(assets.deleteFile).toHaveBeenCalledWith(OTHER_KEY);
+        });
+    });
+
+    describe('stages', () => {
+        const openLead = {
+            id: 'lead-s',
+            tenant_id: 'tenant-1',
+            mobile: '01712121212',
+            status: LeadStatus.CONTACTED,
+            status_id: 'st-con',
+            lost_reason: null,
+            priority: 'MEDIUM',
+            last_contacted_at: null,
+            next_step_date: null,
+            source_id: 'src-other',
+        };
+        const dataOfUpdate = () => db.lead.update.mock.calls[0][0].data;
+
+        beforeEach(() => {
+            db.lead.update.mockResolvedValue(openLead);
+        });
+
+        it('files a new lead on the NEW stage', async () => {
+            db.lead.findFirst.mockResolvedValue(null);
+            db.lead.create.mockResolvedValue({ id: 'lead-new' });
+
+            await service.create('tenant-1', 'user-1', { name: 'A' } as any, 'Asia/Dhaka');
+
+            expect(db.lead.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({ status: 'NEW', status_id: 'st-new' }),
+            );
+        });
+
+        it('creates a lead on a custom stage with its open lifecycle', async () => {
+            db.lead.findFirst.mockResolvedValue(null);
+            db.lead.create.mockResolvedValue({ id: 'lead-new' });
+
+            await service.create('tenant-1', 'user-1', { name: 'A', status_id: 'st-neg' } as any, 'Asia/Dhaka');
+
+            expect(db.lead.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({ status: 'QUALIFIED', status_id: 'st-neg', closed_at: undefined }),
+            );
+        });
+
+        it('moves to a custom stage without touching the close date or lost reason', async () => {
+            db.lead.findFirst.mockResolvedValue(openLead);
+
+            await service.update('tenant-1', 'lead-s', { status_id: 'st-neg' } as any);
+
+            expect(dataOfUpdate()).toEqual(
+                expect.objectContaining({ status: 'QUALIFIED', status_id: 'st-neg' }),
+            );
+            expect(db.crmActivity.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('requires a lost reason when the chosen stage closes the lead as lost', async () => {
+            db.lead.findFirst.mockResolvedValue(openLead);
+
+            await expect(
+                service.update('tenant-1', 'lead-s', { status_id: 'st-lost' } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('closes the lead when moved to the lost stage with a reason', async () => {
+            db.lead.findFirst.mockResolvedValue(openLead);
+
+            await service.update('tenant-1', 'lead-s', { status_id: 'st-lost', lost_reason: 'Price' } as any);
+
+            expect(dataOfUpdate()).toEqual(
+                expect.objectContaining({
+                    status: 'LOST',
+                    status_id: 'st-lost',
+                    lost_reason: 'Price',
+                    closed_at: expect.any(Date),
+                    score: 0,
+                }),
+            );
+        });
+
+        it('keeps a custom stage when an old client re-sends the lifecycle it shows', async () => {
+            db.lead.findFirst.mockResolvedValue({ ...openLead, status: 'QUALIFIED', status_id: 'st-neg' });
+
+            await service.update('tenant-1', 'lead-s', { status: LeadStatus.QUALIFIED, remarks: 'x' } as any);
+
+            expect(dataOfUpdate()).not.toHaveProperty('status_id');
+            expect(dataOfUpdate()).not.toHaveProperty('status');
+        });
+
+        it('lets status_id win over a disagreeing status', async () => {
+            db.lead.findFirst.mockResolvedValue(openLead);
+
+            await service.update('tenant-1', 'lead-s', { status_id: 'st-neg', status: 'LOST' } as any);
+
+            expect(dataOfUpdate()).toEqual(
+                expect.objectContaining({ status: 'QUALIFIED', status_id: 'st-neg' }),
+            );
+        });
+
+        it('bulk-moves leads to a stage, writing both columns', async () => {
+            db.lead.updateMany = jest.fn().mockResolvedValue({ count: 2 });
+
+            await service.bulkAction('tenant-1', {
+                ids: ['a', 'b'],
+                action: LeadBulkAction.STATUS,
+                value: 'st-neg',
+            } as any);
+
+            expect(db.lead.updateMany).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', id: { in: ['a', 'b'] } },
+                data: { status_id: 'st-neg', status: 'QUALIFIED' },
+            });
+        });
+
+        it('refuses a bulk move onto a closing stage', async () => {
+            db.lead.updateMany = jest.fn();
+
+            await expect(
+                service.bulkAction('tenant-1', { ids: ['a'], action: LeadBulkAction.STATUS, value: 'st-lost' } as any),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.lead.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('filters the list to one stage', async () => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+
+            await service.findAll('tenant-1', { statusId: 'st-neg' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where.status_id).toBe('st-neg');
+        });
+
+        it('sorts by the stage order the tenant set, not the enum', async () => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+
+            await service.findAll('tenant-1', { sortBy: 'status', sortDir: 'asc' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].orderBy).toEqual({ statusOption: { sort_order: 'asc' } });
+        });
+
+        it('keeps a custom stage when a re-imported sheet names only its lifecycle', async () => {
+            // An export taken before stage names were exported says QUALIFIED for a
+            // lead on "Negotiation"; re-importing it must not pull the lead off.
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01800000079'));
+            db.lead.findUnique.mockResolvedValue({ status: 'QUALIFIED' });
+            db.lead.update.mockResolvedValue({ id: 'lead-existing' });
+
+            await service.importRows('tenant-1', [
+                { name: 'Imp', mobile: '01800000079', status: 'QUALIFIED' },
+            ], 'upsert', 'Asia/Dhaka');
+
+            const data = db.lead.update.mock.calls[0][0].data;
+            expect(data).not.toHaveProperty('status_id');
+            expect(data).not.toHaveProperty('status');
+        });
+
+        it('still moves a lead when the re-imported lifecycle differs', async () => {
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01800000080'));
+            db.lead.findUnique.mockResolvedValue({ status: 'QUALIFIED' });
+            db.lead.update.mockResolvedValue({ id: 'lead-existing' });
+
+            await service.importRows('tenant-1', [
+                { name: 'Imp', mobile: '01800000080', status: 'Contacted' },
+            ], 'upsert', 'Asia/Dhaka');
+
+            expect(db.lead.update.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({ status: 'CONTACTED', status_id: 'st-con' }),
+            );
+        });
+
+        it('imports a status cell naming a custom stage', async () => {
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+            db.lead.findFirst.mockResolvedValue(null);
+            db.lead.create.mockResolvedValue({ id: 'lead-imp' });
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Imp', mobile: '01800000077', status: 'negotiation' },
+            ], 'skip', 'Asia/Dhaka');
+
+            expect(result.errors).toEqual([]);
+            expect(db.lead.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({ status: 'QUALIFIED', status_id: 'st-neg' }),
+            );
+        });
+
+        it('rejects an imported status cell naming a lost-lifecycle stage', async () => {
+            taxonomyService.list.mockImplementation(async (_t: string, kind: string) =>
+                kind === 'statuses' ? STAGES : [],
+            );
+
+            const result = await service.importRows('tenant-1', [
+                { name: 'Imp', mobile: '01800000078', status: 'Lost' },
+            ], 'skip', 'Asia/Dhaka');
+
+            expect(result.created).toBe(0);
+            expect(result.errors[0]).toMatch(/lost_reason/);
         });
     });
 });

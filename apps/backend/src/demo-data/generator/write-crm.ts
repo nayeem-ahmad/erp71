@@ -53,6 +53,7 @@ const ACTIVITY_SUBJECTS = [
 export class CrmWriter {
     private leadSourceIds = new Map<string, string>();
     private leadCategoryIds = new Map<string, string>();
+    private leadStatusIds = new Map<string, string>();
     private channelIds = new Map<string, string>();
     private purposeIds = new Map<string, string>();
     private leadIds: string[] = [];
@@ -79,6 +80,9 @@ export class CrmWriter {
         }
         for (const row of await tx.leadCategoryOption.findMany({ where: { tenant_id: tenantId }, select: { id: true, code: true } })) {
             this.leadCategoryIds.set(row.code, row.id);
+        }
+        for (const row of await tx.leadStatusOption.findMany({ where: { tenant_id: tenantId }, select: { id: true, code: true } })) {
+            this.leadStatusIds.set(row.code, row.id);
         }
         for (const row of await tx.conversationChannel.findMany({ where: { tenant_id: tenantId }, select: { id: true, code: true } })) {
             this.channelIds.set(row.code, row.id);
@@ -255,6 +259,7 @@ export class CrmWriter {
                 category_id: this.leadCategoryIds.get(categoryCode) ?? null,
                 priority: rng.weighted(['LOW', 'MEDIUM', 'HIGH', 'URGENT'], [20, 45, 25, 10]) as never,
                 status: status as never,
+                status_id: this.leadStatusIds.get(status) ?? null,
                 score: rng.int(5, 95),
                 remarks: rng.pick([
                     'Asked for a wholesale rate card',

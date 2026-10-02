@@ -57,17 +57,24 @@ String? redirectFor(AuthState auth, String location) {
   }
 }
 
-/// Reads `/leads?status=…&stale=…` — the links the overview tiles make.
+/// Reads `/leads?status=…&stale=…` and `/leads?statusId=…` — the links the
+/// overview tiles and pipeline bars make.
 /// Anything unrecognised falls back to the default list rather than a
 /// request the API would refuse.
 LeadQuery leadQueryFromLink(Map<String, String> params) {
   final status = params['status'];
   final stale = int.tryParse(params['stale'] ?? '');
+  final staleDays = stale != null && stale > 0 && stale <= 3650 ? stale : null;
+  // A pipeline bar links at one of the workspace's stages.
+  final statusId = params['statusId'];
+  if (statusId != null && statusId.isNotEmpty) {
+    return LeadQuery(status: null, statusId: statusId, staleDays: staleDays);
+  }
   return LeadQuery(
     status: status == LeadQuery.openStatus || LeadStatus.parse(status) != null
         ? status
         : LeadQuery.openStatus,
-    staleDays: stale != null && stale > 0 && stale <= 3650 ? stale : null,
+    staleDays: staleDays,
   );
 }
 

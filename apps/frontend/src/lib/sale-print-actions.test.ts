@@ -1,3 +1,4 @@
+import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
 import { printSaleChallan, printSaleInvoice, printSaleReceipt, type PrintableSale, type SalePrintContext } from './sale-print-actions';
 import { printSalesInvoice } from './sales-invoice-printer';
 import { printDeliveryChallan } from './delivery-challan-printer';
@@ -77,7 +78,14 @@ describe('printSaleInvoice', () => {
             expect.anything(),
             'Thermal80',
             undefined,
+            undefined,
         );
+    });
+
+    it('prints in the layout the member saved', () => {
+        const invoiceLayout = { ...DEFAULT_INVOICE_PRINT_PREFS, table_style: 'grid' as const };
+        printSaleInvoice(listShapedSale, 'A4', { ...ctx, invoiceLayout }, true);
+        expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'A4', undefined, invoiceLayout);
     });
 
     it('attaches a preview toolbar unless the operator opted out', () => {
@@ -145,6 +153,7 @@ describe('the sale\u2019s store on the letterhead', () => {
                 companyAddress: '12 Gulshan Ave',
             }),
             'A4',
+            undefined,
             undefined,
         );
     });

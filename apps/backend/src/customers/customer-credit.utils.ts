@@ -15,15 +15,20 @@ export function creditDueAmount(totalAmount: number, amountPaid: number): number
  * other leg in expense rather than cash, but the due falls the same way), and
  * an adjustment carries its own sign.
  *
+ * A payment also settles its `discount` — the remainder the shop let the
+ * customer off — so the due falls by money plus discount. Only a payment
+ * carries one; the argument is ignored for every other type.
+ *
  * The single place that knows this, so the customer's statement, the due-aging
  * report and an invoice's previous due cannot disagree about what a row means.
  */
-export function customerLedgerDueDelta(type: string, amount: number): number {
+export function customerLedgerDueDelta(type: string, amount: number, discount = 0): number {
     switch (type) {
         case 'CREDIT_SALE':
         case 'PAYOUT':
             return amount;
         case 'PAYMENT':
+            return -(amount + discount);
         case 'WRITE_OFF':
             return -amount;
         case 'ADJUSTMENT':

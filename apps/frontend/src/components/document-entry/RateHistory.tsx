@@ -27,6 +27,23 @@ export interface RateHistoryData {
 }
 
 /**
+ * The rate a new line should start from: this party's most recent rate if they
+ * have one, otherwise the most recent from anyone. Both lists arrive newest
+ * first. `null` when the product has never traded this way.
+ */
+export function lastRateFrom(data: RateHistoryData | null | undefined): number | null {
+    const row = data?.forParty?.[0] ?? data?.recent?.[0];
+    return row && Number.isFinite(Number(row.rate)) ? Number(row.rate) : null;
+}
+
+/** Fetches (or reuses) the history for one product, outside of a component. */
+export function loadRateHistory(productId: string, type: RateHistoryType, partyId?: string) {
+    const key = cacheKey(productId, type, partyId);
+    const cached = cache.get(key);
+    return cached ? Promise.resolve(cached) : fetchRateHistory(key, productId, type, partyId);
+}
+
+/**
  * Answers cache-key → response for the life of the tab. A staged product is
  * often removed and re-picked while an operator settles on a rate, and the
  * answer cannot have changed in between — nothing on this screen writes a sale

@@ -4,7 +4,13 @@ import { useI18n } from '@/lib/i18n';
 import { Field, Input, Select, Textarea } from '@/components/ui';
 import PhotoField from '@/components/PhotoField';
 import type { LeadTaxonomyOption } from '@/lib/use-lead-taxonomy';
+import { stageOptionLabel } from '@/lib/lead-status';
 
+/**
+ * The five lifecycle codes. Stages are tenant-managed now (CRM → Setup →
+ * Statuses); this list is only the fallback for a tenant whose stages have not
+ * been seeded yet, and the set of values `lead.status` can hold.
+ */
 export const LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'LOST', 'CONVERTED'] as const;
 export const LEAD_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 
@@ -56,7 +62,13 @@ export type LeadFormState = {
     category: string;
     priority: string;
     remarks: string;
+    /**
+     * The lifecycle (NEW … LOST). Mirrors the chosen stage's lifecycle, so the
+     * lost-reason rules below keep reading it whatever the stage is called.
+     */
     status: string;
+    /** The tenant's pipeline stage id; '' when the tenant has no stages yet. */
+    status_id: string;
     lost_reason: string;
     source: string;
     linkedin_url: string;
@@ -81,6 +93,7 @@ export const emptyLeadForm = (): LeadFormState => ({
     priority: 'MEDIUM',
     remarks: '',
     status: 'NEW',
+    status_id: '',
     lost_reason: '',
     source: '',
     linkedin_url: '',
@@ -107,6 +120,7 @@ export function leadToFormState(lead: Record<string, unknown>): LeadFormState {
         priority: String(lead.priority ?? 'MEDIUM'),
         remarks: String(lead.remarks ?? lead.notes ?? ''),
         status: String(lead.status ?? 'NEW'),
+        status_id: String(lead.status_id ?? ''),
         lost_reason: String(lead.lost_reason ?? ''),
         source: String(lead.source_id ?? ''),
         linkedin_url: String(lead.linkedin_url ?? ''),
@@ -200,7 +214,10 @@ export function leadFormToPayload(
     if (form.priority) payload.priority = form.priority;
     const remarks = form.remarks.trim();
     if (remarks) payload.remarks = remarks;
-    if (form.status) payload.status = form.status;
+    // The stage id when there is one; a bare lifecycle code otherwise (a tenant
+    // whose stages are not seeded yet), which the API maps onto the seeded stage.
+    if (form.status_id) payload.status_id = form.status_id;
+    else if (form.status) payload.status = form.status;
     if (form.status === 'LOST') payload.lost_reason = form.lost_reason.trim();
     if (form.source) payload.source = form.source;
     const linkedin = form.linkedin_url.trim();
@@ -250,6 +267,16 @@ export function leadFormToPayload(
     return payload;
 }
 
+/** Pick a stage, carrying its lifecycle into `status` alongside. */
+export function selectLeadStage(
+    form: LeadFormState,
+    stageId: string,
+    stages: LeadTaxonomyOption[],
+): LeadFormState {
+    const stage = stages.find((s) => s.id === stageId);
+    return { ...form, status_id: stageId, status: stage?.lifecycle ?? form.status };
+}
+
 export type LeadFormErrors = Partial<Record<keyof LeadFormState, string>>;
 
 type TeamMember = {
@@ -278,6 +305,8 @@ type LeadFormFieldsProps = {
     /** Active rows from CRM → Settings → Lead Sources & Categories. */
     sourceOptions?: LeadTaxonomyOption[];
     categoryOptions?: LeadTaxonomyOption[];
+    /** Active rows from CRM → Setup → Statuses. Empty falls back to the five lifecycle codes. */
+    statusOptions?: LeadTaxonomyOption[];
     /**
      * Off everywhere as of this change: activities — planned and logged alike —
      * are created and edited from CrmActivityPanel, so no lead form collects a
@@ -301,6 +330,7 @@ export function LeadFormFields({
     errors = {},
     sourceOptions = [],
     categoryOptions = [],
+    statusOptions = [],
     showNextStep = false,
 }: Readonly<LeadFormFieldsProps>) {
     const { t } = useI18n();
@@ -380,9 +410,27 @@ export function LeadFormFields({
             </Field>
             {showStatus && (
                 <Field label={m.columns.status}>
-                    <Select value={form.status} onChange={(e) => set('status', e.target.value)}>
-                        {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                    </Select>
+                    {statusOptions.length > 0 ? (
+                        <Select
+                            // A new lead has no stage id yet; show the seeded stage its
+                            // lifecycle maps to, which is where the API will file it.
+                            value={form.status_id || statusOptions.find((o) => o.code === form.status)?.id || ''}
+                            onChange={(e) => onChange(selectLeadStage(form, e.target.value, statusOptions))}
+                        >
+                            {/* A lead on a since-hidden stage keeps it selectable, labelled by
+                                its lifecycle, or saving any other field would move the lead. */}
+                            {form.status_id && !statusOptions.some((o) => o.id === form.status_id) && (
+                                <option value={form.status_id}>{statusLabel(form.status)}</option>
+                            )}
+                            {statusOptions.map((o) => (
+                                <option key={o.id} value={o.id}>{stageOptionLabel(o, m.statuses)}</option>
+                            ))}
+                        </Select>
+                    ) : (
+                        <Select value={form.status} onChange={(e) => set('status', e.target.value)}>
+                            {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+                        </Select>
+                    )}
                 </Field>
             )}
             {showStatus && form.status === 'LOST' && (

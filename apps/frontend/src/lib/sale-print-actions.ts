@@ -6,6 +6,7 @@ import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { paperSizeLabel } from '@/lib/print';
 import type { PrintPreviewOptions } from '@/lib/print';
 import type { DeepPartial, PrintHeaderConfig } from '@/lib/print';
+import type { InvoicePrintPrefs } from '@erp71/shared-types';
 
 /** The three things a sale can be printed as. Mushak is a page, not a print. */
 export type SaleDocument = 'invoice' | 'challan' | 'receipt';
@@ -63,6 +64,8 @@ export interface SalePrintContext {
     /** `t.sales.printMenu` — menu and preview wording. */
     menuLabels: any;
     unknownProductLabel: string;
+    /** The printing member's invoice layout; the built-in one when omitted. */
+    invoiceLayout?: InvoicePrintPrefs;
 }
 
 function itemName(item: PrintableSale['items'][number], fallback: string): string {
@@ -172,6 +175,7 @@ export function printSaleInvoice(
         },
         size,
         previewFor('invoice', size, ctx, skipPreview),
+        ctx.invoiceLayout,
     );
 }
 

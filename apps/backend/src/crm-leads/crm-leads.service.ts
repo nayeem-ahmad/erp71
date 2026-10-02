@@ -42,11 +42,14 @@ import { parseTenantDateTime, zonedTodayWindow } from '../common/tenant-time.uti
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
+import { LeadStatusResolver, ResolvedStage } from './lead-status.resolver';
+import { STAGE_OPTION_SELECT, stageCounts } from './lead-stages.util';
 import { LeadTaxonomyKind } from '../crm-lead-taxonomy/lead-taxonomy.dto';
 import {
     buildTaxonomyIndex,
     coerceLegacyCategory,
     coerceLegacySource,
+    lookupTaxonomy,
     resolveImportRef,
 } from '../crm-lead-taxonomy/lead-taxonomy.util';
 
@@ -75,6 +78,9 @@ const leadIncludes = {
     convertedCustomer: { select: { id: true, name: true, phone: true } },
     sourceOption: { select: { id: true, code: true, name: true, score_weight: true } },
     categoryOption: taxonomySelect,
+    // `is_system` lets a client tell a seeded stage it may translate from a
+    // tenant-named one it must show verbatim; `lifecycle` drives its tone.
+    statusOption: { select: { id: true, code: true, name: true, lifecycle: true, is_system: true } },
 } as const;
 
 // `category`/`source` sort through the relation so the list orders by the label
@@ -84,7 +90,8 @@ const LEAD_SORTABLE: SortableMap = {
     category: (dir) => ({ categoryOption: { name: dir } }),
     source: (dir) => ({ sourceOption: { name: dir } }),
     priority: (dir) => ({ priority: dir }),
-    status: (dir) => ({ status: dir }),
+    // The tenant's own stage order, not the enum's.
+    status: (dir) => ({ statusOption: { sort_order: dir } }),
     score: (dir) => ({ score: dir }),
     next_step_date: (dir) => ({ next_step_date: dir }),
     created_at: (dir) => ({ created_at: dir }),
@@ -112,6 +119,7 @@ export class CrmLeadsService {
         private taxonomy: CrmLeadTaxonomyService,
         private assets: AssetsService,
         private photos: CrmPhotosService,
+        private statuses: LeadStatusResolver,
     ) {}
 
     /**
@@ -187,6 +195,10 @@ export class CrmLeadsService {
             // into the columns — resolvePhoto sets them explicitly instead.
             photo_url: _ignoredPhotoUrl,
             photo_storage_key: _ignoredPhotoKey,
+            // Resolved through LeadStatusResolver into the status_id + status
+            // pair by the caller, never written straight from the payload.
+            status: _ignoredStatus,
+            status_id: _ignoredStatusId,
             ...rest
         } = dto as any;
         return { ...rest } as Record<string, unknown>;
@@ -297,7 +309,8 @@ export class CrmLeadsService {
         const identity = leadIdentityOf(dto);
         await this.assertIdentityFree(tenantId, identity);
 
-        const status = dto.status ?? LeadStatus.NEW;
+        const stage = await this.statuses.forCreate(tenantId, dto);
+        const status = stage.lifecycle;
         if (status === LeadStatus.LOST && !dto.lost_reason) {
             throw new BadRequestException('lost_reason is required when creating a lead with status LOST.');
         }
@@ -353,6 +366,7 @@ export class CrmLeadsService {
                 source_id: sourceRow?.id ?? null,
                 source: coerceLegacySource(sourceRow?.code),
                 status,
+                status_id: stage.id,
                 lost_reason: status === LeadStatus.LOST ? dto.lost_reason : undefined,
                 // A lead can be filed already-lost (a walk-in who bought elsewhere),
                 // in which case it closed the moment it was created.
@@ -448,6 +462,7 @@ export class CrmLeadsService {
         tenantId: string,
         opts: {
             status?: string;
+            statusId?: string;
             source?: string;
             category?: string;
             priority?: string;
@@ -480,6 +495,7 @@ export class CrmLeadsService {
         // once, which no single status value can express.
         if (opts.status === OPEN_LEAD_STATUS_FILTER) where.status = { in: [...OPEN_LEAD_STATUSES] };
         else if (opts.status) where.status = opts.status;
+        if (opts.statusId) where.status_id = opts.statusId;
         // Filters carry a taxonomy row id. A stale bookmarked filter naming a
         // deleted row simply matches nothing, rather than erroring.
         if (opts.source) where.source_id = opts.source;
@@ -610,8 +626,16 @@ export class CrmLeadsService {
             data.custom_fields = customFields;
         }
 
-        const nextStatus = dto.status ?? existing.status;
-        this.applyStatusTransition(existing, dto, data);
+        // The stage is resolved first and its lifecycle stands in for `dto.status`
+        // from here on, so every rule below sees the lifecycle the lead will
+        // actually carry — whichever of status_id / status the client sent.
+        const stage = await this.statuses.forUpdate(tenantId, existing, dto);
+        if (stage) {
+            data.status = stage.lifecycle;
+            data.status_id = stage.id;
+        }
+        const nextStatus = stage?.lifecycle ?? existing.status;
+        this.applyStatusTransition(existing, { ...dto, status: stage?.lifecycle }, data);
 
         // Same rule convert() applies, on the other way a lead closes.
         const closing = nextStatus !== existing.status && isClosedStatus(nextStatus);
@@ -698,16 +722,12 @@ export class CrmLeadsService {
         }
 
         if (action === LeadBulkAction.STATUS) {
-            const status = value as LeadStatus;
-            if (!status || !Object.values(LeadStatus).includes(status)) {
-                throw new BadRequestException('Invalid status.');
-            }
-            if (status === LeadStatus.LOST || status === LeadStatus.CONVERTED) {
-                throw new BadRequestException(
-                    'Bulk status change to LOST or CONVERTED is not supported — edit those leads individually.',
-                );
-            }
-            const res = await this.db.lead.updateMany({ where, data: { status } });
+            // A stage id, or a bare code from an older client. Open stages only.
+            const stage = await this.statuses.forBulk(tenantId, value ?? '');
+            const res = await this.db.lead.updateMany({
+                where,
+                data: { status_id: stage.id, status: stage.lifecycle },
+            });
             return { count: res.count };
         }
 
@@ -732,13 +752,28 @@ export class CrmLeadsService {
         return members.map(({ user }) => ({ userId: user.id, name: user.name, email: user.email }));
     }
 
-    /** Counts of leads per pipeline stage, for the CRM hub dashboard. */
+    /**
+     * Counts of leads for the CRM hub: `counts`/`open` by lifecycle (what older
+     * clients read; custom stages count under QUALIFIED), and `stages` by the
+     * tenant's own pipeline stages.
+     */
     async getStatusSummary(tenantId: string) {
-        const grouped = await this.db.lead.groupBy({
-            by: ['status'],
-            where: { tenant_id: tenantId },
-            _count: { _all: true },
-        });
+        const [grouped, byStage, options] = await Promise.all([
+            this.db.lead.groupBy({
+                by: ['status'],
+                where: { tenant_id: tenantId },
+                _count: { _all: true },
+            }),
+            this.db.lead.groupBy({
+                by: ['status_id'],
+                where: { tenant_id: tenantId },
+                _count: { _all: true },
+            }),
+            this.db.leadStatusOption.findMany({
+                where: { tenant_id: tenantId },
+                select: STAGE_OPTION_SELECT,
+            }),
+        ]);
 
         const counts: Record<string, number> = {};
         for (const status of Object.values(LeadStatus)) {
@@ -749,7 +784,7 @@ export class CrmLeadsService {
         }
 
         const open = counts.NEW + counts.CONTACTED + counts.QUALIFIED;
-        return { counts, open };
+        return { counts, open, stages: stageCounts(options, byStage as any) };
     }
 
     private resolveEnum<T extends string>(raw: unknown, allowed: T[]): T | undefined {
@@ -772,10 +807,33 @@ export class CrmLeadsService {
         // Prefetched once, not per row: the importer accepts up to 5000 rows.
         // Inactive rows are included so importing historical data onto a
         // retired source still lands on the right row instead of failing.
-        const [sourceRows, categoryRows] = await Promise.all([
+        const [sourceRows, categoryRows, statusRows] = await Promise.all([
             this.taxonomy.list(tenantId, LeadTaxonomyKind.SOURCE, true),
             this.taxonomy.list(tenantId, LeadTaxonomyKind.CATEGORY, true),
+            this.taxonomy.list(tenantId, LeadTaxonomyKind.STATUS, true),
         ]);
+        const statusIndex = buildTaxonomyIndex(statusRows);
+        const seededStageId = (code: string) => statusRows.find((r) => r.code === code)?.id ?? null;
+        /**
+         * A status cell names a stage by id, code or name. A bare lifecycle code
+         * the tenant has no row for still lands on that lifecycle, and anything
+         * unrecognised falls back to NEW — the importer's behaviour before stages.
+         */
+        type ImportStage = ResolvedStage & { seeded: boolean };
+        const importStage = (raw: unknown): ImportStage | undefined => {
+            if (raw == null || String(raw).trim() === '') return undefined;
+            const row = lookupTaxonomy(statusIndex, raw);
+            if (row?.lifecycle) {
+                return {
+                    id: row.id,
+                    lifecycle: row.lifecycle as LeadStatus,
+                    seeded: row.code === row.lifecycle,
+                };
+            }
+            const lifecycle =
+                this.resolveEnum(raw, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW;
+            return { id: seededStageId(lifecycle), lifecycle: lifecycle as LeadStatus, seeded: true };
+        };
         const sourceIndex = buildTaxonomyIndex(sourceRows);
         const categoryIndex = buildTaxonomyIndex(categoryRows);
         const fallbackSource = await this.taxonomy.fallbackSource(tenantId);
@@ -783,10 +841,8 @@ export class CrmLeadsService {
         return runImport(rows, mode, tenantId, {
             requiredFields: ['name'],
             castRow: (raw) => {
-                const rawStatus = raw.status != null && String(raw.status).trim() !== ''
-                    ? (this.resolveEnum(raw.status, Object.values(LeadStatus) as string[]) ?? LeadStatus.NEW)
-                    : undefined;
-                if (rawStatus === LeadStatus.LOST) {
+                const rawStage = importStage(raw.status);
+                if (rawStage?.lifecycle === LeadStatus.LOST) {
                     throw new Error('status LOST requires a lost_reason, which import does not support — set status after import instead');
                 }
                 const row = {
@@ -805,7 +861,7 @@ export class CrmLeadsService {
                         ? (this.resolveEnum(raw.priority, Object.values(LeadPriority) as string[]) ?? LeadPriority.MEDIUM)
                         : undefined,
                     source: resolveImportRef(raw.source, sourceIndex, 'source'),
-                    status: rawStatus,
+                    stage: rawStage,
                     linkedin_url: raw.linkedin_url ? String(raw.linkedin_url).trim() || null : null,
                     fb_url: raw.fb_url ? String(raw.fb_url).trim() || null : null,
                     x_url: raw.x_url ? String(raw.x_url).trim() || null : null,
@@ -845,7 +901,7 @@ export class CrmLeadsService {
                 const source = row.source ?? fallbackSource;
                 const score = computeLeadScore(
                     {
-                        status: row.status ?? LeadStatus.NEW as any,
+                        status: row.stage?.lifecycle ?? LeadStatus.NEW,
                         sourceWeight: source?.score_weight ?? DEFAULT_SOURCE_WEIGHT,
                         priority: row.priority ?? LeadPriority.MEDIUM as any,
                         last_contacted_at: null,
@@ -867,10 +923,11 @@ export class CrmLeadsService {
                         priority: row.priority ?? LeadPriority.MEDIUM,
                         source_id: source?.id ?? null,
                         source: coerceLegacySource(source?.code),
-                        status: row.status ?? LeadStatus.NEW,
+                        status: row.stage?.lifecycle ?? LeadStatus.NEW,
+                        status_id: row.stage?.id ?? seededStageId(LeadStatus.NEW),
                         // Import can carry CONVERTED (a backlog of already-won deals);
                         // LOST is rejected upstream for want of a reason.
-                        closed_at: isClosedStatus(row.status ?? LeadStatus.NEW) ? new Date() : undefined,
+                        closed_at: isClosedStatus(row.stage?.lifecycle ?? LeadStatus.NEW) ? new Date() : undefined,
                         linkedin_url: row.linkedin_url ?? undefined,
                         fb_url: row.fb_url ?? undefined,
                         x_url: row.x_url ?? undefined,
@@ -895,6 +952,19 @@ export class CrmLeadsService {
                 );
             },
             update: async (id, row) => {
+                // A seeded stage naming the lifecycle the lead already has is not a
+                // move — the same rule LeadStatusResolver.forUpdate applies. A sheet
+                // that says "Qualified" for a lead on "Negotiation" (an export from
+                // before stage names were exported, or hand-typed) must not pull
+                // the lead off the tenant's own stage on every upsert.
+                let stage = row.stage;
+                if (stage?.seeded) {
+                    const current = await this.db.lead.findUnique({
+                        where: { id },
+                        select: { status: true },
+                    });
+                    if (current?.status === stage.lifecycle) stage = undefined;
+                }
                 await this.db.lead.update({
                     where: { id },
                     data: {
@@ -931,7 +1001,9 @@ export class CrmLeadsService {
                         // won deal on every import. A lead moved to CONVERTED this
                         // way still counts in the all-time totals, just not in
                         // won-this-period until someone edits it for real.
-                        ...(row.status   !== undefined ? { status: row.status }     : {}),
+                        ...(stage !== undefined
+                            ? { status: stage.lifecycle, status_id: stage.id }
+                            : {}),
                         ...(row.linkedin_url !== null
                             ? { linkedin_url: row.linkedin_url, linkedin_norm: row.identity.linkedin_norm }
                             : {}),
@@ -1020,6 +1092,7 @@ export class CrmLeadsService {
             where: { id },
             data: {
                 status: LeadStatus.CONVERTED,
+                status_id: (await this.statuses.seeded(tenantId, LeadStatus.CONVERTED)).id,
                 converted_customer_id: customer.id,
                 closed_at: new Date(),
                 score: 100,

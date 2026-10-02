@@ -13,7 +13,7 @@ import { DataTable, createdAtColumn, CreatedRangeFilter, type BulkAction } from 
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, PageHeader, Button, Select, StatusBadge, Input, type StatusBadgeTone } from '@/components/ui';
+import { PageShell, PageHeader, Button, Select, StatusBadge, Input } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import {
@@ -21,6 +21,7 @@ import {
     LEAD_STATUSES,
 } from './lead-form-fields';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import { isOpenLifecycle, leadStatusLabel, leadStatusTone, stageOptionLabel, type LeadStage } from '@/lib/lead-status';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
@@ -40,7 +41,9 @@ interface Lead {
     source: string | null;
     sourceOption: TaxonomyRef;
     priority: string;
+    /** The lifecycle; `statusOption` is the tenant's stage and what is shown. */
     status: string;
+    statusOption?: LeadStage | null;
     score: number;
     photo_url: string | null;
     next_step: string | null;
@@ -121,14 +124,6 @@ function LinkCell({ url }: { url: string | null }) {
     );
 }
 
-const leadStatusTone: Record<string, StatusBadgeTone> = {
-    NEW: 'info',
-    CONTACTED: 'neutral',
-    QUALIFIED: 'neutral',
-    LOST: 'danger',
-    CONVERTED: 'success',
-};
-
 /**
  * Mirrors OPEN_LEAD_STATUS_FILTER in crm-leads.dto.ts — the sentinel standing for
  * NEW + CONTACTED + QUALIFIED at once. The CRM dashboard's attention tiles count
@@ -155,6 +150,19 @@ const MAX_STALE_DAYS = 3650;
 function readStatusParam(value: string | null): string {
     if (value === OPEN_STATUS_FILTER) return value;
     return LEAD_STATUSES.includes(value as (typeof LEAD_STATUSES)[number]) ? (value as string) : '';
+}
+
+/**
+ * The status filter holds one of three kinds of value: the open-pipeline
+ * sentinel or a lifecycle code (both sent as `status` — what the dashboard's
+ * attention tiles and older links use), or a stage id (sent as `statusId`).
+ */
+function statusQuery(filter: string): { status: string | undefined; statusId: string | undefined } {
+    const isLifecycle = Boolean(filter) && Boolean(readStatusParam(filter));
+    return {
+        status: isLifecycle ? filter : undefined,
+        statusId: filter && !isLifecycle ? filter : undefined,
+    };
 }
 
 /** Mirrors LeadEmailPresence in crm-leads.dto.ts; anything else means no filter. */
@@ -209,7 +217,9 @@ function LeadsPage() {
     // is not undone by the query string it was seeded from.
     const searchParams = useSearchParams();
     const staleDaysParam = readStaleDaysParam(searchParams.get('staleDays'));
-    const statusParam = readStatusParam(searchParams.get('status'));
+    // A funnel bar links at its stage (`statusId`); older links and the
+    // dashboard tiles name a lifecycle (`status`).
+    const statusParam = readStatusParam(searchParams.get('status')) || (searchParams.get('statusId') ?? '');
     const ownerParam = searchParams.get('assignedTo') ?? '';
     const emailParam = readEmailPresenceParam(searchParams.get('emailPresence'));
 
@@ -293,6 +303,11 @@ function LeadsPage() {
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
     const { options: sourceOptions } = useLeadTaxonomy('sources');
     const { options: categoryOptions } = useLeadTaxonomy('categories');
+    // Hidden stages too: a funnel bar or a remembered filter can point at one
+    // that still holds leads, and the filter must be able to show it. Forms and
+    // the bulk action offer only the active ones.
+    const { options: allStatusOptions, loading: statusesLoading } = useLeadTaxonomy('statuses', true);
+    const statusOptions = useMemo(() => allStatusOptions.filter((o) => o.is_active), [allStatusOptions]);
     const [selectionEpoch, setSelectionEpoch] = useState(0);
     const [bulkBusy, setBulkBusy] = useState(false);
     const [total, setTotal] = useState(0);
@@ -327,7 +342,7 @@ function LeadsPage() {
                 ({ page: p, limit, sortBy, sortDir }) =>
                     api.getLeads({
                         search: effectiveSearch || undefined,
-                        status: statusFilter || undefined,
+                        ...statusQuery(statusFilter),
                         category: categoryFilter || undefined,
                         source: sourceFilter || undefined,
                         priority: priorityFilter || undefined,
@@ -356,7 +371,7 @@ function LeadsPage() {
         try {
             const data = await api.getLeads({
                 search: effectiveSearch || undefined,
-                status: statusFilter || undefined,
+                ...statusQuery(statusFilter),
                 category: categoryFilter || undefined,
                 source: sourceFilter || undefined,
                 priority: priorityFilter || undefined,
@@ -385,6 +400,16 @@ function LeadsPage() {
     }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort, filtersReady, scopeReady]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
+
+    // A remembered stage id the tenant has since deleted (or one from another
+    // workspace) would filter the list down to nothing behind a select reading
+    // "All statuses". Drop it once the stage list is in. Only when the list
+    // actually loaded — an empty list is also what a failed fetch looks like.
+    useEffect(() => {
+        if (!filtersReady || statusesLoading || allStatusOptions.length === 0) return;
+        const { statusId } = statusQuery(statusFilter);
+        if (statusId && !allStatusOptions.some((o) => o.id === statusId)) setFilter('status', '');
+    }, [filtersReady, statusesLoading, allStatusOptions, statusFilter, setFilter]);
 
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
@@ -495,11 +520,14 @@ function LeadsPage() {
                 </span>
             ),
         }),
-        columnHelper.accessor('status', {
+        // The stage's own name is the value, so a CSV export says "Negotiation"
+        // rather than the lifecycle — and re-imports onto the same stage.
+        columnHelper.accessor((row) => leadStatusLabel(row, m.statuses), {
+            id: 'status',
             header: m.columns.status,
             cell: (info) => (
-                <StatusBadge tone={leadStatusTone[info.getValue()] ?? 'neutral'}>
-                    {statusLabel(info.getValue())}
+                <StatusBadge tone={leadStatusTone(info.row.original.status)}>
+                    {info.getValue() as string}
                 </StatusBadge>
             ),
         }),
@@ -689,7 +717,23 @@ function LeadsPage() {
                         three working stages as one choice — what the dashboard's
                         attention tiles count, and so what their links open. */}
                     <option value={OPEN_STATUS_FILTER}>{m.openPipeline}</option>
-                    {LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+                    {allStatusOptions.length > 0 ? (
+                        <>
+                            {/* A lifecycle from an older link stays visible as the selection. */}
+                            {LEAD_STATUSES.includes(statusFilter as (typeof LEAD_STATUSES)[number]) && (
+                                <option value={statusFilter}>{statusLabel(statusFilter)}</option>
+                            )}
+                            {allStatusOptions.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                    {o.is_active
+                                        ? stageOptionLabel(o, m.statuses)
+                                        : `${stageOptionLabel(o, m.statuses)} (${t.crm.leadTaxonomy.inactive})`}
+                                </option>
+                            ))}
+                        </>
+                    ) : (
+                        LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)
+                    )}
                 </Select>
                 <Select value={categoryFilter} onChange={(e) => setFilter('category', e.target.value)} className="w-auto max-w-[180px]">
                     <option value="">{m.allCategories}</option>
@@ -779,9 +823,17 @@ function LeadsPage() {
                             className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
                         >
                             <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
-                            {(['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
-                                <option key={s} value={s}>{statusLabel(s)}</option>
-                            ))}
+                            {/* Open stages only: closing a lead needs a lost reason or a
+                                customer record, which a bulk action cannot supply. */}
+                            {statusOptions.length > 0
+                                ? statusOptions
+                                    .filter((o) => isOpenLifecycle(o.lifecycle))
+                                    .map((o) => (
+                                        <option key={o.id} value={o.id}>{stageOptionLabel(o, m.statuses)}</option>
+                                    ))
+                                : (['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
+                                    <option key={s} value={s}>{statusLabel(s)}</option>
+                                ))}
                         </select>
                         <select
                             value=""

@@ -23,7 +23,8 @@ describe('SubscriptionAccessGuard', () => {
     let guard: SubscriptionAccessGuard;
     let reflector: jest.Mocked<Reflector>;
     const db = {
-        tenantUser: { findUnique: jest.fn() },
+        // The membership is read through the shared loader's joined query.
+        $queryRaw: jest.fn(),
         tenantSubscription: { findUnique: jest.fn() },
         tenantAddonSubscription: { findMany: jest.fn() },
     };
@@ -41,7 +42,9 @@ describe('SubscriptionAccessGuard', () => {
         jest.resetAllMocks();
         reflector = { getAllAndOverride: jest.fn() } as any;
         guard = new SubscriptionAccessGuard(reflector, db as any);
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantAddonSubscription.findMany.mockResolvedValue([]);
     });
 

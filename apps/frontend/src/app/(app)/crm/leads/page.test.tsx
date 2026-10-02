@@ -663,3 +663,91 @@ describe('LeadsPage — a denied list is not an empty one', () => {
         expect(screen.queryAllByText(/plan does not include the CRM module/i)).toHaveLength(0);
     });
 });
+
+describe('LeadsPage — tenant stages', () => {
+    const STAGES = [
+        { id: 'st-new', code: 'NEW', name: 'New', lifecycle: 'NEW', sort_order: 1, is_system: true, is_active: true },
+        { id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED', sort_order: 2, is_system: false, is_active: true },
+        { id: 'st-won', code: 'CONVERTED', name: 'Won deal', lifecycle: 'CONVERTED', sort_order: 3, is_system: true, is_active: true },
+    ];
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+        api.getLeadTaxonomy.mockImplementation(async (kind: string) => (kind === 'statuses' ? STAGES : []));
+        api.getLeads.mockResolvedValue({
+            items: [{ ...leads[0], status: 'QUALIFIED', statusOption: STAGES[1] }],
+            total: 1,
+        });
+    });
+
+    afterAll(() => {
+        api.getLeadTaxonomy.mockResolvedValue([]);
+    });
+
+    it('shows the stage name the tenant chose', async () => {
+        render(<LeadsPage />);
+
+        expect(await screen.findByRole('cell', { name: 'Negotiation' })).toBeInTheDocument();
+    });
+
+    it('filters by one stage, sent as statusId', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.change(selectByOption('All statuses'), { target: { value: 'st-neg' } });
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenLastCalledWith(
+                expect.objectContaining({ statusId: 'st-neg', status: undefined }),
+            ),
+        );
+    });
+
+    it('opens on a stage from a funnel link', async () => {
+        searchParams = new URLSearchParams('statusId=st-neg');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ statusId: 'st-neg' })),
+        );
+    });
+
+    it('shows a hidden stage it was linked at, rather than pretending to show everything', async () => {
+        api.getLeadTaxonomy.mockImplementation(async (kind: string) =>
+            kind === 'statuses'
+                ? [...STAGES, { id: 'st-old', code: 'OLD', name: 'Paused', lifecycle: 'QUALIFIED', sort_order: 4, is_system: false, is_active: false }]
+                : [],
+        );
+        searchParams = new URLSearchParams('statusId=st-old');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() => expect(selectByOption('All statuses').value).toBe('st-old'));
+        expect(screen.getByRole('option', { name: 'Paused (Hidden)' })).toBeInTheDocument();
+    });
+
+    it('drops a remembered stage that no longer exists', async () => {
+        searchParams = new URLSearchParams('statusId=st-deleted');
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenLastCalledWith(
+                expect.objectContaining({ statusId: undefined }),
+            ),
+        );
+        expect(selectByOption('All statuses').value).toBe('');
+    });
+
+    it('offers only open stages to the bulk status action', async () => {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(screen.getAllByRole('checkbox')[1]);
+        const bulk = selectByOption('Set status…');
+        const options = Array.from(bulk.options).map((o) => o.value);
+        expect(options).toEqual(['', 'st-new', 'st-neg']);
+    });
+});

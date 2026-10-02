@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
@@ -29,6 +29,15 @@ const SUPPLIER_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
 };
 const SUPPLIER_DEFAULT_ORDER = { name: 'asc' as const };
+
+/** Amounts below this are rounding dust, not money. */
+const AMOUNT_EPSILON = 0.005;
+
+/**
+ * The legKey of a payment's discount voucher. The cash voucher stays keyless,
+ * so payments recorded before discounts existed keep their idempotency keys.
+ */
+const DISCOUNT_LEG = 'discount';
 
 @Injectable()
 export class SuppliersService {
@@ -207,22 +216,131 @@ export class SuppliersService {
         });
     }
 
-    private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number): number {
-        return type === 'PAYMENT' ? -amount : amount;
+    private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number, discount = 0): number {
+        return this.ledgerDueDelta(type, amount, discount);
     }
 
-    private ledgerDueDelta(type: string, amount: number): number {
+    /**
+     * A PAYMENT settles its discount along with its money, so the due falls by
+     * both. Only a payment carries a discount; it is ignored for other types.
+     */
+    private ledgerDueDelta(type: string, amount: number, discount = 0): number {
         switch (type) {
             case 'CREDIT_PURCHASE':
             case 'PAYOUT':
                 return amount;
             case 'PAYMENT':
-                return -amount;
+                return -(amount + discount);
             case 'ADJUSTMENT':
                 return amount;
             default:
                 return 0;
         }
+    }
+
+    /** What a payment settles: its money plus any discount taken with it. */
+    private settledBy(payment: { amount: unknown; discount_amount?: unknown }): number {
+        return Number(payment.amount) + Number(payment.discount_amount ?? 0);
+    }
+
+    /**
+     * A discount is only taken on money paid to the supplier, and never beyond
+     * what the payment leaves due — anything more would be the supplier owing
+     * the shop, booked as income.
+     */
+    private assertPaymentSplit(type: 'PAYMENT' | 'PAYOUT', amount: number, discount: number, dueBefore: number) {
+        if (amount < 0 || discount < 0) throw new BadRequestException('Amount and discount cannot be negative');
+        if (type === 'PAYOUT') {
+            if (discount > AMOUNT_EPSILON) {
+                throw new BadRequestException('A discount can only be taken on a payment made to the supplier.');
+            }
+            if (amount < AMOUNT_EPSILON) throw new BadRequestException('Amount must be positive');
+            return;
+        }
+        if (amount + discount < AMOUNT_EPSILON) {
+            throw new BadRequestException('Enter an amount paid, a discount, or both.');
+        }
+        const leftAfterPayment = Math.max(0, dueBefore - amount);
+        if (discount - leftAfterPayment > AMOUNT_EPSILON) {
+            throw new BadRequestException(
+                `Discount of ৳${discount.toFixed(2)} is more than the ৳${leftAfterPayment.toFixed(2)} still due after this payment.`,
+            );
+        }
+    }
+
+    /**
+     * Posts a payment's vouchers: the money on the keyless cash leg (Dr/Cr
+     * Purchase Payable against cash), the discount as its own JOURNAL voucher
+     * (Dr Purchase Payable / Cr Discount Received) on legKey 'discount'. Both
+     * dated at the payment, so an edit reposts into the period it belongs to.
+     */
+    private async postPaymentLegs(
+        tx: any,
+        input: {
+            tenantId: string;
+            supplierId: string;
+            supplierName: string;
+            paymentId: string;
+            paymentNumber: string;
+            type: 'PAYMENT' | 'PAYOUT';
+            amount: number;
+            discount: number;
+            date: Date;
+        },
+    ) {
+        const common = {
+            tx,
+            tenantId: input.tenantId,
+            eventType: 'supplier_payment' as const,
+            conditionKey: 'payment_direction' as const,
+            sourceModule: 'suppliers',
+            sourceId: input.paymentId,
+            referenceNumber: input.paymentNumber,
+            date: input.date,
+            partyType: 'SUPPLIER' as const,
+            partyId: input.supplierId,
+        };
+
+        // Purchases credit Purchase Payable; without this nothing ever debits
+        // it, so the payable grows forever and the balance sheet overstates
+        // liabilities. PAYMENT (we pay the supplier) reduces the payable;
+        // PAYOUT (we receive from the supplier) increases it — mirroring
+        // dueDelta above, so the voucher and due_balance cannot disagree.
+        const cash = input.amount > AMOUNT_EPSILON
+            ? await autoPostFromRules({
+                ...common,
+                conditionValue: input.type === 'PAYMENT' ? 'pay' : 'receive',
+                sourceType: 'supplier_payment',
+                amount: input.amount,
+                description: `Auto-posted supplier ${input.type === 'PAYMENT' ? 'payment' : 'receipt'} — ${input.supplierName}`,
+            })
+            : null;
+
+        const discount = input.discount > AMOUNT_EPSILON
+            ? await autoPostFromRules({
+                ...common,
+                conditionValue: 'discount',
+                legKey: DISCOUNT_LEG,
+                sourceType: 'supplier_payment_discount',
+                amount: input.discount,
+                description: `Discount received — ${input.supplierName}`,
+            })
+            : null;
+
+        const primary = cash ?? discount;
+        return {
+            posting_status: primary?.postingStatus ?? 'skipped',
+            voucher_id: primary?.voucherId ?? null,
+            voucher_number: primary?.voucherNumber ?? null,
+            discount_voucher_id: discount?.voucherId ?? null,
+            discount_voucher_number: discount?.voucherNumber ?? null,
+        };
+    }
+
+    /** Takes back both of a payment's vouchers. Either may be absent. */
+    private async voidPaymentLegs(tx: any, tenantId: string, paymentId: string) {
+        await voidAutoPostedVoucher(tx, tenantId, 'supplier_payment', paymentId);
+        await voidAutoPostedVoucher(tx, tenantId, 'supplier_payment', paymentId, DISCOUNT_LEG);
     }
 
     private paymentStatusFor(paidAmount: number, totalAmount: number): string {
@@ -415,7 +533,8 @@ export class SuppliersService {
                 ...tx,
                 amount,
                 balance_after: balanceAfter,
-                balance_before: balanceAfter - this.ledgerDueDelta(tx.type, amount),
+                discount_amount: Number(tx.discount_amount ?? 0),
+                balance_before: balanceAfter - this.ledgerDueDelta(tx.type, amount, Number(tx.discount_amount ?? 0)),
             };
 
             if (tx.type === 'CREDIT_PURCHASE' && tx.reference_type === 'PURCHASE' && tx.reference_id) {
@@ -439,7 +558,7 @@ export class SuppliersService {
                 return {
                     ...base,
                     allocations: txAllocations,
-                    unapplied_amount: amount - allocatedTotal,
+                    unapplied_amount: this.settledBy(tx) - allocatedTotal,
                 };
             }
 
@@ -558,7 +677,7 @@ export class SuppliersService {
             return {
                 ...item,
                 allocated_amount: allocated,
-                unapplied_amount: Number(item.amount) - allocated,
+                unapplied_amount: this.settledBy(item) - allocated,
             };
         });
 
@@ -574,32 +693,32 @@ export class SuppliersService {
             _sum: { amount: true },
         });
         const allocated = Number(allocatedSum._sum.amount ?? 0);
-        return { ...payment, allocated_amount: allocated, unapplied_amount: Number(payment.amount) - allocated };
+        return { ...payment, allocated_amount: allocated, unapplied_amount: this.settledBy(payment) - allocated };
     }
 
     async updateCreditPayment(tenantId: string, paymentId: string, dto: UpdateSupplierCreditPaymentDto) {
         const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
+        const oldDiscount = Number(payment.discount_amount ?? 0);
         const supplierId = payment.supplier_id;
 
         const newDirection = dto.direction ?? this.directionFromType(oldType);
         const newType = this.typeFromDirection(newDirection);
         const newAmount = dto.amount ?? oldAmount;
+        const newDiscount = dto.discount ?? oldDiscount;
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
-
-        if (newAmount <= 0) throw new BadRequestException('Amount must be positive');
 
         const allocatedSum = await this.db.supplierPaymentAllocation.aggregate({
             where: { tenant_id: tenantId, transaction_id: paymentId },
             _sum: { amount: true },
         });
         const allocatedTotal = Number(allocatedSum._sum.amount ?? 0);
-        if (allocatedTotal > 0.005) {
+        if (allocatedTotal > AMOUNT_EPSILON) {
             if (newType !== 'PAYMENT') {
                 throw new BadRequestException('Remove this payment\'s bill allocations before changing its direction.');
             }
-            if (newAmount - allocatedTotal < -0.005) {
+            if (newAmount + newDiscount - allocatedTotal < -AMOUNT_EPSILON) {
                 throw new BadRequestException(
                     `Cannot reduce this payment below its already-allocated amount (${allocatedTotal.toFixed(2)}). Remove allocations first.`,
                 );
@@ -613,15 +732,20 @@ export class SuppliersService {
             });
             if (!supplier) throw new NotFoundException('Supplier not found');
 
-            const reverseDelta = -this.dueDelta(oldType, oldAmount);
-            let currentDue = Number(supplier.due_balance) + reverseDelta;
-            const balanceAfter = currentDue + this.dueDelta(newType, newAmount);
+            const dueWithoutPayment = Number(supplier.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
+            this.assertPaymentSplit(newType, newAmount, newDiscount, dueWithoutPayment);
+            const balanceAfter = dueWithoutPayment + this.dueDelta(newType, newAmount, newDiscount);
+
+            // The old vouchers must go: the GL is the supplier ledger, so an edit
+            // that left them behind would show the original payment forever.
+            await this.voidPaymentLegs(tx, tenantId, paymentId);
 
             const updated = await tx.supplierCreditTransaction.update({
                 where: { id: paymentId },
                 data: {
                     type: newType,
                     amount: newAmount,
+                    discount_amount: newDiscount,
                     balance_after: balanceAfter,
                     notes: newNotes,
                 },
@@ -636,7 +760,19 @@ export class SuppliersService {
                 data: { due_balance: balanceAfter },
             });
 
-            return updated;
+            const posting = await this.postPaymentLegs(tx, {
+                tenantId,
+                supplierId,
+                supplierName: supplier.name,
+                paymentId,
+                paymentNumber: payment.payment_number ?? paymentId,
+                type: newType,
+                amount: newAmount,
+                discount: newDiscount,
+                date: payment.created_at,
+            });
+
+            return { ...updated, ...posting };
         });
     }
 
@@ -644,6 +780,7 @@ export class SuppliersService {
         const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
+        const oldDiscount = Number(payment.discount_amount ?? 0);
 
         const allocationCount = await this.db.supplierPaymentAllocation.count({
             where: { tenant_id: tenantId, transaction_id: paymentId },
@@ -659,8 +796,9 @@ export class SuppliersService {
             });
             if (!supplier) throw new NotFoundException('Supplier not found');
 
-            const reverseDelta = -this.dueDelta(oldType, oldAmount);
-            const newDue = Number(supplier.due_balance) + reverseDelta;
+            const newDue = Number(supplier.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
+
+            await this.voidPaymentLegs(tx, tenantId, paymentId);
 
             await tx.supplierCreditTransaction.delete({ where: { id: paymentId } });
 
@@ -687,15 +825,15 @@ export class SuppliersService {
 
         const direction = dto.direction ?? SupplierPaymentDirectionDto.PAY;
         const txType = this.typeFromDirection(direction);
-
-        if (dto.amount <= 0) throw new BadRequestException('Amount must be positive');
+        const discount = dto.discount ?? 0;
 
         if (dto.allocations?.length && txType !== 'PAYMENT') {
             throw new BadRequestException('Only payments made to the supplier (not receipts) can be allocated to bills.');
         }
 
         const currentDue = Number(supplier.due_balance);
-        const balanceAfter = currentDue + this.dueDelta(txType, dto.amount);
+        this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
+        const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
 
         return this.db.$transaction(async (tx) => {
             const payment_number = await nextSupplierPaymentNumber(tenantId, tx, txType);
@@ -706,6 +844,7 @@ export class SuppliersService {
                     supplier_id: id,
                     type: txType,
                     amount: dto.amount,
+                    discount_amount: discount,
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
@@ -723,37 +862,24 @@ export class SuppliersService {
             });
 
             if (dto.allocations?.length) {
-                await this.applyAllocations(tx, tenantId, id, payment.id, dto.allocations, dto.amount);
+                // A discount settles bills exactly as money does: ৳4,998 paid
+                // plus ৳2 let off clears a ৳5,000 bill.
+                await this.applyAllocations(tx, tenantId, id, payment.id, dto.allocations, dto.amount + discount);
             }
 
-            // Purchases credit Purchase Payable; without this nothing ever debits
-            // it, so the payable grows forever and the balance sheet overstates
-            // liabilities. PAYMENT (we pay the supplier) reduces the payable;
-            // PAYOUT (we receive from the supplier) increases it — mirroring
-            // dueDelta above, so the voucher and due_balance cannot disagree.
-            const posting = await autoPostFromRules({
-                tx,
+            const posting = await this.postPaymentLegs(tx, {
                 tenantId,
-                eventType: 'supplier_payment',
-                conditionKey: 'payment_direction',
-                conditionValue: txType === 'PAYMENT' ? 'pay' : 'receive',
-                sourceModule: 'suppliers',
-                sourceType: 'supplier_payment',
-                sourceId: payment.id,
+                supplierId: id,
+                supplierName: supplier.name,
+                paymentId: payment.id,
+                paymentNumber: payment_number,
+                type: txType,
                 amount: dto.amount,
-                description: `Auto-posted supplier ${txType === 'PAYMENT' ? 'payment' : 'receipt'} — ${supplier.name}`,
-                referenceNumber: payment_number,
+                discount,
                 date: payment.created_at,
-                partyType: 'SUPPLIER',
-                partyId: id,
             });
 
-            return {
-                ...payment,
-                posting_status: posting.postingStatus,
-                voucher_id: posting.voucherId ?? null,
-                voucher_number: posting.voucherNumber ?? null,
-            };
+            return { ...payment, ...posting };
         });
     }
 
@@ -768,7 +894,7 @@ export class SuppliersService {
             where: { tenant_id: tenantId, transaction_id: transactionId },
             _sum: { amount: true },
         });
-        const remaining = Number(transaction.amount) - Number(alreadyAllocated._sum.amount ?? 0);
+        const remaining = this.settledBy(transaction) - Number(alreadyAllocated._sum.amount ?? 0);
 
         return this.db.$transaction(async (tx) => {
             await this.applyAllocations(tx, tenantId, transaction.supplier_id, transactionId, dto.allocations, remaining);
@@ -828,7 +954,7 @@ export class SuppliersService {
 
         const unallocatedAdvance = paymentTransactions.reduce((sum, txn) => {
             const allocated = txn.allocations.reduce((s, a) => s + Number(a.amount), 0);
-            const remaining = Number(txn.amount) - allocated;
+            const remaining = this.settledBy(txn) - allocated;
             return sum + Math.max(0, remaining);
         }, 0);
 

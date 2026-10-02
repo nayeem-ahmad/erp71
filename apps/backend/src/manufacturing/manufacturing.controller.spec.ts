@@ -28,7 +28,8 @@ describe('ManufacturingController — subscription guard', () => {
     } as any;
 
     const db = {
-        tenantUser: { findUnique: jest.fn() },
+        // The membership is read through the shared loader's joined query.
+        $queryRaw: jest.fn(),
         tenantSubscription: { findUnique: jest.fn() },
         tenantAddonSubscription: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
@@ -77,7 +78,9 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('blocks STANDARD plan subscribers with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'STANDARD', features_json: {} },
@@ -92,7 +95,9 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('allows access for PREMIUM plan', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'PREMIUM', features_json: { premiumManufacturing: true } },
@@ -107,7 +112,9 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('blocks BASIC plan subscribers with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'BASIC', features_json: {} },
@@ -122,7 +129,9 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('blocks FREE plan subscribers with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'FREE', features_json: {} },
@@ -137,7 +146,9 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('blocks PAST_DUE subscriptions with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'PAST_DUE',
             plan: { code: 'STANDARD', features_json: {} },
@@ -152,7 +163,9 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('blocks access with 403 when platform admin disables the manufacturing feature', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'PREMIUM', features_json: { premiumManufacturing: true } },
@@ -168,7 +181,9 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('allows a FREE plan tenant with an active Manufacturing add-on', async () => {
-        db.tenantUser.findUnique.mockResolvedValue({ tenant_id: 'tenant-1', user_id: 'user-1' });
+        db.$queryRaw.mockResolvedValue([
+            { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'FREE', features_json: {} },
@@ -186,7 +201,7 @@ describe('ManufacturingController — subscription guard', () => {
     });
 
     it('blocks a user who is not a member of the requested tenant with 403', async () => {
-        db.tenantUser.findUnique.mockResolvedValue(null);
+        db.$queryRaw.mockResolvedValue([]);
         db.tenantSubscription.findUnique.mockResolvedValue({
             status: 'ACTIVE',
             plan: { code: 'STANDARD', features_json: {} },

@@ -275,12 +275,20 @@ export async function applyPaymentImpacts(input: PaymentImpactInput): Promise<vo
         });
     }
 
+    // The rules key on which way the money went, and that depends on the party:
+    // a customer PAYMENT brings money in, a supplier PAYMENT sends it out. The
+    // payment method's account replaces the cash leg, which is the debit when
+    // money comes in and the credit when it goes out — overriding the other leg
+    // would swap out the receivable or payable instead.
+    const moneyIn = isCustomer ? type === 'PAYMENT' : type === 'PAYOUT';
+    const methodAccountId = await resolvePaymentMethodAccountId(tx, tenantId, input.method);
+
     await autoPostFromRules({
         tx,
         tenantId,
         eventType: isCustomer ? 'customer_payment' : 'supplier_payment',
         conditionKey: 'payment_direction',
-        conditionValue: type === 'PAYMENT' ? 'receive' : 'pay',
+        conditionValue: moneyIn ? 'receive' : 'pay',
         sourceModule: 'external-sync',
         sourceType: isCustomer ? 'customer_payment' : 'supplier_payment',
         sourceId: input.transactionId,
@@ -290,7 +298,9 @@ export async function applyPaymentImpacts(input: PaymentImpactInput): Promise<vo
         date: input.date,
         partyType: isCustomer ? 'CUSTOMER' : 'SUPPLIER',
         partyId,
-        overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, input.method),
+        ...(moneyIn
+            ? { overrideDebitAccountId: methodAccountId }
+            : { overrideCreditAccountId: methodAccountId }),
     });
 }
 

@@ -33,6 +33,7 @@ export default function NewLeadPage() {
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
     const { options: sourceOptions } = useLeadTaxonomy('sources');
     const { options: categoryOptions } = useLeadTaxonomy('categories');
+    const { options: statusOptions } = useLeadTaxonomy('statuses');
 
     // Preselect the tenant's fallback source once the list arrives. Only while
     // the field is still untouched, so it never overwrites a real choice.
@@ -113,6 +114,7 @@ export default function NewLeadPage() {
                     errors={errors}
                     sourceOptions={sourceOptions}
                     categoryOptions={categoryOptions}
+                    statusOptions={statusOptions}
                 />
 
                 {saveError && <p role="alert" className="text-xs text-danger mt-3">{saveError}</p>}

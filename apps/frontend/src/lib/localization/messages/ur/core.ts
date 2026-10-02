@@ -1332,6 +1332,15 @@ export const coreMessages = {
         printVoucher: 'ادائیگی واؤچر پرنٹ کریں',
         voucherNumber: 'واؤچر نمبر',
         balanceAfter: 'بعد کا بیلنس',
+        discount: {
+            label: 'دی گئی رعایت',
+            hint: 'گاہک کو معمولی بقایا کی رعایت دیں یا راؤنڈ آف کریں۔ نقد کے بغیر واجب الادا کم کرتا ہے اور دی گئی رعایت کے طور پر درج ہوتا ہے۔',
+            fillRemainder: 'بقایا پر رعایت دیں',
+            settles: 'کل تصفیہ {amount}',
+            tooLarge: 'رعایت اس ادائیگی کے بعد باقی {amount} سے زیادہ نہیں ہو سکتی۔',
+            amountOrDiscount: 'رقم، رعایت یا دونوں درج کریں۔',
+            voucher: 'رعایت واؤچر',
+        },
         print: {
             moneyReceipt: 'منی رسید',
             paymentVoucher: 'ادائیگی واؤچر',
@@ -1431,6 +1440,15 @@ export const coreMessages = {
         printVoucher: 'ادائیگی واؤچر پرنٹ کریں',
         voucherNumber: 'واؤچر نمبر',
         balanceAfter: 'بعد کا بیلنس',
+        discount: {
+            label: 'موصول رعایت',
+            hint: 'سپلائر کی طرف سے چھوڑا گیا معمولی بقایا۔ نقد کے بغیر قابل ادائیگی کم کرتا ہے اور موصول رعایت کے طور پر درج ہوتا ہے۔',
+            fillRemainder: 'بقایا پر رعایت دیں',
+            settles: 'کل تصفیہ {amount}',
+            tooLarge: 'رعایت اس ادائیگی کے بعد باقی {amount} سے زیادہ نہیں ہو سکتی۔',
+            amountOrDiscount: 'رقم، رعایت یا دونوں درج کریں۔',
+            voucher: 'رعایت واؤچر',
+        },
         print: {
             moneyReceipt: 'منی رسید',
             paymentVoucher: 'ادائیگی واؤچر',

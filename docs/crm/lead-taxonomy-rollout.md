@@ -117,6 +117,32 @@ rollback short of a dump restore.
 
 ---
 
+## Lead statuses — deliberately NOT the same rollout
+
+`LeadStatusOption` (CRM → Setup → Statuses) shipped 2026-10-01 in a single
+additive release: one `CREATE TABLE`, one `ADD COLUMN Lead.status_id`, indexes
+and FKs — no `DROP`, no `ALTER COLUMN`.
+
+Unlike source and category, **there is no contract phase.** `Lead.status` (the
+`LeadStatus` enum) is not legacy: it is the lead's *lifecycle* — open, won or
+lost — and every rule that cares about that (`closed_at`, the lost reason,
+scoring, conversion, the dashboard's won/lost KPIs, the bulk guard, older
+mobile builds) keeps reading it. `status_id` is the stage the tenant sees.
+Each option carries a fixed `lifecycle`, and every write sets both columns
+through `LeadStatusResolver`. Custom stages are always open (`QUALIFIED`); New,
+Converted and Lost can be renamed but never hidden or deleted.
+
+`sync-lead-taxonomy` seeds the five default stages, fills `status_id` where it
+is null, and **repairs drift** — any lead whose stage's lifecycle disagrees with
+`Lead.status` is reset to the seeded stage for its lifecycle. It does this on
+every boot, so a write path that forgets the stage is corrected rather than
+left inconsistent. Do not drop `Lead.status`.
+
+Rollback: the previous image's `db push` drops the table and `status_id`. Leads
+keep `Lead.status`; custom stage definitions are lost and would need recreating.
+
+---
+
 ## Things that will bite you
 
 - **`packages/database/index.js` is hand-maintained.** `package.json` sets
