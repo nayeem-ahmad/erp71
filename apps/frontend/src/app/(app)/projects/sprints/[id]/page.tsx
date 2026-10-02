@@ -13,6 +13,11 @@ import {
     ConfirmDialog,
     Input,
 } from '@/components/ui';
+import BoardCardComposer, {
+    type ComposerCard,
+    type ComposerDraft,
+    type ComposerProject,
+} from '@/components/projects/BoardCardComposer';
 import SprintBurndownChart from '@/components/projects/SprintBurndownChart';
 import CompleteSprintModal from '@/components/projects/CompleteSprintModal';
 import type { IdealDay, TimelinePoint } from '@/components/projects/burndown-steps';
@@ -33,11 +38,15 @@ import {
     writeCollapsedLanes,
 } from '@/components/projects/board-lane-storage';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import TaskEntryModal, { type TaskEntryValues } from '@/components/projects/TaskEntryModal';
+import { assigneeColumns, defaultAssigneeKeyFor } from '@/components/projects/task-assignee';
+import { useProjectMeta } from '@/components/projects/use-project-meta';
 import {
     NO_LANE,
     SPRINT_LANE_MODES,
     assigneeNameOf,
     assigneeOptions,
+    busiestProjectId,
     groupSprintTasks,
     hours,
     laneKeyOf,
@@ -45,6 +54,7 @@ import {
     sprintTimeline,
     sumHours,
     todayKey,
+    type SprintLane,
     type SprintLaneMode,
     type SprintTask,
 } from '@/components/projects/sprint-table';
@@ -53,6 +63,7 @@ import {
     matchesSprintSearch,
     type ProjectStatusColumn,
     type SprintCardTask,
+    type StatusColumn,
 } from '@/components/projects/sprint-cards';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -109,6 +120,41 @@ function asClosed(task: SprintCardTask): SprintCardTask {
     return closing == null ? task : { ...task, remaining_hours: closing };
 }
 
+/**
+ * Where a composed task lands beyond the sprint itself: a card-view column's
+ * status, and a swimlane's story. The table has neither — its tasks open on
+ * their project's default status.
+ */
+interface ComposerSpot {
+    column?: StatusColumn;
+    userStory?: { id: string; code: string; title: string };
+    /** A story lane fixes the project to its story's. */
+    projectLocked?: boolean;
+}
+
+/** A composer's place on the page: where its task lands, and what it opens on. */
+interface ComposerTarget extends ComposerSpot {
+    projectId: string;
+    /** A person's lane assigns to them; otherwise the page's default holder. */
+    assignee?: string;
+    assigneeLabel?: string;
+}
+
+/** What the composer sends, plus the rest of the New Task form when filed through it. */
+type NewTask = ComposerCard & {
+    description?: string;
+    priority?: string;
+    dueDate?: string;
+    estimateHours?: number;
+};
+
+/** The New Task form, opened from a composer's "More fields". */
+interface TaskEntry extends ComposerSpot {
+    initial: Partial<TaskEntryValues>;
+    /** Names `initial.assignee` before the project's roster arrives. */
+    assigneeLabel: string;
+}
+
 const cellNum = (value: number | null | undefined) =>
     value == null ? '' : String(Math.round(value * 100) / 100);
 
@@ -136,6 +182,22 @@ export default function SprintDetailPage() {
     const [pendingDelete, setPendingDelete] = useState<SprintTask | null>(null);
     const [busy, setBusy] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [projects, setProjects] = useState<ComposerProject[]>([]);
+    /** The project picked in a composer; `''` until somebody picks one. */
+    const [pickedProject, setPickedProject] = useState('');
+    /** Who is composing — a task lands on them unless the assignee filter names someone. */
+    const [userId, setUserId] = useState<string | null>(null);
+    const [entry, setEntry] = useState<TaskEntry | null>(null);
+    /**
+     * Tasks composed on this visit. They stay on screen whatever the search
+     * and the assignee filter say until the reader next changes them, as on a
+     * board: a task typed under a search it does not match would otherwise
+     * vanish the moment it saved, which reads as a save that failed.
+     */
+    const [composed, setComposed] = useState<string[]>([]);
+    useEffect(() => setComposed([]), [search, assignee]);
+    /** The composers' assignee pickers draw on the chosen project's roster. */
+    const projectMeta = useProjectMeta();
     // The same per-browser appearance the boards use: card size, column width
     // and colour, card fields and motion. Read by the card view only.
     const boardView = useBoardView();
@@ -173,6 +235,17 @@ export default function SprintDetailPage() {
     useEffect(() => {
         void load();
     }, [load]);
+
+    // For the composers. Tenant-wide: a sprint spans projects and can take a
+    // task from one with nothing in it yet. A failure only costs composing.
+    useEffect(() => {
+        api.getProjects({ limit: 100 })
+            .then((res) => setProjects((res?.items ?? []) as ComposerProject[]))
+            .catch(() => setProjects([]));
+        api.getMe()
+            .then((me: unknown) => setUserId((me as { id?: string } | null)?.id ?? null))
+            .catch(() => setUserId(null));
+    }, []);
 
     // Each project's own board columns, for the card view's status columns.
     // Keyed by the set of projects so adding a task from a new project fetches
@@ -240,14 +313,16 @@ export default function SprintDetailPage() {
     const assigneeFilter = people.some((option) => option.key === assignee) ? assignee : 'all';
     // Search and the assignee filter narrow both views and their totals; the
     // stats and the charts beside them stay whole, because they describe the sprint.
+    const keep = useMemo(() => new Set(composed), [composed]);
     const visibleTasks = useMemo(
         () =>
             tasks.filter(
                 (task) =>
-                    matchesSprintSearch(task, search) &&
-                    (assigneeFilter === 'all' || laneKeyOf(task, 'assignee') === assigneeFilter),
+                    keep.has(task.id) ||
+                    (matchesSprintSearch(task, search) &&
+                        (assigneeFilter === 'all' || laneKeyOf(task, 'assignee') === assigneeFilter)),
             ),
-        [tasks, search, assigneeFilter],
+        [tasks, search, assigneeFilter, keep],
     );
     const lanes = useMemo(() => groupSprintTasks(visibleTasks, laneMode), [visibleTasks, laneMode]);
     const statusColumns = useMemo(() => buildStatusColumns(tasks, projectColumns), [tasks, projectColumns]);
@@ -266,6 +341,107 @@ export default function SprintDetailPage() {
         [tasks, burndown, today, closed],
     );
     const timeline = sprint ? sprintTimeline(sprint.start_date, sprint.end_date, today) : null;
+
+    /**
+     * The project a composer opens on: whichever was last picked, else the one
+     * with the most tasks in the sprint, else the first in the workspace.
+     */
+    const composerProject = useMemo(() => {
+        const offered = (id: string) => projects.some((project) => project.id === id);
+        if (pickedProject && offered(pickedProject)) return pickedProject;
+        return busiestProjectId(tasks, offered) ?? projects[0]?.id ?? '';
+    }, [pickedProject, projects, tasks]);
+    /**
+     * Who a composed task lands on: the signed-in user — or whoever the sprint
+     * is filtered to, so a run of tasks typed while looking at Rafi's work is
+     * Rafi's and does not vanish from the view (the board's rule).
+     */
+    const composerAssignee = defaultAssigneeKeyFor(assigneeFilter, userId);
+    const composerAssigneeLabel =
+        people.find((option) => option.key === composerAssignee)?.label ?? m.quickAdd.me;
+    const canCompose = Boolean(sprint) && !closed;
+
+    /** One write for the composer and the New Task form alike. */
+    const createTask = async (card: NewTask, spot: ComposerSpot) => {
+        // A column groups statuses by name across projects; one the chosen
+        // project has no status under leaves the task on its default status.
+        const statusId = spot.column?.statusIds[card.projectId];
+        const created = (await api.createProjectTask({
+            ...card,
+            sprintId,
+            ...(statusId ? { statusId } : {}),
+        })) as { id?: string } | null;
+        if (!spot.projectLocked) setPickedProject(card.projectId);
+        const id = created?.id;
+        if (id) setComposed((current) => [...current, id]);
+        return created;
+    };
+
+    /** A card-view lane's say in a composed task: its person, or its story and that story's project. */
+    const laneSpot = (lane: SprintLane | null): ComposerTarget => {
+        if (!lane || laneMode === 'none') return { projectId: composerProject };
+        if (laneMode === 'assignee') {
+            return {
+                projectId: composerProject,
+                assignee: lane.key === NO_LANE ? '' : lane.key,
+                assigneeLabel: lane.title ?? m.board.laneUnassigned,
+            };
+        }
+        const storyProject = lane.tasks.find((task) => task.project)?.project?.id;
+        if (lane.key === NO_LANE || !storyProject) return { projectId: composerProject };
+        return {
+            projectId: storyProject,
+            userStory: { id: lane.key.slice('story:'.length), code: lane.code ?? '', title: lane.title ?? '' },
+            projectLocked: true,
+        };
+    };
+
+    const composerFor = (spot: ComposerTarget, options: { label?: string; compact?: boolean } = {}) => (
+        <BoardCardComposer
+            create={(card) => createTask(card, spot)}
+            projects={projects}
+            projectId={spot.projectId}
+            onProjectChange={setPickedProject}
+            projectLocked={spot.projectLocked}
+            userStory={spot.userStory}
+            defaultAssignee={spot.assignee ?? composerAssignee}
+            defaultAssigneeLabel={spot.assigneeLabel ?? composerAssigneeLabel}
+            assignees={projectMeta.peek(spot.projectId)?.assignees ?? []}
+            onAssigneeMenuOpen={() => void projectMeta.load(spot.projectId)}
+            onCreated={() => load()}
+            onOpenFull={(draft: ComposerDraft) =>
+                setEntry({
+                    column: spot.column,
+                    userStory: spot.userStory,
+                    projectLocked: spot.projectLocked,
+                    initial: { projectId: spot.projectId, title: draft.title, assignee: draft.assignee },
+                    assigneeLabel: draft.assigneeLabel,
+                })
+            }
+            label={options.label}
+            compact={options.compact}
+        />
+    );
+
+    /** The table's composer: the sprint, nothing more. */
+    const tableComposer = () => composerFor({ projectId: composerProject }, { label: m.sprint.addTask });
+
+    const fileEntry = async (target: TaskEntry, values: TaskEntryValues) => {
+        await createTask(
+            {
+                projectId: values.projectId,
+                title: values.title.trim(),
+                ...assigneeColumns(values.assignee),
+                ...(target.userStory ? { userStoryId: target.userStory.id } : {}),
+                description: values.description.trim() || undefined,
+                priority: values.priority,
+                dueDate: values.dueDate || undefined,
+                estimateHours: values.estimateHours ? Number(values.estimateHours) : undefined,
+            },
+            target,
+        );
+        await load();
+    };
 
     const returnToBacklog = async (task: SprintTask) => {
         setBusy(true);
@@ -496,9 +672,15 @@ export default function SprintDetailPage() {
                     </div>
 
                     {tasks.length === 0 ? (
-                        <p className="p-3 text-sm text-gray-500">{m.sprint.emptySprint}</p>
+                        <div className="space-y-2 p-3">
+                            <p className="text-sm text-gray-500">{m.sprint.emptySprint}</p>
+                            {canCompose && tableComposer()}
+                        </div>
                     ) : visibleTasks.length === 0 ? (
-                        <p className="p-3 text-sm text-gray-500">{m.sprint.noMatches}</p>
+                        <div className="space-y-2 p-3">
+                            <p className="text-sm text-gray-500">{m.sprint.noMatches}</p>
+                            {canCompose && tableComposer()}
+                        </div>
                     ) : viewMode === 'cards' ? (
                         // Painted inside the panel rather than behind the page:
                         // the table, the charts and the stats stay on white.
@@ -514,6 +696,12 @@ export default function SprintDetailPage() {
                                 laneControls={laneControls}
                                 view={boardView.view}
                                 lift={boardColumnLiftClass(sprint)}
+                                composer={
+                                    canCompose
+                                        ? (column, lane) =>
+                                              composerFor({ ...laneSpot(lane), column }, { compact: lane !== null })
+                                        : undefined
+                                }
                             />
                         </div>
                     ) : (
@@ -655,6 +843,7 @@ export default function SprintDetailPage() {
                                     </tr>
                                 </tfoot>
                             </table>
+                            {canCompose && <div className="border-t border-gray-200 p-2">{tableComposer()}</div>}
                         </div>
                     )}
                 </section>
@@ -835,6 +1024,31 @@ export default function SprintDetailPage() {
                                 : prev,
                         )
                     }
+                />
+            )}
+
+            {entry && sprint && (
+                <TaskEntryModal
+                    projects={projects}
+                    initial={entry.initial}
+                    projectLocked={entry.projectLocked}
+                    // Where the task is going, since the form has no field for
+                    // it: the sprint, and a card-view column's status or a story lane's story.
+                    subtitle={[
+                        fmt(m.sprint.entrySprint, { name: sprint.name }),
+                        entry.column && fmt(m.board.entryColumn, { column: entry.column.name }),
+                        entry.userStory && `${entry.userStory.code} ${entry.userStory.title}`,
+                    ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    projectMeta={projectMeta}
+                    assigneeName={(key) =>
+                        key === entry.initial.assignee
+                            ? entry.assigneeLabel
+                            : (people.find((option) => option.key === key)?.label ?? undefined)
+                    }
+                    onSubmit={(values) => fileEntry(entry, values)}
+                    onClose={() => setEntry(null)}
                 />
             )}
 
