@@ -14,6 +14,7 @@ import { BoardColumnsService, pickColumnForStatus } from './board-columns.servic
 import { syncStoryStatuses } from './story-status.util';
 import { SprintSnapshotService } from './sprint-snapshot.service';
 import {
+    BulkUpdateTasksDto,
     CreateChecklistItemDto,
     CreateTaskDto,
     ListTasksDto,
@@ -31,6 +32,26 @@ import {
     nameIndex,
     requiredText,
 } from './project-import.util';
+
+/** What a bulk change reports: how many tasks took it, and why each of the rest did not. */
+export interface BulkTaskOutcome {
+    updated: number;
+    skipped: { id: string; reason: string }[];
+}
+
+/**
+ * `user:<id>` / `employee:<id>` — the keys the task list already uses for an
+ * assignee option — onto the pair of columns a task stores, clearing the other
+ * so a task never ends up assigned to both. `null` unassigns.
+ */
+export function assigneePatch(value: string | null): Partial<UpdateTaskDto> {
+    if (!value) return { assigneeId: '', assigneeEmployeeId: '' };
+    const [kind, id] = value.split(':');
+    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) throw new BadRequestException('Unknown assignee.');
+    if (kind === 'user') return { assigneeId: id, assigneeEmployeeId: '' };
+    if (kind === 'employee') return { assigneeEmployeeId: id, assigneeId: '' };
+    throw new BadRequestException('Unknown assignee.');
+}
 
 const TASK_SORTABLE: SortableMap = {
     title: (dir) => ({ title: dir }),
@@ -1134,6 +1155,70 @@ export class ProjectTasksService {
         );
 
         return { success: true, deleted: count, skipped: ids.length - count };
+    }
+
+    /**
+     * One change set over a selection that can span projects — the board's bulk
+     * edit. Each task goes through `update`, so a bulk change moves projects,
+     * burns remaining hours, records activity and checks access exactly as a
+     * single edit does, rather than being a second, subtly different write path.
+     *
+     * Sequential on purpose: a project move numbers the task off the target
+     * project's highest reference, and two in flight would take the same one.
+     * A task that refuses is reported back and the rest still go through.
+     */
+    async bulkUpdate(viewer: ProjectViewer, dto: BulkUpdateTasksDto): Promise<BulkTaskOutcome> {
+        const patch: Partial<UpdateTaskDto> = {
+            ...(dto.projectId ? { projectId: dto.projectId } : {}),
+            ...(dto.sprintId !== undefined ? { sprintId: dto.sprintId ?? '' } : {}),
+            ...(dto.assignee !== undefined ? assigneePatch(dto.assignee) : {}),
+            ...(dto.priority ? { priority: dto.priority } : {}),
+            ...(dto.dueDate !== undefined ? { dueDate: dto.dueDate ?? '' } : {}),
+        };
+        const adding = [...new Set(dto.addLabelIds ?? [])];
+        const removing = new Set(dto.removeLabelIds ?? []);
+        const relabel = adding.length > 0 || removing.size > 0;
+        if (Object.keys(patch).length === 0 && !relabel) {
+            throw new BadRequestException('Choose something to change.');
+        }
+
+        // Parents first. A subtask moves with its parent, so one picked
+        // alongside its parent is carried by the parent's move; run first, it
+        // would be refused and then moved anyway, and be reported as skipped.
+        const ids = [...new Set(dto.ids)];
+        const rows = await this.db.projectTask.findMany({
+            where: { id: { in: ids }, tenant_id: viewer.tenantId },
+            select: { id: true, parent_task_id: true },
+        });
+        const subtasks = new Set(rows.filter((row) => row.parent_task_id).map((row) => row.id));
+        const ordered = [...ids.filter((id) => !subtasks.has(id)), ...ids.filter((id) => subtasks.has(id))];
+
+        const outcome: BulkTaskOutcome = { updated: 0, skipped: [] };
+        for (const id of ordered) {
+            try {
+                let labelIds: string[] | undefined;
+                if (relabel) {
+                    const held = await this.db.projectTaskLabel.findMany({
+                        where: { tenant_id: viewer.tenantId, task_id: id },
+                        select: { label_id: true },
+                    });
+                    labelIds = [
+                        ...new Set([
+                            ...held.map((row) => row.label_id).filter((labelId) => !removing.has(labelId)),
+                            ...adding.filter((labelId) => !removing.has(labelId)),
+                        ]),
+                    ];
+                }
+                await this.update(viewer, id, { ...patch, ...(labelIds ? { labelIds } : {}) } as UpdateTaskDto);
+                outcome.updated += 1;
+            } catch (error) {
+                outcome.skipped.push({
+                    id,
+                    reason: error instanceof Error ? error.message : 'Could not be updated',
+                });
+            }
+        }
+        return outcome;
     }
 
     async remainingHistory(viewer: ProjectViewer, taskId: string) {

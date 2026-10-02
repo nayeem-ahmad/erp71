@@ -14,11 +14,20 @@ const NONE: StoredBoardFilters = {
     priority: 'all',
     due: 'all',
     label: 'all',
+    project: 'all',
+    sprint: 'all',
 };
 
-const options = (assignees: string[] = [], labels: string[] = []) => ({
+const options = (
+    assignees: string[] = [],
+    labels: string[] = [],
+    projects: string[] = [],
+    sprints: string[] = [],
+) => ({
     assignees: new Set(assignees),
     labels: new Set(labels),
+    projects: new Set(projects),
+    sprints: new Set(sprints),
 });
 
 beforeEach(() => {
@@ -48,6 +57,14 @@ describe('mergeStoredFilters', () => {
         expect(mergeStoredFilters({ due: 7 }).due).toBe('all');
     });
 
+    it('keeps a stored project and sprint', () => {
+        expect(mergeStoredFilters({ project: 'p1', sprint: 'none' })).toEqual({
+            ...NONE,
+            project: 'p1',
+            sprint: 'none',
+        });
+    });
+
     it('ignores non-string and empty ids', () => {
         expect(mergeStoredFilters({ assignee: 42, label: '', priority: null })).toEqual(NONE);
     });
@@ -61,13 +78,15 @@ describe('hasStoredFilter', () => {
     it('is true for any one filter', () => {
         expect(hasStoredFilter({ ...NONE, priority: 'HIGH' })).toBe(true);
         expect(hasStoredFilter({ ...NONE, label: 'none' })).toBe(true);
+        expect(hasStoredFilter({ ...NONE, project: 'p1' })).toBe(true);
+        expect(hasStoredFilter({ ...NONE, sprint: 'none' })).toBe(true);
     });
 });
 
 describe('read/write', () => {
     it('round-trips a board’s filters', () => {
-        writeStoredFilters('b1', { ...NONE, assignee: 'u1', due: 'overdue' });
-        expect(readStoredFilters('b1')).toEqual({ ...NONE, assignee: 'u1', due: 'overdue' });
+        writeStoredFilters('b1', { ...NONE, assignee: 'u1', due: 'overdue', sprint: 's1' });
+        expect(readStoredFilters('b1')).toEqual({ ...NONE, assignee: 'u1', due: 'overdue', sprint: 's1' });
     });
 
     it('keeps each board’s filters apart', () => {
@@ -128,6 +147,21 @@ describe('pruneMissingOptions', () => {
     it('drops a label that has been deleted', () => {
         const pruned = pruneMissingOptions({ ...NONE, label: 'gone' }, options([], ['l1']));
         expect(pruned.label).toBe('all');
+    });
+
+    it('drops a project that no longer has a card here', () => {
+        const pruned = pruneMissingOptions({ ...NONE, project: 'gone' }, options([], [], ['p1']));
+        expect(pruned.project).toBe('all');
+    });
+
+    it('drops a sprint no card here is in any more, but keeps "no sprint"', () => {
+        expect(pruneMissingOptions({ ...NONE, sprint: 'gone' }, options([], [], [], ['s1'])).sprint).toBe('all');
+        expect(pruneMissingOptions({ ...NONE, sprint: 'none' }, options()).sprint).toBe('none');
+    });
+
+    it('keeps a project and sprint still on the board', () => {
+        const filters = { ...NONE, project: 'p1', sprint: 's1' };
+        expect(pruneMissingOptions(filters, options([], [], ['p1'], ['s1']))).toEqual(filters);
     });
 
     it('keeps "unassigned" and "no label", which name no id', () => {

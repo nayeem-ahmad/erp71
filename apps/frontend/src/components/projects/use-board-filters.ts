@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NO_FILTERS, type BoardFilters } from './board-tasks';
-import { pruneMissingOptions, readStoredFilters, writeStoredFilters } from './board-filter-storage';
+import {
+    pruneMissingOptions,
+    readStoredFilters,
+    writeStoredFilters,
+    type BoardFilterOptionIds,
+} from './board-filter-storage';
 
 export interface BoardFilterControls {
     filters: BoardFilters;
@@ -14,7 +19,7 @@ export interface BoardFilterControls {
  * This board's filters, restored from the last visit.
  *
  * Restored once the board's cards have arrived, not on mount, because what is
- * stored is a pair of ids and the board is the only thing that can say whether
+ * stored is a set of ids and the board is the only thing that can say whether
  * they still name anyone — see `pruneMissingOptions`. `ready` is the caller's
  * "the cards are in": before it turns true the board is unfiltered, which is
  * also what the first paint has to be, since the server has no `localStorage`
@@ -27,7 +32,7 @@ export interface BoardFilterControls {
 export function useBoardFilters(
     boardId: string,
     ready: boolean,
-    available: { assignees: ReadonlySet<string>; labels: ReadonlySet<string> },
+    available: BoardFilterOptionIds,
 ): BoardFilterControls {
     const [filters, setFiltersState] = useState<BoardFilters>(NO_FILTERS);
 
@@ -63,6 +68,8 @@ export function useBoardFilters(
                 priority: next.priority,
                 due: next.due,
                 label: next.label,
+                project: next.project,
+                sprint: next.sprint,
             });
         },
         [boardId],

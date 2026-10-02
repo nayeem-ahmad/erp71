@@ -13,7 +13,7 @@
  * who may hold no card on the next board, and `label` is a label id — carrying
  * either across would silently empty a board the reader had not filtered.
  *
- * **The search box is deliberately not stored.** The other four are choices
+ * **The search box is deliberately not stored.** The others are choices
  * picked off a list of what the board holds, and a stored one shows in the
  * control that made it. Free text is a question asked once; restored three days
  * later it reads as a board that has lost most of its cards, and the four-letter
@@ -27,6 +27,14 @@ import { NO_FILTERS, type BoardFilters, type DueFilter } from './board-tasks';
 
 /** What is actually written: the whole filter set bar the free-text query. */
 export type StoredBoardFilters = Omit<BoardFilters, 'text'>;
+
+/** What a remembered id is checked against: the ids each id-valued filter can name today. */
+export interface BoardFilterOptionIds {
+    assignees: ReadonlySet<string>;
+    labels: ReadonlySet<string>;
+    projects: ReadonlySet<string>;
+    sprints: ReadonlySet<string>;
+}
 
 export const BOARD_FILTERS_STORAGE_PREFIX = 'board-filters:';
 
@@ -70,6 +78,8 @@ export function mergeStoredFilters(stored: unknown): StoredBoardFilters {
         priority: NO_FILTERS.priority,
         due: NO_FILTERS.due,
         label: NO_FILTERS.label,
+        project: NO_FILTERS.project,
+        sprint: NO_FILTERS.sprint,
     };
     if (!isPlainObject(stored)) return base;
 
@@ -80,6 +90,8 @@ export function mergeStoredFilters(stored: unknown): StoredBoardFilters {
         assignee: str(stored.assignee, base.assignee),
         priority: str(stored.priority, base.priority),
         label: str(stored.label, base.label),
+        project: str(stored.project, base.project),
+        sprint: str(stored.sprint, base.sprint),
         due:
             typeof stored.due === 'string' && (DUE_FILTERS as string[]).includes(stored.due)
                 ? (stored.due as DueFilter)
@@ -92,7 +104,9 @@ export function hasStoredFilter(filters: StoredBoardFilters): boolean {
         filters.assignee !== 'all' ||
         filters.priority !== 'all' ||
         filters.due !== 'all' ||
-        filters.label !== 'all'
+        filters.label !== 'all' ||
+        filters.project !== 'all' ||
+        filters.sprint !== 'all'
     );
 }
 
@@ -170,11 +184,13 @@ export function writeStoredFilters(boardId: string, filters: StoredBoardFilters)
  * a choice is dropped back to `all` instead.
  *
  * `priority` and `due` are closed sets that `mergeStoredFilters` has already
- * checked, so only the two id-valued filters are pruned here.
+ * checked, so only the id-valued filters are pruned here. A project or sprint
+ * counts as available while a card on the board is in it — the same test the
+ * filter's own options are built by.
  */
 export function pruneMissingOptions(
     filters: StoredBoardFilters,
-    available: { assignees: ReadonlySet<string>; labels: ReadonlySet<string> },
+    available: BoardFilterOptionIds,
 ): StoredBoardFilters {
     const assigneeOk =
         filters.assignee === 'all' ||
@@ -183,11 +199,16 @@ export function pruneMissingOptions(
         available.assignees.has(filters.assignee);
     const labelOk =
         filters.label === 'all' || filters.label === 'none' || available.labels.has(filters.label);
+    const projectOk = filters.project === 'all' || available.projects.has(filters.project);
+    const sprintOk =
+        filters.sprint === 'all' || filters.sprint === 'none' || available.sprints.has(filters.sprint);
 
-    if (assigneeOk && labelOk) return filters;
+    if (assigneeOk && labelOk && projectOk && sprintOk) return filters;
     return {
         ...filters,
         assignee: assigneeOk ? filters.assignee : 'all',
         label: labelOk ? filters.label : 'all',
+        project: projectOk ? filters.project : 'all',
+        sprint: sprintOk ? filters.sprint : 'all',
     };
 }
