@@ -15,7 +15,6 @@ import { ProjectTimeController } from './project-time.controller';
 import { ProjectTimeService } from './project-time.service';
 import { ProjectTimerService } from './project-timer.service';
 import { ProjectsModule } from './projects.module';
-import { ProjectsScheduler } from './projects.scheduler';
 
 /**
  * Two things here that nothing else in the project would catch.
@@ -63,8 +62,6 @@ describe('/project-time route order (regression guard for the literal segments)'
             .overrideProvider(NotificationsService)
             .useValue({})
             .overrideProvider(AssetsService)
-            .useValue({})
-            .overrideProvider(ProjectsScheduler)
             .useValue({})
             .overrideGuard(JwtAuthGuard)
             .useValue({ canActivate: () => true })

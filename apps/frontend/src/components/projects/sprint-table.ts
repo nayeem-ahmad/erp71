@@ -4,7 +4,7 @@
  * tested without a page to render.
  */
 
-import type { BurndownPoint } from './BurndownChart';
+import type { IdealDay } from './burndown-steps';
 
 export type SprintLaneMode = 'none' | 'assignee' | 'story';
 
@@ -24,6 +24,17 @@ export interface SprintTask {
     assignee?: { id: string; name?: string | null; email: string } | null;
     assigneeEmployee?: { id: string; name?: string | null } | null;
     userStory?: { id: string; code: string; title: string } | null;
+    /**
+     * The task's stay in the sprint being listed, when the list was filtered
+     * by sprint. Open while it is still in it; closed with an outcome once the
+     * sprint completed — a carried task names the sprint it went to.
+     */
+    sprintMembership?: {
+        outcome: 'DONE' | 'CARRIED_OVER' | 'RETURNED_TO_BACKLOG' | 'REMOVED' | null;
+        removed_at: string | null;
+        remaining_at_close: string | number | null;
+        carried_to: { id: string; name: string } | null;
+    } | null;
 }
 
 export interface SprintLane {
@@ -117,15 +128,16 @@ export interface SprintStats extends HourTotals {
     /** Working days from today to the end, today included. */
     workingDaysLeft: number;
     /**
-     * Ideal minus actual remaining for today, from the burndown. Positive is
-     * ahead of the line. Null when today has no reading to compare.
+     * Today's ideal minus the sprint's remaining hours now. Positive is ahead
+     * of the line. Null outside the sprint's dates, or with no live figure.
      */
     variance: number | null;
 }
 
 export function sprintStats(
     tasks: SprintTask[],
-    series: BurndownPoint[],
+    ideal: IdealDay[],
+    currentRemaining: number | null,
     todayKey: string,
 ): SprintStats {
     const totals = sumHours(tasks);
@@ -134,10 +146,10 @@ export function sprintStats(
         totals.estimate > 0
             ? Math.round(Math.min(Math.max((totals.estimate - totals.remaining) / totals.estimate, 0), 1) * 100)
             : 0;
-    const workingDaysLeft = series.filter((point) => point.isWorkingDay && point.date >= todayKey).length;
-    const today = series.find((point) => point.date === todayKey);
+    const workingDaysLeft = ideal.filter((day) => day.isWorkingDay && day.date >= todayKey).length;
+    const today = ideal.find((day) => day.date === todayKey);
     const variance =
-        today && today.ideal != null && today.actual != null ? round2(today.ideal - today.actual) : null;
+        today && today.value != null && currentRemaining != null ? round2(today.value - currentRemaining) : null;
 
     return { ...totals, taskCount: tasks.length, doneCount, progress, workingDaysLeft, variance };
 }

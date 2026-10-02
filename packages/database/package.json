@@ -36,6 +36,7 @@
     "backfill:product-costs": "tsx prisma/backfill-product-costs.ts",
     "backfill:billing-periods": "tsx prisma/backfill-frozen-billing-periods.ts",
     "backfill:task-remaining": "tsx prisma/backfill-task-remaining.ts",
+    "backfill:sprint-history": "tsx prisma/backfill-sprint-history.ts",
     "reconcile:balances": "tsx prisma/reconcile-party-balances.ts",
     "retag:parties": "tsx prisma/retag-party-ledger.ts",
     "sync:nav-layout": "tsx prisma/sync-nav-layout.ts"

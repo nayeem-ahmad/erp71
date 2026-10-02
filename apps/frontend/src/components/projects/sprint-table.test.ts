@@ -68,10 +68,11 @@ describe('sprintStats', () => {
         const stats = sprintStats(
             [task('a'), task('b', { status: { id: 'd', name: 'Done', category: 'DONE' }, remaining_hours: 0 })],
             [
-                { date: '2026-08-06', ideal: 10, actual: 12, committed: 16, isWorkingDay: true },
-                { date: '2026-08-07', ideal: 10, actual: null, committed: null, isWorkingDay: false },
-                { date: '2026-08-09', ideal: 0, actual: null, committed: null, isWorkingDay: true },
+                { date: '2026-08-06', value: 10, isWorkingDay: true },
+                { date: '2026-08-07', value: 10, isWorkingDay: false },
+                { date: '2026-08-09', value: 0, isWorkingDay: true },
             ],
+            12,
             '2026-08-06',
         );
         expect(stats.doneCount).toBe(1);
@@ -80,6 +81,12 @@ describe('sprintStats', () => {
         expect(stats.workingDaysLeft).toBe(2);
         // Two hours more left than the ideal says — behind.
         expect(stats.variance).toBe(-2);
+    });
+
+    it('has no variance outside the sprint, or with no live figure', () => {
+        const ideal = [{ date: '2026-08-06', value: 10, isWorkingDay: true }];
+        expect(sprintStats([], ideal, 12, '2026-09-01').variance).toBeNull();
+        expect(sprintStats([], ideal, null, '2026-08-06').variance).toBeNull();
     });
 });
 

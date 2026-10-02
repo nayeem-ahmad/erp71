@@ -5956,10 +5956,6 @@ export const api = {
         fetchWithAuth(`/sprints${projectId ? `?projectId=${projectId}` : ''}`),
     getSprint: (id: string) => fetchWithAuth(`/sprints/${id}`),
     getSprintBurndown: (id: string) => fetchWithAuth(`/sprints/${id}/burndown`),
-    rebuildSprintSnapshots: (id: string, overwrite = false) =>
-        fetchWithAuth(`/sprints/${id}/rebuild-snapshots${overwrite ? '?overwrite=true' : ''}`, {
-            method: 'POST',
-        }),
     createSprint: (data: Record<string, unknown>) =>
         fetchWithAuth('/sprints', {
             method: 'POST',
@@ -5985,7 +5981,22 @@ export const api = {
     clearSprintBackground: (id: string) =>
         fetchWithAuth(`/sprints/${id}/background`, { method: 'DELETE' }),
     startSprint: (id: string) => fetchWithAuth(`/sprints/${id}/start`, { method: 'POST' }),
-    completeSprint: (id: string) => fetchWithAuth(`/sprints/${id}/complete`, { method: 'POST' }),
+    /**
+     * Omit `carryTo` to return unfinished tasks to the backlog. Returns the
+     * completed sprint with `carried_over` and `carried_to` (null for the backlog).
+     */
+    completeSprint: (
+        id: string,
+        carryTo?:
+            | { kind: 'backlog' }
+            | { kind: 'sprint'; sprintId: string }
+            | { kind: 'new'; name: string; startDate: string; endDate: string; goal?: string; start?: boolean },
+    ) =>
+        fetchWithAuth(`/sprints/${id}/complete`, {
+            method: 'POST',
+            body: JSON.stringify(carryTo ? { carryTo } : {}),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     assignTasksToSprint: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/sprints/${id}/tasks`, {
             method: 'POST',

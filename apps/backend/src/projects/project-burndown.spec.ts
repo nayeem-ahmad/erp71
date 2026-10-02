@@ -1,3 +1,5 @@
+import { SprintMembershipService } from './sprint-membership.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
@@ -45,6 +47,8 @@ describe('ProjectsService.burndown', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProjectsService,
+                SprintMembershipService,
+                { provide: BurndownRecorder, useValue: { record: jest.fn() } },
                 { provide: DatabaseService, useValue: db },
                 { provide: ProjectSettingsService, useValue: {} },
                 { provide: ProjectAccessService, useValue: access },

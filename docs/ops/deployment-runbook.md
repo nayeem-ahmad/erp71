@@ -188,6 +188,7 @@ already be deployed (it ships in the backend image), so merge and deploy first.
 | Script | What it fixes |
 |--------|---------------|
 | `backfill:task-remaining` | Open tasks with an estimate, no remaining hours and no time logged get remaining = estimate, with a remaining-hours log row. Done tasks, tasks with time logged, and tasks with no estimate are counted and left alone. |
+| `backfill:sprint-history` | Run once after the release that added `sprint_tasks` / `sprint_burndown_points`. Rebuilds each sprint's task history (open rows for planned/active sprints; closed `DONE` / `RETURNED_TO_BACKLOG` rows for completed ones, so a completed sprint lists its carried work again) and its burndown points from the remaining-hours log and the old daily snapshots. Writes only points older than a sprint's first live point, and skips rows already present, so it is safe to re-run. `sprint_snapshots` stays until a later migration drops it. |
 
 ---
 
