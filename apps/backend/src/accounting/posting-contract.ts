@@ -110,6 +110,11 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // SupplierCreditTransaction has no payment_method column. See TODO.md.
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'suppliers.service.ts:670', expectation: 'rule' },
+    // Imported payments (post_impacts on) emit all four direction tuples.
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
+    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
+    { eventType: 'customer_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'external-sync.impacts.ts:applyPaymentImpacts', expectation: 'rule' },
     // Discount received alongside a payment, posted on legKey 'discount'.
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'discount', emittedBy: 'suppliers.service.ts postPaymentLegs', expectation: 'rule' },
     // A purchase paid at the counter posts the same 'pay' tuple, on legKey 'paid'
