@@ -15,7 +15,6 @@ import { BoardsController } from './boards.controller';
 import { BoardsService } from './boards.service';
 import { ProjectsModule } from './projects.module';
 import { ProjectsService } from './projects.service';
-import { ProjectsScheduler } from './projects.scheduler';
 
 /**
  * Two invariants this suite protects that nothing else in the project would
@@ -78,8 +77,6 @@ describe('route registration order (regression guard for /projects/boards)', () 
             .overrideProvider(NotificationsService)
             .useValue({})
             .overrideProvider(AssetsService)
-            .useValue({})
-            .overrideProvider(ProjectsScheduler)
             .useValue({})
             .overrideGuard(JwtAuthGuard)
             .useValue({ canActivate: () => true })

@@ -1876,6 +1876,27 @@ describe('TaskDetailPanel sprint', () => {
         expect(screen.getByRole('option', { name: /Sprint 8/ })).toHaveTextContent('Planned');
     });
 
+    it('does not offer a completed sprint, which takes no new tasks', async () => {
+        getSprints.mockResolvedValue([...sprints, { id: 'sp0', name: 'Sprint 6', status: 'COMPLETED' }]);
+        panel();
+        fireEvent.click(await chip());
+
+        expect(await screen.findByRole('option', { name: /Sprint 8/ })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /Sprint 6/ })).not.toBeInTheDocument();
+    });
+
+    it('still shows the completed sprint a task already sits in', async () => {
+        getSprints.mockResolvedValue([...sprints, { id: 'sp0', name: 'Sprint 6', status: 'COMPLETED' }]);
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            sprint: { id: 'sp0', name: 'Sprint 6', status: 'COMPLETED' },
+        });
+        panel();
+        fireEvent.click(await chip());
+
+        expect(await screen.findByRole('option', { name: /Sprint 6/ })).toHaveTextContent('Completed');
+    });
+
     it('moves the task into a sprint', async () => {
         getSprints.mockResolvedValue(sprints);
         panel();

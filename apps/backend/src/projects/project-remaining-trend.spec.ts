@@ -6,7 +6,8 @@ import { ProjectActivityService } from './project-activity.service';
 import { ProjectAccessService } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
 import { DatabaseService } from '../database/database.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
+import { SprintMembershipService } from './sprint-membership.service';
 
 /**
  * The sparkline in the list's Remaining column. The property that matters is
@@ -51,7 +52,8 @@ describe('ProjectTasksService remaining trend', () => {
                     useValue: { taskFilter: jest.fn().mockResolvedValue({}) },
                 },
                 { provide: BoardColumnsService, useValue: {} },
-                { provide: SprintSnapshotService, useValue: { refresh: jest.fn() } },
+                { provide: BurndownRecorder, useValue: { record: jest.fn() } },
+                { provide: SprintMembershipService, useValue: { moveTasks: jest.fn() } },
             ],
         }).compile();
 

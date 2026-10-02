@@ -1,3 +1,5 @@
+import { SprintMembershipService } from './sprint-membership.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
@@ -22,7 +24,14 @@ describe('ProjectsService — members and deletion', () => {
                 update: jest.fn().mockResolvedValue({}),
                 count: jest.fn().mockResolvedValue(0),
             },
-            projectTask: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+            projectTask: {
+                findMany: jest.fn().mockResolvedValue([]),
+                updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+            },
+            sprintTask: {
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+                createMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
             projectMember: { upsert: jest.fn().mockResolvedValue({}), deleteMany: jest.fn().mockResolvedValue({}) },
             tenantUser: {
                 findFirst: jest.fn().mockResolvedValue({ id: 'tu-1' }),
@@ -33,12 +42,18 @@ describe('ProjectsService — members and deletion', () => {
                 findFirst: jest.fn().mockResolvedValue({ id: 'emp-1' }),
                 findMany: jest.fn().mockResolvedValue([]),
             },
-            $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+            // A transaction's client, like Prisma's, has no `$transaction` of its own.
+            $transaction: jest.fn((run: (tx: unknown) => unknown) => {
+                const { $transaction: _root, ...tx } = db;
+                return run(tx);
+            }),
         };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProjectsService,
+                SprintMembershipService,
+                { provide: BurndownRecorder, useValue: { record: jest.fn() } },
                 ProjectAccessService,
                 { provide: DatabaseService, useValue: db },
                 {
@@ -176,14 +191,21 @@ describe('ProjectsService — members and deletion', () => {
             // Sprints are tenant-level and shared now, so leaving a deleted
             // project's tasks attached would inflate a live sprint's committed
             // hours with work nobody is doing.
+            db.projectTask.findMany
+                .mockResolvedValueOnce([{ id: 'task-1' }])
+                .mockResolvedValueOnce([{ id: 'task-1', sprint_id: 'sprint-1', remaining_hours: 3 }]);
+
             await service.remove(OWNER, 'project-1');
 
+            expect(db.projectTask.findMany.mock.calls[0][0].where).toMatchObject({
+                project_id: 'project-1',
+                sprint_id: { not: null },
+            });
             expect(db.projectTask.updateMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: expect.objectContaining({ project_id: 'project-1', sprint_id: { not: null } }),
-                    data: { sprint_id: null },
-                }),
+                expect.objectContaining({ data: { sprint_id: null } }),
             );
+            // The history says the task left, rather than keeping it open.
+            expect(db.sprintTask.updateMany.mock.calls[0][0].data).toMatchObject({ outcome: 'REMOVED' });
             expect(db.project.update).toHaveBeenCalledWith(
                 expect.objectContaining({ data: { deleted_at: expect.any(Date) } }),
             );
