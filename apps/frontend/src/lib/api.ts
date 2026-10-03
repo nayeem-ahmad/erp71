@@ -754,6 +754,28 @@ export type EmployeeLoginState = {
     must_change_password: boolean;
 };
 
+/**
+ * One change set for the board's bulk edit. An absent field is left alone and
+ * `null` clears it; labels are added and removed rather than replaced, since a
+ * selection rarely shares one label set.
+ */
+export interface BulkTaskChanges {
+    projectId?: string;
+    sprintId?: string | null;
+    /** `user:<id>` / `employee:<id>`; `null` unassigns. */
+    assignee?: string | null;
+    priority?: string;
+    dueDate?: string | null;
+    addLabelIds?: string[];
+    removeLabelIds?: string[];
+}
+
+export interface BulkTaskOutcome {
+    updated: number;
+    /** The tasks that refused, each with the server's reason. */
+    skipped: { id: string; reason: string }[];
+}
+
 export interface Paginated<T = any> {
     items: T[];
     total: number;
@@ -5733,6 +5755,17 @@ export const api = {
             body: JSON.stringify({ ids }),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /**
+     * One change set over a selection, from any number of projects — the
+     * board's bulk edit. One request for the same rate-limit reason as
+     * `bulkDeleteProjectTasks`. Tasks that refuse are skipped and reported.
+     */
+    bulkUpdateProjectTasks: (data: BulkTaskChanges & { ids: string[] }): Promise<BulkTaskOutcome> =>
+        fetchWithAuth('/project-tasks/bulk-update', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     addTaskChecklistItem: (taskId: string, data: { text: string }) =>
         fetchWithAuth(`/project-tasks/${taskId}/checklist`, {
             method: 'POST',
@@ -5923,10 +5956,6 @@ export const api = {
         fetchWithAuth(`/sprints${projectId ? `?projectId=${projectId}` : ''}`),
     getSprint: (id: string) => fetchWithAuth(`/sprints/${id}`),
     getSprintBurndown: (id: string) => fetchWithAuth(`/sprints/${id}/burndown`),
-    rebuildSprintSnapshots: (id: string, overwrite = false) =>
-        fetchWithAuth(`/sprints/${id}/rebuild-snapshots${overwrite ? '?overwrite=true' : ''}`, {
-            method: 'POST',
-        }),
     createSprint: (data: Record<string, unknown>) =>
         fetchWithAuth('/sprints', {
             method: 'POST',
@@ -5952,7 +5981,22 @@ export const api = {
     clearSprintBackground: (id: string) =>
         fetchWithAuth(`/sprints/${id}/background`, { method: 'DELETE' }),
     startSprint: (id: string) => fetchWithAuth(`/sprints/${id}/start`, { method: 'POST' }),
-    completeSprint: (id: string) => fetchWithAuth(`/sprints/${id}/complete`, { method: 'POST' }),
+    /**
+     * Omit `carryTo` to return unfinished tasks to the backlog. Returns the
+     * completed sprint with `carried_over` and `carried_to` (null for the backlog).
+     */
+    completeSprint: (
+        id: string,
+        carryTo?:
+            | { kind: 'backlog' }
+            | { kind: 'sprint'; sprintId: string }
+            | { kind: 'new'; name: string; startDate: string; endDate: string; goal?: string; start?: boolean },
+    ) =>
+        fetchWithAuth(`/sprints/${id}/complete`, {
+            method: 'POST',
+            body: JSON.stringify(carryTo ? { carryTo } : {}),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     assignTasksToSprint: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/sprints/${id}/tasks`, {
             method: 'POST',

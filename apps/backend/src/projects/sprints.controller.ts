@@ -21,6 +21,7 @@ import { SprintsService } from './sprints.service';
 import {
     AssignStoriesToSprintDto,
     AssignTasksToSprintDto,
+    CompleteSprintDto,
     CreateSprintDto,
     UpdateSprintDto,
 } from './project.dto';
@@ -55,20 +56,6 @@ export class SprintsController {
     @RequireStorePermission(StorePermission.VIEW_PROJECTS)
     burndown(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.sprints.burndown(tenant.tenantId, id);
-    }
-
-    /**
-     * Repairs gaps by replaying the remaining-hours log. Available because the
-     * snapshots are a cache — without the log this endpoint could not exist.
-     */
-    @Post(':id/rebuild-snapshots')
-    @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
-    rebuild(
-        @Tenant() tenant: TenantContext,
-        @Param('id') id: string,
-        @Query('overwrite') overwrite?: string,
-    ) {
-        return this.sprints.rebuildSnapshots(tenant.tenantId, id, overwrite === 'true');
     }
 
     @Patch(':id')
@@ -114,8 +101,12 @@ export class SprintsController {
 
     @Post(':id/complete')
     @RequireStorePermission(StorePermission.MANAGE_SPRINTS)
-    complete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.sprints.complete(tenant.tenantId, id);
+    complete(
+        @Tenant() tenant: TenantContext,
+        @Param('id') id: string,
+        @Body() dto: CompleteSprintDto,
+    ) {
+        return this.sprints.complete(tenant.tenantId, id, dto ?? {});
     }
 
     @Post(':id/tasks')

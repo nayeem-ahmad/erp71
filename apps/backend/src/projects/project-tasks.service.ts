@@ -12,8 +12,10 @@ import { ProjectSettingsService } from './project-settings.service';
 import { ActivityType, ProjectActivityService } from './project-activity.service';
 import { BoardColumnsService, pickColumnForStatus } from './board-columns.service';
 import { syncStoryStatuses } from './story-status.util';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
+import { SprintMembershipService } from './sprint-membership.service';
 import {
+    BulkUpdateTasksDto,
     CreateChecklistItemDto,
     CreateTaskDto,
     ListTasksDto,
@@ -32,6 +34,26 @@ import {
     requiredText,
 } from './project-import.util';
 
+/** What a bulk change reports: how many tasks took it, and why each of the rest did not. */
+export interface BulkTaskOutcome {
+    updated: number;
+    skipped: { id: string; reason: string }[];
+}
+
+/**
+ * `user:<id>` / `employee:<id>` — the keys the task list already uses for an
+ * assignee option — onto the pair of columns a task stores, clearing the other
+ * so a task never ends up assigned to both. `null` unassigns.
+ */
+export function assigneePatch(value: string | null): Partial<UpdateTaskDto> {
+    if (!value) return { assigneeId: '', assigneeEmployeeId: '' };
+    const [kind, id] = value.split(':');
+    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) throw new BadRequestException('Unknown assignee.');
+    if (kind === 'user') return { assigneeId: id, assigneeEmployeeId: '' };
+    if (kind === 'employee') return { assigneeEmployeeId: id, assigneeId: '' };
+    throw new BadRequestException('Unknown assignee.');
+}
+
 const TASK_SORTABLE: SortableMap = {
     title: (dir) => ({ title: dir }),
     priority: (dir) => ({ priority: dir }),
@@ -39,6 +61,52 @@ const TASK_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
     sort_order: (dir) => ({ sort_order: dir }),
 };
+
+/**
+ * The tasks a sprint's list shows: those in it now, plus those whose stay in it
+ * ended other than by removal — done there, carried on, or returned to the
+ * backlog when it completed. So a completed sprint still lists the work it was
+ * committed to, and a task taken out mid-sprint drops out as it always did.
+ *
+ * Current members are matched on `sprint_id`, not on an open history row, so
+ * the list is right even for tasks that joined before history was recorded.
+ */
+function inSprint(sprintId: string) {
+    return {
+        OR: [
+            { sprint_id: sprintId },
+            {
+                sprintMemberships: {
+                    some: {
+                        sprint_id: sprintId,
+                        removed_at: { not: null },
+                        outcome: { in: ['DONE', 'CARRIED_OVER', 'RETURNED_TO_BACKLOG'] },
+                    },
+                },
+            },
+        ],
+    };
+}
+
+/** A task's latest stay in one sprint — a task re-added after removal has two. */
+function membershipIn(sprintId: string) {
+    return {
+        where: { sprint_id: sprintId },
+        orderBy: { added_at: 'desc' },
+        take: 1,
+        select: {
+            outcome: true,
+            removed_at: true,
+            remaining_at_close: true,
+            carried_to: { select: { id: true, name: true } },
+        },
+    } as const;
+}
+
+function withSprintMembership(task: TaskRow): TaskRow {
+    const { sprintMemberships, ...rest } = task as TaskRow & { sprintMemberships?: unknown[] };
+    return { ...rest, sprintMembership: sprintMemberships?.[0] ?? null } as TaskRow;
+}
 
 /** How many readings the list sparkline draws. Enough for a shape, not a chart. */
 const TREND_POINTS = 10;
@@ -65,7 +133,8 @@ export class ProjectTasksService {
         private readonly activity: ProjectActivityService,
         private readonly access: ProjectAccessService,
         private readonly boardColumns: BoardColumnsService,
-        private readonly snapshots: SprintSnapshotService,
+        private readonly burndown: BurndownRecorder,
+        private readonly membership: SprintMembershipService,
     ) {}
 
     /**
@@ -162,7 +231,7 @@ export class ProjectTasksService {
             ...(query.labelId ? { labels: { some: { label_id: query.labelId } } } : {}),
         };
         if (query.backlogOnly === 'true') where.sprint_id = null;
-        else if (query.sprintId) where.sprint_id = query.sprintId;
+        else if (query.sprintId) where.AND = [inSprint(query.sprintId)];
 
         const search = query.search?.trim();
         if (search) where.title = { contains: search, mode: 'insensitive' };
@@ -185,12 +254,15 @@ export class ProjectTasksService {
                 ]) as never,
                 skip: (page - 1) * limit,
                 take: limit,
-                include: TASK_INCLUDE as never,
+                include: (query.sprintId
+                    ? { ...TASK_INCLUDE, sprintMemberships: membershipIn(query.sprintId) }
+                    : TASK_INCLUDE) as never,
             }),
             this.db.projectTask.count({ where: scoped as never }),
         ]);
 
-        const withLogged = await this.attachLoggedHours(tenantId, items as TaskRow[]);
+        const rows = query.sprintId ? (items as TaskRow[]).map(withSprintMembership) : items;
+        const withLogged = await this.attachLoggedHours(tenantId, rows as TaskRow[]);
         const withTrend = await this.attachRemainingTrend(tenantId, withLogged as TaskRow[]);
         return paginate(withTrend, total, page, limit);
     }
@@ -364,15 +436,29 @@ export class ProjectTasksService {
                     orderBy: { work_date: 'desc' },
                     include: { user: { select: { id: true, name: true } } },
                 },
+                // Every sprint it was attempted in, the current one included.
+                sprintMemberships: {
+                    orderBy: { added_at: 'asc' },
+                    select: {
+                        added_at: true,
+                        removed_at: true,
+                        outcome: true,
+                        sprint: { select: { id: true, name: true, status: true } },
+                    },
+                },
             } as never,
         });
         if (!task) throw new NotFoundException('Task not found');
         // The viewer's watcher row is folded into a flag rather than returned:
         // a `watchers` array holding one person would read as the whole list.
-        const { watchers, ...row } = task as TaskRow & { watchers?: unknown[] };
+        const { watchers, sprintMemberships, ...row } = task as TaskRow & {
+            watchers?: unknown[];
+            sprintMemberships?: unknown[];
+        };
         const [withLogged] = await this.attachLoggedHours(tenantId, [row as TaskRow]);
         return {
             ...withLogged,
+            sprintHistory: sprintMemberships ?? [],
             viewer_watching: Array.isArray(watchers) && watchers.length > 0,
         };
     }
@@ -394,7 +480,7 @@ export class ProjectTasksService {
             }
         }
         if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, dto.projectId);
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
+        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId, { joining: true });
 
         const sortOrder = await this.nextSortOrder(tenantId, dto.projectId, statusId);
         const estimate = dto.estimateHours ?? null;
@@ -422,7 +508,6 @@ export class ProjectTasksService {
                 assignee_employee_id: dto.assigneeEmployeeId || null,
                 milestone_id: dto.milestoneId || null,
                 user_story_id: dto.userStoryId || null,
-                sprint_id: dto.sprintId || null,
                 parent_task_id: dto.parentTaskId || null,
                 start_date: dto.startDate ? new Date(dto.startDate) : null,
                 due_date: dto.dueDate ? new Date(dto.dueDate) : null,
@@ -433,6 +518,9 @@ export class ProjectTasksService {
             },
         });
 
+        // Through the membership service, not the create, so the task's sprint
+        // history opens with it.
+        if (dto.sprintId) await this.membership.moveTasks(this.db, tenantId, [task.id], dto.sprintId, 'REMOVED');
         if (dto.labelIds?.length) await this.setLabels(tenantId, task.id, dto.labelIds);
         await syncStoryStatuses(this.db as never, tenantId, [dto.userStoryId]);
 
@@ -461,7 +549,7 @@ export class ProjectTasksService {
             });
         }
         // A task with no hours still raises the sprint's open-task count.
-        await this.snapshots.refresh(tenantId, [dto.sprintId]);
+        await this.burndown.record(tenantId, [dto.sprintId], 'TASK_ADDED', task.id);
 
         return this.findOne(viewer, task.id);
     }
@@ -626,7 +714,9 @@ export class ProjectTasksService {
         }
 
         if (dto.userStoryId) await this.assertUserStory(tenantId, dto.userStoryId, projectId);
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
+        if (dto.sprintId) {
+            await this.assertSprint(tenantId, dto.sprintId, { joining: dto.sprintId !== task.sprint_id });
+        }
 
         const data = {
             ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
@@ -639,7 +729,6 @@ export class ProjectTasksService {
                 : {}),
             ...(dto.milestoneId !== undefined ? { milestone_id: dto.milestoneId || null } : {}),
             ...(dto.userStoryId !== undefined ? { user_story_id: dto.userStoryId || null } : {}),
-            ...(dto.sprintId !== undefined ? { sprint_id: dto.sprintId || null } : {}),
             ...(dto.startDate !== undefined
                 ? { start_date: dto.startDate ? new Date(dto.startDate) : null }
                 : {}),
@@ -654,6 +743,14 @@ export class ProjectTasksService {
             ? await this.db.$transaction((tx) => this.applyMove(tx, tenantId, task, move, data, statusId))
             : null;
         if (!moved) await this.db.projectTask.update({ where: { id: taskId }, data });
+        // Scope first, before any hours move, so the chart shows the task
+        // joining (or leaving) as its own step rather than folding it into
+        // whatever re-estimate follows.
+        if (dto.sprintId !== undefined && (dto.sprintId || null) !== task.sprint_id) {
+            await this.membership.moveTasks(this.db, tenantId, [taskId], dto.sprintId || null, 'REMOVED');
+            await this.burndown.record(tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
+            await this.burndown.record(tenantId, [dto.sprintId], 'TASK_ADDED', taskId);
+        }
 
         if (dto.labelIds !== undefined) await this.setLabels(tenantId, taskId, dto.labelIds);
         if (statusId !== task.status_id || dto.userStoryId !== undefined || moved) {
@@ -747,10 +844,10 @@ export class ProjectTasksService {
             await this.burnDoneCrossing({ tenantId, userId, projectId, ...crossing });
         }
 
-        // Both sprints when it changed sprint: the one it left loses its hours
-        // and its task. And a Done crossing with no hours left to burn writes
-        // no remaining row, yet still changes the open-task count.
-        await this.snapshots.refresh(tenantId, [task.sprint_id, sprintId]);
+        // A Done crossing with no hours left to burn writes no remaining row,
+        // yet still changes the open-task count. A no-op edit records nothing:
+        // the recorder skips a point that repeats the last.
+        await this.burndown.record(tenantId, [task.sprint_id, sprintId], 'STATUS_CHANGED', taskId);
 
         return this.findOne(viewer, taskId);
     }
@@ -985,7 +1082,9 @@ export class ProjectTasksService {
         const userId = viewer.userId;
         const task = await this.assertTask(viewer, taskId);
         const status = await this.assertStatus(tenantId, dto.statusId, task.project_id);
-        if (dto.sprintId) await this.assertSprint(tenantId, dto.sprintId);
+        if (dto.sprintId) {
+            await this.assertSprint(tenantId, dto.sprintId, { joining: dto.sprintId !== task.sprint_id });
+        }
 
         const sprintId = dto.clearSprint ? null : (dto.sprintId ?? task.sprint_id);
         const wasDone = task.status?.category === 'DONE';
@@ -1015,7 +1114,6 @@ export class ProjectTasksService {
                         ...(ordered[i].id === taskId
                             ? {
                                   status_id: status.id,
-                                  sprint_id: sprintId,
                                   ...(isDone && !wasDone ? { completed_at: new Date() } : {}),
                                   ...(!isDone && wasDone ? { completed_at: null } : {}),
                               }
@@ -1023,7 +1121,14 @@ export class ProjectTasksService {
                     },
                 });
             }
+            // Dragging a card between sprint lanes changes its sprint.
+            await this.membership.moveTasks(tx, tenantId, [taskId], sprintId, 'REMOVED');
         });
+
+        if (sprintId !== task.sprint_id) {
+            await this.burndown.record(tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
+            await this.burndown.record(tenantId, [sprintId], 'TASK_ADDED', taskId);
+        }
 
         if (status.id !== task.status_id) {
             await syncStoryStatuses(this.db as never, tenantId, [task.user_story_id]);
@@ -1073,7 +1178,7 @@ export class ProjectTasksService {
                 userId,
             });
         }
-        await this.snapshots.refresh(tenantId, [task.sprint_id, sprintId]);
+        await this.burndown.record(tenantId, [task.sprint_id, sprintId], 'STATUS_CHANGED', taskId);
 
         return this.findOne(viewer, taskId);
     }
@@ -1084,8 +1189,11 @@ export class ProjectTasksService {
             where: { id: taskId },
             data: { deleted_at: new Date() },
         });
+        // A deleted task leaves its sprint, so the history says so rather than
+        // keeping an open row for a task nobody can see.
+        await this.membership.moveTasks(this.db, viewer.tenantId, [taskId], null, 'REMOVED');
         await syncStoryStatuses(this.db as never, viewer.tenantId, [task.user_story_id]);
-        await this.snapshots.refresh(viewer.tenantId, [task.sprint_id]);
+        await this.burndown.record(viewer.tenantId, [task.sprint_id], 'TASK_REMOVED', taskId);
         return { success: true };
     }
 
@@ -1117,23 +1225,95 @@ export class ProjectTasksService {
 
         const affected = await this.db.projectTask.findMany({
             where: where as never,
-            select: { user_story_id: true, sprint_id: true },
+            select: { id: true, user_story_id: true, sprint_id: true },
         });
         const { count } = await this.db.projectTask.updateMany({
             where: where as never,
             data: { deleted_at: new Date() },
         });
+        await this.membership.moveTasks(
+            this.db,
+            viewer.tenantId,
+            affected.filter((row) => row.sprint_id).map((row) => row.id),
+            null,
+            'REMOVED',
+        );
         await syncStoryStatuses(
             this.db as never,
             viewer.tenantId,
             affected.map((row) => row.user_story_id),
         );
-        await this.snapshots.refresh(
+        await this.burndown.record(
             viewer.tenantId,
             affected.map((row) => row.sprint_id),
+            'TASK_REMOVED',
         );
 
         return { success: true, deleted: count, skipped: ids.length - count };
+    }
+
+    /**
+     * One change set over a selection that can span projects — the board's bulk
+     * edit. Each task goes through `update`, so a bulk change moves projects,
+     * burns remaining hours, records activity and checks access exactly as a
+     * single edit does, rather than being a second, subtly different write path.
+     *
+     * Sequential on purpose: a project move numbers the task off the target
+     * project's highest reference, and two in flight would take the same one.
+     * A task that refuses is reported back and the rest still go through.
+     */
+    async bulkUpdate(viewer: ProjectViewer, dto: BulkUpdateTasksDto): Promise<BulkTaskOutcome> {
+        const patch: Partial<UpdateTaskDto> = {
+            ...(dto.projectId ? { projectId: dto.projectId } : {}),
+            ...(dto.sprintId !== undefined ? { sprintId: dto.sprintId ?? '' } : {}),
+            ...(dto.assignee !== undefined ? assigneePatch(dto.assignee) : {}),
+            ...(dto.priority ? { priority: dto.priority } : {}),
+            ...(dto.dueDate !== undefined ? { dueDate: dto.dueDate ?? '' } : {}),
+        };
+        const adding = [...new Set(dto.addLabelIds ?? [])];
+        const removing = new Set(dto.removeLabelIds ?? []);
+        const relabel = adding.length > 0 || removing.size > 0;
+        if (Object.keys(patch).length === 0 && !relabel) {
+            throw new BadRequestException('Choose something to change.');
+        }
+
+        // Parents first. A subtask moves with its parent, so one picked
+        // alongside its parent is carried by the parent's move; run first, it
+        // would be refused and then moved anyway, and be reported as skipped.
+        const ids = [...new Set(dto.ids)];
+        const rows = await this.db.projectTask.findMany({
+            where: { id: { in: ids }, tenant_id: viewer.tenantId },
+            select: { id: true, parent_task_id: true },
+        });
+        const subtasks = new Set(rows.filter((row) => row.parent_task_id).map((row) => row.id));
+        const ordered = [...ids.filter((id) => !subtasks.has(id)), ...ids.filter((id) => subtasks.has(id))];
+
+        const outcome: BulkTaskOutcome = { updated: 0, skipped: [] };
+        for (const id of ordered) {
+            try {
+                let labelIds: string[] | undefined;
+                if (relabel) {
+                    const held = await this.db.projectTaskLabel.findMany({
+                        where: { tenant_id: viewer.tenantId, task_id: id },
+                        select: { label_id: true },
+                    });
+                    labelIds = [
+                        ...new Set([
+                            ...held.map((row) => row.label_id).filter((labelId) => !removing.has(labelId)),
+                            ...adding.filter((labelId) => !removing.has(labelId)),
+                        ]),
+                    ];
+                }
+                await this.update(viewer, id, { ...patch, ...(labelIds ? { labelIds } : {}) } as UpdateTaskDto);
+                outcome.updated += 1;
+            } catch (error) {
+                outcome.skipped.push({
+                    id,
+                    reason: error instanceof Error ? error.message : 'Could not be updated',
+                });
+            }
+        }
+        return outcome;
     }
 
     async remainingHistory(viewer: ProjectViewer, taskId: string) {
@@ -1502,13 +1682,21 @@ export class ProjectTasksService {
      * A sprint is tenant-level, so a task from any project may join it. The old
      * same-project check was removed with `Sprint.project_id` — the tenant scope
      * below is now the only thing that matters.
+     *
+     * `joining` refuses a completed sprint: its membership is history, and a
+     * task joining it would open a stay no completion will ever close. Naming
+     * the sprint a task is already in (a Done task in a finished sprint) is
+     * not joining, so it passes.
      */
-    private async assertSprint(tenantId: string, sprintId: string) {
+    private async assertSprint(tenantId: string, sprintId: string, opts: { joining?: boolean } = {}) {
         const sprint = await this.db.sprint.findFirst({
             where: { id: sprintId, tenant_id: tenantId },
-            select: { id: true },
+            select: { id: true, status: true },
         });
         if (!sprint) throw new NotFoundException('Sprint not found');
+        if (opts.joining && sprint.status === 'COMPLETED') {
+            throw new BadRequestException('That sprint is complete; tasks can no longer join it.');
+        }
         return sprint;
     }
 }

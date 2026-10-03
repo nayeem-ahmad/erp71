@@ -8,7 +8,7 @@ import { ImportsService } from './imports.service';
 @Module({
     // AssetsModule for document uploads; JobTrackerService and AppLogger both
     // come from @Global() modules, which is why the scheduler needs no import
-    // of its own — same as ProjectsScheduler.
+    // of its own.
     imports: [AuthModule, AssetsModule],
     controllers: [ImportsController],
     providers: [ImportsService, ImportsScheduler],

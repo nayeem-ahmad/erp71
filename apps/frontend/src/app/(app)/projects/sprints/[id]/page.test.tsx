@@ -37,6 +37,11 @@ jest.mock('@/lib/api', () => ({
         deleteProjectTask: jest.fn(),
         getProjectColumns: jest.fn(),
         moveProjectTask: jest.fn(),
+        getMe: jest.fn(),
+        createProjectTask: jest.fn(),
+        getProject: jest.fn(),
+        getSprints: jest.fn(),
+        completeSprint: jest.fn(),
     },
 }));
 
@@ -77,12 +82,18 @@ beforeEach(() => {
     });
     (api.getProjectTasks as jest.Mock).mockReset().mockResolvedValue({ items: tasks });
     (api.getSprintBurndown as jest.Mock).mockReset().mockResolvedValue({
-        series: [
-            { date: '2026-08-02', ideal: 12, actual: 12, committed: 12, open: 2, isWorkingDay: true },
-            { date: '2026-08-03', ideal: 6, actual: 9.5, committed: 12, open: 2, isWorkingDay: true },
-            { date: '2026-08-04', ideal: 0, actual: null, committed: null, open: null, isWorkingDay: true },
+        current: { remaining_hours: 7, committed_hours: 12, task_count: 2, done_task_count: 0 },
+        ideal: [
+            { date: '2026-08-02', value: 12, isWorkingDay: true },
+            { date: '2026-08-03', value: 6, isWorkingDay: true },
+            { date: '2026-08-04', value: 0, isWorkingDay: true },
+        ],
+        points: [
+            { at: '2026-08-02T03:00:00.000Z', remaining: 12, committed: 12, open: 2, cause: 'STARTED', task: null },
+            { at: '2026-08-03T06:00:00.000Z', remaining: 9.5, committed: 12, open: 2, cause: 'WORK_LOGGED', task: null },
         ],
     });
+    (api.getSprints as jest.Mock).mockReset().mockResolvedValue([]);
     (api.getProjects as jest.Mock).mockReset().mockResolvedValue({ items: [] });
     (api.getProjectStories as jest.Mock).mockReset().mockResolvedValue([
         {
@@ -100,6 +111,8 @@ beforeEach(() => {
     ]);
     (api.assignStoriesToSprint as jest.Mock).mockReset().mockResolvedValue({ assigned: 2 });
     (api.removeTasksFromSprint as jest.Mock).mockReset().mockResolvedValue({ removed: 1 });
+    (api.getMe as jest.Mock).mockReset().mockResolvedValue({ id: 'me' });
+    (api.createProjectTask as jest.Mock).mockReset().mockResolvedValue({ id: 't-new' });
 });
 
 describe('Sprint detail page', () => {
@@ -275,13 +288,124 @@ describe('Sprint detail page', () => {
         expect(burndown.compareDocumentPosition(info) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(info.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-        // One marker per day with a snapshot; the future day is a gap.
-        expect(within(burndown as unknown as HTMLElement).getAllByTestId('open-task-point')).toHaveLength(2);
+        // Every recorded change, as step lines on a time axis.
+        expect(within(burndown as unknown as HTMLElement).getByTestId('remaining-line')).toBeInTheDocument();
+        expect(within(burndown as unknown as HTMLElement).getByTestId('open-line')).toBeInTheDocument();
         expect(screen.getByText('Open tasks (right axis)')).toBeInTheDocument();
         expect(screen.queryByText('Open tasks chart')).not.toBeInTheDocument();
 
         // Seven figures as label/value pairs, not tiles.
         expect(within(stats).getAllByRole('term')).toHaveLength(7);
+    });
+
+    describe('completing', () => {
+        it('opens the Complete dialog from the header of a running sprint', async () => {
+            render(<SprintDetailPage />);
+            await screen.findByText('Receipt email');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Complete sprint' }));
+
+            expect(await screen.findByText('Complete Sprint 7')).toBeInTheDocument();
+            expect(await screen.findByLabelText('A new sprint')).toBeChecked();
+        });
+
+        it('offers no Complete button on a sprint that is not running', async () => {
+            (api.getSprint as jest.Mock).mockResolvedValue({
+                id: 's1',
+                name: 'Sprint 7',
+                status: 'PLANNED',
+                start_date: '2026-08-02',
+                end_date: '2026-08-04',
+            });
+            render(<SprintDetailPage />);
+            await screen.findByText('Receipt email');
+            expect(screen.queryByRole('button', { name: 'Complete sprint' })).not.toBeInTheDocument();
+        });
+    });
+
+    describe('a completed sprint', () => {
+        beforeEach(() => {
+            (api.getSprint as jest.Mock).mockResolvedValue({
+                id: 's1',
+                name: 'Sprint 7',
+                status: 'COMPLETED',
+                start_date: '2026-08-02',
+                end_date: '2026-08-04',
+            });
+            (api.getProjectTasks as jest.Mock).mockResolvedValue({
+                items: [
+                    {
+                        ...tasks[0],
+                        // Kept burning in Sprint 8 since; this sprint reports what it closed at.
+                        remaining_hours: '1',
+                        sprintMembership: {
+                            outcome: 'CARRIED_OVER',
+                            removed_at: '2026-08-04T17:59:00.000Z',
+                            remaining_at_close: '3',
+                            carried_to: { id: 's8', name: 'Sprint 8' },
+                        },
+                    },
+                    {
+                        ...tasks[1],
+                        sprintMembership: {
+                            outcome: 'RETURNED_TO_BACKLOG',
+                            removed_at: '2026-08-04T17:59:00.000Z',
+                            remaining_at_close: '4',
+                            carried_to: null,
+                        },
+                    },
+                ],
+            });
+        });
+
+        it('lists the carried work with where it went', async () => {
+            render(<SprintDetailPage />);
+            const row = (await screen.findByText('Wire the bKash callback')).closest('tr')!;
+
+            expect(within(row).getByRole('link', { name: '→ Sprint 8' })).toHaveAttribute('href', '/projects/sprints/s8');
+            const other = screen.getByText('Receipt email').closest('tr')!;
+            expect(within(other).getByText('Returned to the backlog')).toBeInTheDocument();
+        });
+
+        it('reports the hours each task closed at, not where it stands now', async () => {
+            render(<SprintDetailPage />);
+            const row = (await screen.findByText('Wire the bKash callback')).closest('tr')!;
+            const cells = within(row).getAllByRole('cell');
+            expect(cells.some((cell) => cell.textContent === '3')).toBe(true);
+            expect(cells.some((cell) => cell.textContent === '1')).toBe(false);
+        });
+
+        it('still says a task was carried over when the sprint it went to is gone', async () => {
+            (api.getProjectTasks as jest.Mock).mockResolvedValue({
+                items: [
+                    {
+                        ...tasks[0],
+                        sprintMembership: {
+                            outcome: 'CARRIED_OVER',
+                            removed_at: '2026-08-04T17:59:00.000Z',
+                            remaining_at_close: '3',
+                            carried_to: null,
+                        },
+                    },
+                ],
+            });
+            render(<SprintDetailPage />);
+            const row = (await screen.findByText('Wire the bKash callback')).closest('tr')!;
+            expect(within(row).getByText('Carried over to the next sprint')).toBeInTheDocument();
+        });
+
+        it('shows no gap to the ideal line once the sprint is over', async () => {
+            render(<SprintDetailPage />);
+            const stats = await screen.findByTestId('sprint-stats');
+            await screen.findByText('Wire the bKash callback');
+            expect(within(stats).getByText('—')).toBeInTheDocument();
+        });
+
+        it('no longer offers to take a task out', async () => {
+            render(<SprintDetailPage />);
+            await screen.findByText('Receipt email');
+            expect(screen.queryByRole('button', { name: /return to backlog/i })).not.toBeInTheDocument();
+        });
     });
 
     describe('folding swimlanes', () => {
@@ -338,6 +462,87 @@ describe('Sprint detail page', () => {
             const lanes = screen.getAllByTestId('sprint-card-lane');
             expect(within(lanes[1]).queryAllByTestId('sprint-card-column')).toHaveLength(0);
             expect(within(lanes[0]).getAllByTestId('sprint-card-column').length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('adding a task', () => {
+        const projects = [
+            { id: 'p2', code: 'WEB', name: 'Website' },
+            { id: 'p1', code: 'OTB', name: 'Online' },
+        ];
+
+        beforeEach(() => {
+            (api.getProjects as jest.Mock).mockResolvedValue({ items: projects });
+        });
+
+        it('commits a task typed under the table to the sprint, for the signed-in user, in the busiest project', async () => {
+            render(<SprintDetailPage />);
+            await screen.findByText('Wire the bKash callback');
+
+            fireEvent.click(await screen.findByRole('button', { name: /add a task/i }));
+            // Both sprint tasks are OTB's, so it is chosen over the first project in the list.
+            await waitFor(() => expect(screen.getByRole('combobox', { name: /^project$/i })).toHaveValue('p1'));
+            await waitFor(() => expect(screen.getByRole('combobox', { name: /assign card to/i })).toHaveValue('user:me'));
+
+            const title = screen.getByRole('textbox', { name: /add a task/i });
+            fireEvent.change(title, { target: { value: 'Refund webhook' } });
+            fireEvent.keyDown(title, { key: 'Enter' });
+
+            await waitFor(() =>
+                expect(api.createProjectTask).toHaveBeenCalledWith({
+                    projectId: 'p1',
+                    title: 'Refund webhook',
+                    assigneeId: 'me',
+                    assigneeEmployeeId: '',
+                    sprintId: 's1',
+                }),
+            );
+            // Reloaded, so the new row and the totals come from the server.
+            await waitFor(() => expect(api.getProjectTasks).toHaveBeenCalledTimes(2));
+        });
+
+        it('opens on the first project when the sprint is empty', async () => {
+            (api.getProjectTasks as jest.Mock).mockResolvedValue({ items: [] });
+            render(<SprintDetailPage />);
+
+            fireEvent.click(await screen.findByRole('button', { name: /add a task/i }));
+            await waitFor(() => expect(screen.getByRole('combobox', { name: /^project$/i })).toHaveValue('p2'));
+        });
+
+        it('files a card typed into a card-view column under that column\'s status', async () => {
+            render(<SprintDetailPage />);
+            await screen.findByText('Wire the bKash callback');
+            fireEvent.click(screen.getByRole('button', { name: /^cards$/i }));
+            await waitFor(() => expect(screen.getAllByTestId('sprint-card-column')).toHaveLength(3));
+
+            const doing = screen.getAllByTestId('sprint-card-column')[1];
+            fireEvent.click(within(doing).getByRole('button', { name: /add a card/i }));
+            await waitFor(() =>
+                expect(within(doing).getByRole('combobox', { name: /^project$/i })).toHaveValue('p1'),
+            );
+            const title = within(doing).getByRole('textbox', { name: /add a card/i });
+            fireEvent.change(title, { target: { value: 'Retry failed payouts' } });
+            fireEvent.keyDown(title, { key: 'Enter' });
+
+            await waitFor(() =>
+                expect(api.createProjectTask).toHaveBeenCalledWith(
+                    expect.objectContaining({ projectId: 'p1', sprintId: 's1', statusId: 'st1' }),
+                ),
+            );
+        });
+
+        it('offers no composer on a completed sprint', async () => {
+            (api.getSprint as jest.Mock).mockResolvedValue({
+                id: 's1',
+                name: 'Sprint 7',
+                status: 'COMPLETED',
+                start_date: '2026-08-02',
+                end_date: '2026-08-04',
+            });
+            render(<SprintDetailPage />);
+            await screen.findByText('Wire the bKash callback');
+
+            expect(screen.queryByRole('button', { name: /add a task/i })).not.toBeInTheDocument();
         });
     });
 });

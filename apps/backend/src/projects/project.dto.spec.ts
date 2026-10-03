@@ -1,7 +1,13 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { CreateProjectDto, CreateTaskDto, UpdateProjectDto, UpdateTaskDto } from './project.dto';
+import {
+    BulkUpdateTasksDto,
+    CreateProjectDto,
+    CreateTaskDto,
+    UpdateProjectDto,
+    UpdateTaskDto,
+} from './project.dto';
 import { CreateBoardCardDto, MoveBoardCardDto } from './board.dto';
 
 const errorsFor = (payload: Record<string, unknown>) =>
@@ -247,5 +253,45 @@ describe('MoveBoardCardDto swimlanes', () => {
         expect(errors({ laneBy: 'priority', laneKey: 'none' })).toEqual(['laneBy']);
         expect(errors({ laneBy: 'assignee', laneKey: 'user:not-a-uuid' })).toEqual(['laneKey']);
         expect(errors({ laneBy: 'assignee', laneKey: `user:${UUID};drop` })).toEqual(['laneKey']);
+    });
+});
+
+describe('BulkUpdateTasksDto', () => {
+    const bulkErrors = (payload: Record<string, unknown>) =>
+        validateSync(plainToInstance(BulkUpdateTasksDto, { ids: [UUID], ...payload }) as object).map(
+            (e) => e.property,
+        );
+
+    it('takes null for the fields a bulk edit can clear', () => {
+        // `null`, not `''`: this DTO is a change set, so an absent field is
+        // "leave alone" and null is "clear" without the PATCH spelling.
+        expect(bulkErrors({ sprintId: null, assignee: null, dueDate: null })).toEqual([]);
+    });
+
+    it('takes a full change set', () => {
+        expect(
+            bulkErrors({
+                projectId: UUID,
+                sprintId: UUID,
+                assignee: `user:${UUID}`,
+                priority: 'HIGH',
+                dueDate: '2026-10-09',
+                addLabelIds: [UUID],
+                removeLabelIds: [UUID],
+            }),
+        ).toEqual([]);
+    });
+
+    it('rejects ids that are not uuids, and an empty selection', () => {
+        expect(bulkErrors({ ids: ['k1'] })).toEqual(['ids']);
+        expect(bulkErrors({ ids: [] })).toEqual(['ids']);
+    });
+
+    it('rejects a label, sprint or project that is not a uuid', () => {
+        expect(bulkErrors({ addLabelIds: ['blocked'], sprintId: 'next', projectId: 'ALP' }).sort()).toEqual([
+            'addLabelIds',
+            'projectId',
+            'sprintId',
+        ]);
     });
 });

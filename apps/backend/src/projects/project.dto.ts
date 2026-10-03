@@ -18,6 +18,7 @@ import {
     Min,
     MinLength,
     ValidateIf,
+    ValidateNested,
 } from 'class-validator';
 import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
 import { PROJECT_CODE_PATTERN } from './url-keys/project-code';
@@ -494,6 +495,46 @@ export class BulkDeleteTasksDto {
     ids!: string[];
 }
 
+/**
+ * One change set over a selection of tasks, from any number of projects — the
+ * board's bulk edit. Each field is optional and an absent one is left alone;
+ * `null` clears the ones that can be cleared. Labels are added and removed
+ * rather than replaced, because a selection rarely shares one label set and
+ * "tag these five Blocked" must not strip whatever else each of them carries.
+ */
+export class BulkUpdateTasksDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @ArrayMaxSize(200)
+    @IsUUID(undefined, { each: true })
+    ids!: string[];
+
+    /** Moves each task to this project — see `ProjectTasksService.update`. */
+    @IsOptional() @IsUUID()
+    projectId?: string;
+
+    /** `null` takes the tasks out of their sprint. */
+    @IsOptional() @IsUUID()
+    sprintId?: string | null;
+
+    /** `user:<id>` / `employee:<id>`, the key the task list uses; `null` unassigns. */
+    @IsOptional() @IsString() @MaxLength(80)
+    assignee?: string | null;
+
+    @IsOptional() @IsEnum(ProjectPriorityDto)
+    priority?: ProjectPriorityDto;
+
+    /** `null` clears the due date. */
+    @IsOptional() @IsDateString()
+    dueDate?: string | null;
+
+    @IsOptional() @IsArray() @ArrayMaxSize(50) @IsUUID(undefined, { each: true })
+    addLabelIds?: string[];
+
+    @IsOptional() @IsArray() @ArrayMaxSize(50) @IsUUID(undefined, { each: true })
+    removeLabelIds?: string[];
+}
+
 export class CreateTaskDto {
     @IsUUID()
     projectId!: string;
@@ -955,6 +996,12 @@ export class UpdateSprintDto {
     @IsOptional() @IsDateString()
     endDate?: string;
 
+    /**
+     * Accepted only to be refused with a reason: a status change goes through
+     * `POST /sprints/:id/start` or `/complete`, which take the burndown point
+     * and close the sprint's history. Declared so the request fails loudly
+     * rather than having the field silently stripped.
+     */
     @IsOptional() @IsEnum(SprintStatusDto)
     status?: SprintStatusDto;
 
@@ -965,6 +1012,45 @@ export class UpdateSprintDto {
     @IsOptional()
     @IsIn(BOARD_BACKGROUND_COLORS)
     backgroundColor?: BoardBackgroundColor | null;
+}
+
+/** Where a completing sprint's unfinished tasks go. */
+export class CarryToDto {
+    @IsIn(['backlog', 'sprint', 'new'])
+    kind!: 'backlog' | 'sprint' | 'new';
+
+    /** `kind: 'sprint'` — a PLANNED sprint in this tenant. */
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'sprint')
+    @IsUUID()
+    sprintId?: string;
+
+    /** `kind: 'new'` — the sprint to create, validated like `CreateSprintDto`. */
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'new')
+    @IsString() @MinLength(1) @MaxLength(200)
+    name?: string;
+
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'new')
+    @IsDateString()
+    startDate?: string;
+
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'new')
+    @IsDateString()
+    endDate?: string;
+
+    @IsOptional() @IsString() @MaxLength(1000)
+    goal?: string;
+
+    /** `kind: 'new'` — start the new sprint straight away. */
+    @IsOptional() @IsBoolean()
+    start?: boolean;
+}
+
+export class CompleteSprintDto {
+    /** Omitted means the backlog — what completing always did. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => CarryToDto)
+    carryTo?: CarryToDto;
 }
 
 export class AssignTasksToSprintDto {

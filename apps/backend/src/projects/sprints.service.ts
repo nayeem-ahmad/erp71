@@ -8,16 +8,30 @@ import {
     type BackgroundImageUpload,
 } from './background-image.util';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
-import { buildBurndownSeries, eachDate, toDateKey } from './burndown.util';
+import { BurndownRecorder } from './burndown-recorder.service';
+import { SprintMembershipService } from './sprint-membership.service';
+import { buildBurndownSeries, toDateKey } from './burndown.util';
+import { composeTaskKey } from './url-keys/task-key';
 import {
     AssignStoriesToSprintDto,
     AssignTasksToSprintDto,
+    CompleteSprintDto,
     CreateSprintDto,
     UpdateSprintDto,
 } from './project.dto';
 
 /** Where an uploaded sprint background lands. Per tenant, like a board's. */
+/** One point on a sprint's burndown, as the chart reads it. */
+export interface BurndownTimelinePoint {
+    at: string;
+    remaining: number;
+    committed: number;
+    open: number;
+    /** Null on the synthetic "now" point appended while the sprint runs. */
+    cause: string | null;
+    task: { id: string; code: string | null; title: string } | null;
+}
+
 export function sprintBackgroundFolder(tenantId: string): string {
     return `${tenantId}/project-sprints`;
 }
@@ -26,7 +40,8 @@ export function sprintBackgroundFolder(tenantId: string): string {
 export class SprintsService {
     constructor(
         private readonly db: DatabaseService,
-        private readonly snapshots: SprintSnapshotService,
+        private readonly burndownRecorder: BurndownRecorder,
+        private readonly membership: SprintMembershipService,
         private readonly access: ProjectAccessService,
         private readonly assets: AssetsService,
     ) {}
@@ -147,14 +162,17 @@ export class SprintsService {
 
     async update(tenantId: string, sprintId: string, dto: UpdateSprintDto) {
         const sprint = await this.assertSprint(tenantId, sprintId);
+        if (dto.status !== undefined) {
+            // A status set here would skip what start and complete do: the
+            // first burndown point, closing the history, carrying work over.
+            throw new BadRequestException(
+                'Change a sprint\'s status with POST /sprints/:id/start or /complete.',
+            );
+        }
 
         const start = dto.startDate ? new Date(dto.startDate) : sprint.start_date;
         const end = dto.endDate ? new Date(dto.endDate) : sprint.end_date;
         if (end < start) throw new BadRequestException('A sprint cannot end before it starts.');
-
-        if (dto.status === 'ACTIVE' && sprint.status !== 'ACTIVE') {
-            await this.assertNoOtherActive(tenantId, sprintId);
-        }
 
         // One background, as on a board: a colour retires the image, file and all.
         const replacingImage = dto.backgroundColor !== undefined && Boolean(sprint.background_image_key);
@@ -166,7 +184,6 @@ export class SprintsService {
                 ...(dto.goal !== undefined ? { goal: dto.goal?.trim() || null } : {}),
                 ...(dto.startDate !== undefined ? { start_date: start } : {}),
                 ...(dto.endDate !== undefined ? { end_date: end } : {}),
-                ...(dto.status !== undefined ? { status: dto.status as never } : {}),
                 ...(dto.backgroundColor !== undefined
                     ? { ...NO_BACKGROUND, background_color: dto.backgroundColor }
                     : {}),
@@ -228,62 +245,151 @@ export class SprintsService {
             where: { id: sprintId },
             data: { status: 'ACTIVE' as never },
         });
-        await this.snapshots.snapshotToday(tenantId, sprintId);
+        await this.burndownRecorder.record(tenantId, [sprintId], 'STARTED');
         return withoutStorageKey(updated);
     }
 
     /**
-     * Completing a sprint snapshots one last time, then returns unfinished
-     * tasks to the backlog. They keep their remaining hours — the work did not
-     * evaporate because the sprint ended — and their log rows keep pointing at
-     * the sprint they burned in.
+     * Closes the sprint and decides where its unfinished work goes — the
+     * backlog (the default, and all this ever did), a planned sprint, or a new
+     * one created here. One transaction, so a sprint is never completed with
+     * its tasks half-moved.
+     *
+     * Done tasks stay in the sprint they were finished in. Every task's
+     * `SprintTask` row closes with how its stay ended, which is what lets the
+     * completed sprint list its carried tasks afterwards and a task show every
+     * sprint it was attempted in. Remaining hours carry unchanged — the work
+     * did not evaporate because the sprint ended — and log rows keep pointing
+     * at the sprint they burned in.
      */
-    async complete(tenantId: string, sprintId: string) {
+    async complete(tenantId: string, sprintId: string, dto: CompleteSprintDto = {}) {
         const sprint = await this.assertSprint(tenantId, sprintId);
-        await this.snapshots.snapshotToday(tenantId, sprintId);
+        if (sprint.status === 'COMPLETED') {
+            throw new ConflictException('That sprint is already complete.');
+        }
+        const carryTo = dto.carryTo ?? { kind: 'backlog' as const };
+        if (carryTo.kind === 'sprint') await this.assertCarryTarget(tenantId, sprintId, carryTo.sprintId!);
+        if (carryTo.kind === 'new' && new Date(carryTo.endDate!) < new Date(carryTo.startDate!)) {
+            throw new BadRequestException('A sprint cannot end before it starts.');
+        }
 
-        const carried = await this.db.projectTask.findMany({
-            where: {
-                tenant_id: tenantId,
-                sprint_id: sprintId,
-                deleted_at: null,
-                status: { category: { not: 'DONE' } },
-            },
-            select: { id: true },
+        if (carryTo.kind === 'new' && carryTo.start) await this.assertNoOtherActive(tenantId, sprintId);
+
+        // Read now, while the work is still in it, so the last point shows what
+        // was left undone; written only after the completion commits, so a
+        // completion that fails leaves no COMPLETED marker on a running sprint.
+        const finalFigures = await this.burndownRecorder.computeCurrent(tenantId, sprintId);
+
+        const at = new Date();
+        const { updated, carried, target } = await this.db.$transaction(async (tx) => {
+            // Conditional, so two people completing at once cannot both run it.
+            const closed = await tx.sprint.updateMany({
+                where: { id: sprintId, tenant_id: tenantId, status: { not: 'COMPLETED' as never } },
+                data: { status: 'COMPLETED' as never },
+            });
+            if (closed.count === 0) throw new ConflictException('That sprint is already complete.');
+
+            const tasks = await tx.projectTask.findMany({
+                where: { tenant_id: tenantId, sprint_id: sprintId, deleted_at: null },
+                select: { id: true, status: { select: { category: true } } },
+            });
+            const done = tasks.filter((task) => task.status?.category === 'DONE').map((task) => task.id);
+            const unfinished = tasks.filter((task) => task.status?.category !== 'DONE').map((task) => task.id);
+
+            await this.membership.closeInPlace(tx, tenantId, sprintId, done, 'DONE', at);
+
+            // Nothing unfinished means nothing to carry, so no sprint is made
+            // for it even when one was asked for.
+            let next: { id: string; name: string; status: string } | null = null;
+            if (unfinished.length > 0 && carryTo.kind === 'new') {
+                next = await tx.sprint.create({
+                    data: {
+                        tenant_id: tenantId,
+                        name: carryTo.name!.trim(),
+                        goal: carryTo.goal?.trim() || null,
+                        start_date: new Date(carryTo.startDate!),
+                        end_date: new Date(carryTo.endDate!),
+                    },
+                    select: { id: true, name: true, status: true },
+                });
+            } else if (unfinished.length > 0 && carryTo.kind === 'sprint') {
+                next = await tx.sprint.findFirst({
+                    where: { id: carryTo.sprintId, tenant_id: tenantId, status: 'PLANNED' as never },
+                    select: { id: true, name: true, status: true },
+                });
+                if (!next) throw new BadRequestException('Carry the work to a planned sprint.');
+            }
+
+            await this.membership.moveTasks(
+                tx,
+                tenantId,
+                unfinished,
+                next?.id ?? null,
+                next ? 'CARRIED_OVER' : 'RETURNED_TO_BACKLOG',
+                { at },
+            );
+
+            if (next && carryTo.kind === 'new' && carryTo.start) {
+                const running = await tx.sprint.findFirst({
+                    where: { tenant_id: tenantId, status: 'ACTIVE' as never, id: { not: next.id } },
+                    select: { name: true },
+                });
+                if (running) {
+                    throw new ConflictException(
+                        `"${running.name}" is already running. Complete it before starting another sprint.`,
+                    );
+                }
+                next = await tx.sprint.update({
+                    where: { id: next.id },
+                    data: { status: 'ACTIVE' as never },
+                    select: { id: true, name: true, status: true },
+                });
+            }
+
+            const row = await tx.sprint.findFirst({ where: { id: sprintId, tenant_id: tenantId } });
+            return { updated: row!, carried: unfinished.length, target: next };
         });
 
-        await this.db.projectTask.updateMany({
-            where: { id: { in: carried.map((t) => t.id) } },
-            data: { sprint_id: null },
-        });
-
-        const updated = await this.db.sprint.update({
-            where: { id: sprintId },
-            data: { status: 'COMPLETED' as never },
-        });
-        return { ...withoutStorageKey(updated), carried_over: carried.length };
+        if (sprint.status === 'ACTIVE') {
+            await this.burndownRecorder.recordFigures(tenantId, sprintId, finalFigures, 'COMPLETED');
+        }
+        if (target?.status === 'ACTIVE') await this.burndownRecorder.record(tenantId, [target.id], 'STARTED');
+        return {
+            ...withoutStorageKey(updated),
+            carried_over: carried,
+            carried_to: target ? { id: target.id, name: target.name } : null,
+        };
     }
 
     /**
      * Tasks may come from any project — that is the point of a tenant-level
      * sprint — but only from a project this viewer can open. Filtered rather
-     * than refused: `updateMany` silently skipping an id someone cannot see is
-     * the same answer as "no such task", which is what the id deserves.
+     * than refused: an id someone cannot see is skipped, the same answer as
+     * "no such task", which is what the id deserves.
      */
     async assignTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {
         const tenantId = viewer.tenantId;
-        await this.assertSprint(tenantId, sprintId);
-        const where = {
-            tenant_id: tenantId,
-            id: { in: dto.taskIds },
-            deleted_at: null,
-            ...(await this.access.taskFilter(viewer)),
-        } as never;
-        // Any sprint these tasks are leaving loses them from its burndown.
-        const leaving = await this.db.projectTask.findMany({ where, select: { sprint_id: true } });
-        const result = await this.db.projectTask.updateMany({ where, data: { sprint_id: sprintId } });
-        await this.snapshots.refresh(tenantId, [sprintId, ...leaving.map((task) => task.sprint_id)]);
-        return { assigned: result.count };
+        await this.assertOpenSprint(tenantId, sprintId);
+        const reachable = await this.db.projectTask.findMany({
+            where: {
+                tenant_id: tenantId,
+                id: { in: dto.taskIds },
+                deleted_at: null,
+                ...(await this.access.taskFilter(viewer)),
+            } as never,
+            select: { id: true },
+        });
+        const { moved, leftSprintIds } = await this.membership.moveTasks(
+            this.db,
+            tenantId,
+            reachable.map((task) => task.id),
+            sprintId,
+            'REMOVED',
+        );
+        // Any sprint these tasks left loses them from its burndown.
+        await this.burndownRecorder.record(tenantId, leftSprintIds, 'TASK_REMOVED');
+        await this.burndownRecorder.record(tenantId, [sprintId], 'TASK_ADDED');
+        return { assigned: moved };
     }
 
     /**
@@ -295,9 +401,9 @@ export class SprintsService {
      */
     async assignStories(viewer: ProjectViewer, sprintId: string, dto: AssignStoriesToSprintDto) {
         const tenantId = viewer.tenantId;
-        await this.assertSprint(tenantId, sprintId);
+        await this.assertOpenSprint(tenantId, sprintId);
         if (dto.storyIds.length === 0) return { assigned: 0 };
-        const result = await this.db.projectTask.updateMany({
+        const open = await this.db.projectTask.findMany({
             where: {
                 tenant_id: tenantId,
                 user_story_id: { in: dto.storyIds },
@@ -306,90 +412,115 @@ export class SprintsService {
                 status: { category: { not: 'DONE' } },
                 ...(await this.access.taskFilter(viewer)),
             } as never,
-            data: { sprint_id: sprintId },
+            select: { id: true },
         });
-        await this.snapshots.refresh(tenantId, [sprintId]);
-        return { assigned: result.count };
+        const { moved } = await this.membership.moveTasks(
+            this.db,
+            tenantId,
+            open.map((task) => task.id),
+            sprintId,
+            'REMOVED',
+        );
+        await this.burndownRecorder.record(tenantId, [sprintId], 'TASK_ADDED');
+        return { assigned: moved };
     }
 
     async removeTasks(viewer: ProjectViewer, sprintId: string, dto: AssignTasksToSprintDto) {
         const tenantId = viewer.tenantId;
-        await this.assertSprint(tenantId, sprintId);
-        const result = await this.db.projectTask.updateMany({
+        await this.assertOpenSprint(tenantId, sprintId);
+        const inSprint = await this.db.projectTask.findMany({
             where: {
                 tenant_id: tenantId,
                 sprint_id: sprintId,
                 id: { in: dto.taskIds },
                 ...(await this.access.taskFilter(viewer)),
             } as never,
-            data: { sprint_id: null },
+            select: { id: true },
         });
-        await this.snapshots.refresh(tenantId, [sprintId]);
-        return { removed: result.count };
+        const { moved } = await this.membership.moveTasks(
+            this.db,
+            tenantId,
+            inSprint.map((task) => task.id),
+            null,
+            'REMOVED',
+        );
+        await this.burndownRecorder.record(tenantId, [sprintId], 'TASK_REMOVED');
+        return { removed: moved };
     }
 
+    /** Its history goes with it: `SprintTask` rows cascade on the sprint. */
     async remove(tenantId: string, sprintId: string) {
         await this.assertSprint(tenantId, sprintId);
-        await this.db.projectTask.updateMany({
+        const inSprint = await this.db.projectTask.findMany({
             where: { tenant_id: tenantId, sprint_id: sprintId },
-            data: { sprint_id: null },
+            select: { id: true },
         });
+        await this.membership.moveTasks(this.db, tenantId, inSprint.map((task) => task.id), null, 'REMOVED');
         await this.db.sprint.delete({ where: { id: sprintId } });
         return { success: true };
     }
 
-    /** The three series the chart draws, plus the sprint's current totals. */
+    /**
+     * Every recorded point, plus the ideal line and the live totals.
+     *
+     * Points are the stored change-by-change totals (`SprintBurndownPoint`).
+     * While the sprint runs, the live figures are appended as a final point,
+     * so the line always reaches "now" — flat after a quiet spell, and right
+     * even if the latest point failed to write.
+     *
+     * The ideal line is anchored to the committed total at the first point —
+     * the scope the sprint started with — not today's, which would hide the
+     * overrun the chart exists to show.
+     */
     async burndown(tenantId: string, sprintId: string) {
         const sprint = await this.assertSprint(tenantId, sprintId);
-        const today = SprintSnapshotService.todayKey();
-        const findRows = () =>
-            this.db.sprintSnapshot.findMany({
+        const [rows, current] = await Promise.all([
+            this.db.sprintBurndownPoint.findMany({
                 where: { tenant_id: tenantId, sprint_id: sprintId },
-                orderBy: { snapshot_date: 'asc' },
-            });
-        let rows = await findRows();
-
-        // A past day with no row — a night the cron missed, or a sprint that
-        // ran before points were recorded on every change — is filled from the
-        // remaining-hours log rather than left as a hole in the line.
-        if (sprint.status !== 'PLANNED') {
-            const have = new Set(rows.map((row) => toDateKey(row.snapshot_date)));
-            const missing = eachDate(sprint.start_date, sprint.end_date).some(
-                (day) => day < today && !have.has(day),
-            );
-            if (missing) {
-                await this.snapshots.rebuild(tenantId, sprintId);
-                rows = await findRows();
-            }
-        }
-
-        const snapshots = new Map(
-            rows.map((row) => [
-                toDateKey(row.snapshot_date),
-                {
-                    remaining: Number(row.remaining_hours),
-                    committed: Number(row.committed_hours),
-                    // Replayed days infer "done" from remaining reaching zero
-                    // (see `computeFromLog`); live snapshots read the column.
-                    open: Math.max(row.task_count - row.done_task_count, 0),
+                orderBy: { recorded_at: 'asc' },
+                include: {
+                    task: {
+                        select: { id: true, reference: true, title: true, project: { select: { code: true } } },
+                    },
                 },
-            ]),
-        );
+            }),
+            this.burndownRecorder.computeCurrent(tenantId, sprintId),
+        ]);
 
-        const current = await this.snapshots.computeCurrent(tenantId, sprintId);
-        // Today's point is the live figure while the sprint runs, so the chart
-        // is never a change behind whatever the stored row says.
-        if (
-            sprint.status === 'ACTIVE' &&
-            today >= toDateKey(sprint.start_date) &&
-            today <= toDateKey(sprint.end_date)
-        ) {
-            snapshots.set(today, {
-                remaining: current.remaining_hours,
-                committed: current.committed_hours,
-                open: Math.max(current.task_count - current.done_task_count, 0),
-            });
-        }
+        const points: BurndownTimelinePoint[] = rows.map((row) => ({
+            at: row.recorded_at.toISOString(),
+            remaining: Number(row.remaining_hours),
+            committed: Number(row.committed_hours),
+            open: Math.max(row.task_count - row.done_task_count, 0),
+            cause: row.cause as string,
+            task: row.task
+                ? {
+                      id: row.task.id,
+                      code: row.task.project?.code ? composeTaskKey(row.task.project.code, row.task.reference) : null,
+                      title: row.task.title,
+                  }
+                : null,
+        }));
+
+        const live: BurndownTimelinePoint = {
+            at: new Date().toISOString(),
+            remaining: current.remaining_hours,
+            committed: current.committed_hours,
+            open: Math.max(current.task_count - current.done_task_count, 0),
+            cause: null,
+            task: null,
+        };
+        // Always, even when nothing moved since the last point: the line has
+        // to reach "now", or three quiet days read as a chart that stopped.
+        if (sprint.status === 'ACTIVE') points.push(live);
+
+        const anchor = points[0]?.committed ?? current.committed_hours;
+        const ideal = buildBurndownSeries({
+            startDate: sprint.start_date,
+            endDate: sprint.end_date,
+            snapshots: new Map([[toDateKey(sprint.start_date), { remaining: anchor, committed: anchor }]]),
+        }).map((day) => ({ date: day.date, value: day.ideal, isWorkingDay: day.isWorkingDay }));
+
         return {
             sprint: {
                 id: sprint.id,
@@ -400,17 +531,9 @@ export class SprintsService {
                 end_date: sprint.end_date,
             },
             current,
-            series: buildBurndownSeries({
-                startDate: sprint.start_date,
-                endDate: sprint.end_date,
-                snapshots,
-            }),
+            ideal,
+            points,
         };
-    }
-
-    async rebuildSnapshots(tenantId: string, sprintId: string, overwrite = false) {
-        await this.assertSprint(tenantId, sprintId);
-        return this.snapshots.rebuild(tenantId, sprintId, { overwrite });
     }
 
     /** The whole row, storage key included — for this service's own use, never a response. */
@@ -420,6 +543,29 @@ export class SprintsService {
         });
         if (!sprint) throw new NotFoundException('Sprint not found');
         return sprint;
+    }
+
+    /**
+     * A completed sprint's membership is history: nothing joins or leaves it
+     * afterwards. The UI already hides the controls; this is the server's word.
+     */
+    private async assertOpenSprint(tenantId: string, sprintId: string) {
+        const sprint = await this.assertSprint(tenantId, sprintId);
+        if (sprint.status === 'COMPLETED') {
+            throw new BadRequestException('That sprint is complete; its tasks can no longer change.');
+        }
+        return sprint;
+    }
+
+    /** Where a completing sprint may send its unfinished work: a planned sprint, not itself. */
+    private async assertCarryTarget(tenantId: string, fromSprintId: string, targetId: string) {
+        const target = await this.db.sprint.findFirst({
+            where: { id: targetId, tenant_id: tenantId },
+            select: { id: true, status: true },
+        });
+        if (!target || target.id === fromSprintId || target.status !== 'PLANNED') {
+            throw new BadRequestException('Carry the work to a planned sprint.');
+        }
     }
 
     /**

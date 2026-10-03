@@ -6,7 +6,8 @@ import { RemainingHoursService } from './remaining-hours.service';
 import { ProjectActivityService } from './project-activity.service';
 import { ProjectAccessService } from './project-access.service';
 import { BoardColumnsService } from './board-columns.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
+import { SprintMembershipService } from './sprint-membership.service';
 import { OWNER, narrow, ownTaskOr, staff, visibilityOr } from './project-access.test-support';
 import { DatabaseService } from '../database/database.service';
 
@@ -17,7 +18,8 @@ describe('ProjectTasksService', () => {
     let activity: { record: jest.Mock; watch: jest.Mock; notifyWatchers: jest.Mock };
     let settings: { defaultTaskStatus: jest.Mock; listTaskStatuses: jest.Mock };
     let boardColumns: { bindProject: jest.Mock };
-    let snapshots: { refresh: jest.Mock };
+    let burndown: { record: jest.Mock };
+    let membership: { moveTasks: jest.Mock };
 
     const todo = { id: 'status-todo', category: 'TODO' };
     const doing = { id: 'status-doing', category: 'IN_PROGRESS' };
@@ -49,7 +51,8 @@ describe('ProjectTasksService', () => {
             listTaskStatuses: jest.fn().mockResolvedValue([todo, doing, done]),
         };
         boardColumns = { bindProject: jest.fn().mockResolvedValue(undefined) };
-        snapshots = { refresh: jest.fn().mockResolvedValue(undefined) };
+        burndown = { record: jest.fn().mockResolvedValue(undefined) };
+        membership = { moveTasks: jest.fn().mockResolvedValue({ moved: 1, leftSprintIds: [] }) };
 
         db = {
             project: {
@@ -129,7 +132,8 @@ describe('ProjectTasksService', () => {
                 { provide: ProjectActivityService, useValue: activity },
                 { provide: ProjectSettingsService, useValue: settings },
                 { provide: BoardColumnsService, useValue: boardColumns },
-                { provide: SprintSnapshotService, useValue: snapshots },
+                { provide: BurndownRecorder, useValue: burndown },
+                { provide: SprintMembershipService, useValue: membership },
             ],
         }).compile();
 
@@ -241,11 +245,27 @@ describe('ProjectTasksService', () => {
                 sprintId: 'sprint-9',
             } as never);
 
-            expect(db.projectTask.create).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    data: expect.objectContaining({ sprint_id: 'sprint-9', project_id: 'project-1' }),
-                }),
-            );
+            // Joined through the membership service, so the history opens too.
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-new'], 'sprint-9', 'REMOVED');
+            expect(db.projectTask.create.mock.calls[0][0].data).not.toHaveProperty('sprint_id');
+        });
+
+        it('records the new task joining its sprint', async () => {
+            await service.create(OWNER, { projectId: 'project-1', title: 'New', sprintId: 'sprint-1' } as never);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_ADDED', 'task-new');
+        });
+
+        it('refuses to create a task straight into a completed sprint', async () => {
+            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-old', status: 'COMPLETED' });
+            await expect(
+                service.create(OWNER, { projectId: 'project-1', title: 'Late', sprintId: 'sprint-old' } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.projectTask.create).not.toHaveBeenCalled();
+        });
+
+        it('opens no sprint history for a task created in the backlog', async () => {
+            await service.create(OWNER, { projectId: 'project-1', title: 'Backlog' } as never);
+            expect(membership.moveTasks).not.toHaveBeenCalled();
         });
 
         it('still refuses a sprint from another tenant', async () => {
@@ -757,20 +777,28 @@ describe('ProjectTasksService', () => {
                 clearSprint: true,
             } as never);
 
+            // Inside the move's transaction (the mock runs it against `db`).
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-1'], null, 'REMOVED');
             const moved = db.projectTask.update.mock.calls.find(
                 (c: any[]) => c[0].where.id === 'task-1',
             );
-            expect(moved[0].data.sprint_id).toBeNull();
+            expect(moved[0].data).not.toHaveProperty('sprint_id');
         });
 
-        it('re-records the burndown of the sprint it left and the one it joined', async () => {
+        it('moves a card dragged into another sprint lane through the membership service', async () => {
+            await service.move(OWNER, 'task-1', { statusId: todo.id, sortOrder: 0, sprintId: 'sprint-2' } as never);
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-1'], 'sprint-2', 'REMOVED');
+        });
+
+        it('records the task leaving one sprint and joining the other', async () => {
             await service.move(OWNER, 'task-1', {
                 statusId: todo.id,
                 sortOrder: 0,
                 sprintId: 'sprint-2',
             } as never);
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-2']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-2'], 'TASK_ADDED', 'task-1');
         });
 
         it('re-records the burndown on Done even when there were no hours to burn', async () => {
@@ -780,7 +808,7 @@ describe('ProjectTasksService', () => {
 
             await service.move(OWNER, 'task-1', { statusId: done.id, sortOrder: 0 } as never);
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1'], 'STATUS_CHANGED', 'task-1');
         });
     });
 
@@ -790,13 +818,52 @@ describe('ProjectTasksService', () => {
 
             await service.update(OWNER, 'task-1', { statusId: done.id } as never);
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1', 'sprint-1'], 'STATUS_CHANGED', 'task-1');
+        });
+
+        it('takes a deleted task out of its sprint, closing its history', async () => {
+            await service.remove(OWNER, 'task-1');
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-1'], null, 'REMOVED');
+        });
+
+        it('moves a task between sprints through the membership service on an edit', async () => {
+            await service.update(OWNER, 'task-1', { sprintId: 'sprint-2' } as never);
+
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-1'], 'sprint-2', 'REMOVED');
+            expect(db.projectTask.update.mock.calls[0][0].data).not.toHaveProperty('sprint_id');
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-2'], 'TASK_ADDED', 'task-1');
+        });
+
+        it('refuses to move a task into a completed sprint, from the card or the board', async () => {
+            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-old', status: 'COMPLETED' });
+
+            await expect(service.update(OWNER, 'task-1', { sprintId: 'sprint-old' } as never)).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            await expect(
+                service.move(OWNER, 'task-1', { statusId: todo.id, sortOrder: 0, sprintId: 'sprint-old' } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(membership.moveTasks).not.toHaveBeenCalled();
+        });
+
+        it('still lets a task in a completed sprint be edited, naming the sprint it is in', async () => {
+            db.projectTask.findFirst.mockResolvedValue(task({ sprint_id: 'sprint-old' }));
+            db.sprint.findFirst.mockResolvedValue({ id: 'sprint-old', status: 'COMPLETED' });
+
+            await service.update(OWNER, 'task-1', { sprintId: 'sprint-old', title: 'Renamed' } as never);
+            expect(membership.moveTasks).not.toHaveBeenCalled();
+        });
+
+        it('leaves membership alone when an edit names the sprint the task is already in', async () => {
+            await service.update(OWNER, 'task-1', { sprintId: 'sprint-1', title: 'Renamed' } as never);
+            expect(membership.moveTasks).not.toHaveBeenCalled();
         });
 
         it('re-records the sprint a deleted task was in', async () => {
             await service.remove(OWNER, 'task-1');
 
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
         });
     });
 
@@ -1185,6 +1252,37 @@ describe('ProjectTasksService', () => {
         });
     });
 
+    describe('sprint history on the card', () => {
+        it('lists every sprint the task was in, oldest first, as sprintHistory', async () => {
+            db.projectTask.findFirst.mockResolvedValue({
+                ...task(),
+                sprintMemberships: [
+                    {
+                        added_at: new Date('2026-08-02T03:00:00.000Z'),
+                        removed_at: new Date('2026-08-13T18:00:00.000Z'),
+                        outcome: 'CARRIED_OVER',
+                        sprint: { id: 'sprint-7', name: 'Sprint 7', status: 'COMPLETED' },
+                    },
+                    {
+                        added_at: new Date('2026-08-13T18:00:00.000Z'),
+                        removed_at: null,
+                        outcome: null,
+                        sprint: { id: 'sprint-8', name: 'Sprint 8', status: 'ACTIVE' },
+                    },
+                ],
+            });
+
+            const result: any = await service.findOne(OWNER, 'task-1');
+
+            expect(db.projectTask.findFirst.mock.calls.at(-1)[0].include.sprintMemberships).toMatchObject({
+                orderBy: { added_at: 'asc' },
+            });
+            expect(result.sprintHistory.map((row: any) => row.sprint.name)).toEqual(['Sprint 7', 'Sprint 8']);
+            expect(result.sprintHistory[0].outcome).toBe('CARRIED_OVER');
+            expect(result).not.toHaveProperty('sprintMemberships');
+        });
+    });
+
     describe('list filters', () => {
         const whereOf = () => db.projectTask.findMany.mock.calls.at(-1)[0].where;
 
@@ -1210,6 +1308,70 @@ describe('ProjectTasksService', () => {
             } as never);
 
             expect(whereOf().assignee_id).toBeNull();
+        });
+
+        describe('by sprint', () => {
+            it('takes the tasks in the sprint now, and those whose stay in it ended other than by removal', async () => {
+                await service.list(OWNER, { sprintId: 'sprint-7' } as never);
+
+                expect(whereOf()).not.toHaveProperty('sprint_id');
+                expect(whereOf().AND).toContainEqual({
+                    OR: [
+                        { sprint_id: 'sprint-7' },
+                        {
+                            sprintMemberships: {
+                                some: {
+                                    sprint_id: 'sprint-7',
+                                    removed_at: { not: null },
+                                    outcome: { in: ['DONE', 'CARRIED_OVER', 'RETURNED_TO_BACKLOG'] },
+                                },
+                            },
+                        },
+                    ],
+                });
+            });
+
+            it("gives each task its latest stay in that sprint, with where a carried task went", async () => {
+                // The list also draws each row's remaining sparkline from a raw query.
+                db.$queryRaw = jest.fn().mockResolvedValue([]);
+                db.projectTask.findMany.mockResolvedValue([
+                    {
+                        id: 'task-1',
+                        sprintMemberships: [
+                            {
+                                outcome: 'CARRIED_OVER',
+                                removed_at: new Date('2026-08-13T18:00:00.000Z'),
+                                remaining_at_close: 5,
+                                carried_to: { id: 'sprint-8', name: 'Sprint 8' },
+                            },
+                        ],
+                    },
+                    { id: 'task-2', sprintMemberships: [] },
+                ]);
+
+                const result = await service.list(OWNER, { sprintId: 'sprint-7' } as never);
+
+                const include = db.projectTask.findMany.mock.calls.at(-1)[0].include;
+                expect(include.sprintMemberships).toMatchObject({
+                    where: { sprint_id: 'sprint-7' },
+                    orderBy: { added_at: 'desc' },
+                    take: 1,
+                });
+                expect(result.items[0]).toMatchObject({
+                    sprintMembership: {
+                        outcome: 'CARRIED_OVER',
+                        remaining_at_close: 5,
+                        carried_to: { id: 'sprint-8', name: 'Sprint 8' },
+                    },
+                });
+                expect(result.items[0]).not.toHaveProperty('sprintMemberships');
+                expect(result.items[1].sprintMembership).toBeNull();
+            });
+
+            it('asks for no history when no sprint is named', async () => {
+                await service.list(OWNER, {} as never);
+                expect(db.projectTask.findMany.mock.calls.at(-1)[0].include).not.toHaveProperty('sprintMemberships');
+            });
         });
 
         it('filters on priority', async () => {
@@ -1549,6 +1711,19 @@ describe('ProjectTasksService', () => {
         });
     });
     describe('bulkRemove', () => {
+        it('takes the deleted tasks out of their sprints, closing their history', async () => {
+            db.projectTask.findMany.mockResolvedValue([
+                { id: 'task-1', user_story_id: null, sprint_id: 'sprint-1' },
+                { id: 'task-2', user_story_id: null, sprint_id: null },
+            ]);
+            db.projectTask.updateMany.mockResolvedValue({ count: 2 });
+
+            await service.bulkRemove(OWNER, ['task-1', 'task-2']);
+
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-1'], null, 'REMOVED');
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1', null], 'TASK_REMOVED');
+        });
+
         it('soft-deletes the whole selection in one query', async () => {
             // One `updateMany`, not one `update` per id: the page used to fan
             // out a DELETE per row and spend its whole rate-limit budget.
@@ -1596,6 +1771,118 @@ describe('ProjectTasksService', () => {
                 { OR: ownTaskOr('user-7') },
             ]);
             expect(result).toEqual({ success: true, deleted: 1, skipped: 2 });
+        });
+    });
+
+    describe('bulkUpdate', () => {
+        const EMPLOYEE = '7f9c2b1e-4a3d-4e5f-8a6b-1c2d3e4f5a6b';
+
+        it('applies one change set to every task, through the single-task update', async () => {
+            const result = await service.bulkUpdate(OWNER, { ids: ['task-1', 'task-2'], priority: 'HIGH' } as never);
+
+            const writes = db.projectTask.update.mock.calls.map(([call]: any[]) => call);
+            expect(writes.map((call: any) => call.where.id)).toEqual(['task-1', 'task-2']);
+            expect(writes.every((call: any) => call.data.priority === 'HIGH')).toBe(true);
+            expect(result).toEqual({ updated: 2, skipped: [] });
+        });
+
+        it('takes the tasks out of their sprint when sent null', async () => {
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], sprintId: null } as never);
+
+            // Through the membership service, like a single edit, so the
+            // task's sprint history closes rather than the column being cleared.
+            expect(membership.moveTasks).toHaveBeenCalledWith(db, 'tenant-1', ['task-1'], null, 'REMOVED');
+            expect(db.projectTask.update.mock.calls.at(-1)[0].data).not.toHaveProperty('sprint_id');
+            // The sprint the task left loses its hours on the burndown.
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], 'TASK_REMOVED', 'task-1');
+        });
+
+        it('hands the tasks to an assignee key, clearing the other column', async () => {
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], assignee: `employee:${EMPLOYEE}` } as never);
+
+            const [{ data }] = db.projectTask.update.mock.calls.at(-1);
+            expect(data.assignee_employee_id).toBe(EMPLOYEE);
+            expect(data.assignee_id).toBeNull();
+        });
+
+        it('unassigns when sent null, and clears the due date the same way', async () => {
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], assignee: null, dueDate: null } as never);
+
+            const [{ data }] = db.projectTask.update.mock.calls.at(-1);
+            expect(data).toMatchObject({ assignee_id: null, assignee_employee_id: null, due_date: null });
+        });
+
+        it('adds and removes labels without touching the rest of each task’s set', async () => {
+            const held: Record<string, string[]> = { 'task-1': ['label-a', 'label-b'], 'task-2': ['label-b'] };
+            db.projectTaskLabel.findMany = jest.fn(({ where }: any) =>
+                Promise.resolve((held[where.task_id] ?? []).map((label_id) => ({ label_id }))),
+            );
+            db.projectLabel.count.mockImplementation(({ where }: any) => Promise.resolve(where.id.in.length));
+
+            await service.bulkUpdate(OWNER, {
+                ids: ['task-1', 'task-2'],
+                addLabelIds: ['label-c'],
+                removeLabelIds: ['label-b'],
+            } as never);
+
+            const written = db.projectTaskLabel.createMany.mock.calls.map(([{ data }]: any[]) =>
+                data.map((row: any) => `${row.task_id}:${row.label_id}`),
+            );
+            expect(written).toEqual([['task-1:label-a', 'task-1:label-c'], ['task-2:label-c']]);
+        });
+
+        it('reports a task that refuses and carries on with the rest', async () => {
+            db.projectTask.findFirst.mockImplementation(({ where }: any) =>
+                Promise.resolve(where.id === 'task-2' ? null : task({ id: where.id })),
+            );
+
+            const result = await service.bulkUpdate(OWNER, {
+                ids: ['task-1', 'task-2', 'task-3'],
+                priority: 'LOW',
+            } as never);
+
+            expect(result.updated).toBe(2);
+            expect(result.skipped).toEqual([{ id: 'task-2', reason: expect.stringMatching(/not found/i) }]);
+        });
+
+        it('moves a parent before its subtasks, so a subtask selected with it goes along', async () => {
+            // Picked subtask-first. Run in that order, the subtask would be
+            // refused ("moves with its parent") and then moved anyway by its
+            // parent, and the report would call a moved card skipped.
+            db.projectTask.findMany.mockResolvedValue([
+                { id: 'sub-1', parent_task_id: 'task-1' },
+                { id: 'task-1', parent_task_id: null },
+            ]);
+            const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+
+            await service.bulkUpdate(OWNER, { ids: ['sub-1', 'task-1'], projectId: 'project-2' } as never);
+
+            expect(update.mock.calls.map(([, id]) => id)).toEqual(['task-1', 'sub-1']);
+            expect(db.projectTask.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: { in: ['sub-1', 'task-1'] }, tenant_id: 'tenant-1' } }),
+            );
+        });
+
+        it('counts a repeated id once', async () => {
+            const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+
+            const result = await service.bulkUpdate(OWNER, { ids: ['task-1', 'task-1'], priority: 'LOW' } as never);
+
+            expect(update).toHaveBeenCalledTimes(1);
+            expect(result).toEqual({ updated: 1, skipped: [] });
+        });
+
+        it('refuses a request that changes nothing', async () => {
+            await expect(service.bulkUpdate(OWNER, { ids: ['task-1'] } as never)).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            expect(db.projectTask.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses an assignee that is not a user or employee key', async () => {
+            await expect(
+                service.bulkUpdate(OWNER, { ids: ['task-1'], assignee: 'robot:42' } as never),
+            ).rejects.toBeInstanceOf(BadRequestException);
         });
     });
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 
 /**
  * Why a task's remaining hours changed. Mirrors the Prisma enum; kept as a
@@ -56,7 +56,7 @@ type Db = Pick<DatabaseService, 'projectTask' | 'projectTaskRemainingLog'>;
 export class RemainingHoursService {
     constructor(
         private readonly db: DatabaseService,
-        private readonly snapshots: SprintSnapshotService,
+        private readonly burndown: BurndownRecorder,
     ) {}
 
     /**
@@ -102,11 +102,17 @@ export class RemainingHoursService {
             },
         });
 
-        // Every change to a sprint task's hours moves its burndown, so today's
-        // point is re-recorded now rather than at the nightly cron. Not inside
-        // a caller's transaction: the snapshot reads through the root client
-        // and would not see the uncommitted write.
-        if (!client) await this.snapshots.refresh(write.tenantId, [write.sprintId]);
+        // Every change to a sprint task's hours moves its burndown, so a point
+        // is recorded now. Not inside a caller's transaction: the recorder
+        // reads through the root client and would not see the uncommitted write.
+        if (!client) {
+            await this.burndown.record(
+                write.tenantId,
+                [write.sprintId],
+                BurndownRecorder.causeForSource(write.source),
+                write.taskId,
+            );
+        }
         return true;
     }
 
