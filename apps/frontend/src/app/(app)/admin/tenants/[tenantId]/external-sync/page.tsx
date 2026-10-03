@@ -39,6 +39,7 @@ const STEPS: Array<{ key: ExternalSyncStep; label: string; hint: string }> = [
     { key: 'MASTERS', label: 'Products, customers, suppliers', hint: 'Everything else references these' },
     { key: 'PURCHASES', label: 'Purchases', hint: 'Stock must exist before it is sold' },
     { key: 'SALES', label: 'Sales', hint: 'Needs products, customers and their stock' },
+    { key: 'QUOTATIONS', label: 'Quotations', hint: 'Needs products and customers · Dizi Cashier only' },
     { key: 'CUSTOMER_PAYMENTS', label: 'Customer payments', hint: 'Needs customers' },
     { key: 'SUPPLIER_PAYMENTS', label: 'Supplier payments', hint: 'Needs suppliers' },
     { key: 'SALE_RETURNS', label: 'Sale returns', hint: 'Needs the parent sales already imported' },
@@ -811,6 +812,7 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
                             ['Sales', 'sales'],
                             ['Purchases', 'purchases'],
                             ['Returns', 'saleReturns'],
+                            ['Quotations', 'quotations'],
                             ['Cust. payments', 'customerPayments'],
                             ['Supp. payments', 'supplierPayments'],
                         ] as const

@@ -9,6 +9,8 @@ export interface SnapshotCounts {
     customerPayments: number;
     supplierPayments: number;
     saleReturns: number;
+    /** Absent on snapshots extracted before quotations were imported. */
+    quotations?: number;
 }
 
 export interface SnapshotManifest {
@@ -35,4 +37,12 @@ export interface SnapshotDocument {
     customerPayments: unknown[];
     supplierPayments: unknown[];
     saleReturns: unknown[];
+    /** Absent on snapshots extracted before quotations were imported. */
+    quotations?: unknown[];
+    /**
+     * Why quotations could not be extracted, when they could not. Quotations
+     * neither move stock nor money, so a provider that refuses them must not
+     * cost the rest of the snapshot; the import reports this instead.
+     */
+    quotationsError?: string;
 }

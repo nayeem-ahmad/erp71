@@ -48,4 +48,11 @@ export class SnapshotClient implements ProviderClient {
     async fetchSaleReturnDocuments(_window: DateWindow): Promise<unknown[]> {
         return this.doc.saleReturns;
     }
+
+    async fetchQuotationDocuments(_window: DateWindow): Promise<unknown[]> {
+        // Replays the extract's own failure so the import reports it the same
+        // way a live pull would.
+        if (this.doc.quotationsError) throw new Error(this.doc.quotationsError);
+        return this.doc.quotations ?? [];
+    }
 }
