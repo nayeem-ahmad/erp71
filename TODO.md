@@ -1716,9 +1716,12 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ---
 
-- [ ] **Purchase Entry stock should follow the chosen warehouse** — `/purchases/new` has a warehouse picker but its ProductSearch and line Avail still sum every warehouse. Same fix as Sales Entry (2026-10-01): pass `warehouseId` to `ProductSearch`, `stockByWarehouse` on lines, `entryWarehouseId` to `LineItemsTable`.
 
 ## COMPLETED
+
+- [x] **Purchase Entry no longer warns about buying "more than is in stock"** — done 2026-10-03. `ProductSearch` and `LineItemsTable` take `warnOverStock` (default on, so sales screens are unchanged); `/purchases/new` turns it off, so the Qty box, the "— entering more than is in stock" note and the line's In Stock figure stay neutral when buying more than is held. Component tests pin both the default and the opt-out; full frontend suite green apart from two load-flaky suites that pass alone. Not checked in a browser.
+
+- [x] **Purchase Entry stock follows the chosen warehouse** — done 2026-10-03. `/purchases/new` had a warehouse picker but its product search and each line's In Stock column still summed every warehouse. Same wiring as Sales Entry (2026-10-01): `warehouseId` to `ProductSearch`, `stockByWarehouse` on lines, `entryWarehouseId` to `LineItemsTable`, so the search, the staged product and the lines all show the entry's warehouse and follow the picker (or a line's own override). Purchase page test added; frontend document-entry/sales/purchases suites green (178), type-check and lint clean. Not checked in a browser.
 
 - [x] **Add tasks from the sprint page, as on a board** — done 2026-10-02. The board's "Add a card" composer (`BoardCardComposer`, now handed a `create` callback instead of a board and column) sits under the sprint table ("Add a task", also in the empty and no-matches states) and at the foot of every card-view column. Tasks are created straight into the sprint; a card-view column adds its status for the chosen project, an assignee lane its person, a story lane its story and that story's project. The project opens on the one with the most tasks in the sprint (`busiestProjectId`), else the first in the workspace, then sticks to the last one picked; the assignee opens on the signed-in user, or on whoever the assignee filter names (the board's rule). "More fields" opens the New Task form. Hidden on completed sprints. Not checked in a browser — tests and type-check only.
 

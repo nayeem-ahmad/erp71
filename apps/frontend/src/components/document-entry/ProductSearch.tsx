@@ -41,6 +41,12 @@ interface ProductSearchProps {
      * unset, it is the total across every warehouse.
      */
     warehouseId?: string;
+    /**
+     * Flag a quantity above the stock on hand. On by default for documents
+     * that draw stock down; a purchase brings goods in, so buying more than is
+     * held is the normal case and it turns this off.
+     */
+    warnOverStock?: boolean;
 }
 
 /**
@@ -78,6 +84,7 @@ export default function ProductSearch({
     historyPartyId,
     historyPartyName,
     warehouseId,
+    warnOverStock = true,
 }: ProductSearchProps) {
     const [query, setQuery] = useState('');
     const [products, setProducts] = useState<any[]>([]);
@@ -229,6 +236,7 @@ export default function ProductSearch({
 
     const stagedAvailable = staged ? availableQtyOf(staged, warehouseId) : 0;
     const stagedQtyNum = parseFloat(stagedQty) || 0;
+    const overStock = warnOverStock && stagedQtyNum > stagedAvailable;
     const numberInput = 'px-2 py-1 border rounded text-sm text-end min-h-touch sm:min-h-0';
 
     return (
@@ -385,7 +393,7 @@ export default function ProductSearch({
                             onChange={(e) => setStagedQty(e.target.value)}
                             onKeyDown={handleStagedKeyDown}
                             aria-label="Qty"
-                            className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && stagedQtyNum > stagedAvailable ? 'border-amber-400 text-amber-700' : ''}`}
+                            className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && overStock ? 'border-amber-400 text-amber-700' : ''}`}
                         />
                     </label>
 
@@ -449,7 +457,7 @@ export default function ProductSearch({
                     <span className={stagedAvailable > 0 ? '' : 'text-red-600'}>
                         Available {stagedAvailable}
                     </span>
-                    {stagedQtyNum > stagedAvailable && (
+                    {overStock && (
                         <span className="ms-1.5 text-amber-600">
                             — entering more than is in stock
                         </span>
