@@ -123,7 +123,8 @@ export class ExternalSyncSnapshotService {
             }
 
             const chunks = def.planWindows(snapshot.window_from, snapshot.window_to);
-            const total = 3 + chunks.length * 5;
+            const withQuotations = typeof client.fetchQuotationDocuments === 'function';
+            const total = 3 + chunks.length * (withQuotations ? 6 : 5);
             let done = 0;
             const mark = async (phase: string) => {
                 done += 1;
@@ -150,6 +151,8 @@ export class ExternalSyncSnapshotService {
             const customerPayments: unknown[] = [];
             const supplierPayments: unknown[] = [];
             const saleReturns: unknown[] = [];
+            const quotations: unknown[] = [];
+            let quotationsError: string | undefined;
 
             for (const chunk of chunks) {
                 sales.push(...(await client.fetchSaleDocuments(chunk)));
@@ -167,6 +170,17 @@ export class ExternalSyncSnapshotService {
                 saleReturns.push(...(await client.fetchSaleReturnDocuments(chunk)));
                 await mark('Sale returns');
                 await this.throwIfCancelled(snapshotId);
+                if (withQuotations && !quotationsError) {
+                    try {
+                        quotations.push(...(await client.fetchQuotationDocuments!(chunk)));
+                    } catch (error) {
+                        // Kept, not thrown: see SnapshotDocument.quotationsError.
+                        quotationsError = String((error as Error)?.message ?? error);
+                        quotations.length = 0;
+                    }
+                    await mark('Quotations');
+                    await this.throwIfCancelled(snapshotId);
+                }
             }
 
             const unsigned: SnapshotDocument = {
@@ -189,6 +203,7 @@ export class ExternalSyncSnapshotService {
                         customerPayments,
                         supplierPayments,
                         saleReturns,
+                        quotations,
                     }),
                     sha256: '',
                 },
@@ -200,6 +215,8 @@ export class ExternalSyncSnapshotService {
                 customerPayments,
                 supplierPayments,
                 saleReturns,
+                quotations,
+                ...(quotationsError ? { quotationsError } : {}),
             };
 
             const written = await writeSnapshotFile(dest, unsigned);

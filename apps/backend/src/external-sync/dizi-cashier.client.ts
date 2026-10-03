@@ -181,6 +181,60 @@ export interface DiziSaleReturnDetail {
     ReturnItems: DiziSaleReturnItem[] | null;
 }
 
+/**
+ * Quotation shapes. Unlike everything above, these were not recorded from the
+ * live account: the quotation screen was never probed, so the field names
+ * follow the conventions of the sale payloads (Id, SlipNo, TraderId,
+ * TotalAmount, Narration, …) and every field is optional. The mapper reads the
+ * plausible alternatives for each value rather than trusting one spelling.
+ */
+export interface DiziQuotationHeader {
+    Id: string;
+    QuotationNo?: string | null;
+    SlipNo?: string | null;
+    TransactionDate?: string | null;
+    QuotationDate?: string | null;
+    Date?: string | null;
+    TraderId?: string | null;
+    CustomerId?: string | null;
+    TotalAmount?: number | string | null;
+    IsDeleted?: boolean | null;
+}
+
+export interface DiziQuotationItem {
+    ItemId: string | null;
+    Quantity: number | string | null;
+    DiscountedPricePerUnitWithTax?: number | string | null;
+    PricePerUnitWithTax?: number | string | null;
+    DiscountedPricePerUnit?: number | string | null;
+    PricePerUnit?: number | string | null;
+    TotalAmount?: number | string | null;
+    SubTotalAmount?: number | string | null;
+}
+
+export interface DiziQuotationDetail {
+    Id: string;
+    QuotationNo?: string | null;
+    SlipNo?: string | null;
+    Date?: string | null;
+    QuotationDate?: string | null;
+    TransactionDate?: string | null;
+    CustomerId?: string | null;
+    TraderId?: string | null;
+    TotalAmount?: number | string | null;
+    ValidUntil?: string | null;
+    ValidTill?: string | null;
+    ExpiryDate?: string | null;
+    Status?: string | null;
+    IsConverted?: boolean | null;
+    SalesId?: string | null;
+    Narration?: string | null;
+    Note?: string | null;
+    UpdatedOn?: string | null;
+    QuotationItems?: DiziQuotationItem[] | null;
+    Items?: DiziQuotationItem[] | null;
+}
+
 export interface DiziCashierCredentials {
     baseUrl: string;
     username: string;
@@ -203,10 +257,35 @@ const LIST_PAGE_SIZE = 500;
 /** Backstop so a misreported TotalItem cannot spin the pager forever. */
 const MAX_LIST_PAGES = 2_000;
 
+/**
+ * Where the quotation list might live, most likely first. ASP.NET routes are
+ * case-insensitive, so only the singular/plural split needs trying.
+ */
+const QUOTATION_LIST_PATHS = ['api/quotation', 'api/quotations'] as const;
+
+/**
+ * Sort columns to try on the quotation list. The sort is obligatory and a
+ * column the table lacks 500s (see the class note), so the first one the
+ * server accepts wins.
+ */
+const QUOTATION_SORTS = ['TransactionDate-desc', 'Date-desc', 'QuotationDate-desc', 'CreatedOn-desc'] as const;
+
+/** A failed API call that kept its HTTP status, so a caller can tell 404 from 500. */
+export class DiziRequestError extends BadGatewayException {
+    constructor(
+        message: string,
+        readonly httpStatus: number,
+    ) {
+        super(message);
+    }
+}
+
 export class DiziCashierClient {
     private readonly logger = new Logger(DiziCashierClient.name);
     private readonly origin: string;
     private token: string | null = null;
+    /** The quotation list path and sort the server accepted, once found. */
+    private quotationRoute: { path: string; sort: string } | null = null;
     private session: DiziCashierSession | null = null;
 
     constructor(private readonly credentials: DiziCashierCredentials) {
@@ -293,6 +372,49 @@ export class DiziCashierClient {
         return this.fetchDetail<DiziSaleReturnDetail>(`api/SalesReturn/${encodeURIComponent(id)}`);
     }
 
+    async fetchQuotationHeaders(): Promise<DiziQuotationHeader[]> {
+        const route = await this.resolveQuotationRoute();
+        return this.fetchList<DiziQuotationHeader>(route.path, route.sort, 'quotations');
+    }
+
+    async fetchQuotationDetail(id: string): Promise<DiziQuotationDetail> {
+        const route = await this.resolveQuotationRoute();
+        return this.fetchDetail<DiziQuotationDetail>(`${route.path}/${encodeURIComponent(id)}`);
+    }
+
+    /**
+     * Finds the quotation list by asking for one row under each candidate path
+     * and sort. A 404 rules the path out; any other failure (typically the
+     * "Invalid column name" 500 an unknown sort produces) rules out only that
+     * sort. Read-only and a handful of requests at most, once per client.
+     */
+    private async resolveQuotationRoute(): Promise<{ path: string; sort: string }> {
+        if (this.quotationRoute) return this.quotationRoute;
+
+        const tried: string[] = [];
+        for (const path of QUOTATION_LIST_PATHS) {
+            for (const sort of QUOTATION_SORTS) {
+                const query = new URLSearchParams({ page: '1', itemsPerPage: '1', sort });
+                try {
+                    const data = await this.getJson(`${path}?${query.toString()}`);
+                    if (Array.isArray(data?.ModelList)) {
+                        this.quotationRoute = { path, sort };
+                        return this.quotationRoute;
+                    }
+                    tried.push(`${path} (${sort}): no ModelList`);
+                } catch (error) {
+                    if (!(error instanceof DiziRequestError)) throw error;
+                    tried.push(`${path} (${sort}): HTTP ${error.httpStatus}`);
+                    if (error.httpStatus === 404) break;
+                }
+            }
+        }
+
+        throw new BadGatewayException(
+            `Dizi Cashier quotation list not found — tried ${tried.join('; ')}`,
+        );
+    }
+
     /**
      * Walks a paginated list endpoint to completion. Stops when the collected
      * count reaches the reported `TotalItem`, when a page comes back empty, or
@@ -342,15 +464,24 @@ export class DiziCashierClient {
 
     private async getJson(path: string): Promise<any> {
         const res = await this.request('GET', path);
-        const payload = await this.readJson(res, path);
+        let payload: any;
+        try {
+            payload = await this.readJson(res, path);
+        } catch (error) {
+            // IIS answers an unknown route with an HTML 404 page; keep the
+            // status so the quotation probe can tell "no such path" apart.
+            if (res.status === 404) throw new DiziRequestError(`Dizi Cashier ${path} failed (HTTP 404)`, 404);
+            throw error;
+        }
         if (res.status === 401) {
             throw new UnauthorizedException('Dizi Cashier session expired mid-import — re-run to continue');
         }
         // The envelope is `{Success, Data}`; a false Success carries an
         // ErrorMessage (often a raw SQL error) rather than an HTTP failure.
         if (!res.ok || payload?.Success === false) {
-            throw new BadGatewayException(
+            throw new DiziRequestError(
                 `Dizi Cashier ${path} failed (HTTP ${res.status}): ${payload?.ErrorMessage ?? 'unknown error'}`,
+                res.status,
             );
         }
         return payload?.Data ?? payload;

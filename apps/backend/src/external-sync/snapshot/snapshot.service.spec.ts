@@ -122,6 +122,25 @@ describe('ExternalSyncSnapshotService', () => {
         expect(withProgress?.[0].data.progress).toEqual({ done: 1, total: 8 });
     });
 
+    it('extracts quotations when the provider offers them', async () => {
+        client = makeClient({ fetchQuotationDocuments: jest.fn().mockResolvedValue([{ header: { Id: 'q-1' } }]) });
+        await service.executeExtract('snap-1');
+        const doc = await readSnapshotFile(path.join(tmp, 'tenant-1', 'snap-1.json.gz'));
+        expect(doc.quotations).toEqual([{ header: { Id: 'q-1' } }]);
+        expect(doc.manifest.counts.quotations).toBe(1);
+        expect(doc.quotationsError).toBeUndefined();
+    });
+
+    it('keeps the snapshot when only quotations fail, and records why', async () => {
+        client = makeClient({ fetchQuotationDocuments: jest.fn().mockRejectedValue(new Error('quotation list not found')) });
+        await service.executeExtract('snap-1');
+        const doc = await readSnapshotFile(path.join(tmp, 'tenant-1', 'snap-1.json.gz'));
+        expect(doc.products).toEqual([{ id: 1 }]);
+        expect(doc.quotations).toEqual([]);
+        expect(doc.quotationsError).toBe('quotation list not found');
+        expect(db.externalSyncSnapshot.update.mock.calls.some((call) => call[0].data.status === 'READY')).toBe(true);
+    });
+
     it('marks FAILED and deletes the file when fetchProducts throws', async () => {
         client.fetchProducts.mockRejectedValue(new Error('provider down'));
         await expect(service.executeExtract('snap-1')).rejects.toThrow(/provider down/);

@@ -19,6 +19,7 @@ import {
     MappedPayment,
     MappedProduct,
     MappedPurchase,
+    MappedQuotation,
     MappedSale,
     MappedSaleReturn,
     MappedSupplier,
@@ -35,10 +36,12 @@ import {
     splitIntoMonthlyWindows,
 } from './external-sync.mapper';
 import {
+    diziQuotationDate,
     mapDiziCustomer,
     mapDiziPayment,
     mapDiziProduct,
     mapDiziPurchase,
+    mapDiziQuotation,
     mapDiziSale,
     mapDiziSaleReturn,
     mapDiziSupplier,
@@ -78,6 +81,11 @@ export interface ProviderClient {
     fetchPurchaseDocuments(window: DateWindow): Promise<unknown[]>;
     fetchPayments(window: DateWindow, party: PaymentParty): Promise<unknown[]>;
     fetchSaleReturnDocuments(window: DateWindow): Promise<unknown[]>;
+    /**
+     * Quotation headers paired with their detail. Optional: a provider that
+     * does not expose quotations leaves it out and the step is skipped.
+     */
+    fetchQuotationDocuments?(window: DateWindow): Promise<unknown[]>;
 }
 
 export interface ProviderMappers {
@@ -88,6 +96,8 @@ export interface ProviderMappers {
     purchase(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedPurchase;
     payment(row: any, party: PaymentParty, documentPrefix: string, warnings: SyncWarning[]): MappedPayment | null;
     saleReturn(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedSaleReturn;
+    /** Present exactly when the provider's client has `fetchQuotationDocuments`. */
+    quotation?(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedQuotation;
 }
 
 export interface ProviderDefinition {
@@ -206,6 +216,7 @@ const DIZI_MAPPERS: ProviderMappers = {
     purchase: (doc, prefix, warnings) => mapDiziPurchase(doc.header, doc.detail, prefix, warnings),
     payment: mapDiziPayment,
     saleReturn: (doc, prefix, warnings) => mapDiziSaleReturn(doc, prefix, warnings),
+    quotation: (doc, prefix, warnings) => mapDiziQuotation(doc.header, doc.detail, prefix, warnings),
 };
 
 class DiziProviderClient implements ProviderClient {
@@ -263,6 +274,16 @@ class DiziProviderClient implements ProviderClient {
             this.inner.fetchSaleReturnDetail(h.Id),
         );
         return details;
+    }
+
+    async fetchQuotationDocuments(window: DateWindow) {
+        const headers = (await this.inner.fetchQuotationHeaders()).filter(
+            (h) => !h.IsDeleted && inWindow(diziQuotationDate(h), window),
+        );
+        const details = await mapWithConcurrency(headers, DIZI_DETAIL_CONCURRENCY, (h) =>
+            this.inner.fetchQuotationDetail(h.Id).catch(() => null),
+        );
+        return headers.map((header, i) => ({ header, detail: details[i] }));
     }
 }
 

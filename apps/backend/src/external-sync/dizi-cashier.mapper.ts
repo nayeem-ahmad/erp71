@@ -3,6 +3,8 @@ import {
     DiziPayment,
     DiziPurchaseDetail,
     DiziPurchaseHeader,
+    DiziQuotationDetail,
+    DiziQuotationHeader,
     DiziSaleDetail,
     DiziSaleHeader,
     DiziSaleReturnDetail,
@@ -14,6 +16,8 @@ import {
     MappedProduct,
     MappedPurchase,
     MappedPurchaseItem,
+    MappedQuotation,
+    MappedQuotationItem,
     MappedSale,
     MappedSaleItem,
     MappedSaleReturn,
@@ -313,6 +317,105 @@ export function mapDiziSaleReturn(
         reason: emptyToNull(detail.Narration),
         returnDate: parseProviderDate(detail.ReturnDate),
         externalUpdatedAt: parseTimestamp(detail.UpdatedOn),
+        items,
+    };
+}
+
+/** The quotation's business date, whichever field this Dizi build names it. */
+export function diziQuotationDate(header: DiziQuotationHeader): string | null {
+    return emptyToNull(header.TransactionDate ?? header.QuotationDate ?? header.Date ?? null);
+}
+
+/** Dizi's quotation states onto ours; anything unrecognised reads as sent. */
+const DIZI_QUOTATION_STATUS: Record<string, string> = {
+    DRAFT: 'DRAFT',
+    SENT: 'SENT',
+    PENDING: 'SENT',
+    OPEN: 'SENT',
+    ACCEPTED: 'ACCEPTED',
+    APPROVED: 'ACCEPTED',
+    REJECTED: 'REJECTED',
+    DECLINED: 'REJECTED',
+    CANCELLED: 'REJECTED',
+    CANCELED: 'REJECTED',
+    EXPIRED: 'EXPIRED',
+    CONVERTED: 'CONVERTED',
+    INVOICED: 'CONVERTED',
+};
+
+/**
+ * Quotations, like sales, carry their lines only on the detail payload. A
+ * quotation whose detail could not be fetched still imports as a header with
+ * its total, and says so, rather than vanishing.
+ *
+ * The quotation payload was never recorded from the live account (see the
+ * types in dizi-cashier.client.ts), so each value is read from the field names
+ * Dizi uses for the same thing on its sales, with fallbacks.
+ */
+export function mapDiziQuotation(
+    header: DiziQuotationHeader,
+    detail: DiziQuotationDetail | null,
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedQuotation {
+    const externalId = String(header.Id);
+    const number = emptyToNull(
+        header.QuotationNo ?? header.SlipNo ?? detail?.QuotationNo ?? detail?.SlipNo ?? null,
+    );
+    const slip = number ?? externalId;
+
+    const lines = detail?.QuotationItems ?? detail?.Items ?? null;
+    if (!detail || !lines) {
+        warnings.push({
+            entity: 'QUOTATION',
+            externalId,
+            code: 'QUOTATION_LINES_MISSING',
+            message: `Quotation ${slip}: line items could not be read from Dizi — imported with its total only`,
+        });
+    }
+
+    const items: MappedQuotationItem[] = (lines ?? []).map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.Quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'QUOTATION',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Quotation ${slip}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        // The offered (tax-inclusive, post-discount) unit price, falling back
+        // through the less specific fields and finally the line total.
+        const lineTotal = toMoney(line.TotalAmount) || toMoney(line.SubTotalAmount);
+        const unitPrice =
+            toMoney(line.DiscountedPricePerUnitWithTax) ||
+            toMoney(line.PricePerUnitWithTax) ||
+            toMoney(line.DiscountedPricePerUnit) ||
+            toMoney(line.PricePerUnit) ||
+            (quantity > 0 ? Math.round((lineTotal / quantity) * 100) / 100 : 0);
+        return { externalProductId: String(line.ItemId ?? ''), quantity, unitPrice };
+    });
+
+    const lineSum = Math.round(items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) * 100) / 100;
+    const date = diziQuotationDate(header) ?? emptyToNull(detail?.Date ?? detail?.QuotationDate ?? detail?.TransactionDate ?? null);
+    const validUntil = emptyToNull(detail?.ValidUntil ?? detail?.ValidTill ?? detail?.ExpiryDate ?? null);
+
+    const converted = detail?.IsConverted === true || Boolean(emptyToNull(detail?.SalesId ?? null));
+    const status = converted
+        ? 'CONVERTED'
+        : DIZI_QUOTATION_STATUS[(detail?.Status ?? '').trim().toUpperCase()] ?? 'SENT';
+
+    return {
+        externalId,
+        quoteNumber: buildDocumentNumber(documentPrefix, slip),
+        referenceNumber: number,
+        externalCustomerId: emptyToNull(header.TraderId ?? header.CustomerId ?? detail?.CustomerId ?? detail?.TraderId ?? null),
+        totalAmount: toMoney(header.TotalAmount) || toMoney(detail?.TotalAmount) || lineSum,
+        quoteDate: parseProviderDate(date ?? ''),
+        validUntil: validUntil ? parseProviderDate(validUntil) : null,
+        status,
+        notes: emptyToNull(detail?.Narration ?? detail?.Note ?? null),
+        externalUpdatedAt: parseTimestamp(detail?.UpdatedOn),
         items,
     };
 }

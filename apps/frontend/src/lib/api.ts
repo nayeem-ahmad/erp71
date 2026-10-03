@@ -1066,6 +1066,7 @@ export type ExternalSyncProvider = {
 export type ExternalSyncStep =
     | 'MASTERS'
     | 'SALES'
+    | 'QUOTATIONS'
     | 'PURCHASES'
     | 'CUSTOMER_PAYMENTS'
     | 'SUPPLIER_PAYMENTS'
@@ -1109,7 +1110,10 @@ export type ExternalSyncRun = {
         | 'supplierPayments'
         | 'saleReturns',
         ExternalSyncTally
-    > | null;
+    > & {
+        /** Absent on runs from before quotations were imported. */
+        quotations?: ExternalSyncTally;
+    } | null;
     warnings: ExternalSyncWarning[] | null;
     error_message: string | null;
     started_at: string;

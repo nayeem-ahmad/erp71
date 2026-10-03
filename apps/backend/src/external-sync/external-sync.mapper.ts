@@ -423,6 +423,33 @@ export function mapSaleReturn(
     };
 }
 
+export interface MappedQuotationItem {
+    externalProductId: string;
+    quantity: number;
+    unitPrice: number;
+}
+
+/**
+ * A price offer to a customer. Unlike every other document here it moves no
+ * stock and no money, so it never posts — it is history the tenant can look
+ * up, revise or convert, nothing more.
+ */
+export interface MappedQuotation {
+    externalId: string;
+    quoteNumber: string;
+    /** The provider's own quotation number, unprefixed, for warnings. */
+    referenceNumber: string | null;
+    externalCustomerId: string | null;
+    totalAmount: number;
+    quoteDate: Date;
+    validUntil: Date | null;
+    /** Our status vocabulary: SENT, ACCEPTED, REJECTED, EXPIRED or CONVERTED. */
+    status: string;
+    notes: string | null;
+    externalUpdatedAt: Date | null;
+    items: MappedQuotationItem[];
+}
+
 /** Which way the cash moved, from our side. */
 export type PaymentDirection = 'IN' | 'OUT';
 
