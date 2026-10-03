@@ -12,6 +12,7 @@ import {
     DateWindow,
     MappedPayment,
     MappedPurchase,
+    MappedQuotation,
     MappedSale,
     MappedSaleReturn,
     PaymentParty,
@@ -54,7 +55,8 @@ type EntityType =
     | 'PURCHASE'
     | 'CUSTOMER_PAYMENT'
     | 'SUPPLIER_PAYMENT'
-    | 'SALE_RETURN';
+    | 'SALE_RETURN'
+    | 'QUOTATION';
 
 interface EntityTally {
     created: number;
@@ -70,7 +72,8 @@ type SyncStats = Record<
     | 'purchases'
     | 'customerPayments'
     | 'supplierPayments'
-    | 'saleReturns',
+    | 'saleReturns'
+    | 'quotations',
     EntityTally
 >;
 
@@ -94,6 +97,9 @@ export const SYNC_STEPS = [
     // processed first would be short of the receipt that supplies it.
     'PURCHASES',
     'SALES',
+    // Quotations move no stock and no money, so they could sit anywhere after
+    // MASTERS; beside sales keeps the customer-facing documents together.
+    'QUOTATIONS',
     'CUSTOMER_PAYMENTS',
     'SUPPLIER_PAYMENTS',
     'SALE_RETURNS',
@@ -427,6 +433,7 @@ export class ExternalSyncService {
             customerPayments: emptyTally(),
             supplierPayments: emptyTally(),
             saleReturns: emptyTally(),
+            quotations: emptyTally(),
         };
         const warnings: SyncWarning[] = [];
 
@@ -449,6 +456,11 @@ export class ExternalSyncService {
                 createLiveClient: (creds) => def.createClient(creds),
             });
             const session = await client.login();
+
+            // Not every provider offers quotations (Express does not), and a
+            // step that can do nothing should not count toward progress.
+            const supportsQuotations = Boolean(client.fetchQuotationDocuments && mappers.quotation);
+            if (!supportsQuotations) steps = steps.filter((step) => step !== 'QUOTATIONS');
 
             // Guard against a mis-typed credential pointing at another
             // company's data landing in this tenant.
@@ -511,6 +523,11 @@ export class ExternalSyncService {
                     await this.assertNotCancelled(runId);
                     await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun, mappers);
                     await tick(`Sales ${label}`);
+                }
+                if (steps.includes('QUOTATIONS')) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncQuotationsWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun, mappers);
+                    await tick(`Quotations ${label}`);
                 }
                 if (steps.includes('CUSTOMER_PAYMENTS')) {
                     await this.assertNotCancelled(runId);
@@ -976,6 +993,162 @@ export class ExternalSyncService {
                 });
             }
         }
+    }
+
+    /**
+     * Quotations import as history: written with the provider's own number,
+     * date and status, and never posted, since a quotation moves neither stock
+     * nor money.
+     *
+     * A provider that refuses quotations costs only the quotations — the run
+     * warns and carries on, because nothing downstream depends on them.
+     */
+    private async syncQuotationsWindow(
+        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string },
+        client: ProviderClient,
+        window: DateWindow,
+        productMap: Map<string, string>,
+        customerMap: Map<string, string>,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        dryRun: boolean,
+        mappers: ProviderMappers,
+    ) {
+        if (!client.fetchQuotationDocuments || !mappers.quotation) return;
+
+        let docs: unknown[];
+        try {
+            docs = await client.fetchQuotationDocuments(window);
+        } catch (error: any) {
+            warnings.push({
+                entity: 'QUOTATION',
+                externalId: '',
+                code: 'QUOTATIONS_UNAVAILABLE',
+                message: `Quotations were not imported — ${error?.message ?? error}. Everything else in this run is unaffected.`,
+            });
+            return;
+        }
+        const quotationMap = await this.loadMappings(connection.id, 'QUOTATION');
+
+        for (const doc of docs) {
+            const mapped = mappers.quotation(doc, connection.document_prefix, warnings);
+            if (dryRun) {
+                quotationMap.has(mapped.externalId) ? stats.quotations.updated++ : stats.quotations.created++;
+                continue;
+            }
+
+            try {
+                const created = await this.writeQuotation(connection, mapped, productMap, customerMap, quotationMap, warnings);
+                if (created === null) {
+                    stats.quotations.skipped++;
+                } else {
+                    created ? stats.quotations.created++ : stats.quotations.updated++;
+                }
+            } catch (error: any) {
+                stats.quotations.skipped++;
+                warnings.push({
+                    entity: 'QUOTATION',
+                    externalId: mapped.externalId,
+                    code: 'WRITE_FAILED',
+                    message: `Quotation ${mapped.referenceNumber ?? mapped.quoteNumber} could not be imported: ${error?.message ?? error}`,
+                });
+            }
+        }
+    }
+
+    /** Returns null when the quotation was left as the tenant has it. */
+    private async writeQuotation(
+        connection: { id: string; tenant_id: string; store_id: string },
+        mapped: MappedQuotation,
+        productMap: Map<string, string>,
+        customerMap: Map<string, string>,
+        quotationMap: Map<string, string>,
+        warnings: SyncWarning[],
+    ): Promise<boolean | null> {
+        const customerId = mapped.externalCustomerId ? customerMap.get(mapped.externalCustomerId) ?? null : null;
+        if (mapped.externalCustomerId && !customerId) {
+            warnings.push({
+                entity: 'QUOTATION',
+                externalId: mapped.externalId,
+                code: 'CUSTOMER_UNRESOLVED',
+                message: `Quotation ${mapped.quoteNumber} references provider customer ${mapped.externalCustomerId}, which is not in the customer list — imported without a customer`,
+            });
+        }
+
+        const items = this.resolveDocumentItems(
+            mapped.items,
+            productMap,
+            warnings,
+            'QUOTATION',
+            mapped.externalId,
+            mapped.quoteNumber,
+        ).map((item) => ({
+            product_id: item.productId,
+            quantity: item.source.quantity,
+            unit_price: item.source.unitPrice,
+        }));
+
+        const header = {
+            customer_id: customerId,
+            total_amount: mapped.totalAmount,
+            status: mapped.status,
+            valid_until: mapped.validUntil,
+            notes: mapped.notes,
+        };
+
+        const existingId = quotationMap.get(mapped.externalId);
+
+        if (existingId) {
+            const current = await this.db.quotation.findFirst({
+                where: { id: existingId, tenant_id: connection.tenant_id },
+                select: { status: true },
+            });
+            if (!current) {
+                await this.forgetStaleMapping(connection.id, 'QUOTATION', mapped.externalId, quotationMap, warnings, `Quotation ${mapped.quoteNumber}`);
+                return this.writeQuotation(connection, mapped, productMap, customerMap, quotationMap, warnings);
+            }
+
+            // The same rule the quotation screen applies: once converted or
+            // revised here, the tenant's version is the one that counts.
+            if (current.status === 'CONVERTED' || current.status === 'REVISED') {
+                if (current.status !== mapped.status) {
+                    warnings.push({
+                        entity: 'QUOTATION',
+                        externalId: mapped.externalId,
+                        code: 'QUOTATION_LOCKED',
+                        message: `Quotation ${mapped.quoteNumber} is ${current.status.toLowerCase()} here — upstream changes were not applied`,
+                    });
+                }
+                return null;
+            }
+
+            await this.db.$transaction(async (tx) => {
+                await tx.quotation.update({ where: { id: existingId }, data: header });
+                await tx.quotationItem.deleteMany({ where: { quotation_id: existingId } });
+                if (items.length > 0) {
+                    await tx.quotationItem.createMany({
+                        data: items.map((item) => ({ ...item, quotation_id: existingId })),
+                    });
+                }
+            });
+            return false;
+        }
+
+        const created = await this.db.quotation.create({
+            data: {
+                tenant_id: connection.tenant_id,
+                store_id: connection.store_id,
+                quote_number: mapped.quoteNumber,
+                created_at: mapped.quoteDate,
+                ...header,
+                items: { create: items },
+            },
+            select: { id: true },
+        });
+
+        await this.writeMapping(connection, 'QUOTATION', mapped.externalId, created.id, mapped.externalUpdatedAt);
+        quotationMap.set(mapped.externalId, created.id);
+        return true;
     }
 
     /**
