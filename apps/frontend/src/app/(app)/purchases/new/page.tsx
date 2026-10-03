@@ -13,7 +13,7 @@ import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout
 import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
 import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
-import ProductSearch, { availableQtyOf } from '@/components/document-entry/ProductSearch';
+import ProductSearch, { availableQtyOf, stockByWarehouseOf } from '@/components/document-entry/ProductSearch';
 import { lastRateFrom, loadRateHistory } from '@/components/document-entry/RateHistory';
 import type { PartyOption } from '@/components/document-entry/PartySearchSelect';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
@@ -117,6 +117,9 @@ function NewPurchasePageContent() {
                         // availableQty undefined rather than claiming zero stock.
                         availableQty: options?.availableQty
                             ?? (Array.isArray(product.stocks) ? availableQtyOf(product) : undefined),
+                        // Kept per warehouse so the line's figure follows the
+                        // warehouse picker after it is added.
+                        stockByWarehouse: stockByWarehouseOf(product),
                     },
                 ];
             });
@@ -357,6 +360,9 @@ function NewPurchasePageContent() {
                         seedPriceFromHistory
                         historyPartyId={supplier?.id}
                         historyPartyName={supplier?.name}
+                        warehouseId={warehouseId || undefined}
+                        // Goods are coming in: buying more than is held is normal.
+                        warnOverStock={false}
                     />
                 </VoiceEntryInput>
             }
@@ -375,7 +381,9 @@ function NewPurchasePageContent() {
                     historyPartyName={supplier?.name}
                     warehouses={perLineWarehouse ? warehouses : []}
                     entryWarehouseName={entryWarehouseName}
+                    entryWarehouseId={warehouseId || undefined}
                     warehouseLabel={t.common.warehouse}
+                    warnOverStock={false}
                 />
             }
             note={
