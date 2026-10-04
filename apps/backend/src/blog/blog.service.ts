@@ -589,7 +589,7 @@ export class BlogService {
      * to-the-second timing, and an hourly job is one the ops team can reason
      * about. Idempotent — a post already PUBLISHED is not in the query.
      */
-    @Cron(CronExpression.EVERY_HOUR)
+    @Cron(CronExpression.EVERY_HOUR, { timeZone: 'Asia/Dhaka' })
     async publishDueScheduledPosts(): Promise<number> {
         const due = await this.db.blogPost.findMany({
             where: {

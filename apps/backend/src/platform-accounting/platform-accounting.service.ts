@@ -5,7 +5,7 @@ import {
     Logger,
     NotFoundException,
 } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import {
     bootstrapPlatformAccounting,
@@ -531,13 +531,16 @@ export class PlatformAccountingService {
     }
 
     /**
-     * Nightly catch-up, an hour after the billing cron posts the day's fees.
+     * Nightly catch-up, an hour after the billing cron posts the day's fees
+     * (04:00 Bangladesh time), so the night's fees reach the books the same
+     * night. It used to run at 03:00 UTC, seven hours *before* the fees, and
+     * picked each day's up a day late.
      *
      * The admin console has a Sync button for when someone wants it now, but the
      * books should not depend on anyone pressing it — a platform that bills
      * while nobody is looking should have a ledger that does too.
      */
-    @Cron(CronExpression.EVERY_DAY_AT_3AM)
+    @Cron('0 5 * * *', { timeZone: 'Asia/Dhaka' })
     async scheduledSync(): Promise<void> {
         if (!(await this.platformSettings.isFeatureEnabled('platformAccounting'))) return;
 
