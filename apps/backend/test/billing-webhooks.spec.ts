@@ -5,6 +5,7 @@ import { BillingController } from '../src/billing/billing.controller';
 import { BillingService } from '../src/billing/billing.service';
 import { DatabaseService } from '../src/database/database.service';
 import { TenantTimezoneService } from '../src/database/tenant-timezone.service';
+import { AuthCacheService } from '../src/database/auth-cache.service';
 import { AuditService } from '../src/audit/audit.service';
 import { EmailService } from '../src/email/email.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
@@ -52,6 +53,9 @@ describe('Billing webhooks (HTTP)', () => {
                         invalidate: jest.fn(),
                     },
                 },
+                // The interceptor reads membership through the auth cache too;
+                // a zero TTL keeps it a pass-through, as in the unit specs.
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
             ],
         }).compile();
 
