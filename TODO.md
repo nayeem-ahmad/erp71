@@ -131,9 +131,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 
 Full plan with design, files, risks, rollback and verification per item: `docs/performance/perceived-speed-plan.md` (IDs P0–P3.6). Baseline measured 2026-10-04: 250 ms RTT from Dhaka, the box idle, distance and round trips dominate. The code for every item landed on `perf/perceived-speed` on 2026-10-04 (see COMPLETED). These parts need a person:
 
-- [ ] **Run `pg-restart` in quiet hours** (P3.2): `ssh root@66.116.236.127 'bash -s' -- pg-restart < scripts/ops/perf-server-steps.sh`. This applies the queued `shared_buffers` 512 MB and `shared_preload_libraries = pg_stat_statements`, then creates the extension. It means about 5–10 s of DB downtime for erp71 **and profiles71**. On 2026-10-04 at 23:45 real traffic was still coming in (dashboards, reports, purchases), so it was deferred to early morning, before shops open. Afterwards, rank the indexes still pending (see below) by `pg_stat_statements` total time.
 - [ ] **Put Cloudflare in front of `app.erp71.com` (P3.1)**, which needs a Cloudflare account and the `erp71.com` nameservers. The backend part is ready behind `TRUST_CLOUDFLARE_PROXY=true`. Set it only once Cloudflare is actually proxying, together with Caddy's `trusted_proxies`. Steps and caveats: plan doc P3.1.
-- [ ] **Measure the deploy outage on the *next* deploy.** #769's deploy still ran the old `deploy.sh`, because bash had already loaded it. The marker for `95fc6fbf` is in place, so the next deploy is the first to prepare before the swap. Run `while true; do curl -s -o /dev/null -w '%{http_code} ' https://api.erp71.com/api/v1/health; sleep 0.5; done` during it. Target: 3 s of non-200 or less.
+- [ ] **Around 2026-10-12, rank queries from `pg_stat_statements`** (on since 2026-10-05). Read the top statements by `total_exec_time` and `mean_exec_time`, decide the pending indexes listed under "Found while implementing" (`InventoryMovement` ×3, `CrmActivity.customer_id`, `LeadConversation`/`CrmFollowUp.lead_id`), and check whether `searchByQuantitySold` dominates the `SaleItem` time.
 
 #### Found while implementing the perceived-speed plan (2026-10-04)
 
@@ -1768,6 +1767,9 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **`pg-restart` done, Postgres tuned** — done 2026-10-05 at 01:10 BDT, with no user traffic: 0 user API requests in the 45 s before. `shared_buffers` is 512 MB, `pg_stat_statements` is loaded and its extension created, and both network aliases survived (`retail-saas-db-1` for profiles71). The backend reconnected by itself within seconds, and profiles71 answered 200.
+- [x] **Deploy outage measured on the new prepare-before-swap flow** — done 2026-10-05. A manual Deploy to VPS run of `main` at 01:11 BDT, probed every ~1.3 s from Dhaka, saw two 502s, about **3.4 s** of outage (19–24 s before). The deploy log shows `db-prepare` running while the old backend still served.
 
 - [x] **Perceived-speed release live (#769, `95fc6fbf`)** — done 2026-10-05. Measured from Dhaka after the deploy:
   - Gzipped JS on the wire: `/login` 1,619 → 418 KiB, `/dashboard` 1,873 → 492 KiB.
