@@ -3,13 +3,17 @@
 import * as Sentry from '@sentry/nextjs';
 import { useEffect, useMemo } from 'react';
 import { DEFAULT_LOCALE } from '@/lib/localization/config';
-import { messageCatalog } from '@/lib/localization/messages';
+import { getLoadedMessagesOrDefault } from '@/lib/localization/load-messages';
 import { getStoredLocalePreference } from '@/lib/localization/preference';
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+    // Synchronous on purpose: this page is the last resort when the app itself
+    // has failed, so it must not wait on — or fail on — fetching a language
+    // chunk. The user's language is usually already loaded by the provider this
+    // page replaces; if not, English.
     const m = useMemo(() => {
         const locale = getStoredLocalePreference() ?? DEFAULT_LOCALE;
-        return messageCatalog[locale].marketing.globalError;
+        return getLoadedMessagesOrDefault(locale).marketing.globalError;
     }, []);
 
     useEffect(() => {

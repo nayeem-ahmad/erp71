@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+import React, { createContext, use, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 
 import {
     AVAILABLE_LOCALES,
@@ -10,9 +10,14 @@ import {
     isLocale,
     type Locale,
 } from './localization/config';
-import { messageCatalog, type MessageDictionary } from './localization/messages';
+import { getLoadedMessages, loadMessages } from './localization/load-messages';
+import { enMessages, type MessageDictionary } from './localization/messages';
 import { resolvePlurals } from './localization/plural';
-import { getStoredLocalePreference, persistLocalePreference } from './localization/preference';
+import {
+    applyLocaleToDocument,
+    getStoredLocalePreference,
+    persistLocalePreference,
+} from './localization/preference';
 
 type I18nContextValue = {
     locale: Locale;
@@ -61,7 +66,7 @@ const I18nContext = createContext<I18nContextValue>({
     setLocale: () => undefined,
     locales: AVAILABLE_LOCALES,
     localeInfo: getLocaleConfig(DEFAULT_LOCALE),
-    t: messageCatalog[DEFAULT_LOCALE],
+    t: enMessages,
     fmt: (template, values) => formatMessage(template, values, DEFAULT_LOCALE),
 });
 
@@ -74,29 +79,81 @@ export function I18nProvider({
 }>) {
     const [locale, setLocaleState] = useReducer((_: Locale, nextLocale: Locale) => nextLocale, initialLocale);
 
-    useEffect(() => {
-        const resolved = getInitialClientLocale(initialLocale);
-        setLocaleState(resolved);
-        persistLocalePreference(resolved);
-    }, [initialLocale]);
+    /*
+     * Only the first render can find the dictionary missing — `setLocale`
+     * never commits a locale before its dictionary has arrived. That render is
+     * hydration, and it must use the dictionary the server rendered with, so
+     * for any language but English it suspends until the chunk is here.
+     *
+     * There is deliberately no <Suspense> around this. Suspending outside every
+     * boundary holds the root instead of showing a fallback: the server's shell
+     * waits for its local chunk rather than streaming an empty page with the
+     * app behind it, and the browser leaves the server's HTML — already in the
+     * right language — on screen, untouched, until hydration can finish. No
+     * flash of English, no mismatch. The cost is that a first-time Bangla
+     * visitor's page turns interactive one chunk later.
+     */
+    const messages = getLoadedMessages(locale) ?? use(loadMessages(locale));
 
-    const setLocale = (l: Locale) => {
+    // English back for another language means its chunk failed (an offline
+    // till). Say English throughout, so plurals, dates and text direction match
+    // the words actually on screen.
+    const activeLocale = messages === enMessages ? DEFAULT_LOCALE : locale;
+
+    // The locale a switch is waiting on, so a slow load that a later choice
+    // has overtaken does not land on top of it.
+    const pendingLocale = useRef<Locale | null>(null);
+    useEffect(
+        () => () => {
+            pendingLocale.current = null;
+        },
+        [],
+    );
+
+    const setLocale = useCallback((l: Locale) => {
         if (!isLocale(l)) return;
-        setLocaleState(l);
-        persistLocalePreference(l);
-    };
+        pendingLocale.current = l;
+
+        if (getLoadedMessages(l)) {
+            setLocaleState(l);
+            persistLocalePreference(l);
+            return;
+        }
+
+        // Load first, switch after: committing a locale whose dictionary has
+        // not arrived would suspend the whole app mid-session.
+        void loadMessages(l).then(() => {
+            if (pendingLocale.current !== l) return;
+            // Its chunk failed, and `loadMessages` has said so. Staying in the
+            // current language beats claiming Bangla while showing English, and
+            // leaves the saved preference for the next page load to retry.
+            if (!getLoadedMessages(l)) return;
+            setLocaleState(l);
+            persistLocalePreference(l);
+        });
+    }, []);
+
+    useEffect(() => {
+        setLocale(getInitialClientLocale(initialLocale));
+    }, [initialLocale, setLocale]);
+
+    // The server marked <html> with a language whose chunk then failed here.
+    // Mark it English to match — without persisting, so the preference survives.
+    useEffect(() => {
+        if (activeLocale !== locale) applyLocaleToDocument(activeLocale);
+    }, [activeLocale, locale]);
 
     const value = useMemo(
         () => ({
-            locale,
+            locale: activeLocale,
             setLocale,
             locales: AVAILABLE_LOCALES,
-            localeInfo: getLocaleConfig(locale),
-            t: messageCatalog[locale],
+            localeInfo: getLocaleConfig(activeLocale),
+            t: messages,
             fmt: (template: string, values: Record<string, string | number>) =>
-                formatMessage(template, values, locale),
+                formatMessage(template, values, activeLocale),
         }),
-        [locale]
+        [activeLocale, messages, setLocale]
     );
 
     return (
