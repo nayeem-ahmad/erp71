@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import DashboardPage from './page';
 import { api } from '@/lib/api';
@@ -241,6 +241,97 @@ describe('DashboardPage — Business Monitor v2', () => {
 
         expect(await screen.findByText('No accounting movement')).toBeInTheDocument();
         expect(screen.getByText('Business health')).toBeInTheDocument();
+    });
+});
+
+describe('DashboardPage — progressive loading', () => {
+    /** A request that never answers, so a panel can be held in flight for the whole test. */
+    const pending = () => new Promise<never>(() => undefined);
+
+    const KPIS = {
+        filters: { from: '2026-03-01', to: '2026-03-31' },
+        kpis: {
+            cash_inflow: 300, cash_outflow: 125, net_cash_movement: 175, gross_revenue: 300,
+            operating_expense: 125, accounts_receivable: 90, accounts_payable: 20, tax_liability: 15,
+        },
+    };
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+        (api.getMe as jest.Mock).mockResolvedValue({
+            id: 'user-1',
+            name: 'Ada',
+            tenants: [{ id: 't1', name: 'Northwind Retail' }],
+        });
+        (api.getFinancialKpis as jest.Mock).mockResolvedValue(KPIS);
+        // Everything else is still on its way.
+        (api.getFinancialTrends as jest.Mock).mockImplementation(pending);
+        (api.getSalesByCategory as jest.Mock).mockImplementation(pending);
+        (api.getSalesByProduct as jest.Mock).mockImplementation(pending);
+        (api.getSalesByCustomer as jest.Mock).mockImplementation(pending);
+        (api.getLowStockCount as jest.Mock).mockImplementation(pending);
+        (api.getSalesList as jest.Mock).mockImplementation(pending);
+    });
+
+    it('paints the health tiles as soon as their own request lands, while the rest are still out', async () => {
+        renderWithQueryClient(<DashboardPage />);
+
+        // The tiles carry their titles only once they have figures to show.
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('kpi-tile-skeleton')).toHaveLength(0);
+
+        // The slow panels keep their own skeletons rather than holding the page.
+        expect(screen.getByTestId('cash-flow-skeleton')).toBeInTheDocument();
+        expect(screen.getByTestId('category-skeleton')).toBeInTheDocument();
+        expect(screen.getAllByTestId('ranked-list-skeleton')).toHaveLength(2);
+    });
+
+    it('does not hold the headline figures for the comparison window', async () => {
+        // Current window answers; the window before it (the delta arrows) never does.
+        (api.getFinancialKpis as jest.Mock).mockImplementation(
+            (window: { from: string; to: string }) => (Date.parse(window.to) > Date.now() - 60_000 ? Promise.resolve(KPIS) : pending()),
+        );
+
+        renderWithQueryClient(<DashboardPage />);
+
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+        expect(api.getFinancialKpis).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the last range on screen while the next one loads', async () => {
+        renderWithQueryClient(<DashboardPage />);
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+
+        // The next range's figures never arrive.
+        (api.getFinancialKpis as jest.Mock).mockImplementation(pending);
+        fireEvent.click(screen.getByText('Month'));
+
+        await waitFor(() => expect(api.getFinancialKpis).toHaveBeenCalledTimes(4));
+        // Still the week's tiles, dimmed — not a band of skeletons.
+        expect(screen.getByText('Cash in hand')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('kpi-tile-skeleton')).toHaveLength(0);
+        const band = screen.getByText('Cash in hand').closest('[aria-busy]');
+        expect(band).toHaveAttribute('aria-busy', 'true');
+        expect(within(band as HTMLElement).getByText('Net profit')).toBeInTheDocument();
+    });
+
+    it('asks for /auth/me once, however many readers mount together', async () => {
+        renderWithQueryClient(<DashboardPage />);
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+
+        expect(api.getMe).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders straight from the cache on a return visit, without asking for /auth/me', async () => {
+        const first = renderWithQueryClient(<DashboardPage />);
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+        first.unmount();
+
+        renderWithQueryClient(<DashboardPage />);
+
+        // No skeleton pass: the variant and the tiles are both in memory.
+        expect(screen.getByText('Cash in hand')).toBeInTheDocument();
+        expect(api.getMe).toHaveBeenCalledTimes(1);
     });
 });
 
