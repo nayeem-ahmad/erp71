@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import CrmActivityComposer from './CrmActivityComposer';
 
 jest.mock('@/lib/api', () => ({
@@ -55,7 +56,7 @@ async function searchFor(text: string) {
 
 describe('CrmActivityComposer — picking the target here instead of on the lead page', () => {
     it('will not save until a lead or customer is named', async () => {
-        render(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
+        renderWithQueryClient(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
 
         fireEvent.change(await screen.findByPlaceholderText(/Call about the outstanding/), {
             target: { value: 'Call Karim' },
@@ -70,7 +71,7 @@ describe('CrmActivityComposer — picking the target here instead of on the lead
      * which it came from.
      */
     it('searches leads and customers together, labelling which is which', async () => {
-        render(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
+        renderWithQueryClient(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
         await searchFor('Karim');
 
         const lead = await screen.findByRole('button', { name: /Karim Traders/ });
@@ -80,7 +81,7 @@ describe('CrmActivityComposer — picking the target here instead of on the lead
     });
 
     it('does not search on a single character, which would match most of the book', async () => {
-        render(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
+        renderWithQueryClient(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
 
         fireEvent.change(screen.getByPlaceholderText('Search by name or phone'), { target: { value: 'K' } });
 
@@ -90,7 +91,7 @@ describe('CrmActivityComposer — picking the target here instead of on the lead
 
     it('files a scheduled activity against the chosen lead', async () => {
         const onSaved = jest.fn();
-        render(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={onSaved} />);
+        renderWithQueryClient(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={onSaved} />);
         await searchFor('Karim');
 
         fireEvent.click(await screen.findByRole('button', { name: /Karim Traders/ }));
@@ -108,7 +109,7 @@ describe('CrmActivityComposer — picking the target here instead of on the lead
     });
 
     it('files a logged activity against the chosen customer, already done', async () => {
-        render(<CrmActivityComposer mode="log" onClose={jest.fn()} onSaved={jest.fn()} />);
+        renderWithQueryClient(<CrmActivityComposer mode="log" onClose={jest.fn()} onSaved={jest.fn()} />);
         await searchFor('Karim');
 
         fireEvent.click(await screen.findByRole('button', { name: /Karim Store/ }));
@@ -124,7 +125,7 @@ describe('CrmActivityComposer — picking the target here instead of on the lead
     });
 
     it('lets the chosen target be swapped back out', async () => {
-        render(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
+        renderWithQueryClient(<CrmActivityComposer mode="schedule" onClose={jest.fn()} onSaved={jest.fn()} />);
         await searchFor('Karim');
         fireEvent.click(await screen.findByRole('button', { name: /Karim Traders/ }));
 
@@ -136,7 +137,7 @@ describe('CrmActivityComposer — picking the target here instead of on the lead
 
 describe('CrmActivityComposer — opened from a record that already knows its target', () => {
     it('shows no picker and posts straight against the given lead', async () => {
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="schedule"
                 target={{ lead_id: 'lead-9' }}
@@ -159,7 +160,7 @@ describe('CrmActivityComposer — opened from a record that already knows its ta
     });
 
     it('opens the log form on the channel the AI drafter used', async () => {
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="log"
                 target={{ lead_id: 'lead-9' }}
@@ -181,7 +182,7 @@ describe('CrmActivityComposer — picking a message template', () => {
     /** No templates configured means no picker — not an empty select to squint at. */
     it('shows no picker when the tenant has no templates', async () => {
         api.getCrmMessageTemplates.mockResolvedValue([]);
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="log"
                 target={{ lead_id: 'lead-9' }}
@@ -195,7 +196,7 @@ describe('CrmActivityComposer — picking a message template', () => {
     });
 
     it('fills the log summary, resolving the placeholders against the target', async () => {
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="log"
                 target={{ lead_id: 'lead-9' }}
@@ -226,7 +227,7 @@ describe('CrmActivityComposer — picking a message template', () => {
                     : PURPOSES,
             ),
         );
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="log"
                 target={{ lead_id: 'lead-9' }}
@@ -256,7 +257,7 @@ describe('CrmActivityComposer — picking a message template', () => {
     });
 
     it('fills subject, notes and purpose when scheduling', async () => {
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="schedule"
                 target={{ lead_id: 'lead-9' }}
@@ -288,7 +289,7 @@ describe('CrmActivityComposer — picking a message template', () => {
      */
     it('falls back to the template name when it has no subject of its own', async () => {
         api.getCrmMessageTemplates.mockResolvedValue([{ ...REMINDER, subject: null }]);
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="schedule"
                 target={{ lead_id: 'lead-9' }}
@@ -306,7 +307,7 @@ describe('CrmActivityComposer — picking a message template', () => {
 
     /** The log dialog asks only for what the channel it is on offers. */
     it('asks the server for the channel the log form is on', async () => {
-        render(
+        renderWithQueryClient(
             <CrmActivityComposer
                 mode="log"
                 target={{ lead_id: 'lead-9' }}

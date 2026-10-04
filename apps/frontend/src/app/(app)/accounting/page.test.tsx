@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import AccountingPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -20,7 +21,7 @@ jest.mock('next/link', () => {
 
 describe('AccountingPage — Story 30.1', () => {
     it('renders the accounting landing page with core navigation cards', () => {
-        render(<AccountingPage />);
+        renderWithQueryClient(<AccountingPage />);
 
         expect(screen.getByText('Accounting Setup')).toBeInTheDocument();
         expect(screen.getByText('Chart of Accounts')).toBeInTheDocument();

@@ -1,4 +1,5 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { waitFor } from '@testing-library/react';
+import { renderHookWithQueryClient } from '@/test-utils/query-client';
 import { useTeamMemberOptions } from './use-team-member-options';
 
 jest.mock('@/lib/api', () => ({
@@ -19,7 +20,7 @@ describe('useTeamMemberOptions', () => {
     });
 
     it('relabels the signed-in user as Me and pins them first', async () => {
-        const { result } = renderHook(() => useTeamMemberOptions('Me'));
+        const { result } = renderHookWithQueryClient(() => useTeamMemberOptions('Me'));
 
         await waitFor(() => expect(result.current.options).toHaveLength(2));
         expect(result.current.options[0]).toEqual({ id: 'user-1', label: 'Me' });
@@ -34,7 +35,7 @@ describe('useTeamMemberOptions', () => {
         ]);
         api.getMe.mockResolvedValue({ id: 'nobody' });
 
-        const { result } = renderHook(() => useTeamMemberOptions('Me'));
+        const { result } = renderHookWithQueryClient(() => useTeamMemberOptions('Me'));
 
         await waitFor(() => expect(result.current.options).toHaveLength(2));
         expect(result.current.options.map((o) => o.id)).toEqual(['user-2', 'user-3']);
@@ -44,7 +45,7 @@ describe('useTeamMemberOptions', () => {
     it('drops rows carrying no user id at all', async () => {
         api.getCrmAssignees.mockResolvedValue([{ name: 'Ghost' }, { userId: 'user-2', name: 'Rifat' }]);
 
-        const { result } = renderHook(() => useTeamMemberOptions('Me'));
+        const { result } = renderHookWithQueryClient(() => useTeamMemberOptions('Me'));
 
         await waitFor(() => expect(result.current.options).toHaveLength(1));
         expect(result.current.options[0].id).toBe('user-2');
@@ -54,7 +55,7 @@ describe('useTeamMemberOptions', () => {
         api.getCrmAssignees.mockRejectedValue(new Error('nope'));
         api.getMe.mockRejectedValue(new Error('nope'));
 
-        const { result } = renderHook(() => useTeamMemberOptions('Me'));
+        const { result } = renderHookWithQueryClient(() => useTeamMemberOptions('Me'));
 
         await waitFor(() => expect(result.current.currentUserId).toBeNull());
         expect(result.current.options).toEqual([]);
