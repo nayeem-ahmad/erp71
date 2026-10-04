@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import SalesDashboard from './SalesDashboard';
 import { api } from '@/lib/api';
 
@@ -65,7 +66,7 @@ describe('SalesDashboard', () => {
     });
 
     it('raises what is owed, late and undelivered for attention', async () => {
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('৳ 45,000.00 owed by 9 customers')).toBeInTheDocument();
         expect(screen.getByText('2 orders past their delivery date')).toBeInTheDocument();
@@ -85,13 +86,13 @@ describe('SalesDashboard', () => {
             },
         }));
 
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('Nothing is waiting on you 🎉')).toBeInTheDocument();
     });
 
     it('shows returns beside net sales rather than hiding them inside it', async () => {
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('Net sales')).toBeInTheDocument();
         expect(screen.getByText('4 returns · ৳ 12,000.00')).toBeInTheDocument();
@@ -102,7 +103,7 @@ describe('SalesDashboard', () => {
             margin: { gross_profit: 40_000, margin_pct: 20, costed_items: 60, uncosted_items: 14, units: 310 },
         }));
 
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('14 lines have no cost recorded')).toBeInTheDocument();
     });
@@ -112,7 +113,7 @@ describe('SalesDashboard', () => {
             margin: { gross_profit: null, margin_pct: null, costed_items: 0, uncosted_items: 40, units: 310 },
         }));
 
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('No cost recorded on any line')).toBeInTheDocument();
     });
@@ -122,14 +123,14 @@ describe('SalesDashboard', () => {
             sales: { gross: 0, returns: 0, net: 0, count: 0, returns_count: 0, avg_ticket: null },
         }));
 
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('Average ticket')).toBeInTheDocument();
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     });
 
     it('flags the unpaid balance on a recent sale', async () => {
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('৳ 1,200.00 due')).toBeInTheDocument();
     });
@@ -146,13 +147,13 @@ describe('SalesDashboard', () => {
             }],
         }));
 
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('Walk-in')).toBeInTheDocument();
     });
 
     it('drops the greeting when embedded under the sales hub header', async () => {
-        const { rerender } = render(<SalesDashboard {...identity} />);
+        const { rerender } = renderWithQueryClient(<SalesDashboard {...identity} />);
         expect(await screen.findByText('Good morning 👋')).toBeInTheDocument();
 
         rerender(<SalesDashboard {...identity} variant="embedded" />);
@@ -163,7 +164,7 @@ describe('SalesDashboard', () => {
     it('surfaces an error when the overview itself fails', async () => {
         (api.getSalesDashboardOverview as jest.Mock).mockRejectedValue(new Error('Sales are down'));
 
-        render(<SalesDashboard {...identity} />);
+        renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('Sales are down')).toBeInTheDocument();
     });

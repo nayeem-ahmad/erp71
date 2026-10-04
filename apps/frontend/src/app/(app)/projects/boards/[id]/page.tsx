@@ -111,6 +111,7 @@ import RunningClock from '@/components/projects/RunningClock';
 import { useProjectTimerActions } from '@/components/projects/use-project-timer';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { api, ApiError, type BulkTaskChanges } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -474,7 +475,7 @@ export default function BoardPage() {
     // so this is read once rather than per card. A failure only means a
     // composed card opens unassigned, which the picker can still correct.
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me: unknown) => setUserId((me as { id?: string } | null)?.id ?? null))
             .catch(() => setUserId(null));
     }, []);

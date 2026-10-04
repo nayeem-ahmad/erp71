@@ -79,10 +79,12 @@ export default function SalesDashboard({
         previous: prev,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'sales',
         fetchOverview: (window) => api.getSalesDashboardOverview(window),
         fetchTrends: (window) => api.getSalesDashboardTrends(window),
         unavailableMessage: sls.overviewUnavailable,
@@ -240,6 +242,7 @@ export default function SalesDashboard({
             range={range}
             onRangeChange={setRange}
             error={error}
+            refreshing={refreshing}
         >
             <AttentionSection
                 items={attentionItems}

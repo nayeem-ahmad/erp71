@@ -66,6 +66,7 @@ import {
     type StatusColumn,
 } from '@/components/projects/sprint-cards';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -242,7 +243,7 @@ export default function SprintDetailPage() {
         api.getProjects({ limit: 100 })
             .then((res) => setProjects((res?.items ?? []) as ComposerProject[]))
             .catch(() => setProjects([]));
-        api.getMe()
+        fetchMe()
             .then((me: unknown) => setUserId((me as { id?: string } | null)?.id ?? null))
             .catch(() => setUserId(null));
     }, []);

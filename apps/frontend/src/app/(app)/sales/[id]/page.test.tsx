@@ -17,7 +17,8 @@ jest.mock('@/lib/i18n', () => {
 const { enMessages } = require('@/lib/localization/messages/en');
 
 import React from 'react';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import SaleDetailPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -132,7 +133,7 @@ const expectedDatetimeLocal = (iso: string) => {
 
 const renderPage = async () => {
     await act(async () => {
-        render(<SaleDetailPage />);
+        renderWithQueryClient(<SaleDetailPage />);
     });
 };
 
@@ -237,7 +238,7 @@ describe('SaleDetailPage — view mode', () => {
 
     it('shows loading state initially', () => {
         getApi().getSale.mockReturnValue(new Promise(() => {}));
-        render(<SaleDetailPage />);
+        renderWithQueryClient(<SaleDetailPage />);
         expect(screen.getByText(enMessages.shared.loading.sale)).toBeInTheDocument();
     });
 

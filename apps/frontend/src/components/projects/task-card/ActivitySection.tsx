@@ -12,6 +12,7 @@ import {
 } from '@/components/projects/task-activity';
 import { formatDateTime } from '@/lib/format';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { Markdown } from './lazy-markdown';
@@ -92,7 +93,7 @@ export default function ActivitySection({
             const [comments, activity, user] = await Promise.all([
                 api.getTaskComments(taskId),
                 api.getTaskActivity(taskId),
-                api.getMe(),
+                fetchMe(),
             ]);
             setMe((user as { id?: string } | null)?.id ?? null);
             setFeed(

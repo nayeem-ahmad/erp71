@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import PurchaseDashboard from './PurchaseDashboard';
 import { api } from '@/lib/api';
 
@@ -57,7 +58,7 @@ describe('PurchaseDashboard', () => {
     });
 
     it('raises what is owed, late and expiring for attention', async () => {
-        render(<PurchaseDashboard {...identity} />);
+        renderWithQueryClient(<PurchaseDashboard {...identity} />);
 
         expect(await screen.findByText('1 orders past their expected date')).toBeInTheDocument();
         expect(screen.getByText('4 orders awaiting receipt')).toBeInTheDocument();
@@ -72,13 +73,13 @@ describe('PurchaseDashboard', () => {
             quotations: { open: 0, expiring: 0, expired: 0 },
         }));
 
-        render(<PurchaseDashboard {...identity} />);
+        renderWithQueryClient(<PurchaseDashboard {...identity} />);
 
         expect(await screen.findByText('Nothing is waiting on you 🎉')).toBeInTheDocument();
     });
 
     it('shows returns beside spend rather than netted into it', async () => {
-        render(<PurchaseDashboard {...identity} />);
+        renderWithQueryClient(<PurchaseDashboard {...identity} />);
 
         expect(await screen.findByText('Purchase value')).toBeInTheDocument();
         expect(screen.getByText('2 returns · ৳ 6,000.00')).toBeInTheDocument();
@@ -89,14 +90,14 @@ describe('PurchaseDashboard', () => {
             spend: { total: 0, purchases: 0, avg_value: null, returns_value: 0, returns_count: 0 },
         }));
 
-        render(<PurchaseDashboard {...identity} />);
+        renderWithQueryClient(<PurchaseDashboard {...identity} />);
 
         expect(await screen.findByText('Average bill')).toBeInTheDocument();
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     });
 
     it('ranks suppliers by spend and shows what is still owed each', async () => {
-        render(<PurchaseDashboard {...identity} />);
+        renderWithQueryClient(<PurchaseDashboard {...identity} />);
 
         // Named twice — once in the ranking, once in the recent list below it.
         expect(await screen.findAllByText('Alpha Traders')).toHaveLength(2);
@@ -115,13 +116,13 @@ describe('PurchaseDashboard', () => {
             }],
         }));
 
-        render(<PurchaseDashboard {...identity} />);
+        renderWithQueryClient(<PurchaseDashboard {...identity} />);
 
         expect(await screen.findByText('No supplier')).toBeInTheDocument();
     });
 
     it('drops the greeting when embedded under the purchases hub header', async () => {
-        const { rerender } = render(<PurchaseDashboard {...identity} />);
+        const { rerender } = renderWithQueryClient(<PurchaseDashboard {...identity} />);
         expect(await screen.findByText('Good morning 👋')).toBeInTheDocument();
 
         rerender(<PurchaseDashboard {...identity} variant="embedded" />);
@@ -132,7 +133,7 @@ describe('PurchaseDashboard', () => {
     it('surfaces an error when the overview itself fails', async () => {
         (api.getPurchaseDashboardOverview as jest.Mock).mockRejectedValue(new Error('Purchases are down'));
 
-        render(<PurchaseDashboard {...identity} />);
+        renderWithQueryClient(<PurchaseDashboard {...identity} />);
 
         expect(await screen.findByText('Purchases are down')).toBeInTheDocument();
     });

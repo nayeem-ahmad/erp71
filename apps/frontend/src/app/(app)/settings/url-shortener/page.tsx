@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { Button, PageShell } from '@/components/ui';
 import ShortLinkManager from '@/components/short-links/ShortLinkManager';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { extractTenantPlan } from '@/lib/nav-visibility';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -24,13 +25,13 @@ export default function SettingsUrlShortenerPage() {
     // The backend gates list/create/revoke on the `urlShortener` plan entitlement
     // and on MANAGE_SHORT_LINKS for every request (not just writes), and
     // ShortLinkManager fetches the moment it mounts. So access has to be resolved
-    // here, before it ever mounts, the same way /crm/setup pre-checks with getMe()
+    // here, before it ever mounts, the same way /crm/setup pre-checks with fetchMe()
     // rather than relying on a caught 403.
     //
     // The plan is checked before the permission: below Business, granting the
     // permission would open nothing, so "ask for access" would be the wrong advice.
     //
-    // 'error' is deliberately distinct from 'notOnPlan' and 'denied': getMe()
+    // 'error' is deliberately distinct from 'notOnPlan' and 'denied': fetchMe()
     // failing (network blip, backend hiccup) tells us nothing about this user's
     // plan or permissions. Collapsing it into either would tell a Business shop
     // owner on a flaky connection they can't use a tool they can, with no way out
@@ -39,7 +40,7 @@ export default function SettingsUrlShortenerPage() {
 
     const checkAccess = useCallback(() => {
         setAccess('checking');
-        api.getMe()
+        fetchMe()
             .then((me: any) => {
                 const { planCode, features, role, permissions } = extractTenantPlan(
                     me,

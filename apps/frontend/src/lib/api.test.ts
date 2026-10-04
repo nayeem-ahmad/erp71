@@ -83,7 +83,8 @@ jest.mock('./session-expiry', () => ({
 }));
 
 /** The API module under test (imported after mocks are wired). */
-import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, resetWorkspaceRecoveryForTests, resetSessionRenewalForTests } from './api';
+import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, invalidatesMe, resetWorkspaceRecoveryForTests, resetSessionRenewalForTests } from './api';
+import { getQueryClient, ME_QUERY_KEY } from './query-client';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import { resetWorkspaceBootstrapForTests } from './session-store';
 
@@ -3014,6 +3015,50 @@ describe('api.getStores', () => {
 
         const stores = await api.getStores();
         expect(stores).toEqual([]);
+    });
+
+    it('reads the cached /auth/me instead of asking for it again', async () => {
+        localStorageMock._setAll({ access_token: 'tok', tenant_id: 'tenant-abc' });
+        getQueryClient().setQueryData(ME_QUERY_KEY, {
+            tenants: [{ id: 'tenant-abc', stores: [{ id: 's1', name: 'Cached' }] }],
+        });
+        mockFetch.mockClear();
+
+        await expect(api.getStores()).resolves.toEqual([{ id: 's1', name: 'Cached' }]);
+        await expect(api.getCurrentUser()).resolves.toEqual(expect.objectContaining({ tenants: expect.any(Array) }));
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+});
+
+describe('invalidatesMe', () => {
+    it('matches writes to the endpoints that feed /auth/me, and nothing else', () => {
+        expect(invalidatesMe('/auth/me', 'PATCH')).toBe(true);
+        expect(invalidatesMe('/auth/2fa/enable', 'POST')).toBe(true);
+        expect(invalidatesMe('/team/members/u1/stores/s1/permissions', 'PUT')).toBe(true);
+        expect(invalidatesMe('/tenants/dashboard-settings', 'PATCH')).toBe(true);
+        expect(invalidatesMe('/stores', 'POST')).toBe(true);
+        expect(invalidatesMe('/invitations/accept', 'POST')).toBe(true);
+        expect(invalidatesMe('/billing/confirm?session=1', 'POST')).toBe(true);
+
+        // Reads never invalidate, and neither do look-alike paths.
+        expect(invalidatesMe('/auth/me', undefined)).toBe(false);
+        // A password change kills this session: re-reading `me` on a dead token
+        // would only race the caller's own trip to the login page.
+        expect(invalidatesMe('/auth/change-password', 'POST')).toBe(false);
+        expect(invalidatesMe('/auth/me', 'GET')).toBe(false);
+        expect(invalidatesMe('/storefront-pages', 'POST')).toBe(false);
+        expect(invalidatesMe('/sales', 'POST')).toBe(false);
+    });
+
+    it('marks the cached me out of date after a successful profile edit', async () => {
+        localStorageMock._setAll({ access_token: 'tok' });
+        const client = getQueryClient();
+        client.setQueryData(ME_QUERY_KEY, { id: 'u1', name: 'Before' });
+        mockOk({ data: { id: 'u1', name: 'After' } });
+
+        await api.updateProfile({ name: 'After' });
+
+        expect(client.getQueryState(ME_QUERY_KEY)?.isInvalidated).toBe(true);
     });
 });
 

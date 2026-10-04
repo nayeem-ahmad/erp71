@@ -75,10 +75,12 @@ export default function InventoryDashboard({
         previous: prev,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'inventory',
         fetchOverview: (window) => api.getInventoryDashboardOverview(window),
         fetchTrends: (window) => api.getInventoryDashboardTrends(window),
         unavailableMessage: inv.overviewUnavailable,
@@ -257,6 +259,7 @@ export default function InventoryDashboard({
             range={range}
             onRangeChange={setRange}
             error={error}
+            refreshing={refreshing}
         >
             <AttentionSection
                 items={attentionItems}

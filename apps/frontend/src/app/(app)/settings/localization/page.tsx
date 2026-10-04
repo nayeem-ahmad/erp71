@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Clock, Globe, Loader2 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { localeRegistry, type SupportedLocaleCode } from '@/lib/localization/config';
 import { useTenantLocales } from '@/contexts/TenantLocaleContext';
 import { useI18n } from '@/lib/i18n';
@@ -34,7 +35,7 @@ export default function LocalizationSettingsPage() {
     useEffect(() => {
         let active = true;
 
-        Promise.all([api.getMe(), api.getTenantLocalizationSettings()])
+        Promise.all([fetchMe(), api.getTenantLocalizationSettings()])
             .then(([me, tenantSettings]) => {
                 if (!active) return;
                 setLocalizationEnabled(Boolean(tenantSettings?.localization_enabled));

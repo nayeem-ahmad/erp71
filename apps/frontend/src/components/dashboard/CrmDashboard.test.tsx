@@ -1,5 +1,6 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import CrmDashboard from './CrmDashboard';
 import { api } from '@/lib/api';
 
@@ -90,7 +91,7 @@ describe('CrmDashboard', () => {
     });
 
     it('renders the pipeline KPIs once the overview lands', async () => {
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('75%')).toBeInTheDocument();
         expect(screen.getByText('New leads')).toBeInTheDocument();
@@ -111,7 +112,7 @@ describe('CrmDashboard', () => {
             },
         }));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         const negotiation = await screen.findByRole('link', { name: /Negotiation/ });
         expect(negotiation).toHaveAttribute('href', '/crm/leads?statusId=st-neg');
@@ -128,7 +129,7 @@ describe('CrmDashboard', () => {
     });
 
     it('raises overdue follow-ups, stale and unowned leads for attention', async () => {
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('4 follow-ups overdue')).toBeInTheDocument();
         expect(screen.getByText('2 follow-ups due today')).toBeInTheDocument();
@@ -143,7 +144,7 @@ describe('CrmDashboard', () => {
      * of these links is covered in crm/leads/page.test.tsx.
      */
     it('links each attention tile at exactly the leads it counted', async () => {
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         const unowned = await screen.findByText('3 leads with no owner');
         expect(unowned.closest('a')).toHaveAttribute(
@@ -162,7 +163,7 @@ describe('CrmDashboard', () => {
             pipeline: { ...overview().pipeline, stale_after_days: 30 },
         }));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         const stale = await screen.findByText('5 leads untouched for 30 days');
         expect(stale.closest('a')).toHaveAttribute('href', '/crm/leads?status=open&staleDays=30');
@@ -174,7 +175,7 @@ describe('CrmDashboard', () => {
             follow_ups: { due_today: 0, overdue: 0, total_pending: 0, completed_in_period: 0 },
         }));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('Your pipeline is under control 🎉')).toBeInTheDocument();
     });
@@ -184,7 +185,7 @@ describe('CrmDashboard', () => {
             campaigns: { ...overview().campaigns, failed: 12 },
         }));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('12 campaign messages failed')).toBeInTheDocument();
     });
@@ -199,7 +200,7 @@ describe('CrmDashboard', () => {
             },
         }));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('0 won · 0 lost')).toBeInTheDocument();
         // The rate tile itself reads "—"; the delta rows do too, since there is
@@ -213,7 +214,7 @@ describe('CrmDashboard', () => {
             .mockRejectedValueOnce(new Error('nope'));
         (api.getCrmDashboardTrends as jest.Mock).mockRejectedValue(new Error('nope'));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('75%')).toBeInTheDocument();
         expect(screen.queryByText('CRM figures are unavailable right now.')).not.toBeInTheDocument();
@@ -222,13 +223,13 @@ describe('CrmDashboard', () => {
     it('surfaces an error when the overview itself fails', async () => {
         (api.getCrmDashboardOverview as jest.Mock).mockRejectedValue(new Error('CRM is down'));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('CRM is down')).toBeInTheDocument();
     });
 
     it('draws the activity calendar on its own window, not the range switcher\'s', async () => {
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('Activity calendar')).toBeInTheDocument();
         // One square per day now, split into a completed half and a planned one.
@@ -246,7 +247,7 @@ describe('CrmDashboard', () => {
     it('keeps painting when the activity calendar fails', async () => {
         (api.getCrmDashboardActivityHeatmap as jest.Mock).mockRejectedValue(new Error('nope'));
 
-        render(<CrmDashboard {...identity} />);
+        renderWithQueryClient(<CrmDashboard {...identity} />);
 
         expect(await screen.findByText('75%')).toBeInTheDocument();
         expect(await screen.findByText('Nothing logged or planned in this window')).toBeInTheDocument();
@@ -254,7 +255,7 @@ describe('CrmDashboard', () => {
     });
 
     it('drops the greeting when embedded under the CRM hub header', async () => {
-        const { rerender } = render(<CrmDashboard {...identity} />);
+        const { rerender } = renderWithQueryClient(<CrmDashboard {...identity} />);
         expect(await screen.findByText('Good morning 👋')).toBeInTheDocument();
 
         rerender(<CrmDashboard {...identity} variant="embedded" />);
@@ -275,7 +276,7 @@ describe('CrmDashboard', () => {
         const toggle = () => screen.getByRole('button', { name: 'Only mine' });
 
         it('counts the whole team until somebody asks for their own numbers', async () => {
-            render(<CrmDashboard {...identity} />);
+            renderWithQueryClient(<CrmDashboard {...identity} />);
             await screen.findByText('75%');
 
             expect(toggle()).toHaveAttribute('aria-pressed', 'false');
@@ -285,7 +286,7 @@ describe('CrmDashboard', () => {
         });
 
         it('re-asks every panel for the caller own numbers', async () => {
-            render(<CrmDashboard {...identity} />);
+            renderWithQueryClient(<CrmDashboard {...identity} />);
             await screen.findByText('75%');
 
             fireEvent.click(toggle());
@@ -304,14 +305,14 @@ describe('CrmDashboard', () => {
         });
 
         it('offers the switch when embedded under the CRM hub too', async () => {
-            render(<CrmDashboard {...identity} variant="embedded" />);
+            renderWithQueryClient(<CrmDashboard {...identity} variant="embedded" />);
             await screen.findByText('75%');
 
             expect(toggle()).toBeInTheDocument();
         });
 
         it('remembers the choice for the next visit, and asks scoped from the first request', async () => {
-            const first = render(<CrmDashboard {...identity} />);
+            const first = renderWithQueryClient(<CrmDashboard {...identity} />);
             await screen.findByText('75%');
             fireEvent.click(toggle());
             await waitFor(() =>
@@ -323,7 +324,7 @@ describe('CrmDashboard', () => {
             (api.getCrmDashboardTrends as jest.Mock).mockResolvedValue({ points: [] });
             (api.getCrmDashboardActivityHeatmap as jest.Mock).mockResolvedValue(heatmap());
 
-            render(<CrmDashboard {...identity} />);
+            renderWithQueryClient(<CrmDashboard {...identity} />);
             await screen.findByText('75%');
 
             expect(toggle()).toHaveAttribute('aria-pressed', 'true');

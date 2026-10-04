@@ -103,10 +103,12 @@ export default function AccountingDashboard({
         previous: previousOverview,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'accounting',
         fetchOverview: (win) => api.getAccountingDashboardOverview(win),
         fetchTrends: (win) => api.getFinancialTrends(win) as Promise<TrendResponse>,
         unavailableMessage: acc.overviewUnavailable,
@@ -308,6 +310,7 @@ export default function AccountingDashboard({
             range={range}
             onRangeChange={setRange}
             error={error}
+            refreshing={refreshing}
         >
             {/* Embedded, the module hub's own link grid sits right below this —
                 a second one would be the same links twice. */}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { getWorkspaceItem } from '@/lib/session-store';
 
 /** Which composer a template is offered in. */
@@ -116,7 +117,7 @@ export function useTemplateIdentity() {
 
     useEffect(() => {
         let cancelled = false;
-        api.getMe()
+        fetchMe()
             .then((me: { name?: string | null; tenants?: { id: string; name?: string | null }[] }) => {
                 if (cancelled) return;
                 // Same tenant resolution CRM Setup uses: the workspace this tab

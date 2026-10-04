@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import HrDashboard from './HrDashboard';
 import { api } from '@/lib/api';
 
@@ -68,7 +69,7 @@ describe('HrDashboard', () => {
     });
 
     it('raises who is absent, who is waiting on leave approval and who has no attendance marked', async () => {
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         expect(await screen.findByText('2 absent today')).toBeInTheDocument();
         expect(screen.getByText('3 leave requests awaiting approval')).toBeInTheDocument();
@@ -83,13 +84,13 @@ describe('HrDashboard', () => {
             leave: { pending: 0, approved_days: 0, on_leave_today: 0 },
         }));
 
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         expect(await screen.findByText('Your team is all accounted for 🎉')).toBeInTheDocument();
     });
 
     it('shows headcount without a period comparison, because it is not churn', async () => {
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         expect(await screen.findByText('Active staff')).toBeInTheDocument();
         expect(screen.getByText('24')).toBeInTheDocument();
@@ -104,7 +105,7 @@ describe('HrDashboard', () => {
             can_view_payroll: false,
         }));
 
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         expect(await screen.findByText('You do not have access to payroll figures')).toBeInTheDocument();
         expect(screen.queryByText('Recent salary payments')).not.toBeInTheDocument();
@@ -123,7 +124,7 @@ describe('HrDashboard', () => {
             },
         }));
 
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         // The tile says what the commitment leaves out; the strip says who to fix.
         expect(await screen.findByText('৳ 500,000.00 monthly, excluding 4 with no salary set')).toBeInTheDocument();
@@ -135,20 +136,20 @@ describe('HrDashboard', () => {
             attendance: { counts: {}, records: 0, rate_pct: null, absent_today: 0, unrecorded_today: 0 },
         }));
 
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         expect(await screen.findByText('Attendance rate')).toBeInTheDocument();
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     });
 
     it('names employees with no department rather than dropping them', async () => {
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         expect(await screen.findByText('Unassigned')).toBeInTheDocument();
     });
 
     it('drops the greeting when embedded under the HR hub header', async () => {
-        const { rerender } = render(<HrDashboard {...identity} />);
+        const { rerender } = renderWithQueryClient(<HrDashboard {...identity} />);
         expect(await screen.findByText('Good morning 👋')).toBeInTheDocument();
 
         rerender(<HrDashboard {...identity} variant="embedded" />);
@@ -159,7 +160,7 @@ describe('HrDashboard', () => {
     it('surfaces an error when the overview itself fails', async () => {
         (api.getHrDashboardOverview as jest.Mock).mockRejectedValue(new Error('HR is down'));
 
-        render(<HrDashboard {...identity} />);
+        renderWithQueryClient(<HrDashboard {...identity} />);
 
         expect(await screen.findByText('HR is down')).toBeInTheDocument();
     });

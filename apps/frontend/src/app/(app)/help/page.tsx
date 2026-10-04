@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { HelpCircle, ChevronDown, ChevronRight, Activity, BookOpen, MessageCircle } from 'lucide-react';
-import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { routes } from '@/lib/routes';
@@ -16,7 +16,7 @@ export default function HelpPage() {
     const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
     useEffect(() => {
-        void api.getMe()
+        void fetchMe()
             .then((me) => setIsPlatformAdmin(Boolean(me?.is_platform_admin)))
             .catch(() => setIsPlatformAdmin(false));
     }, []);
