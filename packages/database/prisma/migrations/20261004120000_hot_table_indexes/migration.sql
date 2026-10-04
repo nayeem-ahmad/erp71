@@ -8,6 +8,15 @@
 -- without CONCURRENTLY and so blocks writes to the table while it runs. Every
 -- table here is under 65k rows, so each build takes well under a second.
 
+-- posting_events.voucher_id: the ON DELETE SET NULL action Postgres runs once
+-- for every deleted voucher, as `UPDATE posting_events SET voucher_id = NULL
+-- WHERE voucher_id = $1` — voidAutoPostedVoucher on a sale cancel or delete, a
+-- purchase cancel or a payment edit, a manual voucher delete, and one per
+-- voucher when Settings > Clear data wipes a tenant's journals. Every other
+-- read of the table is served by the unique key or the two composites.
+-- CreateIndex
+CREATE INDEX "posting_events_voucher_id_idx" ON "posting_events"("voucher_id");
+
 -- PaymentRecord.sale_id: every `include: { payments }` on a sale (the sales
 -- list, the sale screen, the invoice print, the cashier-session close, the
 -- daily report), the deleteMany a sale edit runs, and the cascade behind a sale

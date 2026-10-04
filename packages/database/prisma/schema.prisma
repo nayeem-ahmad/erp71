@@ -3855,6 +3855,13 @@ model PostingEvent {
   @@unique([tenant_id, idempotency_key])
   @@index([tenant_id, status, updated_at])
   @@index([tenant_id, source_module, source_type, source_id])
+  // Backs the ON DELETE SET NULL on voucher_id. Deleting a voucher makes
+  // Postgres run `UPDATE posting_events SET voucher_id = NULL WHERE voucher_id
+  // = $1`, and without an index that is a full scan of the table, once per
+  // voucher: voidAutoPostedVoucher on every sale cancel/delete, purchase
+  // cancel and payment edit, a manual voucher delete, and one per voucher when
+  // Settings › Clear data wipes a tenant's journals.
+  @@index([voucher_id])
   @@map("posting_events")
 }
 
