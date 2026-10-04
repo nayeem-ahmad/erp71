@@ -478,11 +478,12 @@ export class ListTasksDto {
  * The Tasks page's "delete selected" action.
  *
  * One request for the whole selection rather than a `DELETE /project-tasks/:id`
- * per row: the platform's default throttle is 20 requests a minute per address
- * (`THROTTLE_LIMIT`, see app.module.ts) and is not raised in production, so a
- * selection of any real size used to spend the caller's whole budget and come
- * back as `429 Too Many Requests` on everything past the twentieth — a partial
- * delete reported as a failure.
+ * per row: the platform's default throttle was 20 requests a minute per
+ * address, not raised in production, so a selection of any real size used to
+ * spend the caller's whole budget and come back as `429 Too Many Requests` on
+ * everything past the twentieth — a partial delete reported as a failure. It is
+ * now 120 a minute per signed-in user (`THROTTLE_LIMIT`, see
+ * `common/default-throttle.util.ts`), still well under a large selection.
  *
  * Capped at the same 200 as a task page's `limit`: a selection cannot hold more
  * rows than one page of the list it was made on.

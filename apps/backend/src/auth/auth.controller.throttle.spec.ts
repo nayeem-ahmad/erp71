@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { ThrottlerModule } from '@nestjs/throttler';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -12,19 +13,21 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { TotpService } from './totp.service';
 import { accountThrottler } from '../common/account-throttle.util';
 import { ApiThrottlerGuard } from '../common/api-throttler.guard';
+import { defaultThrottler, ipThrottler } from '../common/default-throttle.util';
 import { applyProxyTrust } from '../common/trust-proxy.util';
 
 /**
- * The real `AuthController`'s budgets, behind production's default: 20 a minute
- * per address, which is what `app.module.ts` falls back to and what production
- * runs on because `THROTTLE_LIMIT` is not set there.
+ * The real `AuthController`'s budgets, behind production's throttlers exactly as
+ * `app.module.ts` builds them with no `THROTTLE_*` set, which is how production
+ * runs: per signed-in user (per address without a token), the per-address
+ * ceiling, and the account dimension.
  */
 describe('AuthController rate limits', () => {
     let app: INestApplication;
 
     beforeEach(async () => {
         const moduleRef = await Test.createTestingModule({
-            imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }, accountThrottler])],
+            imports: [ThrottlerModule.forRoot([defaultThrottler({}), accountThrottler, ipThrottler({})])],
             controllers: [AuthController],
             providers: [
                 { provide: APP_GUARD, useClass: ApiThrottlerGuard },
@@ -74,5 +77,33 @@ describe('AuthController rate limits', () => {
             if (res.status === 429) refusedAt = i;
         }
         expect(refusedAt).not.toBeNull();
+    });
+
+    // Signed the way `AuthModule` signs, so the throttler keys these on the user.
+    const issuer = new JwtService({ secret: process.env.JWT_SECRET || 'fallback-secret-for-dev-only' });
+    const tokenFor = (userId: string) => issuer.sign({ sub: userId, tv: 0, scope: 'app' }, { expiresIn: 3600 });
+    const getMeAs = (ip: string, userId: string) => getMe(ip).set('Authorization', `Bearer ${tokenFor(userId)}`);
+
+    it('keeps its 300 a minute for a signed-in user, not the 120 platform default', async () => {
+        const caller = '203.0.113.42';
+        for (let i = 0; i < 300; i++) {
+            await getMeAs(caller, 'user-1').expect(200);
+        }
+        const refused = await getMeAs(caller, 'user-1');
+        expect(refused.status).toBe(429);
+        expect(Number(refused.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+    });
+
+    it('keeps its 300 a minute per address however many people are signed in there', async () => {
+        // The route's own budget holds per address as before, so the per-user key
+        // does not turn one host into many budgets.
+        const office = '203.0.113.43';
+        const people = ['user-a', 'user-b', 'user-c'];
+        for (let round = 0; round < 100; round++) {
+            for (const person of people) {
+                await getMeAs(office, person).expect(200);
+            }
+        }
+        await getMeAs(office, 'user-d').expect(429);
     });
 });
