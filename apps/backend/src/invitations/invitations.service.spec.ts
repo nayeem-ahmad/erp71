@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { Test } from '@nestjs/testing';
 import { InvitationsService } from './invitations.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { EmailService } from '../email/email.service';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
@@ -38,6 +39,7 @@ const planEntitlements = { assertUserQuota: jest.fn().mockResolvedValue(undefine
 
 describe('InvitationsService', () => {
     let service: InvitationsService;
+    let invalidateMember: jest.SpyInstance;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -46,6 +48,7 @@ describe('InvitationsService', () => {
             providers: [
                 InvitationsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 { provide: EmailService, useValue: emailService },
                 { provide: PlanEntitlementsService, useValue: planEntitlements },
                 // The real service over the same db mock, so an invitee's password is
@@ -54,6 +57,7 @@ describe('InvitationsService', () => {
             ],
         }).compile();
         service = mod.get(InvitationsService);
+        invalidateMember = jest.spyOn(mod.get(AuthCacheService), 'invalidateMember');
     });
 
     it('blocks CASHIER from inviting', async () => {
@@ -180,6 +184,39 @@ describe('InvitationsService', () => {
                 tenantRoleIds: ['role-manager'],
                 grantedBy: 'owner-1',
             }),
+        );
+        // The guards' cached role and grants for this member go once the
+        // transaction has committed, so the change holds on their next request.
+        expect(invalidateMember).toHaveBeenCalledWith('cashier-1', 't1');
+        expect(invalidateMember.mock.invocationCallOrder[0]).toBeGreaterThan(
+            (setMemberRoles as jest.Mock).mock.invocationCallOrder[0],
+        );
+    });
+
+    it('drops the cached answers of an existing account once it joins', async () => {
+        const rawToken = 'join-token';
+        const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        db.userInvitation.findUnique.mockResolvedValue({
+            id: 'inv1',
+            token_hash: hash,
+            email: 'joiner@example.com',
+            accepted_at: null,
+            expires_at: new Date(Date.now() + 86400_000),
+            tenant_id: 't1',
+            tenant_role_id: 'role-cashier',
+            invited_by: 'owner',
+            tenantRole: { name: 'Cashier', permissions: [] },
+            roles: [],
+        });
+        db.user.findUnique.mockResolvedValue({ id: 'u2', email: 'joiner@example.com' });
+        db.store.findFirst.mockResolvedValue(null);
+
+        await service.accept(rawToken, 'u2');
+
+        expect(db.tenantUser.create).toHaveBeenCalled();
+        expect(invalidateMember).toHaveBeenCalledWith('u2', 't1');
+        expect(invalidateMember.mock.invocationCallOrder[0]).toBeGreaterThan(
+            db.userInvitation.update.mock.invocationCallOrder[0],
         );
     });
 

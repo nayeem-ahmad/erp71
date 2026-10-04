@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StorefrontService } from './storefront.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from '../auth/totp.service';
@@ -34,6 +35,7 @@ const mockTenant = {
 
 describe('StorefrontService', () => {
     let service: StorefrontService;
+    let authCache: AuthCacheService;
     let db: any;
     let jwtService: any;
     let priceListsService: any;
@@ -159,6 +161,7 @@ describe('StorefrontService', () => {
             providers: [
                 StorefrontService,
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 { provide: JwtService, useValue: jwtService },
                 { provide: PriceListsService, useValue: priceListsService },
                 { provide: TotpService, useValue: totpService },
@@ -170,6 +173,7 @@ describe('StorefrontService', () => {
         }).compile();
 
         service = module.get<StorefrontService>(StorefrontService);
+        authCache = module.get(AuthCacheService);
     });
 
     // ── getStorefront ─────────────────────────────────────────────────────────
@@ -1147,6 +1151,19 @@ describe('StorefrontService', () => {
                 data: { storefront_token_version: { increment: 1 } },
             });
             expect(result).toEqual({ success: true });
+        });
+
+        // `JwtStrategy` checks `stv` against a cached row; the bump only ends
+        // the shopper's sessions once that row is dropped.
+        it('drops the cached user row after the bump', async () => {
+            const invalidate = jest.spyOn(authCache, 'invalidateUser');
+            db.user.update.mockResolvedValue({ id: 'user-1' });
+            db.customer.findMany.mockResolvedValue([]);
+
+            await service.customerLogout('user-1');
+
+            expect(invalidate).toHaveBeenCalledWith('user-1');
+            expect(invalidate.mock.invocationCallOrder[0]).toBeGreaterThan(db.user.update.mock.invocationCallOrder[0]);
         });
 
         it('scopes the audit row to each shop the customer belongs to', async () => {

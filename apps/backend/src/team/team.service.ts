@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService } from '../audit/audit.service';
 import { InvitationsService } from '../invitations/invitations.service';
 import {
@@ -27,6 +28,7 @@ export class TeamService {
         private db: DatabaseService,
         private audit: AuditService,
         private invitations: InvitationsService,
+        private authCache: AuthCacheService,
     ) {}
 
     /* ----------------------------- Authorization ----------------------------- */
@@ -441,6 +443,11 @@ export class TeamService {
                 });
             }
         });
+        // Its holders' cached memberships carry the role's name and record scope,
+        // and their cached grants were materialized from its permissions. Whole
+        // workspace rather than each holder: it is one call, and role edits are
+        // rare enough that the re-reads cost nothing.
+        this.authCache.invalidateTenant(ctx.tenantId);
 
         await this.audit.log('team.role_updated', 'TenantRole', this.auditCtx(ctx), roleId, {
             name: dto.name !== undefined ? name : undefined,
@@ -469,6 +476,10 @@ export class TeamService {
         }
 
         await this.db.tenantRole.delete({ where: { id: role.id } });
+        // Nobody holds it (checked above), so no cached answer should mention it;
+        // cleared anyway, because being wrong here would be a security bug and
+        // being thorough costs a few re-reads.
+        this.authCache.invalidateTenant(ctx.tenantId);
         await this.audit.log('team.role_deleted', 'TenantRole', this.auditCtx(ctx), roleId, { name: role.name });
         return { message: 'Role deleted.' };
     }
@@ -522,6 +533,8 @@ export class TeamService {
                 grantedBy: ctx.userId,
             });
         });
+        // After the commit — see `AuthCacheService` on why never inside it.
+        this.authCache.invalidateMember(userId, ctx.tenantId);
 
         await this.audit.log('team.role_updated', 'TenantUser', this.auditCtx(ctx), userId, {
             tenantRoleIds: roles.map((role) => role.id),
@@ -576,6 +589,7 @@ export class TeamService {
                 }
             }
         });
+        this.authCache.invalidateMember(userId, ctx.tenantId);
 
         await this.audit.log('team.store_access_granted', 'UserStoreAccess', this.auditCtx(ctx), userId, {
             storeId,
@@ -596,6 +610,8 @@ export class TeamService {
                 where: { tenant_id: ctx.tenantId, user_id: userId, store_id: storeId },
             }),
         ]);
+        // The branch must be refused on the member's very next request.
+        this.authCache.invalidateMember(userId, ctx.tenantId);
 
         await this.audit.log('team.store_access_revoked', 'UserStoreAccess', this.auditCtx(ctx), userId, { storeId });
         return { message: 'Branch access revoked.' };
@@ -632,6 +648,7 @@ export class TeamService {
                 });
             }
         });
+        this.authCache.invalidateMember(userId, ctx.tenantId);
 
         await this.audit.log('team.permissions_updated', 'UserStorePermission', this.auditCtx(ctx), userId, {
             storeId,
@@ -663,6 +680,9 @@ export class TeamService {
                 where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: userId } },
             }),
         ]);
+        // A removed member must be refused on their very next request, not
+        // after the cached membership expires.
+        this.authCache.invalidateMember(userId, ctx.tenantId);
 
         await this.audit.log('team.member_removed', 'TenantUser', this.auditCtx(ctx), userId, {});
         return { message: 'Member removed.' };

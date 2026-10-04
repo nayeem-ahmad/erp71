@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import {
     PlatformWorkspaceService,
@@ -10,6 +11,7 @@ import {
 
 describe('PlatformWorkspaceService', () => {
     let service: PlatformWorkspaceService;
+    let authCache: AuthCacheService;
 
     const db = {
         tenant: {
@@ -53,11 +55,13 @@ describe('PlatformWorkspaceService', () => {
             providers: [
                 PlatformWorkspaceService,
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 { provide: PlatformSettingsService, useValue: platformSettings },
             ],
         }).compile();
 
         service = module.get(PlatformWorkspaceService);
+        authCache = module.get(AuthCacheService);
     });
 
     describe('resolveForAdmin', () => {
@@ -183,6 +187,22 @@ describe('PlatformWorkspaceService', () => {
             );
         });
 
+        // New memberships: whatever the guards cached for this workspace
+        // predates them. Only when rows were actually written — this runs on
+        // every platform accounting request, and is a no-op on all but the first.
+        it('drops the workspace\'s cached answers only when it added someone', async () => {
+            const invalidate = jest.spyOn(authCache, 'invalidateTenant');
+            db.tenant.findFirst.mockResolvedValue(workspace);
+
+            await service.resolveForAdmin('admin-1');
+            expect(invalidate).toHaveBeenCalledWith('ws-1');
+
+            invalidate.mockClear();
+            db.tenantUser.createMany.mockResolvedValue({ count: 0 });
+            await service.resolveForAdmin('admin-1');
+            expect(invalidate).not.toHaveBeenCalled();
+        });
+
         it('writes nothing when the admin roster comes back empty', async () => {
             db.tenant.findFirst.mockResolvedValue(workspace);
             db.user.findMany.mockResolvedValue([]);
@@ -246,8 +266,12 @@ describe('PlatformWorkspaceService', () => {
         it('backfills a member joined before the store existed with the union of their roles', async () => {
             db.tenant.findFirst.mockResolvedValue(workspace);
             db.tenantUser.findMany.mockResolvedValue([projectUser]);
+            const invalidate = jest.spyOn(authCache, 'invalidateMember');
 
             await service.resolveForAdmin('admin-1');
+
+            // Their cached empty branch list must not outlive the grant.
+            expect(invalidate).toHaveBeenCalledWith('pu-1', 'ws-1');
 
             expect(db.userStoreAccess.createMany).toHaveBeenCalledWith({
                 data: [{ user_id: 'pu-1', store_id: 'store-1', tenant_id: 'ws-1', access_level: 'STORE_ONLY' }],

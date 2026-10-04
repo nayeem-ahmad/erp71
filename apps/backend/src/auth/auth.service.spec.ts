@@ -15,6 +15,7 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { ReferralsService } from '../referrals/referrals.service';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { CURRENT_TERMS_VERSION, StorePermission } from '@erp71/shared-types';
 
 /**
@@ -48,6 +49,7 @@ jest.mock('bcrypt', () => ({
 
 describe('AuthService', () => {
     let service: AuthService;
+    let authCache: AuthCacheService;
 
     const db = {
         user: {
@@ -234,10 +236,12 @@ describe('AuthService', () => {
                 { provide: RefreshTokenService, useValue: refreshTokens },
                 PasswordPolicyService,
                 PlanEntitlementsService,
+                AuthCacheService,
             ],
         }).compile();
 
         service = module.get(AuthService);
+        authCache = module.get(AuthCacheService);
         // Stub sendVerificationEmail to avoid it competing for db.user.findUnique mock calls
         jest.spyOn(service, 'sendVerificationEmail').mockResolvedValue(undefined);
         issuedTokens.length = 0;
@@ -1145,6 +1149,29 @@ describe('AuthService', () => {
             expect(updateCall.data.token_version).toEqual({ increment: 1 });
         });
 
+        // `JwtStrategy` checks the token versions against a cached row, so the
+        // bump only ends the old sessions once that row is dropped — and only
+        // after the write, or a request in between would cache the old row again.
+        it('drops the cached user row after the write, so old tokens fail on the next request', async () => {
+            const invalidate = jest.spyOn(authCache, 'invalidateUser');
+
+            await service.changePassword(userId, { currentPassword, newPassword });
+
+            expect(invalidate).toHaveBeenCalledWith(userId);
+            expect(invalidate.mock.invocationCallOrder[0]).toBeGreaterThan(
+                db.user.update.mock.invocationCallOrder[0],
+            );
+        });
+
+        it('leaves the cache alone when the change is refused', async () => {
+            const invalidate = jest.spyOn(authCache, 'invalidateUser');
+            (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+            await expect(service.changePassword(userId, { currentPassword: 'wrong', newPassword })).rejects.toThrow();
+
+            expect(invalidate).not.toHaveBeenCalled();
+        });
+
         it('rejects when current password is wrong', async () => {
             (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
@@ -1212,6 +1239,26 @@ describe('AuthService', () => {
         });
     });
 
+    // "Sign out everywhere": the token_version bump ends every access token, but
+    // only once `JwtStrategy` stops serving the cached row from before it.
+    describe('logout', () => {
+        it('drops the cached user row after bumping token_version', async () => {
+            db.user.update.mockResolvedValue({});
+            const invalidate = jest.spyOn(authCache, 'invalidateUser');
+
+            await service.logout('user-1');
+
+            expect(db.user.update).toHaveBeenCalledWith({
+                where: { id: 'user-1' },
+                data: { token_version: { increment: 1 } },
+            });
+            expect(invalidate).toHaveBeenCalledWith('user-1');
+            expect(invalidate.mock.invocationCallOrder[0]).toBeGreaterThan(
+                db.user.update.mock.invocationCallOrder[0],
+            );
+        });
+    });
+
     describe('logoutSession', () => {
         // Spies on the shared plain-function double, restored one by one:
         // `jest.restoreAllMocks()` would reach well beyond this block.
@@ -1265,7 +1312,7 @@ describe('AuthService.getSignupDefaults', () => {
     const service = new AuthService(
         {} as any, {} as any, {} as any, {} as any, {} as any,
         {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-        {} as any, {} as any, passwordPolicy() as any,
+        {} as any, {} as any, passwordPolicy() as any, new AuthCacheService({ ttlMs: 0 }),
     );
 
     beforeEach(() => jest.clearAllMocks());
@@ -1300,7 +1347,7 @@ describe('AuthService.signup', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, {} as any,
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-            {} as any, refreshTokens as any, passwordPolicy() as any,
+            {} as any, refreshTokens as any, passwordPolicy() as any, new AuthCacheService({ ttlMs: 0 }),
         );
         // Isolate signup(): stub provisioning and post-signup side effects.
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({
@@ -1460,7 +1507,7 @@ describe('AuthService.googleSignIn', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, totp as any,
             {} as any, platformSettings as any, {} as any, {} as any, google as any,
-            {} as any, refreshTokens as any, passwordPolicy() as any,
+            {} as any, refreshTokens as any, passwordPolicy() as any, new AuthCacheService({ ttlMs: 0 }),
         );
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({
             tenant: { id: 't1', name: 'Tenant One' },
@@ -1685,7 +1732,7 @@ describe('AuthService.mobileSignIn', () => {
         const svc = new AuthService(
             db as any, {} as any, email as any, audit as any, totp as any,
             {} as any, platformSettings as any, {} as any, {} as any, {} as any,
-            firebase as any, refreshTokens as any, passwordPolicy() as any,
+            firebase as any, refreshTokens as any, passwordPolicy() as any, new AuthCacheService({ ttlMs: 0 }),
         );
         jest.spyOn(svc as any, 'provisionTenant').mockResolvedValue({
             tenant: { id: 't1', name: 'Tenant One' },

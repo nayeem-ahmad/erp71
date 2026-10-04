@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import { BillingService } from '../billing/billing.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
@@ -103,6 +104,7 @@ export class AdminTenantsService {
         private readonly platformSettings: PlatformSettingsService,
         private readonly addonModules: AddonModulesService,
         private readonly passwordPolicy: PasswordPolicyService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     private resolveMobileFields(
@@ -734,6 +736,10 @@ export class AdminTenantsService {
                 });
             }
         });
+        // Every member's cached membership still says `deleted_at: null`;
+        // `TenantInterceptor` refuses a deleted workspace only once it sees the
+        // new value.
+        this.authCache.invalidateTenant(tenantId);
 
         await this.auditService.log('tenant.delete', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             reason: dto.reason ?? null,
@@ -1046,6 +1052,8 @@ export class AdminTenantsService {
             where: { id: userId },
             data: { is_platform_admin: true },
         });
+        // `request.user.isPlatformAdmin` comes from the row `JwtStrategy` caches.
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.promote', 'User', { userId: adminUserId }, userId, {
             target_email: user.email,
@@ -1079,6 +1087,9 @@ export class AdminTenantsService {
             where: { id: userId },
             data: { is_platform_admin: false },
         });
+        // Without this the demoted admin keeps `isPlatformAdmin` — and every
+        // admin route — until the cached row expires.
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.demote', 'User', { userId: adminUserId }, userId, {
             target_email: user.email,
@@ -1178,6 +1189,9 @@ export class AdminTenantsService {
                 created_at: true,
             },
         });
+        // The email may have changed, and `request.user.email` is read off the
+        // row `JwtStrategy` caches.
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.platform.update', 'User', { userId: adminUserId }, userId, {
             email: updated.email,
@@ -1223,6 +1237,9 @@ export class AdminTenantsService {
         }
 
         await this.db.user.delete({ where: { id: userId } });
+        // A deleted account's token must stop working now, not when the cached
+        // row expires.
+        this.authCache.invalidateUser(userId);
         await this.auditService.log('user.platform.delete', 'User', { userId: adminUserId }, userId, {
             email: user.email,
         });
@@ -1248,6 +1265,7 @@ export class AdminTenantsService {
             where: { id: userId },
             data: { passwordHash, token_version: { increment: 1 } },
         });
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.platform.reset_password', 'User', { userId: adminUserId }, userId, {
             email: user.email,

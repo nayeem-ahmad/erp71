@@ -44,6 +44,7 @@ import { PasswordPolicyService } from '../password-policy/password-policy.servic
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 
 /** The columns `login()` needs off a user row to finish authenticating them. */
@@ -99,6 +100,7 @@ export class AuthService {
         private readonly firebase: FirebaseTokenService,
         private readonly refreshTokens: RefreshTokenService,
         private readonly passwordPolicy: PasswordPolicyService,
+        private readonly authCache: AuthCacheService,
     ) { }
 
     async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
@@ -657,6 +659,9 @@ export class AuthService {
             where: { id: userId },
             data: { token_version: { increment: 1 } },
         });
+        // `JwtStrategy` checks `tv` against a cached row; without this the old
+        // token would keep passing until that entry expired.
+        this.authCache.invalidateUser(userId);
         // The access JWT dies with the `tv` bump above, but a refresh token is
         // checked against its own row — without this it would happily mint a
         // brand-new session seconds after the user signed out.
@@ -1108,6 +1113,9 @@ export class AuthService {
                 must_change_password: false,
             },
         });
+        // All three token versions and `must_change_password` live on the row
+        // `JwtStrategy` caches.
+        this.authCache.invalidateUser(userId);
         await this.refreshTokens.revokeAllForUser(userId);
         this.audit
             .logForUserTenants('PASSWORD_CHANGED', 'User', { userId, ...meta }, userId)
