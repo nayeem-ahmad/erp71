@@ -644,6 +644,49 @@ describe('AuthService.getMe — the response the app shell reads', () => {
         });
     });
 
+    /**
+     * What it costs. Before the slimming this was 21 statements: the same user
+     * read (11 — one per relation level, `include` or `select` alike), then the
+     * referee by id, the employee, and per paid workspace the subscription and
+     * plan read a second time plus the add-ons. Now the subscription is not
+     * re-read and the referee lookup is one query whichever way it resolves.
+     */
+    it('costs 17 statements for a member of two paid workspaces', async () => {
+        const { service, log } = harness({
+            users: [karim()],
+            referees: [refereeRow({})],
+            employees: [employeeRow],
+            addons: addonSubscriptions(),
+        });
+
+        await service.getMe('user-1');
+
+        expect(log.map((entry) => [entry.model, entry.op, entry.statements])).toEqual([
+            ['user', 'findUnique', 11],
+            ['referee', 'findMany', 1],
+            ['employee', 'findFirst', 1],
+            ['tenantAddonSubscription', 'findMany', 2],
+            ['tenantAddonSubscription', 'findMany', 2],
+        ]);
+        expect(log.reduce((sum, entry) => sum + entry.statements, 0)).toBe(17);
+        // Loaded once, with the membership — never read again per workspace.
+        expect(log.some((entry) => entry.model === 'tenantSubscription')).toBe(false);
+    });
+
+    it('reads no column the response does not use', async () => {
+        const { service, log } = harness({ users: [karim()] });
+
+        await service.getMe('user-1');
+
+        const userRead = log.find((entry) => entry.model === 'user')!;
+        expect(userRead.args.include).toBeUndefined();
+        // The secrets it must read to report "has a password" / "has 2FA" are the
+        // only sensitive columns in it; the token versions and billing references
+        // the old `include` dragged along are gone.
+        expect(Object.keys(userRead.args.select)).not.toContain('token_version');
+        expect(Object.keys(userRead.args.select.tenantMembers.select.tenant.select)).not.toContain('sms_credits');
+    });
+
     it('refuses an unknown user', async () => {
         const { service } = harness({ users: [] });
         await expect(service.getMe('nobody')).rejects.toThrow('User not found');
