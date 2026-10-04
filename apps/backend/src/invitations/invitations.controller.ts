@@ -104,6 +104,9 @@ export class InvitationsController {
         return this.service.updateMemberRole(tenantId, req.user.userId, req.userRole, userId, roleIdsFrom(dto));
     }
 
+    // Each call sends a transactional email. Pinned at the 20 a minute it had
+    // under the old per-address platform default.
+    @Throttle({ default: { ttl: 60_000, limit: 20 } })
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     @Post('send')
