@@ -9,6 +9,7 @@ import { FirebaseTokenService } from './firebase-token.service';
 import { TotpService } from './totp.service';
 import { extractRequestMeta } from '../audit/audit-route.util';
 import { ThrottleAccount } from '../common/account-throttle.util';
+import { CloudinaryUploadDto, isDirectUpload } from '../assets/direct-upload.util';
 
 @Controller('auth')
 export class AuthController {
@@ -259,14 +260,27 @@ export class AuthController {
         return { message: '2FA disabled successfully' };
     }
 
+    /**
+     * Two bodies, one route. The web app uploads the picture straight to
+     * Cloudinary and sends JSON `{ secure_url, public_id }` (see
+     * `direct-upload.util.ts`); the mobile app and older clients still send the
+     * file itself as multipart, which multer turns into `file`.
+     */
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(FileInterceptor('avatar'))
     @Patch('me/avatar')
-    async updateAvatar(@Request() req, @UploadedFile() file: Express.Multer.File) {
-        if (!file) {
-            throw new BadRequestException('No avatar file provided');
+    async updateAvatar(
+        @Request() req,
+        @UploadedFile() file: Express.Multer.File,
+        @Body() upload: CloudinaryUploadDto,
+    ) {
+        if (file) {
+            return this.authService.updateAvatar(req.user.userId, file);
         }
-        return this.authService.updateAvatar(req.user.userId, file);
+        if (isDirectUpload(upload)) {
+            return this.authService.updateAvatarFromUpload(req.user.userId, upload);
+        }
+        throw new BadRequestException('No avatar file provided');
     }
 
     /** The second leg of `/auth/login`, and split the same way — `userId` is the account. */

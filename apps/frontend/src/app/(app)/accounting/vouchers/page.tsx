@@ -13,6 +13,7 @@ import { VoucherType } from '@erp71/shared-types';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { formatBDT, formatDate } from '@/lib/format';
@@ -93,7 +94,7 @@ function AccountingVouchersListPageContent() {
     const createdVoucherNumber = searchParams.get('voucher');
 
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me) => {
                 const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === getWorkspaceItem('tenant_id'))
                     ?? me?.tenants?.[0];

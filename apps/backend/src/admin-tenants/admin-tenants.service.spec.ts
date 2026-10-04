@@ -29,6 +29,7 @@ import { DemoDataService } from '../demo-data/demo-data.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -43,6 +44,7 @@ describe('AdminTenantsService', () => {
   let demoDataService: any;
   let platformSettingsService: any;
   let addonModulesService: any;
+  let authCache: { invalidateUser: jest.Mock; invalidateMember: jest.Mock; invalidateTenant: jest.Mock };
 
   const makeTenant = (overrides: any = {}) => ({
     id: 't-1',
@@ -173,6 +175,7 @@ describe('AdminTenantsService', () => {
       grantOrRenewSubscription: jest.fn().mockResolvedValue(undefined),
       revokeSubscriptionNow: jest.fn().mockResolvedValue(undefined),
     };
+    authCache = { invalidateUser: jest.fn(), invalidateMember: jest.fn(), invalidateTenant: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -191,6 +194,7 @@ describe('AdminTenantsService', () => {
         { provide: DemoDataService, useValue: demoDataService },
         { provide: PlatformSettingsService, useValue: platformSettingsService },
         { provide: AddonModulesService, useValue: addonModulesService },
+        { provide: AuthCacheService, useValue: authCache },
       ],
     }).compile();
 
@@ -663,6 +667,22 @@ describe('AdminTenantsService', () => {
       db.tenant.findFirst.mockResolvedValue(null);
 
       await expect(service.deleteTenant('missing', {}, 'admin-1')).rejects.toThrow(NotFoundException);
+      expect(authCache.invalidateTenant).not.toHaveBeenCalled();
+    });
+
+    // Members' cached memberships still say the workspace is live; the
+    // interceptor refuses a deleted one only once it reads the new row.
+    it('drops every cached answer for the workspace after the delete commits', async () => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't-1', name: 'Test Store', storefront_slug: null });
+      db.tenant.update.mockResolvedValue({ id: 't-1' });
+      db.tenantSubscription.findUnique.mockResolvedValue(null);
+
+      await service.deleteTenant('t-1', {}, 'admin-1');
+
+      expect(authCache.invalidateTenant).toHaveBeenCalledWith('t-1');
+      expect(authCache.invalidateTenant.mock.invocationCallOrder[0]).toBeGreaterThan(
+        db.tenant.update.mock.invocationCallOrder[0],
+      );
     });
   });
 
@@ -865,6 +885,7 @@ describe('AdminTenantsService', () => {
         where: { id: 'u-1' },
         data: { is_platform_admin: true },
       });
+      expect(authCache.invalidateUser).toHaveBeenCalledWith('u-1');
     });
 
     it('logs the promotion via auditService', async () => {
@@ -909,6 +930,21 @@ describe('AdminTenantsService', () => {
         where: { id: 'u-1' },
         data: { is_platform_admin: false },
       });
+    });
+
+    // `request.user.isPlatformAdmin` is read off the row `JwtStrategy` caches;
+    // without this a demoted admin keeps every admin route until it expires.
+    it('drops the cached user row so the demotion holds on their next request', async () => {
+      db.user.findUnique.mockResolvedValue({ id: 'u-1', email: 'admin@test.com', is_platform_admin: true });
+      db.user.count.mockResolvedValue(1);
+      db.user.update.mockResolvedValue({ id: 'u-1', is_platform_admin: false });
+
+      await service.demoteUser('u-1', 'super-admin');
+
+      expect(authCache.invalidateUser).toHaveBeenCalledWith('u-1');
+      expect(authCache.invalidateUser.mock.invocationCallOrder[0]).toBeGreaterThan(
+        db.user.update.mock.invocationCallOrder[0],
+      );
     });
 
     it('logs the demotion via auditService', async () => {

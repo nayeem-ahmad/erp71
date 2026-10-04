@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Menu, Zap, X } from 'lucide-react';
 import ChatBell from '@/components/ChatBell';
 import NotificationBell from '@/components/NotificationBell';
@@ -11,10 +12,8 @@ import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import ActivationPendingBanner from '@/components/ActivationPendingBanner';
-import FeedbackWidget from '@/components/FeedbackWidget';
-import VoiceNavWidget from '@/components/VoiceNavWidget';
-import AiChatWidget from '@/components/AiChatWidget';
-import TimeTracker from '@/components/projects/TimeTracker';
+// Fetched on their own after the page is up, and only when rendered; see the file.
+import { AiChatWidget, FeedbackWidget, TimeTracker, VoiceNavWidget } from '@/components/app-shell-widgets';
 import TimerChip from '@/components/projects/TimerChip';
 import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
@@ -40,6 +39,8 @@ import { BrandingProvider } from '@/lib/branding';
 import { formatPlanDisplayName } from '@/lib/plan-display';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useMe } from '@/hooks/use-me';
+import { ME_QUERY_KEY, QueryProvider, resetWorkspaceQueries, workspaceScope } from '@/lib/query-client';
 import {
     applyPlatformAdminContext,
     applyRefereeContext,
@@ -65,23 +66,48 @@ import { getLastTenantId, getWorkspaceItem, removeWorkspaceItem, setWorkspaceIte
 
 type DashboardLayoutProps = Readonly<{ children: React.ReactNode }>;
 
+/**
+ * The query cache is provided here, around the shell, so the shell itself can
+ * read `/auth/me` through it — see `QueryProvider` for why here and not in the
+ * root layout.
+ */
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
+    return (
+        <QueryProvider>
+            <AppShell>{children}</AppShell>
+        </QueryProvider>
+    );
+}
+
+function AppShell({ children }: DashboardLayoutProps) {
     const { t } = useI18n();
     const pathname = usePathname();
     const router = useRouter();
-    const [user, setUser] = useState<any>(null);
-    const [hasResolvedUser, setHasResolvedUser] = useState(false);
+    const queryClient = useQueryClient();
+    // The signed-in user, from the cache every page shares. A page that reads
+    // it while the shell is loading it joins the same request, and a page that
+    // reads it afterwards gets it from memory.
+    const meQuery = useMe();
+    const user: any = meQuery.data ?? null;
+    // Resolved once there is an answer, or a failure that is a verdict. A
+    // failure that said nothing about the session (429, 5xx, network) is still
+    // being re-asked below, so the shell keeps waiting rather than drawing a
+    // signed-out-looking app.
+    const hasResolvedUser = meQuery.data !== undefined
+        || (meQuery.isError && !isUnconfirmedSessionError(meQuery.error));
     const [activeStoreId, setActiveStoreId] = useState<string>('');
     const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
     const [showDemoBanner, setShowDemoBanner] = useState(false);
-    const [showEmailVerificationBanner, setShowEmailVerificationBanner] = useState(false);
+    const [emailVerificationDismissed, setEmailVerificationDismissed] = useState(false);
     const [resendingVerification, setResendingVerification] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
-    const [accountPlatformFeatures, setAccountPlatformFeatures] = useState<PlatformFeatures>(DEFAULT_PLATFORM_FEATURES);
+    const accountPlatformFeatures: PlatformFeatures = user?.platform_features ?? DEFAULT_PLATFORM_FEATURES;
+    // Derived rather than set once on load: `me` now refreshes in the background,
+    // and a dismissed banner must stay dismissed through those refreshes.
+    const showEmailVerificationBanner = Boolean(user) && !user.email_verified && !emailVerificationDismissed;
     const [tenantNavLayout, setTenantNavLayout] = useState<NavLayoutNode[]>(DEFAULT_TENANT_NAV_LAYOUT);
     const [platformAdminNavLayout, setPlatformAdminNavLayout] = useState<NavLayoutNode[]>(DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT);
-    const [posEnabled, setPosEnabled] = useState(true);
     // The platform team's own workspace. Resolved lazily, and only in the admin
     // console — it is what scopes the project pages there, in place of a shop.
     // Starts false even when the id is already parked in this tab's store: the
@@ -108,6 +134,52 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         window.addEventListener('erp71:nav-layout-updated', onNavLayoutUpdated);
         return () => window.removeEventListener('erp71:nav-layout-updated', onNavLayoutUpdated);
     }, [refreshNavLayouts]);
+
+    // What used to run once when the shell fetched `/auth/me` now runs whenever
+    // the cached answer changes — a background refresh included, so a shop the
+    // user was removed from is corrected without a reload. Structural sharing
+    // keeps `user` the same object when nothing in it changed, so a refresh that
+    // found nothing new does not re-run this.
+    //
+    // Declared ahead of the context effect below on purpose: effects run in
+    // order, and a stale shop has to be cleared before that one decides
+    // whether the tab still needs the account chooser.
+    useEffect(() => {
+        if (!user) return;
+        // A tab that resumed from `last_tenant_id` may be pointing at a shop
+        // this account no longer belongs to. Correct it against the real
+        // membership list rather than letting the header carry a stale id.
+        const tenantId = globalThis.window === undefined ? null : getWorkspaceItem('tenant_id');
+        const tenants = user.tenants ?? [];
+        const matchedTenant = tenants.find((t: { id: string }) => t.id === tenantId);
+        if (tenantId && !matchedTenant) {
+            removeWorkspaceItem('tenant_id');
+            removeWorkspaceItem('store_id');
+            removeWorkspaceItem('subscription_plan_code');
+            // Whatever was fetched under the shop this tab no longer belongs to
+            // must not be painted into the next one.
+            resetWorkspaceQueries(queryClient);
+            // One shop left is unambiguous; several is a choice only the
+            // user can make, so `/select-account` takes it from here.
+            if (tenants.length === 1) applyTenantContext(tenants[0]);
+            setWorkspaceEpoch((epoch) => epoch + 1);
+        }
+        const sessionTenant = matchedTenant || (tenants.length === 1 ? tenants[0] : undefined);
+        syncLocalePreferenceFromSession(user, { overwrite: false });
+        if (sessionTenant) {
+            const stored = localStorage.getItem('locale');
+            const preferred = stored || user.preferred_locale || 'en';
+            const clamped = clampLocaleToTenant(preferred, sessionTenant);
+            if (clamped !== preferred) {
+                localStorage.setItem('locale', clamped);
+            }
+        }
+        const isDemo = Boolean(user.is_demo) || localStorage.getItem('demo_session') === '1';
+        setShowDemoBanner(isDemo && localStorage.getItem('demo_banner_dismissed') !== '1');
+        if (user.is_demo) {
+            localStorage.setItem('demo_session', '1');
+        }
+    }, [queryClient, user]);
 
     useEffect(() => {
         if (!hasResolvedUser || !user) return;
@@ -158,69 +230,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         }
     }, [hasResolvedUser, pathname, router, user]);
 
+    // No verdict on the session (rate limit, 5xx, network) and nothing cached to
+    // show. Rendering on regardless draws a signed-out-looking shell with no way
+    // forward, so re-ask a few times, then hand over to the login page with this
+    // page as the return path. A background refresh that fails while there is
+    // data on screen is not this case: the screen keeps what it has.
+    const sessionConfirmAttempts = useRef(0);
+    const { isError: meFailed, error: meError, errorUpdatedAt: meErrorAt, refetch: refetchMe } = meQuery;
+    const hasMe = meQuery.data !== undefined;
     useEffect(() => {
-        let cancelled = false;
-        let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-        const loadMe = (attempt: number) => api.getMe().then((me) => {
-            if (cancelled) return;
-            setHasResolvedUser(true);
-            // A tab that resumed from `last_tenant_id` may be pointing at a shop
-            // this account no longer belongs to. Correct it against the real
-            // membership list rather than letting the header carry a stale id.
-            const tenantId = globalThis.window === undefined ? null : getWorkspaceItem('tenant_id');
-            const tenants = me?.tenants ?? [];
-            const matchedTenant = tenants.find((t: { id: string }) => t.id === tenantId);
-            if (tenantId && !matchedTenant) {
-                removeWorkspaceItem('tenant_id');
-                removeWorkspaceItem('store_id');
-                removeWorkspaceItem('subscription_plan_code');
-                // One shop left is unambiguous; several is a choice only the
-                // user can make, so `/select-account` takes it from here.
-                if (tenants.length === 1) applyTenantContext(tenants[0]);
-                setWorkspaceEpoch((epoch) => epoch + 1);
-            }
-            const sessionTenant = matchedTenant || (tenants.length === 1 ? tenants[0] : undefined);
-            syncLocalePreferenceFromSession(me, { overwrite: false });
-            if (sessionTenant) {
-                const stored = localStorage.getItem('locale');
-                const preferred = stored || me?.preferred_locale || 'en';
-                const clamped = clampLocaleToTenant(preferred, sessionTenant);
-                if (clamped !== preferred) {
-                    localStorage.setItem('locale', clamped);
-                }
-            }
-            setUser(me);
-            setAccountPlatformFeatures(me?.platform_features ?? DEFAULT_PLATFORM_FEATURES);
-            setShowEmailVerificationBanner(!me?.email_verified);
-            const isDemo = Boolean(me?.is_demo) || localStorage.getItem('demo_session') === '1';
-            setShowDemoBanner(isDemo && localStorage.getItem('demo_banner_dismissed') !== '1');
-            if (me?.is_demo) {
-                localStorage.setItem('demo_session', '1');
-            }
-        }, (error) => {
-            if (cancelled) return;
-            // No verdict on the session (rate limit, 5xx, network). Rendering on
-            // regardless draws a signed-out-looking shell with no way forward,
-            // so re-ask a few times, then hand over to the login page with this
-            // page as the return path.
-            if (isUnconfirmedSessionError(error)) {
-                if (attempt < SESSION_CONFIRM_MAX_RETRIES) {
-                    retryTimer = setTimeout(() => void loadMe(attempt + 1), sessionConfirmRetryDelayMs(error));
-                } else {
-                    handleUnconfirmedSession();
-                }
-                return;
-            }
-            setHasResolvedUser(true);
-        }).catch(() => null);
-
-        void loadMe(0);
-        return () => {
-            cancelled = true;
-            clearTimeout(retryTimer);
-        };
-    }, []);
+        if (hasMe) {
+            sessionConfirmAttempts.current = 0;
+            return;
+        }
+        if (!meFailed || !isUnconfirmedSessionError(meError)) return;
+        if (sessionConfirmAttempts.current >= SESSION_CONFIRM_MAX_RETRIES) {
+            handleUnconfirmedSession();
+            return;
+        }
+        const retryTimer = setTimeout(() => {
+            sessionConfirmAttempts.current += 1;
+            void refetchMe();
+        }, sessionConfirmRetryDelayMs(meError));
+        return () => clearTimeout(retryTimer);
+    }, [hasMe, meFailed, meError, meErrorAt, refetchMe]);
 
     const useCompactChrome = !pathname.startsWith(routes.sales.pos);
 
@@ -295,25 +328,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         setShowOnboardingBanner(!done && pathname === routes.home);
     }, [hasResolvedUser, pathname, inPlatformAdminMode, inRefereeMode, onboardingDismissed, owner]);
 
-    const refreshSalesSettings = useCallback(() => {
-        if (inPlatformAdminMode || inRefereeMode) {
-            setPosEnabled(true);
-            return;
-        }
-        api.getSalesSettings()
-            .then((settings) => setPosEnabled(isPosEnabled(settings)))
-            .catch(() => setPosEnabled(true));
-    }, [inPlatformAdminMode, inRefereeMode]);
+    // Whether the POS is switched on decides a nav entry and a redirect. Cached
+    // per workspace, so the navigation that re-applies this tab's workspace (and
+    // bumps `workspaceEpoch`) no longer re-fetches it on every click; a key that
+    // moves with the tenant or branch is what re-asks after a real switch.
+    const salesSettingsEnabled = !inPlatformAdminMode && !inRefereeMode;
+    const salesSettingsQuery = useQuery({
+        queryKey: ['sales-settings', ...workspaceScope()],
+        queryFn: () => api.getSalesSettings(),
+        enabled: salesSettingsEnabled,
+    });
+    // On until told otherwise — the old default, and the safe one: a failed read
+    // must not hide the till.
+    const posEnabled = !salesSettingsEnabled || salesSettingsQuery.data === undefined
+        ? true
+        : isPosEnabled(salesSettingsQuery.data);
 
     useEffect(() => {
-        refreshSalesSettings();
-    }, [refreshSalesSettings, workspaceEpoch]);
-
-    useEffect(() => {
-        const onSalesSettingsUpdated = () => refreshSalesSettings();
+        const onSalesSettingsUpdated = () => {
+            void queryClient.invalidateQueries({ queryKey: ['sales-settings'] });
+        };
         window.addEventListener('erp71:sales-settings-updated', onSalesSettingsUpdated);
         return () => window.removeEventListener('erp71:sales-settings-updated', onSalesSettingsUpdated);
-    }, [refreshSalesSettings]);
+    }, [queryClient]);
 
     useEffect(() => {
         if (!mobileNavOpen) return;
@@ -595,6 +632,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const handleStoreChange = (storeId: string) => {
         setActiveStoreId(storeId);
         setWorkspaceItem('store_id', storeId);
+        // Every request now carries the other branch's `x-store-id`; nothing
+        // cached under the old one may answer for it.
+        resetWorkspaceQueries(queryClient);
         router.refresh();
     };
 
@@ -770,7 +810,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 {resendingVerification ? t.dashboardLayout.emailVerifySending : t.dashboardLayout.emailVerifyResend}
                             </button>
                             <button
-                                onClick={() => setShowEmailVerificationBanner(false)}
+                                onClick={() => setEmailVerificationDismissed(true)}
                                 className="text-amber-100 hover:text-white transition-colors"
                                 aria-label={t.dashboardLayout.emailVerifyDismiss}
                             >
@@ -798,10 +838,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 onClick={() => {
                                     localStorage.setItem('onboarding_complete', '1');
                                     setShowOnboardingBanner(false);
-                                    // Flip the cached workspace flag too, so a later
-                                    // /auth/me refresh in this session doesn't hand the
-                                    // banner effect a stale `onboarding_dismissed: false`.
-                                    setUser((current: any) => (current?.tenants
+                                    // Flip the cached workspace flag too, so every reader
+                                    // of `me` — this banner, the onboarding redirect —
+                                    // agrees before the server's answer comes back.
+                                    queryClient.setQueryData(ME_QUERY_KEY, (current: any) => (current?.tenants
                                         ? {
                                             ...current,
                                             tenants: current.tenants.map((tenant: any) => (

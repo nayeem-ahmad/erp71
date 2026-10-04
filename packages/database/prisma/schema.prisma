@@ -3444,6 +3444,12 @@ model CrmActivity {
   @@index([tenant_id, status, completed_at])
   @@index([tenant_id, channel_id])
   @@index([tenant_id, purpose_id])
+  // lead_id alone, without tenant_id in front. Two readers filter on nothing
+  // else, so the (tenant_id, lead_id, …) index above cannot serve them: the
+  // ON DELETE CASCADE behind a lead delete (one scan per lead in a bulk
+  // delete), and sync-lead-activity's per-lead subquery, which runs on every
+  // container start for each lead that has never been worked.
+  @@index([lead_id])
 }
 
 /// A reusable message a rep drops into an activity instead of retyping it — the
@@ -3855,6 +3861,13 @@ model PostingEvent {
   @@unique([tenant_id, idempotency_key])
   @@index([tenant_id, status, updated_at])
   @@index([tenant_id, source_module, source_type, source_id])
+  // Backs the ON DELETE SET NULL on voucher_id. Deleting a voucher makes
+  // Postgres run `UPDATE posting_events SET voucher_id = NULL WHERE voucher_id
+  // = $1`, and without an index that is a full scan of the table, once per
+  // voucher: voidAutoPostedVoucher on every sale cancel/delete, purchase
+  // cancel and payment edit, a manual voucher delete, and one per voucher when
+  // Settings › Clear data wipes a tenant's journals.
+  @@index([voucher_id])
   @@map("posting_events")
 }
 
@@ -3941,6 +3954,13 @@ model PaymentRecord {
   account Account? @relation(fields: [account_id], references: [id], onDelete: SetNull)
 
   @@index([account_id])
+  // Every read of a sale's tenders filters on sale_id: `include: { payments }`
+  // on the sales list, the sale screen, the invoice print, the cashier-session
+  // close and the daily report, plus the deleteMany a sale edit runs and the
+  // cascade behind a sale delete. Without it each of those seq-scanned the
+  // whole table, every tenant's rows — 75,898 full scans against 4 index scans
+  // in production by 2026-10-04.
+  @@index([sale_id])
 }
 
 model SaleItem {

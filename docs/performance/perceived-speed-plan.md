@@ -1,6 +1,14 @@
 # Perceived Speed Plan — ERP71 on the current VPS
 
-**Status:** approved 2026-10-04, in progress  
+**Status:** code for every item implemented 2026-10-04 on `perf/perceived-speed` (full backend and frontend suites, lint and production build green). The server steps (`scripts/ops/perf-server-steps.sh`) and Cloudflare (P3.1) still need a person; see [§8](#8-rollout-ownership-and-rollback).  
+**Build result (First Load JS, Next build):**
+
+| | Production before | After |
+|---|---|---|
+| `/login` | 1.6 MB | 378 kB |
+| `/dashboard` | 1.8 MB | 399 kB |
+| Shared by all | 227 kB (after the locale split) | 109 kB |
+
 **Constraint:** the VPS stays as it is (`66.116.236.127`). No region move, no split into managed services.  
 **Goal:** the app should *feel* fast to a shopkeeper in Bangladesh: screens appear quickly, clicks respond at once, and pages already visited show instantly.
 
@@ -172,7 +180,7 @@ Every route is dynamic, because the root layout calls `cookies()` (`src/app/layo
 - **Evidence:** [§1 API behaviour](#api-behaviour). A second connection costs about 0.5 s per fresh load, and the preflight costs about 0.25 s per call.
 - **Design:** the reverse proxy sends `app.erp71.com/api/v1/*` straight to the backend container, and the browser calls its own domain. Same domain means no preflight and one shared HTTP/2 connection. Don't route it through the existing Next.js rewrite (`next.config.js:15-22`): that proxies every call through the Node frontend process, buffers request bodies (which breaks the 100 MB external-sync snapshot upload), and adds a hop.
 - **Steps:**
-  1. **Caddy (VPS, outside the repo):** in `/opt/hermes/caddy/Caddyfile`, replace the `app.erp71.com` block. Back up the file first, run `caddy validate`, then `caddy reload`:
+  1. **Caddy (VPS, outside the repo):** `scripts/ops/perf-server-steps.sh caddy-app-api-route` backs up `/opt/hermes/caddy/Caddyfile`, validates the new file and reloads Caddy. It replaces the `app.erp71.com` block with:
      ```
      app.erp71.com {
      	encode zstd gzip
@@ -274,7 +282,7 @@ Every route is dynamic, because the root layout calls `cookies()` (`src/app/layo
 ### P1.6 Turn on server timings
 
 - **Change:**
-  - Set `METRICS_TOKEN` in `/opt/erp71/.env.production`; it takes effect on the next deploy.
+  - Set `METRICS_TOKEN` in `/opt/erp71/.env.production` with `scripts/ops/perf-server-steps.sh metrics-token`. It takes effect on the next deploy.
   - Document the scrape command in `docs/ops/uptime-monitoring.md`. It's already token-guarded (`system-health/metrics/metrics-token.guard.ts`).
 - **Why now:** Phase 3's server work should be ranked by real per-route latency, not by reading source code. Start collecting a week before P3.2/P3.3.
 - **Verify:** on the VPS, a curl of `/api/v1/metrics` with the token returns `http_request_duration_seconds` histograms.
@@ -388,22 +396,11 @@ Not in this phase, because it's larger: compiling `@erp71/shared-types` to ES mo
 ### P3.2 Measure, tune Postgres, then add indexes
 
 - **Steps:**
-  1. **One Postgres restart**, in a quiet window. It also briefly restarts profiles71's database, which lives in the same container. Add to `docker-compose.prod.yml`:
-     ```yaml
-     db:
-       command: >
-         postgres
-         -c shared_preload_libraries=pg_stat_statements
-         -c pg_stat_statements.track=all
-         -c shared_buffers=512MB
-         -c effective_cache_size=4GB
-         -c work_mem=16MB
-         -c random_page_cost=1.1
-         -c track_io_timing=on
-       shm_size: 256mb
-     ```
-     Then run `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;`, as an idempotent `sync:*` step so it survives a rebuilt database. 512 MB covers the 360 MB database. The box has 5 GB free, which leaves room for the other apps.
-  2. Add `?connection_limit=15&pool_timeout=20` to `DATABASE_URL`, so crons can't use up the request pool.
+  1. **Settings through `ALTER SYSTEM`, not compose `command:`.** `erp71-db-1` is also attached by hand to the `retail-saas_default` network, with alias `retail-saas-db-1`, for profiles71. That attachment isn't in `docker-compose.prod.yml`. Any change to the db service's compose config makes the next deploy **recreate** the container and silently drop it, which breaks profiles71. `ALTER SYSTEM` writes `postgresql.auto.conf` inside the data volume, so a `docker restart`, which keeps network attachments, is enough.
+     - `scripts/ops/perf-server-steps.sh pg-tune` (no downtime) applies `work_mem` 16 MB, `effective_cache_size` 4 GB, `random_page_cost` 1.1 and `track_io_timing`. It queues `shared_buffers` 512 MB and `shared_preload_libraries = pg_stat_statements` for the next restart.
+     - `scripts/ops/perf-server-steps.sh pg-restart` (quiet hours) restarts the container, about 5–10 s of DB downtime for erp71 and profiles71, then runs `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`.
+     - 512 MB covers the 360 MB database, and the box has 5 GB free.
+  2. Add `?connection_limit=15&pool_timeout=20` to `DATABASE_URL`, so crons can't use up the request pool: `scripts/ops/perf-server-steps.sh db-pool`. It takes effect on the next deploy.
   3. After 3–7 days of traffic, rank by `total_exec_time`, then by `mean_exec_time`, from `pg_stat_statements`. Add `@@index` entries to `schema.prisma` for the top offenders. Start with the four tables in [§1](#postgres): `PaymentRecord` (4 index scans against 76 k full scans) and `SalesReturnItem` (43 against 350 k) are probably missing an index on a foreign key or tenant column. `posting_events` and `InventoryMovement` need the actual queries looked at before choosing.
   4. `db push` creates indexes without `CONCURRENTLY`. All four tables have ≤ 100 k rows, so each build takes well under a second; acceptable inside the deploy.
 - **Verify:**
@@ -476,15 +473,20 @@ Not in this phase, because it's larger: compiling `@erp71/shared-types` to ES mo
   5. P3.5 (makes later deploys cheaper).
   6. P3.2 (needs a week of P1.6 data) → P3.3 → P3.4.
   7. P3.1 whenever the Cloudflare account is ready; it doesn't depend on the others.
+- **Server steps are run by a person.** Auto mode's classifier blocks writes over SSH, so every VPS change is packaged as an idempotent step in `scripts/ops/perf-server-steps.sh`. Each step prints how to undo it. Run one with:
+  ```bash
+  ssh root@66.116.236.127 'bash -s' -- <step> < scripts/ops/perf-server-steps.sh
+  ```
+  The steps are `caddy-app-api-route`, `metrics-token`, `db-pool`, `pg-tune`, `pg-restart` and `status`. `caddy-app-api-route` **must be live before** the release that points the browser at its own origin. Its own check: `curl -sD - -o /dev/null https://app.erp71.com/api/v1/health | grep -i '^vary'` prints `vary: Origin`; while the request still goes through the Next rewrite, it prints `vary: Origin, Accept-Encoding`.
 - **VPS changes outside the repo:**
   - The Hermes Caddyfile (P1.1, P3.1). Back up to `Caddyfile.bak-YYYYMMDD` and run `caddy validate` before every reload. It serves five apps, so a bad reload takes all of them down. Record each change in `docs/ops/deployment-runbook.md`.
   - `.env.production` (P1.6, P3.2).
-  - The Postgres restart (P3.2).
+  - The Postgres restart (P3.2). Use `docker restart erp71-db-1`, **never** a compose recreate of `db` (see P3.2).
 - **Rollback:**
   - Code: revert the PR and redeploy.
   - Caddy: restore the `.bak` file and reload.
   - Cloudflare: grey-cloud the records.
-  - Postgres flags: remove `command:` and restart.
+  - Postgres settings: `ALTER SYSTEM RESET <name>`, then reload, or restart for `shared_buffers`/`shared_preload_libraries`.
 
 ---
 

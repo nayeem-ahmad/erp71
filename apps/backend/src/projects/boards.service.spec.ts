@@ -12,6 +12,7 @@ import { visibilityOr } from './project-access.test-support';
 import { ProjectPriorityDto } from './project.dto';
 import { DatabaseService } from '../database/database.service';
 import { AssetsService } from '../assets/assets.service';
+import { verifyDirectUpload } from '../assets/direct-upload.util';
 
 describe('BoardsService', () => {
     let service: BoardsService;
@@ -832,6 +833,67 @@ describe('BoardsService', () => {
                 }),
             ).rejects.toBeInstanceOf(BadRequestException);
             expect(assets.uploadBuffer).not.toHaveBeenCalled();
+        });
+
+        describe('from a direct upload', () => {
+            /** The real check, against a cloud called `erp71`. */
+            beforeEach(() => {
+                assets.verifyDirectUpload = jest.fn((upload: any, folder: string) =>
+                    verifyDirectUpload(upload, {
+                        cloudName: 'erp71',
+                        folder: `retail/${folder}`,
+                        resourceType: 'image',
+                    }),
+                );
+            });
+
+            const uploaded = (tenant: string, id = 'q8w7e6') => ({
+                public_id: `retail/${tenant}/project-boards/${id}`,
+                secure_url: `https://res.cloudinary.com/erp71/image/upload/v1759999999/retail/${tenant}/project-boards/${id}.png`,
+            });
+
+            it('stores what the browser uploaded, without uploading it again', async () => {
+                withImage();
+
+                await service.setBackgroundImage(tenantId, 'b1', uploaded(tenantId));
+
+                expect(assets.uploadBuffer).not.toHaveBeenCalled();
+                expect(assets.verifyDirectUpload).toHaveBeenCalledWith(
+                    expect.objectContaining({ public_id: 'retail/t1/project-boards/q8w7e6' }),
+                    't1/project-boards',
+                );
+                expect(db.board.update).toHaveBeenCalledWith({
+                    where: { id: 'b1' },
+                    data: {
+                        background_image_url:
+                            'https://res.cloudinary.com/erp71/image/upload/v1759999999/retail/t1/project-boards/q8w7e6.png',
+                        background_image_key: 'retail/t1/project-boards/q8w7e6',
+                        background_color: null,
+                    },
+                });
+                // The picture it replaced still goes.
+                expect(assets.deleteFile).toHaveBeenCalledWith('retail/t1/project-boards/old', 'image');
+            });
+
+            it('refuses another tenant’s asset — the key is what a later replace deletes', async () => {
+                withImage();
+
+                await expect(
+                    service.setBackgroundImage(tenantId, 'b1', uploaded('t2')),
+                ).rejects.toBeInstanceOf(BadRequestException);
+                expect(db.board.update).not.toHaveBeenCalled();
+                expect(assets.deleteFile).not.toHaveBeenCalled();
+            });
+
+            it('refuses a URL that is not on our Cloudinary account', async () => {
+                await expect(
+                    service.setBackgroundImage(tenantId, 'b1', {
+                        public_id: uploaded(tenantId).public_id,
+                        secure_url: 'https://evil.example/retail/t1/project-boards/q8w7e6.png',
+                    }),
+                ).rejects.toBeInstanceOf(BadRequestException);
+                expect(db.board.update).not.toHaveBeenCalled();
+            });
         });
 
         it('says so plainly when storage is not configured', async () => {

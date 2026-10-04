@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { UserPlus } from 'lucide-react';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { PageShell, PageHeader, Button, FormFooter } from '@/components/ui';
@@ -51,7 +52,7 @@ export default function NewLeadPage() {
     // picker from reading as a duplicate of the owner one. Only while both are
     // still untouched, so it never overwrites a real choice.
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me: any) => {
                 if (!me?.id) return;
                 setForm((prev) => (prev.assigned_to ? prev : setLeadOwner(prev, me.id)));

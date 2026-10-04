@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@erp71/shared-types';
 import { TenantRoleGuard } from './tenant-role.guard';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 /**
  * The single row the membership loader's joined query returns — the guard reads
@@ -38,7 +39,7 @@ describe('TenantRoleGuard', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         reflector = { getAllAndOverride: jest.fn().mockReturnValue(['OWNER', 'ACCOUNTANT']) } as any;
-        guard = new TenantRoleGuard(reflector, db as any);
+        guard = new TenantRoleGuard(reflector, db as any, new AuthCacheService({ ttlMs: 0 }));
         request = { user: { userId: 'u1' }, headers: { 'x-tenant-id': 't1' } };
     });
 
@@ -85,5 +86,24 @@ describe('TenantRoleGuard', () => {
     it('rejects a user who is not a member of the tenant', async () => {
         db.$queryRaw.mockResolvedValue([]);
         await expect(guard.canActivate(contextFor(request))).rejects.toThrow(ForbiddenException);
+    });
+
+    // With the cross-request cache on, the role is remembered between requests —
+    // and a role taken away must still close the gate on the next one, because
+    // the role change invalidates the member.
+    it('closes the gate on the next request after a role change invalidates', async () => {
+        const cache = new AuthCacheService({ ttlMs: 30_000 });
+        const cached = new TenantRoleGuard(reflector, db as any, cache);
+        const fresh = () => ({ user: { userId: 'u1' }, headers: { 'x-tenant-id': 't1' } });
+
+        db.$queryRaw.mockResolvedValueOnce(roleRows(UserRole.ACCOUNTANT));
+        await expect(cached.canActivate(contextFor(fresh()))).resolves.toBe(true);
+        await expect(cached.canActivate(contextFor(fresh()))).resolves.toBe(true);
+        expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+
+        db.$queryRaw.mockResolvedValueOnce(roleRows(UserRole.CASHIER, ['Sales Manager']));
+        cache.invalidateMember('u1', 't1');
+
+        await expect(cached.canActivate(contextFor(fresh()))).rejects.toThrow(ForbiddenException);
     });
 });

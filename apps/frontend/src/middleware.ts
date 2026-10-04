@@ -40,10 +40,12 @@ export function middleware(request: NextRequest) {
 
 export const config = {
     /*
-     * Page requests only. `/api/v1/*` is rewritten to the backend by
-     * next.config.js and must not be touched; `_next/*` and anything with a file
-     * extension (including `/sitemap.xml`, `/robots.txt` and the RSS feed) are
-     * assets and feeds that are correct on whichever host serves them.
+     * Page requests only. `/api/v1/*` belongs to the backend — on app.erp71.com
+     * the proxy sends it there before it reaches this server, and next.config.js
+     * rewrites it everywhere else — so it must not be touched; `_next/*` and
+     * anything with a file extension (including `/sitemap.xml`, `/robots.txt`
+     * and the RSS feed) are assets and feeds that are correct on whichever host
+     * serves them.
      */
     matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'],
 };

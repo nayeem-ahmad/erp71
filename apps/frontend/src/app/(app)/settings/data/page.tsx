@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Trash2, PlugZap } from 'lucide-react';
 import Link from 'next/link';
-import { api, fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -32,7 +33,7 @@ export default function DataManagementPage() {
     const { externalImport } = usePlatformFeatures();
 
     useEffect(() => {
-        api.getMe().then((me: any) => {
+        fetchMe().then((me: any) => {
             const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
             const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) ?? me?.tenants?.[0];
             setRole(tenant?.role ?? null);

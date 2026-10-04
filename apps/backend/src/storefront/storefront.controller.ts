@@ -103,7 +103,15 @@ export class StorefrontController {
         return this.storefrontService.placeOrder(slug, dto, req.user?.userId);
     }
 
-    /** Public: customer sign up for a storefront */
+    /**
+     * Public: customer sign up for a storefront.
+     *
+     * This and the password and 2FA sign-ins below are public and run bcrypt
+     * on every call, and had only the platform default to slow guessing: 20 a
+     * minute per address. When that default moved to the signed-in user (and
+     * 120 a minute), they were pinned at the 20 they had.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 20 } })
     @Post(':slug/auth/signup')
     async customerSignup(@Param('slug') slug: string, @Body() dto: CustomerSignupDto) {
         return this.storefrontService.customerSignup(slug, dto);
@@ -114,6 +122,7 @@ export class StorefrontController {
      * Returns `{ requires_2fa, user_id }` instead of a session when the account
      * has TOTP enabled — see `:slug/auth/2fa/verify`.
      */
+    @Throttle({ default: { ttl: 60_000, limit: 20 } })
     @Post(':slug/auth/login')
     async customerLogin(@Param('slug') slug: string, @Body() dto: CustomerLoginDto) {
         return this.storefrontService.customerLogin(slug, dto);
@@ -152,6 +161,7 @@ export class StorefrontController {
     }
 
     /** Public: second leg of a 2FA storefront sign-in */
+    @Throttle({ default: { ttl: 60_000, limit: 20 } })
     @Post(':slug/auth/2fa/verify')
     async customerTwoFactorVerify(@Param('slug') slug: string, @Body() dto: CustomerTwoFactorLoginDto) {
         return this.storefrontService.completeCustomerTwoFactorLogin(slug, dto.userId, dto.code);

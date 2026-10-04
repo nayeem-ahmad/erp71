@@ -1,10 +1,41 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
+import {
+    DIRECT_UPLOAD_IMAGE_FORMATS,
+    DIRECT_UPLOAD_IMAGE_TRANSFORMATION,
+    MAX_DIRECT_UPLOAD_BYTES,
+    verifyDirectUpload as verifyDirectUploadResult,
+} from './direct-upload.util';
+
+/**
+ * Everything the browser needs to post one file straight to Cloudinary.
+ *
+ * `params` is exactly what was signed, as strings: the browser sends each of
+ * them, plus `api_key`, `signature` and the file, and nothing else — any other
+ * field would break the signature, which is the point.
+ */
+export interface DirectUploadSignature {
+    cloudName: string;
+    apiKey: string;
+    timestamp: number;
+    signature: string;
+    /** The full folder, `retail/` included. Fixed by the signature. */
+    folder: string;
+    /** What every `public_id` uploaded with this signature starts with. */
+    publicIdPrefix: string;
+    resourceType: 'image';
+    uploadUrl: string;
+    params: Record<string, string>;
+    allowedFormats: string[];
+    maxBytes: number;
+}
 
 @Injectable()
 export class AssetsService implements OnModuleInit {
     private readonly logger = new Logger(AssetsService.name);
     private enabled = false;
+    /** Kept for signing direct uploads and checking what they hand back. */
+    private credentials: { cloudName: string; apiKey: string; apiSecret: string } | null = null;
 
     onModuleInit() {
         const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
@@ -13,6 +44,7 @@ export class AssetsService implements OnModuleInit {
 
         if (cloudName && apiKey && apiSecret) {
             cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+            this.credentials = { cloudName, apiKey, apiSecret };
             this.enabled = true;
         } else {
             this.logger.warn('Cloudinary env vars not set — file uploads will be disabled');
@@ -99,6 +131,67 @@ export class AssetsService implements OnModuleInit {
                 },
             );
             stream.end(buffer);
+        });
+    }
+
+    /**
+     * Sign a browser's upload of one image into `retail/<folder>/`.
+     *
+     * The same incoming transformation and the same formats as the server-side
+     * path, so where a file came from makes no difference to how it is stored.
+     * No `public_id` is signed: Cloudinary picks a random one inside the folder,
+     * so the browser can neither choose a name nor overwrite an existing asset.
+     * The signature stays valid for Cloudinary's hour, for any number of files —
+     * which is why it is only handed out behind the save route's permission.
+     */
+    signDirectUpload(folder: string): DirectUploadSignature {
+        if (!this.enabled || !this.credentials) {
+            // A 503 the browser answers by falling back to the server-side
+            // route, which then fails with its own, more specific message.
+            throw new ServiceUnavailableException('File storage is not configured.');
+        }
+        const { cloudName, apiKey, apiSecret } = this.credentials;
+        const fullFolder = `retail/${folder}`;
+        const timestamp = Math.floor(Date.now() / 1000);
+        const params: Record<string, string> = {
+            allowed_formats: DIRECT_UPLOAD_IMAGE_FORMATS.join(','),
+            folder: fullFolder,
+            timestamp: String(timestamp),
+            transformation: DIRECT_UPLOAD_IMAGE_TRANSFORMATION,
+        };
+        const signature = cloudinary.utils.api_sign_request(params, apiSecret);
+
+        return {
+            cloudName,
+            apiKey,
+            timestamp,
+            signature,
+            folder: fullFolder,
+            publicIdPrefix: `${fullFolder}/`,
+            resourceType: 'image',
+            uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+            params,
+            allowedFormats: [...DIRECT_UPLOAD_IMAGE_FORMATS],
+            maxBytes: MAX_DIRECT_UPLOAD_BYTES,
+        };
+    }
+
+    /**
+     * Check a direct-upload result before a route saves it: the asset must be
+     * an image in *our* cloud, inside `retail/<folder>/` — the folder only this
+     * tenant (or user) could have been signed for. See `verifyDirectUpload`.
+     */
+    verifyDirectUpload(
+        upload: { secure_url?: unknown; public_id?: unknown },
+        folder: string,
+    ): { url: string; publicId: string } {
+        if (!this.credentials) {
+            throw new ServiceUnavailableException('File storage is not configured.');
+        }
+        return verifyDirectUploadResult(upload, {
+            cloudName: this.credentials.cloudName,
+            folder: `retail/${folder}`,
+            resourceType: 'image',
         });
     }
 

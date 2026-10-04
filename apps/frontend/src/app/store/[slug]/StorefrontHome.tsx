@@ -8,17 +8,14 @@ import StorefrontEnquiryForm from '@/components/storefront/StorefrontEnquiryForm
 import { storefrontTheme, storefrontThemeStyle } from '@/lib/storefront/storefront-theme';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { browserApiBase } from '@/lib/api-base';
 
 interface CustomerSession {
     access_token: string;
     customer: { id: string; name: string; email: string; phone: string };
 }
 
-const API_BASE =
-    ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL) ||
-        (process.env.NODE_ENV === 'production'
-            ? 'https://erp71-backend.onrender.com'
-            : 'http://localhost:4000')) + '/api/v1';
+const API_BASE = browserApiBase();
 
 /*
  * There is deliberately no stock-photo fallback here any more.

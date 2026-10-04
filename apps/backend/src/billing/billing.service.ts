@@ -943,7 +943,12 @@ export class BillingService {
         const apiUrl = process.env.SSL_WIRELESS_API_URL || 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
         const storeId = process.env.SSL_WIRELESS_STORE_ID;
         const storePassword = process.env.SSL_WIRELESS_STORE_PASSWORD;
-        const backendPublicUrl = process.env.BACKEND_PUBLIC_URL || 'http://localhost:4000';
+        // BACKEND_PUBLIC_URL is the bare origin in production (the deploy script
+        // sets https://api.erp71.com), but every route sits under the global
+        // `api/v1` prefix (main.ts). Without it the gateway's redirects and IPN
+        // land on a 404: the customer pays and the payment is never recorded.
+        const backendOrigin = (process.env.BACKEND_PUBLIC_URL || 'http://localhost:4000').replace(/\/+$/, '');
+        const backendPublicUrl = backendOrigin.endsWith('/api/v1') ? backendOrigin : `${backendOrigin}/api/v1`;
 
         if (!storeId || !storePassword) {
             throw new BadRequestException('SSL Wireless credentials are not configured.');

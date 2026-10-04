@@ -6,6 +6,7 @@ import { AccountingPageShell, CompactSection } from '@/components/accounting/com
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { Button, Checkbox } from '@/components/ui';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isOwner } from '@/lib/permissions';
@@ -35,7 +36,7 @@ export default function AccountingSettingsPage() {
 
     const load = useCallback(async () => {
         try {
-            const [data, me] = await Promise.all([api.getAccountingSettings(), api.getMe()]);
+            const [data, me] = await Promise.all([api.getAccountingSettings(), fetchMe()]);
             const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) ?? me?.tenants?.[0];
             setCanEdit(isOwner(tenant?.role));

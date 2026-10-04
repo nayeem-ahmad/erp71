@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Camera, Eye, EyeOff, Loader2, ShieldCheck, ShieldOff } from 'lucide-react';
 import { api, fetchWithAuth } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -11,6 +12,7 @@ import AvatarCropModal from '@/components/AvatarCropModal';
 import { PageShell, PasswordRequirements } from '@/components/ui';
 import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
 import { toast } from '@/lib/toast';
+import { uploadProfileAvatar } from '@/lib/uploads/profile-avatar';
 
 type ToastState = { type: 'success' | 'error'; message: string } | null;
 
@@ -533,7 +535,7 @@ export default function ProfilePage() {
     const [twoFAEnabled, setTwoFAEnabled] = useState<boolean | null>(null);
 
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me) => {
                 setUser(me);
                 setName(me?.name || '');
@@ -581,10 +583,7 @@ export default function ProfilePage() {
     const handleCropConfirm = async (file: File) => {
         setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('avatar', file);
-            const result: { avatarUrl?: string } = await api.updateProfileAvatar(formData);
-            const nextUrl = result?.avatarUrl ?? null;
+            const nextUrl = await uploadProfileAvatar(file);
             setAvatarUrl(nextUrl);
             showToast({ type: 'success', message: t.profile.uploadSuccess });
         } catch (err: any) {

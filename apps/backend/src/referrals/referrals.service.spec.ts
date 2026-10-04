@@ -747,20 +747,36 @@ describe('ReferralsService', () => {
             user_id: 'user-1',
         };
 
+        /** A row as the single read returns it: the profile plus its archive stamp. */
+        const row = (overrides: Record<string, unknown> = {}) => ({ ...profile, deleted_at: null, ...overrides });
+
+        it('reads both candidates — by account and by email — in one query', async () => {
+            db.referee.findMany.mockResolvedValueOnce([]);
+
+            await service.resolveActiveRefereeForUser('user-1', 'rahman@example.com');
+
+            expect(db.referee.findMany).toHaveBeenCalledTimes(1);
+            expect(db.referee.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { OR: [{ user_id: 'user-1' }, { email: 'rahman@example.com' }] },
+                    take: 2,
+                }),
+            );
+            expect(db.referee.findFirst).not.toHaveBeenCalled();
+        });
+
         it('resolves by user_id without touching the row', async () => {
-            db.referee.findFirst.mockResolvedValueOnce(profile);
+            db.referee.findMany.mockResolvedValueOnce([row()]);
 
             const result = await service.resolveActiveRefereeForUser('user-1', 'rahman@example.com');
 
+            // The archive stamp it was read with is not part of the profile.
             expect(result).toEqual(profile);
             expect(db.referee.update).not.toHaveBeenCalled();
         });
 
         it('falls back to email and back-fills the missing user link', async () => {
-            db.referee.findFirst
-                .mockResolvedValueOnce(null)                          // no user_id match
-                .mockResolvedValueOnce({ ...profile, user_id: null }) // email match, unlinked
-                .mockResolvedValueOnce(null);                         // user not linked elsewhere
+            db.referee.findMany.mockResolvedValueOnce([row({ user_id: null })]);
             db.referee.update.mockResolvedValue({ ...profile, user_id: 'user-1' });
 
             const result = await service.resolveActiveRefereeForUser('user-1', 'rahman@example.com');
@@ -769,13 +785,11 @@ describe('ReferralsService', () => {
                 where: { id: 'referee-1' },
                 data: { user_id: 'user-1' },
             });
-            expect(result?.user_id).toBe('user-1');
+            expect(result).toEqual(profile);
         });
 
         it('refuses an email match that belongs to a different user account', async () => {
-            db.referee.findFirst
-                .mockResolvedValueOnce(null)
-                .mockResolvedValueOnce({ ...profile, user_id: 'user-someone-else' });
+            db.referee.findMany.mockResolvedValueOnce([row({ user_id: 'user-someone-else' })]);
 
             const result = await service.resolveActiveRefereeForUser('user-1', 'rahman@example.com');
 
@@ -784,10 +798,11 @@ describe('ReferralsService', () => {
         });
 
         it('refuses to link when this user already owns another referee profile', async () => {
-            db.referee.findFirst
-                .mockResolvedValueOnce(null)
-                .mockResolvedValueOnce({ ...profile, user_id: null })
-                .mockResolvedValueOnce({ id: 'referee-other' });
+            db.referee.findMany.mockResolvedValueOnce([
+                row({ user_id: null }),
+                // Their own profile, archived — it still counts as theirs.
+                row({ id: 'referee-other', email: 'old@example.com', user_id: 'user-1', is_active: false, deleted_at: new Date() }),
+            ]);
 
             const result = await service.resolveActiveRefereeForUser('user-1', 'rahman@example.com');
 
@@ -795,8 +810,22 @@ describe('ReferralsService', () => {
             expect(db.referee.update).not.toHaveBeenCalled();
         });
 
+        it('does not resolve to a linked profile that has been deactivated', async () => {
+            db.referee.findMany.mockResolvedValueOnce([row({ is_active: false })]);
+
+            await expect(service.resolveActiveRefereeForUser('user-1', 'rahman@example.com')).resolves.toBeNull();
+            expect(db.referee.update).not.toHaveBeenCalled();
+        });
+
+        it('ignores an archived email match', async () => {
+            db.referee.findMany.mockResolvedValueOnce([row({ user_id: null, deleted_at: new Date() })]);
+
+            await expect(service.resolveActiveRefereeForUser('user-1', 'rahman@example.com')).resolves.toBeNull();
+            expect(db.referee.update).not.toHaveBeenCalled();
+        });
+
         it('returns null when no active referee matches at all', async () => {
-            db.referee.findFirst.mockResolvedValue(null);
+            db.referee.findMany.mockResolvedValue([]);
 
             await expect(
                 service.resolveActiveRefereeForUser('user-1', 'nobody@example.com'),

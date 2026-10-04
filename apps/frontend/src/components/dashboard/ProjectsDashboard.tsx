@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMe } from '@/hooks/use-me';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import PageShell from '@/components/ui/compact/PageShell';
 import { DashboardSection, KpiTileGrid, type KpiTileSpec } from './ModuleDashboard';
 import type { DashboardIdentity } from './dashboard-identity';
+import { dashboardQueryKey } from './dashboard-query';
 
 type OpenTask = {
     id: string;
@@ -61,64 +63,89 @@ function openTasksFrom(page: { items?: OpenTask[] } | null | undefined) {
  * The running timer is reflected, never started here: the FloatingPanel tracker
  * is already mounted shell-wide for this member, and a second control would be
  * two ways to reach one feature (UI spec §2.8).
+ *
+ * The member's id comes from the shared `/auth/me` cache — the dashboard page
+ * has just read the same answer to pick this variant, so this no longer costs a
+ * third request before any tile can start. Each tile then owns its request and
+ * fills in on its own: one slow endpoint holds back one tile, not four.
  */
 export default function ProjectsDashboard({ greeting, tenantName }: Readonly<DashboardIdentity>) {
     const { t } = useI18n();
     const copy = t.dashboardHome.projects;
 
-    const [tasks, setTasks] = useState<OpenTask[]>([]);
-    const [openCount, setOpenCount] = useState(0);
-    const [hoursToday, setHoursToday] = useState(0);
-    const [hoursWeek, setHoursWeek] = useState(0);
-    const [activeProjects, setActiveProjects] = useState(0);
-    const [timerRunning, setTimerRunning] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const { data: me, isPending: mePending } = useMe();
+    const userId: string | undefined = me?.id ?? undefined;
+    const { today, weekStart } = windows();
+    // No id — `/auth/me` failed or came back without one — means there is no one
+    // to fetch the personal tiles for. They show their empty state rather than
+    // pulse forever with no error and no retry.
+    const hasUser = Boolean(userId);
+    const personalLoading = (pending: boolean) => (hasUser ? pending : mePending);
 
-    useEffect(() => {
-        let cancelled = false;
-        const { today, weekStart } = windows();
+    // Each tile fails on its own: one dead endpoint must not blank the page.
+    const tasksQuery = useQuery({
+        queryKey: dashboardQueryKey('projects', 'open-tasks', userId),
+        queryFn: () => api.getProjectTasks({ assigneeId: userId, limit: 20 }) as Promise<{ items?: OpenTask[] } | null>,
+        enabled: hasUser,
+    });
+    const todayQuery = useQuery({
+        queryKey: dashboardQueryKey('projects', 'hours', userId, today, today),
+        queryFn: () => api.getProjectTimeReport({ from: today, to: today, groupBy: 'date', userId }),
+        enabled: hasUser,
+    });
+    const weekQuery = useQuery({
+        queryKey: dashboardQueryKey('projects', 'hours', userId, weekStart, today),
+        queryFn: () => api.getProjectTimeReport({ from: weekStart, to: today, groupBy: 'date', userId }),
+        enabled: hasUser,
+    });
+    const projectsQuery = useQuery({
+        queryKey: dashboardQueryKey('projects', 'active-projects'),
+        queryFn: () => api.getProjects({ status: 'ACTIVE', limit: 1 }),
+        enabled: hasUser,
+    });
+    const timerQuery = useQuery({
+        queryKey: dashboardQueryKey('projects', 'timer'),
+        queryFn: () => api.getProjectTimer(),
+        enabled: hasUser,
+        // Started and stopped from the tracker on any page, so a return visit
+        // re-checks it rather than trusting a half-minute-old answer.
+        staleTime: 0,
+    });
 
-        (async () => {
-            const me = await api.getMe().catch(() => null);
-            const userId = me?.id;
-            if (cancelled) return;
-            if (!userId) {
-                // getMe() failed or came back without an id: there is no one to
-                // fetch tiles for, but the skeleton must still clear — otherwise
-                // the member stares at four pulsing tiles forever with no error
-                // and no retry.
-                setLoading(false);
-                return;
-            }
-
-            // Each tile fails on its own: one dead endpoint must not blank the page.
-            const [taskPage, todayReport, weekReport, projectPage, timer] = await Promise.all([
-                api.getProjectTasks({ assigneeId: userId, limit: 20 }).catch(() => null),
-                api.getProjectTimeReport({ from: today, to: today, groupBy: 'date', userId }).catch(() => null),
-                api.getProjectTimeReport({ from: weekStart, to: today, groupBy: 'date', userId }).catch(() => null),
-                api.getProjects({ status: 'ACTIVE', limit: 1 }).catch(() => null),
-                api.getProjectTimer().catch(() => null),
-            ]);
-            if (cancelled) return;
-
-            const openTasks = openTasksFrom(taskPage);
-            setTasks(openTasks.tasks.slice(0, 5));
-            setOpenCount(openTasks.total);
-            setHoursToday(todayReport?.summary?.totalHours ?? 0);
-            setHoursWeek(weekReport?.summary?.totalHours ?? 0);
-            setActiveProjects(projectPage?.total ?? 0);
-            setTimerRunning(Boolean(timer));
-            setLoading(false);
-        })();
-
-        return () => { cancelled = true; };
-    }, []);
+    const openTasks = openTasksFrom(tasksQuery.data);
+    const tasks = openTasks.tasks.slice(0, 5);
+    const tasksLoading = personalLoading(tasksQuery.isPending);
+    const timerRunning = Boolean(timerQuery.data);
 
     const tiles: KpiTileSpec[] = [
-        { key: 'tasks', title: copy.myOpenTasks, value: String(openCount), delta: { label: '—', positive: true } },
-        { key: 'today', title: copy.hoursToday, value: hoursToday.toFixed(1), delta: { label: '—', positive: true } },
-        { key: 'week', title: copy.hoursThisWeek, value: hoursWeek.toFixed(1), delta: { label: '—', positive: true } },
-        { key: 'projects', title: copy.activeProjects, value: String(activeProjects), delta: { label: '—', positive: true } },
+        {
+            key: 'tasks',
+            title: copy.myOpenTasks,
+            value: String(openTasks.total),
+            delta: { label: '—', positive: true },
+            loading: tasksLoading,
+        },
+        {
+            key: 'today',
+            title: copy.hoursToday,
+            value: (todayQuery.data?.summary?.totalHours ?? 0).toFixed(1),
+            delta: { label: '—', positive: true },
+            loading: personalLoading(todayQuery.isPending),
+        },
+        {
+            key: 'week',
+            title: copy.hoursThisWeek,
+            value: (weekQuery.data?.summary?.totalHours ?? 0).toFixed(1),
+            delta: { label: '—', positive: true },
+            loading: personalLoading(weekQuery.isPending),
+        },
+        {
+            key: 'projects',
+            title: copy.activeProjects,
+            value: String(projectsQuery.data?.total ?? 0),
+            delta: { label: '—', positive: true },
+            loading: personalLoading(projectsQuery.isPending),
+        },
     ];
 
     return (
@@ -133,7 +160,7 @@ export default function ProjectsDashboard({ greeting, tenantName }: Readonly<Das
                     <p className="text-xs font-medium text-emerald-600">{copy.timerRunning}</p>
                 )}
 
-                <KpiTileGrid tiles={tiles} loading={loading} deltaContext="" />
+                <KpiTileGrid tiles={tiles} loading={false} deltaContext="" />
 
                 {/*
                     Not labelled `copy.myOpenTasks` here too: that string is
@@ -144,7 +171,13 @@ export default function ProjectsDashboard({ greeting, tenantName }: Readonly<Das
                     is unique to this heading.
                 */}
                 <DashboardSection label={copy.title}>
-                    {tasks.length === 0 ? (
+                    {tasksLoading ? (
+                        <div data-testid="open-tasks-skeleton" className="animate-pulse space-y-2">
+                            {Array.from({ length: 3 }).map((_, index) => (
+                                <div key={index} className="h-11 rounded-lg bg-gray-100" />
+                            ))}
+                        </div>
+                    ) : tasks.length === 0 ? (
                         <p className="text-sm text-gray-500">{copy.nothingAssigned}</p>
                     ) : (
                         <ul className="space-y-2">

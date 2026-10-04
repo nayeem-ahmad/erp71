@@ -46,6 +46,7 @@ import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { readsOwnHoursOnly, tenantFromMe } from '@/lib/permissions';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { formatDate } from '@/lib/format';
@@ -303,7 +304,7 @@ export default function HourLogsPage() {
     }, []);
 
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me: unknown) => {
                 const payload = me as {
                     tenants?: { id: string; role?: string | null; record_scope?: string | null }[];

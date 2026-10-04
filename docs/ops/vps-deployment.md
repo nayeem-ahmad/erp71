@@ -5,8 +5,11 @@ This deployment path runs PostgreSQL, the backend, and the frontend on a single 
 ## Topology
 
 - `erp71.com`, `www.erp71.com` -> Caddy -> frontend container on port `3000` (marketing site)
-- `app.erp71.com` -> Caddy -> frontend container on port `3000` (signed-in app)
-- `api.erp71.com` -> Caddy -> backend container on port `4000`
+- `app.erp71.com` -> Caddy -> frontend container on port `3000` (signed-in app),
+  except `app.erp71.com/api/v1/*` -> backend container on port `4000` (the
+  browser's API calls, kept same-origin to skip the CORS preflight)
+- `api.erp71.com` -> Caddy -> backend container on port `4000` (mobile app,
+  API-key clients, payment callbacks)
 - Postgres runs in the `db` container with a persistent Docker volume
 
 The marketing site and the app are the same Next.js container. `src/middleware.ts`
@@ -79,7 +82,14 @@ start this stack's own `caddy` service — it is gated behind the
    }
    app.erp71.com {
    	encode zstd gzip
-   	reverse_proxy erp71-frontend-1:3000
+   	handle /api/v1/* {
+   		reverse_proxy erp71-backend-1:4000 {
+   			flush_interval -1
+   		}
+   	}
+   	handle {
+   		reverse_proxy erp71-frontend-1:3000
+   	}
    }
    api.erp71.com {
    	encode zstd gzip
@@ -93,6 +103,10 @@ start this stack's own `caddy` service — it is gated behind the
    extra is needed; a proxy that rewrites it must send the original in
    `X-Forwarded-Host`.
 
+   `/api/v1/*` on the app host goes to the backend because the browser calls
+   its own origin for the API — see the runbook's
+   [API on the app domain](./deployment-runbook.md#api-on-the-app-domain).
+
 For a dedicated host, enable this stack's own proxy instead:
 `docker compose --profile standalone-edge -f docker-compose.prod.yml up -d`.
 
@@ -100,6 +114,7 @@ For a dedicated host, enable this stack's own proxy instead:
 
 ```bash
 curl https://api.erp71.com/api/v1/health
+curl https://app.erp71.com/api/v1/health
 curl -I https://app.erp71.com
 curl -I https://erp71.com
 docker compose -f docker-compose.prod.yml ps

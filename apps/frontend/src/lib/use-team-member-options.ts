@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useMe } from '@/hooks/use-me';
 import { api } from '@/lib/api';
 
 export type TeamMemberOption = { id: string; label: string };
@@ -17,15 +18,14 @@ export type TeamMemberOption = { id: string; label: string };
  */
 export function useTeamMemberOptions(meLabel: string) {
     const [members, setMembers] = useState<any[]>([]);
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    // From the shared `/auth/me` cache rather than a request of its own.
+    const { data: me } = useMe();
+    const currentUserId: string | null = me?.id ?? null;
 
     useEffect(() => {
         api.getCrmAssignees()
             .then((d: any) => setMembers(Array.isArray(d) ? d : []))
             .catch(() => setMembers([]));
-        api.getMe()
-            .then((me: any) => setCurrentUserId(me?.id ?? null))
-            .catch(() => setCurrentUserId(null));
     }, []);
 
     const options = useMemo<TeamMemberOption[]>(() => {

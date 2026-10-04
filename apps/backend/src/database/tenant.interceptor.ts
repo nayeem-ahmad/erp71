@@ -11,12 +11,20 @@ import { TenantRecordScope, resolveRecordScope } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from './tenant-timezone.service';
 import { loadTenantMembership } from './tenant-membership.loader';
+import { AuthCacheService } from './auth-cache.service';
+import {
+    MemberStoreAccess,
+    loadMemberStoreAccess,
+    soleStoreId,
+    storeBelongsToTenant,
+} from './member-access.loader';
 
 @Injectable()
 export class TenantInterceptor implements NestInterceptor {
     constructor(
         private db: DatabaseService,
         private timezones: TenantTimezoneService,
+        private authCache: AuthCacheService,
     ) { }
 
     async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
@@ -34,7 +42,7 @@ export class TenantInterceptor implements NestInterceptor {
         let resolvedTenantId: string;
         // Filled by the parallel read below, for the store section to use
         // instead of issuing the same query a round trip later.
-        let prefetchedStoreRows: { store_id: string }[] | undefined;
+        let prefetchedStoreRows: readonly MemberStoreAccess[] | undefined;
 
         if (tenantId) {
             // The header already names the tenant, so the auto-resolve store
@@ -52,14 +60,8 @@ export class TenantInterceptor implements NestInterceptor {
                 // which run before this interceptor and read the same row.
                 // Whichever gets there first pays for it; the rest read it back
                 // off the request.
-                loadTenantMembership(this.db, request, tenantId as string, userId),
-                storeId
-                    ? undefined
-                    : this.db.userStoreAccess.findMany({
-                          where: { user_id: userId, tenant_id: tenantId as string },
-                          select: { store_id: true },
-                          take: 2,
-                      }),
+                loadTenantMembership(this.db, request, tenantId as string, userId, this.authCache),
+                storeId ? undefined : loadMemberStoreAccess(this.db, this.authCache, userId, tenantId as string),
             ]);
             prefetchedStoreRows = storeRows ?? undefined;
 
@@ -120,26 +122,16 @@ export class TenantInterceptor implements NestInterceptor {
             // permission for them) and have it accepted as a store of A.
             if (isOwner) {
                 // OWNER may use any store — of their own workspace.
-                const store = await this.db.store.findFirst({
-                    where: { id: storeId as string, tenant_id: resolvedTenantId },
-                    select: { id: true },
-                });
-                if (!store) {
+                if (!(await storeBelongsToTenant(this.db, this.authCache, resolvedTenantId, storeId as string))) {
                     throw new ForbiddenException('You do not have access to this store');
                 }
             } else {
-                const access = await this.db.userStoreAccess.findUnique({
-                    where: {
-                        user_id_store_id: {
-                            user_id: userId,
-                            store_id: storeId as string,
-                        },
-                        tenant_id: resolvedTenantId,
-                    },
-                    select: { store_id: true, access_level: true },
-                });
+                // The member's whole access list in this workspace, cached, rather
+                // than a lookup of this one store: the next request usually names
+                // the same store, and the guard reads the same list.
+                const access = await loadMemberStoreAccess(this.db, this.authCache, userId, resolvedTenantId);
 
-                if (!access) {
+                if (!access.some((row) => row.store_id === storeId)) {
                     throw new ForbiddenException('You do not have access to this store');
                 }
             }
@@ -152,14 +144,11 @@ export class TenantInterceptor implements NestInterceptor {
             // still issues the read here.
             const userStoreAccess =
                 prefetchedStoreRows ??
-                (await this.db.userStoreAccess.findMany({
-                    where: { user_id: userId, tenant_id: resolvedTenantId },
-                    select: { store_id: true },
-                    take: 2,
-                }));
+                (await loadMemberStoreAccess(this.db, this.authCache, userId, resolvedTenantId));
 
-            if (userStoreAccess.length === 1) {
-                request.storeId = userStoreAccess[0].store_id;
+            const sole = soleStoreId(userStoreAccess);
+            if (sole) {
+                request.storeId = sole;
             }
             // If 0 or >1, storeId stays undefined — endpoints that need it will demand the header
         }

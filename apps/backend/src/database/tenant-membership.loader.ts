@@ -1,4 +1,5 @@
 import { DatabaseService } from './database.service';
+import { AuthCacheService } from './auth-cache.service';
 import { TenantRecordScope } from '@erp71/shared-types';
 
 /**
@@ -54,12 +55,18 @@ type MembershipCache = Map<string, Promise<LoadedTenantMembership | null>>;
  * in particular stays at the call site: `TenantInterceptor` rejects a member of
  * a soft-deleted tenant, the guards do not, and unifying that here would change
  * which status code a stale tenant header returns.
+ *
+ * Beneath the per-request cache sits `AuthCacheService`, which keeps the row
+ * across requests for a short while, so on a warm cache the four readers cost
+ * no query at all. The per-request layer stays: with the process cache switched
+ * off (`AUTH_CACHE_TTL_MS=0`) it is what keeps one request to one read.
  */
 export async function loadTenantMembership(
     db: DatabaseService,
     request: any,
     tenantId: string,
     userId: string,
+    authCache: AuthCacheService,
 ): Promise<LoadedTenantMembership | null> {
     const cache: MembershipCache = request?.[CACHE_KEY] ?? new Map();
     if (request && !request[CACHE_KEY]) request[CACHE_KEY] = cache;
@@ -68,7 +75,7 @@ export async function loadTenantMembership(
     const cached = cache.get(key);
     if (cached) return cached;
 
-    const pending = fetchMembership(db, tenantId, userId);
+    const pending = authCache.membership(userId, tenantId, () => fetchMembership(db, tenantId, userId));
     cache.set(key, pending);
 
     try {

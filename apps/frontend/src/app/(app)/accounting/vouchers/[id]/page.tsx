@@ -13,6 +13,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { compactDensity } from '@/lib/ui/compact-density';
@@ -66,7 +67,7 @@ export default function VoucherDetailPage() {
     const [acting, setActing] = useState(false);
 
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me) => {
                 const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === getWorkspaceItem('tenant_id'))
                     ?? me?.tenants?.[0];

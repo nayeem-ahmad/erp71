@@ -1,5 +1,6 @@
 import { api } from './api';
 import { syncLocalePreferenceFromSession } from './localization/preference';
+import { clearQueryCache, getQueryClient, ME_QUERY_KEY, resetWorkspaceQueries } from './query-client';
 import { routes } from './routes';
 import { clearStoredSession } from './session-expiry';
 import { resolveWorkspaceSlug } from './workspace-slug';
@@ -46,13 +47,36 @@ export function getLoginContexts(me: any): LoginContexts {
     };
 }
 
+/** Which workspace this tab is in, as far as anything cached could care. */
+function workspaceIdentity(): string {
+    return `${getWorkspaceItem('active_context') ?? ''}|${getWorkspaceItem('tenant_id') ?? ''}`;
+}
+
+/**
+ * Run a workspace change and, when it really moved the tab somewhere else, drop
+ * what the cache holds for the workspace it left.
+ *
+ * Compared before and after rather than reset unconditionally because the app
+ * shell re-applies the context it is already in on every navigation; resetting
+ * then would throw the whole cache away on every click. The store is left out of
+ * the comparison for the same reason — re-entering a shop re-picks its first
+ * branch — and a deliberate branch switch resets on its own (`(app)/layout.tsx`).
+ */
+function switchWorkspace(apply: () => void): void {
+    const before = workspaceIdentity();
+    apply();
+    if (workspaceIdentity() !== before) resetWorkspaceQueries();
+}
+
 /** Activate the referee self-service portal (no shop/tenant scope). */
 export function applyRefereeContext() {
-    rememberCurrentTenant();
-    setWorkspaceItem('active_context', 'referee');
-    removeWorkspaceItem('tenant_id');
-    removeWorkspaceItem('store_id');
-    removeWorkspaceItem('subscription_plan_code');
+    switchWorkspace(() => {
+        rememberCurrentTenant();
+        setWorkspaceItem('active_context', 'referee');
+        removeWorkspaceItem('tenant_id');
+        removeWorkspaceItem('store_id');
+        removeWorkspaceItem('subscription_plan_code');
+    });
 }
 
 /**
@@ -64,21 +88,25 @@ export function applyRefereeContext() {
  * only break the app shell, which needs a tenant to render.
  */
 export function applyEmployeeContext(employee: { tenant_id?: string | null }) {
-    setWorkspaceItem('active_context', 'employee');
-    if (employee?.tenant_id) {
-        setWorkspaceItem('tenant_id', employee.tenant_id);
-        setLastTenantId(employee.tenant_id);
-    }
-    removeWorkspaceItem('store_id');
+    switchWorkspace(() => {
+        setWorkspaceItem('active_context', 'employee');
+        if (employee?.tenant_id) {
+            setWorkspaceItem('tenant_id', employee.tenant_id);
+            setLastTenantId(employee.tenant_id);
+        }
+        removeWorkspaceItem('store_id');
+    });
 }
 
 /** Activate the Platform Admin console (no shop/tenant scope). */
 export function applyPlatformAdminContext() {
-    rememberCurrentTenant();
-    setWorkspaceItem('active_context', 'platform-admin');
-    removeWorkspaceItem('tenant_id');
-    removeWorkspaceItem('store_id');
-    removeWorkspaceItem('subscription_plan_code');
+    switchWorkspace(() => {
+        rememberCurrentTenant();
+        setWorkspaceItem('active_context', 'platform-admin');
+        removeWorkspaceItem('tenant_id');
+        removeWorkspaceItem('store_id');
+        removeWorkspaceItem('subscription_plan_code');
+    });
 }
 
 /**
@@ -88,25 +116,29 @@ export function applyPlatformAdminContext() {
  * it is what a brand-new tab resumes from.
  */
 export function applyTenantContext(tenant: any) {
-    removeWorkspaceItem('active_context');
-    setWorkspaceItem('tenant_id', tenant.id);
-    setLastTenantId(tenant.id);
-    if (tenant.stores && tenant.stores.length > 0) {
-        setWorkspaceItem('store_id', tenant.stores[0].id);
-    } else {
-        removeWorkspaceItem('store_id');
-    }
-    if (tenant.subscription?.plan?.code) {
-        setWorkspaceItem('subscription_plan_code', tenant.subscription.plan.code);
-    } else {
-        removeWorkspaceItem('subscription_plan_code');
-    }
+    switchWorkspace(() => {
+        removeWorkspaceItem('active_context');
+        setWorkspaceItem('tenant_id', tenant.id);
+        setLastTenantId(tenant.id);
+        if (tenant.stores && tenant.stores.length > 0) {
+            setWorkspaceItem('store_id', tenant.stores[0].id);
+        } else {
+            removeWorkspaceItem('store_id');
+        }
+        if (tenant.subscription?.plan?.code) {
+            setWorkspaceItem('subscription_plan_code', tenant.subscription.plan.code);
+        } else {
+            removeWorkspaceItem('subscription_plan_code');
+        }
+    });
 }
 
 /** Forget the selected workspace so the account chooser starts clean. */
 export function clearActiveContext() {
-    clearWorkspace();
-    clearLastTenantId();
+    switchWorkspace(() => {
+        clearWorkspace();
+        clearLastTenantId();
+    });
 }
 
 /**
@@ -161,6 +193,10 @@ export async function storeAuthResponse(
 ): Promise<StoreAuthResult> {
     const data = res.data ? res.data : res;
     setCredentials(data);
+    // Nothing the previous session cached may reach this one, which can be a
+    // different person on the same browser — a sign-out in another tab, or an
+    // expiry, may never have cleared this tab's memory.
+    clearQueryCache();
     // Fresh login → start from a collapsed, default-width sidebar.
     clearSidebarLayoutState();
 
@@ -178,6 +214,17 @@ export async function storeAuthResponse(
         localStorage.setItem('demo_session', '1');
     }
 
+    const result = enterWorkspaceAfterSignIn(meRes, options);
+    // Handed to the cache so the screen this opens onto renders without asking
+    // for `/auth/me` again. Seeded after the workspace is entered, not before:
+    // entering one marks `me` stale for the next screen, which is right for a
+    // switch but not for an answer that is a moment old.
+    getQueryClient().setQueryData(ME_QUERY_KEY, meRes);
+    return result;
+}
+
+/** Where a fresh session lands, given who it turned out to be. */
+function enterWorkspaceAfterSignIn(meRes: any, options: StoreAuthOptions): StoreAuthResult {
     const { isPlatformAdmin, isReferee, tenants, count } = getLoginContexts(meRes);
 
     // More than one workspace available → let the user choose which to enter,
@@ -221,6 +268,10 @@ export function clearAuthSession() {
     // Shares one key list with the expired-session path so an explicit sign-out
     // and an expiry can never clear different things.
     clearStoredSession();
+    // Sign-out is a client-side navigation, so the cache would otherwise survive
+    // it in memory and greet whoever signs in next with this account's data.
+    // (The expiry path does not need this: it reloads the page.)
+    clearQueryCache();
 }
 
 /** True when the path belongs to a shop workspace (not the platform admin console). */

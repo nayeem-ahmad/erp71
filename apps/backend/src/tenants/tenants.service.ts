@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
 import { checkMushakIssuer, isDashboardPreference, normalizePasswordPolicy, type PasswordPolicy } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { isValidTimeZone } from '../common/tenant-time.util';
@@ -23,6 +24,7 @@ export class TenantsService {
         private readonly db: DatabaseService,
         private readonly timezones: TenantTimezoneService,
         private readonly planEntitlements: PlanEntitlementsService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     async updateStorefrontSettings(tenantId: string, dto: StorefrontSettingsDto) {
@@ -585,8 +587,14 @@ export class TenantsService {
         });
 
         // Otherwise the next few minutes of requests keep measuring the day in
-        // the old zone, which reads as the setting not having saved.
-        if (dto.timezone !== undefined) this.timezones.invalidate(tenantId);
+        // the old zone, which reads as the setting not having saved. Both
+        // caches: `TenantInterceptor` reads the zone off the cached membership
+        // and primes `TenantTimezoneService` with it on every request, so
+        // clearing only the latter would have it re-primed with the old zone.
+        if (dto.timezone !== undefined) {
+            this.authCache.invalidateTenant(tenantId);
+            this.timezones.invalidate(tenantId);
+        }
 
         return updated;
     }

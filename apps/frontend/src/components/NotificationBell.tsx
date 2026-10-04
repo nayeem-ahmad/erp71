@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { NotificationIcon } from '@/components/NotificationIcon';
 import { useDismissable } from '@/hooks/useDismissable';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 
 interface Notification {
     id: string;
@@ -49,12 +50,11 @@ export default function NotificationBell() {
         }
     }, []);
 
-    // Poll unread count every 60s
+    // Unread count on mount, then every 60s while the tab is in view.
     useEffect(() => {
-        fetchCount();
-        const interval = setInterval(fetchCount, 60_000);
-        return () => clearInterval(interval);
+        void fetchCount();
     }, [fetchCount]);
+    useVisibleInterval(() => void fetchCount(), 60_000);
 
     // Close on outside click / Escape
     useDismissable(panelRef, () => setOpen(false), open);

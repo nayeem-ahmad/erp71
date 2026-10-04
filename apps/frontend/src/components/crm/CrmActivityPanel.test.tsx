@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import CrmActivityPanel from './CrmActivityPanel';
 
 jest.mock('@/lib/api', () => ({
@@ -76,7 +77,7 @@ beforeEach(() => {
 
 describe('CrmActivityPanel', () => {
     it('splits planned work from logged history', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
 
         expect(await screen.findByText('Chase the invoice')).toBeInTheDocument();
         expect(screen.getByText('Sent the catalogue')).toBeInTheDocument();
@@ -85,19 +86,19 @@ describe('CrmActivityPanel', () => {
     });
 
     it('scopes the load to the lead it was given', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await waitFor(() => expect(api.getAllCrmActivities).toHaveBeenCalledWith({ leadId: 'l1' }));
     });
 
     it('scopes the load to the customer it was given', async () => {
-        render(<CrmActivityPanel customerId="c1" />);
+        renderWithQueryClient(<CrmActivityPanel customerId="c1" />);
         await waitFor(() => expect(api.getAllCrmActivities).toHaveBeenCalledWith({ customerId: 'c1' }));
     });
 
     // The closed loop is the whole reason the two tables were merged: completing
     // a call and scheduling the next one is one action, not two.
     it('sends the next activity along with the completion', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         fireEvent.click(await screen.findByRole('button', { name: /complete/i }));
 
         fireEvent.change(await screen.findByPlaceholderText(/Spoke to Karim/), {
@@ -110,7 +111,7 @@ describe('CrmActivityPanel', () => {
     });
 
     it('omits the next block entirely when it is left half-filled', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         fireEvent.click(await screen.findByRole('button', { name: /complete/i }));
         fireEvent.change(await screen.findByPlaceholderText(/Spoke to Karim/), {
             target: { value: 'Spoke to him' },
@@ -127,14 +128,14 @@ describe('CrmActivityPanel', () => {
     });
 
     it('cancels a planned activity rather than deleting it', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         fireEvent.click(await screen.findByRole('button', { name: /Cancel activity/i }));
         await waitFor(() => expect(api.cancelCrmActivity).toHaveBeenCalledWith('a1'));
     });
 
     it('opens the log dialog pre-filled when handed a draft', async () => {
         const onConsumed = jest.fn();
-        render(
+        renderWithQueryClient(
             <CrmActivityPanel
                 leadId="l1"
                 draft={{ channelCode: 'CALL', summary: 'Drafted by AI' }}
@@ -161,28 +162,28 @@ describe('CrmActivityPanel — editing a planned activity', () => {
     };
 
     it('offers Edit on planned work', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await screen.findByText('Chase the invoice');
 
         expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
     });
 
     it('does not offer Edit on history, which the API refuses to edit', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await screen.findByText('Sent the catalogue');
 
         expect(screen.getAllByRole('button', { name: /edit/i })).toHaveLength(1);
     });
 
     it('prefills the form from the activity it is editing', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await openEdit();
 
         expect(await screen.findByDisplayValue('Chase the invoice')).toBeInTheDocument();
     });
 
     it('patches the activity rather than creating a second one', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await openEdit();
 
         fireEvent.change(await screen.findByDisplayValue('Chase the invoice'), {
@@ -199,7 +200,7 @@ describe('CrmActivityPanel — editing a planned activity', () => {
     });
 
     it('reassigns through the same form', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await openEdit();
 
         const assignee = await screen.findByLabelText('Assigned to');
@@ -213,7 +214,7 @@ describe('CrmActivityPanel — editing a planned activity', () => {
     });
 
     it('can hand an activity back to nobody', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await openEdit();
 
         fireEvent.change(await screen.findByLabelText('Assigned to'), { target: { value: '' } });
@@ -228,7 +229,7 @@ describe('CrmActivityPanel — editing a planned activity', () => {
 
 describe('CrmActivityPanel — naming an assignee on new work', () => {
     it('defaults a scheduled activity to the person scheduling it', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         fireEvent.click(await screen.findByRole('button', { name: 'Schedule' }));
 
         await waitFor(() =>
@@ -237,7 +238,7 @@ describe('CrmActivityPanel — naming an assignee on new work', () => {
     });
 
     it('sends the chosen assignee when scheduling', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         fireEvent.click(await screen.findByRole('button', { name: 'Schedule' }));
 
         fireEvent.change(await screen.findByPlaceholderText(/Call about the outstanding/), {
@@ -254,7 +255,7 @@ describe('CrmActivityPanel — naming an assignee on new work', () => {
     });
 
     it('carries an assignee on the follow-up scheduled at completion', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         fireEvent.click(await screen.findByRole('button', { name: /^Complete$/ }));
 
         fireEvent.change(await screen.findByPlaceholderText(/Spoke to Karim/), {
@@ -308,7 +309,7 @@ describe('CrmActivityPanel — approving planned work', () => {
 
     it('approves a planned activity in place', async () => {
         asReviewer();
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         const toggle = await enabledSwitch();
         expect(toggle).toHaveAttribute('aria-checked', 'false');
 
@@ -325,7 +326,7 @@ describe('CrmActivityPanel — approving planned work', () => {
 
     it('names the reviewer once the server has stamped the approval', async () => {
         asReviewer();
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         fireEvent.click(await enabledSwitch());
 
         expect(await screen.findByText(/Nayeem/)).toBeInTheDocument();
@@ -334,7 +335,7 @@ describe('CrmActivityPanel — approving planned work', () => {
     // Printed rather than left to a tooltip: a phone has no hover.
     it('names who approved an activity that arrives approved', async () => {
         api.getAllCrmActivities.mockResolvedValue([{ ...planned, is_approved: true, approver: RIFAT }, logged]);
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
 
         expect(await screen.findByText(/Rifat/)).toBeInTheDocument();
     });
@@ -343,7 +344,7 @@ describe('CrmActivityPanel — approving planned work', () => {
         asReviewer();
         api.getAllCrmActivities.mockResolvedValue([{ ...planned, is_approved: true, approver: RIFAT }, logged]);
         api.setCrmActivityApproval.mockResolvedValue({ ...planned, is_approved: false, approver: null });
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         const toggle = await enabledSwitch();
         expect(toggle).toHaveAttribute('aria-checked', 'true');
 
@@ -359,7 +360,7 @@ describe('CrmActivityPanel — approving planned work', () => {
     it('puts the switch back and says so when the server refuses', async () => {
         asReviewer();
         api.setCrmActivityApproval.mockRejectedValue(new Error('nope'));
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         const toggle = await enabledSwitch();
 
         fireEvent.click(toggle);
@@ -375,7 +376,7 @@ describe('CrmActivityPanel — approving planned work', () => {
      */
     it('reports a write to the caller, and stays quiet on a plain load', async () => {
         const onChanged = jest.fn();
-        render(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
         await screen.findByText('Chase the invoice');
 
         expect(onChanged).not.toHaveBeenCalled();
@@ -388,7 +389,7 @@ describe('CrmActivityPanel — approving planned work', () => {
     it('does not report a write the server refused', async () => {
         const onChanged = jest.fn();
         api.cancelCrmActivity.mockRejectedValue(new Error('nope'));
-        render(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" onChanged={onChanged} />);
         await screen.findByText('Chase the invoice');
 
         fireEvent.click(await screen.findByRole('button', { name: /Cancel activity/i }));
@@ -398,7 +399,7 @@ describe('CrmActivityPanel — approving planned work', () => {
     });
 
     it('shows the switch disabled to someone who cannot approve', async () => {
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await screen.findByText('Chase the invoice');
 
         expect(screen.getByRole('switch', { name: 'Approve this activity' })).toBeDisabled();
@@ -408,7 +409,7 @@ describe('CrmActivityPanel — approving planned work', () => {
     // decision that changes nothing.
     it('offers the switch on planned work only, not on history', async () => {
         asReviewer();
-        render(<CrmActivityPanel leadId="l1" />);
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
         await screen.findByText('Sent the catalogue');
 
         expect(screen.getAllByRole('switch')).toHaveLength(1);
