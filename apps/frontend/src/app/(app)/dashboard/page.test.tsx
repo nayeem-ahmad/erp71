@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import DashboardPage from './page';
 import { api } from '@/lib/api';
 
@@ -168,7 +169,7 @@ describe('DashboardPage — Business Monitor v2', () => {
     });
 
     it('renders the v2 dashboard sections', async () => {
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
         expect(await screen.findByText('Business health')).toBeInTheDocument();
         expect(await screen.findByText('Needs your attention')).toBeInTheDocument();
         expect(await screen.findByText('Sales by category')).toBeInTheDocument();
@@ -178,7 +179,7 @@ describe('DashboardPage — Business Monitor v2', () => {
     });
 
     it('renders the greeting and range toggle and fetches financial data', async () => {
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText(/Northwind Retail/)).toBeInTheDocument();
         // Health KPI titles
@@ -236,7 +237,7 @@ describe('DashboardPage — Business Monitor v2', () => {
             },
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('No accounting movement')).toBeInTheDocument();
         expect(screen.getByText('Business health')).toBeInTheDocument();
@@ -281,7 +282,7 @@ describe('DashboardPage — variant selection', () => {
     it('renders the accounting dashboard for an accounting-only plan', async () => {
         (api.getMe as jest.Mock).mockResolvedValue(accountingTenant());
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Where the money sits')).toBeInTheDocument();
         expect(screen.getByText('Health of your books')).toBeInTheDocument();
@@ -310,7 +311,7 @@ describe('DashboardPage — variant selection', () => {
             }],
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Where the money sits')).toBeInTheDocument();
         expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
@@ -328,7 +329,7 @@ describe('DashboardPage — variant selection', () => {
             }],
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Business health')).toBeInTheDocument();
         expect(screen.queryByText('Where the money sits')).not.toBeInTheDocument();
@@ -346,7 +347,7 @@ describe('DashboardPage — variant selection', () => {
             }],
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Business health')).toBeInTheDocument();
         expect(screen.queryByText('Where the money sits')).not.toBeInTheDocument();
@@ -371,7 +372,7 @@ describe('DashboardPage — variant selection', () => {
         (api.getProjects as jest.Mock).mockResolvedValue({ items: [], total: 0 });
         (api.getProjectTimer as jest.Mock).mockResolvedValue(null);
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('My Open Tasks')).toBeInTheDocument();
         expect(screen.getByText('Hours This Week')).toBeInTheDocument();

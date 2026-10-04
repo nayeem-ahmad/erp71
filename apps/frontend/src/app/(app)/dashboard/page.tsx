@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { DashboardVariant } from '@erp71/shared-types';
-import { api } from '@/lib/api';
+import { useMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { extractTenantPlan } from '@/lib/nav-visibility';
 import { tenantDashboardVariant } from '@/lib/plan-entitlements';
@@ -28,44 +28,40 @@ type Resolved = {
  * The variants are separate components on purpose: the previous single page
  * carried six `!accountingOnlyMode` guards, and every panel added to any side
  * made that worse.
+ *
+ * The choice is read off the shared `/auth/me` cache. The app shell is fetching
+ * the same answer as this page mounts, so this used to be a second request the
+ * page waited on before any card could start loading; now it joins the shell's,
+ * and on a return visit the variant is known on the first render.
  */
 export default function DashboardPage() {
     const { t } = useI18n();
     const copy = t.dashboardHome;
 
-    const [resolved, setResolved] = useState<Resolved | null>(null);
+    const { data: me, isError, error } = useMe();
+    const tenantId = getWorkspaceItem('tenant_id');
+
+    const resolved = useMemo<Resolved | null>(() => {
+        if (me !== undefined) {
+            const { planCode, features, dashboardPreference, permissions } = extractTenantPlan(me, tenantId);
+            const tenants = me?.tenants ?? [];
+            const tenant = tenants.find((entry: { id: string }) => entry.id === tenantId) ?? tenants[0];
+            return {
+                variant: tenantDashboardVariant(planCode, features, dashboardPreference, permissions),
+                userName: me?.name || '',
+                tenantName: tenant?.name || '',
+                renewalEnd: tenant?.subscription?.current_period_end ?? null,
+            };
+        }
+        // Without the plan there is nothing to switch on, and retail is the
+        // dashboard every plan has.
+        if (isError) return { variant: 'RETAIL', userName: '', tenantName: '', renewalEnd: null };
+        return null;
+    }, [me, isError, tenantId]);
 
     useEffect(() => {
-        let cancelled = false;
-
-        api.getMe()
-            .then((me) => {
-                if (cancelled) return;
-                const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
-                const { planCode, features, dashboardPreference, permissions } = extractTenantPlan(me, tenantId);
-                const tenants = me?.tenants ?? [];
-                const tenant = tenants.find((entry: { id: string }) => entry.id === tenantId) ?? tenants[0];
-
-                setResolved({
-                    variant: tenantDashboardVariant(planCode, features, dashboardPreference, permissions),
-                    userName: me?.name || '',
-                    tenantName: tenant?.name || '',
-                    renewalEnd: tenant?.subscription?.current_period_end ?? null,
-                });
-            })
-            .catch((reason) => {
-                console.error('Failed to fetch dashboard user context:', reason);
-                // Without the plan there is nothing to switch on, and retail is the
-                // dashboard every plan has.
-                if (!cancelled) {
-                    setResolved({ variant: 'RETAIL', userName: '', tenantName: '', renewalEnd: null });
-                }
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+        if (isError && me === undefined) console.error('Failed to fetch dashboard user context:', error);
+    }, [isError, me, error]);
 
     const greeting = useMemo(() => {
         const hour = new Date().getHours();
