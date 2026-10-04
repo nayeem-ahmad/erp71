@@ -159,6 +159,32 @@ Full plan with design, files, risks, rollback and verification per item: `docs/p
 - [ ] **Set `METRICS_TOKEN` in production.** It is unset, so `/api/v1/metrics` 404s and there are no per-route server timings. The 2026-10-04 numbers come from client-side curl and table statistics only.
 - [ ] **Shorten the deploy outage.** Measured during the #766 deploy on 2026-10-04: 19 s from backend container start to app-ready (~23 sync scripts plus `prisma db push` before `listen`), and every API call 502s for the whole window. Building images in CI and pulling them on the VPS would also stop deploy builds competing with live traffic and eating the 81%-full disk.
 
+#### Found while implementing the perceived-speed plan (2026-10-04)
+
+- [ ] **Offline POS sales queued for more than about an hour never sync.** Each queued sale stores the access token from when it was rung up, and neither sync path (`public/sw.js` `syncPendingSales`, the page's `syncNow`) renews it. Access tokens last 1 h, so a sale queued earlier than that gets 401 on every retry and sits in IndexedDB for good. Queued sales also carry no `x-store-id`. Renew through `/auth/refresh` before replaying, and replay with the store header.
+- [ ] **The POS doesn't recognise Safari's offline error.** It treats a failure as "offline" only when the message contains "failed to fetch" or "network". Safari says "Load failed", so on iPhone/iPad a sale made with no connection errors out instead of being queued.
+- [ ] **Server-side storefront fetches share one rate-limit bucket.** Public pages render on the frontend server, and their API calls now go to `http://backend:4000`. The backend sees the frontend container's IP for all of them. The bucket is now 120/min (it was 20), but it's shared by every visitor across every storefront. Forward the visitor's IP from the frontend (`X-Forwarded-For`, trusted only from the compose network) or exempt internal calls.
+- [ ] **The service worker caches error pages.** Its navigation handler stores any response, including 5xx pages, so an offline reload can show a cached error page. Cache only `response.ok`.
+- [ ] **Onboarding keeps polling after it has succeeded.** It checks every 4 s even after a sale is detected; `saleDetected ? null : 4000` in its `useVisibleInterval` call would stop it.
+- [ ] **`sync-lead-activity.ts` subqueries don't join on tenant.** Add `AND x."tenant_id" = l2."tenant_id"` to its three subqueries so they can use the `(tenant_id, lead_id, …)` indexes, and fix its comment claiming they run "over indexed foreign keys". It runs on every deploy for each lead that has never been worked.
+- [ ] **`searchByQuantitySold` joins every product to the whole `SaleItem` table on a broad search term** (`products.service.ts:635-654`). It's called on every keystroke-driven product search in New Sale/Purchase. It probably causes many of the `SaleItem` full scans and needs a query fix (restrict by tenant and a date window, or a pre-aggregated count), not an index.
+- [ ] **Indexes waiting for `pg_stat_statements` data** (the three clear-cut ones landed with the plan):
+  - `InventoryMovement(tenant_id, reference_type, reference_id)` for the purchase-cancel reversal
+  - `InventoryMovement(product_id)` for product merge and the product cascade
+  - a covering `InventoryMovement(tenant_id, created_at, product_id, quantity_delta)` for the inventory dashboard
+  - `CrmActivity(customer_id)`
+  - `LeadConversation(lead_id)` and `CrmFollowUp(lead_id)`
+
+  Decide each from the top statements by total execution time.
+- [ ] **Build the images in CI and pull them on the VPS (P3.5 remainder).** Needs:
+  - a read-only GHCR token logged in on the VPS (`docker login ghcr.io`), or public packages
+  - `packages: write` and build-push steps in the deploy workflow
+  - the frontend's `NEXT_PUBLIC_*` build args moved out of the VPS's `.env.production`, since they're inlined at build time
+  - `image:` tags in compose
+
+  A rollback then becomes "redeploy the previous tag".
+- [ ] **About 20 `packages/database/prisma/sync-*.ts` headers still say "runs on every container start"**, or point at the Dockerfile. Since P3.5 the chain lives in `apps/backend/scripts/db-prepare.sh` and runs once per commit, before the container swap. New sync steps must be added there.
+
 ### Server performance — follow-ups (2026-09-21)
 
 The request path and the document-line indexes were dealt with (see COMPLETED). What that work turned up and did not fix:
