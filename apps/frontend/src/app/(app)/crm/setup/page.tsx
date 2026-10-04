@@ -6,7 +6,7 @@ import { PageShell, PageHeader } from '@/components/ui';
 import CrmListPanel from '@/components/crm/CrmListPanel';
 import CrmCustomFieldsPanel from '@/components/crm/CrmCustomFieldsPanel';
 import CrmMessageTemplatesPanel from '@/components/crm/CrmMessageTemplatesPanel';
-import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { hasPermission, isOwner } from '@/lib/permissions';
@@ -46,7 +46,7 @@ function CrmSetupPage() {
     );
 
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me) => {
                 const tenant =
                     me?.tenants?.find((e: { id: string }) => e.id === getWorkspaceItem('tenant_id'))

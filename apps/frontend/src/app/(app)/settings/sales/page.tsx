@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ShoppingBag, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -34,7 +35,7 @@ export default function SalesSettingsPage() {
 
     const loadSettings = useCallback(async () => {
         try {
-            const [data, me] = await Promise.all([api.getSalesSettings(), api.getMe()]);
+            const [data, me] = await Promise.all([api.getSalesSettings(), fetchMe()]);
             const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
             setIsShopOwner(isOwner(tenant?.role));

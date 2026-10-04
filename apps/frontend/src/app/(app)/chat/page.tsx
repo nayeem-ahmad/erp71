@@ -19,6 +19,7 @@ import {
     type PendingAttachment,
 } from '@/components/chat/types';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -62,7 +63,7 @@ export default function ChatPage() {
         let cancelled = false;
         void (async () => {
             try {
-                const user = (await api.getMe()) as { id?: string } | null;
+                const user = (await fetchMe()) as { id?: string } | null;
                 if (!cancelled) setCurrentUserId(user?.id ?? null);
             } catch {
                 if (!cancelled) setCurrentUserId(null);

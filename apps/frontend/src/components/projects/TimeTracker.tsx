@@ -5,6 +5,7 @@ import { Square } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui';
 import FloatingPanel from '@/components/FloatingPanel';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
@@ -113,7 +114,7 @@ export default function TimeTracker() {
             .catch(() => setTags([]));
         // Who "mine" is. Nobody resolving it leaves the list unfiltered rather
         // than empty — see the fetch below.
-        api.getMe()
+        fetchMe()
             .then((me: unknown) => setUserId((me as { id?: string })?.id ?? null))
             .catch(() => setUserId(null));
         // `projects.length` is the "have we already" flag, not a trigger.

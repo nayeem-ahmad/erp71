@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES, BUSINESS_TYPES_WITH_TEMPLATE, type BusinessType } from '@erp71/shared-types';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { getWorkspaceItem, setWorkspaceItem } from '@/lib/session-store';
 
@@ -462,7 +463,7 @@ export default function OnboardingPage() {
             return;
         }
 
-        api.getMe()
+        fetchMe()
             .then((me) => {
                 const tenantId = getWorkspaceItem('tenant_id');
                 const tenant = me?.tenants?.find((item: any) => item.id === tenantId) || me?.tenants?.[0];

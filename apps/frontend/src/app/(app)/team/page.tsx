@@ -15,6 +15,7 @@ import {
     type TenantRoleSummary,
 } from '@erp71/shared-types';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -819,7 +820,7 @@ export default function TeamPage() {
     const [inviting, setInviting] = useState(false);
 
     useEffect(() => {
-        api.getMe().then((me) => {
+        fetchMe().then((me) => {
             const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
             setIsOwner(tenant?.role === 'OWNER');
