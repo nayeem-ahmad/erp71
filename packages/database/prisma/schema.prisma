@@ -3941,6 +3941,13 @@ model PaymentRecord {
   account Account? @relation(fields: [account_id], references: [id], onDelete: SetNull)
 
   @@index([account_id])
+  // Every read of a sale's tenders filters on sale_id: `include: { payments }`
+  // on the sales list, the sale screen, the invoice print, the cashier-session
+  // close and the daily report, plus the deleteMany a sale edit runs and the
+  // cascade behind a sale delete. Without it each of those seq-scanned the
+  // whole table, every tenant's rows — 75,898 full scans against 4 index scans
+  // in production by 2026-10-04.
+  @@index([sale_id])
 }
 
 model SaleItem {
