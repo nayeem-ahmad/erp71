@@ -7,6 +7,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppLogger } from './common/app-logger.service';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { getAllowedOrigins } from './common/allowed-origins.util';
+import { buildCorsOptions } from './common/cors-options.util';
 import { applyProxyTrust } from './common/trust-proxy.util';
 import helmet from 'helmet';
 
@@ -20,17 +21,7 @@ async function bootstrap() {
     app.useLogger(app.get(AppLogger));
     app.use(helmet());
     app.setGlobalPrefix('api/v1');
-    const allowedOrigins = getAllowedOrigins();
-    app.enableCors({
-        origin: (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin)) {
-                callback(null, true);
-                return;
-            }
-            callback(new Error(`Origin ${origin} is not allowed by CORS`));
-        },
-        credentials: true,
-    });
+    app.enableCors(buildCorsOptions(getAllowedOrigins()));
     app.useGlobalFilters(new HttpExceptionFilter());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.listen(process.env.PORT ?? 4000);
