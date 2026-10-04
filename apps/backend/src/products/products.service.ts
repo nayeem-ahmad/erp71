@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CreateProductDto, MergeProductDto, ProductTypeDto, UpdateProductDto } from './product.dto';
 import { commitMerge, parseTakeFields, planMerge, throwIfBlocked } from './products.merge';
@@ -612,7 +613,24 @@ export class ProductsService {
         query: string,
         limit: number = 20,
     ): Promise<any[]> {
-        const searchTerm = `%${query.toLowerCase()}%`;
+        // Every word typed must appear in the name or SKU, in any order — so
+        // "rice 5kg" finds "Miniket Rice 5KG". Matching the whole phrase as one
+        // substring missed a product the moment the words were out of order
+        // or separated by anything other than one space. LIKE wildcards in
+        // the input are escaped so they match literally.
+        const terms = query
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((term) => `%${term.replace(/[!%_]/g, (c) => `!${c}`)}%`);
+        const termFilter = terms.length
+            ? Prisma.join(
+                  terms.map(
+                      (term) => Prisma.sql`(LOWER(p.name) LIKE ${term} ESCAPE '!' OR LOWER(COALESCE(p.sku, '')) LIKE ${term} ESCAPE '!')`,
+                  ),
+                  ' AND ',
+              )
+            : Prisma.sql`TRUE`;
 
         const results = await this.db.$queryRaw`
             SELECT
@@ -630,10 +648,7 @@ export class ProductsService {
             LEFT JOIN "Sale" s ON si.sale_id = s.id AND s.tenant_id = ${tenantId}
             WHERE p.tenant_id = ${tenantId}
             AND p.deleted_at IS NULL
-            AND (
-                LOWER(p.name) LIKE ${searchTerm}
-                OR LOWER(p.sku) LIKE ${searchTerm}
-            )
+            AND ${termFilter}
             GROUP BY p.id, p.name, p.sku, p.price, p.unit_type, p.brand_id, p.group_id, p.subgroup_id
             ORDER BY qty_sold DESC, p.name ASC
             LIMIT ${limit}

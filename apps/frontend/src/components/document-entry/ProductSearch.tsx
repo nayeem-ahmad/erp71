@@ -129,11 +129,14 @@ export default function ProductSearch({
     useEffect(() => {
         if (!showDropdown) return;
 
+        // Mark the list as loading now, not when the debounce fires: otherwise
+        // the previous results (often an empty list) render under the new term
+        // for 300ms, flashing "No products found" for a product that exists.
+        setLoading(true);
         const controller = new AbortController();
         const timer = setTimeout(async () => {
             const term = query.trim();
             try {
-                setLoading(true);
                 // Empty term → backend returns the most-sold products so the list can
                 // be browsed without typing. Use a larger limit when browsing.
                 const data = await api.searchProductsByQuantity(term, term ? 20 : 50);
@@ -294,10 +297,13 @@ export default function ProductSearch({
                         {/* Results Dropdown */}
                         {showDropdown && !staged && (
                             <AnchoredDropdown anchorRef={inputRef} panelRef={dropdownRef} maxHeight={320}>
-                                {loading ? (
-                                    <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
-                                ) : products.length === 0 ? (
-                                    <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
+                                {/* Results already on screen stay while a refined
+                                    search runs, so typing doesn't flicker; the
+                                    empty message waits for a settled answer. */}
+                                {products.length === 0 ? (
+                                    <div className="p-3 text-center text-gray-500 text-sm">
+                                        {loading ? 'Searching...' : 'No products found'}
+                                    </div>
                                 ) : (
                                     <>
                                         {!query.trim() && (

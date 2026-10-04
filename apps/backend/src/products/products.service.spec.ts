@@ -435,6 +435,18 @@ describe('ProductsService', () => {
       expect(result[0].qty_sold).toBe(12);
       expect(result[1].qty_sold).toBe(5);
     });
+
+    it('matches each typed word on its own, with LIKE wildcards escaped', async () => {
+      db.$queryRaw.mockResolvedValue([]);
+
+      await service.searchByQuantitySold('tenant-1', '  Rice   5_kg% ', 20);
+
+      // Words out of order or spaced differently must still find the product,
+      // so each word is its own bound pattern rather than one phrase.
+      const values = db.$queryRaw.mock.calls[0].slice(1).flatMap((v: any) => v?.values ?? [v]);
+      expect(values).toEqual(expect.arrayContaining(['%rice%', '%5!_kg!%%']));
+      expect(values).not.toContain('%rice   5_kg%%');
+    });
   });
 
   describe('getRateHistory()', () => {
