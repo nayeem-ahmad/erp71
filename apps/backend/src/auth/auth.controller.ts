@@ -193,7 +193,16 @@ export class AuthController {
         return this.authService.dismissOnboarding(req.user.userId, tenantId);
     }
 
+    /**
+     * Off the 20-a-minute default for the reason `/auth/refresh` is: a refusal
+     * here ends the session. The app shell, most pages and several hooks each
+     * ask on mount, so a shop's floor behind one address spent the default
+     * between them; the shell then sent them to /login, where the sign-in
+     * succeeded and the `/auth/me` behind it was refused on the same budget —
+     * read as "Too many sign-in attempts" with the right password in hand.
+     */
     @UseGuards(JwtAuthGuard)
+    @Throttle({ default: { ttl: 60_000, limit: 300 } })
     @Get('me')
     async getMe(@Request() req) {
         return this.authService.getMe(req.user.userId);
