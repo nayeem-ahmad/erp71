@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { directUpload, withServerFallback } from '@/lib/uploads/direct-upload';
 import { useI18n } from '@/lib/i18n';
 import { useBranding } from '@/lib/branding';
 import { toast } from '@/lib/toast';
@@ -89,7 +90,10 @@ export default function PrintTemplatesPage() {
     const uploadImage = useCallback(async (file: File): Promise<string | null> => {
         setUploading(true);
         try {
-            const result = await api.uploadFile(file);
+            const result: { url?: string } | null = await withServerFallback(
+                async () => ({ url: (await directUpload(file, 'print-template-image')).secure_url }),
+                () => api.uploadFile(file),
+            );
             return result?.url ?? null;
         } catch {
             toast.error(copy.uploadFailed);
