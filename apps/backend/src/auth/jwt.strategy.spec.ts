@@ -1,5 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtStrategy } from './jwt.strategy';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 describe('JwtStrategy', () => {
     let db: any;
@@ -15,7 +16,69 @@ describe('JwtStrategy', () => {
 
     beforeEach(() => {
         db = { user: { findUnique: jest.fn().mockResolvedValue(user) } };
-        strategy = new JwtStrategy(db);
+        // Off, so each case below sees the row its own mock returns.
+        strategy = new JwtStrategy(db, new AuthCacheService({ ttlMs: 0 }));
+    });
+
+    /**
+     * The row is cached across requests. The property that matters is that a
+     * sign-out, a password change or a demotion still bites on the very next
+     * request: each of those writes calls `invalidateUser` after it commits.
+     */
+    describe('with the cross-request cache on', () => {
+        let cache: AuthCacheService;
+
+        beforeEach(() => {
+            cache = new AuthCacheService({ ttlMs: 30_000 });
+            strategy = new JwtStrategy(db, cache);
+        });
+
+        it('checks a second request against the cached row instead of reading it again', async () => {
+            await strategy.validate({ sub: 'user-1', tv: 4 });
+            await strategy.validate({ sub: 'user-1', tv: 4 });
+
+            expect(db.user.findUnique).toHaveBeenCalledTimes(1);
+        });
+
+        it('rejects the old token on the next request after sign-out invalidates', async () => {
+            await expect(strategy.validate({ sub: 'user-1', tv: 4 })).resolves.toBeDefined();
+
+            // `AuthService.logout` bumps token_version, then invalidates.
+            db.user.findUnique.mockResolvedValue({ ...user, token_version: 5 });
+            cache.invalidateUser('user-1');
+
+            await expect(strategy.validate({ sub: 'user-1', tv: 4 })).rejects.toThrow('Session invalidated');
+        });
+
+        it('stops treating a demoted platform admin as one on the next request', async () => {
+            db.user.findUnique.mockResolvedValue({ ...user, is_platform_admin: true });
+            await expect(strategy.validate({ sub: 'user-1', tv: 4 })).resolves.toMatchObject({
+                isPlatformAdmin: true,
+            });
+
+            db.user.findUnique.mockResolvedValue({ ...user, is_platform_admin: false });
+            cache.invalidateUser('user-1');
+
+            await expect(strategy.validate({ sub: 'user-1', tv: 4 })).resolves.toMatchObject({
+                isPlatformAdmin: false,
+            });
+        });
+
+        it('rejects a deleted account on the next request', async () => {
+            await strategy.validate({ sub: 'user-1', tv: 4 });
+
+            db.user.findUnique.mockResolvedValue(null);
+            cache.invalidateUser('user-1');
+
+            await expect(strategy.validate({ sub: 'user-1', tv: 4 })).rejects.toThrow(UnauthorizedException);
+        });
+
+        it('does not remember an unknown user, so an account created later is found', async () => {
+            db.user.findUnique.mockResolvedValueOnce(null);
+            await expect(strategy.validate({ sub: 'user-1', tv: 4 })).rejects.toThrow(UnauthorizedException);
+
+            await expect(strategy.validate({ sub: 'user-1', tv: 4 })).resolves.toBeDefined();
+        });
     });
 
     it('rejects an unknown user', async () => {

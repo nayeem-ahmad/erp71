@@ -14,6 +14,7 @@ import {
 } from './subscription-access.decorator';
 import { PENDING_ACTIVATION_CODE, isPendingActivation } from '../billing/activation-state.util';
 import { loadTenantMembership } from '../database/tenant-membership.loader';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 type PlanCode = 'FREE' | 'BASIC' | 'ACCOUNTING' | 'STANDARD' | 'PREMIUM';
 
@@ -29,6 +30,7 @@ export class SubscriptionAccessGuard implements CanActivate {
     constructor(
         private readonly reflector: Reflector,
         private readonly db: DatabaseService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -75,7 +77,7 @@ export class SubscriptionAccessGuard implements CanActivate {
         // shared with `TenantInterceptor`, which runs after every guard and
         // reads the same row; loading it here means that one is free.
         const [membership, subscription, activeAddons] = await Promise.all([
-            loadTenantMembership(this.db, request, tenantId, userId),
+            loadTenantMembership(this.db, request, tenantId, userId, this.authCache),
             this.db.tenantSubscription.findUnique({
                 where: { tenant_id: tenantId },
                 include: { plan: true },

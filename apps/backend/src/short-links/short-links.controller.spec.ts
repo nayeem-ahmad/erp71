@@ -8,6 +8,7 @@ import { STORE_PERMISSIONS_KEY } from '../auth/store-permission.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { SUBSCRIPTION_FEATURE_KEY } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { ShortLinksController } from './short-links.controller';
 import { ShortLinksAdminController } from './short-links-admin.controller';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
@@ -143,7 +144,7 @@ describe('ShortLinksController', () => {
             };
 
             const canCreate = () =>
-                new SubscriptionAccessGuard(new Reflector(), db as any).canActivate({
+                new SubscriptionAccessGuard(new Reflector(), db as any, new AuthCacheService({ ttlMs: 0 })).canActivate({
                     switchToHttp: () => ({
                         getRequest: () => ({ user: { userId: 'user-1' }, headers: { 'x-tenant-id': 'tenant-1' } }),
                     }),

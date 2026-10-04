@@ -12,6 +12,7 @@ import { EmployeesService } from '../employees/employees.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { DatabaseService } from '../database/database.service';
 
 /**
@@ -123,6 +124,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                 { provide: EmployeeLoginService, useValue: loginService },
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 Reflector,
                 EmployeeGuard,
                 StorePermissionGuard,
@@ -247,7 +249,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
 
         it('allows a staff member holding MANAGE_HR', async () => {
             db.userStorePermission.findMany.mockResolvedValue([
-                { permission: StorePermission.MANAGE_HR },
+                { store_id: 'store-1', permission: StorePermission.MANAGE_HR },
             ]);
             await request(app.getHttpServer())
                 .post('/employees/emp-1/portal-access')
@@ -272,7 +274,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
 
         it('allows a staff member holding MANAGE_HR', async () => {
             db.userStorePermission.findMany.mockResolvedValue([
-                { permission: StorePermission.MANAGE_HR },
+                { store_id: 'store-1', permission: StorePermission.MANAGE_HR },
             ]);
             await request(app.getHttpServer()).post('/employees/emp-1/login').expect(201);
             expect(loginService.create).toHaveBeenCalledWith(
@@ -309,7 +311,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             // a permission granted, the same token sails through. Nothing about
             // being "an employee" is what stops it; only the missing grant is.
             db.userStorePermission.findMany.mockResolvedValue([
-                { permission: StorePermission.VIEW_HR },
+                { store_id: 'store-1', permission: StorePermission.VIEW_HR },
             ]);
             await request(app.getHttpServer()).get('/employees').expect(200);
         });
