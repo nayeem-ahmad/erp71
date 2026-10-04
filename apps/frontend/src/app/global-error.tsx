@@ -1,6 +1,5 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
 import { useEffect, useMemo } from 'react';
 import { DEFAULT_LOCALE } from '@/lib/localization/config';
 import { getLoadedMessagesOrDefault } from '@/lib/localization/load-messages';
@@ -16,8 +15,17 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         return getLoadedMessagesOrDefault(locale).marketing.globalError;
     }, []);
 
+    // The SDK is loaded here only when there is somewhere to send the error.
+    // A static import kept part of it in every page's bundle — this component
+    // is the root error boundary, so it ships with all of them — and without a
+    // DSN `sentry.client.config.ts` never initialises it, which made
+    // `captureException` a no-op anyway. With one, the config has already
+    // fetched the chunk and this resolves from the cache.
     useEffect(() => {
-        Sentry.captureException(error);
+        if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return;
+        void import(/* webpackExports: ["captureException"] */ '@sentry/nextjs').then((Sentry) =>
+            Sentry.captureException(error),
+        );
     }, [error]);
 
     return (
