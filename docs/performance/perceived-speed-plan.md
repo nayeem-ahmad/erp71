@@ -1,6 +1,14 @@
 # Perceived Speed Plan — ERP71 on the current VPS
 
-**Status:** approved 2026-10-04, in progress  
+**Status:** code for every item implemented 2026-10-04 on `perf/perceived-speed` (full backend and frontend suites, lint and production build green). The server steps (`scripts/ops/perf-server-steps.sh`) and Cloudflare (P3.1) still need a person; see [§8](#8-rollout-ownership-and-rollback).  
+**Build result (First Load JS, Next build):**
+
+| | Production before | After |
+|---|---|---|
+| `/login` | 1.6 MB | 378 kB |
+| `/dashboard` | 1.8 MB | 399 kB |
+| Shared by all | 227 kB (after the locale split) | 109 kB |
+
 **Constraint:** the VPS stays as it is (`66.116.236.127`). No region move, no split into managed services.  
 **Goal:** the app should *feel* fast to a shopkeeper in Bangladesh: screens appear quickly, clicks respond at once, and pages already visited show instantly.
 
