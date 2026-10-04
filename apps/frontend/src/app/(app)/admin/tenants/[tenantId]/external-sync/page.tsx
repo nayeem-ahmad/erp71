@@ -26,6 +26,7 @@ import {
     type ExternalSyncStep,
     type ExternalSyncWarning,
 } from '@/lib/api';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -237,11 +238,7 @@ export default function TenantExternalSyncPage() {
     }
 
     // While an import is in flight the run row is the only progress channel.
-    useEffect(() => {
-        if (!activeRun) return;
-        const timer = setInterval(() => void loadRuns(), RUN_POLL_MS);
-        return () => clearInterval(timer);
-    }, [activeRun, loadRuns]);
+    useVisibleInterval(() => void loadRuns(), activeRun ? RUN_POLL_MS : null);
 
     function validate(): boolean {
         const errors: Record<string, string> = {};
