@@ -28,8 +28,8 @@ the two sites a request belongs to.
 |---|---|
 | `erp71.com` | Marketing site — homepage, pricing, blog, legal pages |
 | `www.erp71.com` | Same, redirected (308) to the apex so nothing is indexed twice |
-| `app.erp71.com` | The signed-in app. `/` is the front door: dashboard, or the account chooser when the identity has more than one workspace, or the login page when the browser holds no session |
-| `api.erp71.com` | Backend API |
+| `app.erp71.com` | The signed-in app. `/` is the front door: dashboard, or the account chooser when the identity has more than one workspace, or the login page when the browser holds no session. `/api/v1/*` on this host is the backend — see [API on the app domain](#api-on-the-app-domain) |
+| `api.erp71.com` | Backend API, for everything configured with its own host: the mobile app, API-key clients, payment gateway callbacks |
 
 Two rules follow:
 
@@ -105,6 +105,71 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://erp71.com/login
 # The app's front door is the gate, not the marketing homepage
 curl -s https://app.erp71.com | grep -c 'Run your business'   # expect 0
 ```
+
+### API on the app domain
+
+The browser app calls `https://app.erp71.com/api/v1/*` — its own origin — and
+Caddy sends that path straight to the backend container. `api.erp71.com` stays
+as it is for everything configured with it: the mobile app, API-key clients,
+and the payment gateways' callbacks (`BACKEND_PUBLIC_URL`).
+
+**Why.** Shopkeepers in Bangladesh are about 250 ms from the VPS, so every round
+trip costs about a quarter of a second. A call from `app.erp71.com` to
+`api.erp71.com` is cross-origin, and since every call carries `Authorization`
+and `x-tenant-id`, the browser first sends a CORS preflight (`OPTIONS`) and
+waits for the answer — an extra round trip on nearly every call, because
+browsers keep a preflight result only briefly and per exact URL. A second host
+is also a second TCP + TLS connection on every fresh page load, about 0.5 s.
+Calling the page's own origin removes both. The route skips the frontend's
+`next.config.js` rewrite on purpose: that would proxy every call through the
+Node process, which adds a hop and buffers request bodies — the external-sync
+snapshot upload is up to 100 MB.
+
+In the shared Hermes Caddyfile (`/opt/hermes/caddy/Caddyfile`), this replaces
+the plain `app.erp71.com` block:
+
+```
+app.erp71.com {
+	encode zstd gzip
+	handle /api/v1/* {
+		reverse_proxy erp71-backend-1:4000 {
+			flush_interval -1
+		}
+	}
+	handle {
+		reverse_proxy erp71-frontend-1:3000
+	}
+}
+```
+
+`flush_interval -1` keeps the support page's Server-Sent Events stream
+unbuffered. The file serves five apps, so a bad reload takes all of them down:
+back it up (`Caddyfile.bak-YYYYMMDD`), edit, `caddy validate`, then
+`caddy reload`. The in-repo `Caddyfile` (the `standalone-edge` profile) carries
+the same block with the compose service names.
+
+**Order.** The Caddy route goes live first, then the frontend switch ships:
+`scripts/sync-erp71-env-urls.sh` sets `NEXT_PUBLIC_API_BASE` and
+`NEXT_PUBLIC_API_URL` to `https://app.erp71.com` on every deploy, and both are
+baked into the frontend image at build time. Should the frontend ship first,
+calls still arrive — `app.erp71.com/api/v1/*` reaches the frontend, whose
+rewrite forwards it to the backend — but slower, and the support stream and
+large uploads may not survive the trip.
+
+**Verify.**
+
+```bash
+# The route answers with the backend's JSON, not a Next.js page
+curl -s https://app.erp71.com/api/v1/health
+```
+
+Then in the browser, DevTools → Network on `app.erp71.com`: API calls go to
+`app.erp71.com/api/v1/…` and there are no `OPTIONS` rows.
+
+**Rollback.** Point the two `NEXT_PUBLIC_API_*` lines in
+`scripts/sync-erp71-env-urls.sh` back at `https://api.erp71.com` and deploy.
+Editing `.env.production` alone does not stick, since the script rewrites both
+keys on every deploy. The Caddy route is harmless to leave in place.
 
 ---
 
@@ -251,8 +316,9 @@ cd /opt/erp71
 # 1. Container status — all Up/healthy
 docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml ps
 
-# 2. Backend health
+# 2. Backend health — on its own host, and on the app host the browser calls
 curl -s https://api.erp71.com/api/v1/health
+curl -s https://app.erp71.com/api/v1/health
 
 # 3. Frontend reachable — app host and marketing host
 curl -s -o /dev/null -w '%{http_code}\n' https://app.erp71.com

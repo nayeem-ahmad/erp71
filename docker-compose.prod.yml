@@ -40,6 +40,8 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
+        # The browser's API base — the app's own origin in production, so API
+        # calls need no CORS preflight (see .env.production.example).
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
         BACKEND_URL: ${BACKEND_URL:-http://backend:4000}
@@ -52,7 +54,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      # Server-side target for the next.config.js /api/v1 rewrite (see Dockerfile).
+      # Server-side target for the next.config.js /api/v1 rewrite (see Dockerfile),
+      # and for the public pages' server-side fetches (publicApiBase in
+      # src/lib/api-base.ts), which would otherwise go out to Caddy and back.
       # Frontend and backend are separate containers, so this must be the backend
       # service on the compose network, not localhost.
       BACKEND_URL: ${BACKEND_URL:-http://backend:4000}
