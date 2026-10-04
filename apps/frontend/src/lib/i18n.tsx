@@ -92,8 +92,14 @@ export function I18nProvider({
      * right language — on screen, untouched, until hydration can finish. No
      * flash of English, no mismatch. The cost is that a first-time Bangla
      * visitor's page turns interactive one chunk later.
+     *
+     * `use()` is called on every render, never behind a "loaded yet?" check:
+     * a settled request carries its value, so this is synchronous once the
+     * chunk is in. Skipping it on the render that replays the suspended one
+     * leaves React treating the hooks below as updates of hooks that never
+     * mounted, and hydration dies with React error #467.
      */
-    const messages = getLoadedMessages(locale) ?? use(loadMessages(locale));
+    const messages = use(loadMessages(locale));
 
     // English back for another language means its chunk failed (an offline
     // till). Say English throughout, so plurals, dates and text direction match

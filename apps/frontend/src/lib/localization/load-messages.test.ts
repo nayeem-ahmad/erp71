@@ -37,6 +37,8 @@ describe('loadMessages', () => {
         // `toEqual`, not `toBe`: the isolated copy has its own instance of the
         // English module, the same content.
         expect(getLoadedMessages('en')).toEqual(enMessages);
+        // Settled from the start, so `use()` never suspends for English.
+        expect(loadMessages('en')).toMatchObject({ status: 'fulfilled', value: getLoadedMessages('en') });
         await expect(loadMessages('en')).resolves.toEqual(enMessages);
         for (const fetch of fetches) expect(fetch).not.toHaveBeenCalled();
     });
@@ -56,9 +58,10 @@ describe('loadMessages', () => {
         await expect(first).resolves.toBe(bnMessages);
 
         expect(getLoadedMessages('bn')).toBe(bnMessages);
-        // The settled promise itself comes back, so `use()` reads it without
-        // suspending again.
+        // The settled promise itself comes back, marked the way `use()` reads
+        // it, so a render gets the dictionary without suspending again.
         expect(loadMessages('bn')).toBe(first);
+        expect(first).toMatchObject({ status: 'fulfilled', value: bnMessages });
         expect(fetch).toHaveBeenCalledTimes(1);
     });
 

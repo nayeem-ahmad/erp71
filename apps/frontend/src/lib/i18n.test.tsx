@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { startTransition } from 'react';
+import { hydrateRoot } from 'react-dom/client';
 
 jest.unmock('@/lib/i18n');
 
@@ -187,5 +189,82 @@ describe('I18nProvider', () => {
         // overwritten — the next page load tries again.
         await waitFor(() => expect(document.documentElement.lang).toBe('en'));
         expect(localStorage.getItem('locale')).toBe('de');
+    });
+
+
+    /*
+     * The browser path, which `render` inside `act` does not take: hydrating
+     * server HTML on React's own scheduler. When the chunk settles quickly —
+     * a returning visitor, chunk in the HTTP cache — React *replays* the render
+     * that suspended rather than starting over. Reading the dictionary only
+     * when it was missing broke that replay (React error #467: the whole root
+     * thrown away and client-rendered) in a production build, while every
+     * act()-based test above still passed.
+     */
+    describe('hydrating server HTML', () => {
+        async function hydrateServerHtml(
+            locale: 'es' | 'ur',
+            whileWaiting: (serverParagraph: HTMLElement) => Promise<void>,
+        ) {
+            document.documentElement.lang = locale;
+            const container = document.createElement('div');
+            container.innerHTML = `<p data-locale="${locale}">${messageCatalog[locale].nav.dashboard}</p>`;
+            document.body.appendChild(container);
+            const serverParagraph = container.firstElementChild as HTMLElement;
+            const hydrated = () => Object.keys(serverParagraph).some((key) => key.startsWith('__reactFiber$'));
+
+            const errors: unknown[] = [];
+            const scope = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+            const actEnvironment = scope.IS_REACT_ACT_ENVIRONMENT;
+            scope.IS_REACT_ACT_ENVIRONMENT = false;
+            let root: ReturnType<typeof hydrateRoot> | undefined;
+            try {
+                // As Next.js does it: hydration in a transition.
+                startTransition(() => {
+                    root = hydrateRoot(
+                        container,
+                        <I18nProvider initialLocale={locale}>
+                            <DashboardLabel />
+                        </I18nProvider>,
+                        {
+                            onRecoverableError: (error) => errors.push(error),
+                            onUncaughtError: (error) => errors.push(error),
+                            onCaughtError: (error) => errors.push(error),
+                        },
+                    );
+                });
+
+                await whileWaiting(serverParagraph);
+                await waitFor(() => expect(hydrated()).toBe(true));
+
+                expect(errors).toEqual([]);
+                // The same node, hydrated — not thrown away and re-rendered.
+                expect(container.firstElementChild).toBe(serverParagraph);
+                expect(serverParagraph).toHaveTextContent(messageCatalog[locale].nav.dashboard);
+                expect(serverParagraph).toHaveAttribute('data-locale', locale);
+            } finally {
+                root?.unmount();
+                container.remove();
+                scope.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+            }
+        }
+
+        it('leaves the server HTML untouched while a slow chunk loads, then hydrates it in place', async () => {
+            const chunk = deferred<MessageDictionary>();
+            jest.spyOn(messageLoaders, 'es').mockReturnValue(chunk.promise);
+
+            await hydrateServerHtml('es', async (serverParagraph) => {
+                await new Promise((resolve) => setTimeout(resolve, 50));
+                expect(Object.keys(serverParagraph).some((key) => key.startsWith('__reactFiber$'))).toBe(false);
+                expect(serverParagraph).toHaveTextContent(messageCatalog.es.nav.dashboard);
+                chunk.resolve(messageCatalog.es);
+            });
+        });
+
+        it('hydrates in place when the chunk arrives at once, as from the cache', async () => {
+            jest.spyOn(messageLoaders, 'ur').mockResolvedValue(messageCatalog.ur);
+
+            await hydrateServerHtml('ur', async () => undefined);
+        });
     });
 });

@@ -8,6 +8,20 @@ import { enMessages, messageLoaders, type MessageDictionary } from './messages';
 const loaded = new Map<Locale, MessageDictionary>([[DEFAULT_LOCALE, enMessages]]);
 
 /**
+ * A promise that says it has settled, the way React's `use()` reads one:
+ * `status: 'fulfilled'` and its `value`. `use()` then returns the value
+ * synchronously instead of suspending for a tick to find out, so a render can
+ * call it every time and only a dictionary still on its way suspends.
+ */
+type MessagesRequest = Promise<MessageDictionary> & { status?: 'fulfilled'; value?: MessageDictionary };
+
+function markSettled(request: MessagesRequest, messages: MessageDictionary): MessageDictionary {
+    request.status = 'fulfilled';
+    request.value = messages;
+    return messages;
+}
+
+/**
  * One promise per locale, kept after it settles — including when it settled
  * on the English fallback.
  *
@@ -18,9 +32,13 @@ const loaded = new Map<Locale, MessageDictionary>([[DEFAULT_LOCALE, enMessages]]
  * stays unavailable until the page is next loaded — when an offline device
  * would be retrying anyway.
  */
-const requests = new Map<Locale, Promise<MessageDictionary>>([
-    [DEFAULT_LOCALE, Promise.resolve(enMessages)],
-]);
+const requests = new Map<Locale, MessagesRequest>([[DEFAULT_LOCALE, alreadySettled(enMessages)]]);
+
+function alreadySettled(messages: MessageDictionary): MessagesRequest {
+    const request: MessagesRequest = Promise.resolve(messages);
+    markSettled(request, messages);
+    return request;
+}
 
 /**
  * The dictionary for `locale`, fetching its chunk the first time.
@@ -37,16 +55,18 @@ export function loadMessages(locale: Locale): Promise<MessageDictionary> {
 
     // Started inside `then` so that a locale with no loader fails the same way
     // a failed fetch does — English and a warning, not a throw during render.
-    const request = Promise.resolve()
+    // Marked settled in the same step that records it as loaded, so nothing
+    // can see the one without the other.
+    const request: MessagesRequest = Promise.resolve()
         .then(() => messageLoaders[locale as Exclude<Locale, 'en'>]())
         .then(
             (messages) => {
                 loaded.set(locale, messages);
-                return messages;
+                return markSettled(request, messages);
             },
             (error: unknown) => {
                 console.warn(`Could not load the "${locale}" messages; showing English instead.`, error);
-                return enMessages;
+                return markSettled(request, enMessages);
             },
         );
 
