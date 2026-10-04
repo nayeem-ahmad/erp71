@@ -471,5 +471,8 @@ describe('DashboardPage — variant selection', () => {
         // Not the retail dashboard, and none of its endpoints are touched.
         expect(api.getLowStockCount).not.toHaveBeenCalled();
         expect(api.getSalesList).not.toHaveBeenCalled();
+        // The page and the projects variant both need the member; they used to
+        // ask for `/auth/me` once each. Now they share one answer.
+        expect(api.getMe).toHaveBeenCalledTimes(1);
     });
 });
