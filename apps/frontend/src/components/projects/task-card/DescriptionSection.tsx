@@ -139,6 +139,11 @@ export default function DescriptionSection({
                     // Focus moving to the toolbar, or tabbing to the tick and
                     // the cross, is not focus leaving the editor.
                     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    // Switching tabs or apps blurs with no related target too,
+                    // the same as a click on empty page. The difference is that
+                    // the editor stays the active element and gets focus back
+                    // on return, so the edit is still in progress.
+                    if (document.activeElement === event.target) return;
                     if (uploading.current) {
                         pendingCommit.current = true;
                         return;

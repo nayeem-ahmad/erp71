@@ -1644,6 +1644,18 @@ Open after the work:
 - [ ] **TipTap's markdown input rules throw when one text insertion completes a pattern.** `RangeError: Position N out of range` from `markInputRule`: `run$1` in `@tiptap/core` puts the rule's start at `from - (match.length - text.length)`, which runs past the document when the inserted text is longer than the match — `**bold**` or `` `code` `` arriving in one piece — and the insert is lost. Typing a key at a time never does it; the Browser pane's type action did. A predictive keyboard or an IME committing a whole chunk that ends a pattern could. Upstream; worth chasing only if it shows up in Sentry.
 - [ ] **`TaskDetailPanel activity › keeps the activity log out of the comments tab` is timing-flaky.** Failed once on a clean `dev` when run alongside `RichTextEditor.test.tsx` — `findByText('Comment c1')` gave up at its 1s default under the load of two workers — then passed alone 3/3 and in two full runs. A longer `findByText` timeout, or awaiting the feed fetch before asserting, would settle it.
 
+### Description editor closing on a tab switch (2026-10-05)
+
+Asked as "Task Entry/Edit - while in edit mode in description field and goes to another browser tab and comes back, the edit mode is gone. it shouldn't happen."
+
+- [x] **The description editor stays open across a tab or app switch** — done 2026-10-05, see COMPLETED
+
+Open after the work:
+
+- [ ] **Every other blur-to-save field on the card still closes on a tab switch.** Same idiom, same cause: `TitleField`, the inline text field in `task-card/fields.tsx`, checklist item edits in `ChecklistSection`, and outside the card `HourLogRowCells`, `BoardColumnHead` rename, `BoardColumnsEditor`, `BacklogRow`. A one-line field does save what was typed on the way out, so nothing is lost, but the user comes back to a closed field. The same guard (`document.activeElement === event.target` → return) fixes each one; worth lifting into a shared helper when the second one takes it.
+- [ ] **Only Chromium was measured.** A headed Playwright Chromium run showed that a tab switch blurs with no related target while the element stays `document.activeElement`, and that a click-away moves it to `BODY`. Firefox and Safari are expected to behave the same way (the HTML spec moves focus before firing `blur`, and window deactivation keeps the focused element), but they were not run. The real task card was not opened either: the app was not running, and the local DB is behind the schema.
+- [ ] **Switching away no longer saves the draft.** Before, the tab switch committed the description as a side effect. Now an edit left open in a background tab that then gets closed is lost, the same as closing the tab with the editor focused always was. If that comes up, keep a local draft (sessionStorage per task id) rather than going back to committing on window blur.
+
 ### Task images — paste, resize and preview (2026-09-20)
 
 Asked as "task entry/edit, when I paste an image in description, at first it shows a text (anchor-like) takes time to upload and then add as 100% (should be resizable to fit appropriately). can we make it more user-friendly. also, add a thumbnail for attached files (if image/pdf/similar). clicking should bring up a preview modal with zoom and other relevant options, not a separate tab in browser."
@@ -1768,6 +1780,7 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **The task description editor stays open across a tab or app switch** — done 2026-10-05. Leaving the window blurs the editor with no `relatedTarget`, the same as a click on empty page, so `DescriptionSection`'s save-on-blur committed and closed the editor. The two cases differ in that a window blur leaves the editor as `document.activeElement`, and the browser focuses it again on return (measured in headed Chromium). The blur handler now returns early in that case. A click-away still saves. New test in `TaskDetailPanel.test.tsx` (fails without the guard); the panel and editor suites pass 182/182, and lint is clean.
 - [x] **`pg-restart` done, Postgres tuned** — done 2026-10-05 at 01:10 BDT, with no user traffic: 0 user API requests in the 45 s before. `shared_buffers` is 512 MB, `pg_stat_statements` is loaded and its extension created, and both network aliases survived (`retail-saas-db-1` for profiles71). The backend reconnected by itself within seconds, and profiles71 answered 200.
 - [x] **Deploy outage measured on the new prepare-before-swap flow** — done 2026-10-05. A manual Deploy to VPS run of `main` at 01:11 BDT, probed every ~1.3 s from Dhaka, saw two 502s, about **3.4 s** of outage (19–24 s before). The deploy log shows `db-prepare` running while the old backend still served.
 
