@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     Activity,
     AlertTriangle,
@@ -11,6 +11,7 @@ import {
     RefreshCw,
     XCircle,
 } from 'lucide-react';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -95,7 +96,6 @@ export default function SystemHealthPanel({
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState('');
     const [autoRefresh, setAutoRefresh] = useState(true);
-    const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const load = useCallback(async () => {
         setIsRefreshing(true);
@@ -119,14 +119,7 @@ export default function SystemHealthPanel({
         load();
     }, [load]);
 
-    useEffect(() => {
-        if (autoRefresh) {
-            timer.current = setInterval(load, refreshIntervalMs);
-        }
-        return () => {
-            if (timer.current) clearInterval(timer.current);
-        };
-    }, [autoRefresh, load, refreshIntervalMs]);
+    useVisibleInterval(() => void load(), autoRefresh ? refreshIntervalMs : null);
 
     const stateLabel = (state: DependencyState) => m.status[state] ?? state;
 

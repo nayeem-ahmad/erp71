@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MessagesSquare } from 'lucide-react';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -11,8 +12,9 @@ import { routes } from '@/lib/routes';
  * Unread badge for team chat.
  *
  * Polls at the same 60s cadence as NotificationBell rather than the chat page's
- * 5s: this one runs for every signed-in user on every page, so it is the count
- * that has to stay cheap. The open conversation is what needs to feel live.
+ * 5s, and only while the tab is in view: this one runs for every signed-in user
+ * on every page, so it is the count that has to stay cheap. The open
+ * conversation is what needs to feel live.
  *
  * Renders nothing at all when the workspace has no chat entitlement — the API
  * answers 403 and there is no badge to show.
@@ -37,9 +39,8 @@ export default function ChatBell() {
 
     useEffect(() => {
         void fetchCount();
-        const interval = setInterval(() => void fetchCount(), 60_000);
-        return () => clearInterval(interval);
     }, [fetchCount]);
+    useVisibleInterval(() => void fetchCount(), 60_000);
 
     if (!available) return null;
 

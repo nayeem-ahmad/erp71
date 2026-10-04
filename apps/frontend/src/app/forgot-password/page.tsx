@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { useHydrated } from '@/hooks/useHydrated';
+import { browserApiBase } from '@/lib/api-base';
 
-const API_BASE = ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
-    || (process.env.NODE_ENV === 'production' ? 'https://erp71-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
+const API_BASE = browserApiBase();
 
 export default function ForgotPasswordPage() {
     const { t } = useI18n();

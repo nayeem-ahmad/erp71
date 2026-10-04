@@ -8,9 +8,9 @@ import { Lock, ArrowLeft, Loader2, CheckCircle, AlertCircle } from 'lucide-react
 import { useHydrated } from '@/hooks/useHydrated';
 import { PasswordRequirements } from '@/components/ui';
 import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
+import { browserApiBase } from '@/lib/api-base';
 
-const API_BASE = ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
-    || (process.env.NODE_ENV === 'production' ? 'https://erp71-backend.onrender.com' : 'http://localhost:4000')) + '/api/v1';
+const API_BASE = browserApiBase();
 
 /** What `GET /auth/reset-token/:token` reports — see `PasswordResetService.inspectToken`. */
 type TokenStatus = { valid: boolean; canResend: boolean; passwordPolicy: PasswordPolicy | null };
