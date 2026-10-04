@@ -17,7 +17,7 @@ import type {
 } from '@/components/admin/referrals/types';
 import type { CandidateRow, MatchManifest } from '@/types/match';
 import type { DailyReport } from '@/lib/daily-report';
-import { normalizeApiBase } from './api-base';
+import { browserApiBase } from './api-base';
 import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
@@ -127,16 +127,12 @@ export type ActivationStatus = {
     latest_request: ActivationRequestRecord | null;
 };
 
-const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
-// In dev (remote container) use a relative path so browser calls go to the
-// Next.js dev server which proxies them to the backend via next.config rewrites.
-// In production keep the explicit backend URL.
-//
-// `normalizeApiBase` lives in ./api-base so the server-side public routes
-// (/s, /q, /store/../p, /r) apply the identical `/api/v1` rule instead of each
-// re-deriving it — see that file for why that mattered.
-const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
-    || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
+// The app's own origin in production, `/api/v1` on the page's origin when
+// unset — `browserApiBase` says why same-origin is worth having. It lives in
+// ./api-base so the server-side public routes (/s, /q, /store/../p, /r) apply
+// the identical `/api/v1` rule instead of each re-deriving it — see that file
+// for why that mattered.
+const API_BASE = browserApiBase();
 
 /**
  * An API failure that keeps its HTTP status.
@@ -158,9 +154,11 @@ export class ApiError extends Error {
         public readonly code?: string,
         /**
          * Seconds to wait before retrying, when the backend rate-limited the
-         * call. Read from the body rather than the `Retry-After` header, which
-         * the browser cannot see cross-origin unless the API exposes it — and
-         * the app and the API are on different hosts in production.
+         * call. Read from the body rather than the `Retry-After` header: the
+         * app now calls its own origin, where the header is readable, but the
+         * marketing host and any deployment configured with a separate API host
+         * still call cross-origin, and there the browser hides every header the
+         * API does not list in `Access-Control-Expose-Headers` — it lists none.
          */
         public readonly retryAfter?: number,
     ) {
@@ -519,6 +517,9 @@ export async function fetchBlobWithAuth(
         throw new ApiError(message, response.status, code);
     }
 
+    // Only readable same-origin: the API exposes no headers to cross-origin
+    // callers, so a deployment that calls a separate API host gets the
+    // `'export'` fallback name instead of the server's.
     const disposition = response.headers.get('Content-Disposition') ?? '';
     const filenameMatch = disposition.match(/filename="([^"]+)"/);
     const filename = filenameMatch ? filenameMatch[1] : 'export';

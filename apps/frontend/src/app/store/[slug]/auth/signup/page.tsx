@@ -7,12 +7,9 @@ import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 import MobileSignInPanel from '@/components/MobileSignInPanel';
+import { browserApiBase } from '@/lib/api-base';
 
-const API_BASE =
-    ((process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL) ||
-        (process.env.NODE_ENV === 'production'
-            ? 'https://erp71-backend.onrender.com'
-            : 'http://localhost:4000')) + '/api/v1';
+const API_BASE = browserApiBase();
 
 export default function StorefrontSignUpPage() {
     const { t } = useI18n();

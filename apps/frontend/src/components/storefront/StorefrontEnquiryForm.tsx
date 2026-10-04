@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { CheckCircle } from 'lucide-react';
-import { publicApiBase } from '@/lib/api-base';
+import { browserApiBase } from '@/lib/api-base';
 import { useI18n } from '@/lib/i18n';
 
 /**
@@ -43,7 +43,7 @@ export default function StorefrontEnquiryForm({ slug }: { slug: string }) {
 
         try {
             const response = await fetch(
-                `${publicApiBase()}/storefront/${encodeURIComponent(slug)}/enquiries`,
+                `${browserApiBase()}/storefront/${encodeURIComponent(slug)}/enquiries`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
