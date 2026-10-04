@@ -1,4 +1,4 @@
-import { messageCatalog } from './index';
+import { messageCatalog } from '@/test-utils/message-catalog';
 
 function collectPaths(value: unknown, prefix = ''): string[] {
     if (typeof value === 'string') {
