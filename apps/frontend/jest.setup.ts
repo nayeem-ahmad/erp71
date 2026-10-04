@@ -155,6 +155,19 @@ if (typeof Range !== 'undefined') {
 }
 
 /**
+ * The app fetches the rich-text editor only when one is drawn
+ * (`LazyRichTextEditor`), so TipTap is not part of every page. In a test that
+ * would make every editor appear a tick late, and the first one in a suite
+ * wait on a cold transform of TipTap and ProseMirror — longer than `findBy`'s
+ * one second on a slow runner. So suites get the real editor, loaded with the
+ * suite as before the split; `LazyRichTextEditor.test.tsx` unmocks this to
+ * test the lazy wrapper itself.
+ */
+jest.mock('@/components/ui/LazyRichTextEditor', () => ({
+    RichTextEditor: jest.requireActual('@/components/ui/RichTextEditor').RichTextEditor,
+}));
+
+/**
  * Web storage does not reset between tests the way component state does, so a
  * test that changes a remembered setting — a list's filters, a view toggle —
  * would otherwise seed every test after it in the same file. Cleared here
