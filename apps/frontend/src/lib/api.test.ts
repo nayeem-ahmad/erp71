@@ -3042,6 +3042,9 @@ describe('invalidatesMe', () => {
 
         // Reads never invalidate, and neither do look-alike paths.
         expect(invalidatesMe('/auth/me', undefined)).toBe(false);
+        // A password change kills this session: re-reading `me` on a dead token
+        // would only race the caller's own trip to the login page.
+        expect(invalidatesMe('/auth/change-password', 'POST')).toBe(false);
         expect(invalidatesMe('/auth/me', 'GET')).toBe(false);
         expect(invalidatesMe('/storefront-pages', 'POST')).toBe(false);
         expect(invalidatesMe('/sales', 'POST')).toBe(false);

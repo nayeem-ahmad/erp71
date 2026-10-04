@@ -648,11 +648,20 @@ const ME_AFFECTING_PATHS = [
     '/admin/tenants',
 ];
 
+/**
+ * Writes that end the session they are made on. A password change bumps
+ * `token_version` and revokes every refresh token, so by the time it returns
+ * this tab's token is dead: re-reading `me` would only 401, fail to renew, and
+ * race the caller's own move to the login page with an "expired" one.
+ */
+const SESSION_ENDING_PATHS = ['/auth/change-password', '/auth/logout'];
+
 /** Whether a successful request of this method to this endpoint leaves the cached `me` out of date. */
 export function invalidatesMe(endpoint: string, method: string | undefined): boolean {
     const verb = (method ?? 'GET').toUpperCase();
     if (verb === 'GET' || verb === 'HEAD') return false;
     const path = endpoint.split('?')[0];
+    if (SESSION_ENDING_PATHS.includes(path)) return false;
     return ME_AFFECTING_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
