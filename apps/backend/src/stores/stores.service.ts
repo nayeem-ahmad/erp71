@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { StorePermission, UserRole } from '@erp71/shared-types';
 import { AuditService } from '../audit/audit.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantContext } from '../database/tenant.decorator';
 import { CreateStoreDto } from './create-store.dto';
 
@@ -12,6 +13,7 @@ export class StoresService {
     constructor(
         private readonly db: DatabaseService,
         private readonly audit: AuditService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     async create(
@@ -24,6 +26,10 @@ export class StoresService {
         await this.assertNameAvailable(ctx.tenantId, name);
 
         const store = await this.createStoreRow(ctx, name, address);
+        // Every owner just gained a branch, and a member with one branch
+        // resolved it without a header; with two they no longer do. Their cached
+        // access lists — and the creator's grants — must say so.
+        this.authCache.invalidateTenant(ctx.tenantId);
 
         await this.audit.log(
             'store.created',

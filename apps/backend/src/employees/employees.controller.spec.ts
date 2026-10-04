@@ -8,6 +8,7 @@ import { EmployeesService } from './employees.service';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { DatabaseService } from '../database/database.service';
 
 /**
@@ -82,7 +83,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
     const grant = (permissions: StorePermission[], role = 'MANAGER') => {
         db.$queryRaw.mockResolvedValue(membershipRows(role));
         db.userStorePermission.findMany.mockResolvedValue(
-            permissions.map((permission) => ({ permission })),
+            permissions.map((permission) => ({ store_id: 'store-1', permission })),
         );
     };
 
@@ -93,6 +94,8 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
             providers: [
                 { provide: EmployeesService, useValue: employeesService },
                 { provide: DatabaseService, useValue: db },
+                // Off, so each case is decided by the grants it mocks.
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 Reflector,
                 StorePermissionGuard,
             ],

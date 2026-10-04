@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SubscriptionAccessGuard } from './subscription-access.guard';
+import { AuthCacheService } from '../database/auth-cache.service';
 import {
     SUBSCRIPTION_EXTRA_FEATURES_KEY,
     SUBSCRIPTION_FEATURE_KEY,
@@ -41,7 +42,7 @@ describe('SubscriptionAccessGuard', () => {
     beforeEach(() => {
         jest.resetAllMocks();
         reflector = { getAllAndOverride: jest.fn() } as any;
-        guard = new SubscriptionAccessGuard(reflector, db as any);
+        guard = new SubscriptionAccessGuard(reflector, db as any, new AuthCacheService({ ttlMs: 0 }));
         db.$queryRaw.mockResolvedValue([
             { tenant_id: 'tenant-1', user_id: 'user-1', role: 'OWNER', tenant_deleted_at: null, tenant_timezone: null, roles: [] },
         ]);

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import {
     PlaceOrderDto,
@@ -75,6 +76,7 @@ export class StorefrontService {
         private readonly storefrontPages: StorefrontPagesService,
         private readonly google: GoogleTokenService,
         private readonly firebase: FirebaseTokenService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     async getStorefront(slug: string, userId?: string) {
@@ -823,6 +825,8 @@ export class StorefrontService {
             where: { id: userId },
             data: { storefront_token_version: { increment: 1 } },
         });
+        // `JwtStrategy` checks `stv` against a cached row.
+        this.authCache.invalidateUser(userId);
         // Scope the row to the shop(s) this person buys from, so it lands in the
         // same audit view as the matching STOREFRONT_CUSTOMER_LOGIN.
         const customers = await this.db.customer.findMany({
