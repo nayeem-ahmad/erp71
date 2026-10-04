@@ -33,6 +33,19 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec -T db 
 
 > Stop the backend before restoring if you need a consistent snapshot.
 
+Then bring the restored database up to the running code — schema, platform
+catalog and `sync:*` back-fills — and restart the backend. A restart alone is
+not enough: the backend skips this at start when its "prepared" marker says
+this commit already did it, and the marker cannot tell the database was
+replaced (`docs/ops/deployment-runbook.md`, "Database prepare and the marker
+volume"):
+
+```bash
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml run --rm --no-deps -T backend \
+  sh apps/backend/scripts/db-prepare.sh
+docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml restart backend
+```
+
 ## Legacy (Render / Supabase) backups
 
 > **No longer applies to production.** Production Postgres is now self-hosted in the `db` Docker container on the VPS — use the `pg_dump`-based path above (`scripts/vps-backup.sh`). This section is retained only for any remaining legacy Render/Supabase-hosted databases.

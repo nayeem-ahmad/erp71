@@ -178,6 +178,10 @@ keys on every deploy. The Caddy route is harmless to leave in place.
 - [ ] All CI checks green on the release branch
 - [ ] PR `dev` → `main` reviewed, approved, and **merged** — the merge itself deploys, once CI passes on `main`
 - [ ] Database migrations reviewed (if any schema changes)
+- [ ] Schema changes are **additive**: nothing the previous release still reads is
+      dropped or renamed. The deploy prepares the database while the previous
+      backend is still serving, so for a few seconds the old code runs against the
+      new schema (see [Database prepare](#database-prepare-and-the-marker-volume))
 - [ ] Rollback plan identified (previous good commit hash)
 
 ---
@@ -200,24 +204,121 @@ GitHub → Actions → "Deploy to VPS" → **Run workflow**, or SSH in directly:
 ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
 ```
 
-`scripts/deploy.sh` (safe to re-run):
+`scripts/deploy.sh` (safe to re-run). `docker compose ...` below is short for
+`docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml`.
 
 1. `git fetch` + `git checkout main` + `git pull --ff-only origin main`
 2. Syncs erp71.com URLs into `.env.production` (`scripts/sync-erp71-env-urls.sh`)
-3. Rebuilds + restarts the stack:
-   `docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml up -d --build`
-4. Reattaches the shared **Hermes** Caddy to the `erp71_default` network (otherwise `app.erp71.com` returns 502)
-5. Prints `docker compose ... ps`
+3. **Builds** the new images: `docker compose ... build`. The old containers keep serving.
+4. Makes sure Postgres is up: `docker compose ... up -d --wait db` (a no-op on every deploy but the first)
+5. **Prepares the database** for the new commit in a one-off container, while the
+   old backend keeps serving:
+   `docker compose ... run --rm --no-deps -T backend sh apps/backend/scripts/db-prepare.sh`.
+   That is the schema sync (`prisma db push`), the platform catalog and every
+   `sync:*` back-fill — see [Database prepare](#database-prepare-and-the-marker-volume).
+   **If it fails, the deploy stops here** with nothing swapped and exits non-zero.
+6. **Swaps** the containers: `docker compose ... up -d`. The new backend finds the
+   marker step 5 left and goes straight to listening.
+7. Waits for the backend container to report `healthy` (the compose healthcheck
+   on `/api/v1/health`), up to 6 minutes. If it does not, prints the backend's
+   last log lines and exits non-zero.
+8. Reattaches the shared **Hermes** Caddy to the `erp71_default` network (otherwise `app.erp71.com` returns 502)
+9. Trims Docker's build cache to 8 GB (`docker builder prune`); images and containers are not touched
+10. Prints `docker compose ... ps`
 
-Build + restart takes ~3–5 minutes. Then run the [Post-Deploy Verification](#post-deploy-verification).
+The whole run takes ~3–5 minutes, nearly all of it steps 3 and 5, while the old
+version is still serving. The API is down only between the old backend stopping
+and the new one listening in step 6 — Nest's own boot, expected to be a few
+seconds (not yet measured on the VPS; time it with a `curl` loop on
+`/api/v1/health` during the first deploy after this change). (Before
+steps 4–5 existed, the prepare ran inside the new container's start, after the
+old one was gone: 19–24 s of 502s per deploy, measured on #766.)
+
+Then run the [Post-Deploy Verification](#post-deploy-verification).
+
+---
+
+## Database prepare and the marker volume
+
+Before the API can serve a new commit, the database has to match it: the
+schema sync, the platform catalog and the `sync:*` back-fills, in an order that
+matters. All of that is `apps/backend/scripts/db-prepare.sh`; its comments
+explain each step. Two things run it:
+
+- **`deploy.sh`**, in a one-off container, before swapping containers (step 5 above).
+- **The backend's own start command**, as `db-prepare.sh --if-needed`, which skips
+  the work when this commit has already prepared this database.
+
+How a start knows: each successful prepare writes a marker,
+`/var/lib/erp71/state/db-prepared-<commit>`, on the **`erp71_backend_state`**
+volume, and removes every other commit's marker. A start skips the prepare only
+when the marker for its own `GIT_SHA` is there and was written against the same
+`DATABASE_URL`. So:
+
+| Situation | What the backend does at start |
+|---|---|
+| After `deploy.sh` | Skips; just boots |
+| Restart of the same commit (crash, host reboot) | Skips |
+| Another commit (rollback, a hand-run `up -d --build`) | Prepares first, then boots — correct, but the old ~20 s start |
+| Image built without `GIT_SHA` (`unknown`) | Always prepares; never trusts or writes a marker |
+| Marker volume lost or emptied | Prepares once, writes a new marker |
+
+```bash
+ssh root@66.116.236.127
+cd /opt/erp71
+C="docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml"
+
+# Which commit last prepared the database, and when
+$C run --rm --no-deps -T backend sh -c 'cat /var/lib/erp71/state/db-prepared-*'
+
+# Prepare by hand (always runs; refreshes the marker)
+$C run --rm --no-deps -T backend sh apps/backend/scripts/db-prepare.sh
+```
+
+**Prepare by hand whenever the database changed behind the marker's back** — the
+marker cannot see it:
+
+- after **restoring a backup** (`docs/ops/vps-backups.md`) — the restored schema
+  may be older than the running code, and a restart would skip the push;
+- after **editing the schema or the back-filled data by hand**.
+
+Then `$C restart backend`.
+
+### If the prepare fails during a deploy
+
+The deploy log shows `db-prepare: FAILED <step> (exit N, after Ns)` and then
+`DEPLOY ABORTED`; the workflow goes red. **Production is still on the old
+version**: nothing was swapped. Steps before the failing one did run, so if the
+failure came after `prisma db push` the schema already has the new commit's
+shape — harmless, since schema changes are additive (see the checklist above).
+No marker was written for the new commit, and the old commit's marker is left
+alone, so the old backend restarts cleanly if it has to.
+
+1. Read the output above the `FAILED` line: it is that step's own error.
+2. Fix the cause — usually a commit that fixes the `sync:*` script or the data
+   it chokes on, shipped the usual way; for a data problem, a fix by hand after a
+   backup.
+3. Re-run the deploy. To try the prepare on its own first, run it by hand as
+   above — `deploy.sh` has already built the new image, so it runs the new code.
+
+Do **not** start the new containers with a plain `up -d` while the prepare
+fails: the new backend would run the same failing prepare at start and never
+listen, which turns a failed deploy into an outage.
+
+### If the new backend does not come up healthy
+
+`deploy.sh` prints the backend's last log lines and exits non-zero. Here the old
+backend is already gone, so this is an outage: fix forward or roll back
+([Rollback Procedure](#rollback-procedure)).
 
 ---
 
 ## Schema Migrations
 
 This project uses Prisma `db push` (no migration files). Schema changes are applied
-on the VPS against the compose Postgres. To run a push explicitly (deploy.sh's
-`--build` restart also re-runs the backend's startup `db push`):
+on the VPS against the compose Postgres. To run a push explicitly (deploy.sh
+already runs one as part of the [database prepare](#database-prepare-and-the-marker-volume),
+before swapping containers):
 
 ```bash
 ssh root@66.116.236.127
@@ -267,16 +368,29 @@ ssh root@66.116.236.127 'cd /opt/erp71 && ./scripts/deploy.sh main'
 ```
 
 ### Option 2 — Pin to a known-good commit on the VPS
+`deploy.sh` follows a branch, so pinning a commit is the same sequence by hand:
 ```bash
 ssh root@66.116.236.127
 cd /opt/erp71
 git checkout <good-commit-hash>
-docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml up -d --build
+export GIT_SHA="$(git rev-parse HEAD)"   # /health reports it; the prepare marker is keyed on it
+C="docker compose -p erp71 --env-file .env.production -f docker-compose.prod.yml"
+$C build
+$C run --rm --no-deps -T backend sh apps/backend/scripts/db-prepare.sh   # while the bad version still serves
+$C up -d
 ```
+Skipping the `run` line is still correct — the good commit has no marker, so its
+backend prepares itself at start — but brings back the ~20 s outage. Either way
+the good commit's `db push --accept-data-loss` **drops any column or table the
+bad commit added**, and whatever was written to them since. Back up first if that
+matters.
+
 (Return to `main` with `./scripts/deploy.sh main` once fixed.)
 
 ### Option 3 — Database rollback
 If a migration caused data issues, restore from backup — see `docs/ops/vps-backups.md`.
+Then prepare by hand ([Database prepare](#database-prepare-and-the-marker-volume)):
+the backend's marker cannot tell the database was replaced.
 
 ---
 
@@ -285,7 +399,7 @@ If a migration caused data issues, restore from backup — see `docs/ops/vps-bac
 | Role | Action |
 |---|---|
 | Frontend 502 | Confirm Hermes Caddy is attached to `erp71_default` (`docker network connect erp71_default hermes-caddy-1`); check `docker compose ... ps` |
-| Backend down | `docker compose -p erp71 ... logs --tail=100 backend`; check `/api/v1/health` |
+| Backend down | `docker compose -p erp71 ... logs --tail=100 backend`; check `/api/v1/health`; `docker compose ... ps` shows the backend `(healthy)`, `(health: starting)` or `(unhealthy)`. A backend stuck in `starting` is usually preparing the database itself — its log shows `db-prepare:` lines |
 | DB issues | Check the `db` container logs + disk on the VPS; restore from backup if needed |
 | Payment webhook failing | Check SSL Wireless / bKash / Nagad dashboards |
 | Email not sending | Verify SMTP/`EMAIL_FROM` in `.env.production`; check Brevo dashboard logs |
