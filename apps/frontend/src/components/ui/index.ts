@@ -18,6 +18,8 @@ export { Alert } from './Alert';
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
 export { ImagePreviewModal } from './ImagePreviewModal';
+export { PageSkeleton, SkeletonBar } from './PageSkeleton';
+export type { PageSkeletonBody } from './PageSkeleton';
 export type { PreviewItem } from './ImagePreviewModal';
 // Markdown is deliberately not re-exported here: it pulls in react-markdown, and
 // a barrel export would drag that into every page importing from this module.
