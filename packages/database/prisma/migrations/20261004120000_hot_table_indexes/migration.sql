@@ -8,6 +8,14 @@
 -- without CONCURRENTLY and so blocks writes to the table while it runs. Every
 -- table here is under 65k rows, so each build takes well under a second.
 
+-- CrmActivity.lead_id, alone: the ON DELETE CASCADE behind a lead delete (one
+-- scan per lead in a bulk delete), and the per-lead subquery
+-- sync-lead-activity runs on every container start for each lead never worked.
+-- Neither filters on tenant_id, so (tenant_id, lead_id, status, due_at) cannot
+-- serve them.
+-- CreateIndex
+CREATE INDEX "CrmActivity_lead_id_idx" ON "CrmActivity"("lead_id");
+
 -- posting_events.voucher_id: the ON DELETE SET NULL action Postgres runs once
 -- for every deleted voucher, as `UPDATE posting_events SET voucher_id = NULL
 -- WHERE voucher_id = $1` — voidAutoPostedVoucher on a sale cancel or delete, a

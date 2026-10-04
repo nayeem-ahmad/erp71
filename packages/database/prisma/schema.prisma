@@ -3444,6 +3444,12 @@ model CrmActivity {
   @@index([tenant_id, status, completed_at])
   @@index([tenant_id, channel_id])
   @@index([tenant_id, purpose_id])
+  // lead_id alone, without tenant_id in front. Two readers filter on nothing
+  // else, so the (tenant_id, lead_id, …) index above cannot serve them: the
+  // ON DELETE CASCADE behind a lead delete (one scan per lead in a bulk
+  // delete), and sync-lead-activity's per-lead subquery, which runs on every
+  // container start for each lead that has never been worked.
+  @@index([lead_id])
 }
 
 /// A reusable message a rep drops into an activity instead of retyping it — the
