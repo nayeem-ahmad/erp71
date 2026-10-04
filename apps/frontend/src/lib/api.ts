@@ -15,6 +15,7 @@ import type {
     RefereePayoutRequestStatus,
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
+import type { CloudinaryUpload, UploadPurpose, UploadSignature } from '@/lib/uploads/direct-upload';
 import type { CandidateRow, MatchManifest } from '@/types/match';
 import type { DailyReport } from '@/lib/daily-report';
 import { browserApiBase } from './api-base';
@@ -1723,6 +1724,28 @@ export const api = {
             body: formData,
         });
     },
+    /**
+     * Ask the API to sign one browser → Cloudinary upload for `purpose`. The
+     * folder is fixed inside the signature; see `lib/uploads/direct-upload.ts`,
+     * which is the only caller that should need this.
+     */
+    getUploadSignature: (purpose: UploadPurpose): Promise<UploadSignature> =>
+        fetchWithAuth('/assets/upload-signature', {
+            method: 'POST',
+            body: JSON.stringify({ purpose }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * Save an avatar the browser already uploaded to Cloudinary. Same route as
+     * `updateProfileAvatar`, with the upload's result in place of the file; the
+     * API checks it is in this user's own avatar folder before storing it.
+     */
+    setProfileAvatarFromUpload: (upload: CloudinaryUpload): Promise<{ avatarUrl?: string }> =>
+        fetchWithAuth('/auth/me/avatar', {
+            method: 'PATCH',
+            body: JSON.stringify(upload),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     /**
      * Store a cropped lead/contact photo and get back both its URL and
      * Cloudinary's public_id. The record it belongs to may not exist yet, which
@@ -5590,7 +5613,8 @@ export const api = {
      */
     setBoardBackgroundImage: (
         id: string,
-        data: { imageBase64: string; mimeType?: string; fileName?: string },
+        /** The image itself, or what Cloudinary returned for a direct upload of it. */
+        data: { imageBase64: string; mimeType?: string; fileName?: string } | CloudinaryUpload,
     ) =>
         fetchWithAuth(`/projects/boards/${id}/background/image`, {
             method: 'PUT',
@@ -5976,7 +6000,8 @@ export const api = {
     /** The sprint's counterpart of `setBoardBackgroundImage`. Returns the updated sprint. */
     setSprintBackgroundImage: (
         id: string,
-        data: { imageBase64: string; mimeType?: string; fileName?: string },
+        /** The image itself, or what Cloudinary returned for a direct upload of it. */
+        data: { imageBase64: string; mimeType?: string; fileName?: string } | CloudinaryUpload,
     ) =>
         fetchWithAuth(`/sprints/${id}/background/image`, {
             method: 'PUT',

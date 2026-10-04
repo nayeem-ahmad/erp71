@@ -6,6 +6,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AuditRequestMeta } from '../audit/audit-route.util';
 import { AssetsService } from '../assets/assets.service';
+import { avatarFolder, type CloudinaryUploadDto } from '../assets/direct-upload.util';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
@@ -1048,13 +1049,30 @@ export class AuthService {
 
         let avatarUrl: string;
         try {
-            avatarUrl = await this.assets.uploadFile(file, `avatars/${userId}`);
+            avatarUrl = await this.assets.uploadFile(file, avatarFolder(userId));
         } catch {
             throw new ServiceUnavailableException(
                 'Avatar upload is not available. Configure Cloudinary or try again later.',
             );
         }
 
+        return this.saveAvatarUrl(userId, avatarUrl);
+    }
+
+    /**
+     * Save an avatar the browser uploaded straight to Cloudinary.
+     *
+     * `avatar_url` has only ever been written by the server, so the URL the
+     * client sends is checked before it is stored: it must be an image in our
+     * cloud, inside this user's own avatar folder — not someone else's
+     * picture, and not an arbitrary address every viewer's browser would load.
+     */
+    async updateAvatarFromUpload(userId: string, upload: CloudinaryUploadDto) {
+        const { url } = this.assets.verifyDirectUpload(upload, avatarFolder(userId));
+        return this.saveAvatarUrl(userId, url);
+    }
+
+    private async saveAvatarUrl(userId: string, avatarUrl: string) {
         const user = await this.db.user.update({
             where: { id: userId },
             data: { avatar_url: avatarUrl },

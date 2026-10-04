@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useCallback, useState } from 'react';
-import { api } from '@/lib/api';
+import { uploadProfileAvatar } from '@/lib/uploads/profile-avatar';
 
 interface AvatarContextValue {
     isUploading: boolean;
@@ -26,10 +26,7 @@ export function AvatarProvider({ children }: { children: React.ReactNode }) {
         setCropComplete(true);
 
         try {
-            const formData = new FormData();
-            formData.append('avatar', croppedFile);
-            const result: { avatarUrl?: string } = await api.updateProfileAvatar(formData);
-            return result?.avatarUrl ?? null;
+            return await uploadProfileAvatar(croppedFile);
         } catch {
             return null;
         } finally {

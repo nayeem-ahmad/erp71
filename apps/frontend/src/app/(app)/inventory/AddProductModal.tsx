@@ -7,6 +7,21 @@ import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
 import { COMPOUND_UNIT_DEFS, CompoundUnitType } from '@/lib/compound-units';
 import { useI18n } from '@/lib/i18n';
+import { directUploader, withServerFallback, type CloudinaryUpload } from '@/lib/uploads/direct-upload';
+
+/**
+ * Straight to Cloudinary when it can, through `/assets/upload` when it cannot.
+ * Either way the product stores only the URL, so the form does not care which.
+ */
+function uploadProductImage(
+    file: File,
+    upload: (file: Blob) => Promise<CloudinaryUpload>,
+): Promise<string> {
+    return withServerFallback(
+        async () => (await upload(file)).secure_url,
+        async () => (await api.uploadFile(file)).url,
+    );
+}
 
 interface AddProductModalProps {
     isOpen: boolean;
@@ -141,8 +156,8 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
         setUploading(true);
         try {
-            const { url } = await api.uploadFile(file);
-            setFormData({ ...formData, image_url: url });
+            const url = await uploadProductImage(file, directUploader('product-image'));
+            setFormData((prev) => ({ ...prev, image_url: url }));
         } catch (error) {
             console.error('Upload failed', error);
         } finally {
@@ -156,9 +171,9 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
         setUploadingGallery(true);
         try {
-            const promises = Array.from(files).map((file) => api.uploadFile(file));
-            const results = await Promise.all(promises);
-            const urls = results.map((r) => r.url);
+            // One uploader for the batch: one signature request, however many files.
+            const upload = directUploader('product-image');
+            const urls = await Promise.all(Array.from(files).map((file) => uploadProductImage(file, upload)));
             setFormData((prev) => ({
                 ...prev,
                 images_gallery: [...prev.images_gallery, ...urls],

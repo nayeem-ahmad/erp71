@@ -11,6 +11,7 @@ import AvatarCropModal from '@/components/AvatarCropModal';
 import { PageShell, PasswordRequirements } from '@/components/ui';
 import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
 import { toast } from '@/lib/toast';
+import { uploadProfileAvatar } from '@/lib/uploads/profile-avatar';
 
 type ToastState = { type: 'success' | 'error'; message: string } | null;
 
@@ -581,10 +582,7 @@ export default function ProfilePage() {
     const handleCropConfirm = async (file: File) => {
         setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('avatar', file);
-            const result: { avatarUrl?: string } = await api.updateProfileAvatar(formData);
-            const nextUrl = result?.avatarUrl ?? null;
+            const nextUrl = await uploadProfileAvatar(file);
             setAvatarUrl(nextUrl);
             showToast({ type: 'success', message: t.profile.uploadSuccess });
         } catch (err: any) {
