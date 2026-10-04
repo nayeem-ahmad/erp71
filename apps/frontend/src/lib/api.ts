@@ -18,6 +18,7 @@ import type {
 import type { CandidateRow, MatchManifest } from '@/types/match';
 import type { DailyReport } from '@/lib/daily-report';
 import { normalizeApiBase } from './api-base';
+import { getQueryClient, ME_QUERY_KEY, readMe } from './query-client';
 import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
@@ -622,8 +623,48 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
     return response.json();
 }
 
+/**
+ * Endpoints whose writes change what `GET /auth/me` returns: the profile,
+ * password and 2FA (`/auth`); roles, grants and store access (`/team`); the
+ * per-workspace settings carried on each tenant row — dashboard, locales,
+ * timezone, storefront slug (`/tenants`); the branch list (`/stores`); the plan,
+ * its activation and add-ons; invitations, which add a workspace; and the
+ * platform switches and workspace edits a platform admin makes.
+ *
+ * Deliberately broad. Missing one leaves a screen showing a permission or a plan
+ * the user no longer has until the cache ages out; matching one too many costs a
+ * single background request.
+ */
+const ME_AFFECTING_PATHS = [
+    '/auth',
+    '/team',
+    '/tenants',
+    '/stores',
+    '/billing',
+    '/activation',
+    '/addon-modules',
+    '/invitations',
+    '/admin/platform-settings',
+    '/admin/tenants',
+];
+
+/** Whether a successful request of this method to this endpoint leaves the cached `me` out of date. */
+export function invalidatesMe(endpoint: string, method: string | undefined): boolean {
+    const verb = (method ?? 'GET').toUpperCase();
+    if (verb === 'GET' || verb === 'HEAD') return false;
+    const path = endpoint.split('?')[0];
+    return ME_AFFECTING_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const json = await requestWithAuth(endpoint, options);
+    if (invalidatesMe(endpoint, options.method)) {
+        // Done here, once, rather than at each of the dozens of call sites that
+        // write one of these: whatever is on screen re-reads `me` in the
+        // background, and a `fetchMe` straight after this write waits for the
+        // new answer instead of serving the one from before it.
+        void getQueryClient().invalidateQueries({ queryKey: ME_QUERY_KEY });
+    }
     // Backend wraps all responses in { data: T } — unwrap transparently
     return json && typeof json === 'object' && 'data' in json ? json.data : json;
 }
@@ -2613,9 +2654,15 @@ export const api = {
         if (params.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/branch-report?${query.toString()}`);
     },
+    /**
+     * The branches of the workspace this tab is in. They are part of `/auth/me`,
+     * so this reads the shared cache (`readMe`) instead of asking for the whole
+     * profile again — a page that wants its stores costs no request when the
+     * app shell already has them.
+     */
     getStores: () => {
         const tenantId = getWorkspaceItem('tenant_id');
-        return fetchWithAuth('/auth/me').then((me: any) => {
+        return readMe(() => api.getMe()).then((me: any) => {
             if (!tenantId || !me?.tenants) return [];
             const tenant = me.tenants.find((t: any) => t.id === tenantId);
             return tenant?.stores ?? [];
@@ -4298,6 +4345,11 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     removeMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`, { method: 'DELETE' }),
+    /**
+     * The network read behind the shared `me` cache. Call `useMe()` or
+     * `fetchMe()` from `@/hooks/use-me` instead: this one always costs a round
+     * trip, and the cache exists so that nobody pays it twice.
+     */
     getMe: () => fetchWithAuth('/auth/me'),
     getNavLayout: (scope: 'tenant' | 'platform_admin') =>
         fetchWithAuth(`/navigation/layout?scope=${scope}`),
@@ -5271,7 +5323,8 @@ export const api = {
         if (params.limit) q.set('limit', String(params.limit));
         return fetchWithAuth(`/products/${productId}/rate-history?${q}`, init);
     },
-    getCurrentUser: () => fetchWithAuth('/auth/me'),
+    /** The signed-in user, from the shared `me` cache — the same answer as `fetchMe()`. */
+    getCurrentUser: () => readMe(() => api.getMe()),
 
     // ── Projects ───────────────────────────────────────────────────────────
 
