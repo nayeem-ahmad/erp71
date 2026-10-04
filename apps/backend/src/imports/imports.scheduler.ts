@@ -52,7 +52,8 @@ export class ImportsScheduler {
      * The same two tiers cover an acceptance maturing, which is the other date
      * here with a bank penalty behind it.
      */
-    @Cron('0 7 * * *', { name: 'imports.lc-expiry-alerts' })
+    // 13:00 Bangladesh time — the 07:00 UTC it always ran at, kept.
+    @Cron('0 13 * * *', { name: 'imports.lc-expiry-alerts', timeZone: 'Asia/Dhaka' })
     async sendLcExpiryAlerts() {
         return this.jobTracker.track(JOB_NAMES.IMPORTS_LC_EXPIRY, async () => {
             const windows = LC_EXPIRY_WARNING_DAYS.map(dayWindow);

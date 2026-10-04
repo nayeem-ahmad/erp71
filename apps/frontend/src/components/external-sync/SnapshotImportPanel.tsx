@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Loader2, Play, Upload } from 'lucide-react';
 import { Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { downloadMatchWorkbook } from '@/lib/match-workbook';
 import {
@@ -174,15 +175,11 @@ export function SnapshotImportPanel({
     }, [refreshList]);
 
     const extracting = snapshots.some((snap) => snap.status === 'EXTRACTING');
-    useEffect(() => {
-        if (!extracting) return;
-        const timer = setInterval(() => {
-            void refreshList().catch(() => {
-                // A failed poll is not worth interrupting the page for.
-            });
-        }, SNAPSHOT_POLL_MS);
-        return () => clearInterval(timer);
-    }, [extracting, refreshList]);
+    useVisibleInterval(() => {
+        void refreshList().catch(() => {
+            // A failed poll is not worth interrupting the page for.
+        });
+    }, extracting ? SNAPSHOT_POLL_MS : null);
 
     const selected = snapshots.find((snap) => snap.id === selectedId) ?? null;
     const selectedReadyId = selected?.status === 'READY' ? selected.id : null;

@@ -125,10 +125,18 @@ export class BillingSchedulerService {
         private readonly notifications: NotificationsService,
     ) {}
 
-    // Run daily at 08:00 — the subscription reminder cycle: PAST_DUE tenants are asked to
-    // retry payment before dunning cancels them; tenants with nothing due get a
-    // good-standing note instead of a payment knock.
-    @Cron('0 8 * * *')
+    // The nightly billing chain, in Bangladesh time and an hour apart: retry
+    // reminders 02:00 → dunning 03:00 → period fees 04:00, then the platform
+    // ledger sync at 05:00. Same order and spacing as the old 08:00/09:00/10:00
+    // UTC, which fell in the middle of the trading day. Dunning and the fee pass
+    // each re-read the ledger, so no job needs another's output that night; the
+    // order decides what a tenant hears when (see the period-fee pass), and the
+    // ledger sync goes last so it picks the night's fees up the same night.
+    //
+    // Daily at 02:00 — the subscription reminder cycle: PAST_DUE tenants are
+    // asked to retry payment before dunning suspends them; tenants with nothing
+    // due get a good-standing note instead of a payment knock.
+    @Cron('0 2 * * *', { timeZone: 'Asia/Dhaka' })
     async retryFailedPayments(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.BILLING_RETRY, () => this.retryFailedPaymentsImpl());
     }
@@ -415,9 +423,10 @@ export class BillingSchedulerService {
         }
     }
 
-    // Run daily at 09:00 — suspend workspaces that have gone unpaid past the
-    // suspension window, and cancel add-ons past their own grace period.
-    @Cron('0 9 * * *')
+    // Daily at 03:00 Bangladesh time — suspend workspaces that have gone
+    // unpaid past the suspension window, and cancel add-ons past their own
+    // grace period.
+    @Cron('0 3 * * *', { timeZone: 'Asia/Dhaka' })
     async performDunning(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.BILLING_DUNNING, () => this.performDunningImpl());
     }
@@ -575,8 +584,11 @@ export class BillingSchedulerService {
         }
     }
 
-    // Run daily at 10:00 — post subscription fees to tenant ledger when a billing period ends
-    @Cron('0 10 * * *')
+    // Daily at 04:00 Bangladesh time — post subscription fees to the tenant
+    // ledger when a billing period ends. After the reminder pass, so a fee
+    // posted tonight is first reminded about tomorrow night — 22 hours later,
+    // as before — rather than minutes after it lands.
+    @Cron('0 4 * * *', { timeZone: 'Asia/Dhaka' })
     async postSubscriptionPeriodFees(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.BILLING_PERIOD_FEES, () => this.postSubscriptionPeriodFeesImpl());
     }

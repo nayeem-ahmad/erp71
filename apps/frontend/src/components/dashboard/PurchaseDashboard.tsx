@@ -82,10 +82,12 @@ export default function PurchaseDashboard({
         previous: prev,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'purchases',
         fetchOverview: (window) => api.getPurchaseDashboardOverview(window),
         fetchTrends: (window) => api.getPurchaseDashboardTrends(window),
         unavailableMessage: pur.overviewUnavailable,
@@ -237,6 +239,7 @@ export default function PurchaseDashboard({
             range={range}
             onRangeChange={setRange}
             error={error}
+            refreshing={refreshing}
         >
             <AttentionSection
                 items={attentionItems}

@@ -1,6 +1,7 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import PurchasesPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -70,7 +71,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     });
 
     it('renders purchases loaded from the API', async () => {
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         await waitFor(() => {
             expect(screen.getByText('PUR-00001')).toBeInTheDocument();
@@ -79,14 +80,14 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     });
 
     it('sends Record Purchase to the entry page', async () => {
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         const action = await screen.findByRole('link', { name: /record purchase/i });
         expect(action).toHaveAttribute('href', '/purchases/new');
     });
 
     it('renders a duplicate action pointing the entry form at the purchase', async () => {
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         const link = await screen.findByTitle('Duplicate purchase');
         expect(link).toHaveAttribute('href', '/purchases/new?duplicate=purchase-1');
@@ -96,7 +97,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         const { api } = require('@/lib/api');
         const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');
 
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
         await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
         const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href'));
@@ -112,7 +113,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     it('sets the paper size from the header rather than from a row', async () => {
         const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');
 
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
         await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
         fireEvent.click(screen.getByRole('button', { name: /print settings/i }));
@@ -133,7 +134,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
 
     it('forwards the legacy ?new=1 deep link to the entry page', async () => {
         searchParams = new URLSearchParams('new=1');
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         await waitFor(() => expect(replace).toHaveBeenCalledWith('/purchases/new'));
     });
@@ -147,7 +148,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         };
 
         it('shows a purchase with no status column value as Recorded', async () => {
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
 
             await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
             // Rows written before the column existed come back without it; the
@@ -156,7 +157,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         });
 
         it('hides the Cancel action from someone without CANCEL_ENTRY', async () => {
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
             await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
             expect(screen.queryByRole('button', { name: /cancel entry/i })).toBeNull();
@@ -167,7 +168,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
             asTenantAdmin();
             api.cancelPurchase.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
 
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
             const actions = await screen.findAllByRole('button', { name: /cancel entry/i });
             fireEvent.click(actions[0]);
 
@@ -198,7 +199,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                 },
             ]);
 
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
             await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
             expect(screen.getByText('Cancelled')).toBeInTheDocument();

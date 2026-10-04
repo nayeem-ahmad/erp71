@@ -110,6 +110,34 @@ describe('BillingService', () => {
         db.referralSignup.update.mockResolvedValue({});
     });
 
+    // BACKEND_PUBLIC_URL is the bare origin in production (the deploy script
+    // sets https://api.erp71.com), while every route lives under the global
+    // api/v1 prefix. Callback URLs built without it 404 at the gateway, so the
+    // customer pays and the payment is never recorded.
+    it.each([
+        ['a bare origin', 'https://api.erp71.com'],
+        ['an origin with a trailing slash', 'https://api.erp71.com/'],
+        ['an origin that already carries the prefix', 'https://api.erp71.com/api/v1'],
+    ])('sends the gateway callback URLs under the API prefix when BACKEND_PUBLIC_URL is %s', async (_label, configured) => {
+        process.env.BACKEND_PUBLIC_URL = configured;
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            text: jest.fn().mockResolvedValue(JSON.stringify({
+                status: 'SUCCESS',
+                GatewayPageURL: 'https://sandbox.sslcommerz.com/gateway',
+                sessionkey: 'session-1',
+            })),
+        });
+
+        await service.createCheckoutSession(tenantCtx(), { planCode: 'STANDARD', billingCycle: 'MONTHLY' });
+
+        const sent = new URLSearchParams(fetchMock.mock.calls[0][1].body);
+        expect(sent.get('success_url')).toBe('https://api.erp71.com/api/v1/billing/callbacks/ssl-wireless/success');
+        expect(sent.get('fail_url')).toBe('https://api.erp71.com/api/v1/billing/callbacks/ssl-wireless/fail');
+        expect(sent.get('cancel_url')).toBe('https://api.erp71.com/api/v1/billing/callbacks/ssl-wireless/cancel');
+        expect(sent.get('ipn_url')).toBe('https://api.erp71.com/api/v1/billing/webhooks/ssl-wireless');
+    });
+
     it('creates an SSL Wireless hosted checkout session', async () => {
         fetchMock.mockResolvedValueOnce({
             ok: true,

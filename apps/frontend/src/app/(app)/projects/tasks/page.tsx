@@ -36,6 +36,7 @@ import {
 import { Sparkline } from '@/components/dashboard/Sparkline';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -180,7 +181,7 @@ export default function TasksPage() {
     }, [search, typing]);
 
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((me: unknown) => {
                 const payload = me as {
                     id?: string;

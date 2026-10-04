@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Pencil, Plus } from 'lucide-react';
-import { Button, CompactSection, RichTextEditor } from '@/components/ui';
+import { Button, CompactSection } from '@/components/ui';
+import { RichTextEditor } from '@/components/ui/LazyRichTextEditor';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';

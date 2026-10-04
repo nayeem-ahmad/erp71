@@ -2,11 +2,13 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
 describe('TenantsService', () => {
     let service: TenantsService;
+    let invalidateTenant: jest.SpyInstance;
 
     const db = {
         tenant: {
@@ -33,12 +35,14 @@ describe('TenantsService', () => {
             providers: [
                 TenantsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 { provide: TenantTimezoneService, useValue: timezones },
                 { provide: PlanEntitlementsService, useValue: planEntitlements },
             ],
         }).compile();
 
         service = module.get(TenantsService);
+        invalidateTenant = jest.spyOn(module.get(AuthCacheService), 'invalidateTenant');
     });
 
     describe('password policy', () => {
@@ -244,6 +248,19 @@ describe('TenantsService', () => {
             expect.objectContaining({ data: { timezone: 'America/New_York' } }),
         );
         expect(timezones.invalidate).toHaveBeenCalledWith('tenant-1');
+        // The zone also rides on every member's cached membership, which
+        // `TenantInterceptor` primes the timezone cache from; left alone it would
+        // put the old zone straight back.
+        expect(invalidateTenant).toHaveBeenCalledWith('tenant-1');
+    });
+
+    it('leaves the auth cache alone when the timezone is not part of the change', async () => {
+        db.tenant.findUnique.mockResolvedValue({ localization_enabled: true, secondary_locale: 'bn' });
+        db.tenant.update.mockResolvedValue({ default_locale: 'bn' });
+
+        await service.updateLocalizationSettings('tenant-1', { default_locale: 'bn' } as any);
+
+        expect(invalidateTenant).not.toHaveBeenCalled();
     });
 
     it('sets the timezone even when the language switcher is disabled', async () => {

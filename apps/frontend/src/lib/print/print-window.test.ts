@@ -1,5 +1,6 @@
 import { buildPrintDocument, openPrintWindow, PRINT_PREVIEW_SKIP_MESSAGE } from './print-window';
 import { PRINT_DENSITY_KEY, PRINT_DENSITY_MESSAGE, readPrintDensity } from './density';
+import { loadMessages } from '@/lib/localization/load-messages';
 
 const base = {
     title: 'Invoice INV-001',
@@ -706,13 +707,24 @@ describe('openPrintWindow — compactable documents', () => {
         expect(html).not.toContain('p71-pv');
     });
 
-    it('words the switch in the language the app is showing', () => {
+    it('words the switch in the language the app is showing', async () => {
+        // The app is showing Bangla only once its chunk has arrived.
+        await loadMessages('bn');
         document.documentElement.dataset.locale = 'bn';
         const win = mockWindow();
 
         openPrintWindow({ ...base, compactable: true });
 
         expect(written(win)).toContain('কমপ্যাক্ট লেআউট');
+    });
+
+    it('words the switch in English rather than wait for a language not yet loaded', () => {
+        document.documentElement.dataset.locale = 'hi';
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, compactable: true });
+
+        expect(written(win)).toContain('>Compact layout<');
     });
 
     it('remembers what the window reports back', () => {

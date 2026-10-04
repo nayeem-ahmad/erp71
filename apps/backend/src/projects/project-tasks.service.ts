@@ -1201,10 +1201,13 @@ export class ProjectTasksService {
      * "Delete selected" on the Tasks page, in one round trip.
      *
      * The page used to fire one `DELETE /project-tasks/:id` per selected row.
-     * With the platform's default throttle at 20 requests a minute per address
-     * — and not raised in production — a selection past twenty rows spent the
-     * whole budget and the rest came back `429`, which the page reported as
-     * "could not be deleted": a half-finished delete dressed up as a failure.
+     * With the platform's default throttle at the time — 20 requests a minute
+     * per address, not raised in production — a selection past twenty rows
+     * spent the whole budget and the rest came back `429`, which the page
+     * reported as "could not be deleted": a half-finished delete dressed up as a
+     * failure. (The default is now 120 a minute per signed-in user; see
+     * `common/default-throttle.util.ts`. One request per selection is still the
+     * right shape.)
      *
      * Invisible and already-deleted ids are *skipped*, not raised: unlike the
      * single-task route there is no one task the caller asked for, and failing

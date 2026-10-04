@@ -159,10 +159,12 @@ export default function CrmDashboard({
         previous: prev,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'crm',
         fetchOverview: (window) => api.getCrmDashboardOverview({ ...window, ...scope }),
         fetchTrends: (window) => api.getCrmDashboardTrends({ ...window, ...scope }),
         unavailableMessage: crm.overviewUnavailable,
@@ -410,6 +412,7 @@ export default function CrmDashboard({
                 />
             }
             error={error}
+            refreshing={refreshing}
         >
             <AttentionSection
                 items={attentionItems}

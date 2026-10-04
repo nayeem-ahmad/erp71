@@ -25,6 +25,7 @@ export const OPEN_ROUTES: Record<string, string> = {
     'AiController.getConversation': "self-scoped conversations; per-tool permission is checked in the chat service", // GET /ai/chat/conversations/:id
     'AiController.deleteConversation': "self-scoped conversations; per-tool permission is checked in the chat service", // DELETE /ai/chat/conversations/:id
     'AssetsController.uploadFile': "TODO(api-audit 2026-09-29): no permission declared — see TODO.md", // POST /assets/upload
+    'AssetsController.uploadSignature': "one route signs for every upload purpose; it asserts the permission that purpose's save route needs (UPLOAD_PURPOSES)", // POST /assets/upload-signature
     'AuditController.list': "permission is enforced in the service layer, not by a decorator", // GET /audit-logs
     'AuthController.logout': "sign-in session and account bootstrap for the signed-in user (no workspace data)", // POST /auth/logout
     'AuthController.setupStore': "sign-in session and account bootstrap for the signed-in user (no workspace data)", // POST /auth/setup-store

@@ -15,9 +15,11 @@ import type {
     RefereePayoutRequestStatus,
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
+import type { CloudinaryUpload, UploadPurpose, UploadSignature } from '@/lib/uploads/direct-upload';
 import type { CandidateRow, MatchManifest } from '@/types/match';
 import type { DailyReport } from '@/lib/daily-report';
-import { normalizeApiBase } from './api-base';
+import { browserApiBase } from './api-base';
+import { getQueryClient, ME_QUERY_KEY, readMe } from './query-client';
 import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
@@ -127,16 +129,12 @@ export type ActivationStatus = {
     latest_request: ActivationRequestRecord | null;
 };
 
-const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
-// In dev (remote container) use a relative path so browser calls go to the
-// Next.js dev server which proxies them to the backend via next.config rewrites.
-// In production keep the explicit backend URL.
-//
-// `normalizeApiBase` lives in ./api-base so the server-side public routes
-// (/s, /q, /store/../p, /r) apply the identical `/api/v1` rule instead of each
-// re-deriving it — see that file for why that mattered.
-const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
-    || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
+// The app's own origin in production, `/api/v1` on the page's origin when
+// unset — `browserApiBase` says why same-origin is worth having. It lives in
+// ./api-base so the server-side public routes (/s, /q, /store/../p, /r) apply
+// the identical `/api/v1` rule instead of each re-deriving it — see that file
+// for why that mattered.
+const API_BASE = browserApiBase();
 
 /**
  * An API failure that keeps its HTTP status.
@@ -158,9 +156,11 @@ export class ApiError extends Error {
         public readonly code?: string,
         /**
          * Seconds to wait before retrying, when the backend rate-limited the
-         * call. Read from the body rather than the `Retry-After` header, which
-         * the browser cannot see cross-origin unless the API exposes it — and
-         * the app and the API are on different hosts in production.
+         * call. Read from the body rather than the `Retry-After` header: the
+         * app now calls its own origin, where the header is readable, but the
+         * marketing host and any deployment configured with a separate API host
+         * still call cross-origin, and there the browser hides every header the
+         * API does not list in `Access-Control-Expose-Headers` — it lists none.
          */
         public readonly retryAfter?: number,
     ) {
@@ -519,6 +519,9 @@ export async function fetchBlobWithAuth(
         throw new ApiError(message, response.status, code);
     }
 
+    // Only readable same-origin: the API exposes no headers to cross-origin
+    // callers, so a deployment that calls a separate API host gets the
+    // `'export'` fallback name instead of the server's.
     const disposition = response.headers.get('Content-Disposition') ?? '';
     const filenameMatch = disposition.match(/filename="([^"]+)"/);
     const filename = filenameMatch ? filenameMatch[1] : 'export';
@@ -622,8 +625,57 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
     return response.json();
 }
 
+/**
+ * Endpoints whose writes change what `GET /auth/me` returns: the profile,
+ * password and 2FA (`/auth`); roles, grants and store access (`/team`); the
+ * per-workspace settings carried on each tenant row — dashboard, locales,
+ * timezone, storefront slug (`/tenants`); the branch list (`/stores`); the plan,
+ * its activation and add-ons; invitations, which add a workspace; and the
+ * platform switches and workspace edits a platform admin makes.
+ *
+ * Deliberately broad. Missing one leaves a screen showing a permission or a plan
+ * the user no longer has until the cache ages out; matching one too many costs a
+ * single background request.
+ */
+const ME_AFFECTING_PATHS = [
+    '/auth',
+    '/team',
+    '/tenants',
+    '/stores',
+    '/billing',
+    '/activation',
+    '/addon-modules',
+    '/invitations',
+    '/admin/platform-settings',
+    '/admin/tenants',
+];
+
+/**
+ * Writes that end the session they are made on. A password change bumps
+ * `token_version` and revokes every refresh token, so by the time it returns
+ * this tab's token is dead: re-reading `me` would only 401, fail to renew, and
+ * race the caller's own move to the login page with an "expired" one.
+ */
+const SESSION_ENDING_PATHS = ['/auth/change-password', '/auth/logout'];
+
+/** Whether a successful request of this method to this endpoint leaves the cached `me` out of date. */
+export function invalidatesMe(endpoint: string, method: string | undefined): boolean {
+    const verb = (method ?? 'GET').toUpperCase();
+    if (verb === 'GET' || verb === 'HEAD') return false;
+    const path = endpoint.split('?')[0];
+    if (SESSION_ENDING_PATHS.includes(path)) return false;
+    return ME_AFFECTING_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const json = await requestWithAuth(endpoint, options);
+    if (invalidatesMe(endpoint, options.method)) {
+        // Done here, once, rather than at each of the dozens of call sites that
+        // write one of these: whatever is on screen re-reads `me` in the
+        // background, and a `fetchMe` straight after this write waits for the
+        // new answer instead of serving the one from before it.
+        void getQueryClient().invalidateQueries({ queryKey: ME_QUERY_KEY });
+    }
     // Backend wraps all responses in { data: T } — unwrap transparently
     return json && typeof json === 'object' && 'data' in json ? json.data : json;
 }
@@ -1723,6 +1775,28 @@ export const api = {
         });
     },
     /**
+     * Ask the API to sign one browser → Cloudinary upload for `purpose`. The
+     * folder is fixed inside the signature; see `lib/uploads/direct-upload.ts`,
+     * which is the only caller that should need this.
+     */
+    getUploadSignature: (purpose: UploadPurpose): Promise<UploadSignature> =>
+        fetchWithAuth('/assets/upload-signature', {
+            method: 'POST',
+            body: JSON.stringify({ purpose }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * Save an avatar the browser already uploaded to Cloudinary. Same route as
+     * `updateProfileAvatar`, with the upload's result in place of the file; the
+     * API checks it is in this user's own avatar folder before storing it.
+     */
+    setProfileAvatarFromUpload: (upload: CloudinaryUpload): Promise<{ avatarUrl?: string }> =>
+        fetchWithAuth('/auth/me/avatar', {
+            method: 'PATCH',
+            body: JSON.stringify(upload),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
      * Store a cropped lead/contact photo and get back both its URL and
      * Cloudinary's public_id. The record it belongs to may not exist yet, which
      * is why this is not a route on /crm/leads or /crm/contacts.
@@ -2613,9 +2687,15 @@ export const api = {
         if (params.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/branch-report?${query.toString()}`);
     },
+    /**
+     * The branches of the workspace this tab is in. They are part of `/auth/me`,
+     * so this reads the shared cache (`readMe`) instead of asking for the whole
+     * profile again — a page that wants its stores costs no request when the
+     * app shell already has them.
+     */
     getStores: () => {
         const tenantId = getWorkspaceItem('tenant_id');
-        return fetchWithAuth('/auth/me').then((me: any) => {
+        return readMe(() => api.getMe()).then((me: any) => {
             if (!tenantId || !me?.tenants) return [];
             const tenant = me.tenants.find((t: any) => t.id === tenantId);
             return tenant?.stores ?? [];
@@ -4298,6 +4378,11 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     removeMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`, { method: 'DELETE' }),
+    /**
+     * The network read behind the shared `me` cache. Call `useMe()` or
+     * `fetchMe()` from `@/hooks/use-me` instead: this one always costs a round
+     * trip, and the cache exists so that nobody pays it twice.
+     */
     getMe: () => fetchWithAuth('/auth/me'),
     getNavLayout: (scope: 'tenant' | 'platform_admin') =>
         fetchWithAuth(`/navigation/layout?scope=${scope}`),
@@ -5271,7 +5356,8 @@ export const api = {
         if (params.limit) q.set('limit', String(params.limit));
         return fetchWithAuth(`/products/${productId}/rate-history?${q}`, init);
     },
-    getCurrentUser: () => fetchWithAuth('/auth/me'),
+    /** The signed-in user, from the shared `me` cache — the same answer as `fetchMe()`. */
+    getCurrentUser: () => readMe(() => api.getMe()),
 
     // ── Projects ───────────────────────────────────────────────────────────
 
@@ -5589,7 +5675,8 @@ export const api = {
      */
     setBoardBackgroundImage: (
         id: string,
-        data: { imageBase64: string; mimeType?: string; fileName?: string },
+        /** The image itself, or what Cloudinary returned for a direct upload of it. */
+        data: { imageBase64: string; mimeType?: string; fileName?: string } | CloudinaryUpload,
     ) =>
         fetchWithAuth(`/projects/boards/${id}/background/image`, {
             method: 'PUT',
@@ -5975,7 +6062,8 @@ export const api = {
     /** The sprint's counterpart of `setBoardBackgroundImage`. Returns the updated sprint. */
     setSprintBackgroundImage: (
         id: string,
-        data: { imageBase64: string; mimeType?: string; fileName?: string },
+        /** The image itself, or what Cloudinary returned for a direct upload of it. */
+        data: { imageBase64: string; mimeType?: string; fileName?: string } | CloudinaryUpload,
     ) =>
         fetchWithAuth(`/sprints/${id}/background/image`, {
             method: 'PUT',

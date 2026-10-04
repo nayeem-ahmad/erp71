@@ -1,0 +1,33 @@
+-- Indexes for hot sequential scans found in production's pg_stat_user_tables
+-- on 2026-10-04 (statistics never reset). pg_stat_statements was not on yet, so
+-- each one was chosen from the code that reads the table: every one backs a
+-- filter on a column that no existing index leads with, which left Postgres no
+-- access path but a full scan of the table, across every tenant.
+--
+-- Production applies the schema with `prisma db push`, which builds these
+-- without CONCURRENTLY and so blocks writes to the table while it runs. Every
+-- table here is under 65k rows, so each build takes well under a second.
+
+-- CrmActivity.lead_id, alone: the ON DELETE CASCADE behind a lead delete (one
+-- scan per lead in a bulk delete), and the per-lead subquery
+-- sync-lead-activity runs on every container start for each lead never worked.
+-- Neither filters on tenant_id, so (tenant_id, lead_id, status, due_at) cannot
+-- serve them.
+-- CreateIndex
+CREATE INDEX "CrmActivity_lead_id_idx" ON "CrmActivity"("lead_id");
+
+-- posting_events.voucher_id: the ON DELETE SET NULL action Postgres runs once
+-- for every deleted voucher, as `UPDATE posting_events SET voucher_id = NULL
+-- WHERE voucher_id = $1` — voidAutoPostedVoucher on a sale cancel or delete, a
+-- purchase cancel or a payment edit, a manual voucher delete, and one per
+-- voucher when Settings > Clear data wipes a tenant's journals. Every other
+-- read of the table is served by the unique key or the two composites.
+-- CreateIndex
+CREATE INDEX "posting_events_voucher_id_idx" ON "posting_events"("voucher_id");
+
+-- PaymentRecord.sale_id: every `include: { payments }` on a sale (the sales
+-- list, the sale screen, the invoice print, the cashier-session close, the
+-- daily report), the deleteMany a sale edit runs, and the cascade behind a sale
+-- delete. 75,898 full scans against 4 index scans.
+-- CreateIndex
+CREATE INDEX "PaymentRecord_sale_id_idx" ON "PaymentRecord"("sale_id");

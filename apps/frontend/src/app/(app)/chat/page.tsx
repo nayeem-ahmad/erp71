@@ -18,7 +18,9 @@ import {
     type ChatMessagePage,
     type PendingAttachment,
 } from '@/components/chat/types';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -62,7 +64,7 @@ export default function ChatPage() {
         let cancelled = false;
         void (async () => {
             try {
-                const user = (await api.getMe()) as { id?: string } | null;
+                const user = (await fetchMe()) as { id?: string } | null;
                 if (!cancelled) setCurrentUserId(user?.id ?? null);
             } catch {
                 if (!cancelled) setCurrentUserId(null);
@@ -164,11 +166,7 @@ export default function ChatPage() {
         void loadConversations();
     }, [loadConversations]);
 
-    useEffect(() => {
-        if (unavailable) return;
-        const timer = setInterval(() => void loadConversations(), LIST_POLL_MS);
-        return () => clearInterval(timer);
-    }, [loadConversations, unavailable]);
+    useVisibleInterval(() => void loadConversations(), unavailable ? null : LIST_POLL_MS);
 
     useEffect(() => {
         if (!activeId) {
@@ -178,10 +176,14 @@ export default function ChatPage() {
         }
         setEditing(null);
         void loadMessages(activeId);
-
-        const timer = setInterval(() => void loadMessages(activeId, true), MESSAGE_POLL_MS);
-        return () => clearInterval(timer);
     }, [activeId, loadMessages]);
+
+    useVisibleInterval(
+        () => {
+            if (activeId) void loadMessages(activeId, true);
+        },
+        activeId ? MESSAGE_POLL_MS : null,
+    );
 
     const loadOlder = async () => {
         if (!activeId || !cursor) return;

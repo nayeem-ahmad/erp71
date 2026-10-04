@@ -11,11 +11,28 @@ erp71.com, www.erp71.com {
 
 # The signed-in app. Same Next.js container — `middleware.ts` decides which of
 # the two sites a request is for, from the Host header Caddy passes through.
+#
+# `/api/v1/*` goes straight to the backend so the browser can call its own
+# origin: a cross-origin call with an `Authorization` header costs a CORS
+# preflight first (a full round trip, about 0.25 s from Bangladesh), and a
+# second host costs a second TLS connection. Not through the frontend's
+# next.config.js rewrite either — that buffers request bodies in Node, which
+# large uploads cannot afford. `flush_interval -1` keeps the support page's
+# Server-Sent Events stream unbuffered.
 app.erp71.com {
     encode zstd gzip
-    reverse_proxy frontend:3000
+    handle /api/v1/* {
+        reverse_proxy backend:4000 {
+            flush_interval -1
+        }
+    }
+    handle {
+        reverse_proxy frontend:3000
+    }
 }
 
+# Kept for everything configured with the API's own host: the mobile app,
+# API-key clients and the payment gateways' callbacks.
 api.erp71.com {
     encode zstd gzip
     reverse_proxy backend:4000

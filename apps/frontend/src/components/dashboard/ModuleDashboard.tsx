@@ -23,6 +23,12 @@ export type KpiTileSpec = {
     /** Sparkline series. Fewer than two points renders `note` instead. */
     points?: number[];
     note?: string;
+    /**
+     * This tile's own figure is still on its way. For dashboards whose tiles each
+     * come from a request of their own, so one slow endpoint holds back one tile
+     * rather than the whole band.
+     */
+    loading?: boolean;
 };
 
 /** A labelled band. Every dashboard is four of these in the same order. */
@@ -37,7 +43,25 @@ export function DashboardSection({ label, children }: Readonly<{ label: string; 
 
 const TILE_GRID = 'grid grid-cols-2 gap-2.5 xl:grid-cols-4';
 
-/** The four-tile health band, with the skeleton it shows while the window loads. */
+/** One health tile's placeholder: the same box, pulsing, so nothing moves when it fills. */
+export function KpiTileSkeleton() {
+    return (
+        <div
+            data-testid="kpi-tile-skeleton"
+            className="animate-pulse rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+        >
+            <div className="h-3 w-16 rounded bg-gray-200" />
+            <div className="mt-2 h-6 w-24 rounded bg-gray-200" />
+            <div className="mt-2 h-3 w-12 rounded bg-gray-200" />
+            <div className="mt-3 h-5 w-full rounded bg-gray-100" />
+        </div>
+    );
+}
+
+/**
+ * The four-tile health band, with the skeleton it shows while the window loads.
+ * `loading` holds the whole band; a tile's own `loading` holds just that tile.
+ */
 export function KpiTileGrid({
     tiles,
     loading,
@@ -51,15 +75,7 @@ export function KpiTileGrid({
         return (
             <div className={TILE_GRID}>
                 {Array.from({ length: 4 }).map((_, index) => (
-                    <div
-                        key={index}
-                        className="animate-pulse rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                    >
-                        <div className="h-3 w-16 rounded bg-gray-200" />
-                        <div className="mt-2 h-6 w-24 rounded bg-gray-200" />
-                        <div className="mt-2 h-3 w-12 rounded bg-gray-200" />
-                        <div className="mt-3 h-5 w-full rounded bg-gray-100" />
-                    </div>
+                    <KpiTileSkeleton key={index} />
                 ))}
             </div>
         );
@@ -67,7 +83,7 @@ export function KpiTileGrid({
 
     return (
         <div className={TILE_GRID}>
-            {tiles.map((tile) => (
+            {tiles.map((tile) => tile.loading ? <KpiTileSkeleton key={tile.key} /> : (
                 <HealthKpiTile
                     key={tile.key}
                     title={tile.title}
@@ -132,6 +148,7 @@ export default function ModuleDashboard({
     onRangeChange,
     toolbar,
     error,
+    refreshing = false,
     children,
 }: Readonly<{
     mount: DashboardMount;
@@ -147,6 +164,12 @@ export default function ModuleDashboard({
      */
     toolbar?: ReactNode;
     error?: string;
+    /**
+     * The bands still show the previous range while the new one loads. Dimmed
+     * rather than swapped for skeletons: the tab has already moved, so the user
+     * knows their click landed, and nothing on the page jumps.
+     */
+    refreshing?: boolean;
     children: ReactNode;
 }>) {
     const { t } = useI18n();
@@ -179,7 +202,9 @@ export default function ModuleDashboard({
                 </div>
             ) : null}
 
-            {children}
+            <div aria-busy={refreshing} className={`space-y-4 transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
+                {children}
+            </div>
         </div>
     );
 

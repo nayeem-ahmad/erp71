@@ -1,4 +1,5 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
+import { renderHookWithQueryClient } from '@/test-utils/query-client';
 import { useCanApproveCrmActivity } from './use-can-approve-crm-activity';
 
 jest.mock('@/lib/api', () => ({
@@ -30,7 +31,7 @@ describe('useCanApproveCrmActivity', () => {
             tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['APPROVE_CRM_ACTIVITY'] }],
         });
 
-        const { result } = renderHook(() => useCanApproveCrmActivity());
+        const { result } = renderHookWithQueryClient(() => useCanApproveCrmActivity());
 
         await waitFor(() => expect(result.current).toBe(true));
     });
@@ -42,7 +43,7 @@ describe('useCanApproveCrmActivity', () => {
             tenants: [{ id: 'tenant-1', role: 'OWNER', permissions: [] }],
         });
 
-        const { result } = renderHook(() => useCanApproveCrmActivity());
+        const { result } = renderHookWithQueryClient(() => useCanApproveCrmActivity());
 
         await waitFor(() => expect(result.current).toBe(true));
     });
@@ -55,7 +56,7 @@ describe('useCanApproveCrmActivity', () => {
             tenants: [{ id: 'tenant-1', role: 'STAFF', permissions: ['MANAGE_CRM_TASKS'] }],
         });
 
-        const { result } = renderHook(() => useCanApproveCrmActivity());
+        const { result } = renderHookWithQueryClient(() => useCanApproveCrmActivity());
         await settleMe();
 
         expect(result.current).toBe(false);
@@ -73,7 +74,7 @@ describe('useCanApproveCrmActivity', () => {
             ],
         });
 
-        const { result } = renderHook(() => useCanApproveCrmActivity());
+        const { result } = renderHookWithQueryClient(() => useCanApproveCrmActivity());
 
         await waitFor(() => expect(result.current).toBe(true));
     });

@@ -24,9 +24,9 @@ jest.mock('next/headers', () => ({
 }));
 
 jest.mock('next/font/google', () => ({
-    Inter: () => ({ variable: 'var-inter' }),
-    Noto_Sans_Bengali: () => ({ variable: 'var-bengali' }),
-    Noto_Sans_Arabic: () => ({ variable: 'var-arabic' }),
+    Inter: jest.fn(() => ({ variable: 'var-inter' })),
+    Noto_Sans_Bengali: jest.fn(() => ({ variable: 'var-bengali' })),
+    Noto_Sans_Arabic: jest.fn(() => ({ variable: 'var-arabic' })),
 }));
 
 async function renderTree() {
@@ -52,5 +52,19 @@ describe('RootLayout', () => {
 
         expect(body.type).toBe('body');
         expect(body.props.className).toContain('font-sans');
+    });
+
+    /*
+     * A preloaded font is fetched by every page before it needs it. Bangla
+     * product names show in the English UI too, so Bengali earns that; Arabic
+     * script is only for the `ar` and `ur` interfaces, and unpreloaded it still
+     * arrives the moment a page actually uses it.
+     */
+    it('preloads Inter and Bengali for everyone, but not the Arabic face', () => {
+        const fonts = jest.requireMock('next/font/google');
+
+        expect(fonts.Noto_Sans_Arabic).toHaveBeenCalledWith(expect.objectContaining({ preload: false }));
+        expect(fonts.Inter.mock.calls[0][0].preload).not.toBe(false);
+        expect(fonts.Noto_Sans_Bengali.mock.calls[0][0].preload).not.toBe(false);
     });
 });

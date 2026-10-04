@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { hasPermission } from '@/lib/permissions';
 import { getWorkspaceItem } from './session-store';
 
@@ -156,7 +157,7 @@ export function useReportStores() {
 
         const load = async () => {
             try {
-                const me = await api.getMe();
+                const me = await fetchMe();
                 if (!active) {
                     return;
                 }

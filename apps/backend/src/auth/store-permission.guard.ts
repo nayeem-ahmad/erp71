@@ -10,12 +10,15 @@ import { StorePermission } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { STORE_PERMISSIONS_ANY_KEY, STORE_PERMISSIONS_KEY } from './store-permission.decorator';
 import { loadTenantMembership } from '../database/tenant-membership.loader';
+import { AuthCacheService } from '../database/auth-cache.service';
+import { loadMemberStoreAccess, loadMemberStoreGrants, soleStoreId } from '../database/member-access.loader';
 
 @Injectable()
 export class StorePermissionGuard implements CanActivate {
     constructor(
         private reflector: Reflector,
         private db: DatabaseService,
+        private authCache: AuthCacheService,
     ) { }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -54,7 +57,7 @@ export class StorePermissionGuard implements CanActivate {
             // Through the shared loader: the interceptor reads this same row
             // once this guard has let the request past, so whichever of them
             // gets here first is the only one that pays for it.
-            const membership = await loadTenantMembership(this.db, request, tenantId, userId);
+            const membership = await loadTenantMembership(this.db, request, tenantId, userId, this.authCache);
 
             if (!membership) {
                 throw new ForbiddenException('Invalid tenant context');
@@ -72,15 +75,8 @@ export class StorePermissionGuard implements CanActivate {
         }
 
         if (!storeId) {
-            const userStoreAccess = await this.db.userStoreAccess.findMany({
-                where: { user_id: userId, tenant_id: tenantId },
-                select: { store_id: true },
-                take: 2,
-            });
-
-            if (userStoreAccess.length === 1) {
-                storeId = userStoreAccess[0].store_id;
-            }
+            // The same cached list `TenantInterceptor` resolves the store from.
+            storeId = soleStoreId(await loadMemberStoreAccess(this.db, this.authCache, userId, tenantId));
         }
 
         if (!storeId) {
@@ -93,18 +89,9 @@ export class StorePermissionGuard implements CanActivate {
         // is a request header, and a member can own a workspace — and a store with
         // every permission — of their own; without `tenant_id` here, sending that
         // store's id would satisfy every check in a workspace they merely belong to.
-        const wanted = [...(hasAll ? required : []), ...(hasAny ? requiredAny : [])];
-        const grants = await this.db.userStorePermission.findMany({
-            where: {
-                user_id: userId,
-                store_id: storeId,
-                tenant_id: tenantId,
-                permission: { in: [...new Set(wanted)] as any[] },
-            },
-            select: { permission: true },
-        });
-
-        const grantedSet = new Set(grants.map((g) => g.permission));
+        // The loader reads by member *and* workspace; this then picks the store.
+        const grants = await loadMemberStoreGrants(this.db, this.authCache, userId, tenantId);
+        const grantedSet: ReadonlySet<string> = grants.get(storeId) ?? new Set<string>();
         const missing = hasAll ? required.filter((p) => !grantedSet.has(p as any)) : [];
 
         if (missing.length > 0) {

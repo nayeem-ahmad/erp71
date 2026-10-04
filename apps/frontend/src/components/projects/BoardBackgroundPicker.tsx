@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Check, ImageUp, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
+import { directUpload, withServerFallback, type CloudinaryUpload } from '@/lib/uploads/direct-upload';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -42,7 +43,8 @@ export interface BackgroundTarget {
     id: string;
 }
 
-type ImageUpload = { imageBase64: string; mimeType?: string; fileName?: string };
+/** The file itself (the fallback route), or where the browser already put it. */
+type ImageUpload = { imageBase64: string; mimeType?: string; fileName?: string } | CloudinaryUpload;
 
 function backgroundApi({ kind, id }: BackgroundTarget) {
     return kind === 'sprint'
@@ -122,19 +124,29 @@ export default function BoardBackgroundPicker({
             toast.error(m.tooLarge);
             return;
         }
-        let dataUrl: string;
-        try {
-            dataUrl = await readAsDataUrl(file);
-        } catch {
-            toast.error(m.uploadFailed);
-            return;
-        }
+        // Straight to Cloudinary, then only the result to the API, which checks
+        // it is in this tenant's folder. If any of that fails, the old route:
+        // the whole picture as base64, uploaded by the API.
         await run(() =>
-            endpoints.setImage({
-                imageBase64: dataUrl,
-                mimeType: file.type,
-                fileName: file.name,
-            }),
+            withServerFallback(
+                async () =>
+                    endpoints.setImage(
+                        await directUpload(file, ofSprint ? 'sprint-background' : 'board-background'),
+                    ),
+                async () => {
+                    let dataUrl: string;
+                    try {
+                        dataUrl = await readAsDataUrl(file);
+                    } catch {
+                        throw new Error(m.uploadFailed);
+                    }
+                    return endpoints.setImage({
+                        imageBase64: dataUrl,
+                        mimeType: file.type,
+                        fileName: file.name,
+                    });
+                },
+            ),
         );
     };
 

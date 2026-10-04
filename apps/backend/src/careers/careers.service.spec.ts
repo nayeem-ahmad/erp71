@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { CareersApplicationStage } from '@erp71/shared-types';
 import { CareersService } from './careers.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from '../auth/totp.service';
 import { AUTH_SCOPE_APPLICANT } from '../auth/token-scope';
@@ -20,6 +21,7 @@ import { AUTH_SCOPE_APPLICANT } from '../auth/token-scope';
  */
 describe('CareersService', () => {
     let service: CareersService;
+    let authCache: AuthCacheService;
     let db: any;
 
     const SEEKER_ID = 'seeker-1';
@@ -113,6 +115,7 @@ describe('CareersService', () => {
             providers: [
                 CareersService,
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 { provide: JwtService, useValue: { sign: jest.fn().mockReturnValue('signed-token') } },
                 {
                     provide: TotpService,
@@ -123,6 +126,7 @@ describe('CareersService', () => {
         }).compile();
 
         service = moduleRef.get(CareersService);
+        authCache = moduleRef.get(AuthCacheService);
     });
 
     describe('the public board', () => {
@@ -490,6 +494,17 @@ describe('CareersService', () => {
                 where: { id: USER_ID },
                 data: { applicant_token_version: { increment: 1 } },
             });
+        });
+
+        // `JwtStrategy` checks `atv` against a cached row; the bump only ends
+        // the applicant's sessions once that row is dropped.
+        it('drops the cached user row after the bump', async () => {
+            const invalidate = jest.spyOn(authCache, 'invalidateUser');
+
+            await service.logout(USER_ID);
+
+            expect(invalidate).toHaveBeenCalledWith(USER_ID);
+            expect(invalidate.mock.invocationCallOrder[0]).toBeGreaterThan(db.user.update.mock.invocationCallOrder[0]);
         });
     });
 });

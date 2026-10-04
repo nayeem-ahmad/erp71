@@ -3,6 +3,7 @@
 import { Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
@@ -11,13 +12,14 @@ import { periodDelta } from '@/lib/dashboard-delta';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
 import { DashboardHeader, type DashboardRange } from '@/components/dashboard/DashboardHeader';
 import { routes } from '@/lib/routes';
-import { HealthKpiTile } from '@/components/dashboard/HealthKpiTile';
 import { AttentionStrip, type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { SalesByCategoryDonut, type CategoryRow } from '@/components/dashboard/SalesByCategoryDonut';
 import { CashFlowChart } from '@/components/dashboard/CashFlowChart';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import PageShell from '@/components/ui/compact/PageShell';
 import type { DashboardIdentity } from './dashboard-identity';
+import { dashboardQueryKey } from './dashboard-query';
+import { KpiTileGrid, type KpiTileSpec } from './ModuleDashboard';
 
 type FinancialKpis = {
     cash_inflow: number;
@@ -77,6 +79,8 @@ type CustomerReportRow = {
     avgOrderValue: number;
 };
 
+type ReportRows<T> = { rows?: T[] } | null;
+
 type SaleRow = {
     id: string;
     serial_number: string;
@@ -101,102 +105,118 @@ const EMPTY_KPIS: FinancialKpis = {
 // pipeline only emits COMPLETED, so this degrades to a count of 0 (item omitted).
 const DELIVERY_PENDING_STATUSES = new Set(['DELIVERY_PENDING', 'AWAITING_DELIVERY', 'PENDING_DELIVERY']);
 
+/**
+ * One panel's question over the selected range.
+ *
+ * Keeps the previous range's answer on screen while a new one loads
+ * (`keepPreviousData`), so switching tabs dims the figures instead of blanking
+ * them to skeletons. The window is worked out when the request is made, not put
+ * in the key — see `dashboardQueryKey`.
+ */
+function useRangeQuery<T>(
+    panel: string,
+    range: DashboardRange,
+    fetchFor: (window: { from: string; to: string }) => Promise<T>,
+) {
+    return useQuery({
+        queryKey: dashboardQueryKey('retail', panel, range),
+        queryFn: () => fetchFor(rangeToWindow(range)),
+        placeholderData: keepPreviousData,
+    });
+}
+
+/** Dims a panel that is still showing the previous range's answer. */
+function dimWhile(refreshing: boolean): string {
+    return refreshing ? 'opacity-60 transition-opacity' : 'transition-opacity';
+}
+
+/**
+ * The retail home dashboard.
+ *
+ * Every panel owns its request and shows its answer the moment that one lands.
+ * These nine calls used to sit in one `Promise.allSettled`, so the page showed
+ * nothing until the slowest — the category and product reports, usually — had
+ * come back; now the health tiles paint as soon as the KPI call answers and the
+ * slow reports fill in behind them. Each answer is cached per workspace, range
+ * and day, so coming back to the dashboard paints from memory and refreshes
+ * behind the figures.
+ */
 export default function RetailDashboard({ greeting, tenantName, renewalEnd }: DashboardIdentity) {
     const { t, locale } = useI18n();
     const copy = t.dashboardHome;
 
     const [range, setRange] = useState<DashboardRange>('week');
 
-    const [financialSnapshot, setFinancialSnapshot] = useState<FinancialKpiResponse | null>(null);
-    const [previousSnapshot, setPreviousSnapshot] = useState<FinancialKpiResponse | null>(null);
-    const [financialTrendSnapshot, setFinancialTrendSnapshot] = useState<FinancialTrendResponse | null>(null);
-    const [categoryData, setCategoryData] = useState<CategoryResponse | null>(null);
-    const [productReport, setProductReport] = useState<ProductReportRow[]>([]);
-    const [customerReport, setCustomerReport] = useState<CustomerReportRow[]>([]);
-    const [sales, setSales] = useState<SaleRow[]>([]);
+    const kpisQuery = useRangeQuery<FinancialKpiResponse>('kpis', range, (win) => api.getFinancialKpis(win));
+    // The window before this one feeds the delta arrows and nothing else, so it
+    // is a request of its own: the headline figures never wait for it.
+    const previousQuery = useRangeQuery<FinancialKpiResponse>(
+        'kpis-previous',
+        range,
+        (win) => api.getFinancialKpis(previousWindow(win)),
+    );
+    const trendQuery = useRangeQuery<FinancialTrendResponse>('trends', range, (win) => api.getFinancialTrends(win));
+    const categoryQuery = useRangeQuery<CategoryResponse | null>('category', range, (win) => api.getSalesByCategory(win));
+    const productQuery = useRangeQuery<ReportRows<ProductReportRow>>('products', range, (win) => api.getSalesByProduct(win));
+    const customerQuery = useRangeQuery<ReportRows<CustomerReportRow>>('customers', range, (win) => api.getSalesByCustomer(win));
+
+    // These three ignore the range tabs, so switching tabs never re-asks them.
+    const lowStockQuery = useQuery({
+        queryKey: dashboardQueryKey('retail', 'low-stock'),
+        queryFn: () => api.getLowStockCount() as Promise<{ count?: number } | null>,
+    });
+    // Two bounded calls instead of the whole history: five rows for the activity
+    // panel, and a count-only probe for the delivery tile.
+    const recentSalesQuery = useQuery({
+        queryKey: dashboardQueryKey('retail', 'recent-sales'),
+        queryFn: () => api.getSalesList({ limit: 5 }) as Promise<{ items?: SaleRow[] } | null>,
+    });
     // Counted by the server across every sale, not just the five loaded above.
-    const [deliveryPendingCount, setDeliveryPendingCount] = useState(0);
-    const [lowStockCount, setLowStockCount] = useState(0);
+    const deliveryQuery = useQuery({
+        queryKey: dashboardQueryKey('retail', 'deliveries-pending'),
+        queryFn: () => api.getSalesList({ status: [...DELIVERY_PENDING_STATUSES].join(','), limit: 1 }) as Promise<{ total?: number } | null>,
+    });
 
-    const [isFinancialLoading, setIsFinancialLoading] = useState(true);
-    const [isRetailLoading, setIsRetailLoading] = useState(true);
-    const [financialError, setFinancialError] = useState('');
-    const [financialTrendError, setFinancialTrendError] = useState('');
+    const financialSnapshot = kpisQuery.data ?? null;
+    const financialError = kpisQuery.isError
+        ? (kpisQuery.error instanceof Error ? kpisQuery.error.message : copy.financialKpisUnavailable)
+        : '';
+    const financialTrendSnapshot = trendQuery.data ?? null;
+    const financialTrendError = trendQuery.isError
+        ? (trendQuery.error instanceof Error ? trendQuery.error.message : copy.financialTrendsUnavailable)
+        : '';
+    // A failed comparison window is not an error worth surfacing — the tiles
+    // simply fall back to showing no delta. Nor is one from the other range: while
+    // a tab switch is in flight the comparison is used only when it belongs to the
+    // same range as the figures on screen, so an arrow never compares this week
+    // against last month.
+    const previousSnapshot = previousQuery.data !== undefined
+        && previousQuery.isPlaceholderData === kpisQuery.isPlaceholderData
+        ? previousQuery.data
+        : null;
+    const categoryData = categoryQuery.data ?? null;
+    const productReport = productQuery.data?.rows ?? [];
+    const customerReport = customerQuery.data?.rows ?? [];
+    const sales = recentSalesQuery.data?.items ?? [];
+    const lowStockCount = lowStockQuery.data?.count ?? 0;
+    const deliveryPendingCount = deliveryQuery.data?.total ?? 0;
 
+    // The attention strip reads three answers (low stock, deliveries, and the
+    // receivable off the KPIs) and waits for all three rather than reshuffling
+    // its items as each one lands.
+    const isAttentionLoading = lowStockQuery.isPending || deliveryQuery.isPending || kpisQuery.isPending;
+
+    const categoryError = categoryQuery.error;
+    const productError = productQuery.error;
+    const customerError = customerQuery.error;
     useEffect(() => {
-        let cancelled = false;
-
-        const fetchData = async () => {
-            setIsFinancialLoading(true);
-            setIsRetailLoading(true);
-            setFinancialError('');
-            setFinancialTrendError('');
-
-            const win = rangeToWindow(range);
-            const prevWin = previousWindow(win);
-
-            const [kpisRes, prevKpisRes, trendRes, lowStockRes, salesRes, deliveryRes, categoryRes, productRepRes, customerRepRes] = await Promise.allSettled([
-                api.getFinancialKpis(win),
-                api.getFinancialKpis(prevWin),
-                api.getFinancialTrends(win),
-                api.getLowStockCount(),
-                // Two bounded calls instead of the whole history: five rows for
-                // the activity panel, and a count-only probe for the tile below.
-                api.getSalesList({ limit: 5 }),
-                api.getSalesList({ status: [...DELIVERY_PENDING_STATUSES].join(','), limit: 1 }),
-                api.getSalesByCategory(win),
-                api.getSalesByProduct(win),
-                api.getSalesByCustomer(win),
-            ]);
-
-            if (cancelled) return;
-
-            // A failed comparison window is not an error worth surfacing — the tiles
-            // simply fall back to showing no delta.
-            setPreviousSnapshot(prevKpisRes.status === 'fulfilled' ? prevKpisRes.value : null);
-
-            if (kpisRes.status === 'fulfilled') {
-                setFinancialSnapshot(kpisRes.value);
-            } else {
-                setFinancialSnapshot(null);
-                setFinancialError(kpisRes.reason instanceof Error ? kpisRes.reason.message : copy.financialKpisUnavailable);
-            }
-
-            if (trendRes.status === 'fulfilled') {
-                setFinancialTrendSnapshot(trendRes.value);
-            } else {
-                setFinancialTrendSnapshot(null);
-                setFinancialTrendError(trendRes.reason instanceof Error ? trendRes.reason.message : copy.financialTrendsUnavailable);
-            }
-
-            setLowStockCount(lowStockRes.status === 'fulfilled' ? (lowStockRes.value?.count ?? 0) : 0);
-
-            setSales(salesRes.status === 'fulfilled' ? (salesRes.value?.items ?? []) : []);
-            setDeliveryPendingCount(
-                deliveryRes.status === 'fulfilled' ? (deliveryRes.value?.total ?? 0) : 0,
-            );
-            setCategoryData(categoryRes.status === 'fulfilled' ? categoryRes.value : null);
-            setProductReport(productRepRes.status === 'fulfilled' ? (productRepRes.value?.rows ?? []) : []);
-            setCustomerReport(customerRepRes.status === 'fulfilled' ? (customerRepRes.value?.rows ?? []) : []);
-
-            if (categoryRes.status === 'rejected' || productRepRes.status === 'rejected' || customerRepRes.status === 'rejected') {
-                console.error('Failed to fetch dashboard retail data:', {
-                    category: categoryRes.status === 'rejected' ? categoryRes.reason : null,
-                    products: productRepRes.status === 'rejected' ? productRepRes.reason : null,
-                    customers: customerRepRes.status === 'rejected' ? customerRepRes.reason : null,
-                });
-            }
-
-            setIsFinancialLoading(false);
-            setIsRetailLoading(false);
-        };
-
-        void fetchData();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [range, copy.financialKpisUnavailable, copy.financialTrendsUnavailable]);
+        if (!categoryError && !productError && !customerError) return;
+        console.error('Failed to fetch dashboard retail data:', {
+            category: categoryError ?? null,
+            products: productError ?? null,
+            customers: customerError ?? null,
+        });
+    }, [categoryError, productError, customerError]);
 
     const financialKpis = financialSnapshot?.kpis ?? EMPTY_KPIS;
     const financialTrends = financialTrendSnapshot?.points ?? [];
@@ -288,37 +308,37 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
     const compare = (current: number, previous: number | null | undefined) =>
         previous == null ? { label: '—', positive: true } : periodDelta(current, previous);
 
-    const healthTiles = [
+    const healthTiles: KpiTileSpec[] = [
         {
             key: 'sales',
             title: copy.kpiSales,
             value: formatBDT(financialKpis.gross_revenue, { locale }),
-            series: salesSeries,
+            points: salesSeries,
             delta: compare(financialKpis.gross_revenue, previousKpis?.gross_revenue),
         },
         {
             key: 'net-profit',
             title: copy.kpiNetProfit,
             value: formatBDT(netProfit, { locale }),
-            series: profitSeries,
+            points: profitSeries,
             delta: compare(netProfit, previousNetProfit),
         },
         {
             key: 'cash',
             title: copy.kpiCashInHand,
             value: formatBDT(financialKpis.net_cash_movement, { locale }),
-            series: cashSeries,
+            points: cashSeries,
             delta: compare(financialKpis.net_cash_movement, previousKpis?.net_cash_movement),
         },
         {
             key: 'receivables',
             title: copy.kpiReceivables,
             value: receivable == null ? copy.notConfigured : formatBDT(receivable, { locale }),
-            series: [] as number[],
+            points: [],
             // Receivables are a balance, not a flow: comparing it against the previous
             // window would read as a trend when it is just the amount currently owed.
+            // A dash also drops the "vs last week" context (see `KpiTileGrid`).
             delta: { label: '—', positive: true },
-            noContext: true,
         },
     ];
 
@@ -346,44 +366,19 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
 
                 <section>
                     <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionHealth}</p>
-                    {isFinancialLoading ? (
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            {Array.from({ length: 4 }).map((_, index) => (
-                                <div key={index} className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] animate-pulse">
-                                    <div className="h-3 w-16 rounded bg-gray-200" />
-                                    <div className="mt-2 h-6 w-24 rounded bg-gray-200" />
-                                    <div className="mt-2 h-3 w-12 rounded bg-gray-200" />
-                                    <div className="mt-3 h-5 w-full rounded bg-gray-100" />
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {financialError ? (
-                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                                    {financialError}
-                                </div>
-                            ) : null}
-                            <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                                {healthTiles.map((tile) => (
-                                    <HealthKpiTile
-                                        key={tile.key}
-                                        title={tile.title}
-                                        value={tile.value}
-                                        delta={tile.delta.label}
-                                        deltaPositive={tile.delta.positive}
-                                        deltaContext={tile.noContext || tile.delta.label === '—' ? undefined : deltaContext}
-                                        points={tile.series}
-                                    />
-                                ))}
+                    <div aria-busy={kpisQuery.isPlaceholderData} className={`space-y-2 ${dimWhile(kpisQuery.isPlaceholderData)}`}>
+                        {financialError ? (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                                {financialError}
                             </div>
-                        </div>
-                    )}
+                        ) : null}
+                        <KpiTileGrid tiles={healthTiles} loading={kpisQuery.isPending} deltaContext={deltaContext} />
+                    </div>
                 </section>
 
                 <section>
                     <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionAttention}</p>
-                    {isRetailLoading ? (
+                    {isAttentionLoading ? (
                         <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
                             {Array.from({ length: 4 }).map((_, index) => (
                                 <div key={index} className="h-16 rounded-xl border border-gray-100 bg-white p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] animate-pulse">
@@ -400,7 +395,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                 <section>
                     <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionMoney}</p>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
-                        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <div className={`rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${dimWhile(trendQuery.isPlaceholderData)}`}>
                             <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                                 <h3 className="text-xs font-bold text-gray-900">{copy.cashFlowMovement}</h3>
                                 {financialTrendError ? (
@@ -409,8 +404,8 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                                     </div>
                                 ) : null}
                             </div>
-                            {isFinancialLoading ? (
-                                <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
+                            {trendQuery.isPending ? (
+                                <div data-testid="cash-flow-skeleton" className="h-40 animate-pulse rounded-lg bg-gray-100" />
                             ) : (
                                 <CashFlowChart
                                     points={financialTrends}
@@ -426,10 +421,10 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                             )}
                         </div>
 
-                        <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <div className={`rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${dimWhile(categoryQuery.isPlaceholderData)}`}>
                             <h3 className="mb-2 text-xs font-bold text-gray-900">{copy.salesByCategory}</h3>
-                            {isRetailLoading ? (
-                                <div className="h-24 animate-pulse rounded-lg bg-gray-100" />
+                            {categoryQuery.isPending ? (
+                                <div data-testid="category-skeleton" className="h-24 animate-pulse rounded-lg bg-gray-100" />
                             ) : (
                                 <SalesByCategoryDonut
                                     rows={categoryRows}
@@ -447,8 +442,22 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                 <section>
                     <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">{copy.sectionDrivers}</p>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                        <RankedListPanel title={copy.topProducts} items={topProducts} emptyLabel={copy.noProductsFound} />
-                        <RankedListPanel title={copy.topCustomers} items={topCustomers} emptyLabel={copy.noRecentActivity} />
+                        <div className={dimWhile(productQuery.isPlaceholderData)}>
+                            <RankedListPanel
+                                title={copy.topProducts}
+                                items={topProducts}
+                                emptyLabel={copy.noProductsFound}
+                                loading={productQuery.isPending}
+                            />
+                        </div>
+                        <div className={dimWhile(customerQuery.isPlaceholderData)}>
+                            <RankedListPanel
+                                title={copy.topCustomers}
+                                items={topCustomers}
+                                emptyLabel={copy.noRecentActivity}
+                                loading={customerQuery.isPending}
+                            />
+                        </div>
                         <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                             <h3 className="mb-2 text-xs font-bold text-gray-900">{copy.recentActivity}</h3>
                             {sales.length > 0 ? (
@@ -464,7 +473,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                                 </div>
                             ) : (
                                 <p className="py-4 text-center text-[11px] text-gray-400">
-                                    {isRetailLoading ? copy.loadingRecentActivity : copy.noRecentActivity}
+                                    {recentSalesQuery.isPending ? copy.loadingRecentActivity : copy.noRecentActivity}
                                 </p>
                             )}
                         </div>

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { EmailService } from '../email/email.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import {
@@ -26,6 +27,7 @@ export class InvitationsService {
         private email: EmailService,
         private planEntitlements: PlanEntitlementsService,
         private passwordPolicy: PasswordPolicyService,
+        private authCache: AuthCacheService,
     ) {}
 
     async getInfo(
@@ -226,6 +228,8 @@ export class InvitationsService {
                 grantedBy: callerUserId,
             });
         });
+        // After the commit — see `AuthCacheService` on why never inside it.
+        this.authCache.invalidateMember(targetUserId, tenantId);
 
         return { user_id: targetUserId, tenantRoleId: roleIds[0], tenantRoleIds: roleIds };
     }
@@ -411,6 +415,11 @@ export class InvitationsService {
         }
 
         await this.db.$transaction((tx) => this.grantMembershipTx(tx, invitation, acceptingUserId));
+        // An existing account may have asked about this workspace before joining
+        // it — a stale header from an earlier visit — and its empty branch list
+        // is cached. (`acceptWithSignup` needs no such call: the account it
+        // creates has never made a request.)
+        this.authCache.invalidateMember(acceptingUserId, invitation.tenant_id);
     }
 
     // Public accept path for an invitee who has no account yet: creates their user

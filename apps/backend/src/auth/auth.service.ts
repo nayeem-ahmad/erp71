@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException, ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { TotpService } from './totp.service';
 import { DatabaseService } from '../database/database.service';
 import { JwtService } from '@nestjs/jwt';
@@ -6,6 +7,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AuditRequestMeta } from '../audit/audit-route.util';
 import { AssetsService } from '../assets/assets.service';
+import { avatarFolder, type CloudinaryUploadDto } from '../assets/direct-upload.util';
 import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
@@ -36,6 +38,7 @@ import {
     CURRENT_TERMS_VERSION,
     isCurrentTermsVersion,
     DEFAULT_PASSWORD_POLICY,
+    type PlatformFeatures,
     type TermsAcceptanceSource,
 } from '@erp71/shared-types';
 import { normalizeBillingCycle, type BillingCycle } from '../billing/billing-cycle.util';
@@ -44,6 +47,7 @@ import { PasswordPolicyService } from '../password-policy/password-policy.servic
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 
 /** The columns `login()` needs off a user row to finish authenticating them. */
@@ -63,6 +67,88 @@ type TenantProvisionDto = {
     referralCode?: string;
     billingCycle?: BillingCycle;
 };
+
+/**
+ * Every column `getMe` and `mapTenantMembership` read, and nothing more.
+ *
+ * It replaced an `include` that pulled every column of the user, every
+ * workspace and every plan — dozens of tenant settings, a TOTP secret, billing
+ * references — only for most of it to be dropped by the mapping. A field the
+ * mapping starts reading has to be added here, or it reads `undefined`;
+ * `auth.service.get-me.spec.ts` pins the whole response so that shows up as a
+ * failing test rather than a blank on screen.
+ *
+ * Each relation level is still its own statement — Prisma issues one per level
+ * without the `relationJoins` preview feature — so this narrows what each
+ * statement returns rather than how many there are.
+ */
+const ME_USER_SELECT = {
+    id: true,
+    email: true,
+    name: true,
+    preferred_locale: true,
+    is_platform_admin: true,
+    email_verified_at: true,
+    // Read only as booleans (has a password, has 2FA), but Prisma cannot select
+    // a column as "is it set", so the values come along.
+    passwordHash: true,
+    totp_secret: true,
+    must_change_password: true,
+    google_id: true,
+    firebase_uid: true,
+    mobile_verified_at: true,
+    avatar_url: true,
+    tenantMembers: {
+        // Filtered by `isListedMembership` below as well.
+        where: { tenant: { deleted_at: null } },
+        select: {
+            tenant_id: true,
+            role: true,
+            tenantRole: { select: { id: true, name: true } },
+            // Every role the member holds, for the record scope: it is resolved
+            // widest-wins across the set, so the primary role alone cannot answer it.
+            roles: { select: { tenantRole: { select: { record_scope: true } } } },
+            tenant: {
+                select: {
+                    id: true,
+                    name: true,
+                    storefront_slug: true,
+                    feature_overrides: true,
+                    platform_workspace_key: true,
+                    default_locale: true,
+                    onboarding_dismissed_at: true,
+                    localization_enabled: true,
+                    secondary_locale: true,
+                    timezone: true,
+                    dashboard_preference: true,
+                    subscription: {
+                        select: {
+                            status: true,
+                            current_period_start: true,
+                            current_period_end: true,
+                            cancel_at_period_end: true,
+                            // For `isPendingActivation`.
+                            activated_at: true,
+                            plan: {
+                                select: {
+                                    code: true,
+                                    name: true,
+                                    description: true,
+                                    monthly_price: true,
+                                    yearly_price: true,
+                                    features_json: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+    // The whole store row: it is what the client receives as `stores`.
+    storeAccess: { select: { tenant_id: true, store_id: true, store: true } },
+    storePermissions: { select: { tenant_id: true, store_id: true, permission: true } },
+} satisfies Prisma.UserSelect;
 
 /**
  * Whether a membership belongs in the signed-in user's workspace list.
@@ -99,6 +185,7 @@ export class AuthService {
         private readonly firebase: FirebaseTokenService,
         private readonly refreshTokens: RefreshTokenService,
         private readonly passwordPolicy: PasswordPolicyService,
+        private readonly authCache: AuthCacheService,
     ) { }
 
     async signup(dto: SignupDto, meta: AuditRequestMeta = {}) {
@@ -657,6 +744,9 @@ export class AuthService {
             where: { id: userId },
             data: { token_version: { increment: 1 } },
         });
+        // `JwtStrategy` checks `tv` against a cached row; without this the old
+        // token would keep passing until that entry expired.
+        this.authCache.invalidateUser(userId);
         // The access JWT dies with the `tv` bump above, but a refresh token is
         // checked against its own row — without this it would happily mint a
         // brand-new session seconds after the user signed out.
@@ -919,62 +1009,58 @@ export class AuthService {
         };
     }
 
+    /**
+     * The signed-in session: who they are and every workspace they can enter.
+     *
+     * The app shell calls this on every load, so its cost is paid often. One
+     * read of the user and their workspaces, then everything that depends only
+     * on that read — the referee profile, the employee identity, and each
+     * workspace's add-on entitlements — in parallel rather than one after
+     * another. Deliberately not cached across requests: a profile edit must show
+     * on the very next load, and the client keeps its own copy.
+     */
     async getMe(userId: string) {
         const user = await this.db.user.findUnique({
             where: { id: userId },
-            include: {
-                tenantMembers: {
-                    // Filtered by `isListedMembership` below.
-                    where: { tenant: { deleted_at: null } },
-                    include: {
-                        tenant: {
-                            include: {
-                                subscription: {
-                                    include: { plan: true },
-                                },
-                            },
-                        },
-                        tenantRole: { select: { id: true, name: true } },
-                        // Every role the member holds, for the record scope
-                        // below: it is resolved widest-wins across the set, so
-                        // the primary role alone cannot answer it.
-                        roles: { select: { tenantRole: { select: { record_scope: true } } } },
-                    },
-                },
-                storeAccess: {
-                    include: { store: true },
-                },
-                storePermissions: {
-                    select: { tenant_id: true, store_id: true, permission: true },
-                },
-            },
+            select: ME_USER_SELECT,
         });
 
         if (!user) {
             throw new UnauthorizedException('User not found');
         }
 
-        const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
+        const isPlatformAdmin = user.is_platform_admin === true || isPlatformAdminEmail(user.email);
         const tenantMembers = (user.tenantMembers ?? []).filter((membership) =>
             isListedMembership(membership, isPlatformAdmin),
         );
         const storeAccess = user.storeAccess ?? [];
         const storePermissions = user.storePermissions ?? [];
 
-        const totpSecret = (user as any).totp_secret as string | null | undefined;
+        const totpSecret = user.totp_secret;
         const twoFactorEnabled = !!totpSecret && !totpSecret.startsWith('pending:');
 
-        const platformFeatures = await this.platformSettings.getPlatformFeatures().catch(() => DEFAULT_PLATFORM_FEATURES);
-        const referee = await this.referrals.resolveActiveRefereeForUser(userId, user.email);
+        // One settings read for the top level and every workspace. Each reader
+        // attaches its own fallback, so a failure still degrades to the
+        // defaults exactly as it did when each of them read it separately.
+        const platformFeaturesRead = this.platformSettings.getPlatformFeatures();
 
-        // The employee self-service portal. Unlike a referee, an employee is a
-        // real tenant member, so this does not add a *new* identity — it tells
-        // the client that one of their tenants can also be entered as "me the
-        // employee" rather than as staff.
-        const employee = await this.db.employee.findFirst({
-            where: { user_id: userId, portal_access: true, status: 'ACTIVE', deleted_at: null },
-            select: { id: true, tenant_id: true, employee_code: true, name: true },
-        });
+        const [platformFeatures, referee, employee, tenants] = await Promise.all([
+            platformFeaturesRead.catch(() => DEFAULT_PLATFORM_FEATURES),
+            this.referrals.resolveActiveRefereeForUser(userId, user.email),
+            // The employee self-service portal. Unlike a referee, an employee is
+            // a real tenant member, so this does not add a *new* identity — it
+            // tells the client that one of their tenants can also be entered as
+            // "me the employee" rather than as staff.
+            this.db.employee.findFirst({
+                where: { user_id: userId, portal_access: true, status: 'ACTIVE', deleted_at: null },
+                select: { id: true, tenant_id: true, employee_code: true, name: true },
+            }),
+            Promise.all(
+                tenantMembers.map((membership) =>
+                    this.mapTenantMembership(membership, storeAccess, user.id, storePermissions, platformFeaturesRead),
+                ),
+            ),
+        ]);
 
         return {
             id: user.id,
@@ -991,13 +1077,13 @@ export class AuthService {
             // True while an admin-set password has not been replaced. The app
             // shell reads it to show the "set your password" gate; the rule
             // itself is enforced in `JwtAuthGuard`, not here.
-            must_change_password: (user as any).must_change_password === true,
-            google_connected: !!(user as any).google_id,
+            must_change_password: user.must_change_password === true,
+            google_connected: !!user.google_id,
             // Same idea for mobile sign-in: an account with a Firebase identity
             // can get back in with an SMS code even with no password set.
-            mobile_connected: !!(user as any).firebase_uid,
-            mobile_verified: !!(user as any).mobile_verified_at,
-            avatar_url: (user as any).avatar_url || null,
+            mobile_connected: !!user.firebase_uid,
+            mobile_verified: !!user.mobile_verified_at,
+            avatar_url: user.avatar_url || null,
             platform_features: platformFeatures,
             referee: referee
                 ? {
@@ -1019,11 +1105,7 @@ export class AuthService {
                     name: employee.name,
                 }
                 : null,
-            tenants: await Promise.all(
-                tenantMembers.map((membership) =>
-                    this.mapTenantMembership(membership, storeAccess, user.id, storePermissions),
-                ),
-            ),
+            tenants,
         };
     }
 
@@ -1048,13 +1130,30 @@ export class AuthService {
 
         let avatarUrl: string;
         try {
-            avatarUrl = await this.assets.uploadFile(file, `avatars/${userId}`);
+            avatarUrl = await this.assets.uploadFile(file, avatarFolder(userId));
         } catch {
             throw new ServiceUnavailableException(
                 'Avatar upload is not available. Configure Cloudinary or try again later.',
             );
         }
 
+        return this.saveAvatarUrl(userId, avatarUrl);
+    }
+
+    /**
+     * Save an avatar the browser uploaded straight to Cloudinary.
+     *
+     * `avatar_url` has only ever been written by the server, so the URL the
+     * client sends is checked before it is stored: it must be an image in our
+     * cloud, inside this user's own avatar folder — not someone else's
+     * picture, and not an arbitrary address every viewer's browser would load.
+     */
+    async updateAvatarFromUpload(userId: string, upload: CloudinaryUploadDto) {
+        const { url } = this.assets.verifyDirectUpload(upload, avatarFolder(userId));
+        return this.saveAvatarUrl(userId, url);
+    }
+
+    private async saveAvatarUrl(userId: string, avatarUrl: string) {
         const user = await this.db.user.update({
             where: { id: userId },
             data: { avatar_url: avatarUrl },
@@ -1108,6 +1207,9 @@ export class AuthService {
                 must_change_password: false,
             },
         });
+        // All three token versions and `must_change_password` live on the row
+        // `JwtStrategy` caches.
+        this.authCache.invalidateUser(userId);
         await this.refreshTokens.revokeAllForUser(userId);
         this.audit
             .logForUserTenants('PASSWORD_CHANGED', 'User', { userId, ...meta }, userId)
@@ -1447,11 +1549,16 @@ export class AuthService {
         return { onboarding_dismissed: true };
     }
 
+    /**
+     * `platformFeaturesRead` lets a caller mapping several workspaces share one
+     * settings read; left out, this reads the settings itself.
+     */
     private async mapTenantMembership(
         membership: any,
         allStoreAccess: any[] = [],
         userId: string,
         allStorePermissions: any[] = [],
+        platformFeaturesRead: Promise<PlatformFeatures> = this.platformSettings.getPlatformFeatures(),
     ) {
         const subscription = membership.tenant.subscription;
         const plan = subscription?.plan;
@@ -1460,18 +1567,20 @@ export class AuthService {
             .filter((a) => a.tenant_id === membership.tenant_id)
             .map((a) => a.store);
 
-        // Merge in any active add-on entitlements so the frontend's plan-gating
-        // (Sidebar, layout) reflects purchased add-ons without a separate fetch.
-        const mergedFeatures = subscription
-            ? await this.planEntitlements.getFeaturesForTenant(membership.tenant_id)
-            : undefined;
-
-        // Platform switches with this tenant's own ON/OFF overrides applied, so the
-        // shell gates on what a super-admin set for *this* workspace.
-        const tenantFeatures = await this.platformSettings
-            .getPlatformFeatures()
-            .then((features) => resolveTenantFeatures(features, membership.tenant.feature_overrides))
-            .catch(() => DEFAULT_PLATFORM_FEATURES);
+        const [mergedFeatures, tenantFeatures] = await Promise.all([
+            // Merge in any active add-on entitlements so the frontend's plan-gating
+            // (Sidebar, layout) reflects purchased add-ons without a separate fetch.
+            // The subscription and its plan are already loaded with the
+            // membership, so only the add-ons are read.
+            subscription
+                ? this.planEntitlements.getFeaturesForLoadedSubscription(membership.tenant_id, subscription)
+                : undefined,
+            // Platform switches with this tenant's own ON/OFF overrides applied, so the
+            // shell gates on what a super-admin set for *this* workspace.
+            platformFeaturesRead
+                .then((features) => resolveTenantFeatures(features, membership.tenant.feature_overrides))
+                .catch(() => DEFAULT_PLATFORM_FEATURES),
+        ]);
 
         // Only non-admin members ever see this workspace listed (see
         // `isListedMembership`). It is not a customer shop: it has no plan to

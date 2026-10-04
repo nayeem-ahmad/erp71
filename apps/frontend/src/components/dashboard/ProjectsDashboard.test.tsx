@@ -1,6 +1,8 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import ProjectsDashboard from './ProjectsDashboard';
+import { seedMe } from '@/hooks/use-me';
 import { api } from '@/lib/api';
 
 jest.mock('@/lib/i18n', () => {
@@ -49,7 +51,7 @@ beforeEach(() => {
 });
 
 it('shows the four tiles built from the member\'s own rows', async () => {
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('My Open Tasks')).toBeInTheDocument();
     expect(screen.getByText('Hours Today')).toBeInTheDocument();
@@ -62,7 +64,7 @@ it('renders today\'s and this week\'s hours from summary.totalHours, distinctly'
     // is coupled to the real field name, not just the tile titles above — a
     // mock still shaped as `{ hours }` would render "0.0" for both and pass
     // the titles-only test while failing this one.
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('3.5')).toBeInTheDocument();
     expect(screen.getByText('12.5')).toBeInTheDocument();
@@ -71,7 +73,7 @@ it('renders today\'s and this week\'s hours from summary.totalHours, distinctly'
 it('asks only for its own hours, whatever the record scope says', async () => {
     // A wide Project User would otherwise see the team's hours under a tile
     // labelled "my hours". The label has to be true at either scope.
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     await waitFor(() => expect(api.getProjectTimeReport).toHaveBeenCalled());
     for (const call of (api.getProjectTimeReport as jest.Mock).mock.calls) {
@@ -80,7 +82,7 @@ it('asks only for its own hours, whatever the record scope says', async () => {
 });
 
 it('lists the member\'s open tasks', async () => {
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('Wire the invoice printer')).toBeInTheDocument();
     expect(screen.getByText('Fix the chalan layout')).toBeInTheDocument();
@@ -91,7 +93,7 @@ it('renders an empty workload without crashing', async () => {
     (api.getProjects as jest.Mock).mockResolvedValue({ items: [], total: 0 });
     (api.getProjectTimeReport as jest.Mock).mockResolvedValue({ summary: { totalHours: 0 }, rows: [] });
 
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('Nothing assigned yet')).toBeInTheDocument();
 });
@@ -99,7 +101,7 @@ it('renders an empty workload without crashing', async () => {
 it('survives an endpoint failing', async () => {
     (api.getProjectTimer as jest.Mock).mockRejectedValue(new Error('boom'));
 
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('My Open Tasks')).toBeInTheDocument();
 });
@@ -109,7 +111,7 @@ it('clears the skeleton and shows the empty state when getMe fails', async () =>
     // member stares at four pulsing tiles forever with no error and no retry.
     (api.getMe as jest.Mock).mockRejectedValue(new Error('boom'));
 
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('Nothing assigned yet')).toBeInTheDocument();
     expect(api.getProjectTasks).not.toHaveBeenCalled();
@@ -118,8 +120,31 @@ it('clears the skeleton and shows the empty state when getMe fails', async () =>
 it('clears the skeleton and shows the empty state when getMe resolves without an id', async () => {
     (api.getMe as jest.Mock).mockResolvedValue({ name: 'Nayeem' });
 
-    render(<ProjectsDashboard {...identity} />);
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
 
     expect(await screen.findByText('Nothing assigned yet')).toBeInTheDocument();
     expect(api.getProjectTasks).not.toHaveBeenCalled();
+});
+
+it('fills each tile as its own request lands, without waiting for the slowest', async () => {
+    // The task list never answers; the hours and projects tiles must not wait for it.
+    (api.getProjectTasks as jest.Mock).mockImplementation(() => new Promise(() => undefined));
+
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
+
+    expect(await screen.findByText('3.5')).toBeInTheDocument();
+    expect(screen.getByText('12.5')).toBeInTheDocument();
+    expect(screen.getByText('Active Projects')).toBeInTheDocument();
+    // Only the open-tasks tile, and its list, are still pulsing.
+    expect(screen.getAllByTestId('kpi-tile-skeleton')).toHaveLength(1);
+    expect(screen.getByTestId('open-tasks-skeleton')).toBeInTheDocument();
+});
+
+it('reads the member from the cached /auth/me instead of asking again', async () => {
+    seedMe({ id: 'user-1', name: 'Nayeem' });
+
+    renderWithQueryClient(<ProjectsDashboard {...identity} />);
+
+    expect(await screen.findByText('3.5')).toBeInTheDocument();
+    expect(api.getMe).not.toHaveBeenCalled();
 });

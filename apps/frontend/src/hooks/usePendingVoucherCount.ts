@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useVisibleInterval } from './useVisibleInterval';
 
 const POLL_MS = 60_000;
 
@@ -20,7 +21,8 @@ export function notifyVoucherApprovalChanged() {
  * The endpoint short-circuits to 0 without touching the vouchers table when the
  * tenant does not require approval, and this hook stops polling once it learns
  * that — so a tenant with the feature off pays for exactly one request per
- * session, not one per minute.
+ * session, not one per minute. A tenant with it on polls only while the tab is
+ * in view.
  */
 export function usePendingVoucherCount() {
     const [count, setCount] = useState(0);
@@ -46,14 +48,7 @@ export function usePendingVoucherCount() {
         return () => window.removeEventListener(VOUCHER_APPROVAL_CHANGED_EVENT, onChanged);
     }, [refresh]);
 
-    useEffect(() => {
-        if (approvalEnabled !== true) {
-            return;
-        }
-
-        const timer = setInterval(() => void refresh(), POLL_MS);
-        return () => clearInterval(timer);
-    }, [approvalEnabled, refresh]);
+    useVisibleInterval(() => void refresh(), approvalEnabled === true ? POLL_MS : null);
 
     return { count, approvalEnabled: approvalEnabled === true, refresh };
 }

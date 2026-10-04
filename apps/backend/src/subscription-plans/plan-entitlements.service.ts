@@ -4,6 +4,9 @@ import { DatabaseService } from '../database/database.service';
 
 const ACTIVE_ADDON_STATUSES = ['ACTIVE', 'TRIALING'] as const;
 
+/** The part of a subscription the entitlements are computed from. */
+type LoadedSubscription = { plan?: { code?: string | null; features_json?: unknown } | null } | null | undefined;
+
 @Injectable()
 export class PlanEntitlementsService {
     constructor(private readonly db: DatabaseService) {}
@@ -19,16 +22,34 @@ export class PlanEntitlementsService {
                 where: { tenant_id: tenantId },
                 include: { plan: true },
             }),
-            this.db.tenantAddonSubscription.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    status: { in: [...ACTIVE_ADDON_STATUSES] },
-                    current_period_end: { gt: new Date() },
-                },
-                include: { addon: true },
-            }),
+            this.findActiveAddons(tenantId),
         ]);
 
+        return this.combine(subscription, activeAddons);
+    }
+
+    /**
+     * `getFeaturesForTenant` for a caller that has already loaded the
+     * subscription and its plan — `/auth/me` reads them with the membership —
+     * so only the add-ons are read here rather than the subscription twice.
+     * Same answer, given the same rows.
+     */
+    async getFeaturesForLoadedSubscription(tenantId: string, subscription: LoadedSubscription) {
+        return this.combine(subscription, await this.findActiveAddons(tenantId));
+    }
+
+    private findActiveAddons(tenantId: string) {
+        return this.db.tenantAddonSubscription.findMany({
+            where: {
+                tenant_id: tenantId,
+                status: { in: [...ACTIVE_ADDON_STATUSES] },
+                current_period_end: { gt: new Date() },
+            },
+            include: { addon: true },
+        });
+    }
+
+    private combine(subscription: LoadedSubscription, activeAddons: { addon: { features_json: unknown } }[]) {
         const planFeatures = normalizePlanFeatures(
             subscription?.plan?.features_json as Record<string, unknown> | undefined,
             subscription?.plan?.code ?? 'FREE',

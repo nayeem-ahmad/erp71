@@ -110,7 +110,8 @@ export class NotificationsService {
     /* ------------------------------------------------------------------ */
 
     // Run daily at 08:00
-    @Cron('0 8 * * *')
+    // 14:00 Bangladesh time — the 08:00 UTC it always ran at, kept.
+    @Cron('0 14 * * *', { timeZone: 'Asia/Dhaka' })
     async sendSubscriptionExpiryWarnings(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_EXPIRY_WARNINGS, () => this.sendSubscriptionExpiryWarningsImpl());
     }
@@ -185,7 +186,8 @@ export class NotificationsService {
     }
 
     // Run daily at 07:00
-    @Cron('0 7 * * *')
+    // 13:00 Bangladesh time — the 07:00 UTC it always ran at, kept.
+    @Cron('0 13 * * *', { timeZone: 'Asia/Dhaka' })
     async sendLowStockAlerts(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_LOW_STOCK, () => this.sendLowStockAlertsImpl());
     }
@@ -307,7 +309,8 @@ export class NotificationsService {
     /*  Sales Report — Weekly (every Monday at 07:00)                      */
     /* ------------------------------------------------------------------ */
 
-    @Cron('0 7 * * 1')
+    // Mondays 13:00 Bangladesh time — the 07:00 UTC it always ran at, kept.
+    @Cron('0 13 * * 1', { timeZone: 'Asia/Dhaka' })
     async sendWeeklyReports(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_WEEKLY, () => this.sendWeeklyReportsImpl());
     }
@@ -344,7 +347,8 @@ export class NotificationsService {
     /*  Sales Report — Monthly (1st of each month at 07:00)               */
     /* ------------------------------------------------------------------ */
 
-    @Cron('0 7 1 * *')
+    // The 1st, 13:00 Bangladesh time — the 07:00 UTC it always ran at, kept.
+    @Cron('0 13 1 * *', { timeZone: 'Asia/Dhaka' })
     async sendMonthlyReports(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_MONTHLY, () => this.sendMonthlyReportsImpl());
     }
@@ -588,8 +592,9 @@ export class NotificationsService {
 </html>`;
     }
 
-    // #74 Data retention — runs daily at 03:00
-    @Cron('0 3 * * *')
+    // #74 Data retention — 01:30 Bangladesh time, in the night batch window.
+    // It was 03:00 UTC, which is 09:00 here, as shops opened.
+    @Cron('30 1 * * *', { timeZone: 'Asia/Dhaka' })
     async purgeExpiredData(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.NOTIFICATIONS_PURGE, () => this.purgeExpiredDataImpl());
     }
