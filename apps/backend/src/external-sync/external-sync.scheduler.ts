@@ -21,7 +21,10 @@ export class ExternalSyncScheduler {
         private readonly externalSyncService: ExternalSyncService,
     ) {}
 
-    @Cron('0 2 * * *')
+    // 01:00 Bangladesh time: first in the night batch window, so the jobs
+    // after it (segments, reorder follow-ups) see the day's imported sales, and
+    // the upstream ERP is as idle as ours. It was 08:00, as shops opened.
+    @Cron('0 1 * * *', { timeZone: 'Asia/Dhaka' })
     async runEnabledConnections() {
         const connections = await this.db.externalSyncConnection.findMany({
             where: { enabled: true },

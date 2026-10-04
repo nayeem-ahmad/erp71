@@ -3661,7 +3661,9 @@ export class AccountingService {
         return { posted, failed };
     }
 
-    @Cron('0 6 * * *')
+    // 12:00 Bangladesh time — the 06:00 UTC it always ran at, now said in the
+    // zone the shops keep, so the posting time does not move.
+    @Cron('0 12 * * *', { timeZone: 'Asia/Dhaka' })
     async runDueRecurringVouchers(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.ACCOUNTING_RECURRING_VOUCHERS, () => this.postAllDueRecurringVouchers());
     }

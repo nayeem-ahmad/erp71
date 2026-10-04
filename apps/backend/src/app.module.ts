@@ -4,6 +4,7 @@ import { CorrelationMiddleware } from './common/correlation.middleware';
 import { TransformInterceptor } from './common/transform.interceptor';
 import { CommonModule } from './common/common.module';
 import { accountThrottler } from './common/account-throttle.util';
+import { defaultThrottler, ipThrottler } from './common/default-throttle.util';
 import { ApiThrottlerGuard } from './common/api-throttler.guard';
 import { CacheModule } from './cache/cache.module';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -135,13 +136,13 @@ import { SocialMediaModule } from './social-media/social-media.module';
     imports: [
         SentryModule.forRoot(),
         ThrottlerModule.forRoot([
-            {
-                ttl: Number(process.env.THROTTLE_TTL_MS ?? 60_000),
-                limit: Number(process.env.THROTTLE_LIMIT ?? 20),
-            },
+            // Per signed-in user, per address without a valid token; and a
+            // per-address ceiling over both. See the file for why.
+            defaultThrottler(),
             // Inert except on the routes carrying @ThrottleAccount(). See the
             // file for why sign-in cannot be rate-limited by address alone.
             accountThrottler,
+            ipThrottler(),
         ]),
         ScheduleModule.forRoot(),
         CommonModule,
