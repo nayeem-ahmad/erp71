@@ -5,7 +5,7 @@ import Link from 'next/link';
 import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ImagePreviewModal } from './ImagePreviewModal';
-import { sizedImageUrl, widthFromUrl } from './markdown-bridge';
+import { sizedImageUrl, widthFromUrl } from './image-width';
 
 /**
  * Markdown for model-generated answers (the AI chat panel) and for the text
