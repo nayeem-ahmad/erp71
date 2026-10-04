@@ -109,3 +109,31 @@ describe('listSheetNames', () => {
         expect(await listSheetNames(xlsxFile(buf))).toEqual(['Products', 'Suppliers']);
     });
 });
+
+describe('loading', () => {
+    /*
+     * This module sits behind the import dialog on sixteen list pages. A
+     * static import of either library puts it in all of their bundles, which
+     * is what this guards: importing the module must not load them.
+     */
+    it('loads neither SheetJS nor Papa Parse until a file is parsed', async () => {
+        const loaded: string[] = [];
+        let isolated: typeof import('./spreadsheet') | undefined;
+        jest.isolateModules(() => {
+            jest.doMock('xlsx', () => {
+                loaded.push('xlsx');
+                return jest.requireActual('xlsx');
+            });
+            jest.doMock('papaparse', () => {
+                loaded.push('papaparse');
+                return jest.requireActual('papaparse');
+            });
+            isolated = require('./spreadsheet');
+        });
+
+        expect(loaded).toEqual([]);
+
+        await isolated!.parseSpreadsheetFile(csvFile('Email\na@example.com\n'));
+        expect(loaded).toEqual(['papaparse']);
+    });
+});

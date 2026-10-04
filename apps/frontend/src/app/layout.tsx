@@ -37,6 +37,11 @@ const notoSansArabic = Noto_Sans_Arabic({
     subsets: ['arabic'],
     weight: ['400', '500', '600', '700'],
     variable: '--font-arabic',
+    // Preloading made every page — the Bangla and English ones that are nearly
+    // all of the traffic — fetch the Arabic files before first paint. Not
+    // preloaded, the `@font-face` still loads them the moment Arabic-script
+    // text is drawn, which only the `ar` and `ur` interfaces do.
+    preload: false,
 });
 
 export const viewport: Viewport = {

@@ -3,7 +3,8 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import Avatar from '@/components/Avatar';
-import { Button, RichTextEditor } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { RichTextEditor } from '@/components/ui/LazyRichTextEditor';
 import {
     actorName,
     describeActivity,

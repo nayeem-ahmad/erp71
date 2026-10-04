@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { File as FileIcon, FileText, Paperclip, Trash2 } from 'lucide-react';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
-import { sizedImageUrl } from '@/components/ui/markdown-bridge';
+import { sizedImageUrl } from '@/components/ui/image-width';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';

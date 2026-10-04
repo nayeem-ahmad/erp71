@@ -12,10 +12,8 @@ import Sidebar from '@/components/Sidebar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import ActivationPendingBanner from '@/components/ActivationPendingBanner';
-import FeedbackWidget from '@/components/FeedbackWidget';
-import VoiceNavWidget from '@/components/VoiceNavWidget';
-import AiChatWidget from '@/components/AiChatWidget';
-import TimeTracker from '@/components/projects/TimeTracker';
+// Fetched on their own after the page is up, and only when rendered; see the file.
+import { AiChatWidget, FeedbackWidget, TimeTracker, VoiceNavWidget } from '@/components/app-shell-widgets';
 import TimerChip from '@/components/projects/TimerChip';
 import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';

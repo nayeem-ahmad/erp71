@@ -5,8 +5,6 @@ export { Textarea } from './Textarea';
 export { Checkbox } from './Checkbox';
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
-export { RichTextEditor } from './RichTextEditor';
-export type { RichTextEditorProps } from './RichTextEditor';
 export { Field } from './Field';
 export { FormGrid } from './FormGrid';
 export { FormFooter } from './FormFooter';
@@ -19,6 +17,13 @@ export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
 export { ImagePreviewModal } from './ImagePreviewModal';
 export type { PreviewItem } from './ImagePreviewModal';
+export { PageSkeleton, SkeletonBar } from './PageSkeleton';
+export type { PageSkeletonBody } from './PageSkeleton';
 // Markdown is deliberately not re-exported here: it pulls in react-markdown, and
 // a barrel export would drag that into every page importing from this module.
 // Import it lazily from '@/components/ui/Markdown' at the point of use.
+//
+// Nor is RichTextEditor, for the same reason and a bigger bill: TipTap,
+// ProseMirror and markdown-it rode this barrel into every page, the app layout
+// included. Import it from '@/components/ui/LazyRichTextEditor', which also
+// fetches it only when an editor is drawn.
