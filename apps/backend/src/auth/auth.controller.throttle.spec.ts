@@ -47,7 +47,11 @@ describe('AuthController rate limits', () => {
             .compile();
         app = moduleRef.createNestApplication<NestExpressApplication>();
         applyProxyTrust(app as unknown as NestExpressApplication);
-        await app.init();
+        // Listen once, on 127.0.0.1, rather than letting supertest re-listen on
+        // an ephemeral `::` port for each of these thousand-odd requests: on
+        // macOS another process can bind 127.0.0.1 on that same port, and under
+        // parallel test load a request then lands on someone else's server.
+        await app.listen(0, '127.0.0.1');
     });
 
     afterEach(async () => {
