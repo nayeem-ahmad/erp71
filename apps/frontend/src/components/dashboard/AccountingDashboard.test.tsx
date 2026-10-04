@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import AccountingDashboard from './AccountingDashboard';
 import { api } from '@/lib/api';
 
@@ -69,7 +70,7 @@ describe('AccountingDashboard', () => {
     });
 
     it('renders position and performance figures in taka', async () => {
-        render(<AccountingDashboard {...identity} />);
+        renderWithQueryClient(<AccountingDashboard {...identity} />);
 
         expect(await screen.findByText('Cash & bank')).toBeInTheDocument();
         expect(screen.getByText('Net worth')).toBeInTheDocument();
@@ -80,7 +81,7 @@ describe('AccountingDashboard', () => {
     });
 
     it('says the books are clean when nothing needs attention', async () => {
-        render(<AccountingDashboard {...identity} />);
+        renderWithQueryClient(<AccountingDashboard {...identity} />);
         expect(await screen.findByText('Your books look clean 🎉')).toBeInTheDocument();
     });
 
@@ -96,7 +97,7 @@ describe('AccountingDashboard', () => {
             },
         }));
 
-        render(<AccountingDashboard {...identity} />);
+        renderWithQueryClient(<AccountingDashboard {...identity} />);
 
         expect(await screen.findByText(/Trial balance out by/)).toBeInTheDocument();
         expect(screen.getByText('7 vouchers awaiting approval')).toBeInTheDocument();
@@ -116,13 +117,13 @@ describe('AccountingDashboard', () => {
 
     it('keeps the renewal reminder the accounting-only dashboard used to lose', async () => {
         const in12Days = new Date(Date.now() + 12 * 86_400_000).toISOString();
-        render(<AccountingDashboard {...identity} renewalEnd={in12Days} />);
+        renderWithQueryClient(<AccountingDashboard {...identity} renewalEnd={in12Days} />);
 
         expect(await screen.findByText('Plan renews in 12 days')).toBeInTheDocument();
     });
 
     it('folds the expense tail into an Other slice', async () => {
-        render(<AccountingDashboard {...identity} />);
+        renderWithQueryClient(<AccountingDashboard {...identity} />);
 
         // One named account plus the tail the server rolled up.
         expect(await screen.findAllByTestId('donut-arc')).toHaveLength(2);
@@ -133,7 +134,7 @@ describe('AccountingDashboard', () => {
     it('degrades to an inline message when the overview call fails', async () => {
         (api.getAccountingDashboardOverview as jest.Mock).mockRejectedValue(new Error('Ledger is down'));
 
-        render(<AccountingDashboard {...identity} />);
+        renderWithQueryClient(<AccountingDashboard {...identity} />);
 
         expect(await screen.findByText('Ledger is down')).toBeInTheDocument();
         // The shell still renders, so the quick actions remain reachable.

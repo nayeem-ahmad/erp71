@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import InventoryDashboard from './InventoryDashboard';
 import { api } from '@/lib/api';
 
@@ -67,7 +68,7 @@ describe('InventoryDashboard', () => {
     });
 
     it('leads with what is out of stock, below reorder and negative', async () => {
-        render(<InventoryDashboard {...identity} />);
+        renderWithQueryClient(<InventoryDashboard {...identity} />);
 
         expect(await screen.findByText('3 products out of stock')).toBeInTheDocument();
         expect(screen.getByText('7 products below reorder level')).toBeInTheDocument();
@@ -90,13 +91,13 @@ describe('InventoryDashboard', () => {
             transfers: { in_transit_units: 0 },
         }));
 
-        render(<InventoryDashboard {...identity} />);
+        renderWithQueryClient(<InventoryDashboard {...identity} />);
 
         expect(await screen.findByText('Your shelves are in order 🎉')).toBeInTheDocument();
     });
 
     it('shows stock value with the units and SKUs behind it', async () => {
-        render(<InventoryDashboard {...identity} />);
+        renderWithQueryClient(<InventoryDashboard {...identity} />);
 
         expect(await screen.findByText('Stock value')).toBeInTheDocument();
         expect(screen.getByText('640 units · 82 SKUs')).toBeInTheDocument();
@@ -112,7 +113,7 @@ describe('InventoryDashboard', () => {
             can_value: false,
         }));
 
-        render(<InventoryDashboard {...identity} />);
+        renderWithQueryClient(<InventoryDashboard {...identity} />);
 
         expect(await screen.findByText('Upgrade for stock valuation')).toBeInTheDocument();
         expect(screen.queryByText('How long stock has been sitting')).not.toBeInTheDocument();
@@ -127,7 +128,7 @@ describe('InventoryDashboard', () => {
             .mockResolvedValueOnce(overview())
             .mockResolvedValueOnce(overview({ shrinkage: { events: 1, units: 4, value: 600 } }));
 
-        render(<InventoryDashboard {...identity} />);
+        renderWithQueryClient(<InventoryDashboard {...identity} />);
 
         // Doubled shrinkage: an upward arrow, styled as the loss it is.
         const delta = await screen.findByText('▲ 100%');
@@ -135,7 +136,7 @@ describe('InventoryDashboard', () => {
     });
 
     it('ages stock into ordinal buckets with a share of the total', async () => {
-        render(<InventoryDashboard {...identity} />);
+        renderWithQueryClient(<InventoryDashboard {...identity} />);
 
         expect(await screen.findByText('How long stock has been sitting')).toBeInTheDocument();
         expect(screen.getByText('0-30 days')).toBeInTheDocument();
@@ -144,7 +145,7 @@ describe('InventoryDashboard', () => {
     });
 
     it('drops the greeting when embedded under the inventory hub header', async () => {
-        const { rerender } = render(<InventoryDashboard {...identity} />);
+        const { rerender } = renderWithQueryClient(<InventoryDashboard {...identity} />);
         expect(await screen.findByText('Good morning 👋')).toBeInTheDocument();
 
         rerender(<InventoryDashboard {...identity} variant="embedded" />);
@@ -155,7 +156,7 @@ describe('InventoryDashboard', () => {
     it('surfaces an error when the overview itself fails', async () => {
         (api.getInventoryDashboardOverview as jest.Mock).mockRejectedValue(new Error('Inventory is down'));
 
-        render(<InventoryDashboard {...identity} />);
+        renderWithQueryClient(<InventoryDashboard {...identity} />);
 
         expect(await screen.findByText('Inventory is down')).toBeInTheDocument();
     });
