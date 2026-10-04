@@ -168,3 +168,20 @@ afterEach(() => {
         // Storage unavailable in this environment; nothing to reset.
     }
 });
+
+/**
+ * The query cache is module state, so it outlives a test the same way storage
+ * does — and worse: a cached `/auth/me` from one test would answer the next
+ * test's `api.getMe` mock without ever calling it. Each test gets a fresh,
+ * retry-free cache instead.
+ *
+ * Required here rather than imported at the top so it is the same module
+ * instance the test file's components load, with that file's `jest.mock`s
+ * already in place, and so suites running in the `node` environment skip it.
+ */
+beforeEach(() => {
+    if (typeof window === 'undefined') return;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { installTestQueryClient } = require('@/test-utils/test-query-client');
+    installTestQueryClient();
+});
