@@ -7,6 +7,21 @@ describe('SalesReportsController — branch scope', () => {
     const tenant = { tenantId: 't1', storeId: 's1', userId: 'u1', userRole: 'MANAGER', timezone: 'Asia/Dhaka' } as any;
     const service: Record<string, jest.Mock> = {
         getBranchReport: jest.fn(),
+        getSalesSummary: jest.fn(),
+        getSalesByProduct: jest.fn(),
+        getSalesByCategory: jest.fn(),
+        getSalesByCustomer: jest.fn(),
+        getMonthlySalesByCustomer: jest.fn(),
+        getSalesTrend: jest.fn(),
+        getSalesBreakdown: jest.fn(),
+        getTopMovers: jest.fn(),
+        getReturnsAnalysis: jest.fn(),
+        getCustomerRetention: jest.fn(),
+        getGrossProfitByProduct: jest.fn(),
+        getGrossProfitBySalesperson: jest.fn(),
+        getMarginExceptions: jest.fn(),
+        getMarginBridge: jest.fn(),
+        getCostCoverage: jest.fn(),
     };
     const lineItems = { getSalesLineItems: jest.fn() };
     const branchScope = { resolveStoreId: jest.fn() };
@@ -54,6 +69,48 @@ describe('SalesReportsController — branch scope', () => {
             branchScope.resolveStoreId.mockRejectedValue(new BadRequestException());
             await expect(controller.getBranchReport(tenant, { storeId: 'all' })).rejects.toBeInstanceOf(BadRequestException);
             expect(service.getBranchReport).not.toHaveBeenCalled();
+        });
+    });
+
+    const FIN = [StorePermission.VIEW_FINANCIAL_REPORTS];
+    const reports: Array<[string, readonly StorePermission[]]> = [
+        ['getSalesSummary', SALES_READ],
+        ['getSalesByProduct', SALES_READ],
+        ['getSalesByCategory', SALES_READ],
+        ['getSalesByCustomer', SALES_READ],
+        ['getMonthlySalesByCustomer', SALES_READ],
+        ['getSalesTrend', SALES_READ],
+        ['getSalesBreakdown', SALES_READ],
+        ['getTopMovers', FIN],
+        ['getReturnsAnalysis', FIN],
+        ['getCustomerRetention', [StorePermission.VIEW_CRM_INTERACTIONS]],
+        ['getGrossProfitByProduct', FIN],
+        ['getGrossProfitBySalesperson', FIN],
+        ['getMarginExceptions', FIN],
+        ['getMarginBridge', FIN],
+        ['getCostCoverage', FIN],
+    ];
+
+    describe.each(reports)('%s', (method, permissions) => {
+        const call = (query: any) => (controller as any)[method](tenant, query);
+
+        it("hands the service the resolved branch, checked with the route's permissions", async () => {
+            branchScope.resolveStoreId.mockResolvedValue('s2');
+            await call({ storeId: 's2', from: '2026-09-01' });
+            expect(branchScope.resolveStoreId).toHaveBeenCalledWith(tenant, 's2', { permissions });
+            expect(service[method].mock.calls[0][1]).toEqual(expect.objectContaining({ storeId: 's2', from: '2026-09-01' }));
+        });
+
+        it("turns 'all' into the whole tenant", async () => {
+            branchScope.resolveStoreId.mockResolvedValue(undefined);
+            await call({ storeId: 'all' });
+            expect(service[method].mock.calls[0][1].storeId).toBeUndefined();
+        });
+
+        it('refuses a branch the caller cannot use before reading', async () => {
+            branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
+            await expect(call({ storeId: 'foreign' })).rejects.toBeInstanceOf(ForbiddenException);
+            expect(service[method]).not.toHaveBeenCalled();
         });
     });
 });

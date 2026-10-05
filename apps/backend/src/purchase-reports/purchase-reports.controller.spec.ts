@@ -29,4 +29,24 @@ describe('PurchaseReportsController — branch scope', () => {
         await expect(controller.getPurchaseLineItems(tenant, { storeId: 'foreign' } as any)).rejects.toBeInstanceOf(ForbiddenException);
         expect(lineItems.getPurchaseLineItems).not.toHaveBeenCalled();
     });
+
+    describe.each(['getPurchaseSummary', 'getPurchaseTrend', 'getPurchasesByProduct', 'getPurchasesBySupplier'] as const)(
+        '%s',
+        (method) => {
+            const call = (query: any) => (controller as any)[method](tenant, query);
+
+            it('hands the service the resolved branch', async () => {
+                branchScope.resolveStoreId.mockResolvedValue('s2');
+                await call({ storeId: 's2' });
+                expect(branchScope.resolveStoreId).toHaveBeenCalledWith(tenant, 's2', { permissions: PURCHASE_READ });
+                expect(service[method]).toHaveBeenCalledWith('t1', expect.objectContaining({ storeId: 's2' }));
+            });
+
+            it('refuses a branch the caller cannot use before reading', async () => {
+                branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
+                await expect(call({ storeId: 'foreign' })).rejects.toBeInstanceOf(ForbiddenException);
+                expect(service[method]).not.toHaveBeenCalled();
+            });
+        },
+    );
 });

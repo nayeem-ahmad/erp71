@@ -31,6 +31,9 @@ import { SalesReportsService } from './sales-reports.service';
 import { SalesLineItemsService } from './sales-line-items.service';
 
 import { SALES_READ } from '../auth/permission-sets';
+
+/** The permission the cost-bearing reports are gated on, checked again in a requested branch. */
+const FINANCIAL_REPORTS = [StorePermission.VIEW_FINANCIAL_REPORTS];
 @Controller('sales-reports')
 @UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
 @UseInterceptors(TenantInterceptor)
@@ -54,20 +57,20 @@ export class SalesReportsController {
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('summary')
-    getSalesSummary(@Tenant() tenant: TenantContext, @Query() query: GetSalesSummaryDto) {
-        return this.service.getSalesSummary(tenant.tenantId, query, tenant.timezone);
+    async getSalesSummary(@Tenant() tenant: TenantContext, @Query() query: GetSalesSummaryDto) {
+        return this.service.getSalesSummary(tenant.tenantId, await this.scoped(tenant, query), tenant.timezone);
     }
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('by-product')
-    getSalesByProduct(@Tenant() tenant: TenantContext, @Query() query: GetSalesByProductDto) {
-        return this.service.getSalesByProduct(tenant.tenantId, query);
+    async getSalesByProduct(@Tenant() tenant: TenantContext, @Query() query: GetSalesByProductDto) {
+        return this.service.getSalesByProduct(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('by-category')
-    getSalesByCategory(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCategoryDto) {
-        return this.service.getSalesByCategory(tenant.tenantId, query);
+    async getSalesByCategory(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCategoryDto) {
+        return this.service.getSalesByCategory(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @Get('consolidated')
@@ -82,7 +85,7 @@ export class SalesReportsController {
         // One branch by nature: checked against the caller's branches, not only
         // the tenant's, and omitted means the header branch.
         const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
-            permissions: [StorePermission.VIEW_FINANCIAL_REPORTS],
+            permissions: FINANCIAL_REPORTS,
             allowAll: false,
         });
         return this.service.getBranchReport(tenant.tenantId, { ...query, storeId: storeId as string });
@@ -90,8 +93,8 @@ export class SalesReportsController {
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('by-customer')
-    getSalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCustomerDto) {
-        return this.service.getSalesByCustomer(tenant.tenantId, query);
+    async getSalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetSalesByCustomerDto) {
+        return this.service.getSalesByCustomer(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     /**
@@ -106,38 +109,40 @@ export class SalesReportsController {
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('monthly-by-customer')
-    getMonthlySalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetMonthlySalesByCustomerDto) {
-        return this.service.getMonthlySalesByCustomer(tenant.tenantId, query);
+    async getMonthlySalesByCustomer(@Tenant() tenant: TenantContext, @Query() query: GetMonthlySalesByCustomerDto) {
+        return this.service.getMonthlySalesByCustomer(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('trend')
-    getSalesTrend(@Tenant() tenant: TenantContext, @Query() query: GetSalesTrendDto) {
-        return this.service.getSalesTrend(tenant.tenantId, query, tenant.timezone);
+    async getSalesTrend(@Tenant() tenant: TenantContext, @Query() query: GetSalesTrendDto) {
+        return this.service.getSalesTrend(tenant.tenantId, await this.scoped(tenant, query), tenant.timezone);
     }
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('breakdown')
-    getSalesBreakdown(@Tenant() tenant: TenantContext, @Query() query: GetSalesBreakdownDto) {
-        return this.service.getSalesBreakdown(tenant.tenantId, query, tenant.timezone);
+    async getSalesBreakdown(@Tenant() tenant: TenantContext, @Query() query: GetSalesBreakdownDto) {
+        return this.service.getSalesBreakdown(tenant.tenantId, await this.scoped(tenant, query), tenant.timezone);
     }
 
     @Get('top-movers')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getTopMovers(@Tenant() tenant: TenantContext, @Query() query: GetTopMoversDto) {
-        return this.service.getTopMovers(tenant.tenantId, query, tenant.timezone);
+    async getTopMovers(@Tenant() tenant: TenantContext, @Query() query: GetTopMoversDto) {
+        return this.service.getTopMovers(tenant.tenantId, await this.scoped(tenant, query, FINANCIAL_REPORTS), tenant.timezone);
     }
 
     @Get('returns-analysis')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getReturnsAnalysis(@Tenant() tenant: TenantContext, @Query() query: GetReturnsAnalysisDto) {
-        return this.service.getReturnsAnalysis(tenant.tenantId, query, tenant.timezone);
+    async getReturnsAnalysis(@Tenant() tenant: TenantContext, @Query() query: GetReturnsAnalysisDto) {
+        const scoped = await this.scoped(tenant, query, FINANCIAL_REPORTS);
+        return this.service.getReturnsAnalysis(tenant.tenantId, scoped, tenant.timezone);
     }
 
     @Get('customer-retention')
     @RequireStorePermission(StorePermission.VIEW_CRM_INTERACTIONS)
-    getCustomerRetention(@Tenant() tenant: TenantContext, @Query() query: GetCustomerRetentionDto) {
-        return this.service.getCustomerRetention(tenant.tenantId, query);
+    async getCustomerRetention(@Tenant() tenant: TenantContext, @Query() query: GetCustomerRetentionDto) {
+        const scoped = await this.scoped(tenant, query, [StorePermission.VIEW_CRM_INTERACTIONS]);
+        return this.service.getCustomerRetention(tenant.tenantId, scoped);
     }
 
     // ── Gross profit ─────────────────────────────────────────────────────────
@@ -147,34 +152,34 @@ export class SalesReportsController {
 
     @Get('gross-profit/by-product')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getGrossProfitByProduct(@Tenant() tenant: TenantContext, @Query() query: GetSalesByProductDto) {
-        return this.service.getGrossProfitByProduct(tenant.tenantId, query);
+    async getGrossProfitByProduct(@Tenant() tenant: TenantContext, @Query() query: GetSalesByProductDto) {
+        return this.service.getGrossProfitByProduct(tenant.tenantId, await this.scoped(tenant, query, FINANCIAL_REPORTS));
     }
 
     @Get('gross-profit/by-salesperson')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getGrossProfitBySalesperson(
+    async getGrossProfitBySalesperson(
         @Tenant() tenant: TenantContext,
         @Query() query: GetGrossProfitBySalespersonDto,
     ) {
-        return this.service.getGrossProfitBySalesperson(tenant.tenantId, query);
+        return this.service.getGrossProfitBySalesperson(tenant.tenantId, await this.scoped(tenant, query, FINANCIAL_REPORTS));
     }
 
     @Get('gross-profit/exceptions')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getMarginExceptions(@Tenant() tenant: TenantContext, @Query() query: GetMarginExceptionsDto) {
-        return this.service.getMarginExceptions(tenant.tenantId, query);
+    async getMarginExceptions(@Tenant() tenant: TenantContext, @Query() query: GetMarginExceptionsDto) {
+        return this.service.getMarginExceptions(tenant.tenantId, await this.scoped(tenant, query, FINANCIAL_REPORTS));
     }
 
     @Get('gross-profit/bridge')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getMarginBridge(@Tenant() tenant: TenantContext, @Query() query: GetMarginBridgeDto) {
-        return this.service.getMarginBridge(tenant.tenantId, query);
+    async getMarginBridge(@Tenant() tenant: TenantContext, @Query() query: GetMarginBridgeDto) {
+        return this.service.getMarginBridge(tenant.tenantId, await this.scoped(tenant, query, FINANCIAL_REPORTS));
     }
 
     @Get('gross-profit/cost-coverage')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getCostCoverage(@Tenant() tenant: TenantContext, @Query() query: GetCostCoverageDto) {
-        return this.service.getCostCoverage(tenant.tenantId, query);
+    async getCostCoverage(@Tenant() tenant: TenantContext, @Query() query: GetCostCoverageDto) {
+        return this.service.getCostCoverage(tenant.tenantId, await this.scoped(tenant, query, FINANCIAL_REPORTS));
     }
 }

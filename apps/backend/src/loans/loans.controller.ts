@@ -13,10 +13,12 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateLoanDto,
     CreateLoanPaymentDto,
     ListLoansQueryDto,
+    LoanSummaryQueryDto,
     UpdateLoanDto,
 } from './loans.dto';
 import { LoansService } from './loans.service';
@@ -28,18 +30,23 @@ import { LOANS_READ, LOANS_WRITE } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class LoansController {
-    constructor(private readonly service: LoansService) {}
+    constructor(
+        private readonly service: LoansService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...LOANS_READ)
     @Get()
-    list(@Tenant() tenant: TenantContext, @Query() query: ListLoansQueryDto) {
-        return this.service.listLoans(tenant.tenantId, { ...query, timezone: tenant.timezone });
+    async list(@Tenant() tenant: TenantContext, @Query() query: ListLoansQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: LOANS_READ });
+        return this.service.listLoans(tenant.tenantId, { ...query, storeId, timezone: tenant.timezone });
     }
 
     @RequireAnyStorePermission(...LOANS_READ)
     @Get('summary')
-    getSummary(@Tenant() tenant: TenantContext) {
-        return this.service.getSummary(tenant.tenantId);
+    async getSummary(@Tenant() tenant: TenantContext, @Query() query: LoanSummaryQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: LOANS_READ });
+        return this.service.getSummary(tenant.tenantId, storeId);
     }
 
     @RequireAnyStorePermission(...LOANS_READ)

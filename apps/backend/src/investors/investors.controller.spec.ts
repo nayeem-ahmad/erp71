@@ -4,7 +4,13 @@ import { InvestorsController } from './investors.controller';
 
 describe('InvestorsController — profit-run scope', () => {
     const tenant = { tenantId: 't1', storeId: 's1', userId: 'u1', userRole: 'MANAGER', timezone: 'Asia/Dhaka' } as any;
-    const service = { previewProfitRun: jest.fn(), createProfitRun: jest.fn() };
+    const service = {
+        previewProfitRun: jest.fn(),
+        createProfitRun: jest.fn(),
+        list: jest.fn(),
+        getSummary: jest.fn(),
+        listProfitRuns: jest.fn(),
+    };
     const branchScope = { resolveStoreId: jest.fn(), canSeeAllBranches: jest.fn() };
     const controller = new InvestorsController(service as any, branchScope as any);
 
@@ -38,5 +44,29 @@ describe('InvestorsController — profit-run scope', () => {
             ForbiddenException,
         );
         expect(service.createProfitRun).not.toHaveBeenCalled();
+    });
+
+    describe('reads', () => {
+        const permissions = [StorePermission.VIEW_INVESTORS, StorePermission.MANAGE_INVESTORS];
+
+        it('list, summary and profit runs hand the service the resolved branch', async () => {
+            branchScope.resolveStoreId.mockResolvedValue('s1');
+            await controller.list(tenant, { storeId: 's1' } as any);
+            await controller.getSummary(tenant, {});
+            await controller.listProfitRuns(tenant, { storeId: 'all' } as any);
+            expect(branchScope.resolveStoreId).toHaveBeenCalledWith(tenant, 's1', { permissions });
+            expect(branchScope.resolveStoreId).toHaveBeenCalledWith(tenant, undefined, { permissions });
+            expect(service.list).toHaveBeenCalledWith('t1', expect.objectContaining({ storeId: 's1' }));
+            expect(service.getSummary).toHaveBeenCalledWith('t1', 's1');
+            expect(service.listProfitRuns).toHaveBeenCalledWith('t1', expect.objectContaining({ storeId: 's1' }));
+        });
+
+        it('refuses a branch the caller cannot use before reading', async () => {
+            branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
+            await expect(controller.list(tenant, { storeId: 'foreign' } as any)).rejects.toBeInstanceOf(ForbiddenException);
+            await expect(controller.getSummary(tenant, { storeId: 'foreign' })).rejects.toBeInstanceOf(ForbiddenException);
+            expect(service.list).not.toHaveBeenCalled();
+            expect(service.getSummary).not.toHaveBeenCalled();
+        });
     });
 });

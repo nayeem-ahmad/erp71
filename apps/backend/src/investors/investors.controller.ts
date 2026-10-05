@@ -20,6 +20,7 @@ import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateCapitalTxnDto,
     CreateInvestorDto,
+    InvestorSummaryQueryDto,
     ListInvestorsQueryDto,
     ListProfitRunsQueryDto,
     PayProfitShareDto,
@@ -45,6 +46,14 @@ export class InvestorsController {
         private readonly branchScope: BranchScopeService,
     ) {}
 
+    /** The branch a read covers, checked against the caller's access. */
+    private async scoped<T extends { storeId?: string }>(tenant: TenantContext, query: T): Promise<T> {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_INVESTORS, StorePermission.MANAGE_INVESTORS],
+        });
+        return { ...query, storeId };
+    }
+
     /**
      * A profit run reads the P&L. A branch run's id must be a branch the caller
      * may manage investors in; a company-wide run needs the whole-company view
@@ -61,18 +70,19 @@ export class InvestorsController {
     }
 
     @Get()
-    list(@Tenant() tenant: TenantContext, @Query() query: ListInvestorsQueryDto) {
-        return this.service.list(tenant.tenantId, query);
+    async list(@Tenant() tenant: TenantContext, @Query() query: ListInvestorsQueryDto) {
+        return this.service.list(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @Get('summary')
-    getSummary(@Tenant() tenant: TenantContext) {
-        return this.service.getSummary(tenant.tenantId);
+    async getSummary(@Tenant() tenant: TenantContext, @Query() query: InvestorSummaryQueryDto) {
+        const { storeId } = await this.scoped(tenant, query);
+        return this.service.getSummary(tenant.tenantId, storeId);
     }
 
     @Get('profit-runs')
-    listProfitRuns(@Tenant() tenant: TenantContext, @Query() query: ListProfitRunsQueryDto) {
-        return this.service.listProfitRuns(tenant.tenantId, query);
+    async listProfitRuns(@Tenant() tenant: TenantContext, @Query() query: ListProfitRunsQueryDto) {
+        return this.service.listProfitRuns(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @Get('profit-runs/:id')

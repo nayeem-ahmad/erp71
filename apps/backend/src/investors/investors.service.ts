@@ -484,14 +484,18 @@ export class InvestorsService {
 
     // ── Summary ──────────────────────────────────────────────────────────────
 
-    async getSummary(tenantId: string) {
+    /**
+     * `storeId` narrows to one branch's investors (and their shares); omitted,
+     * every investor in the tenant.
+     */
+    async getSummary(tenantId: string, storeId?: string) {
         const [investors, shares] = await Promise.all([
             this.db.investor.findMany({
-                where: { tenant_id: tenantId },
+                where: { tenant_id: tenantId, ...(storeId ? { store_id: storeId } : {}) },
                 include: { capitalTxns: { select: { direction: true, amount: true } } },
             }),
             this.db.investorProfitShare.findMany({
-                where: { tenant_id: tenantId },
+                where: { tenant_id: tenantId, ...(storeId ? { investor: { store_id: storeId } } : {}) },
                 select: { amount: true, paid_amount: true, status: true },
             }),
         ]);

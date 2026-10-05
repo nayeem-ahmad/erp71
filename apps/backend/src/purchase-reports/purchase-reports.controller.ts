@@ -38,26 +38,26 @@ export class PurchaseReportsController {
 
     @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('summary')
-    getPurchaseSummary(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseSummaryDto) {
-        return this.service.getPurchaseSummary(tenant.tenantId, query);
+    async getPurchaseSummary(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseSummaryDto) {
+        return this.service.getPurchaseSummary(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('trend')
-    getPurchaseTrend(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseTrendDto) {
-        return this.service.getPurchaseTrend(tenant.tenantId, query);
+    async getPurchaseTrend(@Tenant() tenant: TenantContext, @Query() query: GetPurchaseTrendDto) {
+        return this.service.getPurchaseTrend(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('by-product')
-    getPurchasesByProduct(@Tenant() tenant: TenantContext, @Query() query: GetPurchasesByProductDto) {
-        return this.service.getPurchasesByProduct(tenant.tenantId, query);
+    async getPurchasesByProduct(@Tenant() tenant: TenantContext, @Query() query: GetPurchasesByProductDto) {
+        return this.service.getPurchasesByProduct(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('by-supplier')
-    getPurchasesBySupplier(@Tenant() tenant: TenantContext, @Query() query: GetPurchasesBySupplierDto) {
-        return this.service.getPurchasesBySupplier(tenant.tenantId, query);
+    async getPurchasesBySupplier(@Tenant() tenant: TenantContext, @Query() query: GetPurchasesBySupplierDto) {
+        return this.service.getPurchasesBySupplier(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...PURCHASE_READ)

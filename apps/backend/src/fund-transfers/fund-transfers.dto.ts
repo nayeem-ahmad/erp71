@@ -7,6 +7,7 @@ import {
     IsUUID,
     Min,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 const FUND_TRANSFER_METHODS = ['CASH', 'CHECK', 'BANK_TRANSFER'] as const;
 const FUND_TRANSFER_STATUSES = ['INITIATED', 'IN_TRANSIT', 'RECEIVED', 'CANCELLED'] as const;
@@ -34,6 +35,11 @@ export class InitiateFundTransferDto {
 }
 
 export class ListFundTransfersQueryDto {
+    /** A transfer out of OR into this branch, or `all`. Resolved against the caller's access. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsString()
     @IsIn(FUND_TRANSFER_STATUSES)

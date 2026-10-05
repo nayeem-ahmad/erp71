@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateExpenseCategoryDto,
     CreateExpenseEntryDto,
@@ -30,7 +31,10 @@ import { EXPENSE_READ, EXPENSE_WRITE } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class ExpensesController {
-    constructor(private readonly service: ExpensesService) {}
+    constructor(
+        private readonly service: ExpensesService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...EXPENSE_READ)
     @Get('categories')
@@ -62,8 +66,9 @@ export class ExpensesController {
 
     @RequireAnyStorePermission(...EXPENSE_READ)
     @Get('entries')
-    listEntries(@Tenant() tenant: TenantContext, @Query() query: ListExpenseEntriesQueryDto) {
-        return this.service.listEntries(tenant.tenantId, { ...query, timezone: tenant.timezone });
+    async listEntries(@Tenant() tenant: TenantContext, @Query() query: ListExpenseEntriesQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: EXPENSE_READ });
+        return this.service.listEntries(tenant.tenantId, { ...query, storeId, timezone: tenant.timezone });
     }
 
     @RequireAnyStorePermission(...EXPENSE_WRITE)
@@ -90,7 +95,8 @@ export class ExpensesController {
 
     @RequireAnyStorePermission(...EXPENSE_READ)
     @Get('summary')
-    getSummary(@Tenant() tenant: TenantContext, @Query() query: ExpenseReportQueryDto) {
-        return this.service.getSummary(tenant.tenantId, query);
+    async getSummary(@Tenant() tenant: TenantContext, @Query() query: ExpenseReportQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: EXPENSE_READ });
+        return this.service.getSummary(tenant.tenantId, { ...query, storeId });
     }
 }
