@@ -123,8 +123,24 @@ export class CreateSaleDto {
     @IsNumber()
     totalAmount: number;
 
+    /**
+     * Everything taken against this sale, which may be more than its total.
+     * On a customer's sale the excess is a payment on their account — it
+     * settles their previous due, then stands as an advance. On a walk-in sale
+     * it is change handed back. See `splitSaleOverpayment`.
+     */
     @IsNumber()
     amountPaid: number;
+
+    /**
+     * The excess over the total was handed back as change, even though a
+     * customer is on the sale. Sent by the POS, whose tender boxes take what
+     * the customer hands over and work the change out from it; the invoice
+     * screen leaves it off, so its excess lands on the customer's account.
+     */
+    @IsOptional()
+    @IsBoolean()
+    returnChange?: boolean;
 
     @IsArray()
     @ArrayMinSize(1)

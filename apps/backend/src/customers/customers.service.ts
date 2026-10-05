@@ -19,6 +19,7 @@ import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
 import { customerLedgerDueDelta } from './customer-credit.utils';
+import { CUSTOMER_PAYMENT_DISCOUNT_LEG, nextCustomerCreditNumber } from './customer-payment-number.util';
 
 const CUSTOMER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -34,26 +35,10 @@ const CUSTOMER_SORTABLE: SortableMap = {
 };
 const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
 
-/**
- * Document-number prefixes per credit-transaction type. A write-off gets its own
- * series rather than sharing the payment one: "CWO-00004" on a customer's
- * statement has to be unmistakably not a receipt, because it is the row that
- * says money stopped being expected rather than that it arrived.
- */
-const CREDIT_TRANSACTION_PREFIXES = {
-    PAYMENT: 'CPY-',
-    PAYOUT: 'CPO-',
-    WRITE_OFF: 'CWO-',
-} as const;
-
 /** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
 const AMOUNT_EPSILON = 0.005;
 
-/**
- * The legKey of a payment's discount voucher. The cash voucher stays keyless,
- * so payments recorded before discounts existed keep their idempotency keys.
- */
-const DISCOUNT_LEG = 'discount';
+const DISCOUNT_LEG = CUSTOMER_PAYMENT_DISCOUNT_LEG;
 
 @Injectable()
 export class CustomersService {
@@ -307,22 +292,7 @@ export class CustomersService {
         tx: any,
         txType: 'PAYMENT' | 'PAYOUT' | 'WRITE_OFF',
     ): Promise<string> {
-        const prefix = CREDIT_TRANSACTION_PREFIXES[txType];
-        const last = await tx.customerCreditTransaction.findFirst({
-            where: {
-                tenant_id: tenantId,
-                type: txType,
-                payment_number: { startsWith: prefix },
-            },
-            orderBy: { payment_number: 'desc' },
-            select: { payment_number: true },
-        });
-
-        if (!last?.payment_number) return `${prefix}00001`;
-
-        const match = last.payment_number.match(new RegExp(`${prefix.replace('-', '\\-')}(\\d+)`));
-        const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-        return `${prefix}${String(nextNum).padStart(5, '0')}`;
+        return nextCustomerCreditNumber(tenantId, tx, txType);
     }
 
     async create(tenantId: string, dto: CreateCustomerDto) {

@@ -141,6 +141,12 @@ interface SaleEntryLayoutProps {
 
     payments: Payment[];
     onPaymentChange: (payments: Payment[]) => void;
+    /**
+     * Say what becomes of money paid beyond the total. Off on a posted sale's
+     * edit form, whose payment edits are not re-posted to the customer's
+     * account.
+     */
+    warnOnOverpayment?: boolean;
 
     /**
      * Show the last few rates each product sold at, beside the price field.
@@ -204,6 +210,7 @@ export default function SaleEntryLayout({
     adjustmentLabel,
     payments,
     onPaymentChange,
+    warnOnOverpayment = true,
     showRateHistory = false,
     warehouses = [],
     warehouseId = '',
@@ -225,6 +232,12 @@ export default function SaleEntryLayout({
         : {};
 
     const entryWarehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId)?.name;
+
+    // One figure for both the totals and the tender strip: the dues the footer
+    // prints and what an overpayment is said to settle must agree.
+    const resolvedPreviousDue = previousDue !== undefined
+        ? previousDue
+        : customer ? Number(customer.due_balance ?? 0) : null;
 
     return (
         <DocumentEntryLayout
@@ -312,9 +325,7 @@ export default function SaleEntryLayout({
                         totals={totals}
                         onTotalsChange={onTotalsChange}
                         tenantVatRate={tenantVatRate}
-                        previousDue={previousDue !== undefined
-                            ? previousDue
-                            : customer ? Number(customer.due_balance ?? 0) : null}
+                        previousDue={resolvedPreviousDue}
                         amountPaid={payments.reduce((sum, p) => sum + p.amount, 0)}
                         readOnly={readOnly}
                         roundingLabel={adjustmentLabel}
@@ -324,6 +335,8 @@ export default function SaleEntryLayout({
                             payments={payments}
                             total={totals.total}
                             customer={customer}
+                            previousDue={resolvedPreviousDue}
+                            warnOnOverpayment={warnOnOverpayment}
                             onPaymentChange={onPaymentChange}
                             readOnly={readOnly}
                         />

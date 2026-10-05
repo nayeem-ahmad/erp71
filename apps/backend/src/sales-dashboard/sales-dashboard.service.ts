@@ -324,7 +324,10 @@ export class SalesDashboardService {
             serial_number: row.serial_number,
             customer_name: row.customer?.name ?? null,
             total: money(Number(row.total_amount)),
-            due: money(Number(row.total_amount) - Number(row.amount_paid)),
+            // A sale can take more than its total (the rest goes on the
+            // customer's account), which leaves nothing due on it, not a
+            // negative due.
+            due: money(Math.max(0, Number(row.total_amount) - Number(row.amount_paid))),
             sale_date: row.sale_date,
         }));
     }
