@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { fetchMe } from '@/hooks/use-me';
-import { hasPermission } from '@/lib/permissions';
 import { getWorkspaceItem } from './session-store';
+import { canViewConsolidatedReports } from './branch-scope';
 
 export type ReportScopeMode = 'branch' | 'company' | 'compare';
 
@@ -119,9 +119,9 @@ export function useApprovedOnly() {
     return { approvedOnly, setApprovedOnly, approvalEnabled, ready };
 }
 
-export function canViewConsolidatedReports(role: string | null | undefined, permissions?: string[]) {
-    return role === 'OWNER' || hasPermission(permissions, 'VIEW_CONSOLIDATED_REPORTS');
-}
+// Moved to `branch-scope.ts`, the page-level branch filter's home; kept
+// exported here for the accounting pages that import it from this module.
+export { canViewConsolidatedReports };
 
 export function getDefaultReportScope(storesCount: number, canConsolidate: boolean): ReportScopeMode {
     if (typeof window !== 'undefined') {

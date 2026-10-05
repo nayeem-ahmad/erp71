@@ -63,6 +63,7 @@ import { hasPermission, isOwner } from '@/lib/permissions';
 import { isPosEnabled } from '@/lib/sales-settings';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { getLastTenantId, getWorkspaceItem, removeWorkspaceItem, setWorkspaceItem } from '@/lib/session-store';
+import { stripBranchParam } from '@/lib/branch-scope';
 
 type DashboardLayoutProps = Readonly<{ children: React.ReactNode }>;
 
@@ -632,6 +633,11 @@ function AppShell({ children }: DashboardLayoutProps) {
     const handleStoreChange = (storeId: string) => {
         setActiveStoreId(storeId);
         setWorkspaceItem('store_id', storeId);
+        // A page's own branch choice (`?branch=`) gives way to the header: the
+        // page filter starts on the header branch, so a header change is the
+        // user moving every page, this one included.
+        const withoutBranch = stripBranchParam(`${window.location.pathname}${window.location.search}`);
+        if (withoutBranch !== null) router.replace(withoutBranch, { scroll: false });
         // Every request now carries the other branch's `x-store-id`; nothing
         // cached under the old one may answer for it.
         resetWorkspaceQueries(queryClient);

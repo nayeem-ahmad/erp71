@@ -257,6 +257,9 @@ export const coreMessages = {
     dashboardLayout: {
         defaultPageTitle: "Übersicht",
         branchLabel: "Filiale",
+        branchFilterAll: 'Alle Filialen',
+        branchFilterLocked: 'Sie haben nur Zugriff auf diese Filiale',
+        branchFilterForbidden: 'Sie haben keinen Zugriff auf diese Filialansicht. Stattdessen wird Ihre Filiale angezeigt.',
         headerMoreMenuAria: "Weitere Optionen",
         userFallbackRole: "Mitarbeiter",
         onboardingMessage: "Willkommen! Legen Sie zuerst Produkte an und tätigen Sie Ihren ersten Verkauf.",

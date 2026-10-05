@@ -121,6 +121,10 @@ const ME_USER_SELECT = {
                     secondary_locale: true,
                     timezone: true,
                     dashboard_preference: true,
+                    // Every branch of the shop, not only the member's: the
+                    // branch filter hides itself in a one-branch shop but shows
+                    // disabled for a member limited to one of several.
+                    _count: { select: { stores: true } },
                     subscription: {
                         select: {
                             status: true,
@@ -955,6 +959,7 @@ export class AuthService {
                                 subscription: {
                                     include: { plan: true },
                                 },
+                                _count: { select: { stores: true } },
                             },
                         },
                         tenantRole: { select: { id: true, name: true } },
@@ -1638,6 +1643,8 @@ export class AuthService {
                 allStorePermissions,
             ),
             stores: accessibleStores,
+            // The shop's branch count, which `stores` (the member's) cannot say.
+            store_count: membership.tenant._count?.stores ?? accessibleStores.length,
             // Whether this workspace has ever been paid for and switched on. The
             // shell reads it to show the activation banner, so it rides on the
             // session payload it already fetches rather than costing every page

@@ -257,6 +257,9 @@ export const coreMessages = {
     dashboardLayout: {
         defaultPageTitle: 'ڈیش بورڈ',
         branchLabel: 'برانچ',
+        branchFilterAll: 'تمام شاخیں',
+        branchFilterLocked: 'آپ کو صرف اس شاخ تک رسائی حاصل ہے',
+        branchFilterForbidden: 'آپ کو اس شاخ کا منظر دیکھنے کی اجازت نہیں۔ آپ کی شاخ دکھائی جا رہی ہے۔',
         headerMoreMenuAria: 'مزید اختیارات',
         userFallbackRole: 'عملہ',
         onboardingMessage: 'خوش آمدید! پروڈکٹس شامل کر کے اور اپنی پہلی فروخت کر کے آغاز کریں۔',
