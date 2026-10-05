@@ -61,6 +61,8 @@ jest.mock('@/lib/api', () => {
             getProjectTimer: jest.fn(),
             startProjectTimer: jest.fn(),
             stopProjectTimer: jest.fn(),
+            getProjectTask: jest.fn(),
+            getTaskRemainingHistory: jest.fn(),
         },
     };
 });
@@ -162,6 +164,11 @@ describe('BoardPage', () => {
                 { employee: { id: 'e-sumaiya', name: 'Sumaiya Akter' } },
             ],
         });
+        // Opening a card mounts the detail panel, which reads the task. Leaving
+        // the read pending keeps the skeleton up: these tests only care that the
+        // dialog appeared, and a half-loaded task would render the whole card.
+        (api.getProjectTask as jest.Mock).mockReset().mockReturnValue(new Promise(() => {}));
+        (api.getTaskRemainingHistory as jest.Mock).mockReset().mockReturnValue(new Promise(() => {}));
     });
 
     /** Board settings, open on the tab this test needs. */
@@ -1030,6 +1037,58 @@ describe('BoardPage', () => {
         fireEvent.pointerMove(card, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 40 });
         fireEvent.pointerUp(card, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 40 });
     };
+
+    describe('opening a card', () => {
+        const card = () => screen.getByRole('button', { name: 'Open task: Fix login' });
+
+        it('opens on a mouse press that does not move', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            const mouse = { pointerId: 1, pointerType: 'mouse' as const, button: 0, clientX: 8, clientY: 8 };
+            fireEvent.pointerDown(card(), mouse);
+            fireEvent.pointerUp(card(), mouse);
+
+            expect(await screen.findByRole('dialog')).toBeInTheDocument();
+        });
+
+        it('opens on a touch tap', async () => {
+            render(<BoardPage />);
+            await screen.findByText('Fix login');
+            const touch = { pointerId: 1, pointerType: 'touch' as const, button: 0, clientX: 8, clientY: 8 };
+            fireEvent.pointerDown(card(), touch);
+            fireEvent.pointerUp(card(), touch);
+            fireEvent.click(card());
+
+            expect(await screen.findByRole('dialog')).toBeInTheDocument();
+        });
+
+        it('does not open after a completed drag, and the next tap still does', async () => {
+            // jsdom has no hit-testing. A null hit is "released over nothing",
+            // which is still a finished drag and must not open the card.
+            const previous = document.elementFromPoint;
+            document.elementFromPoint = jest.fn().mockReturnValue(null);
+            try {
+                render(<BoardPage />);
+                await screen.findByText('Fix login');
+                const down = { pointerId: 1, pointerType: 'mouse' as const, button: 0, clientX: 0, clientY: 0 };
+                fireEvent.pointerDown(card(), down);
+                fireEvent.pointerMove(card(), { ...down, clientX: 0, clientY: 40 });
+                fireEvent.pointerUp(card(), { ...down, clientX: 0, clientY: 40 });
+                fireEvent.click(card());
+
+                expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+                const tap = { pointerId: 2, pointerType: 'touch' as const, button: 0, clientX: 8, clientY: 8 };
+                fireEvent.pointerDown(card(), tap);
+                fireEvent.pointerUp(card(), tap);
+                fireEvent.click(card());
+
+                expect(await screen.findByRole('dialog')).toBeInTheDocument();
+            } finally {
+                document.elementFromPoint = previous;
+            }
+        });
+    });
 
     describe('a refused drop', () => {
         let toastErrorSpy: jest.SpyInstance;

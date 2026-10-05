@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -229,6 +229,13 @@ export default function BoardPage() {
      */
     const [labelsLoaded, setLabelsLoaded] = useState(false);
     const [drag, setDrag] = useState<DragState | null>(null);
+    /**
+     * A finished drag is followed by a click on the card. Without this the
+     * click opens the card the reader just put down — including a drag that
+     * ended where it began. Cleared on the next press, so a click the browser
+     * never fires (a scroll takes the gesture) cannot eat the tap after it.
+     */
+    const swallowCardClick = useRef(false);
     const [columnDrag, setColumnDrag] = useState<ColumnDragState | null>(null);
     const [adding, setAdding] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -781,12 +788,16 @@ export default function BoardPage() {
     // Replaces HTML5 draggable, which never fires from touch input, so the board
     // was read-only on a phone. A card body only arms a mouse drag; touch has to
     // come through the grip, or the column could not be scrolled by finger.
+    // Opening is a click on the card, which a scroll does not fire. A mouse
+    // press under the threshold still opens here, because that gesture is the
+    // click and the tests drive it without a separate click event.
 
     const beginDrag = (
         e: React.PointerEvent,
         task: BoardTask,
         { fromHandle }: { fromHandle: boolean },
     ) => {
+        swallowCardClick.current = false;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.pointerType !== 'mouse' && !fromHandle) return;
 
@@ -867,6 +878,7 @@ export default function BoardPage() {
             setOpenTaskId(drag.taskId);
             return;
         }
+        swallowCardClick.current = true;
         if (!drag.target) {
             if (drag.refused === 'otherProject') toast.error(bm.laneOtherProject);
             return;
@@ -1102,6 +1114,11 @@ export default function BoardPage() {
             onPointerUp={endDrag}
             onPointerCancel={cancelDrag}
             onOpen={() => setOpenTaskId(task.id)}
+            consumeSwallowedClick={() => {
+                if (!swallowCardClick.current) return false;
+                swallowCardClick.current = false;
+                return true;
+            }}
             onRemove={() => setPendingRemoval({ taskIds: [task.id], title: task.title })}
         />
     );
@@ -2122,6 +2139,7 @@ function TaskCard({
     selected,
     onToggleSelected,
     onOpen,
+    consumeSwallowedClick,
     onRemove,
     onPointerDownBody,
     onPointerDownHandle,
@@ -2145,6 +2163,8 @@ function TaskCard({
     selected: boolean;
     onToggleSelected: () => void;
     onOpen: () => void;
+    /** True when the click is the one a finished drag left behind, and should not open. */
+    consumeSwallowedClick: () => boolean;
     onRemove: () => void;
     onPointerDownBody: (e: React.PointerEvent) => void;
     onPointerDownHandle: (e: React.PointerEvent) => void;
@@ -2233,6 +2253,10 @@ function TaskCard({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
+            onClick={() => {
+                if (consumeSwallowedClick()) return;
+                onOpen();
+            }}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
