@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors }
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { CreateInventoryShrinkageDto, ShrinkageDirection } from './inventory-shrinkage.dto';
 import { InventoryShrinkageService } from './inventory-shrinkage.service';
 
@@ -12,7 +13,10 @@ import { SHRINKAGE_STAFF } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class InventoryShrinkageController {
-    constructor(private readonly service: InventoryShrinkageService) {}
+    constructor(
+        private readonly service: InventoryShrinkageService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...SHRINKAGE_STAFF)
     @Post()
@@ -27,14 +31,17 @@ export class InventoryShrinkageController {
      */
     @RequireAnyStorePermission(...SHRINKAGE_STAFF)
     @Get()
-    findAll(
+    async findAll(
         @Tenant() tenant: TenantContext,
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
         @Query('direction') direction?: string,
+        @Query('storeId') requestedStoreId?: string,
     ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, requestedStoreId, { permissions: SHRINKAGE_STAFF });
         return this.service.findAll(tenant.tenantId, {
             timezone: tenant.timezone,
+            storeId,
             createdFrom,
             createdTo,
             direction: direction === 'LOSS' || direction === 'FOUND' ? (direction as ShrinkageDirection) : undefined,

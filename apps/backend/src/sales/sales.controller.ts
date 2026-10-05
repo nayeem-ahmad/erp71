@@ -8,6 +8,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 import { SALES_READ, SALE_DELETE, SALE_WRITE } from '../auth/permission-sets';
 // `StorePermissionGuard` is class-wide but only the cancel route names a
@@ -17,7 +18,10 @@ import { SALES_READ, SALE_DELETE, SALE_WRITE } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class SalesController {
-    constructor(private readonly salesService: SalesService) { }
+    constructor(
+        private readonly salesService: SalesService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...SALE_WRITE)
     @Post()
@@ -38,9 +42,12 @@ export class SalesController {
         @Query('sortDir') sortDir?: string,
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
+        @Query('storeId') requestedStoreId?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
+        const storeId = await this.branchScope.resolveStoreId(tenant, requestedStoreId, { permissions: SALES_READ });
         return this.salesService.findAll(tenant.tenantId, { timezone: tenant.timezone,
+            storeId,
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             createdBy: mineOnly ? tenant.userId : undefined,

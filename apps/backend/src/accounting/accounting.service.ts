@@ -850,6 +850,9 @@ export class AccountingService {
         const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
         const where = {
             tenant_id: tenantId,
+            // A branch lists its own vouchers; company-level ones (no branch)
+            // appear only for the whole tenant.
+            ...(query.storeId ? { store_id: query.storeId } : {}),
             ...(query.voucherType ? { voucher_type: query.voucherType } : {}),
             ...(query.approvalStatus ? { approval_status: query.approvalStatus } : {}),
             ...this.buildVoucherDateRangeFilter(query.from, query.to),

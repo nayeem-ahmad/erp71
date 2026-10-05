@@ -130,12 +130,13 @@ export class InventoryShrinkageService {
 
     async findAll(
         tenantId: string,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; direction?: ShrinkageDirection },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; direction?: ShrinkageDirection; storeId?: string },
     ) {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return this.db.inventoryShrinkage.findMany({
             where: {
                 tenant_id: tenantId,
+                ...(opts?.storeId ? { warehouse: { store_id: opts.storeId } } : {}),
                 ...(opts?.direction ? { direction: opts.direction } : {}),
                 ...(created ? { created_at: created } : {}),
             },

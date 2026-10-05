@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export class WarehouseTransferItemDto {
     @IsUUID()
@@ -70,6 +71,11 @@ export class RejectWarehouseTransferDto {
 }
 
 export class ListWarehouseTransfersQueryDto {
+    /** A transfer out of OR into this branch, or `all`. Resolved against the caller's access. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsString()
     status?: string;

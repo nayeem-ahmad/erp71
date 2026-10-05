@@ -145,7 +145,7 @@ export class SalesOrdersService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
     ): Promise<PaginatedResult<unknown>> {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
@@ -155,7 +155,7 @@ export class SalesOrdersService {
                     include: { customer: true, items: { include: { product: true } }, deposits: true },
                 }),
             count: (args) => this.db.salesOrder.count(args as any),
-            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
+            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
             orderBy: { created_at: 'desc' },
             page,
             limit,

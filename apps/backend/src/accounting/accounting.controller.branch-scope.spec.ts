@@ -17,6 +17,7 @@ describe('AccountingController — statement branch scope', () => {
         getAccountingDashboardOverview: jest.fn(),
         getFinancialKpis: jest.fn(),
         getFinancialTrends: jest.fn(),
+        findVouchers: jest.fn(),
     };
     const db = { userStorePermission: { findFirst: jest.fn() } };
     const branchScope = { resolveStoreId: jest.fn(), resolveStoreIds: jest.fn() };
@@ -93,6 +94,23 @@ describe('AccountingController — statement branch scope', () => {
             branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
             await expect(call({ storeId: 'foreign' })).rejects.toBeInstanceOf(ForbiddenException);
             expect(service[method]).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('GET /accounting/vouchers', () => {
+        it('lists the resolved branch', async () => {
+            branchScope.resolveStoreId.mockResolvedValue('s1');
+            await controller.findVouchers(member, { storeId: 's1' } as any);
+            expect(branchScope.resolveStoreId).toHaveBeenCalledWith(member, 's1', {
+                permissions: [StorePermission.VIEW_LEDGER],
+            });
+            expect(service.findVouchers).toHaveBeenCalledWith('t1', { storeId: 's1', timezone: 'Asia/Dhaka' });
+        });
+
+        it('refuses a branch the caller cannot use', async () => {
+            branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
+            await expect(controller.findVouchers(member, { storeId: 'foreign' } as any)).rejects.toBeInstanceOf(ForbiddenException);
+            expect(service.findVouchers).not.toHaveBeenCalled();
         });
     });
 });

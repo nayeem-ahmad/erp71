@@ -291,6 +291,11 @@ export class CreateVoucherDto {
 }
 
 export class ListVouchersQueryDto {
+    /** A branch's own vouchers, or `all` (company-level vouchers included). Resolved against the caller's access. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsString()
     @IsIn(Object.values(VoucherType))
