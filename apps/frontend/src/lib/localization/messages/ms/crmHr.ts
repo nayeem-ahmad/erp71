@@ -176,6 +176,7 @@ export const crmHrMessages = {
             save: 'Simpan',
             cancel: 'Batal',
             tokenHint: 'Ruang letak: {tokens}. Setiap satu diisi apabila templat dipilih; yang tiada nilai kekal seperti ditulis.',
+            unknownTokens: 'Bukan ruang letak: {tokens}. Ia dihantar tepat seperti ditulis.',
             usage: {
                 BOTH: 'Rekod dan Jadual',
                 LOG: 'Rekod aktiviti sahaja',

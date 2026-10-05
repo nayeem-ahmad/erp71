@@ -9,13 +9,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
-import {
-    fillTemplate,
-    useCrmMessageTemplates,
-    useTemplateIdentity,
-    type CrmMessageTemplate,
-} from '@/lib/crm-message-templates';
-import { formatDate } from '@/lib/format';
+import CrmMessageTemplatePicker, { type PickedTemplate } from './CrmMessageTemplatePicker';
 
 /** What `POST /crm/activities` wants: exactly one of the two ids. */
 export type CrmActivityTarget = { lead_id: string } | { customer_id: string };
@@ -73,7 +67,7 @@ export default function CrmActivityComposer({
     onClose,
     onSaved,
 }: Readonly<Props>) {
-    const { t, locale } = useI18n();
+    const { t } = useI18n();
     const m = t.crm.activities;
 
     const { options: channels } = useLeadTaxonomy('channels');
@@ -91,7 +85,6 @@ export default function CrmActivityComposer({
 
     const planAssigneeId = useId();
     const targetInputId = useId();
-    const templateSelectId = useId();
     // `Field` associates its label only when handed the control's id. The
     // assignee and target boxes already carried one; the rest are here for the
     // same reason — an unlabelled control is unreachable by name.
@@ -102,15 +95,6 @@ export default function CrmActivityComposer({
     const planDueId = useId();
     const planPurposeId = useId();
     const planNotesId = useId();
-
-    // The log form knows which channel it is on, so it asks only for the
-    // templates that channel offers. The schedule form has no channel field, so
-    // it asks for all of them.
-    const { templates } = useCrmMessageTemplates(
-        mode === 'log' ? 'LOG' : 'SCHEDULE',
-        mode === 'log' ? log.channel || undefined : undefined,
-    );
-    const identity = useTemplateIdentity();
 
     // The channel list arrives after mount, so the select cannot be initialised
     // from it. Fill it once, and only while untouched.
@@ -179,23 +163,6 @@ export default function CrmActivityComposer({
     }, [target, chosen]);
 
     /**
-     * What a template's `{{tokens}}` resolve to. The name and phone come from
-     * whoever the dialog is pointed at — the row picked here, or the label the
-     * lead / customer page handed down. Neither is guaranteed, and a token with
-     * no value is left standing rather than blanked; see `fillTemplate`.
-     */
-    const templateVars = useMemo(
-        () => ({
-            name: chosen?.name ?? targetLabel?.name ?? null,
-            phone: chosen?.phone ?? targetLabel?.phone ?? null,
-            user: identity.user,
-            business: identity.business,
-            date: formatDate(new Date(), locale),
-        }),
-        [chosen, targetLabel, identity, locale],
-    );
-
-    /**
      * Drop a template into the form.
      *
      * Replaces the fields the template supplies and leaves the rest alone — the
@@ -204,8 +171,7 @@ export default function CrmActivityComposer({
      * editable; what is saved is whatever is in the boxes at that point.
      */
     const applyTemplate = useCallback(
-        (template: CrmMessageTemplate) => {
-            const body = fillTemplate(template.body, templateVars);
+        ({ template, body, subject }: PickedTemplate) => {
             if (mode === 'log') {
                 // Only the summary: the channel is not the template's to set.
                 // The list is already narrowed to the channel the form is on, so
@@ -220,40 +186,36 @@ export default function CrmActivityComposer({
                 // A template with no subject of its own still has to leave one
                 // behind — `subject` is what the activity is listed under, and
                 // the template's own name is the closest thing to a title it has.
-                subject: template.subject ? fillTemplate(template.subject, templateVars) : template.name,
+                subject: subject ?? template.name,
                 notes: body,
                 purpose: template.purpose?.id ?? prev.purpose,
             }));
         },
-        [mode, templateVars],
+        [mode],
     );
 
     /**
-     * Rendered in both dialogs. Resets to the placeholder after each pick so the
-     * same template can be re-applied — a rep who has edited the text into a
-     * corner wants the original back, and a `<select>` that keeps its value
-     * fires no change event the second time.
+     * Rendered in both dialogs. The log form knows which channel it is on, so it
+     * asks only for the templates that channel offers; the schedule form has no
+     * channel field, so it asks for all of them.
      *
      * Held back in the log dialog until the channel is settled: the channel list
      * arrives after mount, and offering the unnarrowed list for those few frames
      * would let someone pick a template meant for a different channel.
+     *
+     * The name and phone come from whoever the dialog is pointed at — the row
+     * picked here, or the label the lead / customer page handed down.
      */
-    const templatePicker = templates.length > 0 && (mode !== 'log' || Boolean(log.channel)) && (
-        <Field label={m.fields.template} hint={m.fields.templateHint} htmlFor={templateSelectId}>
-            <Select
-                id={templateSelectId}
-                value=""
-                onChange={(e) => {
-                    const picked = templates.find((tpl) => tpl.id === e.target.value);
-                    if (picked) applyTemplate(picked);
-                }}
-            >
-                <option value="">{m.fields.templatePlaceholder}</option>
-                {templates.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-                ))}
-            </Select>
-        </Field>
+    const templatePicker = (mode !== 'log' || Boolean(log.channel)) && (
+        <CrmMessageTemplatePicker
+            usage={mode === 'log' ? 'LOG' : 'SCHEDULE'}
+            channelId={mode === 'log' ? log.channel : undefined}
+            recipient={{
+                name: chosen?.name ?? targetLabel?.name,
+                phone: chosen?.phone ?? targetLabel?.phone,
+            }}
+            onPick={applyTemplate}
+        />
     );
 
     const savePlan = useCallback(async () => {

@@ -176,6 +176,7 @@ export const crmHrMessages = {
             save: "Guardar",
             cancel: "Cancelar",
             tokenHint: "Marcadores: {tokens}. Cada uno se rellena al elegir la plantilla; el que no tenga valor se queda tal cual.",
+            unknownTokens: "No es un marcador: {tokens}. Se envía tal cual está escrito.",
             usage: {
                 BOTH: "Registrar y programar",
                 LOG: "Solo al registrar",
