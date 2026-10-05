@@ -1,4 +1,6 @@
 'use client';
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/i18n', () => {
   const { enMessages } = require('@/lib/localization/messages/en');
 
@@ -16,8 +18,9 @@ jest.mock('@/lib/i18n', () => {
 }, { virtual: true });
 
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SalesSummaryPage from './page';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -44,6 +47,7 @@ jest.mock('@/components/data-table', () => ({
 describe('SalesSummaryPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getSalesSummary.mockResolvedValue({
             summary: {
@@ -133,5 +137,29 @@ describe('SalesSummaryPage', () => {
         await waitFor(() => {
             expect(screen.getByRole('heading', { name: 'Sales Summary' })).toBeInTheDocument();
         });
+    });
+
+    it('asks for the header branch, then the one picked in the filter', async () => {
+        const { api } = require('@/lib/api');
+        render(<SalesSummaryPage />);
+        await waitFor(() => expect(api.getSalesSummary).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })));
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+        await waitFor(() => expect(api.getSalesSummary).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })));
+    });
+
+    it('goes back to the header branch when the server refuses the chosen one', async () => {
+        const { api } = require('@/lib/api');
+        api.getSalesSummary.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+            if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
+            return { summary: null, rows: [] };
+        });
+        render(<SalesSummaryPage />);
+        await waitFor(() => expect(api.getSalesSummary).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
     });
 });

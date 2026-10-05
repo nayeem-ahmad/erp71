@@ -3,6 +3,9 @@ import TrialBalancePage from './page';
 import { api } from '@/lib/api';
 import { printTrialBalanceReport } from '@/lib/statement-printer';
 import { setWorkspaceItem } from '@/lib/session-store';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -44,6 +47,7 @@ const RESPONSE = {
 describe('TrialBalancePage — print', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope({ branches: mockStores, headerBranchId: 's1', value: 's1', hidden: mockStores.length <= 1 });
         localStorage.clear();
         setWorkspaceItem('tenant_id', 'tenant-1');
         setWorkspaceItem('store_id', 's1');

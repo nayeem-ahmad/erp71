@@ -11,6 +11,7 @@ import {
     Min,
     MinLength,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { COSTING_METHODS } from '../database/product-cost.utils';
 
 /**
@@ -186,6 +187,11 @@ export class UpdateWarehouseDto {
 }
 
 export class ListStockLedgerQueryDto {
+    /** Movements in this branch's warehouses, or `all`. Resolved against the caller's access. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsUUID()
     productId?: string;

@@ -327,6 +327,18 @@ describe('ProductsService', () => {
       expect(db.$queryRaw).not.toHaveBeenCalled();
     });
 
+    it("counts only the branch's warehouses, under a branch-specific cache key", async () => {
+      db.$queryRaw.mockResolvedValue([{ count: BigInt(2) }]);
+
+      await service.countLowStock('tenant-1', 'store-1');
+
+      // The branch clause is a nested Prisma.sql fragment, bound as parameters.
+      const fragment = db.$queryRaw.mock.calls[0].slice(1).find((param: any) => Array.isArray(param?.values));
+      expect(fragment.values).toContain('store-1');
+      expect(redis.get).toHaveBeenCalledWith('products:tenant-1:low-stock-count:store-1');
+      expect(redis.set).toHaveBeenCalledWith('products:tenant-1:low-stock-count:store-1', { count: 2 }, expect.any(Number));
+    });
+
     it('caches the computed count', async () => {
       db.$queryRaw.mockResolvedValue([{ count: BigInt(2) }]);
 

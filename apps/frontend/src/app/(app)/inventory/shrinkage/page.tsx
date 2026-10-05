@@ -14,7 +14,8 @@ import { PostingBadge } from '@/components/PostingBadge';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Alert, Button, Field, Input, Select, StatusBadge } from '@/components/ui';
+import { BranchFilter, Alert, Button, Field, Input, Select, StatusBadge } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
@@ -65,6 +66,7 @@ const columnHelper = createColumnHelper<ShrinkageRecord>();
 
 export default function InventoryShrinkagePage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [records, setRecords] = useState<ShrinkageRecord[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [reasons, setReasons] = useState<any[]>([]);
@@ -81,8 +83,9 @@ export default function InventoryShrinkagePage() {
     const isFound = direction === 'FOUND';
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadRecords();
-    }, [createdRange, directionFilter]);
+    }, [createdRange, directionFilter, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         void loadOptions();
@@ -94,9 +97,11 @@ export default function InventoryShrinkagePage() {
             const data = await api.getInventoryShrinkage({
                 ...applyCreatedRangeQuery(createdRange),
                 direction: directionFilter || undefined,
+                storeId: branch.apiStoreId,
             });
             setRecords(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load shrinkage records', error);
         } finally {
             setLoading(false);
@@ -254,9 +259,12 @@ export default function InventoryShrinkagePage() {
                         'inventory',
                     )}
                     actions={(
-                        <Button onClick={openForm} icon={<Plus className="w-4 h-4" />}>
-                            {t.inventoryShrinkage.newEntry}
-                        </Button>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <Button onClick={openForm} icon={<Plus className="w-4 h-4" />}>
+                                {t.inventoryShrinkage.newEntry}
+                            </Button>
+                        </>
                     )}
                 />
 

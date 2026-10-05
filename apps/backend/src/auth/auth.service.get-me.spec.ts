@@ -265,7 +265,9 @@ function karim() {
     });
     shop1.subscription = subscriptionOf('tenant-1', STANDARD_PLAN) as any;
 
-    const shop2 = tenantRow('tenant-2', { name: 'Rahim Traders', timezone: 'Asia/Kolkata' });
+    // Rahim has three branches; Karim works the till at one of them, so the
+    // branch filter shows locked rather than hidden.
+    const shop2 = tenantRow('tenant-2', { name: 'Rahim Traders', timezone: 'Asia/Kolkata', _count: { stores: 3 } });
     // Never paid for: no active status and no activation stamp.
     shop2.subscription = subscriptionOf('tenant-2', BASIC_PLAN, {
         status: 'PAST_DUE',
@@ -476,6 +478,7 @@ function expectedKarim() {
                 record_scope: TenantRecordScope.ALL,
                 permissions: ALL_PERMISSIONS,
                 stores: [storeRow('store-1', 'tenant-1', 'Gulshan')],
+                store_count: 1,
                 pending_activation: false,
                 is_platform_workspace: false,
                 subscription: {
@@ -511,6 +514,7 @@ function expectedKarim() {
                 record_scope: TenantRecordScope.OWN,
                 permissions: [StorePermission.CREATE_SALE, StorePermission.VIEW_LEDGER],
                 stores: [storeRow('store-2', 'tenant-2', 'Banani')],
+                store_count: 3,
                 pending_activation: true,
                 is_platform_workspace: false,
                 subscription: {
@@ -546,6 +550,7 @@ function expectedKarim() {
                 record_scope: TenantRecordScope.OWN,
                 permissions: [],
                 stores: [],
+                store_count: 0,
                 pending_activation: false,
                 is_platform_workspace: true,
                 subscription: null,

@@ -11,6 +11,8 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import { STOCK_TAKES_FIELD_HELP, STOCK_TAKES_HELP } from '@/lib/help/contextual-help';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -29,6 +31,7 @@ const columnHelper = createColumnHelper<StockTakeSession>();
 
 export default function StockTakesPage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [sessions, setSessions] = useState<StockTakeSession[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -36,16 +39,24 @@ export default function StockTakesPage() {
     const [message, setMessage] = useState('');
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
+    // The new-session form's warehouses belong to the header branch, so they
+    // load once; the list follows the branch filter.
     useEffect(() => {
-        void Promise.all([loadSessions(), loadWarehouses()]);
-    }, [createdRange]);
+        void loadWarehouses();
+    }, []);
+
+    useEffect(() => {
+        if (!branch.ready) return;
+        void loadSessions();
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const loadSessions = async () => {
         setLoading(true);
         try {
-            const data = await api.getStockTakes(applyCreatedRangeQuery(createdRange));
+            const data = await api.getStockTakes({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setSessions(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load stock takes', error);
         } finally {
             setLoading(false);
@@ -107,6 +118,7 @@ export default function StockTakesPage() {
                         t.inventoryStockTakes.title,
                         'inventory',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <ContextualHelpPanel {...STOCK_TAKES_HELP} />

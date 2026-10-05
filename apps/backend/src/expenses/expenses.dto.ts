@@ -6,6 +6,7 @@ import {
     IsUUID,
     Min,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { PaginationDto } from '../common/pagination.dto';
 
 export class CreateExpenseCategoryDto {
@@ -84,7 +85,7 @@ export class ListExpenseEntriesQueryDto extends PaginationDto {
     categoryId?: string;
 
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -114,6 +115,6 @@ export class ExpenseReportQueryDto {
     to?: string;
 
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 }

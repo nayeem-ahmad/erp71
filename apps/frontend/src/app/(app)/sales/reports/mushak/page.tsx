@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Download, Printer } from 'lucide-react';
 import { MUSHAK_FORMS, MushakForm, toBengaliDigits } from '@erp71/shared-types';
-import { Alert, Button, Checkbox, Field, Input, PageHeader, PageShell } from '@/components/ui';
+import { Alert, BranchFilter, Button, Checkbox, Field, Input, PageHeader, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import MushakDocument, {
     MushakColumnHead,
     type MushakIssuerBlock,
@@ -72,6 +73,8 @@ export default function MushakBooksPage() {
     const { t, locale } = useI18n();
     const m = t.sales.mushak;
     const period = useMemo(currentTaxPeriod, []);
+    const branch = useBranchScope();
+    const storeId = branch.apiStoreId;
 
     const [form, setForm] = useState<string>(MushakForm.SALES_BOOK);
     const [from, setFrom] = useState(period.from);
@@ -88,19 +91,22 @@ export default function MushakBooksPage() {
         setError('');
         try {
             const data = isStatement
-                ? await api.getMushakLargeSupplyStatement({ from, to })
-                : await api.getMushakSalesBook({ from, to, taxableOnly });
+                ? await api.getMushakLargeSupplyStatement({ from, to, storeId })
+                : await api.getMushakSalesBook({ from, to, storeId, taxableOnly });
             setBook(data);
         } catch (err: any) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             setError(err?.message || m.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [isStatement, from, to, taxableOnly, m]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isStatement, from, to, storeId, taxableOnly, m]);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [load]);
+    }, [branch.ready, load]);
 
     const exportCsv = () => {
         if (!book) return;
@@ -144,6 +150,7 @@ export default function MushakBooksPage() {
                     )}
                     actions={
                         <>
+                            <BranchFilter scope={branch} />
                             <Button variant="secondary" onClick={exportCsv} disabled={!book?.rows.length}>
                                 <Download className="h-4 w-4" />
                                 {m.exportCsv}

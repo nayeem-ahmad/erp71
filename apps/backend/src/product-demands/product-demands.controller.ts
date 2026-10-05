@@ -17,6 +17,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { ProductDemandsService } from './product-demands.service';
 import {
     CreateProductDemandDto,
@@ -37,11 +38,17 @@ import {
 @RequireStorePermission(StorePermission.VIEW_PRODUCT_CATALOG)
 @UseInterceptors(TenantInterceptor)
 export class ProductDemandsController {
-    constructor(private readonly service: ProductDemandsService) {}
+    constructor(
+        private readonly service: ProductDemandsService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @Get()
-    findAll(@Tenant() tenant: TenantContext, @Query() query: ListProductDemandsQueryDto) {
-        return this.service.findAll(tenant.tenantId, query, tenant.userId);
+    async findAll(@Tenant() tenant: TenantContext, @Query() query: ListProductDemandsQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_PRODUCT_CATALOG],
+        });
+        return this.service.findAll(tenant.tenantId, { ...query, storeId }, tenant.userId);
     }
 
     @Get(':id')

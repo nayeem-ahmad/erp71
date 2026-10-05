@@ -1,15 +1,16 @@
 import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, UseInterceptors, Delete } from '@nestjs/common';
-import { PaginationDto } from '../common/pagination.dto';
 import { SalesQuotationsService } from './sales-quotations.service';
 import {
     CreateQuotationDto,
     UpdateQuotationDto,
     UpdateQuotationStatusDto,
+    ListQuotationsQueryDto,
     QUOTATION_DOC_KINDS,
 } from './sales-quotations.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
@@ -18,7 +19,10 @@ import { QUOTATION_WRITE, SALES_READ } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class SalesQuotationsController {
-    constructor(private readonly quotationsService: SalesQuotationsService) {}
+    constructor(
+        private readonly quotationsService: SalesQuotationsService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...QUOTATION_WRITE)
     @Post()
@@ -30,17 +34,17 @@ export class SalesQuotationsController {
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
-        @Query() query: PaginationDto,
-        @Query('createdFrom') createdFrom?: string,
-        @Query('createdTo') createdTo?: string,
+        @Query() query: ListQuotationsQueryDto,
+    ) {
         // Allow-listed rather than passed straight through: `doc_kind` reaches a
         // Prisma `where`, and an unchecked query param there is a filter the
         // caller gets to write.
-        @Query('docKind') docKind?: string,
-    ) {
+        const docKind = query.docKind;
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
         return this.quotationsService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
-            createdFrom,
-            createdTo,
+            createdFrom: query.createdFrom,
+            createdTo: query.createdTo,
+            storeId,
             docKind: QUOTATION_DOC_KINDS.includes(docKind as never) ? docKind : undefined,
         });
     }

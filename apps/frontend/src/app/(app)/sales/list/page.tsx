@@ -13,7 +13,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { PageShell, Input, Select } from '@/components/ui';
+import { BranchFilter, PageShell, Input, Select } from '@/components/ui';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { useServerList } from '@/hooks/useServerList';
 import { toast } from '@/lib/toast';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
@@ -55,6 +56,7 @@ const columnHelper = createColumnHelper<Sale>();
 
 export default function SalesPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Sale | null>(null);
 
@@ -103,21 +105,27 @@ export default function SalesPage() {
     const {
         items: sales,
         loading,
+        error: listError,
         serverPagination,
         reload,
         setItems: setSales,
     } = useServerList<Sale>({
         tableId: 'sales',
         initialSort: { id: 'created_at', desc: true },
-        deps: [debouncedSearch, statusFilter, createdRange],
+        // The branch filter is a filter like the rest: a change is page 1 of a
+        // fresh query, and the export walks the same filtered query.
+        deps: [debouncedSearch, statusFilter, createdRange, branch.apiStoreId],
+        enabled: branch.ready,
         fetch: (params) =>
             api.getSalesList({
                 ...params,
                 search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
                 ...applyCreatedRangeQuery(createdRange),
+                storeId: branch.apiStoreId,
             }),
     });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
     const handleDelete = useCallback(async (sale: Sale) => {
         if (!window.confirm(t.shared.confirm.deleteSale)) return;
@@ -360,6 +368,7 @@ export default function SalesPage() {
                     )}
                     actions={
                         <>
+                            <BranchFilter scope={branch} />
                             <button
                                 type="button"
                                 onClick={() => setPrintSettingsOpen(true)}

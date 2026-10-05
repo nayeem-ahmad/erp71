@@ -241,4 +241,33 @@ describe('AccountingService — dashboard overview', () => {
             amount: 12_000,
         });
     });
+
+    it("narrows every voucher figure to the branch's own vouchers, leaving company-level ones out", async () => {
+        db.voucherDetail.groupBy.mockResolvedValue([]);
+
+        await service.getAccountingDashboardOverview('tenant-1', { storeId: 'store-1' });
+
+        for (const call of db.voucherDetail.groupBy.mock.calls) expect(call[0].where.voucher.store_id).toBe('store-1');
+        for (const call of db.voucherDetail.findMany.mock.calls) expect(call[0].where.voucher.store_id).toBe('store-1');
+        expect(db.voucher.findMany.mock.calls[0][0].where.store_id).toBe('store-1');
+    });
+
+    it('reads every voucher, company-level included, for the whole tenant', async () => {
+        db.voucherDetail.groupBy.mockResolvedValue([]);
+
+        await service.getAccountingDashboardOverview('tenant-1', {});
+
+        expect(db.voucherDetail.groupBy.mock.calls[0][0].where.voucher.store_id).toBeUndefined();
+    });
+
+    it("lists only a branch's own vouchers when one is resolved (the voucher list shares the scope rule)", async () => {
+        await service.findVouchers('tenant-1', { storeId: 'store-1', timezone: 'Asia/Dhaka' });
+        expect(db.voucher.findMany.mock.calls[0][0].where).toEqual(
+            expect.objectContaining({ tenant_id: 'tenant-1', store_id: 'store-1' }),
+        );
+
+        db.voucher.findMany.mockClear();
+        await service.findVouchers('tenant-1', { timezone: 'Asia/Dhaka' });
+        expect(db.voucher.findMany.mock.calls[0][0].where.store_id).toBeUndefined();
+    });
 });

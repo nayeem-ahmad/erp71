@@ -18,7 +18,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 type OrdersTab = 'sales' | 'online';
 
@@ -55,6 +56,7 @@ const columnHelper = createColumnHelper<SalesOrder>();
 
 export default function OrdersPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const printHeader = usePrintHeader('SALES_ORDER');
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -75,17 +77,18 @@ export default function OrdersPage() {
     }, [router, searchParams]);
 
     useEffect(() => {
-        if (activeTab === 'sales') {
+        if (activeTab === 'sales' && branch.ready) {
             loadOrders();
         }
-    }, [activeTab, createdRange]);
+    }, [activeTab, createdRange, branch.ready, branch.apiStoreId]);
 
     const loadOrders = async () => {
         setLoading(true);
         try {
-            const data = await api.getOrders(applyCreatedRangeQuery(createdRange));
+            const data = await api.getOrders({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setOrders(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load orders', error);
         } finally {
             setLoading(false);
@@ -276,14 +279,19 @@ export default function OrdersPage() {
                         'sales',
                     )}
                     actions={
+                        // The online tab is the storefront's queue, which the
+                        // branch filter does not narrow.
                         activeTab === 'sales' ? (
-                            <Link
-                                href={routes.sales.orderNew}
-                                className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
-                            >
-                                <Plus className="w-4 h-4" />
-                                {t.orders.newOrder}
-                            </Link>
+                            <>
+                                <BranchFilter scope={branch} />
+                                <Link
+                                    href={routes.sales.orderNew}
+                                    className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    {t.orders.newOrder}
+                                </Link>
+                            </>
                         ) : null
                     }
                 />

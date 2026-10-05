@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import InventoryDashboard from './InventoryDashboard';
 import { api } from '@/lib/api';
+import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('@/lib/localization/messages/en');
@@ -19,6 +20,8 @@ jest.mock('@/lib/api', () => ({
         getInventoryDashboardTrends: jest.fn(),
     },
 }));
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => ({
     __esModule: true,
@@ -63,6 +66,7 @@ const identity = { greeting: 'Good morning 👋', tenantName: 'Shelf Co', renewa
 describe('InventoryDashboard', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         (api.getInventoryDashboardOverview as jest.Mock).mockResolvedValue(overview());
         (api.getInventoryDashboardTrends as jest.Mock).mockResolvedValue({ points: [] });
     });

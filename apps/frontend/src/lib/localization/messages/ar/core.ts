@@ -257,6 +257,9 @@ export const coreMessages = {
     dashboardLayout: {
         defaultPageTitle: 'لوحة المعلومات',
         branchLabel: 'الفرع',
+        branchFilterAll: 'كل الفروع',
+        branchFilterLocked: 'لديك صلاحية الوصول إلى هذا الفرع فقط',
+        branchFilterForbidden: 'ليست لديك صلاحية لعرض ذلك الفرع. يتم عرض فرعك بدلاً منه.',
         headerMoreMenuAria: 'خيارات إضافية',
         userFallbackRole: 'موظف',
         onboardingMessage: 'مرحبًا! ابدأ بإضافة المنتجات وإتمام أول عملية بيع.',

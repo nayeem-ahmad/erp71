@@ -41,6 +41,7 @@ export class ProductDemandsService {
                 tenant_id: tenantId,
                 ...(query.status ? { status: query.status } : {}),
                 ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
+                ...(query.storeId ? { warehouse: { store_id: query.storeId } } : {}),
                 ...(query.priority ? { priority: query.priority } : {}),
                 ...(query.productId ? { items: { some: { product_id: query.productId } } } : {}),
                 // `mine` without a caller would silently widen to everyone's, so

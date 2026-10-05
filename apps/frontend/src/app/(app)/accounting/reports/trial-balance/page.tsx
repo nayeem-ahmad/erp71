@@ -21,13 +21,13 @@ import { printTrialBalanceReport, reportContextLines } from '@/lib/statement-pri
 import {
     getDefaultHideZero,
     getDefaultReportLevel,
-    getDefaultReportScope,
+    getDefaultCompare,
     type ReportLevelMode,
-    type ReportScopeMode,
-    useReportStores,
+    statementScopeParams,
     useApprovedOnly,
 } from '@/lib/accounting-report-scope';
-import { getWorkspaceItem } from '@/lib/session-store';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 function defaultToday() {
     return new Date().toISOString().slice(0, 10);
@@ -53,21 +53,6 @@ interface TBData {
     columns?: Array<{ key: string; label: string; type?: string }>;
 }
 
-function buildScopeParams(
-    scope: ReportScopeMode,
-    storeId: string,
-    selectedStoreIds: string[],
-    includeCompanyBucket: boolean,
-) {
-    if (scope === 'branch') {
-        return { scope, storeId };
-    }
-    if (scope === 'compare') {
-        return { scope, storeIds: selectedStoreIds, includeCompanyBucket };
-    }
-    return { scope: 'company' as const };
-}
-
 const thClass = `text-end px-3 py-2 ${compactDensity.formLabel}`;
 const thLeftClass = `text-start px-3 py-2 ${compactDensity.formLabel}`;
 
@@ -75,12 +60,15 @@ export default function TrialBalancePage() {
     const { t, locale } = useI18n();
     const { businessName } = useBranding();
     const printHeader = usePrintHeader('LIST_REPORT');
-    const { stores, canConsolidate, loading: storesLoading } = useReportStores();
+    // Which branch, or the whole company, is the page's branch filter;
+    // "Compare branches" (consolidated viewers only) overrides it.
+    const branch = useBranchScope();
+    const stores = branch.branches;
+    const canConsolidate = branch.canSeeAll;
     const { approvedOnly, setApprovedOnly, approvalEnabled, ready: approvalReady } = useApprovedOnly();
     const [data, setData] = useState<TBData | null>(null);
-    const [scope, setScope] = useState<ReportScopeMode>('branch');
+    const [compare, setCompare] = useState(false);
     const [level, setLevel] = useState<ReportLevelMode>('account');
-    const [storeId, setStoreId] = useState('');
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
     const [includeCompanyBucket, setIncludeCompanyBucket] = useState(false);
     const [hideZero, setHideZero] = useState(false);
@@ -89,23 +77,26 @@ export default function TrialBalancePage() {
     const [error, setError] = useState<string | null>(null);
     const [initialized, setInitialized] = useState(false);
 
+    const scopeParams = statementScopeParams({
+        compare,
+        branchValue: branch.value,
+        selectedStoreIds,
+        includeCompanyBucket,
+    });
+    const scope = scopeParams.scope;
+    const storeId = scopeParams.storeId ?? '';
+
     useEffect(() => {
-        if (storesLoading || stores.length === 0) {
+        if (!branch.ready || stores.length === 0) {
             return;
         }
 
-        const savedStoreId = getWorkspaceItem('store_id');
-        const resolvedStoreId = stores.some((store) => store.id === savedStoreId)
-            ? (savedStoreId as string)
-            : stores[0].id;
-
-        setStoreId(resolvedStoreId);
         setSelectedStoreIds(stores.map((store) => store.id));
-        setScope(getDefaultReportScope(stores.length, canConsolidate));
+        setCompare(getDefaultCompare(canConsolidate));
         setLevel(getDefaultReportLevel());
         setHideZero(getDefaultHideZero());
         setInitialized(true);
-    }, [stores, storesLoading, canConsolidate]);
+    }, [branch.ready, stores, canConsolidate]);
 
     const load = useCallback(async () => {
         // approvalReady gates the first fetch so the report is never generated
@@ -121,15 +112,17 @@ export default function TrialBalancePage() {
                 approvedOnly,
                 asOfDate: asOfDate || undefined,
                 level,
-                ...buildScopeParams(scope, storeId, selectedStoreIds, includeCompanyBucket),
+                ...statementScopeParams({ compare, branchValue: branch.value, selectedStoreIds, includeCompanyBucket }),
             });
             setData(result);
         } catch (err: any) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             setError(err?.message ?? t.accounting.reports.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [asOfDate, scope, level, storeId, selectedStoreIds, includeCompanyBucket, initialized, approvalReady, approvedOnly, t.accounting.reports.loadFailed]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [asOfDate, compare, branch.value, level, selectedStoreIds, includeCompanyBucket, initialized, approvalReady, approvedOnly, t.accounting.reports.loadFailed]);
 
     useEffect(() => {
         if (initialized && approvalReady) {
@@ -224,6 +217,7 @@ export default function TrialBalancePage() {
                     t.accounting.reports.trialBalance.title,
                     'accounting',
                 )}
+                actions={compare ? null : <BranchFilter scope={branch} />}
             />
             <AccountingToolbar
                 actions={(
@@ -235,10 +229,8 @@ export default function TrialBalancePage() {
                 )}
             >
                 <ReportScopeBar
-                    scope={scope}
-                    onScopeChange={setScope}
-                    storeId={storeId}
-                    onStoreIdChange={setStoreId}
+                    compare={compare}
+                    onCompareChange={setCompare}
                     selectedStoreIds={selectedStoreIds}
                     onSelectedStoreIdsChange={setSelectedStoreIds}
                     includeCompanyBucket={includeCompanyBucket}

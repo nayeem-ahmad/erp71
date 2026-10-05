@@ -2,27 +2,34 @@
 
 import { compactDensity } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
-import type { ReportLevelMode, ReportScopeMode } from '@/lib/accounting-report-scope';
+import type { ReportLevelMode } from '@/lib/accounting-report-scope';
 import { ApprovedOnlyToggle } from '@/components/accounting/ApprovedOnlyToggle';
 import {
+    persistCompare,
     persistHideZero,
     persistReportLevel,
-    persistReportScope,
     REPORT_LEVEL_MODES,
 } from '@/lib/accounting-report-scope';
 
 export type ReportStore = { id: string; name: string };
 
+/**
+ * The accounting statements' (P&L, balance sheet, trial balance) controls below
+ * the header. Which branch — or the whole company — is the page's
+ * `BranchFilter`; this bar only adds "Compare branches", which, when ticked,
+ * overrides the filter with a side-by-side of the branches picked here.
+ */
 export type ReportScopeBarProps = {
-    scope: ReportScopeMode;
-    onScopeChange: (scope: ReportScopeMode) => void;
-    storeId: string;
-    onStoreIdChange: (storeId: string) => void;
+    /** Side-by-side branches instead of the filter's one branch (or company). */
+    compare: boolean;
+    onCompareChange: (compare: boolean) => void;
     selectedStoreIds: string[];
     onSelectedStoreIdsChange: (storeIds: string[]) => void;
     includeCompanyBucket: boolean;
     onIncludeCompanyBucketChange: (value: boolean) => void;
+    /** The branches offered for comparison. */
     stores: ReportStore[];
+    /** Only consolidated viewers may compare. */
     canConsolidate: boolean;
     dateMode: 'range' | 'asOf';
     from: string;
@@ -47,10 +54,8 @@ export type ReportScopeBarProps = {
 };
 
 export function ReportScopeBar({
-    scope,
-    onScopeChange,
-    storeId,
-    onStoreIdChange,
+    compare,
+    onCompareChange,
     selectedStoreIds,
     onSelectedStoreIdsChange,
     includeCompanyBucket,
@@ -76,9 +81,9 @@ export function ReportScopeBar({
     const scopeLabels = t.accounting.reports.reportScope;
     const levelLabels = t.accounting.reports.reportLevel;
 
-    const handleScopeChange = (nextScope: ReportScopeMode) => {
-        persistReportScope(nextScope);
-        onScopeChange(nextScope);
+    const handleCompareChange = (next: boolean) => {
+        persistCompare(next);
+        onCompareChange(next);
     };
 
     const handleLevelChange = (nextLevel: ReportLevelMode) => {
@@ -105,43 +110,17 @@ export function ReportScopeBar({
     return (
         <div className={`${compactDensity.filterBar} flex-col items-stretch gap-3`}>
             <div className="flex flex-wrap items-center gap-3">
-                <span className={compactDensity.formLabel}>{scopeLabels.view}</span>
-                <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={scopeLabels.view}>
-                    <label className="inline-flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                {canConsolidate ? (
+                    <label className="inline-flex min-h-touch items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
                         <input
-                            type="radio"
-                            name="report-scope"
-                            checked={scope === 'branch'}
-                            onChange={() => handleScopeChange('branch')}
+                            type="checkbox"
+                            checked={compare}
+                            onChange={(event) => handleCompareChange(event.target.checked)}
                             className="text-blue-600"
                         />
-                        {scopeLabels.thisBranch}
+                        {scopeLabels.compareBranches}
                     </label>
-                    {canConsolidate ? (
-                        <>
-                            <label className="inline-flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="report-scope"
-                                    checked={scope === 'company'}
-                                    onChange={() => handleScopeChange('company')}
-                                    className="text-blue-600"
-                                />
-                                {scopeLabels.allBranches}
-                            </label>
-                            <label className="inline-flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="report-scope"
-                                    checked={scope === 'compare'}
-                                    onChange={() => handleScopeChange('compare')}
-                                    className="text-blue-600"
-                                />
-                                {scopeLabels.compareBranches}
-                            </label>
-                        </>
-                    ) : null}
-                </div>
+                ) : null}
 
                 {level && onLevelChange ? (
                     <div className="flex flex-wrap items-center gap-3 md:ms-auto">
@@ -189,25 +168,7 @@ export function ReportScopeBar({
                 ) : null}
             </div>
 
-            {scope === 'branch' ? (
-                <div className="flex flex-col gap-1 min-w-[180px]">
-                    <span className={compactDensity.formLabel}>{scopeLabels.branch}</span>
-                    <select
-                        value={storeId}
-                        onChange={(event) => onStoreIdChange(event.target.value)}
-                        className={compactDensity.formField}
-                        aria-label={scopeLabels.branch}
-                    >
-                        {stores.map((store) => (
-                            <option key={store.id} value={store.id}>
-                                {store.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-            ) : null}
-
-            {scope === 'compare' ? (
+            {compare && canConsolidate ? (
                 <div className="space-y-2">
                     <span className={compactDensity.formLabel}>{scopeLabels.selectBranches}</span>
                     <div className="flex flex-wrap gap-2">
@@ -272,7 +233,7 @@ export function ReportScopeBar({
                 <button
                     type="button"
                     onClick={onGenerate}
-                    disabled={generating || (scope === 'compare' && selectedStoreIds.length === 0)}
+                    disabled={generating || (compare && selectedStoreIds.length === 0)}
                     className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-60`}
                 >
                     {generating ? t.accountingShared.loading : scopeLabels.generate}

@@ -6,6 +6,7 @@ import { CashTransactionDto } from './dto/cash-transaction.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
@@ -14,7 +15,21 @@ import { POS_STAFF } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class CashierSessionsController {
-  constructor(private readonly cashierSessionsService: CashierSessionsService) {}
+  constructor(
+    private readonly cashierSessionsService: CashierSessionsService,
+    private readonly branchScope: BranchScopeService,
+  ) {}
+
+  /**
+   * A till belongs to one branch. A path or body store id must be one the
+   * caller may use there — before this, any branch of the tenant could be
+   * named and read (or opened against).
+   */
+  private branch(tenant: TenantContext, storeId: string | undefined): Promise<string> {
+    return this.branchScope
+      .resolveStoreId(tenant, storeId, { permissions: POS_STAFF, allowAll: false })
+      .then((resolved) => resolved as string);
+  }
 
   @RequireAnyStorePermission(...POS_STAFF)
   @Post('open')
@@ -22,7 +37,8 @@ export class CashierSessionsController {
     @Tenant() tenant: TenantContext,
     @Body() dto: OpenSessionDto,
   ) {
-    return this.cashierSessionsService.openSession(tenant.tenantId, tenant.userId, dto);
+    const storeId = await this.branch(tenant, dto.storeId);
+    return this.cashierSessionsService.openSession(tenant.tenantId, tenant.userId, { ...dto, storeId });
   }
 
   @RequireAnyStorePermission(...POS_STAFF)
@@ -49,7 +65,7 @@ export class CashierSessionsController {
     @Tenant() tenant: TenantContext,
     @Param('storeId') storeId: string,
   ) {
-    return this.cashierSessionsService.getSessionsByStore(tenant.tenantId, storeId);
+    return this.cashierSessionsService.getSessionsByStore(tenant.tenantId, await this.branch(tenant, storeId));
   }
 
   /**
@@ -62,7 +78,7 @@ export class CashierSessionsController {
     @Tenant() tenant: TenantContext,
     @Param('storeId') storeId: string,
   ) {
-    return this.cashierSessionsService.getOpenSessionsByStore(tenant.tenantId, storeId);
+    return this.cashierSessionsService.getOpenSessionsByStore(tenant.tenantId, await this.branch(tenant, storeId));
   }
 
   @RequireAnyStorePermission(...POS_STAFF)

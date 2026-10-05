@@ -3,6 +3,9 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import PurchasesPage from './page';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -55,6 +58,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getPurchases.mockResolvedValue([
             {
@@ -77,6 +81,40 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
             expect(screen.getByText('PUR-00001')).toBeInTheDocument();
             expect(screen.getByText('Fresh Farms')).toBeInTheDocument();
         });
+    });
+
+    it('lists the header branch\'s purchases, and re-asks for the branch picked', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<PurchasesPage />);
+        await waitFor(() =>
+            expect(api.getPurchases).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+        expect(api.getPurchases).toHaveBeenCalledTimes(1);
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+        await waitFor(() =>
+            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })),
+        );
+    });
+
+    it('goes back to the header branch when the server refuses the chosen one', async () => {
+        const { api } = require('@/lib/api');
+        const rows = await api.getPurchases();
+        api.getPurchases.mockClear();
+        api.getPurchases.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+            if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
+            return rows;
+        });
+        renderWithQueryClient(<PurchasesPage />);
+        await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
+        await waitFor(() =>
+            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
     });
 
     it('sends Record Purchase to the entry page', async () => {

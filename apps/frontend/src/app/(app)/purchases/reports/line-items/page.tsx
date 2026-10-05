@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { ScrollText } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
-import { Alert, Button, CompactStat, Field, Input, PageShell, Select } from '@/components/ui';
+import { Alert, BranchFilter, Button, CompactStat, Field, Input, PageShell } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import SearchFilterPicker from '@/components/reports/SearchFilterPicker';
 import { searchProductOptions, searchSupplierOptions } from '@/components/reports/filter-searches';
@@ -15,6 +15,7 @@ import { api, type Paginated, type PurchaseLineItemRow, type PurchaseLineItemsRe
 import { formatBDT, formatDate, formatNumber } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { handleBranchForbidden } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
 
 type PurchaseLinePage = Paginated<PurchaseLineItemRow> & PurchaseLineItemsReport;
@@ -31,12 +32,13 @@ function PurchaseLineItemsContent() {
     const copy = t.purchaseReports.lineItems;
     const fieldId = useId();
     const filters = useLineItemFilters('supplierId');
-    const { nameFromResponse } = filters;
+    const { nameFromResponse, branch } = filters;
 
     const { items, response, loading, error, serverPagination } = useServerList<PurchaseLineItemRow, PurchaseLinePage>({
         tableId: 'purchase-line-items',
         initialSort: { id: 'date', desc: true },
         deps: filters.deps,
+        enabled: branch.ready,
         fetch: async (params) => {
             const report = await api.getPurchaseLineItems({
                 ...filters.query,
@@ -52,6 +54,12 @@ function PurchaseLineItemsContent() {
     useEffect(() => {
         if (response) nameFromResponse({ party: response.filters.supplier, product: response.filters.product });
     }, [response, nameFromResponse]);
+
+    // A branch the server refused: say so and go back to the header branch.
+    useEffect(() => {
+        if (error) handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [error]);
 
     const summary = response?.summary;
 
@@ -194,6 +202,7 @@ function PurchaseLineItemsContent() {
                     copy.title,
                     'purchases',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="space-y-3 rounded-lg border border-gray-100 bg-white p-3 md:p-4">
@@ -227,23 +236,6 @@ function PurchaseLineItemsContent() {
                 </div>
 
                 <div className="flex flex-wrap items-end gap-3">
-                    {/* One branch has nothing to choose between. */}
-                    {filters.stores.length > 1 && (
-                        <Field label={copy.branchLabel} htmlFor={`${fieldId}-branch`} className="min-w-[160px] flex-1">
-                            <Select
-                                id={`${fieldId}-branch`}
-                                value={filters.storeId}
-                                onChange={(e) => filters.setStoreId(e.target.value)}
-                            >
-                                <option value="">{copy.allBranches}</option>
-                                {filters.stores.map((store) => (
-                                    <option key={store.id} value={store.id}>
-                                        {store.name}
-                                    </option>
-                                ))}
-                            </Select>
-                        </Field>
-                    )}
                     <Field label={t.accountingShared.from} htmlFor={`${fieldId}-from`} className="min-w-[140px]">
                         <Input
                             id={`${fieldId}-from`}

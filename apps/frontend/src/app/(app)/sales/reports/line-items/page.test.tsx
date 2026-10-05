@@ -1,8 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { defaultLineItemWindow } from '@/components/reports/useLineItemFilters';
 import SalesLineItemsPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
 
 const searchParams = new Map<string, string>();
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
@@ -29,7 +32,6 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getSalesLineItems: jest.fn(),
-        getStores: jest.fn(),
         searchCustomers: jest.fn(),
         searchProductsByQuantity: jest.fn(),
     },
@@ -85,9 +87,9 @@ function lastQuery() {
 describe('SalesLineItemsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         searchParams.clear();
         api().getSalesLineItems.mockResolvedValue(REPORT);
-        api().getStores.mockResolvedValue([{ id: 'store-1', name: 'Main' }]);
         api().searchCustomers.mockResolvedValue([{ id: 'cust-1', name: 'Rahim Uddin', phone: '01711000001' }]);
         api().searchProductsByQuantity.mockResolvedValue([{ id: 'prod-1', name: 'Miniket Rice 5kg', sku: 'RICE-5' }]);
     });
@@ -177,19 +179,18 @@ describe('SalesLineItemsPage', () => {
         expect(screen.getByText('01700000009')).toBeInTheDocument();
     });
 
-    it('offers a branch filter only when there is more than one branch', async () => {
-        const { unmount } = render(<SalesLineItemsPage />);
-        await waitFor(() => expect(api().getStores).toHaveBeenCalled());
-        expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
-        unmount();
-
-        api().getStores.mockResolvedValue([
-            { id: 'store-1', name: 'Main' },
-            { id: 'store-2', name: 'Banani' },
-        ]);
+    it('hides the branch filter in a one-branch shop', async () => {
+        mockBranchScope({ hidden: true, branches: [{ id: 'store-1', name: 'Main' }] });
         render(<SalesLineItemsPage />);
+        await waitFor(() => expect(api().getSalesLineItems).toHaveBeenCalled());
+        expect(screen.queryByRole('combobox', { name: 'Branch' })).not.toBeInTheDocument();
+    });
 
-        fireEvent.change(await screen.findByLabelText('Branch'), { target: { value: 'store-2' } });
+    it('opens on the header branch and follows the branch filter', async () => {
+        render(<SalesLineItemsPage />);
+        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ storeId: 'store-1' })));
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
 
         await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ storeId: 'store-2', page: 1 })));
     });

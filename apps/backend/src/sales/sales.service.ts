@@ -990,6 +990,8 @@ export class SalesService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** One branch (already resolved by the controller); omitted, every branch. */
+            storeId?: string;
             /** IANA zone the calendar-day bounds above are measured in. */
             timezone: string;
         },
@@ -1005,6 +1007,7 @@ export class SalesService {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const where: any = {
             tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
             ...(created ? { created_at: created } : {}),
             ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
             // Accepts one status or a comma-separated set, so a caller can ask

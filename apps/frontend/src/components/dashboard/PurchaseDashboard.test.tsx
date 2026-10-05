@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import PurchaseDashboard from './PurchaseDashboard';
 import { api } from '@/lib/api';
+import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('@/lib/localization/messages/en');
@@ -19,6 +20,8 @@ jest.mock('@/lib/api', () => ({
         getPurchaseDashboardTrends: jest.fn(),
     },
 }));
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => ({
     __esModule: true,
@@ -53,6 +56,7 @@ const identity = { greeting: 'Good morning 👋', tenantName: 'Buyer Co', renewa
 describe('PurchaseDashboard', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         (api.getPurchaseDashboardOverview as jest.Mock).mockResolvedValue(overview());
         (api.getPurchaseDashboardTrends as jest.Mock).mockResolvedValue({ points: [] });
     });

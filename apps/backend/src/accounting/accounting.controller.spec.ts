@@ -11,6 +11,7 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { StorePermission } from '@erp71/shared-types';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { AuthCacheService } from '../database/auth-cache.service';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { DatabaseService } from '../database/database.service';
 import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
@@ -205,6 +206,7 @@ const membershipRows = (role: string | null, tenantId = 'tenant-1', userId = 'us
                 },
                 // Off, so each case is decided by the rows it mocks.
                 { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
+                BranchScopeService,
                 // The real TenantInterceptor is declared on the controller, so
                 // Nest resolves its dependencies even though it is overridden.
                 {

@@ -257,6 +257,9 @@ export const coreMessages = {
         dashboardLayout: {
             defaultPageTitle: "ড্যাশবোর্ড",
             branchLabel: "শাখা",
+            branchFilterAll: 'সব শাখা',
+            branchFilterLocked: 'আপনার শুধু এই শাখায় প্রবেশাধিকার আছে',
+            branchFilterForbidden: 'ওই শাখার তথ্য দেখার অনুমতি আপনার নেই। আপনার শাখা দেখানো হচ্ছে।',
             headerMoreMenuAria: "আরও অপশন",
             userFallbackRole: "স্টাফ",
             onboardingMessage: "স্বাগতম! পণ্য যোগ করে এবং প্রথম বিক্রয় করে শুরু করুন।",

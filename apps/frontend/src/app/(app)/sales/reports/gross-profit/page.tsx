@@ -11,7 +11,8 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 import { CoverageNotice, MarginCell, ProfitCell, StatTile, type Coverage } from '@/components/gross-profit';
 
 interface Row {
@@ -47,6 +48,7 @@ function defaultTo() {
 
 export default function GrossProfitByProductPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const gp = t.salesReports.grossProfit;
     const [rows, setRows] = useState<Row[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
@@ -55,16 +57,18 @@ export default function GrossProfitByProductPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getGrossProfitByProduct({ from: fromDate, to: toDate });
+            const data = await api.getGrossProfitByProduct({ storeId: branch.apiStoreId, from: fromDate, to: toDate });
             setSummary(data.summary);
             setRows(data.rows);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load gross profit by product', error);
         } finally {
             setLoading(false);
@@ -111,6 +115,7 @@ export default function GrossProfitByProductPage() {
                     gp.byProductTitle,
                     'sales',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="flex flex-wrap gap-2 text-xs">

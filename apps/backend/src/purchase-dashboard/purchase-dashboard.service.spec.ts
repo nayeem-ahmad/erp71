@@ -164,4 +164,24 @@ describe('PurchaseDashboardService', () => {
 
         expect(result.points.find((point) => point.date === '2026-08-02')?.spend).toBe(750);
     });
+
+    it('narrows purchases, returns, orders and quotations to the resolved branch, but not supplier balances', async () => {
+        await service.getOverview('tenant-1', { storeId: 'store-1' }, 'Asia/Dhaka');
+        await service.getTrends('tenant-1', { storeId: 'store-1' }, 'Asia/Dhaka');
+
+        for (const mock of [
+            db.purchase.aggregate,
+            db.purchase.count,
+            db.purchase.groupBy,
+            db.purchase.findMany,
+            db.purchaseReturn.aggregate,
+            db.purchaseOrder.count,
+            db.purchaseQuotation.count,
+        ]) {
+            expect(mock).toHaveBeenCalled();
+            for (const call of mock.mock.calls) expect(call[0].where.store_id).toBe('store-1');
+        }
+        expect(db.purchaseItem.groupBy.mock.calls[0][0].where.purchase.store_id).toBe('store-1');
+        expect(db.supplier.aggregate.mock.calls[0][0].where.store_id).toBeUndefined();
+    });
 });

@@ -7,8 +7,9 @@ import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { resolveLocaleForFormatting } from '@/lib/format';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
 
 interface MonthlyRow {
     customer: { id: string | null; name: string; phone: string | null };
@@ -41,6 +42,7 @@ function defaultTo() {
 
 export default function MonthlySalesPage() {
     const { t, locale, fmt } = useI18n();
+    const branch = useBranchScope();
     const [data, setData] = useState<MonthlyData | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
@@ -48,19 +50,22 @@ export default function MonthlySalesPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const load = async () => {
         setLoading(true);
         setError(null);
         try {
             const result = await api.getMonthlySalesByCustomer({
+                storeId: branch.apiStoreId,
                 from: fromDate || undefined,
                 to: toDate || undefined,
             });
             setData(result);
         } catch (err: any) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             setError(err?.message ?? t.shared.errors.loadReport);
         } finally {
             setLoading(false);
@@ -79,6 +84,7 @@ export default function MonthlySalesPage() {
                         t.salesReports.monthly.title,
                         'sales',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">

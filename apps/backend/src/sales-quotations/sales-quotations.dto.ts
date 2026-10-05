@@ -11,6 +11,7 @@ import {
     Length,
     ValidateNested,
 } from 'class-validator';
+import { BranchListQueryDto } from '../common/branch-list-query.dto';
 import { Type } from 'class-transformer';
 import { InlineCustomerDto } from '../customers/customer.dto';
 
@@ -160,4 +161,12 @@ export class UpdateQuotationDto extends ProformaTermsDto {
 export class UpdateQuotationStatusDto {
     @IsString()
     status: string;
+}
+
+/** The quotation list: a branch-aware list narrowed by document kind. */
+export class ListQuotationsQueryDto extends BranchListQueryDto {
+    /** Allow-listed again by the controller before it reaches a `where`. */
+    @IsOptional()
+    @IsString()
+    docKind?: string;
 }

@@ -3,6 +3,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PurchaseReturnsPage from './page';
 
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/api', () => ({
     api: {
         getPurchaseReturns: jest.fn(),

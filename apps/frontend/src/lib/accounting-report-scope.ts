@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { fetchMe } from '@/hooks/use-me';
-import { hasPermission } from '@/lib/permissions';
 import { getWorkspaceItem } from './session-store';
+import { ALL_BRANCHES, canViewConsolidatedReports } from './branch-scope';
 
 export type ReportScopeMode = 'branch' | 'company' | 'compare';
 
@@ -119,32 +119,51 @@ export function useApprovedOnly() {
     return { approvedOnly, setApprovedOnly, approvalEnabled, ready };
 }
 
-export function canViewConsolidatedReports(role: string | null | undefined, permissions?: string[]) {
-    return role === 'OWNER' || hasPermission(permissions, 'VIEW_CONSOLIDATED_REPORTS');
+// Moved to `branch-scope.ts`, the page-level branch filter's home; kept
+// exported here for the accounting pages that import it from this module.
+export { canViewConsolidatedReports };
+
+/**
+ * Whether the statements open on "Compare branches" — remembered across the
+ * P&L, balance sheet and trial balance. Branch vs company is no longer kept
+ * here: the page's branch filter decides it, starting on the header branch.
+ */
+export function getDefaultCompare(canConsolidate: boolean): boolean {
+    if (!canConsolidate || typeof window === 'undefined') return false;
+    try {
+        return localStorage.getItem(REPORT_SCOPE_KEY) === 'compare';
+    } catch {
+        return false;
+    }
 }
 
-export function getDefaultReportScope(storesCount: number, canConsolidate: boolean): ReportScopeMode {
-    if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem(REPORT_SCOPE_KEY);
-        if (saved === 'branch' || saved === 'company' || saved === 'compare') {
-            if ((saved === 'company' || saved === 'compare') && !canConsolidate) {
-                return 'branch';
-            }
-            return saved;
-        }
+export function persistCompare(compare: boolean) {
+    if (typeof window === 'undefined') return;
+    try {
+        if (compare) localStorage.setItem(REPORT_SCOPE_KEY, 'compare');
+        else localStorage.removeItem(REPORT_SCOPE_KEY);
+    } catch {
+        // Storage blocked (private window): the choice just isn't remembered.
     }
-
-    if (!canConsolidate || storesCount <= 1) {
-        return 'branch';
-    }
-
-    return 'company';
 }
 
-export function persistReportScope(scope: ReportScopeMode) {
-    if (typeof window !== 'undefined') {
-        localStorage.setItem(REPORT_SCOPE_KEY, scope);
+/**
+ * The statement API's scope params: "Compare branches" overrides the filter;
+ * otherwise "All branches" is the company and a branch is that branch.
+ */
+export function statementScopeParams(input: {
+    compare: boolean;
+    branchValue: string;
+    selectedStoreIds: string[];
+    includeCompanyBucket: boolean;
+}): { scope: ReportScopeMode; storeId?: string; storeIds?: string[]; includeCompanyBucket?: boolean } {
+    if (input.compare) {
+        return { scope: 'compare', storeIds: input.selectedStoreIds, includeCompanyBucket: input.includeCompanyBucket };
     }
+    if (input.branchValue === ALL_BRANCHES) {
+        return { scope: 'company' };
+    }
+    return { scope: 'branch', storeId: input.branchValue };
 }
 
 export function useReportStores() {

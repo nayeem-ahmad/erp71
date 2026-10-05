@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterce
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateWarehouseDto,
     CreateInventoryReasonDto,
@@ -21,7 +22,10 @@ import { CATALOG_READ, INVENTORY_REPORT_READ, INVENTORY_WRITE } from '../auth/pe
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class InventoryController {
-    constructor(private readonly service: InventoryService) {}
+    constructor(
+        private readonly service: InventoryService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...CATALOG_READ)
     @Get('warehouses')
@@ -79,7 +83,8 @@ export class InventoryController {
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('ledger')
-    getLedger(@Tenant() tenant: TenantContext, @Query() query: ListStockLedgerQueryDto) {
-        return this.service.getLedger(tenant.tenantId, query);
+    async getLedger(@Tenant() tenant: TenantContext, @Query() query: ListStockLedgerQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: INVENTORY_REPORT_READ });
+        return this.service.getLedger(tenant.tenantId, { ...query, storeId });
     }
 }

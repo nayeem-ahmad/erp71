@@ -2,10 +2,12 @@
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import BranchReportPage from './page';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
-        getStores: jest.fn(),
         getBranchReport: jest.fn(),
     },
 }));
@@ -74,8 +76,8 @@ const mockEmptyReport = {
 describe('BranchReportPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope({ branches: mockStores, headerBranchId: 'store1', value: 'store1' });
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue([]);
         api.getBranchReport.mockResolvedValue(mockEmptyReport);
     });
 
@@ -96,40 +98,67 @@ describe('BranchReportPage', () => {
         });
     });
 
-    it('calls getStores on mount', async () => {
-        const { api } = require('@/lib/api');
+    it('offers one branch at a time, never All branches', async () => {
         render(<BranchReportPage />);
 
-        await waitFor(() => {
-            expect(api.getStores).toHaveBeenCalledTimes(1);
-        });
+        await waitFor(() => expect(screen.getByRole('combobox', { name: 'Branch' })).toBeInTheDocument());
+        expect(screen.queryByRole('option', { name: 'All branches' })).not.toBeInTheDocument();
     });
 
     it('renders store selector with loaded stores', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
 
         await waitFor(() => {
-            expect(screen.getByText('Main Store')).toBeInTheDocument();
-            expect(screen.getByText('North Branch')).toBeInTheDocument();
+            expect(screen.getByRole('option', { name: 'Main Store' })).toBeInTheDocument();
+            expect(screen.getByRole('option', { name: 'North Branch' })).toBeInTheDocument();
         });
     });
 
-    it('auto-selects first store and fetches report on mount', async () => {
+    it('opens on the header branch rather than the first one', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
+        mockBranchScope({ branches: mockStores, headerBranchId: 'store2', value: 'store2' });
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
 
         await waitFor(() => {
             expect(api.getBranchReport).toHaveBeenCalledWith(
-                expect.objectContaining({ storeId: 'store1' }),
+                expect.objectContaining({ storeId: 'store2' }),
             );
         });
+        expect(api.getBranchReport).not.toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store1' }));
+    });
+
+    it('fetches the branch picked in the filter', async () => {
+        const { api } = require('@/lib/api');
+        api.getBranchReport.mockResolvedValue(mockReport);
+
+        render(<BranchReportPage />);
+        await waitFor(() => expect(api.getBranchReport).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store1' })));
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store2' } });
+
+        await waitFor(() =>
+            expect(api.getBranchReport).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store2' })),
+        );
+    });
+
+    it('goes back to the header branch when the server refuses the chosen one', async () => {
+        const { api } = require('@/lib/api');
+        api.getBranchReport.mockImplementation(async ({ storeId }: { storeId: string }) => {
+            if (storeId === 'store2') throw Object.assign(new Error('Forbidden'), { status: 403 });
+            return mockReport;
+        });
+
+        render(<BranchReportPage />);
+        await waitFor(() => expect(api.getBranchReport).toHaveBeenCalled());
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store2' } });
+
+        await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
+        expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
     });
 
     it('renders the Generate button', async () => {
@@ -149,7 +178,6 @@ describe('BranchReportPage', () => {
 
     it('shows KPI cards after loading report data', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -164,7 +192,6 @@ describe('BranchReportPage', () => {
 
     it('displays formatted branch revenue', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -177,7 +204,6 @@ describe('BranchReportPage', () => {
 
     it('shows revenue_share sub-label on Branch Revenue card', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -189,7 +215,6 @@ describe('BranchReportPage', () => {
 
     it('shows Top Products table with product rows', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -203,7 +228,6 @@ describe('BranchReportPage', () => {
 
     it('shows empty state for Top Products when list is empty', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockEmptyReport);
 
         render(<BranchReportPage />);
@@ -215,7 +239,6 @@ describe('BranchReportPage', () => {
 
     it('shows Daily Breakdown table with daily rows', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -229,7 +252,6 @@ describe('BranchReportPage', () => {
 
     it('shows empty state for Daily Breakdown when list is empty', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockEmptyReport);
 
         render(<BranchReportPage />);
@@ -241,7 +263,6 @@ describe('BranchReportPage', () => {
 
     it('shows Branch vs Company Revenue comparison section', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -254,7 +275,6 @@ describe('BranchReportPage', () => {
 
     it('calls getBranchReport with new dates when Generate is clicked', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -271,7 +291,6 @@ describe('BranchReportPage', () => {
 
     it('shows an error message when getBranchReport fails', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockRejectedValue(new Error('Report failed to load'));
 
         render(<BranchReportPage />);
@@ -281,9 +300,8 @@ describe('BranchReportPage', () => {
         });
     });
 
-    it('shows "No stores found" option when stores list is empty', async () => {
-        const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue([]);
+    it('says there is no branch when the member has none', async () => {
+        mockBranchScope({ branches: [], headerBranchId: null, value: '', hidden: true });
 
         render(<BranchReportPage />);
 
@@ -294,7 +312,6 @@ describe('BranchReportPage', () => {
 
     it('disables Generate button while loading', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         // Never-resolving promise keeps loading state active
         api.getBranchReport.mockReturnValue(new Promise(() => {}));
 
@@ -308,7 +325,6 @@ describe('BranchReportPage', () => {
 
     it('shows store name badge in report content area', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);
@@ -322,7 +338,6 @@ describe('BranchReportPage', () => {
 
     it('shows total transactions sub-label on Transactions card', async () => {
         const { api } = require('@/lib/api');
-        api.getStores.mockResolvedValue(mockStores);
         api.getBranchReport.mockResolvedValue(mockReport);
 
         render(<BranchReportPage />);

@@ -8,7 +8,8 @@ import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Input, Checkbox } from '@/components/ui';
+import { BranchFilter, PageShell, Input, Checkbox } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 type DutyReport = {
     totals_by_type: Array<{ cost_type: string; amount_bdt: number }>;
@@ -29,6 +30,7 @@ type DutyReport = {
 
 export default function ImportDutyReportPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.imports.dutyReport;
     const [report, setReport] = useState<DutyReport | null>(null);
     const [loading, setLoading] = useState(true);
@@ -40,16 +42,22 @@ export default function ImportDutyReportPage() {
     const [includeUnpaid, setIncludeUnpaid] = useState(false);
 
     const load = useCallback(() => {
+        if (!branch.ready) return;
         setLoading(true);
         api.getImportDutyReport({
             from: from || undefined,
             to: to || undefined,
             includeUnpaid: includeUnpaid || undefined,
+            storeId: branch.apiStoreId,
         })
             .then(setReport)
-            .catch(() => {})
+            .catch((error) => {
+                handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden);
+            })
             .finally(() => setLoading(false));
-    }, [from, to, includeUnpaid]);
+        // `branch` is a fresh object every render; what it asks for is these two.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [from, to, includeUnpaid, branch.ready, branch.apiStoreId]);
 
     useEffect(load, [load]);
 
@@ -65,6 +73,7 @@ export default function ImportDutyReportPage() {
                     [{ label: t.imports.title, href: routes.purchases.imports.root }],
                     copy.title,
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="flex flex-wrap items-end gap-2">

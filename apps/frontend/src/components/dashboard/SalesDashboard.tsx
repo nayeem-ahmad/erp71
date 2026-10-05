@@ -6,7 +6,9 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { useModuleDashboard } from '@/lib/use-module-dashboard';
+import { useBranchScope } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
+import { BranchFilter } from '@/components/ui';
 import ModuleDashboard, {
     AttentionSection,
     DashboardSection,
@@ -69,6 +71,7 @@ export default function SalesDashboard({
     variant = 'page',
 }: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.dashboardHome;
     const sls = copy.sales;
 
@@ -85,6 +88,7 @@ export default function SalesDashboard({
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
         cacheKey: 'sales',
+        branch,
         fetchOverview: (window) => api.getSalesDashboardOverview(window),
         fetchTrends: (window) => api.getSalesDashboardTrends(window),
         unavailableMessage: sls.overviewUnavailable,
@@ -241,6 +245,7 @@ export default function SalesDashboard({
             subtitle={sls.subtitle}
             range={range}
             onRangeChange={setRange}
+            toolbar={<BranchFilter scope={branch} />}
             error={error}
             refreshing={refreshing}
         >

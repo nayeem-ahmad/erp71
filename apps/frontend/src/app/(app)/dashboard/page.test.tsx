@@ -2,6 +2,9 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import DashboardPage from './page';
 import { api } from '@/lib/api';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => ({
     __esModule: true,
@@ -103,6 +106,7 @@ const ACCOUNTING_OVERVIEW = {
 describe('DashboardPage — Business Monitor v2', () => {
     beforeEach(() => {
         jest.resetAllMocks();
+        mockBranchScope();
         (api.getMe as jest.Mock).mockResolvedValue({
             name: 'Ada',
             tenants: [{ name: 'Northwind Retail' }],
@@ -241,6 +245,37 @@ describe('DashboardPage — Business Monitor v2', () => {
 
         expect(await screen.findByText('No accounting movement')).toBeInTheDocument();
         expect(screen.getByText('Business health')).toBeInTheDocument();
+    });
+
+    it('asks every panel for the branch filter\'s choice, and again when it changes', async () => {
+        renderWithQueryClient(<DashboardPage />);
+
+        const branchCalls = [
+            api.getFinancialKpis,
+            api.getFinancialTrends,
+            api.getSalesByCategory,
+            api.getSalesByProduct,
+            api.getSalesByCustomer,
+            api.getLowStockCount,
+            api.getSalesList,
+        ] as jest.Mock[];
+        // Opens on the header branch.
+        await waitFor(() => {
+            for (const call of branchCalls) {
+                expect(call).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' }));
+            }
+        });
+        // The comparison window as well as the current one.
+        expect((api.getFinancialKpis as jest.Mock).mock.calls.filter(([params]) => params.storeId === 'store-1')).toHaveLength(2);
+
+        fireEvent.change(await screen.findByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => {
+            for (const call of branchCalls) {
+                expect(call).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-2' }));
+            }
+        });
+        expect((api.getSalesList as jest.Mock).mock.calls.filter(([params]) => params.storeId === 'store-2')).toHaveLength(2);
     });
 });
 
