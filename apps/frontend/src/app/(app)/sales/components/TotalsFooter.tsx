@@ -84,11 +84,14 @@ export default function TotalsFooter({
     // than inverting the invoice, so say so instead of silently ignoring it.
     const discountCapped = byAmount && (totals.discountAmount ?? 0) > totals.discount + 0.005;
 
-    // Only for a customer with a balance already. With nothing owed before, the
-    // total due is just what this sale leaves unpaid, and the payment strip
-    // right below says that. Without a paid amount the sale is taken as
-    // settled, which is how the previous due used to be shown on its own.
-    const dues = previousDue != null && Math.abs(previousDue) > 0.005
+    // Only for a customer with a balance already, or one paying beyond this
+    // sale (the excess becomes an advance, which the total due goes negative
+    // to show). With nothing owed before, the total due is otherwise just what
+    // this sale leaves unpaid, and the payment strip right below says that.
+    // Without a paid amount the sale is taken as settled, which is how the
+    // previous due used to be shown on its own.
+    const overpaid = amountPaid !== undefined && amountPaid - totals.total > 0.005;
+    const dues = previousDue != null && (Math.abs(previousDue) > 0.005 || overpaid)
         ? invoiceDues(totals.total, amountPaid ?? totals.total, previousDue)
         : null;
     const oweTone = (value: number) => (value > 0.005 ? 'text-amber-600' : 'text-gray-700');

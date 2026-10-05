@@ -286,6 +286,71 @@ describe('PaymentSection', () => {
         });
     });
 
+    describe('paying more than the total', () => {
+        const cash = (amount: number) => [{ method: 'Cash', label: 'Cash', amount }];
+        const customer = { id: 'cust-1', name: 'Rahim Store', due_balance: 400 };
+
+        it('notes the excess going toward the previous due, without a warning', async () => {
+            render(
+                <PaymentSection payments={cash(1150)} total={850} customer={customer} onPaymentChange={jest.fn()} />,
+            );
+
+            await waitFor(() => expect(screen.getByLabelText('Cash amount')).toBeInTheDocument());
+            expect(screen.getByText(/৳\s?300\.00 goes toward the previous due/)).toBeInTheDocument();
+            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+            expect(screen.getByText(/On account/)).toBeInTheDocument();
+        });
+
+        it('warns, without blocking, when the excess runs past the previous due', async () => {
+            render(
+                <PaymentSection payments={cash(1500)} total={850} customer={customer} onPaymentChange={jest.fn()} />,
+            );
+
+            const alert = await screen.findByRole('alert');
+            expect(alert).toHaveTextContent(/Paid ৳\s?250\.00 more than this sale and the previous due/);
+            expect(alert).toHaveTextContent(/৳\s?400\.00 settles the previous due/);
+            expect(alert).toHaveTextContent(/advance on Rahim Store's account/);
+        });
+
+        it('settles the previous due the server reports, not the customer\'s balance today', async () => {
+            render(
+                <PaymentSection
+                    payments={cash(1000)}
+                    total={850}
+                    customer={customer}
+                    previousDue={0}
+                    onPaymentChange={jest.fn()}
+                />,
+            );
+
+            const alert = await screen.findByRole('alert');
+            expect(alert).toHaveTextContent(/Paid ৳\s?150\.00 more than this sale\. The/);
+        });
+
+        it('calls a walk-in\'s excess change', async () => {
+            render(<PaymentSection payments={cash(1000)} total={850} onPaymentChange={jest.fn()} />);
+
+            const alert = await screen.findByRole('alert');
+            expect(alert).toHaveTextContent(/change to hand back/);
+            expect(screen.getByText(/^Change/)).toBeInTheDocument();
+        });
+
+        it('says nothing where the excess would not be posted', async () => {
+            render(
+                <PaymentSection
+                    payments={cash(1500)}
+                    total={850}
+                    customer={customer}
+                    warnOnOverpayment={false}
+                    onPaymentChange={jest.fn()}
+                />,
+            );
+
+            await waitFor(() => expect(screen.getByLabelText('Cash amount')).toBeInTheDocument());
+            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        });
+    });
+
     it('falls back to generic methods when all defined methods are inactive', async () => {
         const { api } = require('@/lib/api');
         (api.getPaymentMethods as jest.Mock).mockResolvedValueOnce([

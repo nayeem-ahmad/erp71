@@ -30,6 +30,8 @@ export interface PendingSale {
   pointsToRedeem?: number;
   totalAmount: number;
   amountPaid: number;
+  /** The excess over the total was handed back as change — always, on the POS. */
+  returnChange?: boolean;
   items: PendingSaleItem[];
   payments: { paymentMethod: string; amount: number }[];
   createdAt: string;    // ISO timestamp

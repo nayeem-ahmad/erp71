@@ -378,7 +378,10 @@ export default function InvoicePage() {
                                     <span>{t.sales.invoice.amountPaid}</span>
                                     <span>{formatBDT(amountPaid, { locale })}</span>
                                 </div>
-                                {Math.abs(balance) > 0.005 && (
+                                {/* Paid beyond the total is change only on a walk-in
+                                    sale. A customer's excess went on their account,
+                                    which the dues lines below already show. */}
+                                {Math.abs(balance) > 0.005 && !(balance > 0 && sale.previous_due != null) && (
                                     <div className={`flex justify-between font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         <span>{balance >= 0 ? t.sales.invoice.change : t.sales.invoice.balanceDue}</span>
                                         <span>{formatBDT(Math.abs(balance))}</span>

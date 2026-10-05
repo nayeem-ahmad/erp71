@@ -39,6 +39,30 @@ import {
 } from './source-document';
 import { useI18n } from '@/lib/i18n';
 
+/**
+ * What the server did with money paid beyond the total, in a line for the
+ * cashier — the receipt it booked on the customer's account, or the change to
+ * hand back. Null when the sale took no more than its total.
+ */
+function overpaymentOutcome(response: {
+    change_returned?: number;
+    account_payment?: { amount: number; payment_number: string; balance_after: number } | null;
+}): string | null {
+    const receipt = response.account_payment;
+    if (receipt && receipt.amount > 0.005) {
+        const standing = receipt.balance_after < -0.005
+            ? `${formatBDT(Math.abs(receipt.balance_after))} now held as advance`
+            : receipt.balance_after > 0.005
+                ? `${formatBDT(receipt.balance_after)} still due`
+                : 'nothing left due';
+        return `${formatBDT(receipt.amount)} beyond the total received on account (${receipt.payment_number}): ${standing}.`;
+    }
+    if ((response.change_returned ?? 0) > 0.005) {
+        return `Give ${formatBDT(response.change_returned!)} change.`;
+    }
+    return null;
+}
+
 function NewSalePageContent() {
     const { t, locale } = useI18n();
     const {
@@ -314,14 +338,14 @@ function NewSalePageContent() {
             errors.push(t.shared.customerNameRequiredInline);
         }
 
+        // Paying more than the total is allowed: the payment strip says where
+        // the excess goes (the previous due, then an advance, or change for a
+        // walk-in) and the server books it that way.
         const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-        const balance = totals.total - totalPaid;
         const creditDue = creditDueAmount(totals.total, totalPaid);
         const keepDueCheck = canKeepDue(customer, creditDue);
 
-        if (balance < -0.01) {
-            errors.push(`Payment amount exceeds total by ৳${Math.abs(balance).toFixed(2)}`);
-        } else if (creditDue > 0.01 && !keepDueCheck.allowed) {
+        if (creditDue > 0.01 && !keepDueCheck.allowed) {
             errors.push(keepDueCheck.reason ?? `Payment amount is ৳${creditDue.toFixed(2)} short of the total`);
         } else if (creditDue <= 0.01 && payments.length === 0) {
             errors.push('Please add at least one payment method');
@@ -398,6 +422,8 @@ function NewSalePageContent() {
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
             toast.success(`Sale created successfully!\nSale #: ${response.serial_number}`);
+            const overpaidNote = overpaymentOutcome(response);
+            if (overpaidNote) toast.info(overpaidNote, 8000);
             setPrintPrompt({
                 serialNumber: response.serial_number,
                 total: totals.total,

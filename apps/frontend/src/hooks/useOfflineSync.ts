@@ -55,7 +55,11 @@ export function useOfflineSync(): OfflineSyncResult {
               Authorization: `Bearer ${authToken}`,
               'x-tenant-id': tenantId,
             },
-            body: JSON.stringify(salePayload),
+            // Every queued sale was rung on the POS, whose excess over the
+            // total is change handed back. Defaulted here so a sale queued
+            // before the flag existed is not credited to the customer's
+            // account on its way in.
+            body: JSON.stringify({ returnChange: true, ...salePayload }),
           });
 
           if (response.ok) {
