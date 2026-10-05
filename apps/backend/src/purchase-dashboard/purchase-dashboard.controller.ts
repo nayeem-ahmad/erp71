@@ -5,6 +5,7 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { RequiresPlan } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { PurchaseDashboardService } from './purchase-dashboard.service';
 import { PurchaseDashboardQueryDto } from './purchase-dashboard.dto';
 
@@ -21,17 +22,22 @@ import { PURCHASE_READ } from '../auth/permission-sets';
 @UseInterceptors(TenantInterceptor)
 @RequiresPlan('BASIC')
 export class PurchaseDashboardController {
-    constructor(private readonly service: PurchaseDashboardService) {}
+    constructor(
+        private readonly service: PurchaseDashboardService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('overview')
-    getOverview(@Tenant() tenant: TenantContext, @Query() query: PurchaseDashboardQueryDto) {
-        return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
+    async getOverview(@Tenant() tenant: TenantContext, @Query() query: PurchaseDashboardQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: PURCHASE_READ });
+        return this.service.getOverview(tenant.tenantId, { ...query, storeId }, tenant.timezone);
     }
 
     @RequireAnyStorePermission(...PURCHASE_READ)
     @Get('trends')
-    getTrends(@Tenant() tenant: TenantContext, @Query() query: PurchaseDashboardQueryDto) {
-        return this.service.getTrends(tenant.tenantId, query, tenant.timezone);
+    async getTrends(@Tenant() tenant: TenantContext, @Query() query: PurchaseDashboardQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: PURCHASE_READ });
+        return this.service.getTrends(tenant.tenantId, { ...query, storeId }, tenant.timezone);
     }
 }

@@ -209,8 +209,12 @@ export class ProductsService {
      * same bound the cached product lists already carry, and a minute-old
      * reorder figure is worth the round trip it saves.
      */
-    async countLowStock(tenantId: string): Promise<{ count: number }> {
-        const cacheKey = `products:${tenantId}:low-stock-count`;
+    /**
+     * `storeId` counts stock in that branch's warehouses only (a product with
+     * none there counts as zero on hand); omitted, every warehouse.
+     */
+    async countLowStock(tenantId: string, storeId?: string): Promise<{ count: number }> {
+        const cacheKey = storeId ? `products:${tenantId}:low-stock-count:${storeId}` : `products:${tenantId}:low-stock-count`;
         const cached = await this.redis.get<{ count: number }>(cacheKey);
         if (cached) return cached;
 
@@ -220,13 +224,17 @@ export class ProductsService {
         });
         const defaultReorderLevel = settings?.default_reorder_level ?? LOW_STOCK_THRESHOLD;
 
+        const branchStock = storeId
+            ? Prisma.sql`AND ps.warehouse_id IN (SELECT id FROM "Warehouse" WHERE tenant_id = ${tenantId} AND store_id = ${storeId})`
+            : Prisma.empty;
+
         const rows = await this.db.$queryRaw<{ count: bigint }[]>`
             SELECT COUNT(*) AS count
             FROM (
                 SELECT p.id
                 FROM "Product" p
                 LEFT JOIN "ProductStock" ps
-                    ON ps.product_id = p.id AND ps.tenant_id = ${tenantId}
+                    ON ps.product_id = p.id AND ps.tenant_id = ${tenantId} ${branchStock}
                 WHERE p.tenant_id = ${tenantId}
                   AND p.deleted_at IS NULL
                 GROUP BY p.id, p.reorder_level

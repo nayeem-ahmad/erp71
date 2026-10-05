@@ -86,6 +86,17 @@ export class AccountingController {
     ) {}
 
     /**
+     * The branch a dashboard or list covers, checked against the caller's
+     * access (`undefined` = the whole tenant, company-level vouchers included).
+     */
+    private async branchQuery<T extends { storeId?: string }>(tenant: TenantContext, query: T): Promise<T> {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return { ...query, storeId };
+    }
+
+    /**
      * P&L / balance sheet / trial balance scope, checked against the caller's
      * branches. `company` and `compare` still need VIEW_CONSOLIDATED_REPORTS;
      * a `branch` id, and every `compare` id, must now be a branch the caller
@@ -340,21 +351,21 @@ export class AccountingController {
     }
 
     @Get('dashboard/overview')
-    getAccountingDashboardOverview(
+    async getAccountingDashboardOverview(
         @Tenant() tenant: TenantContext,
         @Query() query: AccountingOverviewQueryDto,
     ) {
-        return this.accountingService.getAccountingDashboardOverview(tenant.tenantId, query);
+        return this.accountingService.getAccountingDashboardOverview(tenant.tenantId, await this.branchQuery(tenant, query));
     }
 
     @Get('dashboard/kpis')
-    getFinancialKpis(@Tenant() tenant: TenantContext, @Query() query: FinancialKpiQueryDto) {
-        return this.accountingService.getFinancialKpis(tenant.tenantId, query);
+    async getFinancialKpis(@Tenant() tenant: TenantContext, @Query() query: FinancialKpiQueryDto) {
+        return this.accountingService.getFinancialKpis(tenant.tenantId, await this.branchQuery(tenant, query));
     }
 
     @Get('dashboard/trends')
-    getFinancialTrends(@Tenant() tenant: TenantContext, @Query() query: FinancialTrendQueryDto) {
-        return this.accountingService.getFinancialTrends(tenant.tenantId, query);
+    async getFinancialTrends(@Tenant() tenant: TenantContext, @Query() query: FinancialTrendQueryDto) {
+        return this.accountingService.getFinancialTrends(tenant.tenantId, await this.branchQuery(tenant, query));
     }
 
     @Get('settings/posting-rules')

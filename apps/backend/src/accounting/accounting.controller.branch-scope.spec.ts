@@ -10,7 +10,14 @@ import { AccountingController } from './accounting.controller';
 describe('AccountingController — statement branch scope', () => {
     const owner = { tenantId: 't1', storeId: 's1', userId: 'u1', userRole: 'OWNER', timezone: 'Asia/Dhaka' } as any;
     const member = { ...owner, userRole: 'MANAGER' };
-    const service = { getProfitLoss: jest.fn(), getBalanceSheet: jest.fn(), getTrialBalance: jest.fn() };
+    const service = {
+        getProfitLoss: jest.fn(),
+        getBalanceSheet: jest.fn(),
+        getTrialBalance: jest.fn(),
+        getAccountingDashboardOverview: jest.fn(),
+        getFinancialKpis: jest.fn(),
+        getFinancialTrends: jest.fn(),
+    };
     const db = { userStorePermission: { findFirst: jest.fn() } };
     const branchScope = { resolveStoreId: jest.fn(), resolveStoreIds: jest.fn() };
     const controller = new AccountingController(service as any, db as any, branchScope as any);
@@ -68,5 +75,24 @@ describe('AccountingController — statement branch scope', () => {
         await call(member, { scope: 'company' });
         expect(branchScope.resolveStoreId).not.toHaveBeenCalled();
         expect(service[method]).toHaveBeenCalledWith('t1', { scope: 'company' }, false);
+    });
+
+    describe.each(['getAccountingDashboardOverview', 'getFinancialKpis', 'getFinancialTrends'] as const)('%s', (method) => {
+        const call = (query: any) => (controller as any)[method](member, query);
+
+        it('hands the service the resolved branch', async () => {
+            branchScope.resolveStoreId.mockResolvedValue('s1');
+            await call({ from: '2026-09-01' });
+            expect(branchScope.resolveStoreId).toHaveBeenCalledWith(member, undefined, {
+                permissions: [StorePermission.VIEW_LEDGER],
+            });
+            expect(service[method]).toHaveBeenCalledWith('t1', { from: '2026-09-01', storeId: 's1' });
+        });
+
+        it('refuses a branch the caller cannot use', async () => {
+            branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
+            await expect(call({ storeId: 'foreign' })).rejects.toBeInstanceOf(ForbiddenException);
+            expect(service[method]).not.toHaveBeenCalled();
+        });
     });
 });

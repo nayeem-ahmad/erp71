@@ -14,11 +14,12 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
-import { CreateProductDto, MergeProductDto, UpdateProductDto } from './product.dto';
+import { CreateProductDto, LowStockCountQueryDto, MergeProductDto, UpdateProductDto } from './product.dto';
 import { CsvProductRow } from './import-products.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
@@ -67,7 +68,10 @@ function parseCsvLine(line: string): string[] {
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class ProductsController {
-    constructor(private readonly productsService: ProductsService) { }
+    constructor(
+        private readonly productsService: ProductsService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...PRODUCT_WRITE)
     @Post('import')
@@ -200,8 +204,9 @@ export class ProductsController {
      */
     @RequireAnyStorePermission(...CATALOG_READ)
     @Get('low-stock-count')
-    countLowStock(@Tenant() tenant: TenantContext) {
-        return this.productsService.countLowStock(tenant.tenantId);
+    async countLowStock(@Tenant() tenant: TenantContext, @Query() query: LowStockCountQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: CATALOG_READ });
+        return this.productsService.countLowStock(tenant.tenantId, storeId);
     }
 
     /**
