@@ -1,14 +1,16 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { DashboardRange } from '@/components/dashboard/DashboardHeader';
 import { dashboardQueryKey } from '@/components/dashboard/dashboard-query';
 import { periodDelta, type Delta } from './dashboard-delta';
 import { previousDateWindow, previousWindow, rangeToDateWindow, rangeToWindow } from './dashboard-range';
 import { useI18n } from './i18n';
+import { handleBranchForbidden, type UseBranchScope } from './branch-scope';
 
-export type DateWindow = { from: string; to: string };
+/** The window a fetcher is asked for, plus the branch filter's `storeId` when the dashboard has one. */
+export type DateWindow = { from: string; to: string; storeId?: string };
 
 const NO_COMPARISON: Delta = { label: '—', positive: true };
 
@@ -64,6 +66,7 @@ export function useModuleDashboard<TOverview, TTrend = never>({
     windowKind = 'date',
     reloadKey,
     enabled = true,
+    branch,
 }: {
     /**
      * Names this dashboard's endpoint in the cache. Required, and unique per
@@ -100,9 +103,19 @@ export function useModuleDashboard<TOverview, TTrend = never>({
      * every Dhaka day boundary six hours and silently re-date the figures.
      */
     windowKind?: 'date' | 'instant';
+    /**
+     * The page's branch filter (`useBranchScope()`), for the dashboards whose
+     * endpoint takes `storeId`. Its `apiStoreId` goes into every window handed
+     * to the fetchers and into the cache key; nothing is asked until it is
+     * `ready`; and a 403 for a branch other than the header's resets the filter
+     * with a toast. Left out, the dashboard is not branch-aware (CRM, HR).
+     */
+    branch?: UseBranchScope;
 }): ModuleDashboardState<TOverview, TTrend> {
     const { t } = useI18n();
     const copy = t.dashboardHome;
+    const storeId = branch?.apiStoreId;
+    const ready = enabled && (branch ? branch.ready : true);
 
     const [range, setRange] = useState<DashboardRange>(initialRange);
 
@@ -112,24 +125,27 @@ export function useModuleDashboard<TOverview, TTrend = never>({
 
     // Worked out when each request is made, not put in the key: an `instant`
     // window ends "now", which would make every render a new query.
-    const currentWindow = () => (windowKind === 'date' ? rangeToDateWindow(range) : rangeToWindow(range));
+    const withBranch = (window: { from: string; to: string }): DateWindow =>
+        storeId ? { ...window, storeId } : window;
+    const baseWindow = () => (windowKind === 'date' ? rangeToDateWindow(range) : rangeToWindow(range));
+    const currentWindow = () => withBranch(baseWindow());
     const priorWindow = () => {
-        const window = currentWindow();
-        return windowKind === 'date' ? previousDateWindow(window) : previousWindow(window);
+        const window = baseWindow();
+        return withBranch(windowKind === 'date' ? previousDateWindow(window) : previousWindow(window));
     };
     const keyFor = (part: 'overview' | 'previous' | 'trends') =>
-        dashboardQueryKey('module', cacheKey, part, windowKind, range, reloadKey ?? null);
+        dashboardQueryKey('module', cacheKey, part, windowKind, range, reloadKey ?? null, storeId ?? null);
 
     const overviewQuery = useQuery({
         queryKey: keyFor('overview'),
         queryFn: () => fetchers.current.fetchOverview(currentWindow()),
-        enabled,
+        enabled: ready,
         placeholderData: keepPreviousData,
     });
     const previousQuery = useQuery({
         queryKey: keyFor('previous'),
         queryFn: () => fetchers.current.fetchOverview(priorWindow()),
-        enabled,
+        enabled: ready,
         placeholderData: keepPreviousData,
     });
     const trendQuery = useQuery({
@@ -138,9 +154,20 @@ export function useModuleDashboard<TOverview, TTrend = never>({
             const loadTrends = fetchers.current.fetchTrends;
             return loadTrends ? loadTrends(currentWindow()) : null;
         },
-        enabled: enabled && hasTrends,
+        enabled: ready && hasTrends,
         placeholderData: keepPreviousData,
     });
+
+    // The server refusing the filter's branch is the filter's problem, not the
+    // page's: back to the header branch, with a toast.
+    const branchRef = useRef(branch);
+    branchRef.current = branch;
+    const forbiddenMessage = t.dashboardLayout.branchFilterForbidden;
+    const overviewError = overviewQuery.error;
+    useEffect(() => {
+        const scope = branchRef.current;
+        if (overviewError && scope) handleBranchForbidden(overviewError, scope, forbiddenMessage);
+    }, [overviewError, forbiddenMessage]);
 
     // Losing the overview costs the page; losing the comparison window costs a
     // "—"; losing the trend costs the sparklines.

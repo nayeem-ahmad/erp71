@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { useModuleDashboard } from '@/lib/use-module-dashboard';
+import { useBranchScope } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
 import ModuleDashboard, {
     AttentionSection,
@@ -16,7 +17,7 @@ import ModuleDashboard, {
 } from '@/components/dashboard/ModuleDashboard';
 import { type AttentionItem } from '@/components/dashboard/AttentionStrip';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
-import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
+import { BranchFilter, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import type { DashboardIdentity } from './dashboard-identity';
 
 type OverviewResponse = {
@@ -72,6 +73,7 @@ export default function PurchaseDashboard({
     variant = 'page',
 }: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.dashboardHome;
     const pur = copy.purchases;
 
@@ -88,6 +90,7 @@ export default function PurchaseDashboard({
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
         cacheKey: 'purchases',
+        branch,
         fetchOverview: (window) => api.getPurchaseDashboardOverview(window),
         fetchTrends: (window) => api.getPurchaseDashboardTrends(window),
         unavailableMessage: pur.overviewUnavailable,
@@ -238,6 +241,7 @@ export default function PurchaseDashboard({
             subtitle={pur.subtitle}
             range={range}
             onRangeChange={setRange}
+            toolbar={<BranchFilter scope={branch} />}
             error={error}
             refreshing={refreshing}
         >

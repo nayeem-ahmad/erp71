@@ -896,10 +896,18 @@ const MAX_PAGES_FETCHED = 100;
  */
 type CreatedRangeParams = { createdFrom?: string; createdTo?: string };
 
-function withCreatedRange(endpoint: string, params?: CreatedRangeParams): string {
+/**
+ * A transaction list the page-level branch filter narrows: `storeId` is one
+ * branch or `'all'` (see `useBranchScope`). Only the endpoints typed with this
+ * accept it — the API rejects unknown query params — so it stays opt-in.
+ */
+type BranchListParams = CreatedRangeParams & { storeId?: string };
+
+function withCreatedRange(endpoint: string, params?: BranchListParams): string {
     const query = new URLSearchParams();
     if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
     if (params?.createdTo) query.set('createdTo', params.createdTo);
+    if (params?.storeId) query.set('storeId', params.storeId);
     const qs = query.toString();
     return qs ? `${endpoint}?${qs}` : endpoint;
 }
@@ -1279,10 +1287,13 @@ function leadConversationQuery(
  * one payload, so they share one caller rather than seven copies of this.
  */
 function dashboardWindowFetcher(path: string) {
-    return (params?: { from?: string; to?: string; mine?: boolean }) => {
+    return (params?: { from?: string; to?: string; mine?: boolean; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        // A branch or `all`, from the page's branch filter. Like `mine`, only the
+        // dashboards that declare it send it (sales, purchases, inventory).
+        if (params?.storeId) query.set('storeId', params.storeId);
         // Only `CrmDashboardQueryDto` declares `mine`, and only the CRM dashboard
         // ever passes it. The API validates with `forbidNonWhitelisted`, so
         // sending it to one of the other module dashboards would be a 400 rather
@@ -1317,7 +1328,8 @@ export const api = {
      * How many products sit at or below their reorder level. Counted by the
      * server so the dashboard tile does not have to walk the whole catalog.
      */
-    getLowStockCount: (): Promise<{ count: number }> => fetchWithAuth('/products/low-stock-count'),
+    getLowStockCount: (params?: { storeId?: string }): Promise<{ count: number }> =>
+        fetchWithAuth(`/products/low-stock-count${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getProductsPaged: (params?: {
         groupId?: string;
         subgroupId?: string;
@@ -1462,6 +1474,8 @@ export const api = {
         limit?: number;
         sortBy?: string;
         sortDir?: string;
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.productId) query.set('productId', params.productId);
@@ -1473,9 +1487,10 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchPaginated(`/inventory/ledger${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string }) => {
+    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.sourceWarehouseId) query.set('sourceWarehouseId', params.sourceWarehouseId);
@@ -1485,6 +1500,7 @@ export const api = {
         if (params?.isCrossBranch !== undefined) query.set('isCrossBranch', String(params.isCrossBranch));
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchWithAuth(`/warehouse-transfers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}`),
@@ -1517,6 +1533,8 @@ export const api = {
         mine?: boolean;
         from?: string;
         to?: string;
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
@@ -1526,6 +1544,7 @@ export const api = {
         if (params?.mine) query.set('mine', 'true');
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchWithAuth(`/product-demands${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getProductDemand: (id: string) => fetchWithAuth(`/product-demands/${id}`),
@@ -1556,7 +1575,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     /** Omit `direction` for the whole adjustment log; 'LOSS' or 'FOUND' narrows it to one side. */
-    getInventoryShrinkage: (params?: CreatedRangeParams & { direction?: 'LOSS' | 'FOUND' }) => {
+    getInventoryShrinkage: (params?: BranchListParams & { direction?: 'LOSS' | 'FOUND' }) => {
         const endpoint = withCreatedRange('/inventory-shrinkage', params);
         if (!params?.direction) return fetchWithAuth(endpoint);
         return fetchWithAuth(`${endpoint}${endpoint.includes('?') ? '&' : '?'}direction=${params.direction}`);
@@ -1567,7 +1586,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getStockTakes: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/stock-takes', params)),
+    getStockTakes: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/stock-takes', params)),
     getStockTake: (id: string) => fetchWithAuth(`/stock-takes/${id}`),
     createStockTake: (data: any) => fetchWithAuth('/stock-takes', {
         method: 'POST',
@@ -1852,6 +1871,8 @@ export const api = {
         mine?: boolean;
         createdFrom?: string;
         createdTo?: string;
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params.page) query.set('page', String(params.page));
@@ -1863,6 +1884,7 @@ export const api = {
         if (params.mine) query.set('mine', 'true');
         if (params.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params.createdTo) query.set('createdTo', params.createdTo);
+        if (params.storeId) query.set('storeId', params.storeId);
         return fetchPaginated(`/sales?${query.toString()}`);
     },
     /** The most recent few sales — callers that do not need the whole history. */
@@ -2471,7 +2493,7 @@ export const api = {
         return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
     },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
-    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number }) => {
+    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.voucherType) query.set('voucherType', params.voucherType);
         if (params?.from) query.set('from', params.from);
@@ -2481,6 +2503,7 @@ export const api = {
         if (params?.approvalStatus) query.set('approvalStatus', params.approvalStatus);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchWithAuth(`/accounting/vouchers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`),
@@ -2491,27 +2514,30 @@ export const api = {
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/ledger/${accountId}${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getFinancialKpis: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+    getFinancialKpis: (params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/kpis${query.toString() ? `?${query.toString()}` : ''}`);
     },
     // One request for the whole accounting dashboard. The equivalent report
     // endpoints each rescan the tenant's voucher details, so this exists to keep
     // the page to a single pass over them.
-    getAccountingDashboardOverview: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+    getAccountingDashboardOverview: (params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/overview${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getFinancialTrends: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+    getFinancialTrends: (params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/trends${query.toString() ? `?${query.toString()}` : ''}`);
     },
@@ -2721,7 +2747,7 @@ export const api = {
         if (params.to) query.set('to', params.to);
         return fetchBlobWithAuth(`/accounting/export?${query.toString()}`);
     },
-    getReturns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-returns', params)),
+    getReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-returns', params)),
     getReturn: (id: string) => fetchWithAuth(`/sales-returns/${id}`),
     createReturn: (data: any) => fetchWithAuth('/sales-returns', {
         method: 'POST',
@@ -2736,7 +2762,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getOrders: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-orders', params)),
+    getOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-orders', params)),
     getOrder: (id: string) => fetchWithAuth(`/sales-orders/${id}`),
     createOrder: (data: any) => fetchWithAuth('/sales-orders', {
         method: 'POST',
@@ -2901,21 +2927,22 @@ export const api = {
     updateSupplier: (id: string, data: any) => fetchWithAuth(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
     getPurchaseInvoice: (id: string) => fetchWithAuth(`/purchases/${id}/invoice`),
-    getPurchaseOrders: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-orders', params)),
+    getPurchaseOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-orders', params)),
     getPurchaseOrder: (id: string) => fetchWithAuth(`/purchase-orders/${id}`),
     createPurchaseOrder: (data: any) => fetchWithAuth('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseOrderStatus: (id: string, status: string) => fetchWithAuth(`/purchase-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     getPurchaseOrderInvoice: (id: string) => fetchWithAuth(`/purchase-orders/${id}/invoice`),
-    getPurchaseQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-quotations', params)),
+    getPurchaseQuotations: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-quotations', params)),
     getPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`),
     createPurchaseQuotation: (data: any) => fetchWithAuth('/purchase-quotations', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseQuotationStatus: (id: string, status: string) => fetchWithAuth(`/purchase-quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     convertPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}/convert`, { method: 'POST' }),
     deletePurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`, { method: 'DELETE' }),
-    getPurchases: (params?: { createdFrom?: string; createdTo?: string }) => {
+    getPurchases: (params?: BranchListParams) => {
         const query = new URLSearchParams();
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
@@ -2930,7 +2957,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getPurchaseReturns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
+    getPurchaseReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
     getPurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`),
     createPurchaseReturn: (data: any) => fetchWithAuth('/purchase-returns', {
         method: 'POST',
@@ -2958,6 +2985,8 @@ export const api = {
         etaTo?: string;
         sortBy?: string;
         sortDir?: 'asc' | 'desc';
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }): Promise<Paginated<any>> => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params ?? {})) {
@@ -3010,18 +3039,25 @@ export const api = {
     deleteImportDocument: (id: string, documentId: string) =>
         fetchWithAuth(`/imports/${id}/documents/${documentId}`, { method: 'DELETE' }),
 
-    getLcRegister: (days?: number) => fetchWithAuth(`/imports/lc-register${days ? `?days=${days}` : ''}`),
-    getImportDutyReport: (params?: { from?: string; to?: string; includeUnpaid?: boolean }) => {
+    getLcRegister: (days?: number, params?: { storeId?: string }) => {
+        const query = new URLSearchParams();
+        if (days) query.set('days', String(days));
+        if (params?.storeId) query.set('storeId', params.storeId);
+        const suffix = query.toString();
+        return fetchWithAuth(`/imports/lc-register${suffix ? `?${suffix}` : ''}`);
+    },
+    getImportDutyReport: (params?: { from?: string; to?: string; includeUnpaid?: boolean; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.includeUnpaid) query.set('includeUnpaid', 'true');
+        if (params?.storeId) query.set('storeId', params.storeId);
         const suffix = query.toString();
         return fetchWithAuth(`/imports/duty-report${suffix ? `?${suffix}` : ''}`);
     },
     getImportBankLimits: () => fetchWithAuth('/imports/bank-limits'),
 
-    getQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
+    getQuotations: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
     getQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}`),
     createQuotation: (data: any) => fetchWithAuth('/sales-quotations', {
         method: 'POST',
@@ -4478,7 +4514,7 @@ export const api = {
     // Warranty Claims
     lookupWarrantySerial: (serialNumber: string) =>
         fetchWithAuth(`/warranty-claims/lookup?serialNumber=${encodeURIComponent(serialNumber)}`),
-    getWarrantyClaims: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/warranty-claims', params)),
+    getWarrantyClaims: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/warranty-claims', params)),
     getWarrantyClaim: (id: string) => fetchWithAuth(`/warranty-claims/${id}`),
     createWarrantyClaim: (data: any) => fetchWithAuth('/warranty-claims', {
         method: 'POST',

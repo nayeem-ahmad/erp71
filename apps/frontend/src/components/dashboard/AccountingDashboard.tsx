@@ -5,7 +5,9 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { useModuleDashboard } from '@/lib/use-module-dashboard';
+import { useBranchScope } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
+import { BranchFilter } from '@/components/ui';
 import FrequentQuickLinks from '@/components/dashboard/FrequentQuickLinks';
 import ModuleDashboard, {
     AttentionSection,
@@ -93,6 +95,7 @@ export default function AccountingDashboard({
     variant = 'page',
 }: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.dashboardHome;
     const acc = copy.accounting;
 
@@ -109,6 +112,7 @@ export default function AccountingDashboard({
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
         cacheKey: 'accounting',
+        branch,
         fetchOverview: (win) => api.getAccountingDashboardOverview(win),
         fetchTrends: (win) => api.getFinancialTrends(win) as Promise<TrendResponse>,
         unavailableMessage: acc.overviewUnavailable,
@@ -309,6 +313,7 @@ export default function AccountingDashboard({
             subtitle={acc.subtitle}
             range={range}
             onRangeChange={setRange}
+            toolbar={<BranchFilter scope={branch} />}
             error={error}
             refreshing={refreshing}
         >

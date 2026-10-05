@@ -1,8 +1,9 @@
 import React from 'react';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import SalesDashboard from './SalesDashboard';
 import { api } from '@/lib/api';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('@/lib/localization/messages/en');
@@ -19,6 +20,8 @@ jest.mock('@/lib/api', () => ({
         getSalesDashboardTrends: jest.fn(),
     },
 }));
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => ({
     __esModule: true,
@@ -61,6 +64,7 @@ const identity = { greeting: 'Good morning 👋', tenantName: 'Shop Co', renewal
 describe('SalesDashboard', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         (api.getSalesDashboardOverview as jest.Mock).mockResolvedValue(overview());
         (api.getSalesDashboardTrends as jest.Mock).mockResolvedValue({ points: [] });
     });
@@ -167,5 +171,45 @@ describe('SalesDashboard', () => {
         renderWithQueryClient(<SalesDashboard {...identity} />);
 
         expect(await screen.findByText('Sales are down')).toBeInTheDocument();
+    });
+
+    describe('branch filter', () => {
+        it('asks for the header branch first, and re-asks for the branch picked', async () => {
+            renderWithQueryClient(<SalesDashboard {...identity} />);
+
+            await waitFor(() =>
+                expect(api.getSalesDashboardOverview).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+            );
+            expect(api.getSalesDashboardTrends).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' }));
+
+            fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+            await waitFor(() =>
+                expect(api.getSalesDashboardOverview).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'all' })),
+            );
+            expect(api.getSalesDashboardTrends).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'all' }));
+        });
+
+        it('asks nothing until the branch is known', async () => {
+            mockBranchScope({ ready: false });
+            renderWithQueryClient(<SalesDashboard {...identity} />);
+
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(api.getSalesDashboardOverview).not.toHaveBeenCalled();
+        });
+
+        it('goes back to the header branch when the server refuses the chosen one', async () => {
+            (api.getSalesDashboardOverview as jest.Mock).mockImplementation(async ({ storeId }: { storeId?: string }) => {
+                if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
+                return overview();
+            });
+            renderWithQueryClient(<SalesDashboard {...identity} />);
+            await screen.findByText('৳ 45,000.00 owed by 9 customers');
+
+            fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+            await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
+            expect(screen.getByRole('combobox', { name: 'Branch' })).toHaveValue('store-1');
+        });
     });
 });
