@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { FolderKanban, GitBranch, GripVertical, MessageSquare, Play, Undo2 } from 'lucide-react';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { formatDate } from '@/lib/format';
@@ -65,7 +65,9 @@ interface DragState {
  * and priority badges, the running clock, counts, hours, assignee initials),
  * category-tinted column heads with their count and hours left, and pointer
  * dragging — mouse from anywhere on the card, touch from the grip — so a card
- * moves on a phone too. Dropping a card changes its status; with swimlanes on,
+ * moves on a phone too. A tap on the card still opens it: the body listens for
+ * click, which a finger-scroll does not fire, and a finished drag swallows the
+ * click that follows the drop. Dropping a card changes its status; with swimlanes on,
  * a card moves between columns inside its own row.
  *
  * It also reads the board's appearance settings (`board-view.ts`) — card size,
@@ -116,10 +118,17 @@ export default function SprintCardBoard({
     const { t, fmt } = useI18n();
     const m = t.projects;
     const [drag, setDrag] = useState<DragState | null>(null);
+    /**
+     * A finished drag is followed by a click on the card. Without this the
+     * click opens the card the reader just put down. Cleared on the next
+     * press, so a click the browser never fires cannot eat the tap after it.
+     */
+    const swallowCardClick = useRef(false);
 
     const grouped = laneMode !== 'none';
 
     const begin = (e: React.PointerEvent, task: SprintCardTask, fromHandle: boolean) => {
+        swallowCardClick.current = false;
         if (busy) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.pointerType !== 'mouse' && !fromHandle) return;
@@ -152,6 +161,7 @@ export default function SprintCardBoard({
             onOpen(drag.task.id);
             return;
         }
+        swallowCardClick.current = true;
         const target = drag.target;
         if (!target) return;
 
@@ -245,6 +255,11 @@ export default function SprintCardBoard({
                                     dragging={Boolean(drag?.active && drag.task.id === task.id)}
                                     busy={busy}
                                     onOpen={() => onOpen(task.id)}
+                                    consumeSwallowedClick={() => {
+                                        if (!swallowCardClick.current) return false;
+                                        swallowCardClick.current = false;
+                                        return true;
+                                    }}
                                     onReturn={() => onReturn(task)}
                                     index={index}
                                     {...handlers(task)}
@@ -331,6 +346,7 @@ function SprintCard({
     dragging,
     busy,
     onOpen,
+    consumeSwallowedClick,
     onReturn,
     onPointerDownBody,
     onPointerDownHandle,
@@ -344,6 +360,8 @@ function SprintCard({
     dragging: boolean;
     busy: boolean;
     onOpen: () => void;
+    /** True when the click is the one a finished drag left behind, and should not open. */
+    consumeSwallowedClick: () => boolean;
     onReturn: () => void;
     onPointerDownBody: (e: React.PointerEvent) => void;
     onPointerDownHandle: (e: React.PointerEvent) => void;
@@ -417,6 +435,10 @@ function SprintCard({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
+            onClick={() => {
+                if (consumeSwallowedClick()) return;
+                onOpen();
+            }}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();

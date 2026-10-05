@@ -116,6 +116,40 @@ describe('SprintCardBoard', () => {
         expect(onMove).not.toHaveBeenCalled();
     });
 
+    it('opens a card on a touch tap of the body', () => {
+        const { onOpen, onMove } = setup([task('a', 'p1')]);
+        const card = screen.getByRole('button', { name: /Task a/ });
+        const init = { pointerId: 1, pointerType: 'touch', button: 0, clientX: 4, clientY: 4 };
+        fireEvent.pointerDown(card, init);
+        fireEvent.pointerUp(card, init);
+        fireEvent.click(card);
+
+        expect(onOpen).toHaveBeenCalledTimes(1);
+        expect(onOpen).toHaveBeenCalledWith('a');
+        expect(onMove).not.toHaveBeenCalled();
+    });
+
+    it('does not open a card when a drag is released, and the next tap still does', () => {
+        const { onOpen, onMove } = setup([task('a', 'p1')]);
+        const card = screen.getByRole('button', { name: /Task a/ });
+        const grip = screen.getByRole('button', { name: 'Drag to move' });
+        const init = { pointerId: 1, pointerType: 'touch', button: 0, clientX: 0, clientY: 0 };
+        fireEvent.pointerDown(grip, init);
+        fireEvent.pointerUp(grip, init);
+        fireEvent.click(grip);
+
+        expect(onOpen).not.toHaveBeenCalled();
+        expect(onMove).not.toHaveBeenCalled();
+
+        const tap = { pointerId: 2, pointerType: 'touch', button: 0, clientX: 8, clientY: 8 };
+        fireEvent.pointerDown(card, tap);
+        fireEvent.pointerUp(card, tap);
+        fireEvent.click(card);
+
+        expect(onOpen).toHaveBeenCalledTimes(1);
+        expect(onOpen).toHaveBeenCalledWith('a');
+    });
+
     it('follows the board appearance settings: width, card size and hidden fields', () => {
         const view = {
             ...DEFAULT_BOARD_VIEW,
