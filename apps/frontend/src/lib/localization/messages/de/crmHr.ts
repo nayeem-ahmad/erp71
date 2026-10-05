@@ -176,6 +176,7 @@ export const crmHrMessages = {
             save: "Speichern",
             cancel: "Abbrechen",
             tokenHint: "Platzhalter: {tokens}. Jeder wird beim Auswählen der Vorlage ersetzt; einer ohne Wert bleibt so stehen, wie er geschrieben ist.",
+            unknownTokens: "Kein Platzhalter: {tokens}. Wird genau so verschickt, wie er geschrieben ist.",
             usage: {
                 BOTH: "Erfassen und Planen",
                 LOG: "Nur beim Erfassen",

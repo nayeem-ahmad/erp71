@@ -415,3 +415,75 @@ describe('CrmActivityPanel — approving planned work', () => {
         expect(screen.getAllByRole('switch')).toHaveLength(1);
     });
 });
+
+/**
+ * Completing a planned activity writes the same summary the Log dialog does —
+ * it is the other way a DONE row is created — so the same canned wording is
+ * offered there too.
+ */
+describe('CrmActivityPanel — message templates when completing', () => {
+    const THANKS = {
+        id: 'tpl-1',
+        name: 'Thanks for your time',
+        usage: 'BOTH' as const,
+        subject: null,
+        body: 'Called {{name}} on {{phone}}. — {{user}}, {{business}}',
+        sort_order: 1,
+        is_active: true,
+        channel: null,
+        purpose: null,
+    };
+
+    beforeEach(() => {
+        api.getCrmMessageTemplates.mockResolvedValue([THANKS]);
+        api.getMe.mockResolvedValue({
+            id: 'user-1',
+            name: 'Nayeem',
+            tenants: [{ id: 'tenant-1', name: 'Dhaka Electronics' }],
+        });
+    });
+
+    afterEach(() => {
+        api.getCrmMessageTemplates.mockResolvedValue([]);
+    });
+
+    it('fills the summary from a picked template and completes with it', async () => {
+        renderWithQueryClient(
+            <CrmActivityPanel leadId="l1" targetLabel={{ name: 'Karim Traders', phone: '01700000000' }} />,
+        );
+        fireEvent.click(await screen.findByRole('button', { name: /^Complete$/ }));
+
+        fireEvent.change(await screen.findByLabelText('Message template'), {
+            target: { value: 'tpl-1' },
+        });
+        const filled = 'Called Karim Traders on 01700000000. — Nayeem, Dhaka Electronics';
+        expect(await screen.findByDisplayValue(filled)).toBeInTheDocument();
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^Complete$/ }).slice(-1)[0]);
+        await waitFor(() => expect(api.completeCrmActivity).toHaveBeenCalled());
+        expect(api.completeCrmActivity.mock.calls[0][1]).toEqual(
+            expect.objectContaining({ channel: 'ch-call', summary: filled }),
+        );
+    });
+
+    /** Same narrowing as the Log dialog: only what the chosen channel offers. */
+    it('asks for the log templates the chosen channel offers', async () => {
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+        fireEvent.click(await screen.findByRole('button', { name: /^Complete$/ }));
+
+        await waitFor(() =>
+            expect(api.getCrmMessageTemplates).toHaveBeenCalledWith({
+                usage: 'LOG',
+                channelId: 'ch-call',
+            }),
+        );
+    });
+
+    /** The lead page should not fetch templates for a dialog nobody opened. */
+    it('does not ask for templates until a dialog is open', async () => {
+        renderWithQueryClient(<CrmActivityPanel leadId="l1" />);
+
+        await screen.findByText('Chase the invoice');
+        expect(api.getCrmMessageTemplates).not.toHaveBeenCalled();
+    });
+});

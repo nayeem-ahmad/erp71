@@ -176,6 +176,7 @@ export const crmHrMessages = {
             save: "Enregistrer",
             cancel: "Annuler",
             tokenHint: "Variables : {tokens}. Chacune est remplacée au moment où le modèle est choisi ; celle qui n’a rien à remplacer reste telle quelle.",
+            unknownTokens: "Ce n’est pas une variable : {tokens}. Elle part telle qu’elle est écrite.",
             usage: {
                 BOTH: "Consigner et planifier",
                 LOG: "Consigner uniquement",

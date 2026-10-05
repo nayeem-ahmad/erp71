@@ -65,6 +65,26 @@ export function fillTemplate(text: string, vars: TemplateVars): string {
 }
 
 /**
+ * The `{{…}}` placeholders in `text` that `fillTemplate` will never replace —
+ * a misspelt token, or one that is not in `TEMPLATE_TOKENS` at all — each listed
+ * once, exactly as typed.
+ *
+ * For a warning in Setup, not a validation rule: a token left standing is right
+ * at pick time, but `{{nmae}}` should not first surface in front of a customer.
+ * Only the double-brace form counts, so a tenant's literal `{500}` is its own.
+ */
+export function unknownTemplateTokens(text: string): string[] {
+    const known: readonly string[] = TEMPLATE_TOKENS;
+    const found = new Set<string>();
+    for (const [whole, inner] of text.matchAll(/\{\{([^{}]*)\}\}/g)) {
+        // Trimmed and lowercased the way `fillTemplate` reads it; anything with
+        // a space left in it cannot be a known token, so it falls through too.
+        if (!known.includes(inner.trim().toLowerCase())) found.add(whole);
+    }
+    return [...found];
+}
+
+/**
  * The tenant's message templates for one composer.
  *
  * `usage` is sent to the server rather than filtered here so the picker and the

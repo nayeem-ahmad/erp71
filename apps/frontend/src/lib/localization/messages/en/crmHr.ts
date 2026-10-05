@@ -180,6 +180,7 @@ export const crmHrMessages = {
             save: 'Save',
             cancel: 'Cancel',
             tokenHint: 'Placeholders: {tokens}. Each is filled in when the template is picked; one with nothing to fill it stays as written.',
+            unknownTokens: 'Not a placeholder: {tokens}. It goes out exactly as typed.',
             usage: {
                 BOTH: 'Log and Schedule',
                 LOG: 'Log activity only',
