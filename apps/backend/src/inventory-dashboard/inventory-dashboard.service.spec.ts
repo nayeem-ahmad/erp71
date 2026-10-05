@@ -215,4 +215,25 @@ describe('InventoryDashboardService', () => {
         // toISOString() would have filed this under the 3rd in Dhaka.
         expect(result.points.find((point) => point.date === '2026-08-02')?.units_in).toBe(7);
     });
+
+    it("reaches the resolved branch through each row's warehouse", async () => {
+        await service.getOverview('tenant-1', { storeId: 'store-1' }, 'Asia/Dhaka');
+        await service.getTrends('tenant-1', { storeId: 'store-1' }, 'Asia/Dhaka');
+
+        const inBranch = { store_id: 'store-1' };
+        expect(db.product.findMany.mock.calls[0][0].select.stocks.where).toEqual({ warehouse: inBranch });
+        for (const call of db.inventoryMovement.findMany.mock.calls) expect(call[0].where.warehouse).toEqual(inBranch);
+        expect(db.inventoryShrinkage.findMany.mock.calls[0][0].where.warehouse).toEqual(inBranch);
+        for (const call of db.stockTakeSession.count.mock.calls) expect(call[0].where.warehouse).toEqual(inBranch);
+        expect(db.warehouseTransferItem.findMany.mock.calls[0][0].where.transfer.OR).toEqual([
+            { sourceWarehouse: inBranch },
+            { destinationWarehouse: inBranch },
+        ]);
+    });
+
+    it('counts every warehouse when no branch is resolved', async () => {
+        await service.getOverview('tenant-1', {}, 'Asia/Dhaka');
+        expect(db.product.findMany.mock.calls[0][0].select.stocks.where).toBeUndefined();
+        expect(db.inventoryMovement.findMany.mock.calls[0][0].where.warehouse).toBeUndefined();
+    });
 });

@@ -7,6 +7,8 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { formatBDT } from '@/lib/format';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -58,6 +60,7 @@ const columnHelper = createColumnHelper<Purchase>();
 
 export default function PurchasesPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -87,8 +90,9 @@ export default function PurchasesPage() {
     const canCancel = isOwner(role) || hasPermission(permissions, 'CANCEL_ENTRY');
 
     useEffect(() => {
+        if (!branch.ready) return;
         loadPurchases();
-    }, [createdRange]);
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     // Recording a purchase is its own screen now; keep the old ?new=1 deep
     // link (bookmarks, voice navigation) working by forwarding it there.
@@ -101,9 +105,10 @@ export default function PurchasesPage() {
     const loadPurchases = async () => {
         setLoading(true);
         try {
-            const data = await api.getPurchases(applyCreatedRangeQuery(createdRange));
+            const data = await api.getPurchases({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setPurchases(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load purchases', error);
         } finally {
             setLoading(false);
@@ -251,6 +256,7 @@ export default function PurchasesPage() {
                     )}
                     actions={(
                         <>
+                            <BranchFilter scope={branch} />
                             <button
                                 type="button"
                                 onClick={() => setPrintSettingsOpen(true)}

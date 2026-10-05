@@ -850,6 +850,9 @@ export class AccountingService {
         const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
         const where = {
             tenant_id: tenantId,
+            // A branch lists its own vouchers; company-level ones (no branch)
+            // appear only for the whole tenant.
+            ...(query.storeId ? { store_id: query.storeId } : {}),
             ...(query.voucherType ? { voucher_type: query.voucherType } : {}),
             ...(query.approvalStatus ? { approval_status: query.approvalStatus } : {}),
             ...this.buildVoucherDateRangeFilter(query.from, query.to),
@@ -920,7 +923,14 @@ export class AccountingService {
     async getAccountingDashboardOverview(tenantId: string, query: AccountingOverviewQueryDto) {
         const range = this.resolveDateRange(query.from, query.to);
         const asOf = range.toDate;
-        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
+        // A branch (resolved by the controller) narrows every voucher-based figure
+        // to that branch's vouchers; company-level vouchers (no branch) count only
+        // for the whole tenant, as in the P&L's branch scope. Books-health counts
+        // stay tenant-wide: they are about the ledger, not a branch.
+        const approvalFilter: Prisma.VoucherWhereInput = {
+            ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
+            ...(query.storeId ? { store_id: query.storeId } : {}),
+        };
 
         const accounts = await this.db.account.findMany({
             where: { tenant_id: tenantId },
@@ -988,7 +998,7 @@ export class AccountingService {
                     where: { tenant_id: tenantId, is_locked: false, end_date: { lt: asOf } },
                 }),
                 this.db.voucher.findMany({
-                    where: { tenant_id: tenantId },
+                    where: { tenant_id: tenantId, ...(query.storeId ? { store_id: query.storeId } : {}) },
                     orderBy: [{ date: 'desc' }, { created_at: 'desc' }],
                     take: 5,
                     select: {
@@ -1165,7 +1175,12 @@ export class AccountingService {
             payableAccountIds,
             taxLiabilityAccountIds,
         } = await this.getFinancialDashboardAccountIds(tenantId);
-        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
+        // A branch narrows to its own vouchers; company-level ones count only
+        // for the whole tenant.
+        const approvalFilter: Prisma.VoucherWhereInput = {
+            ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
+            ...(query.storeId ? { store_id: query.storeId } : {}),
+        };
 
         const [liquidityTotals, revenueTotals, expenseTotals, receivableTotals, payableTotals, taxLiabilityTotals] = await Promise.all([
             this.aggregateVoucherDetailTotals(tenantId, liquidityAccountIds, range.fromDate, range.toDate, approvalFilter),
@@ -1222,7 +1237,12 @@ export class AccountingService {
             ...expenseAccountIds,
         ])];
 
-        const approvalFilter = await this.reportApprovalFilter(tenantId, query.approvedOnly);
+        // A branch narrows to its own vouchers; company-level ones count only
+        // for the whole tenant.
+        const approvalFilter: Prisma.VoucherWhereInput = {
+            ...(await this.reportApprovalFilter(tenantId, query.approvedOnly)),
+            ...(query.storeId ? { store_id: query.storeId } : {}),
+        };
 
         const entries = relevantAccountIds.length === 0
             ? []

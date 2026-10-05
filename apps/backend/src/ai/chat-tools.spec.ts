@@ -294,6 +294,30 @@ describe('sales_summary', () => {
         expect(result.note).toMatch(/Unknown branch id/);
     });
 
+    it("keeps a member without the consolidated view on their own branch", async () => {
+        const getSalesSummary = jest.fn().mockResolvedValue({ summary: {}, rows: [] });
+        const deps = makeDeps({ salesReports: { getSalesSummary } });
+        const member: ChatToolContext = {
+            ...ctx,
+            userRole: 'MANAGER',
+            hasConsolidatedAccess: false,
+            stores: [{ id: 'store-1', name: 'Gulshan' }],
+        };
+
+        // Omitted: their branch, not the whole business.
+        await CHAT_TOOLS_BY_NAME.sales_summary.handler(member, { from: '2026-07-01', to: '2026-07-31' }, deps);
+        expect(getSalesSummary).toHaveBeenLastCalledWith('tenant-1', expect.objectContaining({ storeId: 'store-1' }), 'Asia/Dhaka');
+
+        // Another branch named: refused back to their own, and the model is told.
+        const result: any = await CHAT_TOOLS_BY_NAME.sales_summary.handler(
+            member,
+            { from: '2026-07-01', to: '2026-07-31', storeId: 'store-2' },
+            deps,
+        );
+        expect(getSalesSummary).toHaveBeenLastCalledWith('tenant-1', expect.objectContaining({ storeId: 'store-1' }), 'Asia/Dhaka');
+        expect(result.note).toMatch(/not one you can use/);
+    });
+
     /**
      * The whole point of compareTo: the prior window is computed by the report
      * layer, so the model never does date arithmetic and never issues a second

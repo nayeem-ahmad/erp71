@@ -5,6 +5,7 @@ import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { GetMushakPeriodDto, GetSalesBookDto } from './mushak.dto';
 import { MushakService } from './mushak.service';
 
@@ -28,7 +29,18 @@ import { SALES_READ } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class MushakController {
-    constructor(private readonly service: MushakService) {}
+    constructor(
+        private readonly service: MushakService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
+
+    /** The branch a book covers, checked against the caller's access. */
+    private async scoped<T extends { storeId?: string }>(tenant: TenantContext, query: T): Promise<T> {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_FINANCIAL_REPORTS],
+        });
+        return { ...query, storeId };
+    }
 
     /** Which 6.x forms this build produces, and whether the issuer is configured. */
     @RequireAnyStorePermission(...SALES_READ)
@@ -40,8 +52,8 @@ export class MushakController {
     /** মূসক-৬.২ · বিক্রয় হিসাব পুস্তক — the sales book for a tax period. */
     @Get('6.2')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getSalesBook(@Tenant() tenant: TenantContext, @Query() query: GetSalesBookDto) {
-        return this.service.getSalesBook(tenant.tenantId, query, tenant.timezone);
+    async getSalesBook(@Tenant() tenant: TenantContext, @Query() query: GetSalesBookDto) {
+        return this.service.getSalesBook(tenant.tenantId, await this.scoped(tenant, query), tenant.timezone);
     }
 
     /** মূসক-৬.৩ · কর চালানপত্র — the tax invoice for one sale. */
@@ -61,7 +73,7 @@ export class MushakController {
     /** মূসক-৬.১০ · supplies over two lakh taka to unregistered buyers. */
     @Get('6.10')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getLargeSupplyStatement(@Tenant() tenant: TenantContext, @Query() query: GetMushakPeriodDto) {
-        return this.service.getLargeSupplyStatement(tenant.tenantId, query, tenant.timezone);
+    async getLargeSupplyStatement(@Tenant() tenant: TenantContext, @Query() query: GetMushakPeriodDto) {
+        return this.service.getLargeSupplyStatement(tenant.tenantId, await this.scoped(tenant, query), tenant.timezone);
     }
 }

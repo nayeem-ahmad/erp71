@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingJournalPage from './page';
 import { api } from '@/lib/api';
 
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('next/link', () => {
     return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
 });

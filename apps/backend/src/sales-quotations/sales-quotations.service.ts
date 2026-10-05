@@ -353,7 +353,7 @@ export class SalesQuotationsService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; docKind?: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string; docKind?: string },
     ): Promise<PaginatedResult<unknown>> {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
@@ -365,6 +365,7 @@ export class SalesQuotationsService {
             count: (args) => this.db.quotation.count(args as any),
             where: {
                 tenant_id: tenantId,
+                ...(opts?.storeId ? { store_id: opts.storeId } : {}),
                 ...(created ? { created_at: created } : {}),
                 // Absent means both kinds, which is what an unfiltered list has
                 // always shown. The two are only ever separated on request.

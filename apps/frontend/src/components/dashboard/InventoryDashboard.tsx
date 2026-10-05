@@ -5,7 +5,9 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { useModuleDashboard } from '@/lib/use-module-dashboard';
+import { useBranchScope } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
+import { BranchFilter } from '@/components/ui';
 import ModuleDashboard, {
     AttentionSection,
     DashboardSection,
@@ -65,6 +67,7 @@ export default function InventoryDashboard({
     variant = 'page',
 }: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.dashboardHome;
     const inv = copy.inventory;
 
@@ -81,6 +84,7 @@ export default function InventoryDashboard({
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
         cacheKey: 'inventory',
+        branch,
         fetchOverview: (window) => api.getInventoryDashboardOverview(window),
         fetchTrends: (window) => api.getInventoryDashboardTrends(window),
         unavailableMessage: inv.overviewUnavailable,
@@ -258,6 +262,7 @@ export default function InventoryDashboard({
             subtitle={inv.subtitle}
             range={range}
             onRangeChange={setRange}
+            toolbar={<BranchFilter scope={branch} />}
             error={error}
             refreshing={refreshing}
         >

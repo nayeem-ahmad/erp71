@@ -713,7 +713,10 @@ export class InventoryReportsService {
             null;
         if (query.warehouseId) {
             warehouse = await this.db.warehouse.findFirst({
-                where: { id: query.warehouseId, tenant_id: tenantId },
+                // A warehouse outside the branch being reported is not found:
+                // the card would be empty anyway, and its name is not this
+                // caller's to read.
+                where: { id: query.warehouseId, tenant_id: tenantId, ...(query.storeId ? { store_id: query.storeId } : {}) },
                 select: {
                     id: true,
                     name: true,

@@ -8,6 +8,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { zonedDateString } from '../common/tenant-time.util';
 import { GetDailyReportDto } from './daily-report.dto';
 import { DailyReportService } from './daily-report.service';
@@ -20,12 +21,19 @@ export class DailyReportController {
     constructor(
         private readonly service: DailyReportService,
         private readonly db: DatabaseService,
+        private readonly branchScope: BranchScopeService,
     ) {}
 
     @Get()
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
     async get(@Tenant() tenant: TenantContext, @Query() query: GetDailyReportDto) {
-        const storeId = query.storeId || tenant.storeId;
+        // One branch by nature: a query id must be a branch the caller may use
+        // (it used to override the validated header unchecked), and omitted is
+        // the header branch.
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_FINANCIAL_REPORTS],
+            allowAll: false,
+        });
         if (!storeId) {
             throw new NotFoundException('Store not found');
         }

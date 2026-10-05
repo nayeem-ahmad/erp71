@@ -13,6 +13,8 @@ import { VoucherType } from '@erp71/shared-types';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { fetchMe } from '@/hooks/use-me';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
@@ -70,6 +72,7 @@ export default function AccountingVouchersListPage() {
 
 function AccountingVouchersListPageContent() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const { businessName } = useBranding();
     const printHeader = usePrintHeader('VOUCHER');
     const router = useRouter();
@@ -84,6 +87,12 @@ function AccountingVouchersListPageContent() {
     const [to, setTo] = useState('');
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [page, setPage] = useState(1);
+    // A branch change is page 1 of a fresh list, like any other filter.
+    const [pagedBranch, setPagedBranch] = useState(branch.apiStoreId);
+    if (pagedBranch !== branch.apiStoreId) {
+        setPagedBranch(branch.apiStoreId);
+        setPage(1);
+    }
     // `?approvalStatus=PENDING` turns this page into the approval queue, which is
     // what the sidebar/settings copy points at rather than a second list page.
     const [approvalStatus, setApprovalStatus] = useState(searchParams.get('approvalStatus') ?? '');
@@ -104,6 +113,7 @@ function AccountingVouchersListPageContent() {
     }, []);
 
     const loadVouchers = useCallback(async () => {
+        if (!branch.ready) return;
         setLoading(true);
         try {
             const data = await api.getVouchers({
@@ -114,16 +124,20 @@ function AccountingVouchersListPageContent() {
                 approvalStatus: approvalStatus || undefined,
                 page,
                 limit: 20,
+                storeId: branch.apiStoreId,
             });
             setResponse(data);
             setSelectedRows([]);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load vouchers', error);
             setResponse({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
         } finally {
             setLoading(false);
         }
-    }, [voucherType, from, to, createdRange, approvalStatus, page]);
+        // `branch` is a fresh object every render; what it asks for is these two.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [voucherType, from, to, createdRange, approvalStatus, page, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         void loadVouchers();
@@ -456,6 +470,7 @@ function AccountingVouchersListPageContent() {
                 )}
                 actions={(
                     <>
+                        <BranchFilter scope={branch} />
                         {filterControls}
                         <Link
                             href="/accounting/vouchers/new"

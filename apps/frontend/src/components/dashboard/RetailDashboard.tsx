@@ -17,6 +17,8 @@ import { SalesByCategoryDonut, type CategoryRow } from '@/components/dashboard/S
 import { CashFlowChart } from '@/components/dashboard/CashFlowChart';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import PageShell from '@/components/ui/compact/PageShell';
+import { BranchFilter } from '@/components/ui';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import type { DashboardIdentity } from './dashboard-identity';
 import { dashboardQueryKey } from './dashboard-query';
 import { KpiTileGrid, type KpiTileSpec } from './ModuleDashboard';
@@ -105,22 +107,28 @@ const EMPTY_KPIS: FinancialKpis = {
 // pipeline only emits COMPLETED, so this degrades to a count of 0 (item omitted).
 const DELIVERY_PENDING_STATUSES = new Set(['DELIVERY_PENDING', 'AWAITING_DELIVERY', 'PENDING_DELIVERY']);
 
+/** The branch filter's answer every panel asks with: `storeId`, and whether it is settled. */
+type PanelBranch = { storeId: string | undefined; ready: boolean };
+
 /**
  * One panel's question over the selected range.
  *
  * Keeps the previous range's answer on screen while a new one loads
  * (`keepPreviousData`), so switching tabs dims the figures instead of blanking
  * them to skeletons. The window is worked out when the request is made, not put
- * in the key — see `dashboardQueryKey`.
+ * in the key — see `dashboardQueryKey`. The branch filter's `storeId` is in the
+ * key, so another branch is a fresh question rather than a cache hit.
  */
 function useRangeQuery<T>(
     panel: string,
     range: DashboardRange,
-    fetchFor: (window: { from: string; to: string }) => Promise<T>,
+    branch: PanelBranch,
+    fetchFor: (window: { from: string; to: string; storeId?: string }) => Promise<T>,
 ) {
     return useQuery({
-        queryKey: dashboardQueryKey('retail', panel, range),
-        queryFn: () => fetchFor(rangeToWindow(range)),
+        queryKey: dashboardQueryKey('retail', panel, range, branch.storeId ?? null),
+        queryFn: () => fetchFor({ ...rangeToWindow(range), storeId: branch.storeId }),
+        enabled: branch.ready,
         placeholderData: keepPreviousData,
     });
 }
@@ -146,36 +154,49 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
     const copy = t.dashboardHome;
 
     const [range, setRange] = useState<DashboardRange>('week');
+    // Every panel answers for the branch filter's choice: the header branch to
+    // start with, another branch or "All branches" when picked.
+    const branch = useBranchScope();
+    const storeId = branch.apiStoreId;
+    const panelBranch: PanelBranch = { storeId, ready: branch.ready };
 
-    const kpisQuery = useRangeQuery<FinancialKpiResponse>('kpis', range, (win) => api.getFinancialKpis(win));
+    const kpisQuery = useRangeQuery<FinancialKpiResponse>('kpis', range, panelBranch, (win) => api.getFinancialKpis(win));
     // The window before this one feeds the delta arrows and nothing else, so it
     // is a request of its own: the headline figures never wait for it.
     const previousQuery = useRangeQuery<FinancialKpiResponse>(
         'kpis-previous',
         range,
-        (win) => api.getFinancialKpis(previousWindow(win)),
+        panelBranch,
+        ({ storeId: branchId, ...win }) => api.getFinancialKpis({ ...previousWindow(win), storeId: branchId }),
     );
-    const trendQuery = useRangeQuery<FinancialTrendResponse>('trends', range, (win) => api.getFinancialTrends(win));
-    const categoryQuery = useRangeQuery<CategoryResponse | null>('category', range, (win) => api.getSalesByCategory(win));
-    const productQuery = useRangeQuery<ReportRows<ProductReportRow>>('products', range, (win) => api.getSalesByProduct(win));
-    const customerQuery = useRangeQuery<ReportRows<CustomerReportRow>>('customers', range, (win) => api.getSalesByCustomer(win));
+    const trendQuery = useRangeQuery<FinancialTrendResponse>('trends', range, panelBranch, (win) => api.getFinancialTrends(win));
+    const categoryQuery = useRangeQuery<CategoryResponse | null>('category', range, panelBranch, (win) => api.getSalesByCategory(win));
+    const productQuery = useRangeQuery<ReportRows<ProductReportRow>>('products', range, panelBranch, (win) => api.getSalesByProduct(win));
+    const customerQuery = useRangeQuery<ReportRows<CustomerReportRow>>('customers', range, panelBranch, (win) => api.getSalesByCustomer(win));
 
     // These three ignore the range tabs, so switching tabs never re-asks them.
     const lowStockQuery = useQuery({
-        queryKey: dashboardQueryKey('retail', 'low-stock'),
-        queryFn: () => api.getLowStockCount() as Promise<{ count?: number } | null>,
+        queryKey: dashboardQueryKey('retail', 'low-stock', storeId ?? null),
+        queryFn: () => api.getLowStockCount({ storeId }) as Promise<{ count?: number } | null>,
+        enabled: branch.ready,
     });
     // Two bounded calls instead of the whole history: five rows for the activity
     // panel, and a count-only probe for the delivery tile.
     const recentSalesQuery = useQuery({
-        queryKey: dashboardQueryKey('retail', 'recent-sales'),
-        queryFn: () => api.getSalesList({ limit: 5 }) as Promise<{ items?: SaleRow[] } | null>,
+        queryKey: dashboardQueryKey('retail', 'recent-sales', storeId ?? null),
+        queryFn: () => api.getSalesList({ limit: 5, storeId }) as Promise<{ items?: SaleRow[] } | null>,
+        enabled: branch.ready,
     });
     // Counted by the server across every sale, not just the five loaded above.
     const deliveryQuery = useQuery({
-        queryKey: dashboardQueryKey('retail', 'deliveries-pending'),
-        queryFn: () => api.getSalesList({ status: [...DELIVERY_PENDING_STATUSES].join(','), limit: 1 }) as Promise<{ total?: number } | null>,
+        queryKey: dashboardQueryKey('retail', 'deliveries-pending', storeId ?? null),
+        queryFn: () => api.getSalesList({ status: [...DELIVERY_PENDING_STATUSES].join(','), limit: 1, storeId }) as Promise<{ total?: number } | null>,
+        enabled: branch.ready,
     });
+
+    // The server refusing the filter's branch: back to the header branch, with
+    // a toast. The KPI call is the one every panel shares a fate with.
+    useBranchForbiddenReset(kpisQuery.error, branch, t.dashboardLayout.branchFilterForbidden);
 
     const financialSnapshot = kpisQuery.data ?? null;
     const financialError = kpisQuery.isError
@@ -353,12 +374,15 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                     onRangeChange={setRange}
                     labels={{ today: copy.rangeToday, week: copy.rangeWeek, month: copy.rangeMonth }}
                     toolbar={
-                        <Link
-                            href={routes.sales.dailyReport}
-                            className="inline-flex min-h-touch items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:bg-gray-50"
-                        >
-                            {copy.todaysReport}
-                        </Link>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <Link
+                                href={routes.sales.dailyReport}
+                                className="inline-flex min-h-touch items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:bg-gray-50"
+                            >
+                                {copy.todaysReport}
+                            </Link>
+                        </>
                     }
                 />
 

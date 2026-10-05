@@ -9,6 +9,8 @@ import { formatBDT } from '@/lib/format';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { useI18n } from '@/lib/i18n';
 
 interface SummaryRow {
@@ -41,6 +43,7 @@ function defaultTo() {
 
 export default function PurchaseSummaryPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<SummaryRow[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
@@ -48,19 +51,22 @@ export default function PurchaseSummaryPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const load = async () => {
         setLoading(true);
         try {
             const data = await api.getPurchaseSummary({
+                storeId: branch.apiStoreId,
                 from: fromDate || undefined,
                 to: toDate || undefined,
             });
             setSummary(data.summary);
             setRows(data.rows);
         } catch (err) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load purchase summary', err);
         } finally {
             setLoading(false);
@@ -105,6 +111,7 @@ export default function PurchaseSummaryPage() {
                         t.purchaseReports.summary.title,
                         'purchases',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="grid md:grid-cols-5 gap-4">

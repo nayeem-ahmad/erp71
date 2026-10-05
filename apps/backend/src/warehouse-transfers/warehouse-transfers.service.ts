@@ -128,6 +128,16 @@ export class WarehouseTransfersService {
                 ...(query?.destinationWarehouseId ? { destination_warehouse_id: query.destinationWarehouseId } : {}),
                 ...(query?.productId ? { items: { some: { product_id: query.productId } } } : {}),
                 ...(query?.isCrossBranch !== undefined ? { is_cross_branch: query.isCrossBranch } : {}),
+                // Either end in the branch. Through the warehouse rather than the
+                // stamped store columns, which older transfers predate.
+                ...(query?.storeId
+                    ? {
+                          OR: [
+                              { sourceWarehouse: { store_id: query.storeId } },
+                              { destinationWarehouse: { store_id: query.storeId } },
+                          ],
+                      }
+                    : {}),
                 ...buildTransferDateRange(query?.from, query?.to, query?.timezone),
             },
             include: this.transferInclude(),

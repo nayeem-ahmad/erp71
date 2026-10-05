@@ -1,6 +1,8 @@
 export * from './compact';
 export { Input } from './Input';
 export { Select } from './Select';
+export { BranchFilter } from './BranchFilter';
+export type { BranchFilterProps } from './BranchFilter';
 export { Textarea } from './Textarea';
 export { Checkbox } from './Checkbox';
 export { Switch } from './Switch';

@@ -7,6 +7,8 @@ import { ArrowRightLeft, Plus, ShieldCheck, Truck } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -49,14 +51,18 @@ const STATUS_TONE: Record<string, string> = {
 
 export default function InventoryTransfersPage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [transfers, setTransfers] = useState<WarehouseTransfer[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [stores, setStores] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState('');
-    const [sourceWarehouseId, setSourceWarehouseId] = useState('');
-    const [destinationWarehouseId, setDestinationWarehouseId] = useState('');
+    // A transfer belongs to both its branches, so either end may sit in a branch
+    // other than the filter's: the pickers keep every warehouse, but a choice is
+    // cleared when the branch filter changes, like the reports' warehouse.
+    const [sourceWarehouseId, setSourceWarehouseId] = useBranchBoundState(branch.apiStoreId);
+    const [destinationWarehouseId, setDestinationWarehouseId] = useBranchBoundState(branch.apiStoreId);
     const [productId, setProductId] = useState('');
     const [scopeFilter, setScopeFilter] = useState('');
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
@@ -70,12 +76,13 @@ export default function InventoryTransfersPage() {
     const [message, setMessage] = useState('');
 
     useEffect(() => {
-        void Promise.all([loadTransfers(), loadOptions()]);
+        void loadOptions();
     }, []);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadTransfers();
-    }, [statusFilter, sourceWarehouseId, destinationWarehouseId, productId, scopeFilter, createdRange]);
+    }, [statusFilter, sourceWarehouseId, destinationWarehouseId, productId, scopeFilter, createdRange, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -97,9 +104,11 @@ export default function InventoryTransfersPage() {
                 isCrossBranch: scopeFilter === '' ? undefined : scopeFilter === 'cross',
                 from: applyCreatedRangeQuery(createdRange).createdFrom,
                 to: applyCreatedRangeQuery(createdRange).createdTo,
+                storeId: branch.apiStoreId,
             });
             setTransfers(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load warehouse transfers', error);
         } finally {
             setLoading(false);
@@ -314,15 +323,18 @@ export default function InventoryTransfersPage() {
                         'inventory',
                     )}
                     actions={(
-                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700">
-                            <option value="">{t.inventoryTransfers.allStatuses}</option>
-                            <option value="DRAFT">{t.inventoryTransfers.statuses.draft}</option>
-                            <option value="PENDING_APPROVAL">{t.inventoryTransfers.statuses.pendingApproval}</option>
-                            <option value="SENT">{t.inventoryTransfers.statuses.sent}</option>
-                            <option value="PARTIALLY_RECEIVED">{t.inventoryTransfers.statuses.partiallyReceived}</option>
-                            <option value="RECEIVED">{t.inventoryTransfers.statuses.received}</option>
-                            <option value="REJECTED">{t.inventoryTransfers.statuses.rejected}</option>
-                        </select>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-700">
+                                <option value="">{t.inventoryTransfers.allStatuses}</option>
+                                <option value="DRAFT">{t.inventoryTransfers.statuses.draft}</option>
+                                <option value="PENDING_APPROVAL">{t.inventoryTransfers.statuses.pendingApproval}</option>
+                                <option value="SENT">{t.inventoryTransfers.statuses.sent}</option>
+                                <option value="PARTIALLY_RECEIVED">{t.inventoryTransfers.statuses.partiallyReceived}</option>
+                                <option value="RECEIVED">{t.inventoryTransfers.statuses.received}</option>
+                                <option value="REJECTED">{t.inventoryTransfers.statuses.rejected}</option>
+                            </select>
+                        </>
                     )}
                 />
 

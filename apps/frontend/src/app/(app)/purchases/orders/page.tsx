@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { formatBDT, formatDate } from '@/lib/format';
 import CreatePurchaseOrderModal from './CreatePurchaseOrderModal';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -43,19 +45,24 @@ const columnHelper = createColumnHelper<PurchaseOrder>();
 
 export default function PurchaseOrdersPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
-    useEffect(() => { void load(); }, [createdRange]);
+    useEffect(() => {
+        if (!branch.ready) return;
+        void load();
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getPurchaseOrders(applyCreatedRangeQuery(createdRange));
+            const data = await api.getPurchaseOrders({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setOrders(data);
         } catch (err) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load purchase orders', err);
         } finally {
             setLoading(false);
@@ -150,13 +157,16 @@ export default function PurchaseOrdersPage() {
                         'purchases',
                     )}
                     actions={(
-                        <button
-                            onClick={() => setModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
-                        >
-                            <Plus className="w-4 h-4 me-2" />
-                            {t.purchaseOrders.newPo}
-                        </button>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <button
+                                onClick={() => setModalOpen(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
+                            >
+                                <Plus className="w-4 h-4 me-2" />
+                                {t.purchaseOrders.newPo}
+                            </button>
+                        </>
                     )}
                 />
 

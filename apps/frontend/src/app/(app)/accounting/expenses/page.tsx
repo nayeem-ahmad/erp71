@@ -18,7 +18,8 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { formatBDT, formatDate } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
-import { Button } from '@/components/ui';
+import { BranchFilter, Button } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { getWorkspaceItem } from '@/lib/session-store';
 
@@ -54,6 +55,9 @@ function defaultTo() {
 
 function ExpensesPageContent() {
     const { t } = useI18n();
+    // Which branch's entries to list; a new entry is still booked on the
+    // header branch.
+    const branch = useBranchScope();
     const searchParams = useSearchParams();
     const [entries, setEntries] = useState<ExpenseEntry[]>([]);
     const [categories, setCategories] = useState<ExpenseCategory[]>([]);
@@ -81,12 +85,14 @@ function ExpensesPageContent() {
                     to: toDate || undefined,
                     categoryId: categoryFilter || undefined,
                     ...applyCreatedRangeQuery(createdRange),
+                    storeId: branch.apiStoreId,
                 }),
                 api.getExpenseCategories(),
             ]);
             setEntries(entriesData ?? []);
             setCategories(Array.isArray(categoriesData) ? categoriesData : []);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load expenses', error);
         } finally {
             setLoading(false);
@@ -94,8 +100,9 @@ function ExpensesPageContent() {
     };
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadData();
-    }, [fromDate, toDate, categoryFilter, createdRange]);
+    }, [fromDate, toDate, categoryFilter, createdRange, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         if (searchParams.get('new') === '1') {
@@ -224,6 +231,7 @@ function ExpensesPageContent() {
                 )}
                 actions={(
                     <>
+                        <BranchFilter scope={branch} />
                         <Link href="/accounting/expenses/categories" className={compactDensity.btnSecondary}>
                             <Settings2 className="w-3.5 h-3.5" />
                             {t.expenses.manageCategories}

@@ -257,6 +257,9 @@ export const coreMessages = {
     dashboardLayout: {
         defaultPageTitle: "Panel",
         branchLabel: "Sucursal",
+        branchFilterAll: 'Todas las sucursales',
+        branchFilterLocked: 'Solo tienes acceso a esta sucursal',
+        branchFilterForbidden: 'No tienes acceso a esa vista de sucursal. Se muestra tu sucursal.',
         headerMoreMenuAria: "Más opciones",
         userFallbackRole: "Personal",
         onboardingMessage: "¡Bienvenido! Empieza añadiendo productos y haciendo tu primera venta.",

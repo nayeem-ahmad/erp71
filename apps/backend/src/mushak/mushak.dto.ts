@@ -1,4 +1,5 @@
-import { IsBooleanString, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBooleanString, IsOptional, IsString } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 /**
  * A tax period. NBR's is the calendar month, but a book is just as often
@@ -16,9 +17,9 @@ export class GetMushakPeriodDto {
     @IsString()
     to?: string;
 
-    /** Limit the book to one branch. Omit for the whole registration. */
+    /** Limit the book to one branch, or `all` for the whole registration. */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 }
 

@@ -1,6 +1,7 @@
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { LineItemSearchDto } from '../common/line-item-search';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 /** Bucket width for any time-series report. */
 export const TREND_GRANULARITIES = ['day', 'week', 'month'] as const;
@@ -39,7 +40,7 @@ export type MoverDimension = (typeof MOVER_DIMENSIONS)[number];
 
 export class GetSalesSummaryDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -53,7 +54,7 @@ export class GetSalesSummaryDto {
 
 export class GetSalesByProductDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -85,7 +86,7 @@ export class GetConsolidatedReportDto {
 
 export class GetSalesByCustomerDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -98,6 +99,11 @@ export class GetSalesByCustomerDto {
 }
 
 export class GetMonthlySalesByCustomerDto {
+    /** One branch, or `all`. Resolved against the caller's access first. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsString()
     from?: string;
@@ -112,8 +118,10 @@ export class GetMonthlySalesByCustomerDto {
 }
 
 export class GetBranchReportDto {
-    @IsUUID()
-    storeId: string;
+    /** The branch to report. Omitted, the header branch; `all` is refused. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 
     @IsOptional()
     @IsString()
@@ -126,7 +134,7 @@ export class GetBranchReportDto {
 
 export class GetSalesByCategoryDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -140,7 +148,7 @@ export class GetSalesByCategoryDto {
 
 export class GetSalesTrendDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsString()
@@ -160,7 +168,7 @@ export class GetSalesTrendDto {
 
 export class GetSalesBreakdownDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsString()
@@ -192,7 +200,7 @@ export class GetSalesBreakdownDto {
 
 export class GetTopMoversDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsString()
@@ -219,7 +227,7 @@ export class GetTopMoversDto {
 
 export class GetReturnsAnalysisDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsString()
@@ -231,7 +239,7 @@ export class GetReturnsAnalysisDto {
 
 export class GetCustomerRetentionDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsString()
@@ -255,7 +263,7 @@ export type SalespersonGrouping = (typeof SALESPERSON_GROUPINGS)[number];
 
 export class GetMarginExceptionsDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -289,7 +297,7 @@ export class GetMarginExceptionsDto {
 
 export class GetGrossProfitBySalespersonDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -307,7 +315,7 @@ export class GetGrossProfitBySalespersonDto {
 
 export class GetMarginBridgeDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsString()
@@ -330,7 +338,7 @@ export class GetMarginBridgeDto {
 
 export class GetCostCoverageDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()

@@ -29,21 +29,34 @@ const OPEN_RFQ_STATUSES = ['DRAFT', 'SENT', 'RECEIVED', 'ACCEPTED'];
  * because the payload spans purchases, orders, quotations, returns and supplier
  * balances, and the Overview must paint in one round trip rather than five.
  */
+type BranchFilter = { store_id?: string };
+
+/** The `where` fragment for one branch, or nothing for the whole tenant. */
+function branchFilter(storeId: string | undefined): BranchFilter {
+    return storeId ? { store_id: storeId } : {};
+}
+
 @Injectable()
 export class PurchaseDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
+    /**
+     * `query.storeId` is the branch the controller resolved (`undefined` = the
+     * whole tenant). The supplier balance stays tenant-wide: what the company
+     * owes a supplier is not any one branch's.
+     */
     async getOverview(tenantId: string, query: PurchaseDashboardQueryDto, timezone: string) {
         const window = resolveDateWindow(query, timezone);
+        const branch = branchFilter(query.storeId);
 
         const [spend, payables, orders, quotations, suppliers, products, recent] = await Promise.all([
-            this.getSpend(tenantId, window),
-            this.getPayables(tenantId),
-            this.getOrders(tenantId, window),
-            this.getQuotations(tenantId),
-            this.getTopSuppliers(tenantId, window),
-            this.getTopProducts(tenantId, window),
-            this.getRecent(tenantId),
+            this.getSpend(tenantId, window, branch),
+            this.getPayables(tenantId, branch),
+            this.getOrders(tenantId, window, branch),
+            this.getQuotations(tenantId, branch),
+            this.getTopSuppliers(tenantId, window, branch),
+            this.getTopProducts(tenantId, window, branch),
+            this.getRecent(tenantId, branch),
         ]);
 
         return {
@@ -58,17 +71,17 @@ export class PurchaseDashboardService {
         };
     }
 
-    private async getSpend(tenantId: string, window: DateWindow) {
+    private async getSpend(tenantId: string, window: DateWindow, branch: BranchFilter) {
         const inWindow = { gte: window.fromDate, lte: window.toDate };
 
         const [purchases, returns] = await Promise.all([
             this.db.purchase.aggregate({
-                where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: inWindow },
+                where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: inWindow },
                 _sum: { total_amount: true },
                 _count: { _all: true },
             }),
             this.db.purchaseReturn.aggregate({
-                where: { tenant_id: tenantId, created_at: inWindow },
+                where: { tenant_id: tenantId, ...branch, created_at: inWindow },
                 _sum: { total_amount: true },
                 _count: { _all: true },
             }),
@@ -92,14 +105,14 @@ export class PurchaseDashboardService {
      * What is owed, across the whole book. Payables are a balance, not a flow —
      * windowing them would answer a question nobody asked.
      */
-    private async getPayables(tenantId: string) {
+    private async getPayables(tenantId: string, branch: BranchFilter) {
         const [outstanding, unpaid, partial] = await Promise.all([
             this.db.supplier.aggregate({
                 where: { tenant_id: tenantId, deleted_at: null },
                 _sum: { due_balance: true },
             }),
-            this.db.purchase.count({ where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, payment_status: 'UNPAID' } }),
-            this.db.purchase.count({ where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, payment_status: 'PARTIAL' } }),
+            this.db.purchase.count({ where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, payment_status: 'UNPAID' } }),
+            this.db.purchase.count({ where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, payment_status: 'PARTIAL' } }),
         ]);
 
         return {
@@ -109,19 +122,20 @@ export class PurchaseDashboardService {
         };
     }
 
-    private async getOrders(tenantId: string, window: DateWindow) {
+    private async getOrders(tenantId: string, window: DateWindow, branch: BranchFilter) {
         const now = new Date();
 
         const [awaiting, draft, overdue, received] = await Promise.all([
             this.db.purchaseOrder.count({
-                where: { tenant_id: tenantId, status: 'SENT', received_at: null },
+                where: { tenant_id: tenantId, ...branch, status: 'SENT', received_at: null },
             }),
-            this.db.purchaseOrder.count({ where: { tenant_id: tenantId, status: 'DRAFT' } }),
+            this.db.purchaseOrder.count({ where: { tenant_id: tenantId, ...branch, status: 'DRAFT' } }),
             // Past its expected date and still not here. A PO with no expected
             // date cannot be late — it never promised anything.
             this.db.purchaseOrder.count({
                 where: {
                     tenant_id: tenantId,
+                    ...branch,
                     status: { in: OPEN_PO_STATUSES },
                     received_at: null,
                     expected_date: { lt: now },
@@ -130,6 +144,7 @@ export class PurchaseDashboardService {
             this.db.purchaseOrder.count({
                 where: {
                     tenant_id: tenantId,
+                    ...branch,
                     received_at: { gte: window.fromDate, lte: window.toDate },
                 },
             }),
@@ -138,18 +153,19 @@ export class PurchaseDashboardService {
         return { awaiting_receipt: awaiting, draft, overdue_expected: overdue, received_in_period: received };
     }
 
-    private async getQuotations(tenantId: string) {
+    private async getQuotations(tenantId: string, branch: BranchFilter) {
         const now = new Date();
         const soon = new Date(now);
         soon.setDate(soon.getDate() + EXPIRING_WITHIN_DAYS);
 
         const [open, expiring, expired] = await Promise.all([
             this.db.purchaseQuotation.count({
-                where: { tenant_id: tenantId, status: { in: OPEN_RFQ_STATUSES } },
+                where: { tenant_id: tenantId, ...branch, status: { in: OPEN_RFQ_STATUSES } },
             }),
             this.db.purchaseQuotation.count({
                 where: {
                     tenant_id: tenantId,
+                    ...branch,
                     status: { in: OPEN_RFQ_STATUSES },
                     valid_until: { gte: now, lte: soon },
                 },
@@ -157,6 +173,7 @@ export class PurchaseDashboardService {
             this.db.purchaseQuotation.count({
                 where: {
                     tenant_id: tenantId,
+                    ...branch,
                     status: { in: OPEN_RFQ_STATUSES },
                     valid_until: { lt: now },
                 },
@@ -166,10 +183,10 @@ export class PurchaseDashboardService {
         return { open, expiring, expired };
     }
 
-    private async getTopSuppliers(tenantId: string, window: DateWindow) {
+    private async getTopSuppliers(tenantId: string, window: DateWindow, branch: BranchFilter) {
         const grouped = await this.db.purchase.groupBy({
             by: ['supplier_id'],
-            where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
+            where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
             _sum: { total_amount: true },
             _count: { _all: true },
         });
@@ -199,11 +216,11 @@ export class PurchaseDashboardService {
         }));
     }
 
-    private async getTopProducts(tenantId: string, window: DateWindow) {
+    private async getTopProducts(tenantId: string, window: DateWindow, branch: BranchFilter) {
         const grouped = await this.db.purchaseItem.groupBy({
             by: ['product_id'],
             where: {
-                purchase: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
+                purchase: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
             },
             _sum: { quantity: true, line_total: true },
         });
@@ -226,9 +243,9 @@ export class PurchaseDashboardService {
         return ranked.map((row) => ({ ...row, name: byId.get(row.id) ?? 'Unknown product', spend: money(row.spend) }));
     }
 
-    private async getRecent(tenantId: string) {
+    private async getRecent(tenantId: string, branch: BranchFilter) {
         const rows = await this.db.purchase.findMany({
-            where: { tenant_id: tenantId, ...ACTIVE_PURCHASE },
+            where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE },
             orderBy: { created_at: 'desc' },
             take: RECENT_PURCHASES,
             select: {
@@ -255,8 +272,9 @@ export class PurchaseDashboardService {
     async getTrends(tenantId: string, query: PurchaseDashboardQueryDto, timezone: string) {
         const window = resolveDateWindow(query, timezone);
 
+        const branch = branchFilter(query.storeId);
         const purchases = await this.db.purchase.findMany({
-            where: { tenant_id: tenantId, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
+            where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
             select: { created_at: true, total_amount: true },
         });
 

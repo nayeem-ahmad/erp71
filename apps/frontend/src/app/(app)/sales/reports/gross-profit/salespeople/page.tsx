@@ -9,7 +9,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 import { CoverageNotice, MarginCell, ProfitCell, StatTile, type Coverage } from '@/components/gross-profit';
 
 interface Row {
@@ -43,6 +44,7 @@ function defaultFrom() {
 
 export default function GrossProfitBySalespersonPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const gp = t.salesReports.grossProfit;
     const [rows, setRows] = useState<Row[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
@@ -52,16 +54,18 @@ export default function GrossProfitBySalespersonPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate, groupBy]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate, groupBy]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getGrossProfitBySalesperson({ from: fromDate, to: toDate, groupBy });
+            const data = await api.getGrossProfitBySalesperson({ storeId: branch.apiStoreId, from: fromDate, to: toDate, groupBy });
             setSummary(data.summary);
             setRows(data.rows);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load gross profit by salesperson', error);
         } finally {
             setLoading(false);
@@ -112,6 +116,7 @@ export default function GrossProfitBySalespersonPage() {
                     gp.bySalespersonTitle,
                     'sales',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="grid md:grid-cols-4 gap-4">

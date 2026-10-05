@@ -35,17 +35,23 @@ const OPEN_DELIVERY_STATUSES = ['PENDING', 'ASSIGNED', 'IN_TRANSIT'];
 export class SalesDashboardService {
     constructor(private readonly db: DatabaseService) {}
 
+    /**
+     * `query.storeId` is the branch the controller resolved (`undefined` = the
+     * whole tenant). Receivables stay tenant-wide: a customer's balance belongs
+     * to the company, not to a branch.
+     */
     async getOverview(tenantId: string, query: SalesDashboardQueryDto, timezone: string) {
         const window = resolveDateWindow(query, timezone);
+        const storeId = query.storeId;
 
         const [sales, margin, receivables, fulfilment, products, customers, recent] = await Promise.all([
-            this.getSales(tenantId, window),
-            this.getMargin(tenantId, window),
+            this.getSales(tenantId, window, storeId),
+            this.getMargin(tenantId, window, storeId),
             this.getReceivables(tenantId),
-            this.getFulfilment(tenantId),
-            this.getTopProducts(tenantId, window),
-            this.getTopCustomers(tenantId, window),
-            this.getRecent(tenantId),
+            this.getFulfilment(tenantId, storeId),
+            this.getTopProducts(tenantId, window, storeId),
+            this.getTopCustomers(tenantId, window, storeId),
+            this.getRecent(tenantId, storeId),
         ]);
 
         return {
@@ -61,26 +67,32 @@ export class SalesDashboardService {
         };
     }
 
-    private saleWhere(tenantId: string, window: DateWindow) {
+    private saleWhere(tenantId: string, window: DateWindow, storeId?: string) {
         return {
             tenant_id: tenantId,
             status: 'COMPLETED',
             sale_date: { gte: window.fromDate, lte: window.toDate },
+            ...(storeId ? { store_id: storeId } : {}),
         };
     }
 
-    private async getSales(tenantId: string, window: DateWindow) {
+    private returnWhere(tenantId: string, window: DateWindow, storeId?: string) {
+        return {
+            tenant_id: tenantId,
+            created_at: { gte: window.fromDate, lte: window.toDate },
+            ...(storeId ? { store_id: storeId } : {}),
+        };
+    }
+
+    private async getSales(tenantId: string, window: DateWindow, storeId?: string) {
         const [sold, returned] = await Promise.all([
             this.db.sale.aggregate({
-                where: this.saleWhere(tenantId, window),
+                where: this.saleWhere(tenantId, window, storeId),
                 _sum: { total_amount: true },
                 _count: { _all: true },
             }),
             this.db.salesReturn.aggregate({
-                where: {
-                    tenant_id: tenantId,
-                    created_at: { gte: window.fromDate, lte: window.toDate },
-                },
+                where: this.returnWhere(tenantId, window, storeId),
                 _sum: { total_refund: true },
                 _count: { _all: true },
             }),
@@ -109,9 +121,9 @@ export class SalesDashboardService {
      * treated as free stock: a margin computed over half the lines is not a
      * margin, and the caller needs to know how much of the basket it covers.
      */
-    private async getMargin(tenantId: string, window: DateWindow) {
+    private async getMargin(tenantId: string, window: DateWindow, storeId?: string) {
         const items = await this.db.saleItem.findMany({
-            where: { sale: this.saleWhere(tenantId, window) },
+            where: { sale: this.saleWhere(tenantId, window, storeId) },
             select: { quantity: true, price_at_sale: true, unit_cost_at_sale: true },
         });
 
@@ -160,14 +172,15 @@ export class SalesDashboardService {
         };
     }
 
-    private async getFulfilment(tenantId: string) {
+    private async getFulfilment(tenantId: string, storeId?: string) {
+        const branch = storeId ? { store_id: storeId } : {};
         const now = new Date();
         const soon = new Date(now);
         soon.setDate(soon.getDate() + EXPIRING_WITHIN_DAYS);
 
         const [openOrders, overdueOrders, pendingDeliveries, openQuotes, expiringQuotes] = await Promise.all([
             this.db.salesOrder.count({
-                where: { tenant_id: tenantId, status: { in: OPEN_ORDER_STATUSES } },
+                where: { tenant_id: tenantId, status: { in: OPEN_ORDER_STATUSES }, ...branch },
             }),
             // Past its promised delivery date and still not delivered. An order
             // with no delivery date promised nothing and cannot be late.
@@ -176,19 +189,22 @@ export class SalesDashboardService {
                     tenant_id: tenantId,
                     status: { in: OPEN_ORDER_STATUSES },
                     delivery_date: { lt: now },
+                    ...branch,
                 },
             }),
             this.db.deliveryOrder.count({
-                where: { tenantId, status: { in: OPEN_DELIVERY_STATUSES } },
+                // A delivery has no branch of its own; it is its sale's.
+                where: { tenantId, status: { in: OPEN_DELIVERY_STATUSES }, ...(storeId ? { sale: branch } : {}) },
             }),
             this.db.quotation.count({
-                where: { tenant_id: tenantId, status: { in: OPEN_QUOTE_STATUSES } },
+                where: { tenant_id: tenantId, status: { in: OPEN_QUOTE_STATUSES }, ...branch },
             }),
             this.db.quotation.count({
                 where: {
                     tenant_id: tenantId,
                     status: { in: OPEN_QUOTE_STATUSES },
                     valid_until: { gte: now, lte: soon },
+                    ...branch,
                 },
             }),
         ]);
@@ -207,10 +223,10 @@ export class SalesDashboardService {
      * is the same rows re-bucketed, and asking the database twice for that would
      * be two scans of the same items.
      */
-    private async getTopProducts(tenantId: string, window: DateWindow) {
+    private async getTopProducts(tenantId: string, window: DateWindow, storeId?: string) {
         const grouped = await this.db.saleItem.groupBy({
             by: ['product_id'],
-            where: { sale: this.saleWhere(tenantId, window) },
+            where: { sale: this.saleWhere(tenantId, window, storeId) },
             _sum: { quantity: true },
         });
 
@@ -255,10 +271,10 @@ export class SalesDashboardService {
         };
     }
 
-    private async getTopCustomers(tenantId: string, window: DateWindow) {
+    private async getTopCustomers(tenantId: string, window: DateWindow, storeId?: string) {
         const grouped = await this.db.sale.groupBy({
             by: ['customer_id'],
-            where: this.saleWhere(tenantId, window),
+            where: this.saleWhere(tenantId, window, storeId),
             _sum: { total_amount: true },
             _count: { _all: true },
         });
@@ -288,9 +304,9 @@ export class SalesDashboardService {
         }));
     }
 
-    private async getRecent(tenantId: string) {
+    private async getRecent(tenantId: string, storeId?: string) {
         const rows = await this.db.sale.findMany({
-            where: { tenant_id: tenantId, status: 'COMPLETED' },
+            where: { tenant_id: tenantId, status: 'COMPLETED', ...(storeId ? { store_id: storeId } : {}) },
             orderBy: { sale_date: 'desc' },
             take: RECENT_SALES,
             select: {
@@ -322,14 +338,11 @@ export class SalesDashboardService {
 
         const [sales, returns] = await Promise.all([
             this.db.sale.findMany({
-                where: this.saleWhere(tenantId, window),
+                where: this.saleWhere(tenantId, window, query.storeId),
                 select: { sale_date: true, total_amount: true },
             }),
             this.db.salesReturn.findMany({
-                where: {
-                    tenant_id: tenantId,
-                    created_at: { gte: window.fromDate, lte: window.toDate },
-                },
+                where: this.returnWhere(tenantId, window, query.storeId),
                 select: { created_at: true, total_refund: true },
             }),
         ]);

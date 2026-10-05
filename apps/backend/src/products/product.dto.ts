@@ -1,4 +1,5 @@
 import { IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { TAKE_FIELDS, type TakeField } from './products.merge';
 
 const COMPOUND_UNIT_TYPES = ['none', 'ft_in', 'dozen_pcs', 'kg_g', 'lb_oz', 'm_cm'] as const;
@@ -230,4 +231,11 @@ export class MergeProductDto {
     @IsArray()
     @IsIn([...TAKE_FIELDS], { each: true })
     takeFields?: TakeField[];
+}
+
+/** The dashboard low-stock tile: one branch, `all`, or (omitted) the caller's default. */
+export class LowStockCountQueryDto {
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 }

@@ -12,6 +12,8 @@ import {
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { routes } from '@/lib/routes';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -53,24 +55,28 @@ function defaultTo() {
 
 export default function ExpenseReportsPage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [summary, setSummary] = useState<ExpenseSummary | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadSummary();
-    }, [fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const loadSummary = async () => {
         setLoading(true);
         try {
             const data = await api.getExpenseSummary({
+                storeId: branch.apiStoreId,
                 from: fromDate || undefined,
                 to: toDate || undefined,
             });
             setSummary(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load expense summary', error);
             setSummary(null);
         } finally {
@@ -136,6 +142,7 @@ export default function ExpenseReportsPage() {
                     [{ label: t.expenses.title, href: routes.accounting.expenses }],
                     t.accounting.links.expenseReports.title,
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <CompactSection flat>

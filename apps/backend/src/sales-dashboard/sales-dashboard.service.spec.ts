@@ -193,4 +193,27 @@ describe('SalesDashboardService', () => {
         // afternoon — right here, but wrong for any evening after 6pm.
         expect(result.points.find((point) => point.date === '2026-08-02')?.net_sales).toBe(500);
     });
+
+    it('narrows every branch-owned figure to the resolved branch, but not receivables', async () => {
+        await service.getOverview(TENANT, { storeId: 'store-1' }, 'Asia/Dhaka');
+        await service.getTrends(TENANT, { storeId: 'store-1' }, 'Asia/Dhaka');
+
+        const branch = expect.objectContaining({ store_id: 'store-1' });
+        expect(db.sale.aggregate).toHaveBeenCalledWith(expect.objectContaining({ where: branch }));
+        expect(db.salesReturn.aggregate).toHaveBeenCalledWith(expect.objectContaining({ where: branch }));
+        expect(db.saleItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { sale: branch } }));
+        expect(db.sale.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: branch }));
+        expect(db.sale.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: branch }));
+        expect(db.salesReturn.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: branch }));
+        for (const call of db.salesOrder.count.mock.calls) expect(call[0].where.store_id).toBe('store-1');
+        for (const call of db.quotation.count.mock.calls) expect(call[0].where.store_id).toBe('store-1');
+        expect(db.deliveryOrder.count.mock.calls[0][0].where.sale).toEqual({ store_id: 'store-1' });
+        // A customer's balance is the company's, not a branch's.
+        expect(db.customer.aggregate.mock.calls[0][0].where.store_id).toBeUndefined();
+    });
+
+    it('reads the whole tenant when no branch is resolved', async () => {
+        await service.getOverview(TENANT, {}, 'Asia/Dhaka');
+        expect(db.sale.aggregate.mock.calls[0][0].where.store_id).toBeUndefined();
+    });
 });

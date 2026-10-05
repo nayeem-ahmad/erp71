@@ -14,6 +14,9 @@ import { TenantRoles } from '../auth/tenant-roles.decorator';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { DatabaseService } from '../database/database.service';
+import { BranchScopeService } from '../database/branch-scope.service';
+import { assertConsolidatedScopePermission, normalizeReportScope, parseStoreIdsParam } from './report-scope.utils';
+import { ReportScope } from './accounting.constants';
 import {
     CreateVoucherDto,
     CreateAccountDto,
@@ -79,7 +82,47 @@ export class AccountingController {
     constructor(
         private readonly accountingService: AccountingService,
         private readonly db: DatabaseService,
+        private readonly branchScope: BranchScopeService,
     ) {}
+
+    /**
+     * The branch a dashboard or list covers, checked against the caller's
+     * access (`undefined` = the whole tenant, company-level vouchers included).
+     */
+    private async branchQuery<T extends { storeId?: string }>(tenant: TenantContext, query: T): Promise<T> {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_LEDGER],
+        });
+        return { ...query, storeId };
+    }
+
+    /**
+     * P&L / balance sheet / trial balance scope, checked against the caller's
+     * branches. `company` and `compare` still need VIEW_CONSOLIDATED_REPORTS;
+     * a `branch` id, and every `compare` id, must now be a branch the caller
+     * may use — before, any branch of the tenant could be named.
+     */
+    private async scopedStatementQuery<T extends { scope?: string; storeId?: string; storeIds?: string }>(
+        tenant: TenantContext,
+        query: T,
+    ): Promise<{ query: T; hasConsolidatedAccess: boolean }> {
+        const hasConsolidatedAccess = await hasStorePermission(this.db, tenant, StorePermission.VIEW_CONSOLIDATED_REPORTS);
+        const scope = normalizeReportScope(query.scope);
+        const permissions = [StorePermission.VIEW_LEDGER];
+
+        if (scope === ReportScope.BRANCH && query.storeId) {
+            const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions, allowAll: false });
+            return { query: { ...query, storeId }, hasConsolidatedAccess };
+        }
+
+        if (scope === ReportScope.COMPARE) {
+            assertConsolidatedScopePermission(scope, hasConsolidatedAccess);
+            const storeIds = await this.branchScope.resolveStoreIds(tenant, parseStoreIdsParam(query.storeIds), { permissions });
+            return { query: { ...query, storeIds: storeIds.join(',') }, hasConsolidatedAccess };
+        }
+
+        return { query, hasConsolidatedAccess };
+    }
 
     @Get()
     getOverview(@Tenant() tenant: TenantContext) {
@@ -220,8 +263,9 @@ export class AccountingController {
     }
 
     @Get('vouchers')
-    findVouchers(@Tenant() tenant: TenantContext, @Query() query: ListVouchersQueryDto) {
-        return this.accountingService.findVouchers(tenant.tenantId, { ...query, timezone: tenant.timezone });
+    async findVouchers(@Tenant() tenant: TenantContext, @Query() query: ListVouchersQueryDto) {
+        const scoped = await this.branchQuery(tenant, query);
+        return this.accountingService.findVouchers(tenant.tenantId, { ...scoped, timezone: tenant.timezone });
     }
 
     @Get('vouchers/next-number')
@@ -308,21 +352,21 @@ export class AccountingController {
     }
 
     @Get('dashboard/overview')
-    getAccountingDashboardOverview(
+    async getAccountingDashboardOverview(
         @Tenant() tenant: TenantContext,
         @Query() query: AccountingOverviewQueryDto,
     ) {
-        return this.accountingService.getAccountingDashboardOverview(tenant.tenantId, query);
+        return this.accountingService.getAccountingDashboardOverview(tenant.tenantId, await this.branchQuery(tenant, query));
     }
 
     @Get('dashboard/kpis')
-    getFinancialKpis(@Tenant() tenant: TenantContext, @Query() query: FinancialKpiQueryDto) {
-        return this.accountingService.getFinancialKpis(tenant.tenantId, query);
+    async getFinancialKpis(@Tenant() tenant: TenantContext, @Query() query: FinancialKpiQueryDto) {
+        return this.accountingService.getFinancialKpis(tenant.tenantId, await this.branchQuery(tenant, query));
     }
 
     @Get('dashboard/trends')
-    getFinancialTrends(@Tenant() tenant: TenantContext, @Query() query: FinancialTrendQueryDto) {
-        return this.accountingService.getFinancialTrends(tenant.tenantId, query);
+    async getFinancialTrends(@Tenant() tenant: TenantContext, @Query() query: FinancialTrendQueryDto) {
+        return this.accountingService.getFinancialTrends(tenant.tenantId, await this.branchQuery(tenant, query));
     }
 
     @Get('settings/posting-rules')
@@ -366,14 +410,14 @@ export class AccountingController {
 
     @Get('reports/profit-loss')
     async getProfitLoss(@Tenant() tenant: TenantContext, @Query() query: ProfitLossQueryDto) {
-        const hasConsolidatedAccess = await hasStorePermission(this.db, tenant, StorePermission.VIEW_CONSOLIDATED_REPORTS);
-        return this.accountingService.getProfitLoss(tenant.tenantId, query, hasConsolidatedAccess);
+        const scoped = await this.scopedStatementQuery(tenant, query);
+        return this.accountingService.getProfitLoss(tenant.tenantId, scoped.query, scoped.hasConsolidatedAccess);
     }
 
     @Get('reports/balance-sheet')
     async getBalanceSheet(@Tenant() tenant: TenantContext, @Query() query: BalanceSheetQueryDto) {
-        const hasConsolidatedAccess = await hasStorePermission(this.db, tenant, StorePermission.VIEW_CONSOLIDATED_REPORTS);
-        return this.accountingService.getBalanceSheet(tenant.tenantId, query, hasConsolidatedAccess);
+        const scoped = await this.scopedStatementQuery(tenant, query);
+        return this.accountingService.getBalanceSheet(tenant.tenantId, scoped.query, scoped.hasConsolidatedAccess);
     }
 
     @Get('reports/cashbook')
@@ -388,8 +432,8 @@ export class AccountingController {
 
     @Get('reports/trial-balance')
     async getTrialBalance(@Tenant() tenant: TenantContext, @Query() query: TrialBalanceQueryDto) {
-        const hasConsolidatedAccess = await hasStorePermission(this.db, tenant, StorePermission.VIEW_CONSOLIDATED_REPORTS);
-        return this.accountingService.getTrialBalance(tenant.tenantId, query, hasConsolidatedAccess);
+        const scoped = await this.scopedStatementQuery(tenant, query);
+        return this.accountingService.getTrialBalance(tenant.tenantId, scoped.query, scoped.hasConsolidatedAccess);
     }
 
     @Get('reports/ar-aging')

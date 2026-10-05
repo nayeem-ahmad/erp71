@@ -828,6 +828,7 @@ export class SalesReportsService {
             where: {
                 tenant_id: tenantId,
                 status: 'COMPLETED',
+                ...(query.storeId ? { store_id: query.storeId } : {}),
                 ...(query.customerId ? { customer_id: query.customerId } : {}),
                 ...dateFilter,
             },

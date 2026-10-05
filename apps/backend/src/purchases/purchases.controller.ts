@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
-import { PaginationDto } from '../common/pagination.dto';
 import { CancelEntryDto } from '../common/cancel-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { SortableBranchListQueryDto } from '../common/branch-list-query.dto';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { CreatePurchaseDto } from './purchase.dto';
 import { PurchasesService } from './purchases.service';
 
@@ -18,7 +19,10 @@ import { PURCHASE_READ, PURCHASE_WRITE } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class PurchasesController {
-    constructor(private readonly purchasesService: PurchasesService) {}
+    constructor(
+        private readonly purchasesService: PurchasesService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...PURCHASE_WRITE)
     @Post()
@@ -28,17 +32,16 @@ export class PurchasesController {
 
     @RequireAnyStorePermission(...PURCHASE_READ)
     @Get()
-    findAll(
+    async findAll(
         @Tenant() tenant: TenantContext,
-        @Query() query: PaginationDto,
-        @Query('createdFrom') createdFrom?: string,
-        @Query('createdTo') createdTo?: string,
-        @Query('sortBy') sortBy?: string,
-        @Query('sortDir') sortDir?: string,
+        @Query() query: SortableBranchListQueryDto,
     ) {
+        const { sortBy, sortDir } = query;
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: PURCHASE_READ });
         return this.purchasesService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
-            createdFrom,
-            createdTo,
+            createdFrom: query.createdFrom,
+            createdTo: query.createdTo,
+            storeId,
             sortBy,
             sortDir,
         });
