@@ -531,6 +531,9 @@ function SaleDetailPageContent() {
             adjustmentLabel="Adjustment"
             payments={payments}
             onPaymentChange={updatePayment}
+            // Editing a posted sale's payments rewrites its tenders and nothing
+            // else; only a draft, once finalised, posts an overpayment.
+            warnOnOverpayment={isDraft}
             warehouses={warehouses}
             warehouseId={warehouseId}
             setWarehouseId={setWarehouseId}

@@ -466,6 +466,12 @@ Found while clearing the open PR list. Each fix below is still missing on `dev`,
 
 ## IMPORTANT — First month after launch
 
+- [ ] **Editing a posted sale's payments re-posts nothing.** `SalesService.update()` rewrites the `PaymentRecord` rows and `amount_paid` but never touches the customer ledger or the vouchers: taking a sale from paid to part-paid leaves no `CREDIT_SALE`, and raising its payments past the total leaves no receipt, so the invoice's Total Due and the customer's `due_balance` disagree afterwards. The overpayment alert is switched off on that form (`warnOnOverpayment={isDraft}`) rather than promise an advance the edit will not book. Fix: re-run the credit/receipt postings as a delta inside `update()`, the way items already reverse and re-apply stock. Found 2026-10-05.
+
+- [ ] **The sale-linked receipt posts to the first tender's account only.** When a customer pays beyond the total across two tenders (say cash and bKash), the excess receipt's Dr side is `resolvePaymentMethodAccountId` of `payments[0]` — the same approximation the sale's own voucher already makes. Splitting both vouchers per tender is the real fix and belongs with the `classifyPaymentMode` account-resolution work. Found 2026-10-05.
+
+- [ ] **The payment-method sales breakdown counts a customer's excess as revenue.** `aggregateByPaymentMethod` sums `PaymentRecord` rows, and a customer sale keeps its full tender (the excess over the total is a receipt on account, not revenue). Cap each sale's rows at its `total_amount`, or label that basis "collected" rather than revenue. Walk-in change is already netted out, so only customer overpayments are affected. Found 2026-10-05.
+
 - [ ] **Per-branch letterheads — follow-ups from the 2026-10-01 review.** None of these blocks the feature; each is small.
   - **Popup-blocker risk on a cold first print.** List and detail prints now await `printHeader.resolve(doc.store_id)` before `window.open`, and the hooks' eager mount fetch has no store, so the first print of a branch's document is a network round trip after the click. On slow mobile Safari the popup can be blocked, and `openPrintWindow` returns null silently. Prefetch `resolve(doc.store_id)` once a detail page loads; on lists, pass the workspace store as the hook's `storeId` (or `eager: false` to drop the wasted fetch).
   - **The "What each branch prints" card can roll back a saved change on screen.** `BranchAssignments` reverts a failed PUT to its closure snapshot, so if A fails after B succeeds, B looks reverted. Revert only the failed `(store, docType)` key.
@@ -1779,6 +1785,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **A sale can take more than its total, with a warning instead of a refusal** — done 2026-10-05. `prepareSale` used to throw "Payment amount exceeds sale total", and New Sale blocked it too — which also broke every POS cash sale that gave change, since the POS sends what was tendered. Now `splitSaleOverpayment` decides: on a customer's sale the excess is a `PAYMENT` receipt (own `CPY-` number, `customer_payment` voucher, `reference_type: 'SALE'`) that settles the previous due and leaves anything past it as an advance (negative due); on a walk-in, or a POS sale (`returnChange: true`), it is change, taken off the tenders cash-first so the till and the payment-method report see only what was kept. The payment strip says where the excess goes and turns amber with an alert once it runs past the previous due; `invoiceDues` now nets an overpayment into Total Due (negative = advance) and the invoice page stops calling a customer's excess "Change". Cancelling or deleting the sale takes the receipt and its voucher back.
 
 - [x] **A task card opens on a touch tap** — done 2026-10-05. The board and the sprint card view only opened a card from a mouse press under the drag threshold, so a finger tap did nothing. The card now opens on click, and a finished drag swallows the click that follows the drop so putting a card down does not open it. Touch on the card body still does not start a drag.
 

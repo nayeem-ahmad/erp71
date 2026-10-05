@@ -26,7 +26,13 @@ import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
 import {
     assertCustomerCreditForSale,
     creditDueAmount,
+    customerLedgerDueDelta,
 } from '../customers/customer-credit.utils';
+import {
+    CUSTOMER_PAYMENT_DISCOUNT_LEG,
+    nextCustomerCreditNumber,
+} from '../customers/customer-payment-number.util';
+import { netOfChange, splitSaleOverpayment } from './sale-overpayment.util';
 import {
     assertSessionForPosSale,
     findOpenSessionForUser,
@@ -101,13 +107,13 @@ export class SalesService {
                     // column comments on Sale.
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
-                    amount_paid: dto.amountPaid,
+                    amount_paid: prep.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'COMPLETED',
                     note: dto.note,
                     created_by: userId,
-                    payments: dto.payments ? {
-                        create: dto.payments.map(paymentRecordData)
+                    payments: prep.payments ? {
+                        create: prep.payments.map(paymentRecordData)
                     } : undefined
                 },
             });
@@ -279,10 +285,29 @@ export class SalesService {
         }
 
         const balanceDue = creditDueAmount(computedTotal, dto.amountPaid);
-        if (dto.amountPaid - computedTotal > 0.02) {
-            throw new BadRequestException(
-                `Payment amount exceeds sale total by ৳${(dto.amountPaid - computedTotal).toFixed(2)}.`,
-            );
+
+        // Paying more than the total is never refused — the entry screen
+        // warns instead. What happens to the excess is `splitSaleOverpayment`'s
+        // call: change handed back is taken off the tenders before they are
+        // stored, a payment on account is posted by applySalePostings.
+        const { changeReturned, accountPayment } = splitSaleOverpayment({
+            total: computedTotal,
+            amountPaid: dto.amountPaid,
+            hasCustomer: !!dto.customerId,
+            returnChange: dto.returnChange,
+        });
+        let accountCustomerName: string | null = null;
+        if (accountPayment > 0) {
+            // Checked here, before anything is written: the excess lands on
+            // this customer's ledger, so it must be one of this tenant's.
+            const accountCustomer = await tx.customer.findFirst({
+                where: { id: dto.customerId, tenant_id: tenantId, deleted_at: null },
+                select: { id: true, name: true },
+            });
+            if (!accountCustomer) {
+                throw new NotFoundException('Customer not found');
+            }
+            accountCustomerName = accountCustomer.name;
         }
 
         let creditCustomerDueBalance = 0;
@@ -341,6 +366,13 @@ export class SalesService {
             balanceDue,
             creditCustomerDueBalance,
             tax,
+            // What the sale and its payment rows record: everything taken,
+            // less any change handed back.
+            amountPaid: dto.amountPaid - changeReturned,
+            payments: netOfChange(dto.payments, changeReturned),
+            changeReturned,
+            accountPayment,
+            accountCustomerName,
         };
     }
 
@@ -367,6 +399,9 @@ export class SalesService {
             balanceDue,
             creditCustomerDueBalance,
             tax,
+            changeReturned,
+            accountPayment,
+            accountCustomerName,
         } = prep;
 
         // 3. Process Items and update stock
@@ -512,6 +547,65 @@ export class SalesService {
             });
         }
 
+        // Paid beyond the total: the excess is a receipt on the customer's
+        // account, exactly as if it had been taken on the customer payments
+        // screen — its own CPY- number, its own Dr <tender> / Cr AR voucher —
+        // linked back to this sale so cancelling the sale takes it back too.
+        // It settles the previous due first, and anything past that leaves the
+        // customer in advance (a negative due).
+        let accountReceipt: { id: string; payment_number: string; amount: number; balance_after: number } | null = null;
+        if (accountPayment > 0 && dto.customerId) {
+            const dueBefore = previousDue ?? 0;
+            const balanceAfter = Math.round((dueBefore - accountPayment) * 100) / 100;
+            const paymentNumber = await nextCustomerCreditNumber(tenantId, tx, 'PAYMENT');
+            const receipt = await tx.customerCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    customer_id: dto.customerId,
+                    type: 'PAYMENT',
+                    amount: accountPayment,
+                    balance_after: balanceAfter,
+                    reference_type: 'SALE',
+                    reference_id: sale.id,
+                    payment_number: paymentNumber,
+                    notes: `Paid with sale ${sale.reference_number || sale.serial_number}`,
+                    created_by: userId,
+                },
+            });
+            await tx.customer.update({
+                where: { id: dto.customerId },
+                data: { due_balance: balanceAfter },
+            });
+
+            // The tender the sale's own voucher posts to, so the excess lands
+            // in the same cash, bank or wallet account as the rest of it.
+            const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
+            await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'customer_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: 'receive',
+                sourceModule: 'customers',
+                sourceType: 'customer_payment',
+                sourceId: receipt.id,
+                amount: accountPayment,
+                description: `Customer payment — ${accountCustomerName ?? 'customer'}`,
+                referenceNumber: paymentNumber,
+                storeId: dto.storeId,
+                partyType: 'CUSTOMER',
+                partyId: dto.customerId,
+                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+            });
+
+            accountReceipt = {
+                id: receipt.id,
+                payment_number: paymentNumber,
+                amount: accountPayment,
+                balance_after: balanceAfter,
+            };
+        }
+
         let posting: AutoPostResult = { postingStatus: 'skipped' };
 
         if (balanceDue > 0.005) {
@@ -586,6 +680,10 @@ export class SalesService {
             voucher_type: posting.voucherType ?? null,
             loyalty: loyaltyResult,
             previous_due: previousDue,
+            // What became of anything paid beyond the total, for the entry
+            // screen to tell the cashier.
+            change_returned: changeReturned,
+            account_payment: accountReceipt,
         };
     }
 
@@ -788,7 +886,7 @@ export class SalesService {
             // applySalePostings recreates the items (with unit cost attached).
             await tx.saleItem.deleteMany({ where: { sale_id: id } });
             await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
-            for (const p of payments) {
+            for (const p of prep.payments ?? []) {
                 await tx.paymentRecord.create({
                     data: { sale_id: id, ...paymentRecordData(p) },
                 });
@@ -804,7 +902,7 @@ export class SalesService {
                     // posted, which may differ from what was parked.
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
-                    amount_paid: amountPaid,
+                    amount_paid: prep.amountPaid,
                     note: saleDto.note ?? null,
                     // The resolved id, not the parked one: a draft may have been
                     // saved with no warehouse at all, and the posted sale must
@@ -1288,26 +1386,38 @@ export class SalesService {
             }
             await tx.loyaltyTransaction.deleteMany({ where: { tenantId, saleId: sale.id } });
 
-            // Credit: drop the CREDIT_SALE row and take its amount back
-            // off the customer's outstanding due.
-            const creditTxns = await tx.customerCreditTransaction.findMany({
+            // Credit: drop the rows this sale wrote on the customer's ledger
+            // — its CREDIT_SALE, and the receipt for anything paid beyond the
+            // total — and move the due back by what they moved it.
+            const ledgerRows = await tx.customerCreditTransaction.findMany({
                 where: {
                     tenant_id: tenantId,
                     reference_type: 'SALE',
                     reference_id: sale.id,
                 },
-                select: { id: true, amount: true },
+                select: { id: true, type: true, amount: true, discount_amount: true },
             });
-            const creditTotal = creditTxns.reduce((sum: number, c: { amount: any }) => sum + Number(c.amount), 0);
+            const dueMoved = ledgerRows.reduce(
+                (sum: number, row: { type: string; amount: any; discount_amount?: any }) =>
+                    sum + customerLedgerDueDelta(row.type, Number(row.amount), Number(row.discount_amount ?? 0)),
+                0,
+            );
             await tx.customerCreditTransaction.deleteMany({
-                where: { id: { in: creditTxns.map((c: { id: string }) => c.id) } },
+                where: { id: { in: ledgerRows.map((row: { id: string }) => row.id) } },
             });
+            // A receipt posted as a customer payment, so its vouchers are
+            // keyed to the receipt row, not to the sale.
+            for (const row of ledgerRows) {
+                if (row.type !== 'PAYMENT') continue;
+                await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', row.id);
+                await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', row.id, CUSTOMER_PAYMENT_DISCOUNT_LEG);
+            }
 
             await tx.customer.update({
                 where: { id: sale.customer_id },
                 data: {
                     total_spent: { decrement: Number(sale.total_amount) },
-                    ...(creditTotal !== 0 && { due_balance: { decrement: creditTotal } }),
+                    ...(Math.abs(dueMoved) > 0.005 && { due_balance: { decrement: dueMoved } }),
                 },
             });
         }

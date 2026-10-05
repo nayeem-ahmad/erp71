@@ -216,6 +216,20 @@ describe('TotalsFooter — customer dues', () => {
         expect(screen.queryByText('Total Due')).not.toBeInTheDocument();
     });
 
+    it('takes what is paid beyond the sale off the previous due', () => {
+        renderDues(500, 1800);
+
+        expect(amountBeside('Previous Due')).toBe('৳500.00');
+        expect(amountBeside('Total Due')).toBe('৳-300.00');
+    });
+
+    it('shows the advance an overpayment leaves when nothing was owed before', () => {
+        renderDues(0, 1200);
+
+        expect(amountBeside('Previous Due')).toBe('৳0.00');
+        expect(amountBeside('Total Due')).toBe('৳-200.00');
+    });
+
     it('shows nothing without a customer', () => {
         renderDues(null, 600);
 

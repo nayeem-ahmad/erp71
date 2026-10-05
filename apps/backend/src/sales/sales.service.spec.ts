@@ -108,6 +108,8 @@ describe('SalesService', () => {
       },
       customerCreditTransaction: {
         create: jest.fn(),
+        // The receipt-number lookup: none yet, so the series starts at 1.
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn(),
       },
@@ -867,6 +869,123 @@ describe('SalesService', () => {
     });
   });
 
+  describe('create() — paying more than the total', () => {
+    const overpaidSale = {
+      storeId: 'store-1',
+      totalAmount: 850,
+      amountPaid: 1500,
+      items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 850 }],
+      payments: [{ paymentMethod: 'CASH', amount: 1500 }],
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({
+        id: 'sale-over', serial_number: 'SL-9', reference_number: 'INV-2610-0009', total_amount: 850,
+      });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Rahim Store' });
+      // The spend update hands back the customer as they stand: owing 400.
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '400.00' });
+      tx.customerCreditTransaction.create.mockResolvedValue({ id: 'ct-receipt' });
+    });
+
+    it('puts the excess on the customer\'s account: previous due first, the rest in advance', async () => {
+      const result = await service.create('tenant-1', 'user-1', { ...overpaidSale, customerId: 'cust-1' });
+
+      // The sale keeps everything that was taken, so its memo reads
+      // paid 1,500 against 850 with 400 owed before: 250 in advance.
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          amount_paid: 1500,
+          payments: { create: [expect.objectContaining({ payment_method: 'CASH', amount: 1500 })] },
+        }),
+      }));
+      expect(tx.customerCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          customer_id: 'cust-1',
+          type: 'PAYMENT',
+          amount: 650,
+          balance_after: -250,
+          reference_type: 'SALE',
+          reference_id: 'sale-over',
+          payment_number: 'CPY-00001',
+          notes: 'Paid with sale INV-2610-0009',
+        }),
+      });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { due_balance: -250 },
+      });
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'customer_payment',
+        conditionKey: 'payment_direction',
+        conditionValue: 'receive',
+        sourceId: 'ct-receipt',
+        amount: 650,
+        partyType: 'CUSTOMER',
+        partyId: 'cust-1',
+      }));
+      // The sale's own voucher is for the sale and no more.
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'sale',
+        amount: 850,
+      }));
+      expect(result.previous_due).toBe(400);
+      expect(result.account_payment).toEqual({
+        id: 'ct-receipt', payment_number: 'CPY-00001', amount: 650, balance_after: -250,
+      });
+      expect(result.change_returned).toBe(0);
+    });
+
+    it('does not refuse an excess beyond everything the customer owed', async () => {
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '0.00' });
+
+      await expect(
+        service.create('tenant-1', 'user-1', { ...overpaidSale, customerId: 'cust-1' }),
+      ).resolves.toBeDefined();
+
+      expect(tx.customerCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type: 'PAYMENT', amount: 650, balance_after: -650 }),
+      });
+    });
+
+    it('treats a walk-in\'s excess as change, kept off the sale and its tenders', async () => {
+      const result = await service.create('tenant-1', 'user-1', overpaidSale);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          amount_paid: 850,
+          payments: { create: [expect.objectContaining({ payment_method: 'CASH', amount: 850 })] },
+        }),
+      }));
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+      expect(result.change_returned).toBe(650);
+      expect(result.account_payment).toBeNull();
+    });
+
+    it('keeps the excess off the account when the till says it was handed back', async () => {
+      await service.create('tenant-1', 'user-1', {
+        ...overpaidSale,
+        customerId: 'cust-1',
+        returnChange: true,
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ amount_paid: 850 }),
+      }));
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to put an excess on a customer the tenant does not have', async () => {
+      tx.customer.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('tenant-1', 'user-1', { ...overpaidSale, customerId: 'cust-elsewhere' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('create() — Story 10.4: Advanced Payments (Split/Cards)', () => {
     it('should create a sale with split payment methods', async () => {
       const sale = { id: 'sale-5' };
@@ -1479,7 +1598,7 @@ describe('SalesService', () => {
     it('restores stock, reverses loyalty, credit and spend, and voids both posting legs', async () => {
       tx.sale.findFirst.mockResolvedValue(completedSale);
       tx.loyaltyTransaction.findMany.mockResolvedValue([{ points: 30 }, { points: -10 }]);
-      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', amount: 120 }]);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', type: 'CREDIT_SALE', amount: 120 }]);
 
       const result = await service.remove('tenant-1', 'sale-1');
 
@@ -1508,6 +1627,26 @@ describe('SalesService', () => {
       expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'sale', 'sale-1', 'paid');
       expect(tx.sale.delete).toHaveBeenCalledWith({ where: { id: 'sale-1' } });
       expect(result).toEqual({ deleted: true, id: 'sale-1' });
+    });
+
+    it('takes back a receipt for money paid beyond the total, with its voucher', async () => {
+      tx.sale.findFirst.mockResolvedValue(completedSale);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([
+        { id: 'ct-receipt', type: 'PAYMENT', amount: 650, discount_amount: 0 },
+      ]);
+
+      await service.remove('tenant-1', 'sale-1');
+
+      expect(tx.customerCreditTransaction.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['ct-receipt'] } },
+      });
+      // The receipt lowered the due by 650, so undoing it raises it by 650.
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { total_spent: { decrement: 300 }, due_balance: { decrement: -650 } },
+      });
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'customer_payment', 'ct-receipt');
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'customer_payment', 'ct-receipt', 'discount');
     });
 
     it('leaves the due balance alone when the sale was fully paid', async () => {
@@ -1571,7 +1710,7 @@ describe('SalesService', () => {
     it('reverses stock, serials, loyalty, credit and spend, and voids both posting legs', async () => {
       tx.sale.findFirst.mockResolvedValue(completedSale);
       tx.loyaltyTransaction.findMany.mockResolvedValue([{ points: 30 }, { points: -10 }]);
-      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', amount: 120 }]);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', type: 'CREDIT_SALE', amount: 120 }]);
       tx.sale.update.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
 
       await service.cancel('tenant-1', 'user-9', 'sale-1', 'Customer walked out');

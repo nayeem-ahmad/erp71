@@ -511,6 +511,21 @@ describe('InvoicePage — customer dues', () => {
         open.mockRestore();
     });
 
+    it('takes a customer\'s payment beyond the invoice off their dues, not as change', async () => {
+        // ৳11,500 billed and ৳14,000 paid against ৳2,000 owed: the ৳2,500
+        // over settles the old due and leaves ৳500 in advance.
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...creditInvoice,
+            sale: { ...creditInvoice.sale, amount_paid: '14000' },
+        });
+        render(<InvoicePage />);
+
+        await waitFor(() => expect(screen.getByText('Total Due')).toBeInTheDocument());
+        expect(screen.queryByText('Change')).not.toBeInTheDocument();
+        expect(amountBeside('Previous Due')).toBe(money(2000));
+        expect(amountBeside('Total Due')).toBe(money(-500));
+    });
+
     it('shows no dues on a walk-in sale', async () => {
         getApi().getSaleInvoice.mockResolvedValue({
             ...mockInvoiceData,

@@ -508,6 +508,10 @@ export default function POSPage() {
             ...(effectivePointsToRedeem > 0 ? { pointsToRedeem: effectivePointsToRedeem } : {}),
             totalAmount: total,
             amountPaid: totalPaid,
+            // The tender boxes take what the customer hands over and the till
+            // gives back `changeDue`, so the excess is change even with a
+            // customer selected — never a payment on their account.
+            returnChange: true,
             items: cart.map(item => ({
                 productId: item.id,
                 quantity: item.quantity,
