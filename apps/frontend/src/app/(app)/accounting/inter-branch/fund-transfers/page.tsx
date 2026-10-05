@@ -17,7 +17,8 @@ import { useI18n } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { useReportStores } from '@/lib/accounting-report-scope';
-import { Button } from '@/components/ui';
+import { BranchFilter, Button } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 interface FundTransfer {
@@ -41,6 +42,9 @@ export default function FundTransfersPage() {
     const { t, locale } = useI18n();
     const m = t.accounting.reports.fundTransfers;
     const { stores } = useReportStores();
+    // Lists the transfers the branch sent or received ("All branches": every one).
+    const branch = useBranchScope();
+    const storeId = branch.apiStoreId;
     const [transfers, setTransfers] = useState<FundTransfer[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState('');
@@ -64,21 +68,25 @@ export default function FundTransfersPage() {
         setError(null);
         try {
             const data = await api.listFundTransfers({
+                storeId,
                 status: statusFilter || undefined,
                 from: applyCreatedRangeQuery(createdRange).createdFrom,
                 to: applyCreatedRangeQuery(createdRange).createdTo,
             });
             setTransfers(Array.isArray(data) ? data : []);
         } catch (err: any) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             setError(err?.message ?? m.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, createdRange, m.loadFailed]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [storeId, statusFilter, createdRange, m.loadFailed]);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadTransfers();
-    }, [loadTransfers]);
+    }, [branch.ready, loadTransfers]);
 
     useEffect(() => {
         if (stores.length === 0) {
@@ -216,14 +224,17 @@ export default function FundTransfersPage() {
                     'accounting',
                 )}
                 actions={(
-                    <button
-                        type="button"
-                        onClick={openCreate}
-                        className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700`}
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        {m.create}
-                    </button>
+                    <>
+                        <BranchFilter scope={branch} />
+                        <button
+                            type="button"
+                            onClick={openCreate}
+                            className={`${compactDensity.btnPrimary} bg-gray-900 text-white hover:bg-gray-700`}
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            {m.create}
+                        </button>
+                    </>
                 )}
             />
 

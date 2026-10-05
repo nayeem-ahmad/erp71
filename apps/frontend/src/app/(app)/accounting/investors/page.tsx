@@ -6,7 +6,8 @@ import { CalendarClock, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { AccountingPageShell, CompactStat } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Button } from '@/components/ui';
+import { BranchFilter, Button } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
@@ -100,6 +101,9 @@ const lastMonth = () => {
 
 export default function InvestorsPage() {
     const { t } = useI18n();
+    // Narrows the list and the totals; the monthly profit run is company-wide
+    // and has no branch to pick.
+    const branch = useBranchScope();
     const copy = t.investors;
 
     const [investors, setInvestors] = useState<Investor[]>([]);
@@ -140,12 +144,13 @@ export default function InvestorsPage() {
         setLoading(true);
         try {
             const [list, stats] = await Promise.all([
-                api.getInvestors({ status: statusFilter || undefined }),
-                api.getInvestorSummary(),
+                api.getInvestors({ storeId: branch.apiStoreId, status: statusFilter || undefined }),
+                api.getInvestorSummary({ storeId: branch.apiStoreId }),
             ]);
             setInvestors(list ?? []);
             setSummary(stats ?? null);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load investors', error);
         } finally {
             setLoading(false);
@@ -153,8 +158,9 @@ export default function InvestorsPage() {
     };
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadData();
-    }, [statusFilter]);
+    }, [branch.ready, branch.apiStoreId, statusFilter]);
 
     const openCreate = () => {
         setEditingId(null);
@@ -413,7 +419,8 @@ export default function InvestorsPage() {
                     'accounting',
                 )}
                 actions={(
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <BranchFilter scope={branch} />
                         <button
                             type="button"
                             onClick={openRun}
