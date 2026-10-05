@@ -95,3 +95,25 @@ describe('SalesSettingsService — member invoice print preferences', () => {
         });
     });
 });
+
+describe('SalesSettingsService — show_customer_credit', () => {
+    const db = { salesSettings: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() } };
+    const service = new SalesSettingsService(db as any);
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it('is off for a tenant whose row predates the flag', async () => {
+        db.salesSettings.findUnique.mockResolvedValue({ id: 's1', tenant_id: 't1' });
+        await expect(service.get('t1')).resolves.toMatchObject({ show_customer_credit: false });
+    });
+
+    it('is written only when the request carries it', async () => {
+        db.salesSettings.findUnique.mockResolvedValue({ id: 's1', tenant_id: 't1', paper_size: 'A4', reference_number_format: 'YYMM-#' });
+        db.salesSettings.update.mockImplementation(({ data }) => Promise.resolve({ id: 's1', tenant_id: 't1', ...data }));
+
+        await service.update('t1', { paper_size: 'A4' as any });
+        expect(db.salesSettings.update.mock.calls[0][0].data).not.toHaveProperty('show_customer_credit');
+
+        await expect(service.update('t1', { show_customer_credit: true })).resolves.toMatchObject({ show_customer_credit: true });
+    });
+});

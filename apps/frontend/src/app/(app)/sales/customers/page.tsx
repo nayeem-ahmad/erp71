@@ -44,6 +44,7 @@ interface Customer {
     total_spent?: string | number | null;
     segment_category?: string | null;
     loyalty_points?: number | null;
+    due_balance?: string | number | null;
     created_at: string;
     customerGroup?: { name: string } | null;
     territory?: { name: string } | null;
@@ -79,6 +80,24 @@ export default function CustomersPage() {
     const [runningSegmentation, setRunningSegmentation] = useState(false);
     const [evaluating, setEvaluating] = useState(false);
     const [evalMessage, setEvalMessage] = useState('');
+    // The tenant admin's Sales Settings switch. Off until it reads true, so the
+    // column never flashes in for a shop that has it off.
+    const [showCredit, setShowCredit] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const load = () => {
+            api.getSalesSettings()
+                .then((s: { show_customer_credit?: boolean }) => { if (!cancelled) setShowCredit(Boolean(s?.show_customer_credit)); })
+                .catch(() => { /* keep the column hidden if settings cannot be read */ });
+        };
+        load();
+        window.addEventListener('erp71:sales-settings-updated', load);
+        return () => {
+            cancelled = true;
+            window.removeEventListener('erp71:sales-settings-updated', load);
+        };
+    }, []);
 
     const segmentCardStyle: Record<string, { bg: string; text: string; bar: string; icon: React.ReactNode }> = useMemo(() => ({
         VIP: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-500', icon: <Crown className="w-5 h-5 text-emerald-500" /> },
@@ -254,6 +273,24 @@ export default function CustomersPage() {
                 sortingFn: (a, b) => Number(a.getValue('total_spent') || 0) - Number(b.getValue('total_spent') || 0),
                 size: 120,
             }),
+            ...(showCredit ? [columnHelper.accessor('due_balance', {
+                id: 'credit',
+                header: t.customers.columns.credit,
+                cell: (info) => {
+                    const due = Number(info.getValue() || 0);
+                    const limit = info.row.original.credit_limit;
+                    return (
+                        <div className="text-sm">
+                            <span className={due > 0 ? 'font-semibold text-amber-700' : 'text-gray-500'}>{formatBDT(due)}</span>
+                            {limit != null ? (
+                                <span className="block text-xs text-gray-400">/ {formatBDT(Number(limit))}</span>
+                            ) : null}
+                        </div>
+                    );
+                },
+                sortingFn: (a, b) => Number(a.original.due_balance || 0) - Number(b.original.due_balance || 0),
+                size: 120,
+            })] : []),
             columnHelper.accessor('loyalty_points', {
                 header: t.customers.columns.points,
                 cell: (info) => {
@@ -313,7 +350,7 @@ export default function CustomersPage() {
                 size: 90,
             }),
         ],
-        [t, locale],
+        [t, locale, showCredit],
     );
 
     // Server-side equivalents of the old client-side presets: filtering the loaded rows
