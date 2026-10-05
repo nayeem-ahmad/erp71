@@ -18,6 +18,8 @@ import { buildNavigationSection } from './app-navigation';
 import { ChatDataService } from './chat-data.service';
 import { WebSearchService } from './web-search.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
+import { AuthCacheService } from '../database/auth-cache.service';
+import { loadMemberStoreAccess } from '../database/member-access.loader';
 import { startOfZonedToday } from '../common/tenant-time.util';
 import {
     CHAT_TOOLS,
@@ -79,7 +81,27 @@ export class ChatService {
         private readonly webSearch: WebSearchService,
         private readonly anomalyDetection: AnomalyDetectionService,
         private readonly timezones: TenantTimezoneService,
+        private readonly authCache: AuthCacheService,
     ) {}
+
+    /**
+     * The branches the assistant may name: every store for an owner, the
+     * member's own branches for anyone else. This list is the allow-list the
+     * tools check a model-supplied `storeId` against, so a member of branch A
+     * cannot ask for branch B's figures by naming it.
+     */
+    private async loadVisibleStores(ctx: TenantContext): Promise<Array<{ id: string; name: string }>> {
+        const stores = await this.db.store.findMany({
+            where: { tenant_id: ctx.tenantId },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+        });
+        if (ctx.userRole === 'OWNER') return stores;
+        if (!ctx.userId) return [];
+        const access = await loadMemberStoreAccess(this.db, this.authCache, ctx.userId, ctx.tenantId);
+        const allowed = new Set(access.map((row) => row.store_id));
+        return stores.filter((store) => allowed.has(store.id));
+    }
 
     private get deps(): ChatToolDeps {
         return {
@@ -236,11 +258,7 @@ export class ChatService {
         const [{ tools, modules }, history, stores, hasConsolidatedAccess] = await Promise.all([
             this.resolveTools(ctx),
             this.loadHistory(conversation.id),
-            this.db.store.findMany({
-                where: { tenant_id: ctx.tenantId },
-                select: { id: true, name: true },
-                orderBy: { name: 'asc' },
-            }),
+            this.loadVisibleStores(ctx),
             hasStorePermission(this.db, ctx, StorePermission.VIEW_CONSOLIDATED_REPORTS),
         ]);
 

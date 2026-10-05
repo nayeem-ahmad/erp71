@@ -236,8 +236,8 @@ export class InvestorsService {
      * The profit basis is a live read here and a snapshot once the run posts —
      * that difference is the point of the preview.
      */
-    async previewProfitRun(tenantId: string, dto: ProfitRunDto) {
-        const { profit, from, to } = await this.readMonthProfit(tenantId, dto);
+    async previewProfitRun(tenantId: string, dto: ProfitRunDto, hasConsolidatedAccess = false) {
+        const { profit, from, to } = await this.readMonthProfit(tenantId, dto, hasConsolidatedAccess);
         const investors = await this.eligibleInvestors(tenantId, dto);
         const lines = allocateProfit(profit, investors.map((investor) => this.toAllocationInvestor(investor)));
         const existing = await this.findRun(tenantId, dto);
@@ -264,7 +264,7 @@ export class InvestorsService {
      * rejected rather than double-accruing. Posting is dated to the period end so
      * autoPostFromRules' fiscal-period guard blocks accruing into a locked month.
      */
-    async createProfitRun(tenantId: string, userId: string, dto: ProfitRunDto) {
+    async createProfitRun(tenantId: string, userId: string, dto: ProfitRunDto, hasConsolidatedAccess = false) {
         if (dto.storeId) await this.assertStoreExists(tenantId, dto.storeId);
 
         const existing = await this.findRun(tenantId, dto);
@@ -274,7 +274,7 @@ export class InvestorsService {
             );
         }
 
-        const { profit, end } = await this.readMonthProfit(tenantId, dto);
+        const { profit, end } = await this.readMonthProfit(tenantId, dto, hasConsolidatedAccess);
         const investors = await this.eligibleInvestors(tenantId, dto);
         if (investors.length === 0) {
             throw new BadRequestException('NO_ELIGIBLE_INVESTORS: no active investor covers this period.');
@@ -524,18 +524,21 @@ export class InvestorsService {
      * The month's net profit, read through the same code that renders the P&L
      * report so the two can never disagree.
      *
-     * `hasConsolidatedAccess` is true because the caller has already cleared
-     * MANAGE_INVESTORS on the controller — this is a server-side read, not a
-     * user-supplied report scope.
+     * `hasConsolidatedAccess` is the caller's real answer (owner, or
+     * VIEW_CONSOLIDATED_REPORTS in the header branch), passed down from the
+     * controller: MANAGE_INVESTORS alone does not entitle a member to read the
+     * company-wide P&L, so a company-wide run without it is refused the same
+     * way the P&L report refuses it. A branch run's id is checked against the
+     * caller's branches by the controller before it gets here.
      */
-    private async readMonthProfit(tenantId: string, dto: ProfitRunDto) {
+    private async readMonthProfit(tenantId: string, dto: ProfitRunDto, hasConsolidatedAccess: boolean) {
         const { from, to, end } = monthBounds(dto.year, dto.month);
         const report = await this.accounting.getProfitLoss(
             tenantId,
             dto.storeId
                 ? { from, to, scope: 'branch', storeId: dto.storeId }
                 : { from, to, scope: 'company' },
-            true,
+            hasConsolidatedAccess,
         );
         return { profit: roundAmount(Number((report as { net_profit: number }).net_profit ?? 0)), from, to, end };
     }

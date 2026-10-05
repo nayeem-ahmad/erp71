@@ -1,3 +1,4 @@
+import { IsStoreIdOrAll } from './store-id-or-all.validator';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 
@@ -29,9 +30,12 @@ export const LINE_ITEM_MAX_PAGE_SIZE = 100;
 const LINE_ITEM_DEFAULT_PAGE_SIZE = 25;
 
 export class LineItemSearchDto {
-    /** One branch. Left out, every branch the tenant has. */
+    /**
+     * One branch, or `all`. The controller resolves it against the caller's
+     * branch access before the service sees it.
+     */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()

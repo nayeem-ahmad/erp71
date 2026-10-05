@@ -7,6 +7,7 @@ import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     GetBranchReportDto,
     GetConsolidatedReportDto,
@@ -38,7 +39,18 @@ export class SalesReportsController {
     constructor(
         private readonly service: SalesReportsService,
         private readonly lineItems: SalesLineItemsService,
+        private readonly branchScope: BranchScopeService,
     ) {}
+
+    /** The branch a report covers, checked against the caller's access. */
+    private async scoped<T extends { storeId?: string }>(
+        tenant: TenantContext,
+        query: T,
+        permissions: readonly StorePermission[] = SALES_READ,
+    ): Promise<T> {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions });
+        return { ...query, storeId };
+    }
 
     @RequireAnyStorePermission(...SALES_READ)
     @Get('summary')
@@ -66,8 +78,14 @@ export class SalesReportsController {
 
     @Get('branch-report')
     @RequireStorePermission(StorePermission.VIEW_FINANCIAL_REPORTS)
-    getBranchReport(@Tenant() tenant: TenantContext, @Query() query: GetBranchReportDto) {
-        return this.service.getBranchReport(tenant.tenantId, query);
+    async getBranchReport(@Tenant() tenant: TenantContext, @Query() query: GetBranchReportDto) {
+        // One branch by nature: checked against the caller's branches, not only
+        // the tenant's, and omitted means the header branch.
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_FINANCIAL_REPORTS],
+            allowAll: false,
+        });
+        return this.service.getBranchReport(tenant.tenantId, { ...query, storeId: storeId as string });
     }
 
     @RequireAnyStorePermission(...SALES_READ)
@@ -82,8 +100,8 @@ export class SalesReportsController {
      */
     @RequireAnyStorePermission(...SALES_READ)
     @Get('line-items')
-    getSalesLineItems(@Tenant() tenant: TenantContext, @Query() query: GetSalesLineItemsDto) {
-        return this.lineItems.getSalesLineItems(tenant.tenantId, query, tenant.timezone);
+    async getSalesLineItems(@Tenant() tenant: TenantContext, @Query() query: GetSalesLineItemsDto) {
+        return this.lineItems.getSalesLineItems(tenant.tenantId, await this.scoped(tenant, query), tenant.timezone);
     }
 
     @RequireAnyStorePermission(...SALES_READ)

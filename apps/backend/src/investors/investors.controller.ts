@@ -16,6 +16,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateCapitalTxnDto,
     CreateInvestorDto,
@@ -39,7 +40,25 @@ import { InvestorsService } from './investors.service';
 @RequireStorePermission(StorePermission.VIEW_INVESTORS)
 @UseInterceptors(TenantInterceptor)
 export class InvestorsController {
-    constructor(private readonly service: InvestorsService) {}
+    constructor(
+        private readonly service: InvestorsService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
+
+    /**
+     * A profit run reads the P&L. A branch run's id must be a branch the caller
+     * may manage investors in; a company-wide run needs the whole-company view
+     * (owner, or VIEW_CONSOLIDATED_REPORTS), which MANAGE_INVESTORS alone is not.
+     */
+    private async profitRunScope(tenant: TenantContext, dto: ProfitRunDto) {
+        if (dto.storeId) {
+            await this.branchScope.resolveStoreId(tenant, dto.storeId, {
+                permissions: [StorePermission.MANAGE_INVESTORS],
+                allowAll: false,
+            });
+        }
+        return this.branchScope.canSeeAllBranches(tenant);
+    }
 
     @Get()
     list(@Tenant() tenant: TenantContext, @Query() query: ListInvestorsQueryDto) {
@@ -109,14 +128,16 @@ export class InvestorsController {
     /** Dry run — shows what a month would allocate without writing anything. */
     @Post('profit-runs/preview')
     @RequireStorePermission(StorePermission.MANAGE_INVESTORS)
-    previewProfitRun(@Tenant() tenant: TenantContext, @Body() dto: ProfitRunDto) {
-        return this.service.previewProfitRun(tenant.tenantId, dto);
+    async previewProfitRun(@Tenant() tenant: TenantContext, @Body() dto: ProfitRunDto) {
+        const hasConsolidatedAccess = await this.profitRunScope(tenant, dto);
+        return this.service.previewProfitRun(tenant.tenantId, dto, hasConsolidatedAccess);
     }
 
     @Post('profit-runs')
     @RequireStorePermission(StorePermission.MANAGE_INVESTORS)
-    createProfitRun(@Tenant() tenant: TenantContext, @Body() dto: ProfitRunDto) {
-        return this.service.createProfitRun(tenant.tenantId, tenant.userId, dto);
+    async createProfitRun(@Tenant() tenant: TenantContext, @Body() dto: ProfitRunDto) {
+        const hasConsolidatedAccess = await this.profitRunScope(tenant, dto);
+        return this.service.createProfitRun(tenant.tenantId, tenant.userId, dto, hasConsolidatedAccess);
     }
 
     @Delete('profit-runs/:id')

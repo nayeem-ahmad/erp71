@@ -112,8 +112,10 @@ export class GetMonthlySalesByCustomerDto {
 }
 
 export class GetBranchReportDto {
+    /** The branch to report. Omitted, the header branch; `all` is refused. */
+    @IsOptional()
     @IsUUID()
-    storeId: string;
+    storeId?: string;
 
     @IsOptional()
     @IsString()

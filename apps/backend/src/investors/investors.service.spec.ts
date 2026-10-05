@@ -227,7 +227,27 @@ describe('InvestorsService', () => {
             expect(accounting.getProfitLoss).toHaveBeenCalledWith(
                 'tenant-1',
                 expect.objectContaining({ scope: 'branch', storeId: 'store-1' }),
+                false,
+            );
+        });
+
+        it("passes the caller's real consolidated access to a company-wide P&L read", async () => {
+            db.investor.findMany.mockResolvedValue([investorRow()]);
+
+            await service.createProfitRun('tenant-1', 'user-1', { year: 2026, month: 7 }, true);
+            expect(accounting.getProfitLoss).toHaveBeenLastCalledWith(
+                'tenant-1',
+                expect.objectContaining({ scope: 'company' }),
                 true,
+            );
+
+            // Regression: this used to be hard-coded `true`, so a MANAGE_INVESTORS
+            // member without VIEW_CONSOLIDATED_REPORTS read the company P&L.
+            await service.previewProfitRun('tenant-1', { year: 2026, month: 7 });
+            expect(accounting.getProfitLoss).toHaveBeenLastCalledWith(
+                'tenant-1',
+                expect.objectContaining({ scope: 'company' }),
+                false,
             );
         });
 
