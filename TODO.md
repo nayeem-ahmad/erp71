@@ -454,6 +454,23 @@ Proposal: `docs/dynamic-payment-methods-plan.md`. Asked as "in sales/purchase, p
 
 ---
 
+### Branch filter on branch-aware pages, plus branch access enforcement — spec written 2026-10-05, not started
+
+Spec: `docs/superpowers/specs/2026-10-05-branch-filter-design.md`. Asked as "for UIs and reports where branch is a parameter — need filter with branch (selected at the top) … if the user is not allowed to access other branches, branch selection should be made disabled". Decisions taken: the page filter starts on the header branch and a change is page-local (`?branch=`); the filter is disabled when a member has exactly one branch; "All branches" needs owner or `VIEW_CONSOLIDATED_REPORTS`; first delivery is phases 0–4.
+
+- [ ] **Any member can read another branch's reports by passing its id** — found while planning: no endpoint checks a query/path/body `storeId` against `UserStoreAccess`. With `x-store-id: A` (checked) and `?storeId=B` (unchecked), a branch-A-only member reads B from `sales-reports/*` (incl. `branch-report`), `purchase-reports/*`, `inventory-reports/*`, `inventory/ledger`, `warehouse-transfers`, `expenses`, `loans`, `investors`, `fund-transfers`, `mushak/*`, `counters`, `cashier-sessions/store/:storeId`, `daily-report` (query id overrides the validated header, `daily-report.controller.ts:28`), and accounting P&L/BS/TB with `scope=branch` (`assertConsolidatedScopePermission` returns early for branch scope). Omitting `storeId` returns every branch without `VIEW_CONSOLIDATED_REPORTS` almost everywhere. Fixed by phase 0–1 (`BranchScopeService`)
+- [ ] **Investor profit-run preview shows company net profit to anyone with `MANAGE_INVESTORS`** — `investors.service.ts` (~531-539) calls `getProfitLoss(..., true)`, hard-coding consolidated access. Phase 1
+- [ ] **The AI assistant accepts any branch of the tenant** — `ai/tools/types.ts:172-179` `resolveStoreId` validates against all tenant stores (`chat.service.ts:239-243`), not the member's. Phase 1
+- [ ] **Phase 0 — foundation** — `BranchScopeService` (beside `member-access.loader.ts`, cached loaders only), `IsStoreIdOrAll` validator, `/auth/me` `store_count`; frontend `useBranchScope` + `BranchFilter` in `@/components/ui`; shell header change strips `?branch=`
+- [ ] **Phase 1 — pages that already take a branch, and the access fix** — 5 inventory reports, sales + purchase line items, branch report, daily report, accounting P&L/BS/TB (`ReportScopeBar` loses its branch radios/select, keeps compare), cashier sessions, Mushak
+- [ ] **Phase 2 — reports whose API takes `storeId` the page never sends** — sales summary/products/customers/monthly, gross profit ×4, purchase summary/by-product/by-supplier, expense reports, loans, investors, fund transfers
+- [ ] **Phase 3 — dashboards** — retail dashboard + sales/purchase/inventory/accounting module dashboards gain `storeId`
+- [ ] **Phase 4 — transaction lists** — sales/orders/quotes/returns/warranty, purchases/orders/quotations/returns, imports, vouchers + journal, expenses, stock takes, shrinkage, transfers, demands, stock ledger
+- [ ] **Phase 5 (later) — company-level ledgers, HR, CRM** — cashbook, bankbook, account ledger, AR/AP aging, cash flow, VAT, ratios, budget-vs-actual, comparative P&L (company-level vouchers have no branch); HR attendance (`Employee` has no `store_id`); CRM (nullable `store_id`, and CRM create endpoints write `dto.store_id` with no check at all — `crm-leads.service.ts:384` and siblings)
+- [ ] **Write paths trust body store ids** — out of this spec's scope, found while planning: voucher create/update writes `dto.storeId`/`counterpartyStoreId` without a tenant check (`accounting.service.ts:1492-1494,1586-1588`); sales, sales-orders and quotations take `dto.storeId` without a tenant lookup (`sales.service.ts:90`, `sales-orders.service.ts:48`, `sales-quotations.service.ts:109`); cashier `openSession` checks the tenant only despite its comment (`cashier-sessions.service.ts:40-51`). The fix is the same resolver with `allowAll: false`
+
+---
+
 ### Re-ports salvaged from closed PRs (2026-10-01)
 
 Found while clearing the open PR list. Each fix below is still missing on `dev`, but its branch had drifted too far to merge, so the PR was closed and the work is recorded here. The original commits remain reachable through the closed PRs (`refs/pull/<n>/head`).
