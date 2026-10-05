@@ -8,6 +8,8 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { formatBDT, formatDate } from '@/lib/format';
 import CreatePurchaseQuotationModal from './CreatePurchaseQuotationModal';
 import PageShell from '@/components/ui/compact/PageShell';
@@ -42,21 +44,25 @@ const columnHelper = createColumnHelper<PurchaseQuotation>();
 
 export default function PurchaseQuotationsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const router = useRouter();
     const [rfqs, setRfqs] = useState<PurchaseQuotation[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
-    useEffect(() => { void load(); }, [createdRange]);
+    useEffect(() => {
+        if (!branch.ready) return;
+        void load();
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getPurchaseQuotations(applyCreatedRangeQuery(createdRange));
+            const data = await api.getPurchaseQuotations({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setRfqs(data);
-        } catch {
-            // silent
+        } catch (err) {
+            handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden);
         } finally {
             setLoading(false);
         }
@@ -188,13 +194,16 @@ export default function PurchaseQuotationsPage() {
                         'purchases',
                     )}
                     actions={(
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
-                        >
-                            <Plus className="w-4 h-4 me-2" />
-                            New RFQ
-                        </button>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <button
+                                onClick={() => setIsModalOpen(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
+                            >
+                                <Plus className="w-4 h-4 me-2" />
+                                New RFQ
+                            </button>
+                        </>
                     )}
                 />
 

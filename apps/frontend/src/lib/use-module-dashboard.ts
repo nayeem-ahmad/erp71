@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { DashboardRange } from '@/components/dashboard/DashboardHeader';
 import { dashboardQueryKey } from '@/components/dashboard/dashboard-query';
 import { periodDelta, type Delta } from './dashboard-delta';
 import { previousDateWindow, previousWindow, rangeToDateWindow, rangeToWindow } from './dashboard-range';
 import { useI18n } from './i18n';
-import { handleBranchForbidden, type UseBranchScope } from './branch-scope';
+import { useBranchForbiddenReset, type UseBranchScope } from './branch-scope';
 
 /** The window a fetcher is asked for, plus the branch filter's `storeId` when the dashboard has one. */
 export type DateWindow = { from: string; to: string; storeId?: string };
@@ -160,14 +160,7 @@ export function useModuleDashboard<TOverview, TTrend = never>({
 
     // The server refusing the filter's branch is the filter's problem, not the
     // page's: back to the header branch, with a toast.
-    const branchRef = useRef(branch);
-    branchRef.current = branch;
-    const forbiddenMessage = t.dashboardLayout.branchFilterForbidden;
-    const overviewError = overviewQuery.error;
-    useEffect(() => {
-        const scope = branchRef.current;
-        if (overviewError && scope) handleBranchForbidden(overviewError, scope, forbiddenMessage);
-    }, [overviewError, forbiddenMessage]);
+    useBranchForbiddenReset(overviewQuery.error, branch, t.dashboardLayout.branchFilterForbidden);
 
     // Losing the overview costs the page; losing the comparison window costs a
     // "—"; losing the trend costs the sparklines.

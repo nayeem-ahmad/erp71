@@ -18,7 +18,7 @@ import { CashFlowChart } from '@/components/dashboard/CashFlowChart';
 import { RankedListPanel, type RankedItem } from '@/components/dashboard/RankedListPanel';
 import PageShell from '@/components/ui/compact/PageShell';
 import { BranchFilter } from '@/components/ui';
-import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import type { DashboardIdentity } from './dashboard-identity';
 import { dashboardQueryKey } from './dashboard-query';
 import { KpiTileGrid, type KpiTileSpec } from './ModuleDashboard';
@@ -196,12 +196,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
 
     // The server refusing the filter's branch: back to the header branch, with
     // a toast. The KPI call is the one every panel shares a fate with.
-    const kpisError = kpisQuery.error;
-    useEffect(() => {
-        if (kpisError) handleBranchForbidden(kpisError, branch, t.dashboardLayout.branchFilterForbidden);
-        // `branch` is a fresh object every render; the error is what changes.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [kpisError]);
+    useBranchForbiddenReset(kpisQuery.error, branch, t.dashboardLayout.branchFilterForbidden);
 
     const financialSnapshot = kpisQuery.data ?? null;
     const financialError = kpisQuery.isError

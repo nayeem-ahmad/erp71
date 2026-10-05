@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMe } from '@/hooks/use-me';
 import { hasPermission, isOwner, tenantFromMe } from '@/lib/permissions';
@@ -201,6 +201,24 @@ export function handleBranchForbidden(
     toast.error(message);
     scope.resetToHeader();
     return true;
+}
+
+/**
+ * `handleBranchForbidden` for an error a hook owns rather than a `catch` the
+ * page writes — `useServerList`'s `error`, a react-query `error`. Runs once per
+ * new error; the scope is read at that moment, so callers may pass the fresh
+ * object `useBranchScope` returns on every render.
+ */
+export function useBranchForbiddenReset(
+    error: unknown,
+    scope: Pick<UseBranchScope, 'value' | 'headerBranchId' | 'resetToHeader'> | undefined,
+    message: string,
+): void {
+    const scopeRef = useRef(scope);
+    scopeRef.current = scope;
+    useEffect(() => {
+        if (error && scopeRef.current) handleBranchForbidden(error, scopeRef.current, message);
+    }, [error, message]);
 }
 
 /**

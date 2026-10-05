@@ -20,6 +20,8 @@ const { enMessages } = require('@/lib/localization/messages/en');
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import QuotesPage from './page';
 
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
     usePathname: () => '/sales/quotes',

@@ -19,6 +19,8 @@ jest.mock('@/lib/i18n', () => {
 import { render, screen, waitFor } from '@testing-library/react';
 import WarrantyClaimsPage from './page';
 
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/api', () => ({
     api: {
         getWarrantyClaims: jest.fn(),

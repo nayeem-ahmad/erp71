@@ -16,7 +16,8 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
 
@@ -60,6 +61,7 @@ const columnHelper = createColumnHelper<Quotation>();
 
 export default function QuotesPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const printHeader = usePrintHeader('QUOTE');
     const [quotes, setQuotes] = useState<Quotation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -69,15 +71,17 @@ export default function QuotesPage() {
     const { share, sharingId, openShare, revokeShare, closeShare } = useQuotationShare();
 
     useEffect(() => {
+        if (!branch.ready) return;
         loadQuotes();
-    }, [createdRange]);
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const loadQuotes = async () => {
         setLoading(true);
         try {
-            const data = await api.getQuotations(applyCreatedRangeQuery(createdRange));
+            const data = await api.getQuotations({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setQuotes(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load quotes', error);
         } finally {
             setLoading(false);
@@ -312,6 +316,7 @@ export default function QuotesPage() {
                     )}
                     actions={
                         <div className="flex flex-wrap items-center gap-2">
+                            <BranchFilter scope={branch} />
                             <Link
                                 href={`${routes.sales.quoteNew}?kind=PROFORMA`}
                                 className={`${compactDensity.btnSecondary}`}

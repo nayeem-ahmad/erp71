@@ -18,6 +18,9 @@ jest.mock('@/lib/i18n', () => {
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import SalesListPage from './page';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => {
     // Forwards the rest of the props: the row menus put `role="menuitem"` on
@@ -98,6 +101,7 @@ const mockSales = [
 
 describe('SalesListPage — Sales Transaction List', () => {
     beforeEach(() => {
+        mockBranchScope();
         const { api } = require('@/lib/api');
         // The list pages against the server, so the mock returns one page plus
         // the real total rather than a bare array.
@@ -292,6 +296,45 @@ describe('SalesListPage — Sales Transaction List', () => {
         await waitFor(() => {
             expect(api.getSalesList).toHaveBeenCalledTimes(1);
         });
+    });
+
+    it('opens on the header branch, and re-asks for page 1 of the branch picked', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all', page: 1 })),
+        );
+    });
+
+    it('asks nothing until the branch is known', async () => {
+        mockBranchScope({ ready: false });
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+        expect(api.getSalesList).not.toHaveBeenCalled();
+    });
+
+    it('goes back to the header branch when the server refuses the chosen one', async () => {
+        const { api } = require('@/lib/api');
+        api.getSalesList.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+            if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
+            return { items: mockSales, total: mockSales.length, page: 1, limit: 20, pages: 1 };
+        });
+        renderWithQueryClient(<SalesListPage />);
+        await waitFor(() => expect(api.getSalesList).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
     });
 
     it('shows sale_date as Sale date and created_at as Created', async () => {
