@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Alert, Button, CompactSection, CompactStat, Input, PageHeader, PageShell } from '@/components/ui';
+import { Alert, BranchFilter, Button, CompactSection, CompactStat, Input, PageHeader, PageShell } from '@/components/ui';
 import MessageShareModal from '@/components/share/MessageShareModal';
 import { ApiError, api } from '@/lib/api';
 import type { DailyReport } from '@/lib/daily-report';
@@ -19,7 +19,7 @@ import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { openPrintWindow, renderHeaderHtml, SIMPLE_DOC_STYLES } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
-import { getWorkspaceItem } from '@/lib/session-store';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 function todayLocal(): string {
     const d = new Date();
@@ -45,12 +45,14 @@ export default function DailyReportPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [shareOpen, setShareOpen] = useState(false);
+    // One branch's day: the filter opens on the header branch, never "All".
+    const branch = useBranchScope({ allowAll: false });
+    const storeId = branch.apiStoreId;
 
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const storeId = getWorkspaceItem('store_id') ?? undefined;
             const data = await api.getDailyReport({
                 date,
                 locale,
@@ -59,6 +61,7 @@ export default function DailyReportPage() {
             setReport(data);
         } catch (err: unknown) {
             setReport(null);
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             if (err instanceof ApiError && err.status === 403) {
                 setError(err.message);
             } else {
@@ -67,16 +70,18 @@ export default function DailyReportPage() {
         } finally {
             setLoading(false);
         }
-    }, [date, locale, t.common.loadFailed]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [date, locale, storeId, t.common.loadFailed]);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [load]);
+    }, [branch.ready, load]);
 
     const handlePrint = async () => {
         if (!report) return;
-        // The branch the report was loaded for; all stores prints company paper.
-        const header = await printHeader.resolve(getWorkspaceItem('store_id') || undefined);
+        // The branch the report was loaded for.
+        const header = await printHeader.resolve(storeId);
         const headerContext = {
             docTitle: m.title,
             docDate: report.date,
@@ -118,14 +123,17 @@ export default function DailyReportPage() {
                     'sales',
                 )}
                 actions={
-                    report ? (
-                        <>
-                            <Button variant="secondary" onClick={() => void handlePrint()}>
-                                {m.print}
-                            </Button>
-                            <Button onClick={() => setShareOpen(true)}>{m.share}</Button>
-                        </>
-                    ) : null
+                    <>
+                        <BranchFilter scope={branch} />
+                        {report ? (
+                            <>
+                                <Button variant="secondary" onClick={() => void handlePrint()}>
+                                    {m.print}
+                                </Button>
+                                <Button onClick={() => setShareOpen(true)}>{m.share}</Button>
+                            </>
+                        ) : null}
+                    </>
                 }
             />
 

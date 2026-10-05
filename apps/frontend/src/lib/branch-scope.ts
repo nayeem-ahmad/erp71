@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMe } from '@/hooks/use-me';
 import { hasPermission, isOwner, tenantFromMe } from '@/lib/permissions';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { toast } from '@/lib/toast';
 
 /**
  * The page-level branch filter. Spec:
@@ -180,4 +181,50 @@ export function isBranchForbidden(error: unknown): boolean {
     const status = (error as { status?: number; response?: { status?: number } } | null)?.status
         ?? (error as { response?: { status?: number } } | null)?.response?.status;
     return status === 403;
+}
+
+/**
+ * A page's error handler for the filter: when the server refused the branch
+ * the page asked for, say so through the global toaster and go back to the
+ * header branch. Returns whether it handled the error, so the page can skip
+ * its own error state for it.
+ *
+ * A 403 on the header branch itself is not about the filter (the member lacks
+ * the page's permission there), so it is left to the page.
+ */
+export function handleBranchForbidden(
+    error: unknown,
+    scope: Pick<UseBranchScope, 'value' | 'headerBranchId' | 'resetToHeader'>,
+    message: string,
+): boolean {
+    if (!isBranchForbidden(error) || !scope.value || scope.value === scope.headerBranchId) return false;
+    toast.error(message);
+    scope.resetToHeader();
+    return true;
+}
+
+/**
+ * A sub-filter that belongs to one branch — the inventory reports' warehouse —
+ * cleared whenever the branch filter changes: the two are AND-ed server-side,
+ * so a warehouse left over from another branch would report nothing at all.
+ * Adjusted during render rather than in an effect, so the change is one fetch.
+ * The filter settling on its first value (`/auth/me` arriving) is not a change,
+ * so a deep-linked `initial` survives it.
+ */
+export function useBranchBoundState(
+    apiStoreId: string | undefined,
+    initial = '',
+): [string, (next: string) => void] {
+    const [value, setValue] = useState(initial);
+    const [boundTo, setBoundTo] = useState(apiStoreId);
+    if (boundTo !== apiStoreId) {
+        setBoundTo(apiStoreId);
+        if (boundTo !== undefined) setValue('');
+    }
+    return [value, setValue];
+}
+
+/** The one branch a page's own pickers should narrow to; `''` under “All branches”. */
+export function branchOrEmpty(apiStoreId: string | undefined): string {
+    return apiStoreId && apiStoreId !== ALL_BRANCHES ? apiStoreId : '';
 }

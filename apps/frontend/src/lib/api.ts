@@ -2673,8 +2673,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/gross-profit/cost-coverage${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getMonthlySalesByCustomer: (params?: { from?: string; to?: string; customerId?: string }) => {
+    getMonthlySalesByCustomer: (params?: { storeId?: string; from?: string; to?: string; customerId?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.customerId) query.set('customerId', params.customerId);
@@ -4873,8 +4874,10 @@ export const api = {
         appendReportScopeParams(q, params);
         return fetchWithAuth(`/accounting/reports/trial-balance${q.toString() ? `?${q}` : ''}`);
     },
-    listFundTransfers: (params?: { status?: string; sourceStoreId?: string; destinationStoreId?: string; from?: string; to?: string }) => {
+    listFundTransfers: (params?: { status?: string; storeId?: string; sourceStoreId?: string; destinationStoreId?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();
+        // A branch (or `all`): transfers where it is the source or the destination.
+        if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.status) q.set('status', params.status);
         if (params?.sourceStoreId) q.set('sourceStoreId', params.sourceStoreId);
         if (params?.destinationStoreId) q.set('destinationStoreId', params.destinationStoreId);
@@ -5073,8 +5076,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteExpenseCategory: (id: string) => fetchWithAuth(`/expenses/categories/${id}`, { method: 'DELETE' }),
-    getExpenseEntries: (params?: { from?: string; to?: string; categoryId?: string; createdFrom?: string; createdTo?: string }) => {
+    getExpenseEntries: (params?: { storeId?: string; from?: string; to?: string; categoryId?: string; createdFrom?: string; createdTo?: string }) => {
         const q = new URLSearchParams();
+        if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
         if (params?.categoryId) q.set('categoryId', params.categoryId);
@@ -5093,8 +5097,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteExpenseEntry: (id: string) => fetchWithAuth(`/expenses/entries/${id}`, { method: 'DELETE' }),
-    getExpenseSummary: (params?: { from?: string; to?: string }) => {
+    getExpenseSummary: (params?: { storeId?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();
+        if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
         return fetchWithAuth(`/expenses/summary?${q}`);
@@ -5110,7 +5115,8 @@ export const api = {
         if (params?.createdTo) q.set('createdTo', params.createdTo);
         return fetchAllPages(`/loans${q.toString() ? `?${q}` : ''}`);
     },
-    getLoanSummary: () => fetchWithAuth('/loans/summary'),
+    getLoanSummary: (params?: { storeId?: string }) =>
+        fetchWithAuth(`/loans/summary${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getLoan: (id: string) => fetchWithAuth(`/loans/${id}`),
     createLoan: (data: any) => fetchWithAuth('/loans', {
         method: 'POST',
@@ -5137,7 +5143,8 @@ export const api = {
         if (params?.search) q.set('search', params.search);
         return fetchAllPages(`/investors${q.toString() ? `?${q}` : ''}`);
     },
-    getInvestorSummary: () => fetchWithAuth('/investors/summary'),
+    getInvestorSummary: (params?: { storeId?: string }) =>
+        fetchWithAuth(`/investors/summary${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getInvestor: (id: string) => fetchWithAuth(`/investors/${id}`),
     createInvestor: (data: any) => fetchWithAuth('/investors', {
         method: 'POST',

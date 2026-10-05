@@ -11,6 +11,8 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { formatMessage, useI18n } from '@/lib/i18n';
+import { BranchFilter } from '@/components/ui';
+import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 
 type CostBasis = 'WEIGHTED_AVERAGE' | 'LATEST_COST' | 'UNCOSTED';
 
@@ -56,6 +58,7 @@ const columnHelper = createColumnHelper<StockOnHandRow>();
 
 export default function StockOnHandPage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<StockOnHandRow[]>([]);
     const [warehouseColumns, setWarehouseColumns] = useState<WarehouseColumn[]>([]);
     // The warehouses the report itself has columns for, as of the last read that
@@ -64,13 +67,12 @@ export default function StockOnHandPage() {
     // nobody can filter down to is a column half missing.
     const [reportedWarehouseIds, setReportedWarehouseIds] = useState<string[]>([]);
     const [summary, setSummary] = useState<StockOnHandSummary | null>(null);
-    const [stores, setStores] = useState<any[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
     const [subgroups, setSubgroups] = useState<any[]>([]);
     const [brands, setBrands] = useState<any[]>([]);
-    const [storeId, setStoreId] = useState('');
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useBranchBoundState(branch.apiStoreId);
+    const storeId = branchOrEmpty(branch.apiStoreId);
     const [groupId, setGroupId] = useState('');
     const [subgroupId, setSubgroupId] = useState('');
     const [brandId, setBrandId] = useState('');
@@ -82,18 +84,19 @@ export default function StockOnHandPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        void Promise.all([loadReport(), loadFilters()]);
+        void loadFilters();
     }, []);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadReport();
-    }, [storeId, warehouseId, groupId, subgroupId, brandId, includeZeroStock]);
+    }, [branch.ready, branch.apiStoreId, warehouseId, groupId, subgroupId, brandId, includeZeroStock]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
             const data = await api.getStockOnHand({
-                storeId: storeId || undefined,
+                storeId: branch.apiStoreId,
                 warehouseId: warehouseId || undefined,
                 groupId: groupId || undefined,
                 subgroupId: subgroupId || undefined,
@@ -108,6 +111,7 @@ export default function StockOnHandPage() {
             if (!warehouseId) setReportedWarehouseIds(data.warehouses.map((warehouse: WarehouseColumn) => warehouse.id));
             setError(null);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load stock on hand report', error);
             setSummary(null);
             setRows([]);
@@ -120,14 +124,12 @@ export default function StockOnHandPage() {
 
     const loadFilters = async () => {
         try {
-            const [storeData, warehouseData, groupData, subgroupData, brandData] = await Promise.all([
-                api.getStores(),
+            const [warehouseData, groupData, subgroupData, brandData] = await Promise.all([
                 api.getInventoryWarehouses(),
                 api.getProductGroups(),
                 api.getProductSubgroups(),
                 api.getBrands(),
             ]);
-            setStores(storeData);
             // Kept whole rather than narrowed to the active ones here: which
             // warehouses this report can speak for is the report's answer (see
             // `visibleWarehouses`), and the full list is also what names the
@@ -143,9 +145,8 @@ export default function StockOnHandPage() {
 
     // A warehouse belongs to exactly one branch, so picking a branch narrows the
     // warehouse picker to that branch's own — the same scoping the entry screens
-    // get from `useWarehouses`. The branch select clears `warehouseId` on the way
-    // past: the two filters are AND-ed server-side, so a warehouse left over from
-    // another branch would report nothing at all.
+    // get from `useWarehouses` — and "All branches" offers every warehouse. The
+    // branch filter clears `warehouseId` on the way past (`useBranchBoundState`).
     //
     // A closed warehouse is offered only while the report still counts it, which
     // is exactly while it still holds something. Unlike the entry screens, this
@@ -266,6 +267,7 @@ export default function StockOnHandPage() {
                     strings.title,
                     'inventory',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="grid md:grid-cols-4 gap-4">
@@ -308,15 +310,6 @@ export default function StockOnHandPage() {
             )}
 
             <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-center">
-                <select
-                    value={storeId}
-                    onChange={(e) => { setStoreId(e.target.value); setWarehouseId(''); }}
-                    aria-label={strings.allBranches}
-                    className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[200px] min-h-touch"
-                >
-                    <option value="">{strings.allBranches}</option>
-                    {stores.map((store: any) => <option key={store.id} value={store.id}>{store.name}</option>)}
-                </select>
                 <select
                     value={warehouseId}
                     onChange={(e) => setWarehouseId(e.target.value)}
