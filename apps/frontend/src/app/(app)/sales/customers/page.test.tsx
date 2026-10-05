@@ -16,6 +16,7 @@ jest.mock('@/lib/api', () => ({
         updateCustomer: jest.fn(),
         getCustomerGroups: jest.fn(),
         getTerritories: jest.fn(),
+        getSalesSettings: jest.fn(),
     },
 }));
 
@@ -70,6 +71,7 @@ describe('CustomersPage — Customer Management', () => {
         api.updateCustomer.mockResolvedValue({ id: 'cust-1' });
         api.getCustomerGroups.mockResolvedValue([{ id: 'grp-1', name: 'Wholesale' }]);
         api.getTerritories.mockResolvedValue([{ id: 'ter-1', name: 'Dhaka North', parent: null }]);
+        api.getSalesSettings.mockResolvedValue({ show_customer_credit: false });
     });
 
     afterEach(() => {
@@ -372,6 +374,21 @@ describe('CustomersPage — Customer Management', () => {
         render(<CustomersPage />);
         await waitFor(() => {
             expect(api.getCustomersPaged).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    it('hides the Credit column while the Sales Settings switch is off', async () => {
+        render(<CustomersPage />);
+        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+        expect(screen.queryByRole('columnheader', { name: /^credit$/i })).not.toBeInTheDocument();
+    });
+
+    it('shows the Credit column once the Sales Settings switch is on', async () => {
+        const { api } = require('@/lib/api');
+        api.getSalesSettings.mockResolvedValue({ show_customer_credit: true });
+        render(<CustomersPage />);
+        await waitFor(() => {
+            expect(screen.getByRole('columnheader', { name: /^credit$/i })).toBeInTheDocument();
         });
     });
 });
