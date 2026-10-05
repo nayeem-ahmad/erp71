@@ -56,6 +56,9 @@ export class SalesSettingsService {
           ...(dto.require_cashier_session !== undefined
             ? { require_cashier_session: dto.require_cashier_session }
             : {}),
+          ...(dto.show_customer_credit !== undefined
+            ? { show_customer_credit: dto.show_customer_credit }
+            : {}),
         },
       });
     }
@@ -107,6 +110,9 @@ export class SalesSettingsService {
       // Off unless a tenant has deliberately turned it on: an upgrade must
       // not stop a shop mid-sale for a workflow it has never used.
       require_cashier_session: settings.require_cashier_session ?? false,
+      // Off until a tenant admin turns it on: an upgrade must not change the
+      // Customers list for a shop that never asked for a Credit column.
+      show_customer_credit: settings.show_customer_credit ?? false,
       created_at: settings.created_at,
       updated_at: settings.updated_at,
     };

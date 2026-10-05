@@ -31,6 +31,7 @@ export default function SalesSettingsPage() {
     const [refFormat, setRefFormat] = useState('');
     const [posEnabled, setPosEnabled] = useState(true);
     const [requireCashierSession, setRequireCashierSession] = useState(false);
+    const [showCustomerCredit, setShowCustomerCredit] = useState(false);
     const [isShopOwner, setIsShopOwner] = useState(false);
 
     const loadSettings = useCallback(async () => {
@@ -45,6 +46,7 @@ export default function SalesSettingsPage() {
             if (data?.reference_number_format) setRefFormat(data.reference_number_format);
             setPosEnabled(data?.pos_enabled !== false);
             setRequireCashierSession(Boolean(data?.require_cashier_session));
+            setShowCustomerCredit(Boolean(data?.show_customer_credit));
         } catch (err: any) {
             toast.error(err?.message || 'Failed to load settings');
         } finally {
@@ -63,7 +65,7 @@ export default function SalesSettingsPage() {
             await api.updateSalesSettings({
                 paper_size: paperSize,
                 ...(refFormat ? { reference_number_format: refFormat } : {}),
-                ...(isShopOwner ? { pos_enabled: posEnabled, require_cashier_session: requireCashierSession } : {}),
+                ...(isShopOwner ? { pos_enabled: posEnabled, require_cashier_session: requireCashierSession, show_customer_credit: showCustomerCredit } : {}),
             });
             window.dispatchEvent(new Event('erp71:sales-settings-updated'));
             toast.success('Sales settings saved');
@@ -145,6 +147,20 @@ export default function SalesSettingsPage() {
                                         Cashiers must open a shift before they can check out, so every counter sale
                                         belongs to a till that can be counted at the end of it. Back-office sales
                                         entry is unaffected.
+                                    </span>
+                                </span>
+                            </label>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <Checkbox
+                                    checked={showCustomerCredit}
+                                    onChange={(e) => setShowCustomerCredit(e.target.checked)}
+                                    className="mt-0.5"
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-gray-700">Show customer credit in Customers</span>
+                                    <span className="block mt-1 text-xs text-gray-400">
+                                        Adds a Credit column to the Customers list showing what each customer owes
+                                        against their credit limit.
                                     </span>
                                 </span>
                             </label>
