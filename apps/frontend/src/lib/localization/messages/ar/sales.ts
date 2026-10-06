@@ -405,9 +405,13 @@ export const salesMessages = {
                 invoice: "فاتورة",
                 challan: "إذن تسليم",
                 receipt: "إيصال نقطة البيع",
+                invoices: "{count} فواتير",
             },
             loadFailed: "تعذر تحميل عملية البيع للطباعة.",
             popupBlocked: "اسمح بالنوافذ المنبثقة لهذا الموقع للطباعة.",
+            printSelected: "طباعة الفواتير",
+            bulkFailed: "تعذر تحميل عمليات البيع المحددة للطباعة.",
+            bulkPartial: "تعذر تحميل {skipped} من أصل {total} عمليات بيع محددة، وتم استبعادها.",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

@@ -1292,6 +1292,10 @@ model SalesSettings {
   /// with the seller's session either way — this only decides whether a
   /// missing session blocks the sale.
   require_cashier_session Boolean @default(false)
+  /// When on, the Customers list shows each customer's credit (what they owe
+  /// against their limit). Off by default so an upgrade changes no existing
+  /// tenant's screens; a tenant admin turns it on under Sales Settings.
+  show_customer_credit Boolean @default(false)
 
   /// Beneficiary bank details printed on a proforma invoice, so a buyer (or a
   /// buyer's bank opening an LC) knows where to remit. Held on the tenant

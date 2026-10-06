@@ -405,9 +405,13 @@ export const salesMessages = {
                     invoice: "Invois",
                     challan: "Nota Penghantaran",
                     receipt: "Resit POS",
+                    invoices: "{count} invois",
                 },
                 loadFailed: "Jualan tidak dapat dimuatkan untuk dicetak.",
                 popupBlocked: "Benarkan pop-up untuk tapak ini bagi mencetak.",
+                printSelected: "Cetak invois",
+                bulkFailed: "Jualan yang dipilih tidak dapat dimuatkan untuk dicetak.",
+                bulkPartial: "{skipped} daripada {total} jualan yang dipilih tidak dapat dimuatkan dan telah ditinggalkan.",
             },
             challan: {
                 /* The delivery challan — quantities only, never prices. */

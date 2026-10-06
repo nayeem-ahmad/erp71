@@ -405,9 +405,13 @@ export const salesMessages = {
                 invoice: "Facture",
                 challan: "Bon de livraison",
                 receipt: "Ticket de caisse",
+                invoices: "{count} factures",
             },
             loadFailed: "Impossible de charger la vente à imprimer.",
             popupBlocked: "Autorisez les fenêtres pop-up de ce site pour imprimer.",
+            printSelected: "Imprimer les factures",
+            bulkFailed: "Impossible de charger les ventes sélectionnées à imprimer.",
+            bulkPartial: "{skipped} vente(s) sur {total} n'ont pas pu être chargées et ont été omises.",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

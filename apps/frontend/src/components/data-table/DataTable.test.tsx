@@ -439,6 +439,15 @@ describe('DataTable', () => {
         expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
     });
 
+    it('keeps the selection box at 16px inside a 44px hit area', () => {
+        render(<DataTable {...defaultProps} enableRowSelection />);
+        const box = screen.getAllByLabelText(/select row/i)[0];
+        expect(box.className).toContain('h-4');
+        expect(box.className).toContain('w-4');
+        expect(box.parentElement?.className).toContain('min-h-touch');
+        expect(box.parentElement?.className).toContain('min-w-touch');
+    });
+
     it('injects a checkbox column when enableRowSelection is true and no caller select column exists', () => {
         render(<DataTable {...defaultProps} enableRowSelection />);
         expect(screen.getByLabelText(/select all/i)).toBeInTheDocument();

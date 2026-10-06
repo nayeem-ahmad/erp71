@@ -77,9 +77,11 @@ export default function SalesPage() {
         density,
         setDensity,
         busyId,
+        batchBusy,
         printInvoice,
         printChallan,
         printReceipt,
+        printInvoices,
     } = useSalePrinting({ resolve: fetchPrintableSale });
     // The member's own invoice layout — edited in the same Print settings.
     const invoiceLayout = useInvoicePrintPrefs();
@@ -341,6 +343,20 @@ export default function SalesPage() {
         [t, locale, handleDelete, deletingId, canCancel, paperSize, busyId, printInvoice, printChallan, printReceipt],
     );
 
+    // Tick the rows, print them as one job — the day's invoices for the file,
+    // or a delivery run's, without a popup per sale. Selection covers the page
+    // on screen, which the server caps at the 100 the endpoint accepts.
+    const bulkActions = useMemo(
+        () => [
+            {
+                label: t.sales.printMenu.printSelected,
+                icon: <Printer className="w-4 h-4" />,
+                onClick: (rows: Sale[]) => void printInvoices(rows.map((row) => row.id)),
+            },
+        ],
+        [t, printInvoices],
+    );
+
     // Was a client-side preset over the whole downloaded set; with server
     // paging the filter has to reach the query or it would only ever narrow the
     // current page.
@@ -423,6 +439,10 @@ export default function SalesPage() {
                     emptyIcon={<Receipt className="w-16 h-16 text-gray-200" />}
                     showSearch={false}
                     serverPagination={serverPagination}
+                    enableRowSelection
+                    getRowId={(sale) => sale.id}
+                    bulkActions={bulkActions}
+                    bulkActionsDisabled={batchBusy}
                 />
 
                 {printSettingsOpen && (

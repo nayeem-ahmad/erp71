@@ -6,6 +6,11 @@ jest.mock('@/lib/i18n', () => {
     useI18n: () => ({
       t: enMessages,
       locale: 'en',
+      fmt: (template, values = {}) =>
+        Object.entries(values).reduce(
+          (result, [key, value]) => result.replaceAll(`{${key}}`, String(value)),
+          template,
+        ),
     }),
     formatMessage: (template, values = {}) =>
       Object.entries(values).reduce(
@@ -44,6 +49,7 @@ jest.mock('@/lib/api', () => ({
         cancelSale: jest.fn(),
         // Printing a row fetches the full sale, because the list payload
         // carries no line items.
+        printSalesBatch: jest.fn(),
         getSale: jest.fn().mockResolvedValue({
             id: 'sale-1',
             serial_number: 'SL-00001',
@@ -62,6 +68,7 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/lib/sale-print-actions', () => ({
     ...jest.requireActual('@/lib/sale-print-actions'),
     printSaleInvoice: jest.fn(),
+    printSaleInvoices: jest.fn(),
     printSaleChallan: jest.fn(),
     printSaleReceipt: jest.fn(),
 }));
@@ -191,6 +198,45 @@ describe('SalesListPage — Sales Transaction List', () => {
             );
             expect(link).toBeDefined();
         });
+    });
+
+    it('prints the checked rows of this page through one batch request', async () => {
+        const { api } = require('@/lib/api');
+        api.printSalesBatch.mockResolvedValue([
+            {
+                id: 'sale-1',
+                serial_number: 'SL-00001',
+                created_at: '2026-03-20T10:00:00.000Z',
+                total_amount: '55.00',
+                amount_paid: '55.00',
+                items: [],
+                payments: [],
+            },
+            {
+                id: 'sale-2',
+                serial_number: 'SL-00002',
+                created_at: '2026-03-21T11:00:00.000Z',
+                total_amount: '20.00',
+                amount_paid: '20.00',
+                items: [],
+                payments: [],
+            },
+        ]);
+
+        renderWithQueryClient(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        const rows = screen.getAllByLabelText(/select row/i);
+        fireEvent.click(rows[0]);
+        fireEvent.click(rows[1]);
+        fireEvent.click(screen.getByRole('button', { name: /print invoices/i }));
+
+        await waitFor(() => expect(api.printSalesBatch).toHaveBeenCalledTimes(1));
+        expect(api.printSalesBatch).toHaveBeenCalledWith(['sale-1', 'sale-2']);
+        expect(api.getSale).not.toHaveBeenCalled();
+        const { printSaleInvoices } = require('@/lib/sale-print-actions');
+        await waitFor(() => expect(printSaleInvoices).toHaveBeenCalledTimes(1));
+        expect(printSaleInvoices.mock.calls[0][0].map((sale: { id: string }) => sale.id)).toEqual(['sale-1', 'sale-2']);
     });
 
     it('prints the invoice from the row instead of opening the invoice page', async () => {

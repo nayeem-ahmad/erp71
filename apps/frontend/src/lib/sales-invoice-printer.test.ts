@@ -1,5 +1,5 @@
 import { DEFAULT_INVOICE_PRINT_PREFS, type InvoicePrintPrefs } from '@erp71/shared-types';
-import { printSalesInvoice, type InvoiceData, type PaperSize } from './sales-invoice-printer';
+import { printSalesInvoice, printSalesInvoices, type InvoiceData, type PaperSize } from './sales-invoice-printer';
 import { formatBDT } from './format';
 
 const baseInvoice: InvoiceData = {
@@ -211,6 +211,81 @@ describe('payment method labels', () => {
     it('labels the shared-type keys rather than printing them raw', () => {
         expect(labelFor('MOBILE_WALLET')).toBe('Mobile Wallet');
         expect(labelFor('BANK')).toBe('Bank');
+    });
+});
+
+describe('bulk invoices', () => {
+    function renderMany(
+        invoices: InvoiceData[],
+        paperSize: PaperSize = 'A4',
+        layout?: Partial<InvoicePrintPrefs>,
+    ): string {
+        const write = jest.fn();
+        const mockWindow = {
+            document: { write, close: jest.fn(), images: [] },
+            print: jest.fn(),
+            focus: jest.fn(),
+            set onload(handler: () => void) {
+                handler();
+            },
+        };
+        jest.spyOn(window, 'open').mockReturnValue(mockWindow as unknown as Window);
+        printSalesInvoices(
+            invoices,
+            paperSize,
+            undefined,
+            layout ? { ...DEFAULT_INVOICE_PRINT_PREFS, ...layout } : undefined,
+        );
+        expect(window.open).toHaveBeenCalledTimes(1);
+        expect(write).toHaveBeenCalledTimes(1);
+        return write.mock.calls[0][0] as string;
+    }
+
+    /** Each document's markup — a preview sheet or a print section alike. */
+    const jobsOf = (html: string) => html.split(/<[a-z]+ class="[^"]*\bp71-job\b[^"]*">/).slice(1);
+
+    const three = ['2609-010', '2609-011', '2609-012'].map((referenceNumber) => ({
+        ...baseInvoice,
+        referenceNumber,
+    }));
+
+    it('prints every invoice in one window, each on its own page', () => {
+        const html = renderMany(three);
+
+        for (const invoice of three) {
+            expect(html).toContain(`Invoice #: <strong>${invoice.referenceNumber}</strong>`);
+        }
+        expect(html).toContain('<title>Invoices (3) — A4</title>');
+        expect(jobsOf(html)).toHaveLength(3);
+        // Before the next sheet, not after each, so the job ends on the last invoice.
+        expect(ruleFor(html, '.p71-job + .p71-job')).toMatch(/break-before:\s*page/);
+    });
+
+    it('lays each invoice out as it prints alone, letterhead and all', () => {
+        const html = renderMany([
+            { ...baseInvoice, referenceNumber: 'G-1', storeName: 'Gulshan' },
+            { ...baseInvoice, referenceNumber: 'D-1', storeName: 'Dhanmondi' },
+        ]);
+
+        // The letterhead repeats down each long invoice, as it does alone.
+        expect(html.match(/<thead><tr><td>/g)).toHaveLength(2);
+        const sheets = jobsOf(html);
+        expect(sheets).toHaveLength(2);
+        expect(sheets[0]).toContain('G-1');
+        expect(sheets[1]).toContain('D-1');
+    });
+
+    it('prints with the member\'s own layout, as a single invoice does', () => {
+        const html = renderMany(three, 'A4', { footer_text: 'Goods once sold are not returned' });
+
+        expect(html.match(/Goods once sold are not returned/g)).toHaveLength(3);
+        expect(html).not.toContain('Thank you for your business!');
+    });
+
+    it('opens nothing for an empty selection', () => {
+        jest.spyOn(window, 'open');
+        expect(printSalesInvoices([])).toBeNull();
+        expect(window.open).not.toHaveBeenCalled();
     });
 });
 

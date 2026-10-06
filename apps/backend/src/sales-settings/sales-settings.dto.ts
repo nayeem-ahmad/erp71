@@ -33,6 +33,10 @@ export class UpdateSalesSettingsDto {
   @IsOptional()
   @IsBoolean()
   require_cashier_session?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  show_customer_credit?: boolean;
 }
 
 export class SalesSettingsResponseDto {
@@ -42,6 +46,7 @@ export class SalesSettingsResponseDto {
   reference_number_format: string;
   pos_enabled: boolean;
   require_cashier_session: boolean;
+  show_customer_credit: boolean;
   created_at: Date;
   updated_at: Date;
 }

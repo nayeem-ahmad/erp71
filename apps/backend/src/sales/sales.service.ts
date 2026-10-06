@@ -39,6 +39,54 @@ import {
     requiresCashierSession,
 } from '../cashier-sessions/active-session.util';
 
+/** One list page — the largest a server-paged table shows — not the tenant's whole history. */
+const PRINT_BATCH_LIMIT = 100;
+/**
+ * Previous due reads the ledger once per sale. Capped so a full batch does not
+ * take every connection in the pool at once.
+ */
+const PRINT_BATCH_CONCURRENCY = 8;
+const PRINT_BATCH_MESSAGE = `Provide between 1 and ${PRINT_BATCH_LIMIT} sale ids.`;
+
+/** The ids in the order given, each once — the order the invoices print in. */
+function orderedPrintIds(ids: string[]): string[] {
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > PRINT_BATCH_LIMIT) {
+        throw new BadRequestException(PRINT_BATCH_MESSAGE);
+    }
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const id of ids) {
+        if (typeof id !== 'string' || !id) {
+            throw new BadRequestException(PRINT_BATCH_MESSAGE);
+        }
+        if (seen.has(id)) continue;
+        seen.add(id);
+        ordered.push(id);
+    }
+    if (ordered.length === 0) {
+        throw new BadRequestException(PRINT_BATCH_MESSAGE);
+    }
+    return ordered;
+}
+
+async function mapWithConcurrency<T, R>(
+    items: T[],
+    limit: number,
+    fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let next = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (next < items.length) {
+            const index = next;
+            next += 1;
+            results[index] = await fn(items[index]);
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
+
 /**
  * Columns the sales list may sort on. An allowlist rather than passing the
  * client's string through, so a sort parameter cannot reach an arbitrary field.
@@ -1093,6 +1141,43 @@ export class SalesService {
             ...posting,
             previous_due: previousDue,
         };
+    }
+
+    /**
+     * The sales behind one bulk invoice print.
+     *
+     * One query, scoped to this tenant, then each sale's previous due through
+     * the same helper a single invoice uses. Ids this tenant does not have are
+     * left out — a missing id and another tenant's id look the same, so the
+     * response cannot be used to learn which is which.
+     */
+    async findForPrintBatch(tenantId: string, ids: string[]) {
+        const ordered = orderedPrintIds(ids);
+        const sales = await this.db.sale.findMany({
+            where: { tenant_id: tenantId, id: { in: ordered } },
+            include: {
+                items: { include: { product: true } },
+                payments: true,
+                customer: true,
+                // The branch's name and address print on its letterhead.
+                store: { select: { id: true, name: true, address: true } },
+            },
+        });
+        const byId = new Map(sales.map((sale) => [sale.id, sale]));
+        const found = ordered.flatMap((id) => {
+            const sale = byId.get(id);
+            return sale ? [sale] : [];
+        });
+
+        return mapWithConcurrency(found, PRINT_BATCH_CONCURRENCY, async (sale) => ({
+            ...sale,
+            previous_due: await resolveSalePreviousDue(
+                this.db,
+                tenantId,
+                sale,
+                Number(sale.customer?.due_balance ?? 0),
+            ),
+        }));
     }
 
     async update(tenantId: string, id: string, dto: UpdateSaleDto) {

@@ -3256,6 +3256,13 @@ export const api = {
         fetchWithAuth('/storefront-pages/menu/reorder', { method: 'PATCH', body: JSON.stringify({ links }) }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
+    /** The checked sales, in the order given, ready to print as one job. */
+    printSalesBatch: (ids: string[]) =>
+        fetchWithAuth('/sales/print-batch', {
+            method: 'POST',
+            body: JSON.stringify({ ids }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
 
     // ── NBR Mushak 6.x ──────────────────────────────────────────────────

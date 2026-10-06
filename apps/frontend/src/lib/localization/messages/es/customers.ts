@@ -20,6 +20,7 @@ export const customersMessages = {
             "group": "Grupo",
             "territory": "Territorio",
             "totalSpent": "Total gastado",
+            "credit": "Crédito",
             "points": "Puntos",
             "pointsSuffix": "pts",
             "segment": "Segmento",

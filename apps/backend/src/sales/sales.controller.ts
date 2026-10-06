@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { SalesService } from './sales.service';
-import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
+import { CreateSaleDto, FinalizeSaleDto, PrintSalesBatchDto, UpdateSaleDto } from './sale.dto';
 import { CancelEntryDto } from '../common/cancel-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
@@ -58,6 +58,12 @@ export class SalesController {
             createdFrom: createdFrom || undefined,
             createdTo: createdTo || undefined,
         });
+    }
+
+    @RequireAnyStorePermission(...SALES_READ)
+    @Post('print-batch')
+    async printBatch(@Tenant() tenant: TenantContext, @Body() dto: PrintSalesBatchDto) {
+        return this.salesService.findForPrintBatch(tenant.tenantId, dto.ids);
     }
 
     @RequireAnyStorePermission(...SALES_READ)

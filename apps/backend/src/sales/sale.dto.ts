@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
     ArrayMinSize,
     IsArray,
     IsBoolean,
@@ -328,4 +329,14 @@ export class UpdateSaleDto {
     @IsOptional()
     @IsString()
     mushakVehicleNo?: string;
+}
+
+/** The sales a counter wants on one print job. One page of a list, not a dump. */
+export class PrintSalesBatchDto {
+    @IsArray()
+    @ArrayMinSize(1)
+    @ArrayMaxSize(100)
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    ids: string[];
 }
