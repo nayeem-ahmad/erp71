@@ -441,6 +441,45 @@ describe('a pinned footer that does not repeat', () => {
     });
 });
 
+describe('a document\u2019s own footer that asks to be pinned', () => {
+    const docFooter = '<div class="p71-doc-ft">Prepared By- Rina</div>';
+
+    it('is pushed to the page bottom without any tenant footer being designed', () => {
+        const html = buildPrintDocument({ ...base, footerHtml: docFooter, pinFooter: true });
+
+        expect(html).toContain('<div class="p71-sheet">');
+        expect(html).toContain('.p71-sheet > .p71-doc-ft');
+        // Printed once, after the content — not in a repeating tfoot.
+        expect(html).not.toContain('<tfoot>');
+    });
+
+    it('flows under the content when it did not ask', () => {
+        expect(buildPrintDocument({ ...base, footerHtml: docFooter })).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('is not pinned on a roll, which has no page bottom', () => {
+        const html = buildPrintDocument({ ...base, paperSize: 'Thermal80', footerHtml: docFooter, pinFooter: true });
+
+        expect(html).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('does not pin an empty footer', () => {
+        expect(buildPrintDocument({ ...base, pinFooter: true })).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('gives way to a tenant footer, which follows its own pin setting', () => {
+        const html = buildPrintDocument({
+            ...base,
+            footerHtml: docFooter,
+            pinFooter: true,
+            headerConfig: { footer: { show: true, lines: [{ text: 'Bank' }], pinToPageBottom: false } },
+        });
+
+        expect(html).not.toContain('Prepared By- Rina');
+        expect(html).not.toContain('<div class="p71-sheet">');
+    });
+});
+
 describe('preview toolbar', () => {
     const preview = {
         title: 'Invoice — A4',

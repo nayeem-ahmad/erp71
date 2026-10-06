@@ -15,6 +15,17 @@
  * gains an option.
  */
 
+/**
+ * Which page design the invoice prints on. `standard` is the layout the
+ * invoice has always had; `detailed` is the full trade invoice — a labelled
+ * invoice / order / date strip, bill-to and payment status side by side, a
+ * warranty column, tax broken out beside the totals, and a QR code that opens
+ * the invoice in the app for anyone allowed to see it. Sheet paper only: a
+ * roll prints the standard design whatever is chosen.
+ */
+export const INVOICE_LAYOUTS = ['standard', 'detailed'] as const;
+export type InvoiceLayout = (typeof INVOICE_LAYOUTS)[number];
+
 /** Breathing room around the invoice body, on top of the page margin. */
 export const INVOICE_PADDINGS = ['narrow', 'normal', 'wide'] as const;
 export type InvoicePadding = (typeof INVOICE_PADDINGS)[number];
@@ -34,6 +45,7 @@ export const INVOICE_FOOTER_MAX_LENGTH = 500;
 
 export interface InvoicePrintPrefs {
   version: 1;
+  layout: InvoiceLayout;
   padding: InvoicePadding;
   balance: InvoiceBalanceMode;
   table_style: InvoiceTableStyle;
@@ -55,6 +67,7 @@ export interface InvoicePrintPrefs {
 /** Exactly how the invoice printed before any of this was configurable. */
 export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   version: 1,
+  layout: 'standard',
   padding: 'normal',
   balance: 'when-owed',
   table_style: 'minimal',
@@ -89,6 +102,7 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
 
   return {
     version: 1,
+    layout: oneOf(INVOICE_LAYOUTS, r.layout, d.layout),
     padding: oneOf(INVOICE_PADDINGS, r.padding, d.padding),
     balance: oneOf(INVOICE_BALANCE_MODES, r.balance, d.balance),
     table_style: oneOf(INVOICE_TABLE_STYLES, r.table_style, d.table_style),

@@ -279,6 +279,10 @@ export interface HeaderContext {
     website?: string;
     vatRegNo?: string;
     tin?: string;
+    /** Who prepared the document — fills `{{prepared_by}}`. */
+    preparedBy?: string;
+    /** When it was printed, already formatted — fills `{{print_date}}`. */
+    printDate?: string;
 }
 
 /**

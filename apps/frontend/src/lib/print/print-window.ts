@@ -96,6 +96,13 @@ export interface PrintDocumentOptions {
      */
     repeatHeader?: boolean;
     /**
+     * Push the document's own footer (`footerHtml`) to the bottom of the page,
+     * the way a tenant footer does when it is set to pin. A tenant-designed
+     * footer follows its own template setting regardless. Sheet paper only —
+     * a roll has no page bottom.
+     */
+    pinFooter?: boolean;
+    /**
      * The document lists rows and carries compact rules for them, written under
      * `COMPACT_SCOPE`. `openPrintWindow` then gives its window the Compact
      * switch and prints it at the operator's remembered density, unless
@@ -355,9 +362,11 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         // Pinning stretches the table to a full page so the browser pushes the
         // `<tfoot>` down to the bottom edge. Only possible on a fixed-height sheet,
         // so a roll — which prints to an open-ended length — never pins.
-        const pinFooter = !!tenantFooter
+        const pinFooter = !!footer
             && !!pageHeightMm
-            && footerPinsToBottom(opts.headerConfig, opts.paperSize);
+            && (tenantFooter
+                ? footerPinsToBottom(opts.headerConfig, opts.paperSize)
+                : !!opts.pinFooter);
 
         // Repeating and pinning are independent settings answering different
         // questions — "every page or only the last?" versus "at the page bottom or
@@ -446,7 +455,13 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
            viewport, which knows nothing about the @page box. */
         .p71-sheet { display: flex; flex-direction: column; min-height: ${pageHeightMm}mm; }
         .p71-sheet > .p71-sheet-body, .p71-sheet > .p71-doc { flex: 1 0 auto; }
-        .p71-sheet > .p71-ft { margin-top: auto; }
+        /* The stretched table must hand its spare height to the body row, not
+           spread it over the repeating header too — which would open a gap
+           under the letterhead. A percentage height is what a table row takes
+           the slack on. */
+        .p71-sheet > .p71-doc > tbody > tr { height: 100%; }
+        .p71-sheet > .p71-doc > tbody > tr > td { vertical-align: top; }
+        .p71-sheet > .p71-ft, .p71-sheet > .p71-doc-ft { margin-top: auto; }
         @media screen {
             /* No pages on screen, so the viewport stands in for the sheet and
                the preview shows where the footer will actually print. */

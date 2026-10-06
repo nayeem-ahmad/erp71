@@ -359,6 +359,10 @@ export const salesMessages = {
                 invoiceLayout: {
                     heading: "Susun atur invois",
                     hint: "Disimpan pada akaun anda, jadi ia mengikut anda ke mana-mana peranti.",
+                    layoutLabel: "Reka bentuk invois",
+                    layoutHint: "Reka bentuk terperinci menambah jalur invois / pesanan / tarikh, lajur Waranti, cukai di sebelah jumlah, pengaki yang menyatakan siapa menyediakannya dan bila dicetak, serta kod QR yang membuka invois untuk sesiapa yang dibenarkan melihatnya. Dicetak pada A4, A5 dan Letter; gulungan kekal dengan reka bentuk standard.",
+                    layoutStandard: "Standard",
+                    layoutDetailed: "Terperinci",
                     paddingLabel: "Ruang di sekeliling kandungan",
                     paddingNarrow: "Sempit",
                     paddingNormal: "Biasa",

@@ -483,3 +483,192 @@ describe('member layout preferences', () => {
         });
     });
 });
+
+describe('detailed invoice layout', () => {
+    // A posted sale: prices are tax-inclusive, so 6,936 holds 906 of tax and
+    // the lines (6,946) are 10 more than the total, which is the discount.
+    const posted: InvoiceData = {
+        referenceNumber: 'S0020090001',
+        date: '06/10/2026',
+        companyName: 'Life Tech Medical',
+        customerName: 'Bio Care',
+        customerPhone: '185',
+        shippingAddress: '12 Mirpur Road',
+        orderNumber: 'SO-0042',
+        preparedBy: 'Rina Akter',
+        printedAt: '06-10-2026 1:02:59 PM',
+        items: [
+            { name: '3 Head Fascial Gun', quantity: 2, unitPrice: 700, warranty: '6 months' },
+            { name: '360 Spin Massager', quantity: 2, unitPrice: 400 },
+            { name: 'A01 Abdominal Belt L', quantity: 3, unitPrice: 1582 },
+        ],
+        payments: [],
+        subtotal: 6946,
+        total: 6936,
+        taxIncluded: 906,
+        amountPaid: 0,
+        previousDue: 0,
+    };
+
+    const detailed = { layout: 'detailed' as const };
+
+    it('keeps the standard design unless the member chose this one', () => {
+        const html = render(posted, 'A4');
+        expect(html).not.toContain('d-strip');
+        expect(html).toContain('Invoice Details');
+    });
+
+    it('writes invoice no, order no and date on one labelled strip', () => {
+        const html = render(posted, 'A4', detailed);
+        expect(html).toMatch(/<strong>Invoice No:<\/strong> S0020090001/);
+        expect(html).toMatch(/<strong>Order No:<\/strong> SO-0042/);
+        expect(html).toMatch(/<strong>Invoice Date:<\/strong> 06\/10\/2026/);
+    });
+
+    it('prints bill to and the shipping block with the payment status', () => {
+        const html = render(posted, 'A4', detailed);
+        expect(html).toContain('Bill To');
+        expect(html).toContain('Bio Care');
+        expect(html).toContain('Phone No:');
+        expect(html).toContain('Shipping Address');
+        expect(html).toContain('12 Mirpur Road');
+        expect(html).toMatch(/Payment Status:<\/span><span>Due</);
+    });
+
+    it('reads Paid when nothing is left to pay and Partial when some is', () => {
+        expect(render({ ...posted, amountPaid: 6936 }, 'A4', detailed)).toMatch(/Payment Status:<\/span><span>Paid</);
+        expect(render({ ...posted, amountPaid: 1000 }, 'A4', detailed)).toMatch(/Payment Status:<\/span><span>Partial</);
+    });
+
+    it('lists SL, item, warranty, quantity, unit price and total, with ৳ in the headers only', () => {
+        const html = render(posted, 'A4', detailed);
+        for (const heading of ['SL', 'Item', 'Warranty', 'Quantity', 'Unit Price (৳)', 'Total (৳)']) {
+            expect(html).toContain(`>${heading}</th>`);
+        }
+        expect(html).toContain('<td class="d-warranty">6 months</td>');
+        expect(html).toContain('<td class="d-num">700.00</td>');
+        expect(html).toContain('<td class="d-num">1,400.00</td>');
+    });
+
+    it('adds a discount column only when a line carries one', () => {
+        expect(render(posted, 'A4', detailed)).not.toContain('Discount (৳)</th>');
+        const withDiscount = { ...posted, items: [{ ...posted.items[0], discount: 50 }] };
+        expect(render(withDiscount, 'A4', detailed)).toContain('Discount (৳)</th>');
+    });
+
+    it('breaks a posted sale’s stored tax out of its total and keeps the total as stored', () => {
+        const html = render(posted, 'A4', detailed);
+        expect(html).toContain('<td>Sub Total (excl. tax) (৳):</td><td>6,030.00</td>');
+        expect(html).toContain('<td>Total Tax (৳):</td><td>906.00</td>');
+        expect(html).toContain('<td>Total (৳):</td><td>6,936.00</td>');
+        // Sub total plus tax is the total — nothing is added on top of it.
+        expect(6030 + 906).toBe(6936);
+    });
+
+    it('lists a posted sale’s discount as already deducted rather than taking it off again', () => {
+        const html = render(posted, 'A4', detailed);
+        expect(html).toContain('<tr class="memo"><td>Discount, already deducted (৳):</td><td>10.00</td></tr>');
+        expect(html).not.toContain('-10.00');
+    });
+
+    it('prints no tax line for a sale that carries none', () => {
+        const html = render({ ...posted, taxIncluded: 0, subtotal: 6936 }, 'A4', detailed);
+        expect(html).not.toContain('Total Tax');
+        expect(html).toContain('<td>Sub Total (৳):</td><td>6,936.00</td>');
+    });
+
+    it('adds tax and takes the discount off for an invoice still on the entry screen', () => {
+        const entry: InvoiceData = {
+            ...posted,
+            taxIncluded: undefined,
+            subtotal: 6040,
+            vat: 906,
+            discountAmount: 10,
+            total: 6936,
+        };
+        const html = render(entry, 'A4', detailed);
+        expect(html).toContain('<td>Sub Total (৳):</td><td>6,040.00</td>');
+        expect(html).toContain('<td>Total Tax (৳):</td><td>906.00</td>');
+        expect(html).toContain('<td>Discount (৳):</td><td>-10.00</td>');
+        expect(html).toContain('<td>Total (৳):</td><td>6,936.00</td>');
+    });
+
+    it('computes paid and due from this invoice, never from the sample’s arithmetic', () => {
+        const html = render({ ...posted, amountPaid: 2000 }, 'A4', detailed);
+        expect(html).toContain('<td>Paid (৳):</td><td>2,000.00</td>');
+        expect(html).toContain('<td>Due (৳):</td><td>4,936.00</td>');
+    });
+
+    it('closes the account block on the customer’s total due', () => {
+        const html = render({ ...posted, previousDue: 1000, amountPaid: 2000 }, 'A4', detailed);
+        expect(html).toContain('<td>Previous Due (৳)</td><td>1,000.00</td>');
+        expect(html).toContain('<td>Sale Amount (৳)</td><td>6,936.00</td>');
+        expect(html).toContain('<td>Collected Amount (৳)</td><td>2,000.00</td>');
+        // 1,000 owed before + 6,936 − 2,000 paid.
+        expect(html).toContain('<td>Total Due (৳)</td><td>5,936.00</td>');
+    });
+
+    it('leaves the account block off for a walk-in and when the member hides balances', () => {
+        expect(render({ ...posted, previousDue: null }, 'A4', detailed)).not.toContain('Previous Due');
+        expect(render({ ...posted, previousDue: 500 }, 'A4', { ...detailed, balance: 'never' })).not.toContain('Previous Due');
+    });
+
+    it('writes the total in words, on the left, when the member asked for it', () => {
+        const html = render(posted, 'A4', { ...detailed, amount_in_words: true });
+        expect(html).toContain('<strong>In Word:</strong> Taka Six Thousand Nine Hundred Thirty Six Only');
+    });
+
+    it('puts who prepared the invoice and when it printed in a footer pinned to the page bottom', () => {
+        const html = render(posted, 'A4', detailed);
+        expect(html).toContain('Prepared By- Rina Akter');
+        expect(html).toContain('Print Date: 06-10-2026 1:02:59 PM');
+        expect(html).toContain('class="p71-sheet"');
+        expect(html).toContain('class="p71-doc-ft d-foot"');
+    });
+
+    it('says the thank-you at the left of the foot unless the member wrote their own', () => {
+        expect(render(posted, 'A4', detailed)).toContain('<div class="d-foot-l">Thank you for your business!</div>');
+        expect(render(posted, 'A4', { ...detailed, footer_text: 'Serve you again' })).toContain(
+            '<div class="d-foot-l">Serve you again</div>',
+        );
+        expect(render(posted, 'A4', { ...detailed, footer_text: '' })).toContain('<div class="d-foot-l"></div>');
+    });
+
+    it('escapes what a customer or a user typed', () => {
+        const html = render({ ...posted, customerName: '<b>Bio</b>', preparedBy: 'A & B' }, 'A4', detailed);
+        expect(html).not.toContain('<b>Bio</b>');
+        expect(html).toContain('&lt;b&gt;Bio&lt;/b&gt;');
+        expect(html).toContain('Prepared By- A &amp; B');
+    });
+
+    it('prints the QR code in the letterhead, right-aligned, when the invoice has one', () => {
+        const html = render({ ...posted, qrDataUrl: 'data:image/png;base64,AAAA' }, 'A4', detailed);
+        expect(html).toContain('src="data:image/png;base64,AAAA"');
+        expect(html).toContain('p71-img-col--right');
+    });
+
+    it('prints without a code when the invoice has none yet', () => {
+        expect(render(posted, 'A4', detailed)).not.toContain('data:image/png');
+    });
+
+    it('does not change a roll — the standard design prints whatever was chosen', () => {
+        const html = render(posted, 'Thermal80', detailed);
+        expect(html).not.toContain('d-strip');
+        expect(html).not.toContain('Prepared By');
+    });
+
+    it('fills the footer tokens a letterhead footer can use', () => {
+        const html = render(
+            {
+                ...posted,
+                headerConfig: {
+                    version: 3,
+                    footer: { show: true, lines: [{ text: '{{prepared_by}} · {{print_date}}' }] },
+                } as any,
+            },
+            'A4',
+            detailed,
+        );
+        expect(html).toContain('Rina Akter · 06-10-2026 1:02:59 PM');
+    });
+});

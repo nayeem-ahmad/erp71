@@ -6,6 +6,13 @@ import {
 import { formatBDT } from './format';
 import { takaInWords } from './amount-in-words';
 import { invoiceDues, type InvoiceDues } from './customer-credit';
+import {
+    detailedBodyHtml,
+    detailedFooterHtml,
+    detailedStyles,
+    formatPrintStamp,
+    withInvoiceQr,
+} from './sales-invoice-detailed';
 import { paymentMethodLabel } from './payment-method-label';
 import { COMPACT_SCOPE, isThermalPaper, openPrintWindow, paperSizeLabel, renderHeaderHtml } from './print';
 import type {
@@ -26,6 +33,8 @@ export interface InvoiceItem {
     quantity: number;
     unitPrice: number;
     discount?: number; // discount amount for this line
+    /** "6 months" — what the detailed layout's Warranty column says for the line. */
+    warranty?: string;
 }
 
 export interface InvoicePayment {
@@ -52,12 +61,36 @@ export interface InvoiceData {
     customerName?: string;
     customerPhone?: string;
     customerAddress?: string;
+    /** Where the goods go — the detailed layout's Shipping Address block. */
+    shippingAddress?: string;
+    /** The sales order this invoice was raised from — the detailed layout's Order No. */
+    orderNumber?: string;
+    /** Who prepared the invoice — the detailed layout's footer, and `{{prepared_by}}`. */
+    preparedBy?: string;
+    /**
+     * When it was printed, already formatted. Left out, the moment of printing
+     * is used; a caller sets it only to pin the stamp, as a test does.
+     */
+    printedAt?: string;
+    /**
+     * A QR code (a data URL) that opens this invoice in the app, printed in the
+     * detailed layout's header. Left out where the invoice has no page to open
+     * yet — a sale not saved — and the code is simply not printed.
+     */
+    qrDataUrl?: string;
     items: InvoiceItem[];
     payments: InvoicePayment[];
     subtotal: number;
     discountAmount?: number;
     discountPercent?: number;
     vat?: number;
+    /**
+     * Tax already *inside* the prices and the total, as a posted sale holds it
+     * (`Sale.vat_amount` + `sd_amount`). Not the same as `vat`, which is tax
+     * still to be added to the subtotal on the entry screen. The two never both
+     * apply; the detailed layout writes its totals differently for each.
+     */
+    taxIncluded?: number;
     transportCost?: number;
     laborCost?: number;
     rounding?: number;
@@ -196,6 +229,7 @@ function buildStyles(isThermal: boolean, layout: InvoicePrintPrefs): string {
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
         ${isThermal ? '' : compactStyles()}
+        ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles()}
     `;
 }
 
@@ -249,6 +283,22 @@ function compactStyles(): string {
 }
 
 /**
+ * What the customer owed going in and owes now, or null when there is no
+ * account behind the invoice (or nothing is owed either way and the member did
+ * not ask to always see the balance). Shared by both layouts.
+ */
+function resolveDues(data: InvoiceData, layout: InvoicePrintPrefs): InvoiceDues | null {
+    const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
+    let dues: InvoiceDues | null = invoiceDues(data.total, paid, data.previousDue);
+
+    // Null with an account behind it means nothing is owed either way.
+    if (!dues && layout.balance === 'always' && data.previousDue != null && Number.isFinite(data.previousDue)) {
+        dues = { paid, invoiceDue: 0, previousDue: data.previousDue, totalDue: data.previousDue };
+    }
+    return dues;
+}
+
+/**
  * The memo's closing lines under the total: paid, this invoice's due, what the
  * customer owed before it, and the total due.
  *
@@ -259,13 +309,7 @@ function compactStyles(): string {
  * invoice leaves unpaid. A walk-in has no account, so prints none of it.
  */
 function buildDueRows(data: InvoiceData, layout: InvoicePrintPrefs): string {
-    const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
-    let dues: InvoiceDues | null = invoiceDues(data.total, paid, data.previousDue);
-
-    // Null with an account behind it means nothing is owed either way.
-    if (!dues && layout.balance === 'always' && data.previousDue != null && Number.isFinite(data.previousDue)) {
-        dues = { paid, invoiceDue: 0, previousDue: data.previousDue, totalDue: data.previousDue };
-    }
+    const dues = resolveDues(data, layout);
     if (!dues) return '';
 
     const owesOnThisInvoice = dues.invoiceDue > 0.005;
@@ -394,7 +438,15 @@ function buildBody(data: InvoiceData, isThermal: boolean, layout: InvoicePrintPr
  * both lay out, so an invoice cannot print one way alone and another in a
  * batch.
  */
-function invoiceSheet(data: InvoiceData, paperSize: PaperSize, layout: InvoicePrintPrefs): PrintSheet {
+function invoiceSheet(
+    data: InvoiceData,
+    paperSize: PaperSize,
+    layout: InvoicePrintPrefs,
+    printedAt: string,
+): PrintSheet {
+    const thermal = isThermalPaper(paperSize);
+    const detailed = !thermal && layout.layout === 'detailed';
+    const stamp = data.printedAt ?? printedAt;
     const context: HeaderContext = {
         docTitle: 'Invoice',
         docNumber: data.referenceNumber,
@@ -403,13 +455,28 @@ function invoiceSheet(data: InvoiceData, paperSize: PaperSize, layout: InvoicePr
         storeName: data.storeName,
         address: data.companyAddress,
         phone: data.companyPhone,
+        preparedBy: data.preparedBy,
+        printDate: stamp,
     };
+
+    if (detailed) {
+        const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
+        return {
+            context,
+            headerConfig: data.headerConfig,
+            headerHtml: renderHeaderHtml(withInvoiceQr(data.headerConfig, data.qrDataUrl), context, paperSize),
+            bodyHtml: detailedBodyHtml(data, layout, paid, resolveDues(data, layout)),
+            // The member's own closing text takes the thank-you's place; an
+            // empty one leaves the left of the foot blank.
+            footerHtml: detailedFooterHtml(data, layout.footer_text ?? THANK_YOU, stamp),
+        };
+    }
 
     return {
         context,
         headerConfig: data.headerConfig,
         headerHtml: renderHeaderHtml(data.headerConfig, context, paperSize),
-        bodyHtml: buildBody(data, isThermalPaper(paperSize), layout),
+        bodyHtml: buildBody(data, thermal, layout),
         footerHtml: layout.footer_text === null ? `<div class="footer">${THANK_YOU}</div>` : '',
     };
 }
@@ -427,12 +494,13 @@ export function printSalesInvoice(
     const isThermal = isThermalPaper(paperSize);
 
     openPrintWindow({
-        ...invoiceSheet(data, paperSize, layout),
+        ...invoiceSheet(data, paperSize, layout, formatPrintStamp()),
         title: `Invoice ${data.referenceNumber}`,
         paperSize,
         styles: buildStyles(isThermal, layout),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
+        pinFooter: !isThermal && layout.layout === 'detailed',
         // A long item list is exactly what compact is for.
         compactable: true,
         preview,
@@ -453,8 +521,10 @@ export function printSalesInvoices(
     if (invoices.length === 0) return null;
     const isThermal = isThermalPaper(paperSize);
 
+    const printedAt = formatPrintStamp();
+
     return openPrintWindow({
-        sheets: invoices.map((data) => invoiceSheet(data, paperSize, layout)),
+        sheets: invoices.map((data) => invoiceSheet(data, paperSize, layout, printedAt)),
         title: `Invoices (${invoices.length}) — ${paperSizeLabel(paperSize)}`,
         paperSize,
         // The template's CSS is global, so a job carries one: the first
@@ -462,6 +532,7 @@ export function printSalesInvoices(
         headerConfig: invoices[0].headerConfig,
         styles: buildStyles(isThermal, layout),
         repeatHeader: !isThermal,
+        pinFooter: !isThermal && layout.layout === 'detailed',
         compactable: true,
         preview,
     });

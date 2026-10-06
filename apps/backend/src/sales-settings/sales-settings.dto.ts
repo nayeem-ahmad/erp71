@@ -2,9 +2,11 @@ import { IsString, IsOptional, IsEnum, IsBoolean, IsIn, MaxLength } from 'class-
 import {
   INVOICE_BALANCE_MODES,
   INVOICE_FOOTER_MAX_LENGTH,
+  INVOICE_LAYOUTS,
   INVOICE_PADDINGS,
   INVOICE_TABLE_STYLES,
   type InvoiceBalanceMode,
+  type InvoiceLayout,
   type InvoicePadding,
   type InvoiceTableStyle,
 } from '@erp71/shared-types';
@@ -57,6 +59,10 @@ export class SalesSettingsResponseDto {
  * settings modal can send one switch without restating the rest.
  */
 export class UpdateMemberInvoicePrintDto {
+  @IsOptional()
+  @IsIn(INVOICE_LAYOUTS)
+  layout?: InvoiceLayout;
+
   @IsOptional()
   @IsIn(INVOICE_PADDINGS)
   padding?: InvoicePadding;

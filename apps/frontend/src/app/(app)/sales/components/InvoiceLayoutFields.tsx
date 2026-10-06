@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import {
     INVOICE_FOOTER_MAX_LENGTH,
     type InvoiceBalanceMode,
+    type InvoiceLayout,
     type InvoicePadding,
     type InvoicePrintPrefs,
     type InvoiceTableStyle,
@@ -51,6 +52,17 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
 
     return (
         <div className="space-y-4">
+            <Field label={copy.layoutLabel} htmlFor={`${id}-layout`} hint={copy.layoutHint}>
+                <Select
+                    id={`${id}-layout`}
+                    value={value.layout}
+                    onChange={(e) => set('layout', e.target.value as InvoiceLayout)}
+                >
+                    <option value="standard">{copy.layoutStandard}</option>
+                    <option value="detailed">{copy.layoutDetailed}</option>
+                </Select>
+            </Field>
+
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label={copy.paddingLabel} htmlFor={`${id}-padding`}>
                     <Select

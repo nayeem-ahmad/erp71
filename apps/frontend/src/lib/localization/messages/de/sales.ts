@@ -359,6 +359,10 @@ export const salesMessages = {
             invoiceLayout: {
                 heading: "Rechnungslayout",
                 hint: "In Ihrem Konto gespeichert und damit auf jedem Gerät verfügbar.",
+                layoutLabel: "Rechnungsdesign",
+                layoutHint: "Detailliert ergänzt eine Leiste mit Rechnungs-/Auftrags-/Datumsangabe, eine Garantiespalte, die Steuer neben den Summen, eine Fußzeile mit Ersteller und Druckzeit sowie einen QR-Code, der die Rechnung für alle öffnet, die sie sehen dürfen. Gedruckt auf A4, A5 und Letter; Rollen behalten das Standarddesign.",
+                layoutStandard: "Standard",
+                layoutDetailed: "Detailliert",
                 paddingLabel: "Abstand um den Inhalt",
                 paddingNarrow: "Schmal",
                 paddingNormal: "Normal",
