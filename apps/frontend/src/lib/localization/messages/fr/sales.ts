@@ -382,6 +382,7 @@ export const salesMessages = {
                 serialColumn: "Colonne numéro d'ordre (SL)",
                 signatureLines: "Lignes de signature du client et du responsable",
                 hideEmptyDiscount: "Masquer la colonne Remise si aucun article n'en a",
+                hideEmptyWarranty: "Masquer la colonne Garantie (présentation détaillée) quand aucun article n'a de garantie",
                 footerLabel: "Pied de page",
                 footerDefault: "Ligne de remerciement",
                 footerCustom: "Texte personnalisé",

@@ -382,6 +382,7 @@ export const salesMessages = {
                 serialColumn: "Spalte für laufende Nummer (SL)",
                 signatureLines: "Unterschriftszeilen für Kunde und Bevollmächtigten",
                 hideEmptyDiscount: "Rabattspalte ausblenden, wenn kein Artikel rabattiert ist",
+                hideEmptyWarranty: "Garantiespalte (detailliertes Design) ausblenden, wenn kein Artikel Garantie hat",
                 footerLabel: "Fußzeile",
                 footerDefault: "Dankeszeile",
                 footerCustom: "Eigener Text",

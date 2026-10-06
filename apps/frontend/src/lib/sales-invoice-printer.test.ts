@@ -622,8 +622,14 @@ describe('detailed invoice layout', () => {
         const html = render(posted, 'A4', detailed);
         expect(html).toContain('Prepared By- Rina Akter');
         expect(html).toContain('Print Date: 06-10-2026 1:02:59 PM');
-        expect(html).toContain('class="p71-sheet"');
         expect(html).toContain('class="p71-doc-ft d-foot"');
+        // Totals and foot share the page table's last row, so they move to the
+        // next page together when they do not fit under the items.
+        const body = html.slice(html.indexOf('<body>'));
+        const endRow = body.slice(body.indexOf('<tr class="p71-end">'));
+        expect(endRow).toContain('class="d-sums"');
+        expect(endRow.indexOf('class="d-sums"')).toBeLessThan(endRow.indexOf('class="p71-doc-ft d-foot"'));
+        expect(ruleFor(html, '.p71-doc--end > tbody > tr.p71-end')).toContain('break-inside: avoid');
     });
 
     it('says the thank-you at the left of the foot unless the member wrote their own', () => {
@@ -641,14 +647,71 @@ describe('detailed invoice layout', () => {
         expect(html).toContain('Prepared By- A &amp; B');
     });
 
-    it('prints the QR code in the letterhead, right-aligned, when the invoice has one', () => {
+    it('prints the QR code beside bill to, once, when the invoice has one', () => {
         const html = render({ ...posted, qrDataUrl: 'data:image/png;base64,AAAA' }, 'A4', detailed);
-        expect(html).toContain('src="data:image/png;base64,AAAA"');
-        expect(html).toContain('p71-img-col--right');
+        expect(html).toContain('<div class="d-qr"><img src="data:image/png;base64,AAAA"');
+        expect(html).toContain('d-parties d-parties--qr');
+        // In the body, not the letterhead — which repeats on every page.
+        expect(html.match(/data:image\/png;base64,AAAA/g)).toHaveLength(1);
+    });
+
+    it('refuses a QR source that is not an image data URL', () => {
+        const html = render({ ...posted, qrDataUrl: 'https://evil.example/x.png' }, 'A4', detailed);
+        expect(html).not.toContain('evil.example');
+        expect(html).not.toContain('<div class="d-qr">');
     });
 
     it('prints without a code when the invoice has none yet', () => {
-        expect(render(posted, 'A4', detailed)).not.toContain('data:image/png');
+        const html = render(posted, 'A4', detailed);
+        expect(html).not.toContain('data:image/png');
+        expect(html).not.toContain('d-parties d-parties--qr');
+    });
+
+    it('repeats the invoice strip with the letterhead, so continuation pages say which invoice they are', () => {
+        const html = render(posted, 'A4', detailed);
+        const body = html.slice(html.indexOf('<body>'));
+        // Inside the repeating <thead>, ahead of the invoice body.
+        expect(body.indexOf('<thead>')).toBeLessThan(body.indexOf('d-strip'));
+        expect(body.indexOf('d-strip')).toBeLessThan(body.indexOf('</thead>'));
+        expect(body.indexOf('</thead>')).toBeLessThan(body.indexOf('invoice-body'));
+    });
+
+    it('keeps rows, totals and the foot whole across a page break', () => {
+        const html = render(posted, 'A4', detailed);
+        expect(ruleFor(html, '.d-table tr, .d-parties, .d-sums, .note-box, .signatures, .d-foot')).toContain('break-inside:avoid');
+    });
+
+    it('shows the warranty column empty by default, and drops it when asked and no item has one', () => {
+        const none = { ...posted, items: posted.items.map((item) => ({ ...item, warranty: undefined })) };
+        expect(render(none, 'A4', detailed)).toContain('>Warranty</th>');
+        expect(render(none, 'A4', { ...detailed, hide_empty_warranty: true })).not.toContain('Warranty');
+        expect(render(posted, 'A4', { ...detailed, hide_empty_warranty: true })).toContain('>Warranty</th>');
+    });
+
+    it('lines the strip up with the body\u2019s own padding', () => {
+        expect(ruleFor(render(posted, 'A4', { ...detailed, padding: 'wide' }), '.d-strip')).toContain('margin:10px 8mm 0');
+        expect(ruleFor(render(posted, 'A4', detailed), '.d-strip')).toContain('margin:10px 4mm 0');
+    });
+
+    it('foots a discounted sale with no tax on its face: lines, less the discount, is the total', () => {
+        const html = render({ ...posted, taxIncluded: 0, subtotal: 6946 }, 'A4', detailed);
+        expect(html).toContain('<td>Sub Total (৳):</td><td>6,946.00</td>');
+        expect(html).toContain('<tr class="neg"><td>Discount (৳):</td><td>-10.00</td></tr>');
+        expect(html).toContain('<td>Total (৳):</td><td>6,936.00</td>');
+        expect(html).not.toContain('already deducted');
+    });
+
+    it('calls a negative previous due an advance balance, and still adds up', () => {
+        const html = render({ ...posted, previousDue: -2000, amountPaid: 0 }, 'A4', detailed);
+        expect(html).toContain('<td>Advance Balance (৳)</td><td>-2,000.00</td>');
+        expect(html).not.toContain('Previous Due');
+        // 6,936 − 2,000 advance.
+        expect(html).toContain('<td>Total Due (৳)</td><td>4,936.00</td>');
+    });
+
+    it('says the customer is still in credit rather than printing a negative total due', () => {
+        const html = render({ ...posted, previousDue: -10000, amountPaid: 0 }, 'A4', detailed);
+        expect(html).toContain('<td>Advance Remaining (৳)</td><td>3,064.00</td>');
     });
 
     it('does not change a roll — the standard design prints whatever was chosen', () => {

@@ -77,6 +77,8 @@ export interface PrintDocumentOptions {
     headerHtml?: string;
     /** Required unless `sheets` carries the documents. */
     bodyHtml?: string;
+    /** The closing block that stays with a pinned footer — see `PrintSheet.endHtml`. */
+    endHtml?: string;
     /**
      * The document's own footer. Used only when the tenant's template does not
      * design one — a tenant who writes their own footer does not also want the
@@ -145,6 +147,16 @@ export interface PrintDocumentOptions {
 export interface PrintSheet {
     headerHtml?: string;
     bodyHtml: string;
+    /**
+     * The document's closing block — totals, signatures — kept together with
+     * its pinned footer. Printed straight after `bodyHtml`, except where the
+     * footer is pinned to the page bottom and flows once: there the two share
+     * the last row of the page table, which is never split, so when they do not
+     * fit under the last rows they move to the next page *together*, under the
+     * repeating letterhead, rather than leaving the footer alone on a page of
+     * its own. Without a pinned footer this is simply more body.
+     */
+    endHtml?: string;
     footerHtml?: string;
     /** Values this sheet's tenant footer {{tokens}} resolve against. */
     context?: HeaderContext;
@@ -296,8 +308,21 @@ function layoutDocument(parts: {
     repeatFooter: boolean;
     pinFooter: boolean;
     flexPin: boolean;
+    /** Closing block that shares the page table's last row with the footer. */
+    endHtml?: string;
 }): string {
-    const { header, bodyHtml, footer, repeatHeader, repeatFooter, pinFooter, flexPin } = parts;
+    const { header, bodyHtml, footer, repeatHeader, repeatFooter, pinFooter, flexPin, endHtml } = parts;
+
+    if (flexPin && endHtml) {
+        const thead = repeatHeader ? `<thead><tr><td>${header}</td></tr></thead>` : '';
+        return `<table class="p71-doc p71-doc--end">
+            ${thead}
+            <tbody>
+                <tr class="p71-body-row"><td>${repeatHeader ? '' : header}${bodyHtml}</td></tr>
+                <tr class="p71-end"><td><div class="p71-end-wrap">${endHtml}${footer}</div></td></tr>
+            </tbody>
+        </table>`;
+    }
 
     if (repeatHeader || repeatFooter) {
         const thead = repeatHeader ? `<thead><tr><td>${header}</td></tr></thead>` : '';
@@ -333,6 +358,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         {
             headerHtml: opts.headerHtml,
             bodyHtml: opts.bodyHtml ?? '',
+            endHtml: opts.endHtml,
             footerHtml: opts.footerHtml,
             context: opts.context,
         },
@@ -344,6 +370,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     let bleeds = false;
     let pinnedTable = false;
     let flexPinAny = false;
+    let endRowAny = false;
     const contents = sheets.map((sheet) => {
         const header = sheet.headerHtml ?? '';
 
@@ -373,14 +400,19 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         // right under the content?" — so they need different mechanisms. See
         // `layoutDocument`.
         const flexPin = pinFooter && !repeatFooter;
+        // The closing block rides with a footer that is pinned and prints once;
+        // anywhere else it is just the end of the body.
+        const endRow = flexPin && !!sheet.endHtml;
 
         bleeds ||= !!tenantFooter && footerBleeds(opts.headerConfig, opts.paperSize);
         pinnedTable ||= pinFooter && repeatFooter;
-        flexPinAny ||= flexPin;
+        flexPinAny ||= flexPin && !endRow;
+        endRowAny ||= endRow;
 
         return layoutDocument({
             header,
-            bodyHtml: sheet.bodyHtml,
+            bodyHtml: endRow ? sheet.bodyHtml : sheet.bodyHtml + (sheet.endHtml ?? ''),
+            endHtml: endRow ? sheet.endHtml : undefined,
             footer,
             repeatHeader,
             repeatFooter,
@@ -422,6 +454,8 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         ${wrapCss(thermal, bleeds, !!opts.preview)}
         ${opts.preview ? previewSheetCss(opts.paperSize) : ''}
         .p71-doc { width: 100%; border-collapse: collapse; }
+        /* A footer band is one piece: never split across a page break. */
+        @media print { .p71-ft, .p71-doc-ft { break-inside: avoid; } }
         .p71-doc > thead > tr > td,
         .p71-doc > tfoot > tr > td,
         .p71-doc > tbody > tr > td { padding: 0; border: 0; }
@@ -447,6 +481,20 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
                height in mm, as it does on paper. */
             .p71-pv-sheet .p71-doc--pinned { height: ${pageHeightMm}mm; }
         }` : ''}
+        ${endRowAny ? `
+        /* The page table is a full page tall, and its last row takes whatever
+           the body row leaves — totals at the top of it, the footer at the
+           bottom. The row cannot split, so a closing block that does not fit
+           under the last rows moves to the next page whole, headed by the
+           repeating letterhead. A 1px height lets the body row shrink to its
+           content while the end row, at 100%, takes the slack. */
+        .p71-doc--end { height: ${pageHeightMm}mm; }
+        .p71-doc--end > tbody > tr.p71-body-row { height: 1px; }
+        .p71-doc--end > tbody > tr.p71-end { height: 100%; break-inside: avoid; }
+        .p71-doc--end > tbody > tr > td { vertical-align: top; }
+        .p71-doc--end > tbody > tr.p71-end > td { height: 100%; }
+        .p71-end-wrap { display: flex; flex-direction: column; height: 100%; }
+        .p71-end-wrap > .p71-ft, .p71-end-wrap > .p71-doc-ft { margin-top: auto; }` : ''}
         ${flexPinAny ? `
         /* A page-tall flex column: the body absorbs the slack, so the footer is
            pushed to the page bottom when the document is short and flows past

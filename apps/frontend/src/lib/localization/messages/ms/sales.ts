@@ -382,6 +382,7 @@ export const salesMessages = {
                     serialColumn: "Lajur nombor siri (SL)",
                     signatureLines: "Garis tandatangan pelanggan dan pegawai sah",
                     hideEmptyDiscount: "Sembunyikan lajur Diskaun apabila tiada item berdiskaun",
+                    hideEmptyWarranty: "Sembunyikan lajur Waranti (reka bentuk terperinci) apabila tiada item mempunyai waranti",
                     footerLabel: "Pengaki",
                     footerDefault: "Ucapan terima kasih",
                     footerCustom: "Teks sendiri",

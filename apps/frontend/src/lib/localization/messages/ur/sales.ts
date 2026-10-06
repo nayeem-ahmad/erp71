@@ -382,6 +382,7 @@ export const salesMessages = {
                 serialColumn: "سیریل نمبر (SL) کالم",
                 signatureLines: "گاہک اور مجاز دستخط کی لائنیں",
                 hideEmptyDiscount: "کسی آئٹم پر رعایت نہ ہو تو رعایت کالم چھپائیں",
+                hideEmptyWarranty: "کسی آئٹم پر وارنٹی نہ ہو تو وارنٹی کالم چھپائیں (تفصیلی ڈیزائن)",
                 footerLabel: "فوٹر",
                 footerDefault: "شکریہ کی سطر",
                 footerCustom: "اپنی تحریر",

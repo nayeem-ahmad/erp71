@@ -9,9 +9,9 @@ import { invoiceDues, type InvoiceDues } from './customer-credit';
 import {
     detailedBodyHtml,
     detailedFooterHtml,
+    detailedStripHtml,
     detailedStyles,
     formatPrintStamp,
-    withInvoiceQr,
 } from './sales-invoice-detailed';
 import { paymentMethodLabel } from './payment-method-label';
 import { COMPACT_SCOPE, isThermalPaper, openPrintWindow, paperSizeLabel, renderHeaderHtml } from './print';
@@ -229,7 +229,7 @@ function buildStyles(isThermal: boolean, layout: InvoicePrintPrefs): string {
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
         ${isThermal ? '' : compactStyles()}
-        ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles()}
+        ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles(layout)}
     `;
 }
 
@@ -461,11 +461,15 @@ function invoiceSheet(
 
     if (detailed) {
         const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
+        const { body, end } = detailedBodyHtml(data, layout, paid, resolveDues(data, layout));
         return {
             context,
             headerConfig: data.headerConfig,
-            headerHtml: renderHeaderHtml(withInvoiceQr(data.headerConfig, data.qrDataUrl), context, paperSize),
-            bodyHtml: detailedBodyHtml(data, layout, paid, resolveDues(data, layout)),
+            // The strip rides with the letterhead, so a long invoice's
+            // continuation pages say which invoice they belong to.
+            headerHtml: renderHeaderHtml(data.headerConfig, context, paperSize) + detailedStripHtml(data),
+            bodyHtml: body,
+            endHtml: end,
             // The member's own closing text takes the thank-you's place; an
             // empty one leaves the left of the foot blank.
             footerHtml: detailedFooterHtml(data, layout.footer_text ?? THANK_YOU, stamp),

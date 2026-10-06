@@ -382,6 +382,7 @@ export const salesMessages = {
                 serialColumn: "क्रम संख्या (SL) कॉलम",
                 signatureLines: "ग्राहक और अधिकृत हस्ताक्षर की लाइनें",
                 hideEmptyDiscount: "किसी आइटम पर छूट न हो तो छूट कॉलम छिपाएँ",
+                hideEmptyWarranty: "किसी वस्तु पर वारंटी न हो तो वारंटी कॉलम छिपाएँ (विस्तृत डिज़ाइन)",
                 footerLabel: "फ़ुटर",
                 footerDefault: "धन्यवाद पंक्ति",
                 footerCustom: "अपना टेक्स्ट",

@@ -382,6 +382,7 @@ export const salesMessages = {
                 serialColumn: "Columna de número de serie (SL)",
                 signatureLines: "Líneas de firma del cliente y del autorizado",
                 hideEmptyDiscount: "Ocultar la columna Descuento si ningún artículo lo tiene",
+                hideEmptyWarranty: "Ocultar la columna Garantía (diseño detallado) cuando ningún artículo tiene garantía",
                 footerLabel: "Pie de página",
                 footerDefault: "Línea de agradecimiento",
                 footerCustom: "Texto propio",
