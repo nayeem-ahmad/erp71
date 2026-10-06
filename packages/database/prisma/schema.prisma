@@ -2739,6 +2739,12 @@ model Sale {
   /// "added on top" sale back the way it was entered.
   prices_include_vat Boolean @default(true)
 
+  /// Who sold it — the customer's sales rep when the sale was made, changeable
+  /// on the sale. Stamped rather than read through the customer, so a later
+  /// reassignment leaves the invoice and the salesperson report as they were.
+  /// `created_by` is who *entered* the sale, which is often someone else.
+  sales_rep_id String?
+
   /// Two boxes the Mushak 6.3 requires that nothing else in the system knows:
   /// সরবরাহের গন্তব্যস্থল (where the goods are going, which is not always the
   /// customer's billing address) and যানবাহনের প্রকৃতি ও নম্বর (how they are
@@ -2766,6 +2772,7 @@ model Sale {
   customer       Customer?       @relation(fields: [customer_id], references: [id])
   quotation      Quotation?      @relation(fields: [quotation_id], references: [id])
   salesOrder     SalesOrder?     @relation(fields: [sales_order_id], references: [id])
+  salesRep       Employee?       @relation("SaleSalesRep", fields: [sales_rep_id], references: [id], onDelete: SetNull)
   items          SaleItem[]
   payments       PaymentRecord[]
   returns        SalesReturn[]
@@ -2783,6 +2790,7 @@ model Sale {
   @@index([tenant_id, quotation_id])
   @@index([tenant_id, sales_order_id])
   @@index([tenant_id, warehouse_id])
+  @@index([tenant_id, sales_rep_id])
 }
 
 model Customer {
@@ -2798,6 +2806,10 @@ model Customer {
   customer_type        CustomerType @default(INDIVIDUAL)
   customer_group_id    String?
   territory_id         String?
+  /// The employee responsible for this customer — the "Sales By" on their
+  /// invoices. Each sale takes a copy when it is made (`Sale.sales_rep_id`), so
+  /// reassigning a customer later does not rewrite who sold what.
+  sales_rep_id         String?
   credit_limit         Decimal?     @db.Decimal(12, 2)
   default_discount_pct Decimal?     @db.Decimal(5, 2)
   total_spent          Decimal      @default(0) @db.Decimal(12, 2)
@@ -2831,6 +2843,7 @@ model Customer {
   tenant              Tenant                      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   customerGroup       CustomerGroup?              @relation(fields: [customer_group_id], references: [id])
   territory           Territory?                  @relation(fields: [territory_id], references: [id])
+  salesRep            Employee?                   @relation("CustomerSalesRep", fields: [sales_rep_id], references: [id], onDelete: SetNull)
   user                User?                       @relation(fields: [user_id], references: [id])
   sales               Sale[]
   salesOrders         SalesOrder[]
@@ -5032,6 +5045,8 @@ model Employee {
   PayrollLine             PayrollLine[]
   PayrollAdjustment       PayrollAdjustment[]
   ExpenseClaim            ExpenseClaim[]
+  customersRepresented    Customer[]                @relation("CustomerSalesRep")
+  salesMade               Sale[]                    @relation("SaleSalesRep")
   AssetAssignment         AssetAssignment[]
   PolicyAcknowledgement   PolicyAcknowledgement[]
   EmployeeDocument        EmployeeDocument[]

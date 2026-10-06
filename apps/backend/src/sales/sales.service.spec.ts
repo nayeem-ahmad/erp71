@@ -299,6 +299,45 @@ describe('SalesService', () => {
       );
     });
 
+    it('stamps the sales rep the screen named, once checked against this tenant', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.employee = { findFirst: jest.fn().mockResolvedValue({ id: 'emp-rafiq' }) };
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        salesRepId: 'emp-rafiq',
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      });
+
+      expect(tx.employee.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'emp-rafiq', tenant_id: 'tenant-1', deleted_at: null } }),
+      );
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ sales_rep_id: 'emp-rafiq' }) }),
+      );
+    });
+
+    it('records no sales rep on a walk-in sale that names none', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ sales_rep_id: null }) }),
+      );
+    });
+
     it('declares VAT on what was billed, not on the undiscounted lines', async () => {
       tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 1000 });
       tx.saleItem.create.mockResolvedValue({});
@@ -1480,6 +1519,7 @@ describe('SalesService', () => {
             payments: true,
             customer: true,
             salesOrder: { select: { id: true, order_number: true } },
+            salesRep: { select: { id: true, name: true } },
             // The branch letterhead needs it, as the single sale's does.
             store: { select: { id: true, name: true, address: true } },
           },

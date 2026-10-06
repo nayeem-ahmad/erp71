@@ -94,6 +94,8 @@ export const coreMessages = {
         subtotal: "उप-योग",
         discount: "छूट",
         tax: "कर",
+        salesRep: "बिक्री प्रतिनिधि",
+        noSalesRep: "— कोई नहीं —",
         reference: "संदर्भ",
         customer: "ग्राहक",
         supplier: "आपूर्तिकर्ता",

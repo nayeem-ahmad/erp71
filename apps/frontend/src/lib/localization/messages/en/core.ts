@@ -94,6 +94,8 @@ export const coreMessages = {
         subtotal: 'Subtotal',
         discount: 'Discount',
         tax: 'Tax',
+        salesRep: "Sales rep",
+        noSalesRep: "— None —",
         reference: 'Reference',
         customer: 'Customer',
         supplier: 'Supplier',

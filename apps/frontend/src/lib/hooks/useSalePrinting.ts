@@ -77,14 +77,15 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                     return;
                 }
                 const storeId = saleStoreId(sale);
-                const [invoice, challan, invoiceLayout] = await Promise.all([
+                const [invoice, challan, invoiceLayout, printedBy] = await Promise.all([
                     invoiceHeader.resolve(storeId),
                     challanHeader.resolve(storeId),
                     // The member's own layout, waited on so the first print
                     // after a page load is not the built-in one by accident.
                     resolveInvoiceLayout(),
+                    printedByName(),
                 ]);
-                await print(sale, { ...ctx, invoiceHeader: invoice, challanHeader: challan, invoiceLayout });
+                await print(sale, { ...ctx, invoiceHeader: invoice, challanHeader: challan, invoiceLayout, printedBy });
             } catch (error) {
                 console.error('Failed to print sale document', error);
                 toast.error(t.sales.printMenu.loadFailed);
@@ -137,16 +138,17 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                 }
 
                 const storeIds = [...new Set(loaded.map(saleStoreId))];
-                const [headers, invoiceLayout] = await Promise.all([
+                const [headers, invoiceLayout, printedBy] = await Promise.all([
                     Promise.all(storeIds.map((storeId) => invoiceHeader.resolve(storeId))),
                     resolveInvoiceLayout(),
+                    printedByName(),
                 ]);
                 const headerByStore = new Map(storeIds.map((storeId, i) => [storeId, headers[i]]));
 
                 const opened = await printSaleInvoices(
                     loaded,
                     paperSize,
-                    { ...ctx, invoiceLayout },
+                    { ...ctx, invoiceLayout, printedBy },
                     skipPreview,
                     (sale) => headerByStore.get(saleStoreId(sale)) ?? ctx.invoiceHeader,
                 );
@@ -178,6 +180,20 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
         printReceipt,
         printInvoices,
     };
+}
+
+/**
+ * The signed-in user's name, for "Printed … by …" on the invoice. Read from
+ * the cached profile, so it costs no request after the first; a print never
+ * waits on it failing — the line just goes without a name.
+ */
+async function printedByName(): Promise<string | undefined> {
+    try {
+        const me: any = await api.getCurrentUser();
+        return me?.name?.trim() || me?.email || undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /** Fetches the full sale — the list's `resolve`, where rows have no lines. */

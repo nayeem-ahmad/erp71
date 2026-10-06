@@ -83,6 +83,8 @@ export const HEADER_TOKENS = [
     'doc_title',
     'doc_number',
     'date',
+    'entry_by',
+    'sales_by',
     'prepared_by',
     'print_date',
 ] as const;
@@ -101,6 +103,8 @@ function tokenValues(ctx: HeaderContext): Record<string, string> {
         doc_number: ctx.docNumber ?? '',
         date: ctx.docDate ?? '',
         prepared_by: ctx.preparedBy ?? '',
+        entry_by: ctx.preparedBy ?? '',
+        sales_by: ctx.salesBy ?? '',
         print_date: ctx.printDate ?? '',
     };
 }

@@ -126,6 +126,17 @@ export class CustomersController {
         return this.customersService.importRows(tenant.tenantId, body.rows, body.mode);
     }
 
+    /**
+     * Employees a customer's sales rep can be picked from: id and name only.
+     * Here rather than on /employees, which needs HR permission (it carries
+     * pay); choosing a rep is a sales task. Declared before `:id`.
+     */
+    @RequireAnyStorePermission(...CUSTOMER_READ)
+    @Get('sales-reps')
+    async salesReps(@Tenant() tenant: TenantContext) {
+        return this.customersService.salesReps(tenant.tenantId);
+    }
+
     @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get(':id')
     async findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {

@@ -94,6 +94,8 @@ export const coreMessages = {
         subtotal: 'ذیلی میزان',
         discount: 'رعایت',
         tax: 'ٹیکس',
+        salesRep: "سیلز نمائندہ",
+        noSalesRep: "— کوئی نہیں —",
         reference: 'حوالہ',
         customer: 'گاہک',
         supplier: 'سپلائر',

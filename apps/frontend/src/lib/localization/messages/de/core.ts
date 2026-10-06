@@ -94,6 +94,8 @@ export const coreMessages = {
         subtotal: "Zwischensumme",
         discount: "Rabatt",
         tax: "Steuer",
+        salesRep: "Vertriebsmitarbeiter",
+        noSalesRep: "— Keiner —",
         reference: "Referenz",
         customer: "Kunde",
         supplier: "Lieferant",

@@ -18,6 +18,7 @@ import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loya
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 import { resolveSalePreviousDue } from './sale-previous-due.util';
 import { loadPreparerNames, preparerOf } from './sale-preparer.util';
+import { checkedSalesRepId, SALES_REP_SELECT, salesRepForSale } from '../customers/sales-rep.util';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
@@ -129,6 +130,8 @@ export class SalesService {
             const prep = await this.prepareSale(tx, tenantId, dto);
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
             const session = await this.resolveCashierSession(tx, tenantId, userId, dto);
+            // Credited to the customer's own rep unless the screen names one.
+            const salesRepId = await salesRepForSale(tx, tenantId, dto.salesRepId, dto.customerId);
 
             // 1. Generate Serial Number (Simplified for v0.1)
             const serialNumber = `SL-${Date.now()}`;
@@ -157,6 +160,7 @@ export class SalesService {
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
                     prices_include_vat: dto.pricesIncludeVat ?? true,
+                    sales_rep_id: salesRepId,
                     amount_paid: prep.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'COMPLETED',
@@ -780,6 +784,7 @@ export class SalesService {
             // is still live until the draft is finalised.
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
             const draftSession = await this.resolveCashierSession(tx, tenantId, userId, dto, { enforce: false });
+            const draftSalesRepId = await salesRepForSale(tx, tenantId, dto.salesRepId, dto.customerId);
 
             // A draft is not a tax invoice — nothing is posted and no 6.3 may
             // be issued against it — but the entry screen still shows a VAT
@@ -815,6 +820,7 @@ export class SalesService {
                     // Completing the draft keeps it: the parked prices were
                     // entered this way.
                     prices_include_vat: dto.pricesIncludeVat ?? true,
+                    sales_rep_id: draftSalesRepId,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'DRAFT',
@@ -1125,6 +1131,8 @@ export class SalesService {
                 // from and link back to it.
                 quotation: { select: { id: true, quote_number: true, doc_kind: true } },
                 salesOrder: { select: { id: true, order_number: true } },
+                // "Sales By" on the invoice and the edit screen.
+                salesRep: { select: SALES_REP_SELECT },
                 // The branch's name and address print on its letterhead.
                 store: { select: { id: true, name: true, address: true } },
             },
@@ -1168,6 +1176,7 @@ export class SalesService {
                 customer: true,
                 // The order the sale was raised from prints as its Order No.
                 salesOrder: { select: { id: true, order_number: true } },
+                salesRep: { select: SALES_REP_SELECT },
                 // The branch's name and address print on its letterhead.
                 store: { select: { id: true, name: true, address: true } },
             },
@@ -1386,11 +1395,14 @@ export class SalesService {
                 }
             }
 
+            const salesRepId = await checkedSalesRepId(tx, tenantId, dto.salesRepId);
+
             // 5. Update sale record
             return tx.sale.update({
                 where: { id },
                 data: {
                     ...(dto.customerId !== undefined && { customer_id: dto.customerId || null }),
+                    ...(salesRepId !== undefined && { sales_rep_id: salesRepId }),
                     ...(dto.status && { status: dto.status }),
                     ...(dto.note !== undefined && { note: dto.note }),
                     ...(dto.mushakDestination !== undefined && {
@@ -1660,6 +1672,7 @@ export class SalesService {
                     customer: true,
                     // The order the sale was raised from prints as its Order No.
                     salesOrder: { select: { id: true, order_number: true } },
+                    salesRep: { select: SALES_REP_SELECT },
                     // The branch's name and address print on its letterhead.
                     store: { select: { id: true, name: true, address: true } },
                 },

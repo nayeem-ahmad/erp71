@@ -94,6 +94,8 @@ export const coreMessages = {
             subtotal: "Subjumlah",
             discount: "Diskaun",
             tax: "Cukai",
+            salesRep: "Wakil jualan",
+            noSalesRep: "— Tiada —",
             reference: "Rujukan",
             customer: "Pelanggan",
             supplier: "Pembekal",

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, MaxLength, Matches } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, MaxLength, Matches, ValidateIf } from 'class-validator';
 import { PaginationDto } from '../common/pagination.dto';
 
 export enum CustomerPaymentDirectionDto {
@@ -52,6 +52,12 @@ export class CreateCustomerDto {
     @IsOptional()
     @IsUUID()
     territory_id?: string;
+
+    /** The employee who looks after this customer — "Sales By". Null clears it. */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    sales_rep_id?: string | null;
 
     @IsOptional()
     @IsNumber()
@@ -159,6 +165,12 @@ export class UpdateCustomerDto {
     @IsOptional()
     @IsUUID()
     territory_id?: string;
+
+    /** The employee who looks after this customer — "Sales By". Null clears it. */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    sales_rep_id?: string | null;
 
     @IsOptional()
     @IsNumber()

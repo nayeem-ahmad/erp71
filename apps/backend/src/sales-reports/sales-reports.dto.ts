@@ -258,7 +258,12 @@ export class GetCustomerRetentionDto {
 }
 
 /** How the salesperson margin report attributes a sale. */
-export const SALESPERSON_GROUPINGS = ['user', 'counter'] as const;
+/**
+ * How the salesperson report attributes a sale: `salesRep`, the employee the
+ * sale is credited to ("Sales By"); `user`, whoever entered it ("Entry By");
+ * `counter`, the till it was rung up at.
+ */
+export const SALESPERSON_GROUPINGS = ['salesRep', 'user', 'counter'] as const;
 export type SalespersonGrouping = (typeof SALESPERSON_GROUPINGS)[number];
 
 export class GetMarginExceptionsDto {

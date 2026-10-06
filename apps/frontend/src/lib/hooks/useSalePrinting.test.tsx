@@ -53,7 +53,7 @@ jest.mock('@/lib/sale-print-actions', () => ({
     printSaleReceipt: jest.fn(),
 }));
 
-jest.mock('@/lib/api', () => ({ api: { printSalesBatch: jest.fn(), getSale: jest.fn() } }));
+jest.mock('@/lib/api', () => ({ api: { printSalesBatch: jest.fn(), getSale: jest.fn(), getCurrentUser: jest.fn() } }));
 jest.mock('@/lib/toast', () => ({ toast: { error: jest.fn(), info: jest.fn(), success: jest.fn() } }));
 
 const gulshanSale = {
@@ -85,6 +85,36 @@ describe('useSalePrinting', () => {
             gulshanSale,
             'A4',
             expect.objectContaining({ invoiceLayout: memberLayout }),
+            true,
+        );
+    });
+
+    it('names the signed-in user as the one printing', async () => {
+        const { api } = require('@/lib/api');
+        api.getCurrentUser.mockResolvedValue({ name: 'Rina Akter', email: 'rina@example.com' });
+        const { result } = renderHook(() => useSalePrinting({ resolve: async () => gulshanSale }));
+
+        await act(() => result.current.printInvoice('sale-1', 'A4'));
+
+        expect(printSaleInvoice).toHaveBeenCalledWith(
+            gulshanSale,
+            'A4',
+            expect.objectContaining({ printedBy: 'Rina Akter' }),
+            true,
+        );
+    });
+
+    it('still prints when the user cannot be read, just without a name', async () => {
+        const { api } = require('@/lib/api');
+        api.getCurrentUser.mockRejectedValue(new Error('offline'));
+        const { result } = renderHook(() => useSalePrinting({ resolve: async () => gulshanSale }));
+
+        await act(() => result.current.printInvoice('sale-1', 'A4'));
+
+        expect(printSaleInvoice).toHaveBeenCalledWith(
+            gulshanSale,
+            'A4',
+            expect.objectContaining({ printedBy: undefined }),
             true,
         );
     });

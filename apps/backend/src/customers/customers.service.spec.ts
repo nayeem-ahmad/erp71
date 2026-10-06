@@ -44,6 +44,11 @@ describe('CustomersService', () => {
       customerGroup: {
         findFirst: jest.fn(),
       },
+      // The employee a customer's sales rep is checked against.
+      employee: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       customerCreditTransaction: {
         count: jest.fn(),
         findMany: jest.fn(),
@@ -84,6 +89,45 @@ describe('CustomersService', () => {
           name: 'Nayeem', phone: '+123', email: '', address: ''
       });
       expect(res.id).toEqual('cust-1');
+  });
+
+  describe('sales rep', () => {
+    it('saves the employee who looks after the customer, once checked against this tenant', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-rafiq' });
+      db.customer.create.mockResolvedValue({ id: 'cust-1', sales_rep_id: 'emp-rafiq' });
+
+      await service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-rafiq' } as any);
+
+      expect(db.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ sales_rep_id: 'emp-rafiq' }),
+          include: expect.objectContaining({ salesRep: { select: { id: true, name: true } } }),
+        }),
+      );
+    });
+
+    it('refuses an employee from another workspace', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.employee.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-elsewhere' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.customer.create).not.toHaveBeenCalled();
+    });
+
+    it('clears the rep on update when told null, and leaves it alone when not mentioned', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', phone: null, customer_code: 'CUST-1' });
+      db.customer.update.mockResolvedValue({ id: 'c1' });
+
+      await service.update('tenant-1', 'c1', { sales_rep_id: null } as any);
+      expect(db.customer.update.mock.calls[0][0].data).toEqual(expect.objectContaining({ sales_rep_id: null }));
+
+      await service.update('tenant-1', 'c1', { name: 'Renamed' } as any);
+      expect(db.customer.update.mock.calls[1][0].data).not.toHaveProperty('sales_rep_id');
+    });
   });
 
   it('should throw Error when phone matches existing customer', async () => {

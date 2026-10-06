@@ -281,8 +281,10 @@ export interface HeaderContext {
     website?: string;
     vatRegNo?: string;
     tin?: string;
-    /** Who prepared the document — fills `{{prepared_by}}`. */
+    /** Who entered the document — fills `{{entry_by}}` (and the older `{{prepared_by}}`). */
     preparedBy?: string;
+    /** The employee a sale is credited to — fills `{{sales_by}}`. */
+    salesBy?: string;
     /** When it was printed, already formatted — fills `{{print_date}}`. */
     printDate?: string;
     /**

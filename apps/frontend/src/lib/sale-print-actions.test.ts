@@ -281,6 +281,20 @@ describe('the detailed invoice\u2019s data', () => {
     });
 });
 
+describe('who sold the sale', () => {
+    it('carries the sale\u2019s sales rep onto the invoice as Sales By', () => {
+        expect(saleToInvoiceData({ ...listShapedSale, salesRep: { id: 'emp-1', name: 'Rafiq Islam' } }, ctx).salesBy).toBe('Rafiq Islam');
+        expect(saleToInvoiceData(listShapedSale, ctx).salesBy).toBeUndefined();
+    });
+});
+
+describe('who printed the invoice', () => {
+    it('carries the signed-in user from the print context onto the invoice', () => {
+        expect(saleToInvoiceData(listShapedSale, { ...ctx, printedBy: 'Rina Akter' }).printedBy).toBe('Rina Akter');
+        expect(saleToInvoiceData(listShapedSale, ctx).printedBy).toBeUndefined();
+    });
+});
+
 describe('a sale entered before VAT', () => {
     // 1,000 before VAT less a 10 discount, with 15% added on top: stored as a
     // 1,150 line, a 1,138.50 total and 148.50 of VAT.
