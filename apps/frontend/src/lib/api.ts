@@ -1899,6 +1899,8 @@ export const api = {
         return fetchPaginated(`/sales${qs ? `?${qs}` : ''}`);
     },
     /** Every customer as a flat array — for pickers and id→customer maps. */
+    /** Employees a customer's (or a sale's) sales rep can be picked from: id and name. */
+    getSalesReps: (): Promise<{ id: string; name: string }[]> => fetchWithAuth('/customers/sales-reps'),
     getCustomers: (params?: { search?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
@@ -2663,7 +2665,7 @@ export const api = {
         return fetchWithAuth(`/sales-reports/gross-profit/by-product${query.toString() ? `?${query.toString()}` : ''}`);
     },
 
-    getGrossProfitBySalesperson: (params?: { storeId?: string; from?: string; to?: string; groupBy?: 'user' | 'counter' }) => {
+    getGrossProfitBySalesperson: (params?: { storeId?: string; from?: string; to?: string; groupBy?: 'salesRep' | 'user' | 'counter' }) => {
         const query = new URLSearchParams();
         if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);

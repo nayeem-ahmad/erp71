@@ -118,6 +118,7 @@ export class SalesReportsService {
                     store_id: true,
                     counter_id: true,
                     created_by: true,
+                    sales_rep_id: true,
                     customer_id: true,
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
                     items: {
@@ -145,7 +146,7 @@ export class SalesReportsService {
                     // The customer who is getting the refund is the one on the
                     // original sale — a return row carries no customer of its
                     // own, so per-customer margin has to reach through it.
-                    sale: { select: { customer_id: true, counter_id: true, created_by: true } },
+                    sale: { select: { customer_id: true, counter_id: true, created_by: true, sales_rep_id: true } },
                     items: {
                         select: {
                             product_id: true,
@@ -1394,20 +1395,25 @@ export class SalesReportsService {
      */
     async getGrossProfitBySalesperson(tenantId: string, query: GetGrossProfitBySalespersonDto) {
         const { sales, returns, rawSales, rawReturns } = await this.loadMarginSource(tenantId, query);
-        const groupBy = query.groupBy ?? 'user';
+        // The employee each sale is credited to, unless asked for who entered it
+        // or the till it went through.
+        const groupBy = query.groupBy ?? 'salesRep';
+        const attribute = (sale: { counter_id?: string | null; created_by?: string | null; sales_rep_id?: string | null } | null | undefined) =>
+            (groupBy === 'counter'
+                ? sale?.counter_id
+                : groupBy === 'user'
+                    ? sale?.created_by
+                    : sale?.sales_rep_id) ?? UNATTRIBUTED_KEY;
 
         const keyForSale = new Map<string, string>();
         for (const sale of rawSales as any[]) {
-            keyForSale.set(sale.id, (groupBy === 'counter' ? sale.counter_id : sale.created_by) ?? UNATTRIBUTED_KEY);
+            keyForSale.set(sale.id, attribute(sale));
         }
         const keyForReturn = new Map<string, string>();
         for (const ret of rawReturns as any[]) {
             // Attributed to whoever made the original sale, not whoever
             // processed the refund: the margin being reversed is theirs.
-            keyForReturn.set(
-                ret.id,
-                (groupBy === 'counter' ? ret.sale?.counter_id : ret.sale?.created_by) ?? UNATTRIBUTED_KEY,
-            );
+            keyForReturn.set(ret.id, attribute(ret.sale));
         }
 
         const lines: MarginLine[] = [];
@@ -1431,6 +1437,12 @@ export class SalesReportsService {
                     select: { id: true, name: true },
                 });
                 for (const c of counters) labels.set(c.id, c.name);
+            } else if (groupBy === 'salesRep') {
+                const reps = await this.db.employee.findMany({
+                    where: { tenant_id: tenantId, id: { in: ids } },
+                    select: { id: true, name: true },
+                });
+                for (const rep of reps) labels.set(rep.id, rep.name);
             } else {
                 const users = await this.db.user.findMany({
                     where: { id: { in: ids } },
@@ -1448,7 +1460,8 @@ export class SalesReportsService {
                 name:
                     group.key === UNATTRIBUTED_KEY
                         ? 'Unattributed'
-                        : labels.get(group.key) ?? (groupBy === 'counter' ? 'Unknown counter' : 'Unknown user'),
+                        : labels.get(group.key)
+                            ?? (groupBy === 'counter' ? 'Unknown counter' : groupBy === 'salesRep' ? 'Unknown employee' : 'Unknown user'),
                 orders: orderCounts.get(group.key) ?? 0,
                 units: group.units,
                 revenue: group.netRevenue,

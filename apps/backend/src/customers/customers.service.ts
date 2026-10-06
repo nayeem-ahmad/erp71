@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { checkedSalesRepId, listSalesReps, SALES_REP_SELECT } from './sales-rep.util';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
@@ -311,22 +312,30 @@ export class CustomersService {
             }
         }
 
-        const { nid, customer_code: requestedCode, ...rest } = dto;
+        const { nid, customer_code: requestedCode, sales_rep_id, ...rest } = dto;
+        const salesRepId = await checkedSalesRepId(this.db, tenantId, sales_rep_id);
         const record = await this.withCustomerCode(tenantId, requestedCode, (customer_code) =>
             this.db.customer.create({
                 data: {
                     tenant_id: tenantId,
                     customer_code,
                     ...rest,
+                    ...(salesRepId !== undefined ? { sales_rep_id: salesRepId } : {}),
                     ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
                 },
                 include: {
                     customerGroup: true,
                     territory: true,
+                    salesRep: { select: SALES_REP_SELECT },
                 }
             }),
         );
         return this.decryptCustomer(record);
+    }
+
+    /** The employees a customer's sales rep can be picked from — see `listSalesReps`. */
+    salesReps(tenantId: string) {
+        return listSalesReps(this.db, tenantId);
     }
 
     async findAll(
@@ -366,7 +375,9 @@ export class CustomersService {
         const [items, total] = await Promise.all([
             this.db.customer.findMany({
                 where,
-                include: { customerGroup: true, territory: true },
+                // The rep travels with the customer so the sale screen can
+                // credit the sale to them on picking the customer.
+                include: { customerGroup: true, territory: true, salesRep: { select: SALES_REP_SELECT } },
                 orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, CUSTOMER_SORTABLE, CUSTOMER_DEFAULT_ORDER),
                 skip,
                 take: limit,
@@ -383,6 +394,7 @@ export class CustomersService {
             include: {
                 customerGroup: true,
                 territory: true,
+                salesRep: { select: SALES_REP_SELECT },
                 sales: {
                     include: { items: { include: { product: true } } },
                     orderBy: { sale_date: 'desc' }
@@ -500,17 +512,20 @@ export class CustomersService {
             }
         }
 
-        const { nid, ...rest } = dto;
+        const { nid, sales_rep_id, ...rest } = dto;
         if (rest.customer_code) rest.customer_code = rest.customer_code.trim();
+        const salesRepId = await checkedSalesRepId(this.db, tenantId, sales_rep_id);
         const record = await this.db.customer.update({
             where: { id },
             data: {
                 ...rest,
+                ...(salesRepId !== undefined ? { sales_rep_id: salesRepId } : {}),
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
             include: {
                 customerGroup: true,
                 territory: true,
+                salesRep: { select: SALES_REP_SELECT },
             }
         });
         return this.decryptCustomer(record);

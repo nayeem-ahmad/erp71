@@ -25,6 +25,7 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import { invoiceQrDataUrl } from '@/lib/invoice-qr';
 import { useInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { useSalesReps } from '@/lib/hooks/useSalesReps';
 import { productTaxRates } from '@/lib/sale-vat';
 import { toast } from '@/lib/toast';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
@@ -132,6 +133,17 @@ function NewSalePageContent() {
     // Tax. (The rate used to be read off the sales settings, which never carry
     // it, so this screen always showed VAT as zero.)
     const taxPricing = useTaxPricing();
+
+    // Who the sale is credited to ("Sales By"): the picked customer's own rep,
+    // unless the operator chooses another.
+    const salesReps = useSalesReps();
+    const [salesRepId, setSalesRepId] = useState<string | null>(null);
+    const customerRepId: string | null = customer?.sales_rep_id ?? null;
+    useEffect(() => {
+        if (customerRepId) setSalesRepId(customerRepId);
+    }, [customer?.id, customerRepId]);
+    const salesRepName = salesReps.find((rep) => rep.id === salesRepId)?.name
+        ?? (salesRepId && customer?.salesRep?.id === salesRepId ? customer.salesRep.name : undefined);
 
     // Seed the cart from the document being converted. Runs once per id: the
     // user is free to edit the lines afterwards, and re-seeding would undo that.
@@ -265,6 +277,8 @@ function NewSalePageContent() {
         customerPhone: customer?.phone,
         shippingAddress: customer?.address || undefined,
         preparedBy: currentUser?.name || undefined,
+        salesBy: salesRepName,
+        printedBy: currentUser?.name || currentUser?.email || undefined,
         items: items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
@@ -391,6 +405,9 @@ function NewSalePageContent() {
         // Always VAT-inclusive: with VAT added on top, each price typed before
         // VAT is grossed up with its line's rates — see `computeEntryTax`.
         pricesIncludeVat: taxPricing.pricesIncludeVat,
+        // Sent even when empty, so "none" is a choice rather than a fall-back
+        // to the customer's rep on the server.
+        salesRepId,
         items: items.map((item, index) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -584,6 +601,10 @@ function NewSalePageContent() {
             totals={totals}
             onTotalsChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
             tenantVatRate={taxPricing.defaultVatRate}
+            salesRepId={salesRepId}
+            setSalesRepId={setSalesRepId}
+            salesReps={salesReps}
+            salesRepName={salesRepName}
             payments={payments}
             onPaymentChange={updatePayment}
             warehouses={warehouses}

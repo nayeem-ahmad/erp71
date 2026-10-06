@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSalesReps } from '@/lib/hooks/useSalesReps';
 import { User, Phone, Mail, MapPin, CreditCard, Percent, Hash, Receipt, UserCog, Cake } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { Button } from '@/components/ui';
@@ -20,6 +21,8 @@ export interface CustomerFormValues {
     customer_type?: string | null;
     customer_group_id?: string | null;
     territory_id?: string | null;
+    /** The employee who looks after the customer — "Sales By" on their sales. */
+    sales_rep_id?: string | null;
     credit_limit?: string | number | null;
     default_discount_pct?: string | number | null;
     birthday?: string | null;
@@ -36,7 +39,7 @@ interface CustomerFormModalProps {
 
 const emptyForm = {
     customer_code: '', name: '', owner_name: '', phone: '', email: '', address: '', bin: '', profile_pic_url: '',
-    customer_type: 'INDIVIDUAL', customer_group_id: '', territory_id: '',
+    customer_type: 'INDIVIDUAL', customer_group_id: '', territory_id: '', sales_rep_id: '',
     credit_limit: '', default_discount_pct: '', birthday: '',
 };
 
@@ -52,6 +55,7 @@ const toForm = (customer: CustomerFormValues): typeof emptyForm => ({
     customer_type: customer.customer_type ?? 'INDIVIDUAL',
     customer_group_id: customer.customer_group_id ?? '',
     territory_id: customer.territory_id ?? '',
+    sales_rep_id: customer.sales_rep_id ?? '',
     credit_limit: customer.credit_limit != null ? String(customer.credit_limit) : '',
     default_discount_pct: customer.default_discount_pct != null ? String(customer.default_discount_pct) : '',
     // `<input type="date">` only accepts yyyy-mm-dd; the API returns a full ISO timestamp.
@@ -66,6 +70,12 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
     const [error, setError] = useState('');
     const [groups, setGroups] = useState<any[]>([]);
     const [territories, setTerritories] = useState<any[]>([]);
+    // Who the customer's sales can be credited to; their sales take a copy.
+    const salesReps = useSalesReps();
+    // A rep who has since left is still shown on the customer they were set on.
+    const repOptions = customer?.sales_rep_id && !salesReps.some((rep) => rep.id === customer.sales_rep_id)
+        ? [...salesReps, { id: customer.sales_rep_id, name: (customer as any).salesRep?.name ?? customer.sales_rep_id }]
+        : salesReps;
 
     useEffect(() => {
         if (isOpen) {
@@ -99,6 +109,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
         if (formData.profile_pic_url) payload.profile_pic_url = formData.profile_pic_url;
         if (formData.customer_group_id) payload.customer_group_id = formData.customer_group_id;
         if (formData.territory_id) payload.territory_id = formData.territory_id;
+        if (formData.sales_rep_id) payload.sales_rep_id = formData.sales_rep_id;
         if (formData.credit_limit) payload.credit_limit = parseFloat(formData.credit_limit);
         if (formData.default_discount_pct) payload.default_discount_pct = parseFloat(formData.default_discount_pct);
         if (formData.birthday) payload.birthday = formData.birthday;
@@ -118,6 +129,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
             bin: blankToNull(formData.bin),
             customer_group_id: formData.customer_group_id || null,
             territory_id: formData.territory_id || null,
+            sales_rep_id: formData.sales_rep_id || null,
             credit_limit: formData.credit_limit === '' ? null : parseFloat(formData.credit_limit),
             default_discount_pct: formData.default_discount_pct === '' ? null : parseFloat(formData.default_discount_pct),
             birthday: formData.birthday || null,
@@ -219,6 +231,14 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
                             <select value={formData.territory_id} onChange={set('territory_id')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
                                 <option value="">{t.common.none}</option>
                                 {territories.map(ter => <option key={ter.id} value={ter.id}>{ter.parent ? `${ter.parent.name} > ` : ''}{ter.name}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label htmlFor="customer-sales-rep" className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.salesRep} <span className="text-gray-300">({t.common.optional})</span></label>
+                            <select id="customer-sales-rep" value={formData.sales_rep_id} onChange={set('sales_rep_id')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
+                                <option value="">{t.common.none}</option>
+                                {repOptions.map(rep => <option key={rep.id} value={rep.id}>{rep.name}</option>)}
                             </select>
                         </div>
 

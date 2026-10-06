@@ -28,6 +28,7 @@ jest.mock('@/lib/api', () => ({
         getSale: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getInventorySettings: jest.fn(),
+        getSalesReps: jest.fn().mockResolvedValue([{ id: 'emp-1', name: 'Rafiq Islam' }]),
     },
 }));
 
@@ -599,6 +600,43 @@ describe('NewSalePage — duplicating an existing sale', () => {
                 totalAmount: 305,
                 items: [expect.objectContaining({ productId: 'prod-1', quantity: 2, priceAtSale: 150 })],
             }));
+        });
+    });
+
+    it('credits the sale to the customer\u2019s sales rep, and sends it', async () => {
+        (api.getSale as jest.Mock).mockResolvedValue({
+            ...sale,
+            customer: { ...sale.customer, sales_rep_id: 'emp-1', salesRep: { id: 'emp-1', name: 'Rafiq Islam' } },
+        });
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSale).toHaveBeenCalled());
+
+        const picker = (await screen.findByLabelText('Sales rep')) as HTMLSelectElement;
+        await waitFor(() => expect(picker.value).toBe('emp-1'));
+
+        const cashInput = await screen.findByLabelText('Cash amount');
+        fireEvent.change(cashInput, { target: { value: '305' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(expect.objectContaining({ salesRepId: 'emp-1' }));
+        });
+    });
+
+    it('sends the rep the operator chose instead', async () => {
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSale).toHaveBeenCalled());
+
+        const picker = await screen.findByLabelText('Sales rep');
+        await waitFor(() => expect(screen.getByRole('option', { name: 'Rafiq Islam' })).toBeInTheDocument());
+        fireEvent.change(picker, { target: { value: 'emp-1' } });
+
+        const cashInput = await screen.findByLabelText('Cash amount');
+        fireEvent.change(cashInput, { target: { value: '305' } });
+        await act(async () => { fireEvent.click(screen.getByText('Create Sale')); });
+
+        await waitFor(() => {
+            expect(api.createNewSale).toHaveBeenCalledWith(expect.objectContaining({ salesRepId: 'emp-1' }));
         });
     });
 });

@@ -1670,7 +1670,30 @@ describe('SalesReportsService', () => {
         });
 
         describe('getGrossProfitBySalesperson', () => {
-            it('groups margin by the user who made the sale', async () => {
+            it('credits margin to the sales rep each sale was made by, by default', async () => {
+                db.sale.findMany.mockResolvedValue([
+                    // Entered by the same cashier, sold by two different reps.
+                    sale('s1', 100, [line('p1', 1, 100, 60)], { created_by: 'cashier', sales_rep_id: 'emp-1' }),
+                    sale('s2', 200, [line('p1', 2, 100, 60)], { created_by: 'cashier', sales_rep_id: 'emp-2' }),
+                ]);
+                db.employee = {
+                    findMany: jest.fn().mockResolvedValue([
+                        { id: 'emp-1', name: 'Rafiq' },
+                        { id: 'emp-2', name: 'Sumaiya' },
+                    ]),
+                };
+
+                const result = await service.getGrossProfitBySalesperson(tenantId, {} as any);
+
+                expect(result.summary.groupBy).toBe('salesRep');
+                expect(db.employee.findMany).toHaveBeenCalledWith(
+                    expect.objectContaining({ where: { tenant_id: tenantId, id: { in: expect.arrayContaining(['emp-1', 'emp-2']) } } }),
+                );
+                expect(result.rows[0]).toMatchObject({ name: 'Sumaiya', grossProfit: 80 });
+                expect(result.rows[1]).toMatchObject({ name: 'Rafiq', grossProfit: 40 });
+            });
+
+            it('groups margin by the user who entered the sale when asked', async () => {
                 db.sale.findMany.mockResolvedValue([
                     sale('s1', 100, [line('p1', 1, 100, 60)], { created_by: 'user-1' }),
                     sale('s2', 200, [line('p1', 2, 100, 60)], { created_by: 'user-2' }),
@@ -1680,7 +1703,7 @@ describe('SalesReportsService', () => {
                     { id: 'user-2', name: 'Rahim' },
                 ]);
 
-                const result = await service.getGrossProfitBySalesperson(tenantId, {} as any);
+                const result = await service.getGrossProfitBySalesperson(tenantId, { groupBy: 'user' } as any);
 
                 expect(result.rows[0]).toMatchObject({ name: 'Rahim', grossProfit: 80, orders: 1 });
                 expect(result.rows[1]).toMatchObject({ name: 'Karim', grossProfit: 40 });
@@ -1710,7 +1733,7 @@ describe('SalesReportsService', () => {
                 ]);
                 db.user.findMany.mockResolvedValue([{ id: 'user-1', name: 'Karim' }]);
 
-                const result = await service.getGrossProfitBySalesperson(tenantId, {} as any);
+                const result = await service.getGrossProfitBySalesperson(tenantId, { groupBy: 'user' } as any);
 
                 // 500 − 200 revenue against 300 − 120 cost.
                 expect(result.rows[0]).toMatchObject({ revenue: 300, cogs: 180, grossProfit: 120 });

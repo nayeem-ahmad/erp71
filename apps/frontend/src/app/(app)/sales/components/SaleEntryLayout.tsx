@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
 import ProductSearch from '@/components/document-entry/ProductSearch';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
-import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
+import DocumentMetaBar, { MetaField, metaFieldInputClass } from '@/components/document-entry/DocumentMetaBar';
 import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
 import type { WarehouseOption } from '@/lib/hooks/useWarehouses';
 import CustomerSelection, { type NewCustomerDraft } from './CustomerSelection';
@@ -13,6 +13,8 @@ import PaymentSection from './PaymentSection';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import type { VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
+import type { SalesRepOption } from '@/lib/hooks/useSalesReps';
+import { useI18n } from '@/lib/i18n';
 import { computeEntryTax, computeSaleTax, resolveTaxRate, type MushakTaxRates } from '@erp71/shared-types';
 
 /**
@@ -209,6 +211,18 @@ interface SaleEntryLayoutProps {
     onTotalsChange: (patch: Partial<SaleAdjustments>) => void;
     tenantVatRate: number;
     adjustmentLabel?: string;
+    /**
+     * Who the sale is credited to ("Sales By"). Passing the setter shows the
+     * picker; it defaults to the picked customer's own sales rep.
+     */
+    salesRepId?: string | null;
+    setSalesRepId?: (id: string | null) => void;
+    salesReps?: SalesRepOption[];
+    /**
+     * The current rep's name, for when they are no longer on the list (they
+     * have since left) — the sale still shows who made it.
+     */
+    salesRepName?: string;
 
     payments: Payment[];
     onPaymentChange: (payments: Payment[]) => void;
@@ -291,7 +305,15 @@ export default function SaleEntryLayout({
     actions,
     headerActions,
     onSubmit,
+    salesRepId = null,
+    setSalesRepId,
+    salesReps = [],
+    salesRepName,
 }: SaleEntryLayoutProps) {
+    const { t } = useI18n();
+    const repOptions = salesRepId && !salesReps.some((rep) => rep.id === salesRepId)
+        ? [...salesReps, { id: salesRepId, name: salesRepName ?? salesRepId }]
+        : salesReps;
     // Only meaningful while a rate is still being decided, and the customer is
     // what puts their own past rates at the top of the list.
     const history = showRateHistory && !readOnly
@@ -327,6 +349,22 @@ export default function SaleEntryLayout({
                     readOnly={readOnly}
                     refReadOnly={refReadOnly}
                 >
+                    {setSalesRepId && (
+                        <MetaField label={t.common.salesRep}>
+                            <select
+                                aria-label={t.common.salesRep}
+                                value={salesRepId ?? ''}
+                                onChange={(e) => setSalesRepId(e.target.value || null)}
+                                disabled={readOnly}
+                                className={metaFieldInputClass}
+                            >
+                                <option value="">{t.common.noSalesRep}</option>
+                                {repOptions.map((rep) => (
+                                    <option key={rep.id} value={rep.id}>{rep.name}</option>
+                                ))}
+                            </select>
+                        </MetaField>
+                    )}
                     {setWarehouseId && (
                         <WarehouseMetaFields
                             warehouses={warehouses}

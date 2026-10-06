@@ -484,6 +484,20 @@ describe('member layout preferences', () => {
     });
 });
 
+describe('standard invoice — who sold and who entered it', () => {
+    it('lists Sales By and Entry By in the details box when the sale has them', () => {
+        const html = render({ ...baseInvoice, salesBy: 'Rafiq Islam', preparedBy: 'Rina Akter' }, 'A4');
+        expect(html).toContain('<p>Sales By: Rafiq Islam</p>');
+        expect(html).toContain('<p>Entry By: Rina Akter</p>');
+    });
+
+    it('leaves them out when it does not', () => {
+        const html = render(baseInvoice, 'A4');
+        expect(html).not.toContain('Sales By:');
+        expect(html).not.toContain('Entry By:');
+    });
+});
+
 describe('detailed invoice layout', () => {
     // A posted sale: prices are tax-inclusive, so 6,936 holds 906 of tax and
     // the lines (6,946) are 10 more than the total, which is the discount.
@@ -627,9 +641,9 @@ describe('detailed invoice layout', () => {
         expect(sums).not.toContain('class="d-words"');
     });
 
-    it('puts who prepared the invoice in a footer pinned to the page bottom', () => {
+    it('puts who entered the sale in a footer pinned to the page bottom', () => {
         const html = render(posted, 'A4', detailed);
-        expect(html).toContain('Prepared By- Rina Akter');
+        expect(html).toContain('Entry By: Rina Akter');
         // The print time moved to the page margin, beside the page number.
         expect(html).not.toContain('Print Date:');
         expect(html).toContain('class="p71-doc-ft d-foot"');
@@ -640,6 +654,27 @@ describe('detailed invoice layout', () => {
         expect(endRow).toContain('class="d-sums"');
         expect(endRow.indexOf('class="d-sums"')).toBeLessThan(endRow.indexOf('class="p71-doc-ft d-foot"'));
         expect(ruleFor(html, '.p71-doc--end > tbody > tr.p71-end')).toContain('break-inside: avoid');
+    });
+
+    it('names the sales rep with the customer', () => {
+        const html = render({ ...posted, salesBy: 'Rafiq Islam' }, 'A4', detailed);
+        expect(html).toContain('<div class="d-kv"><span>Sales By:</span><span>Rafiq Islam</span></div>');
+        // Under the phone number, in the Bill To block.
+        expect(html.indexOf('Phone No:')).toBeLessThan(html.indexOf('Sales By:'));
+        expect(render(posted, 'A4', detailed)).not.toContain('Sales By:');
+    });
+
+    it('fills the entry_by and sales_by tokens a letterhead footer can use', () => {
+        const html = render(
+            {
+                ...posted,
+                salesBy: 'Rafiq Islam',
+                headerConfig: { version: 3, footer: { show: true, lines: [{ text: 'Sold by {{sales_by}}, entered by {{entry_by}}' }] } } as any,
+            },
+            'A4',
+            detailed,
+        );
+        expect(html).toContain('Sold by Rafiq Islam, entered by Rina Akter');
     });
 
     it('says the thank-you at the left of the foot unless the member wrote their own', () => {
@@ -654,7 +689,7 @@ describe('detailed invoice layout', () => {
         const html = render({ ...posted, customerName: '<b>Bio</b>', preparedBy: 'A & B' }, 'A4', detailed);
         expect(html).not.toContain('<b>Bio</b>');
         expect(html).toContain('&lt;b&gt;Bio&lt;/b&gt;');
-        expect(html).toContain('Prepared By- A &amp; B');
+        expect(html).toContain('Entry By: A &amp; B');
     });
 
     it('prints the QR code under the title in the header, in place of the number and date', () => {
@@ -746,6 +781,11 @@ describe('detailed invoice layout', () => {
             const html = render(posted, 'A4', detailed);
             expect(html).toContain('@bottom-left { content: "Printed 06-10-2026 1:02:59 PM";');
             expect(html).toContain('@bottom-right { content: "Page " counter(page) " of " counter(pages);');
+        });
+
+        it('names who printed it after the time', () => {
+            const html = render({ ...posted, printedBy: 'Rina Akter' }, 'A4', detailed);
+            expect(html).toContain('@bottom-left { content: "Printed 06-10-2026 1:02:59 PM by Rina Akter";');
         });
 
         it('prints whatever footer the letterhead designs, since it is not part of the footer', () => {

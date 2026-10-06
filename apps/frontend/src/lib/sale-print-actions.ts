@@ -68,8 +68,10 @@ export interface PrintableSale {
     prices_include_vat?: boolean | null;
     /** The order the sale was raised from, when it was. */
     salesOrder?: { order_number?: string | null } | null;
-    /** Name of the user who prepared the sale, as the print endpoints resolve it. */
+    /** Name of the user who entered the sale, as the print endpoints resolve it. */
     prepared_by?: string | null;
+    /** The employee the sale is credited to ("Sales By"). */
+    salesRep?: { id?: string; name?: string | null } | null;
     /**
      * The branch the sale was rung up at. Its letterhead and name print on the
      * sale's documents, whatever branch the operator has selected now.
@@ -88,6 +90,8 @@ export interface SalePrintContext {
     /** `t.sales.printMenu` — menu and preview wording. */
     menuLabels: any;
     unknownProductLabel: string;
+    /** The signed-in user printing, named on the detailed invoice's print line. */
+    printedBy?: string;
     /** The printing member's invoice layout; the built-in one when omitted. */
     invoiceLayout?: InvoicePrintPrefs;
 }
@@ -241,6 +245,8 @@ export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): I
         shippingAddress: sale.customer?.address ?? undefined,
         orderNumber: sale.salesOrder?.order_number ?? undefined,
         preparedBy: sale.prepared_by ?? undefined,
+        salesBy: sale.salesRep?.name ?? undefined,
+        printedBy: ctx.printedBy,
         items,
         payments,
         subtotal,

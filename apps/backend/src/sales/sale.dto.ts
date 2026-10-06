@@ -9,6 +9,7 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    ValidateIf,
     ValidateNested,
 } from 'class-validator';
 import { PaymentInstrumentDto } from '../common/payment-instrument.dto';
@@ -181,6 +182,15 @@ export class CreateSaleDto {
     pricesIncludeVat?: boolean;
 
     /**
+     * The employee who made the sale ("Sales By"). Left out, it is the
+     * customer's own sales rep; null records none.
+     */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsString()
+    salesRepId?: string | null;
+
+    /**
      * Park the entry as a DRAFT: the sale and its lines are stored, but nothing
      * is posted — no stock movement, credit check, loyalty, or accounting entry.
      */
@@ -281,6 +291,12 @@ export class UpdateSaleDto {
     @IsOptional()
     @IsString()
     customerId?: string | null;
+
+    /** Change who the sale is credited to; null clears it. */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsString()
+    salesRepId?: string | null;
 
     /**
      * Move the whole sale to another warehouse. Only read when `items` are

@@ -11,6 +11,7 @@ import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { instrumentFromRecord } from '@/lib/payment-instrument';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { useSalesReps } from '@/lib/hooks/useSalesReps';
 import { enteredBeforeVat, enteredDiscount, enteredUnitPrice, productTaxRates, saleLineRates } from '@/lib/sale-vat';
 import SaleEntryLayout, {
     computeSaleTotals,
@@ -104,6 +105,11 @@ function SaleDetailPageContent() {
     // prices are entered follows the sale itself, never the shop's current
     // setting: a sale keeps the mode it was rung up in.
     const taxPricing = useTaxPricing();
+    // Who the sale is credited to, as stamped when it was made. Changing the
+    // customer here does not move it: an edit corrects a sale, it does not
+    // re-decide who sold it.
+    const salesReps = useSalesReps();
+    const [salesRepId, setSalesRepId] = useState<string | null>(null);
     const beforeVat = enteredBeforeVat(sale);
     const salePricing = useMemo(
         () => ({ defaultVatRate: taxPricing.defaultVatRate, pricesIncludeVat: !beforeVat }),
@@ -174,6 +180,7 @@ function SaleDetailPageContent() {
         setStatus(sale.status);
         setSaleDate(toDatetimeLocal(new Date(sale.sale_date ?? sale.created_at)));
         setWarehouseId(sale.warehouse_id ?? '');
+        setSalesRepId(sale.sales_rep_id ?? null);
         // Shown, not hidden behind the switch, when the sale really is split:
         // a warehouse that steers a line has to be visible on the line.
         setPerLineWarehouse(cartItems.some((item: any) => item.warehouseId));
@@ -209,6 +216,7 @@ function SaleDetailPageContent() {
         try {
             await api.updateSale(sale.id, {
                 customerId: customer?.id ?? null,
+                salesRepId,
                 status,
                 note: description,
                 saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
@@ -325,11 +333,15 @@ function SaleDetailPageContent() {
             prices_include_vat: sale.prices_include_vat,
             salesOrder: sale.salesOrder ?? null,
             prepared_by: sale.prepared_by ?? null,
+            // As chosen on screen, so an unsaved change prints too.
+            salesRep: salesRepId
+                ? { id: salesRepId, name: salesReps.find((rep) => rep.id === salesRepId)?.name ?? sale.salesRep?.name ?? null }
+                : null,
             // Prints on the branch it was rung up at, whatever branch is selected now.
             store_id: sale.store_id,
             store: sale.store,
         };
-    }, [sale, saleDate, totals.total, description, customer, items, payments]);
+    }, [sale, saleDate, totals.total, description, customer, items, payments, salesRepId, salesReps]);
 
     const { paperSize, setPaperSize, printInvoice, printChallan, printReceipt } = useSalePrinting({
         resolve: resolvePrintable,
@@ -581,6 +593,10 @@ function SaleDetailPageContent() {
             totals={totals}
             onTotalsChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
             tenantVatRate={0}
+            salesRepId={salesRepId}
+            setSalesRepId={setSalesRepId}
+            salesReps={salesReps}
+            salesRepName={sale.salesRep?.name ?? undefined}
             adjustmentLabel="Adjustment"
             payments={payments}
             onPaymentChange={updatePayment}

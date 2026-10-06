@@ -65,8 +65,18 @@ export interface InvoiceData {
     shippingAddress?: string;
     /** The sales order this invoice was raised from — the detailed layout's Order No. */
     orderNumber?: string;
-    /** Who prepared the invoice — the detailed layout's footer, and `{{prepared_by}}`. */
+    /**
+     * Who entered the sale ("Entry By") — the detailed layout's footer, the
+     * standard layout's details box, and `{{entry_by}}` / `{{prepared_by}}`.
+     */
     preparedBy?: string;
+    /**
+     * The employee the sale is credited to ("Sales By") — the customer's sales
+     * rep when it was made. Printed with the customer, and `{{sales_by}}`.
+     */
+    salesBy?: string;
+    /** Who is printing it — the signed-in user — named after the print time. */
+    printedBy?: string;
     /**
      * When it was printed, already formatted. Left out, the moment of printing
      * is used; a caller sets it only to pin the stamp, as a test does.
@@ -381,6 +391,8 @@ function buildBody(data: InvoiceData, isThermal: boolean, layout: InvoicePrintPr
             <h3>Invoice Details</h3>
             <p>Invoice #: <strong>${esc(data.referenceNumber)}</strong></p>
             <p>Date: ${esc(data.date)}</p>
+            ${data.salesBy ? `<p>Sales By: ${esc(data.salesBy)}</p>` : ''}
+            ${data.preparedBy ? `<p>Entry By: ${esc(data.preparedBy)}</p>` : ''}
         </div>` : ''}
     </div>
 
@@ -456,6 +468,7 @@ function invoiceSheet(
         address: data.companyAddress,
         phone: data.companyPhone,
         preparedBy: data.preparedBy,
+        salesBy: data.salesBy,
         printDate: stamp,
     };
 
@@ -498,9 +511,10 @@ function invoiceSheet(
  * of how many. The window leaves the page count off a batch, where the count
  * would run across invoices.
  */
-function detailedPageStamp(layout: InvoicePrintPrefs, printedAt: string) {
+function detailedPageStamp(layout: InvoicePrintPrefs, printedAt: string, printedBy?: string) {
+    const who = printedBy?.trim();
     return layout.layout === 'detailed'
-        ? { text: `Printed ${printedAt}`, pageNumbers: true }
+        ? { text: `Printed ${printedAt}${who ? ` by ${who}` : ''}`, pageNumbers: true }
         : undefined;
 }
 
@@ -525,7 +539,7 @@ export function printSalesInvoice(
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
         pinFooter: !isThermal && layout.layout === 'detailed',
-        pageStamp: detailedPageStamp(layout, printedAt),
+        pageStamp: detailedPageStamp(layout, printedAt, data.printedBy),
         // A long item list is exactly what compact is for.
         compactable: true,
         preview,
@@ -558,7 +572,8 @@ export function printSalesInvoices(
         styles: buildStyles(isThermal, layout),
         repeatHeader: !isThermal,
         pinFooter: !isThermal && layout.layout === 'detailed',
-        pageStamp: detailedPageStamp(layout, invoices[0].printedAt ?? printedAt),
+        // A batch is printed by one person at one moment.
+        pageStamp: detailedPageStamp(layout, invoices[0].printedAt ?? printedAt, invoices[0].printedBy),
         compactable: true,
         preview,
     });

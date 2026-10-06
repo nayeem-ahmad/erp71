@@ -94,6 +94,8 @@ export const coreMessages = {
         subtotal: 'المجموع الفرعي',
         discount: 'الخصم',
         tax: 'الضريبة',
+        salesRep: "مندوب المبيعات",
+        noSalesRep: "— لا أحد —",
         reference: 'المرجع',
         customer: 'الزبون',
         supplier: 'المورّد',

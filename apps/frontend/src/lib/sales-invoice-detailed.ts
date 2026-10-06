@@ -193,6 +193,7 @@ export function detailedBodyHtml(
             <h3>Bill To</h3>
             <div class="d-kv"><span>Name:</span><span>${data.customerName ? esc(data.customerName) : 'Walk-in Customer'}</span></div>
             ${data.customerPhone ? `<div class="d-kv"><span>Phone No:</span><span>${esc(data.customerPhone)}</span></div>` : ''}
+            ${data.salesBy ? `<div class="d-kv"><span>Sales By:</span><span>${esc(data.salesBy)}</span></div>` : ''}
         </div>
         <div class="d-party">
             <h3>Shipping Address</h3>
@@ -242,16 +243,16 @@ export function detailedBodyHtml(
 }
 
 /**
- * The foot of the page: the thank-you at the left, who prepared the invoice at
+ * The foot of the page: the thank-you at the left, who entered the sale at
  * the right. A letterhead footer the tenant designed replaces it, as it
- * replaces every printer's own — `{{prepared_by}}` lets that footer say the
- * same. The print time is not here: it rides in the page margin with the page
- * number (see `pageStamp`), so it prints whatever footer the letterhead has.
+ * replaces every printer's own — `{{entry_by}}` lets that footer say the same.
+ * The print time and who printed are not here: they ride in the page margin
+ * with the page number (see `pageStamp`), so they print whatever the footer.
  */
 export function detailedFooterHtml(data: InvoiceData, thankYou: string): string {
     return `<div class="p71-doc-ft d-foot">
         <div class="d-foot-l">${esc(thankYou)}</div>
-        <div class="d-foot-r">Prepared By- ${data.preparedBy ? esc(data.preparedBy) : ''}</div>
+        <div class="d-foot-r">Entry By: ${data.preparedBy ? esc(data.preparedBy) : ''}</div>
     </div>`;
 }
 
