@@ -239,9 +239,11 @@ export interface PrintHeaderConfig {
          */
         position?: TitlePosition;
         /**
-         * Fine-tuning nudge from the slot, in mm. Applied as a relative offset,
-         * so the title still takes its place in the flow and only its painted
-         * position shifts — a tenant cannot push it off the page and lose it.
+         * Fine-tuning nudge from the slot, in mm. Across and up are applied as a
+         * relative offset, so the title still takes its place in the flow and
+         * only its painted position shifts — a tenant cannot push it off the
+         * page and lose it. Down is a margin, so the header grows to hold the
+         * block and its divider is never painted over.
          */
         offsetXMm?: number;
         offsetYMm?: number;

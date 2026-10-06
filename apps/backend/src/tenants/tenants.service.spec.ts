@@ -296,6 +296,30 @@ describe('TenantsService', () => {
      * The settings form hides it when Mushak is off, but the form is only a
      * convenience — the rule has to hold at the API.
      */
+    describe('how prices are entered', () => {
+        const savedData = () => db.tenant.update.mock.calls[0][0].data;
+
+        it('stores "VAT added on top" and reads it back with the other tax settings', async () => {
+            db.tenant.update.mockResolvedValue({ prices_include_vat: false });
+
+            const result = await service.updateTaxSettings('tenant-1', { prices_include_vat: false } as any);
+
+            expect(savedData().prices_include_vat).toBe(false);
+            expect(db.tenant.update.mock.calls[0][0].select).toEqual(
+                expect.objectContaining({ prices_include_vat: true }),
+            );
+            expect(result).toEqual(expect.objectContaining({ prices_include_vat: false }));
+        });
+
+        it('leaves the setting alone when the request does not mention it', async () => {
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateTaxSettings('tenant-1', { default_vat_rate: 15 } as any);
+
+            expect(savedData()).not.toHaveProperty('prices_include_vat');
+        });
+    });
+
     describe('mushak POS receipt format', () => {
         const savedData = () => db.tenant.update.mock.calls[0][0].data;
 

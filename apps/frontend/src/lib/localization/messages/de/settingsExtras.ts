@@ -243,6 +243,13 @@ export const settingsExtrasMessages = {
             placeholder: "z. B. 15",
             hint: "Leer lassen, um die MwSt. zu deaktivieren. Produkte können diesen Satz einzeln überschreiben.",
         },
+        pricing: {
+            label: "Wie Preise erfasst werden",
+            included: "Preise enthalten die MwSt.",
+            addedOnTop: "MwSt. wird auf die Preise aufgeschlagen",
+            hint: "Enthalten: Der eingegebene Preis ist, was der Kunde zahlt, und die MwSt. wird daraus herausgerechnet. Aufgeschlagen: Sie geben den Preis vor MwSt. ein, und Verkäufe, Angebote und Aufträge schlagen die MwSt. auf. Jedes Dokument behält die Art, in der es erfasst wurde.",
+            posWarning: "Die Kasse (POS) behandelt Preise weiterhin als inklusive MwSt. Bis sie dieser Einstellung folgt, berechnet ein POS-Verkauf den Preis vor MwSt. ohne Aufschlag.",
+        },
         vatReg: {
             label: "MwSt.-Registrierungsnummer (BIN)",
             placeholder: "z. B. 000000000-0101",

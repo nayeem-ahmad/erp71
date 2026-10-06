@@ -51,6 +51,8 @@ export type PublicQuotation = {
     notes: string | null;
     items: Item[];
     total_amount: number;
+    /** VAT added on top of the lines (part of the total); 0 when prices include it. */
+    vat_amount?: number;
 
     doc_kind: string;
     currency: string;
@@ -176,6 +178,7 @@ export default function PublicQuotationView({ quotation }: { quotation: PublicQu
                 items: quotation.items,
                 totalLabel: 'Total',
                 total: quotation.total_amount,
+                vat: (quotation.vat_amount ?? 0) > 0.005 ? { label: 'VAT', amount: quotation.vat_amount ?? 0 } : undefined,
                 advance:
                     quotation.advance_amount != null
                         ? {
@@ -324,6 +327,12 @@ export default function PublicQuotationView({ quotation }: { quotation: PublicQu
 
                     <div className="mt-3 flex justify-end">
                         <div className="w-full max-w-xs space-y-1 text-sm">
+                            {(quotation.vat_amount ?? 0) > 0.005 && (
+                                <div className="flex justify-between text-gray-700">
+                                    <span>VAT</span>
+                                    <span>{money(quotation.vat_amount ?? 0)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between border-t border-gray-200 pt-2 font-semibold text-gray-900">
                                 <span>Total</span>
                                 <span>{money(quotation.total_amount)}</span>

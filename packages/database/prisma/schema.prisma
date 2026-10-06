@@ -733,6 +733,11 @@ model Tenant {
   brand_favicon_url         String?
   brand_business_name       String?
   default_vat_rate          Decimal? @db.Decimal(5, 2) // e.g. 15.00 for 15% BD VAT
+  /// How the shop's prices are entered. True (the default, and how ERP71 has
+  /// always worked): prices include VAT and the tax is worked out of them.
+  /// False: prices are before VAT and the sales screens add it on top. Either
+  /// way a sale is *stored* VAT-inclusive — see `Sale.prices_include_vat`.
+  prices_include_vat        Boolean  @default(true)
   vat_registration_no       String? // NBR VAT registration number
   business_tin              String? // Tax Identification Number
 
@@ -2726,6 +2731,14 @@ model Sale {
   vat_amount Decimal @default(0) @db.Decimal(12, 2)
   sd_amount  Decimal @default(0) @db.Decimal(12, 2)
 
+  /// How the sale was entered: true, prices typed VAT-inclusive; false, typed
+  /// before VAT with the tax added on top. Presentation only — `price_at_sale`
+  /// and `total_amount` are VAT-inclusive either way, so the total check, the
+  /// tax snapshot, Mushak, returns and reports read every sale the same. The
+  /// edit screen, Duplicate and the printed invoice use it to show an
+  /// "added on top" sale back the way it was entered.
+  prices_include_vat Boolean @default(true)
+
   /// Two boxes the Mushak 6.3 requires that nothing else in the system knows:
   /// সরবরাহের গন্তব্যস্থল (where the goods are going, which is not always the
   /// customer's billing address) and যানবাহনের প্রকৃতি ও নম্বর (how they are
@@ -4089,6 +4102,12 @@ model SalesOrder {
   customer_id    String?
   order_number   String
   total_amount   Decimal   @db.Decimal(12, 2)
+  /// How the document's prices were entered — see `Sale.prices_include_vat`.
+  /// Unlike a sale, a quotation or order stores its lines as typed (before VAT
+  /// when this is false) and nothing downstream reads its tax, so the VAT added
+  /// on top is kept here and is part of `total_amount`.
+  prices_include_vat Boolean @default(true)
+  vat_amount         Decimal @default(0) @db.Decimal(12, 2)
   amount_paid    Decimal   @default(0) @db.Decimal(12, 2)
   status         String    @default("DRAFT") // DRAFT, CONFIRMED, PROCESSING, DELIVERED, CANCELLED
   payment_status String    @default("UNPAID") // UNPAID, PARTIAL, PAID
@@ -4146,6 +4165,12 @@ model Quotation {
   customer_id       String?
   quote_number      String
   total_amount      Decimal   @db.Decimal(12, 2)
+  /// How the document's prices were entered — see `Sale.prices_include_vat`.
+  /// Unlike a sale, a quotation or order stores its lines as typed (before VAT
+  /// when this is false) and nothing downstream reads its tax, so the VAT added
+  /// on top is kept here and is part of `total_amount`.
+  prices_include_vat Boolean @default(true)
+  vat_amount         Decimal @default(0) @db.Decimal(12, 2)
   status            String    @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED, CONVERTED, REVISED
   valid_until       DateTime?
   version           Int       @default(1)

@@ -13,6 +13,14 @@ export class UpdateTaxSettingsDto {
     @Max(100)
     default_vat_rate?: number | null;
 
+    /**
+     * How the shop's prices are entered: true, VAT-inclusive (the default);
+     * false, before VAT with the tax added on top by the sales screens.
+     */
+    @IsOptional()
+    @IsBoolean()
+    prices_include_vat?: boolean;
+
     /** বিআইএন — the 13-digit business identification number. */
     @IsOptional()
     @IsString()

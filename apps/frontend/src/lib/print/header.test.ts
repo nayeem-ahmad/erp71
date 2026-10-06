@@ -489,19 +489,29 @@ describe('title position', () => {
         expect(html.indexOf('p71-hd-doc--below')).toBeGreaterThan(html.indexOf('p71-hd--logo-left'));
     });
 
-    it('applies a nudge as a relative offset so the title stays in the flow', () => {
-        const html = render({ title: { position: 'above-center', offsetXMm: -6, offsetYMm: 3 } });
+    it('applies a nudge across or up as a relative offset so the title stays in the flow', () => {
+        const html = render({ title: { position: 'above-center', offsetXMm: -6, offsetYMm: -3 } });
 
-        expect(html).toContain('left:-6mm;top:3mm');
+        expect(html).toContain('style="left:-6mm;top:-3mm"');
         expect(headerCss({ title: { position: 'above-center' } }, 'A4')).toContain('position: relative');
     });
 
+    it('pushes a nudge down into the layout, so the header grows and its divider is never painted over', () => {
+        const html = render({ title: { position: 'beside-right', offsetYMm: 6 } });
+
+        expect(html).toContain('style="margin-top:6mm"');
+        expect(html).not.toMatch(/[";]top:6mm/);
+    });
+
     it('omits the offset style when there is no nudge', () => {
-        expect(render({ title: { position: 'above-center' } })).not.toContain('left:0mm');
+        const html = render({ title: { position: 'above-center' } });
+        expect(html).not.toContain('left:0mm');
+        expect(html).not.toMatch(/p71-hd-doc[^>]*style=/);
     });
 
     it('clamps a nudge far beyond the page', () => {
         expect(render({ title: { offsetXMm: 9999, offsetYMm: -9999 } })).toContain('left:100mm;top:-100mm');
+        expect(render({ title: { offsetYMm: 9999 } })).toContain('margin-top:100mm');
     });
 
     it('ignores a position that is not one of the known slots', () => {

@@ -27,6 +27,8 @@ interface Quotation {
     created_at: string;
     valid_until?: string | null;
     total_amount: string;
+    /** VAT added on top of the lines; part of `total_amount`. */
+    vat_amount?: string | null;
     status: string;
     version: number;
     doc_kind?: string;
@@ -129,6 +131,7 @@ export default function QuotesPage() {
                     <thead><tr><th>${t.shared.print.product}</th><th>${t.shared.print.qty}</th><th>${t.shared.print.unitPrice}</th><th>${t.shared.print.subtotal}</th></tr></thead>
                     <tbody>
                         ${quote.items.map((item: any) => `<tr><td>${item.product?.name || t.shared.item}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.unit_price), { locale })}</td><td>${formatBDT(item.quantity * Number(item.unit_price), { locale })}</td></tr>`).join('')}
+                        ${Number(quote.vat_amount ?? 0) > 0.005 ? `<tr><td colspan="3">${t.sales.invoice.vat}</td><td>${formatBDT(Number(quote.vat_amount), { locale })}</td></tr>` : ''}
                         <tr class="total-row"><td colspan="3">${t.shared.print.total}</td><td>${formatBDT(Number(quote.total_amount), { locale })}</td></tr>
                     </tbody>
                 </table>

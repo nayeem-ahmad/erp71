@@ -156,6 +156,7 @@ export class SalesService {
                     // column comments on Sale.
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
                     amount_paid: prep.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'COMPLETED',
@@ -811,6 +812,9 @@ export class SalesService {
                     total_amount: dto.totalAmount,
                     vat_amount: draftTax.vat_amount,
                     sd_amount: draftTax.sd_amount,
+                    // Completing the draft keeps it: the parked prices were
+                    // entered this way.
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'DRAFT',

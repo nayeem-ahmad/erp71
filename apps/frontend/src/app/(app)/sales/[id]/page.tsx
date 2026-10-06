@@ -10,6 +10,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { instrumentFromRecord } from '@/lib/payment-instrument';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
+import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { enteredBeforeVat, enteredDiscount, enteredUnitPrice, productTaxRates, saleLineRates } from '@/lib/sale-vat';
 import SaleEntryLayout, {
     computeSaleTotals,
     EMPTY_ADJUSTMENTS,
@@ -98,23 +100,44 @@ function SaleDetailPageContent() {
     const [warehouseId, setWarehouseId] = useState('');
     const [perLineWarehouse, setPerLineWarehouse] = useState(false);
 
+    // The shop's default VAT rate, for lines added during the edit. How the
+    // prices are entered follows the sale itself, never the shop's current
+    // setting: a sale keeps the mode it was rung up in.
+    const taxPricing = useTaxPricing();
+    const beforeVat = enteredBeforeVat(sale);
+    const salePricing = useMemo(
+        () => ({ defaultVatRate: taxPricing.defaultVatRate, pricesIncludeVat: !beforeVat }),
+        [taxPricing.defaultVatRate, beforeVat],
+    );
+
     // Seed the entry form from the loaded sale. A sale stores only its final
     // total, so whatever separates that total from the line subtotal is carried
     // as a single "Adjustment" — the original discount/VAT/transport split is
-    // not persisted and must not be invented here.
+    // not persisted and must not be invented here. A sale entered with VAT
+    // added on top is the exception: its before-VAT prices and its discount are
+    // recovered exactly from the stored prices and rates, so it reopens the way
+    // it was typed and its VAT is worked out again when lines change.
     useEffect(() => {
         if (!sale) return;
+        const onTop = enteredBeforeVat(sale);
 
-        const cartItems = (sale.items || []).map((item: any) => ({
-            productId: item.product_id,
-            name: item.product?.name || t.shared.unknown,
-            price: parseFloat(item.price_at_sale),
-            group: item.product?.group?.name,
-            subgroup: item.product?.subgroup?.name,
-            quantity: item.quantity,
-            discount: 0,
-            warehouseId: item.warehouse_id ?? undefined,
-        }));
+        const cartItems = (sale.items || []).map((item: any) => {
+            const rates = saleLineRates(item, taxPricing.defaultVatRate);
+            return {
+                productId: item.product_id,
+                name: item.product?.name || t.shared.unknown,
+                price: onTop ? enteredUnitPrice(item, taxPricing.defaultVatRate) : parseFloat(item.price_at_sale),
+                group: item.product?.group?.name,
+                subgroup: item.product?.subgroup?.name,
+                quantity: item.quantity,
+                discount: 0,
+                // The rates the line was posted at, so editing it does not
+                // re-tax it at whatever the catalogue says today.
+                vatRate: rates.vatRate,
+                sdRate: rates.sdRate,
+                warehouseId: item.warehouse_id ?? undefined,
+            };
+        });
 
         loadCart({
             items: cartItems,
@@ -128,22 +151,38 @@ function SaleDetailPageContent() {
             })),
         });
 
-        const subtotal = cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0);
-        setAdjustments({
-            ...EMPTY_ADJUSTMENTS,
-            rounding: Number((parseFloat(sale.total_amount) - subtotal).toFixed(2)),
-        });
+        const total = parseFloat(sale.total_amount);
+        if (onTop) {
+            const grossLines = (sale.items || []).reduce(
+                (sum: number, item: any) => sum + item.quantity * parseFloat(item.price_at_sale),
+                0,
+            );
+            const netLines = cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0);
+            const discount = enteredDiscount(grossLines, netLines, total);
+            setAdjustments({
+                ...EMPTY_ADJUSTMENTS,
+                discountMode: 'AMOUNT',
+                discountAmount: discount,
+            });
+        } else {
+            const subtotal = cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0);
+            setAdjustments({
+                ...EMPTY_ADJUSTMENTS,
+                rounding: Number((total - subtotal).toFixed(2)),
+            });
+        }
         setStatus(sale.status);
         setSaleDate(toDatetimeLocal(new Date(sale.sale_date ?? sale.created_at)));
         setWarehouseId(sale.warehouse_id ?? '');
         // Shown, not hidden behind the switch, when the sale really is split:
         // a warehouse that steers a line has to be visible on the line.
         setPerLineWarehouse(cartItems.some((item: any) => item.warehouseId));
-    }, [sale, loadCart, t]);
+    }, [sale, loadCart, t, taxPricing.defaultVatRate]);
 
-    // A stored sale has no recoverable VAT rate — the whole gap between the
-    // line subtotal and the invoice total lives in the adjustment row instead.
-    const totals = useMemo(() => computeSaleTotals(items, adjustments, 0), [items, adjustments]);
+    const totals = useMemo(
+        () => computeSaleTotals(items, adjustments, salePricing),
+        [items, adjustments, salePricing],
+    );
 
     const handleAddItem = (
         product: any,
@@ -157,6 +196,7 @@ function SaleDetailPageContent() {
             subgroup: product.subgroup?.name,
             quantity: options?.quantity ?? 1,
             discount: 0,
+            ...productTaxRates(product),
             availableQty: options?.availableQty
                 ?? (Array.isArray(product.stocks) ? availableQtyOf(product) : undefined),
             stockByWarehouse: stockByWarehouseOf(product),
@@ -174,10 +214,12 @@ function SaleDetailPageContent() {
                 saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
                 totalAmount: totals.total,
                 warehouseId: warehouseId || undefined,
-                items: items.map((i) => ({
+                // VAT-inclusive, as every sale is stored — grossed up again when
+                // the sale was entered before VAT.
+                items: items.map((i, index) => ({
                     productId: i.productId,
                     quantity: i.quantity,
-                    priceAtSale: i.price,
+                    priceAtSale: totals.postedUnitPrices[index] ?? i.price,
                     warehouseId: perLineWarehouse ? i.warehouseId : undefined,
                 })),
                 payments: payments.map((p) => ({
@@ -278,6 +320,9 @@ function SaleDetailPageContent() {
             // Stored with the sale when it was posted, so they print as posted.
             vat_amount: sale.vat_amount,
             sd_amount: sale.sd_amount,
+            // Entered before VAT: the cart lines hold before-VAT prices and the
+            // invoice adds the stored VAT on top of them.
+            prices_include_vat: sale.prices_include_vat,
             salesOrder: sale.salesOrder ?? null,
             prepared_by: sale.prepared_by ?? null,
             // Prints on the branch it was rung up at, whatever branch is selected now.

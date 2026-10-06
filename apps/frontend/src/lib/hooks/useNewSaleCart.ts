@@ -11,6 +11,13 @@ export interface LineItem {
     /** Stock on hand when the product was picked — shown for reference only. */
     availableQty?: number;
     /**
+     * The product's own VAT and supplementary duty rates, in percent. Null or
+     * left out means the product has none of its own and the shop's default VAT
+     * rate applies (and no SD) — see `resolveTaxRate`.
+     */
+    vatRate?: number | null;
+    sdRate?: number | null;
+    /**
      * Stock on hand per warehouse id when the product was picked. Where set,
      * the line's availability follows its warehouse instead of `availableQty`.
      */

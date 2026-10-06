@@ -13,6 +13,7 @@ import PaymentSection from './PaymentSection';
 import VoiceEntryInput from '@/components/VoiceEntryInput';
 import type { VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
+import { computeEntryTax, computeSaleTax, resolveTaxRate, type MushakTaxRates } from '@erp71/shared-types';
 
 /**
  * Which of the two discount figures the user is typing. Shops that negotiate
@@ -34,6 +35,7 @@ export interface SaleAdjustments {
 }
 
 export interface SaleTotals extends SaleAdjustments {
+    /** Σ quantity × price, as the prices were entered. */
     subtotal: number;
     /** What the discount actually comes to in taka, however it was entered. */
     discount: number;
@@ -43,8 +45,45 @@ export interface SaleTotals extends SaleAdjustments {
      * the printed invoice and anything else reading totals agree.
      */
     discountPercent: number;
+    /**
+     * The discount to show beside the VAT and the total. Equal to `discount`
+     * unless VAT is added on top, where it is worked back from the other
+     * figures so the block foots — see `computeEntryTax`.
+     */
+    discountShown: number;
+    /** The VAT in this sale: inside the total, or added to it — see `vatIncluded`. */
     vat: number;
+    /** Supplementary duty, likewise. */
+    sd: number;
+    /** True when the VAT is already inside the prices; false when it was added on top. */
+    vatIncluded: boolean;
+    /** The VAT rate when every line shares one, for the row label; null when they differ. */
+    vatRate: number | null;
+    /** Unit prices to post, line for line — always VAT-inclusive. */
+    postedUnitPrices: number[];
+    /** The discount to post, in the same VAT-inclusive terms as the prices. */
+    postedDiscount: number;
     total: number;
+}
+
+/**
+ * How the shop prices: the VAT rate a product without its own takes, and
+ * whether prices are entered with VAT in them or before it.
+ */
+export interface VatPricing {
+    defaultVatRate: number;
+    pricesIncludeVat: boolean;
+}
+
+/** Prices that include VAT at no stated rate — the entry screens before they read the settings. */
+export const NO_VAT_PRICING: VatPricing = { defaultVatRate: 0, pricesIncludeVat: true };
+
+/** The rates a cart line is taxed at: its product's own, else the shop default. */
+export function lineTaxRates(item: Pick<LineItem, 'vatRate' | 'sdRate'>, pricing: VatPricing): MushakTaxRates {
+    return {
+        vatRate: resolveTaxRate(item.vatRate, pricing.defaultVatRate),
+        sdRate: resolveTaxRate(item.sdRate, 0),
+    };
 }
 
 export const EMPTY_ADJUSTMENTS: SaleAdjustments = {
@@ -59,12 +98,22 @@ export const EMPTY_ADJUSTMENTS: SaleAdjustments = {
 /**
  * Line subtotal plus the form's adjustments. Discount is taken off first, VAT
  * applies to the discounted amount, and the flat costs are added last.
+ *
+ * Whether the VAT is inside the prices or added on top is the shop's choice
+ * (`pricing`); either way the figures come from `computeEntryTax`, the same
+ * arithmetic the server snapshots, so the VAT shown is the VAT stored.
  */
 export function computeSaleTotals(
     items: LineItem[],
     adjustments: SaleAdjustments,
-    vatRate: number,
+    pricing: VatPricing,
 ): SaleTotals {
+    const lines = items.map((item) => ({
+        key: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        ...lineTaxRates(item, pricing),
+    }));
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
     // A flat discount is taken as typed, a percentage one off the subtotal.
     // Either way it is capped at the subtotal: a discount on its own must
@@ -77,18 +126,40 @@ export function computeSaleTotals(
     const discountPercent = adjustments.discountMode === 'AMOUNT'
         ? (subtotal > 0 ? (discount / subtotal) * 100 : 0)
         : adjustments.discountPercent || 0;
-    const afterDiscount = subtotal - discount;
-    const vat = afterDiscount * (vatRate / 100);
-    const total =
-        afterDiscount
-        + vat
-        + (adjustments.transportCost || 0)
+
+    const entry = computeEntryTax(lines, discount, pricing.pricesIncludeVat);
+    const extras =
+        (adjustments.transportCost || 0)
         + (adjustments.laborCost || 0)
         + (adjustments.rounding || 0);
+    const total = entry.total + extras;
+
+    // An edited sale carries whatever separates its lines from its stored total
+    // as one adjustment; the server taxes the edited total, so the VAT inside
+    // follows it rather than the lines alone.
+    const tax = pricing.pricesIncludeVat && Math.abs(extras) > 0.005
+        ? computeSaleTax(lines, total)
+        : { vatAmount: entry.vatAmount, sdAmount: entry.sdAmount };
+
+    const rates = new Set(lines.map((line) => line.vatRate));
+    const vatRate = lines.length === 0 ? pricing.defaultVatRate : rates.size === 1 ? [...rates][0] : null;
 
     // Adjustments first: the derived figures below are what callers read, and
     // the typed percentage must not shadow the calculated one.
-    return { ...adjustments, subtotal, discount, discountPercent, vat, total };
+    return {
+        ...adjustments,
+        subtotal,
+        discount,
+        discountPercent,
+        discountShown: pricing.pricesIncludeVat ? discount : entry.discountShown,
+        vat: tax.vatAmount,
+        sd: tax.sdAmount,
+        vatIncluded: pricing.pricesIncludeVat,
+        vatRate,
+        postedUnitPrices: entry.postedUnitPrices,
+        postedDiscount: pricing.pricesIncludeVat ? discount : entry.postedDiscount,
+        total,
+    };
 }
 
 interface SaleEntryLayoutProps {

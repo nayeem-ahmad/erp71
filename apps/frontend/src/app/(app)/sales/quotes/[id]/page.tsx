@@ -10,6 +10,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { PageShell } from '@/components/ui';
+import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { documentPricing, documentVatTotals, enteredBeforeVat, productTaxRates } from '@/lib/sale-vat';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
@@ -25,6 +27,9 @@ interface EditQuoteItem {
     sku: string;
     quantity: number;
     unitPrice: number;
+    /** The product's own rates, for VAT added on top; null takes the shop default. */
+    vatRate?: number | null;
+    sdRate?: number | null;
 }
 
 /** One term of a proforma, omitted entirely when it was never filled in. */
@@ -55,6 +60,9 @@ function QuoteDetailsPageContent() {
     const [editValidUntil, setEditValidUntil] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [editItems, setEditItems] = useState<EditQuoteItem[]>([]);
+    // The shop's default VAT rate, for lines without their own. Whether VAT is
+    // added on top follows the quotation itself, priced the way it was made.
+    const taxPricing = useTaxPricing();
     const [productSearch, setProductSearch] = useState('');
     const [showProductDropdown, setShowProductDropdown] = useState(false);
     const [editTerms, setEditTerms] = useState<ProformaTerms>(emptyProformaTerms);
@@ -87,6 +95,7 @@ function QuoteDetailsPageContent() {
                 sku: item.product?.sku || '',
                 quantity: item.quantity,
                 unitPrice: Number(item.unit_price),
+                ...productTaxRates(item.product),
             })));
             // Every term back to a string, because the inputs are controlled and
             // a null would flip them to uncontrolled on first render.
@@ -136,6 +145,7 @@ function QuoteDetailsPageContent() {
                     sku: product.sku || '',
                     quantity: 1,
                     unitPrice: parseFloat(product.price),
+                    ...productTaxRates(product),
                 },
             ]);
         }
@@ -153,7 +163,13 @@ function QuoteDetailsPageContent() {
         setEditItems(editItems.filter((_, itemIndex) => itemIndex !== index));
     };
 
-    const editTotalAmount = editItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const editPricing = documentPricing(
+        !enteredBeforeVat(quote),
+        taxPricing.defaultVatRate,
+        isProforma ? editTerms.currency : quote?.currency,
+    );
+    const editTotals = documentVatTotals(editItems, editPricing);
+    const editTotalAmount = editTotals.total;
 
     const handleSave = async () => {
         if (!quote || editItems.length === 0) return;
@@ -170,6 +186,7 @@ function QuoteDetailsPageContent() {
                     unitPrice: item.unitPrice,
                 })),
                 totalAmount: editTotalAmount,
+                vatAmount: editTotals.vatAmount,
                 // Sent only for a proforma. A quotation has no terms to write,
                 // and posting docKind: 'QUOTE' at an already-promoted document
                 // is refused by the service.
@@ -606,6 +623,14 @@ function QuoteDetailsPageContent() {
                                 <h2 className="font-bold tracking-tight uppercase tracking-widest text-sm">{t.quotes.detail.quoteNetWrapUp}</h2>
                             </div>
                             <div className="p-6 space-y-4">
+                                {/* VAT added on top of before-VAT prices is part of the
+                                    total, so it is shown with it. */}
+                                {(isEditMode ? editTotals.vatAmount : Number(quote.vat_amount ?? 0)) > 0.005 && (
+                                    <div className="flex justify-between items-center text-sm text-gray-600">
+                                        <span>{t.sales.invoice.vat}</span>
+                                        <span>{formatBDT(isEditMode ? editTotals.vatAmount : Number(quote.vat_amount), { locale })}</span>
+                                    </div>
+                                )}
                                 <div className="pt-2 flex justify-between items-center text-gray-900">
                                     <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{t.quotes.detail.grandTotal}</span>
                                     <span className="font-bold text-3xl tracking-tight">{formatBDT(isEditMode ? editTotalAmount : totalAmount, { locale })}</span>

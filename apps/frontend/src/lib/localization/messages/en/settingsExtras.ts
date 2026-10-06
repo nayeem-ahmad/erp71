@@ -243,6 +243,13 @@ export const settingsExtrasMessages = {
             placeholder: 'e.g. 15',
             hint: 'Leave blank to disable VAT. Products can override this rate individually.',
         },
+        pricing: {
+            label: "How prices are entered",
+            included: "Prices include VAT",
+            addedOnTop: "VAT is added on top of prices",
+            hint: "Included: the price you type is what the customer pays, and the VAT is worked out of it. Added on top: you type the price before VAT, and sales, quotations and orders add the VAT to it. Each document keeps the way it was entered.",
+            posWarning: "The POS counter still treats prices as including VAT. Until it follows this setting, a POS sale charges the before-VAT price with no VAT added.",
+        },
         vatReg: {
             label: 'VAT Registration Number (BIN)',
             placeholder: 'e.g. 000000000-0101',

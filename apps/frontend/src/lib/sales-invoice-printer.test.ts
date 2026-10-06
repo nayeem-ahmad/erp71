@@ -602,7 +602,9 @@ describe('detailed invoice layout', () => {
     it('closes the account block on the customer’s total due', () => {
         const html = render({ ...posted, previousDue: 1000, amountPaid: 2000 }, 'A4', detailed);
         expect(html).toContain('<td>Previous Due (৳)</td><td>1,000.00</td>');
-        expect(html).toContain('<td>Sale Amount (৳)</td><td>6,936.00</td>');
+        // This invoice's unpaid part: 6,936 − 2,000 paid.
+        expect(html).toContain('<td>New Due (৳)</td><td>4,936.00</td>');
+        expect(html).not.toContain('Sale Amount');
         // What was paid is the right-hand block's Paid line, not repeated here.
         expect(html).not.toContain('Collected Amount');
         expect(html).toContain('<td>Paid (৳):</td><td>2,000.00</td>');
@@ -780,6 +782,19 @@ describe('detailed invoice layout', () => {
         expect(html).toContain('<tr class="neg"><td>Discount (৳):</td><td>-10.00</td></tr>');
         expect(html).toContain('<td>Total (৳):</td><td>6,936.00</td>');
         expect(html).not.toContain('already deducted');
+    });
+
+    it('adds up on its own: previous due + new due = total due', () => {
+        const html = render({ ...posted, previousDue: 335, amountPaid: 1000 }, 'A4', detailed);
+        expect(html).toContain('<td>Previous Due (৳)</td><td>335.00</td>');
+        expect(html).toContain('<td>New Due (৳)</td><td>5,936.00</td>');
+        expect(html).toContain('<td>Total Due (৳)</td><td>6,271.00</td>');
+    });
+
+    it('shows a payment beyond the total as paid in excess, not a negative new due', () => {
+        const html = render({ ...posted, previousDue: 1000, amountPaid: 7436 }, 'A4', detailed);
+        expect(html).toContain('<td>Paid in Excess (৳)</td><td>-500.00</td>');
+        expect(html).toContain('<td>Total Due (৳)</td><td>500.00</td>');
     });
 
     it('calls a negative previous due an advance balance, and still adds up', () => {

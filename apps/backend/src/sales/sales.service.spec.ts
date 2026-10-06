@@ -13,6 +13,7 @@ import {
     usableWarehouseIds,
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { computeEntryTax } from '@erp71/shared-types';
 
 jest.mock('../database/inventory.utils', () => ({
   applyInventoryMovement: jest.fn(),
@@ -239,6 +240,63 @@ describe('SalesService', () => {
       expect(tx.saleItem.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ vat_rate: 15, vat_amount: 150, sd_rate: 0, sd_amount: 0 }),
       });
+    });
+
+    it('accepts a sale entered with VAT added on top, and remembers it was entered that way', async () => {
+      // The entry screen grosses 1,000 + 15% up to 1,150 and scales the 10
+      // discount to the same terms. What it posts must pass the total check
+      // and leave the VAT it showed in the snapshot.
+      const entry = computeEntryTax(
+        [{ key: 'prod-1', quantity: 1, unitPrice: 1000, vatRate: 15, sdRate: 0 }],
+        10,
+        false,
+      );
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: entry.total });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 15, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: entry.total,
+        amountPaid: entry.total,
+        discountAmount: entry.postedDiscount,
+        pricesIncludeVat: false,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: entry.postedUnitPrices[0] }],
+      });
+
+      // 1,000 less 10 is 990; 15% of that is 148.50.
+      expect(entry.total).toBe(1138.5);
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            total_amount: 1138.5,
+            vat_amount: entry.vatAmount,
+            prices_include_vat: false,
+          }),
+        }),
+      );
+      expect(entry.vatAmount).toBe(148.5);
+    });
+
+    it('counts a sale that does not say how it was entered as VAT-inclusive', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ prices_include_vat: true }) }),
+      );
     });
 
     it('declares VAT on what was billed, not on the undiscounted lines', async () => {
@@ -557,6 +615,16 @@ describe('SalesService', () => {
         service.create('tenant-1', 'user-1', { ...draftDto, warehouseId: 'wh-other-branch' }),
       ).rejects.toThrow(BadRequestException);
       expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps how a parked draft was entered, for when it is completed', async () => {
+      await service.create('tenant-1', 'user-1', { ...draftDto, pricesIncludeVat: false });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'DRAFT', prices_include_vat: false }),
+        }),
+      );
     });
 
     it('stores the sale as DRAFT with its lines and posts nothing', async () => {

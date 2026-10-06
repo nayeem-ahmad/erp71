@@ -59,6 +59,9 @@ describe('toPublicQuotation', () => {
                 'seller_name',
                 'status',
                 'total_amount',
+                // VAT added on top of the lines, so the buyer sees what the
+                // total is made of; 0 when the prices include it.
+                'vat_amount',
                 'valid_until',
                 'version',
                 // Proforma commercial terms. Present on every document so the

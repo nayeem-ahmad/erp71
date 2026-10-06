@@ -124,6 +124,7 @@ export class TenantsService {
      */
     private static readonly TAX_SETTING_FIELDS = {
         default_vat_rate: true,
+        prices_include_vat: true,
         vat_registration_no: true,
         business_tin: true,
         mushak_enabled: true,
@@ -149,6 +150,7 @@ export class TenantsService {
     async updateTaxSettings(tenantId: string, dto: UpdateTaxSettingsDto) {
         const data: Record<string, number | string | boolean | null> = {};
         if (dto.default_vat_rate !== undefined) data.default_vat_rate = dto.default_vat_rate;
+        if (dto.prices_include_vat !== undefined) data.prices_include_vat = dto.prices_include_vat;
         if (dto.vat_registration_no !== undefined) data.vat_registration_no = dto.vat_registration_no || null;
         if (dto.business_tin !== undefined) data.business_tin = dto.business_tin || null;
         if (dto.mushak_enabled !== undefined) data.mushak_enabled = dto.mushak_enabled;
