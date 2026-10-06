@@ -22,7 +22,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       serial_column: false,
       signature_lines: false,
       hide_empty_discount: false,
-      hide_empty_warranty: false,
+      warranty_column: 'always',
       footer_text: null,
     });
   });
@@ -38,7 +38,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       serial_column: true,
       signature_lines: true,
       hide_empty_discount: true,
-      hide_empty_warranty: true,
+      warranty_column: 'never',
       footer_text: 'Goods once sold are not returnable.',
     };
     expect(normalizeInvoicePrintPrefs(saved)).toEqual(saved);
@@ -53,6 +53,21 @@ describe('normalizeInvoicePrintPrefs', () => {
   it('reads an unknown layout as the standard one', () => {
     expect(normalizeInvoicePrintPrefs({ layout: 'fancy' }).layout).toBe('standard');
     expect(normalizeInvoicePrintPrefs({ layout: 'detailed' }).layout).toBe('detailed');
+  });
+
+  it('reads each warranty column choice, and an unknown one as always', () => {
+    expect(normalizeInvoicePrintPrefs({ warranty_column: 'when-used' }).warranty_column).toBe('when-used');
+    expect(normalizeInvoicePrintPrefs({ warranty_column: 'never' }).warranty_column).toBe('never');
+    expect(normalizeInvoicePrintPrefs({ warranty_column: 'sometimes' }).warranty_column).toBe('always');
+  });
+
+  it('carries the old hide-when-empty switch over as "only when an item has one"', () => {
+    expect(normalizeInvoicePrintPrefs({ hide_empty_warranty: true }).warranty_column).toBe('when-used');
+    expect(normalizeInvoicePrintPrefs({ hide_empty_warranty: false }).warranty_column).toBe('always');
+    // A choice made with the new control wins over the leftover switch.
+    expect(
+      normalizeInvoicePrintPrefs({ hide_empty_warranty: true, warranty_column: 'always' }).warranty_column,
+    ).toBe('always');
   });
 
   it('keeps an empty footer as "no footer", distinct from the default', () => {

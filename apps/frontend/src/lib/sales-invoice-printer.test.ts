@@ -603,7 +603,9 @@ describe('detailed invoice layout', () => {
         const html = render({ ...posted, previousDue: 1000, amountPaid: 2000 }, 'A4', detailed);
         expect(html).toContain('<td>Previous Due (৳)</td><td>1,000.00</td>');
         expect(html).toContain('<td>Sale Amount (৳)</td><td>6,936.00</td>');
-        expect(html).toContain('<td>Collected Amount (৳)</td><td>2,000.00</td>');
+        // What was paid is the right-hand block's Paid line, not repeated here.
+        expect(html).not.toContain('Collected Amount');
+        expect(html).toContain('<td>Paid (৳):</td><td>2,000.00</td>');
         // 1,000 owed before + 6,936 − 2,000 paid.
         expect(html).toContain('<td>Total Due (৳)</td><td>5,936.00</td>');
     });
@@ -613,15 +615,21 @@ describe('detailed invoice layout', () => {
         expect(render({ ...posted, previousDue: 500 }, 'A4', { ...detailed, balance: 'never' })).not.toContain('Previous Due');
     });
 
-    it('writes the total in words, on the left, when the member asked for it', () => {
+    it('writes the total in words across the full width, above both blocks, when the member asked for it', () => {
         const html = render(posted, 'A4', { ...detailed, amount_in_words: true });
         expect(html).toContain('<strong>In Word:</strong> Taka Six Thousand Nine Hundred Thirty Six Only');
+        // Not inside either block, so the two start at the same height.
+        expect(html.indexOf('class="d-words"')).toBeLessThan(html.indexOf('<div class="d-sums">'));
+        expect(html.indexOf('<div class="d-left">')).toBeLessThan(html.indexOf('<div class="d-right">'));
+        const sums = html.slice(html.indexOf('<div class="d-sums">'));
+        expect(sums).not.toContain('class="d-words"');
     });
 
-    it('puts who prepared the invoice and when it printed in a footer pinned to the page bottom', () => {
+    it('puts who prepared the invoice in a footer pinned to the page bottom', () => {
         const html = render(posted, 'A4', detailed);
         expect(html).toContain('Prepared By- Rina Akter');
-        expect(html).toContain('Print Date: 06-10-2026 1:02:59 PM');
+        // The print time moved to the page margin, beside the page number.
+        expect(html).not.toContain('Print Date:');
         expect(html).toContain('class="p71-doc-ft d-foot"');
         // Totals and foot share the page table's last row, so they move to the
         // next page together when they do not fit under the items.
@@ -647,24 +655,49 @@ describe('detailed invoice layout', () => {
         expect(html).toContain('Prepared By- A &amp; B');
     });
 
-    it('prints the QR code beside bill to, once, when the invoice has one', () => {
+    it('prints the QR code under the title in the header, in place of the number and date', () => {
         const html = render({ ...posted, qrDataUrl: 'data:image/png;base64,AAAA' }, 'A4', detailed);
-        expect(html).toContain('<div class="d-qr"><img src="data:image/png;base64,AAAA"');
-        expect(html).toContain('d-parties d-parties--qr');
-        // In the body, not the letterhead — which repeats on every page.
+        const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+
+        expect(header).toContain('<img class="p71-hd-qr" src="data:image/png;base64,AAAA"');
+        expect(header.indexOf('p71-hd-title')).toBeLessThan(header.indexOf('p71-hd-qr'));
+        // The strip below still says the number and date; the title block does not.
+        expect(header).not.toContain('p71-hd-meta');
+        expect(header).toContain('<strong>Invoice No:</strong> S0020090001');
         expect(html.match(/data:image\/png;base64,AAAA/g)).toHaveLength(1);
     });
 
-    it('refuses a QR source that is not an image data URL', () => {
-        const html = render({ ...posted, qrDataUrl: 'https://evil.example/x.png' }, 'A4', detailed);
-        expect(html).not.toContain('evil.example');
-        expect(html).not.toContain('<div class="d-qr">');
+    it('leaves the number and date in the header of the standard design', () => {
+        const html = render({ ...posted, qrDataUrl: 'data:image/png;base64,AAAA' }, 'A4');
+
+        expect(html).toContain('<div class="p71-hd-meta"># S0020090001</div>');
+        expect(html).not.toContain('p71-hd-qr"');
+    });
+
+    it('refuses a QR source that is not an image URL', () => {
+        const html = render({ ...posted, qrDataUrl: 'javascript:alert(1)' }, 'A4', detailed);
+        expect(html).not.toContain('javascript:');
+        expect(html).not.toContain('<img class="p71-hd-qr"');
     });
 
     it('prints without a code when the invoice has none yet', () => {
         const html = render(posted, 'A4', detailed);
         expect(html).not.toContain('data:image/png');
-        expect(html).not.toContain('d-parties d-parties--qr');
+        expect(html).not.toContain('<img class="p71-hd-qr"');
+        // Nothing stands in for the dropped number and date, either.
+        expect(html.slice(html.indexOf('<body>'))).not.toContain('p71-hd-meta');
+    });
+
+    it('still fills a template\u2019s own {{doc_number}} and {{date}} lines', () => {
+        const html = render(
+            {
+                ...posted,
+                headerConfig: { version: 3, lines: [{ text: 'Ref {{doc_number}} on {{date}}' }] } as any,
+            },
+            'A4',
+            detailed,
+        );
+        expect(html).toContain('Ref S0020090001 on 06/10/2026');
     });
 
     it('repeats the invoice strip with the letterhead, so continuation pages say which invoice they are', () => {
@@ -681,11 +714,59 @@ describe('detailed invoice layout', () => {
         expect(ruleFor(html, '.d-table tr, .d-parties, .d-sums, .note-box, .signatures, .d-foot')).toContain('break-inside:avoid');
     });
 
-    it('shows the warranty column empty by default, and drops it when asked and no item has one', () => {
+    describe('warranty column', () => {
         const none = { ...posted, items: posted.items.map((item) => ({ ...item, warranty: undefined })) };
-        expect(render(none, 'A4', detailed)).toContain('>Warranty</th>');
-        expect(render(none, 'A4', { ...detailed, hide_empty_warranty: true })).not.toContain('Warranty');
-        expect(render(posted, 'A4', { ...detailed, hide_empty_warranty: true })).toContain('>Warranty</th>');
+        const headed = (html: string) => html.includes('>Warranty</th>');
+
+        it('prints, empty if need be, by default', () => {
+            expect(headed(render(none, 'A4', detailed))).toBe(true);
+            expect(headed(render(posted, 'A4', detailed))).toBe(true);
+        });
+
+        it('prints only when an item has a warranty, if asked', () => {
+            const layout = { ...detailed, warranty_column: 'when-used' as const };
+            expect(headed(render(none, 'A4', layout))).toBe(false);
+            expect(headed(render(posted, 'A4', layout))).toBe(true);
+        });
+
+        it('is removed entirely when set to never, even for an item that has a warranty', () => {
+            const html = render(posted, 'A4', { ...detailed, warranty_column: 'never' });
+            expect(headed(html)).toBe(false);
+            expect(html).not.toContain('<td class="d-warranty">');
+            // The other columns are untouched.
+            expect(html).toContain('>Quantity</th>');
+            expect(html).toContain('<td class="d-num">1,400.00</td>');
+        });
+    });
+
+    describe('page margin line', () => {
+        it('prints when the invoice was printed and page X of Y on every page', () => {
+            const html = render(posted, 'A4', detailed);
+            expect(html).toContain('@bottom-left { content: "Printed 06-10-2026 1:02:59 PM";');
+            expect(html).toContain('@bottom-right { content: "Page " counter(page) " of " counter(pages);');
+        });
+
+        it('prints whatever footer the letterhead designs, since it is not part of the footer', () => {
+            const html = render(
+                { ...posted, headerConfig: { version: 3, footer: { show: true, lines: [{ text: 'Shop footer' }] } } as any },
+                'A4',
+                detailed,
+            );
+            expect(html).toContain('Shop footer');
+            expect(html).toContain('"Printed 06-10-2026 1:02:59 PM"');
+            expect(html).toContain('counter(pages)');
+        });
+
+        it('leaves the standard design and the rolls as they were', () => {
+            expect(render(posted, 'A4')).not.toContain('counter(pages)');
+            expect(render(posted, 'Thermal80', detailed)).not.toContain('counter(pages)');
+        });
+    });
+
+    it('keeps the strip exactly as wide as the table under Compact, which drops the side padding', () => {
+        const html = render(posted, 'A4', detailed);
+        expect(ruleFor(html, 'html.p71-compact .d-strip')).toContain('margin-left:0; margin-right:0');
+        expect(ruleFor(html, 'html.p71-compact .invoice-body')).toContain('padding:1mm 0');
     });
 
     it('lines the strip up with the body\u2019s own padding', () => {

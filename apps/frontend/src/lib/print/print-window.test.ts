@@ -549,6 +549,55 @@ describe('a closing block that stays with a pinned footer', () => {
     });
 });
 
+describe('the page margin line', () => {
+    const stamp = { text: 'Printed 06-10-2026 1:02:59 PM', pageNumbers: true };
+
+    it('writes the text bottom-left and page X of Y bottom-right', () => {
+        const html = buildPrintDocument({ ...base, pageStamp: stamp });
+
+        expect(html).toContain('@bottom-left { content: "Printed 06-10-2026 1:02:59 PM";');
+        expect(html).toContain('@bottom-right { content: "Page " counter(page) " of " counter(pages);');
+    });
+
+    it('moves to the top margin when the footer bleeds into the bottom one', () => {
+        const html = buildPrintDocument({
+            ...base,
+            pageStamp: stamp,
+            headerConfig: { footer: { show: true, lines: [{ text: 'Band' }], bleed: true } },
+        });
+
+        expect(html).toContain('@top-left {');
+        expect(html).toContain('@top-right {');
+        expect(html).not.toContain('@bottom-right {');
+    });
+
+    it('leaves the page count off a batch, where it would count across documents', () => {
+        const html = buildPrintDocument({
+            ...base,
+            pageStamp: stamp,
+            sheets: [{ bodyHtml: 'ONE' }, { bodyHtml: 'TWO' }],
+        });
+
+        expect(html).not.toContain('counter(pages)');
+        expect(html).toContain('"Printed 06-10-2026 1:02:59 PM"');
+    });
+
+    it('prints nothing in the margin of a roll', () => {
+        expect(buildPrintDocument({ ...base, paperSize: 'Thermal80', pageStamp: stamp })).not.toContain('@bottom-left');
+    });
+
+    it('cannot break out of the stylesheet or the CSS string', () => {
+        const html = buildPrintDocument({ ...base, pageStamp: { text: 'a"b\\c</style><script>x</script>' } });
+
+        expect(html).toContain('content: "a\\"b\\\\c\\3C /style>\\3C script>x\\3C /script>";');
+        expect(html.match(/<\/style>/g)).toHaveLength(1);
+    });
+
+    it('is absent unless asked for', () => {
+        expect(buildPrintDocument(base)).not.toContain('@bottom-left');
+    });
+});
+
 describe('preview toolbar', () => {
     const preview = {
         title: 'Invoice — A4',

@@ -283,6 +283,17 @@ export interface HeaderContext {
     preparedBy?: string;
     /** When it was printed, already formatted — fills `{{print_date}}`. */
     printDate?: string;
+    /**
+     * An image (a QR code, as a data URL) printed under the title in the header
+     * block, for a document whose number and date are printed elsewhere.
+     */
+    docQr?: string;
+    /**
+     * Leave the document number and date out of the header's title block.
+     * Only that block: `{{doc_number}}` and `{{date}}` in a template's own lines
+     * and footer still fill, since the context still carries them.
+     */
+    hideDocMeta?: boolean;
 }
 
 /**

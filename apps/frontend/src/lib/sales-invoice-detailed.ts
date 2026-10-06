@@ -125,7 +125,6 @@ function accountRows(data: InvoiceData, dues: InvoiceDues): string {
     return [
         row(advance ? 'Advance Balance (৳)' : 'Previous Due (৳)', amount(dues.previousDue)),
         row('Sale Amount (৳)', amount(data.total)),
-        row('Collected Amount (৳)', amount(dues.paid)),
         // Still in credit after this sale: say so rather than print a negative due.
         row(settled ? 'Advance Remaining (৳)' : 'Total Due (৳)', amount(settled ? -dues.totalDue : dues.totalDue), 'rule'),
     ].join('');
@@ -159,8 +158,8 @@ export function detailedBodyHtml(
     dues: InvoiceDues | null,
 ): { body: string; end: string } {
     const showDiscount = data.items.some((item) => !!item.discount);
-    const showWarranty = !layout.hide_empty_warranty || data.items.some((item) => !!item.warranty);
-    const qr = data.qrDataUrl && /^data:image\//i.test(data.qrDataUrl) ? data.qrDataUrl : '';
+    const showWarranty = layout.warranty_column === 'always'
+        || (layout.warranty_column === 'when-used' && data.items.some((item) => !!item.warranty));
 
     const itemRows = data.items.map((item, index) => {
         const lineTotal = item.quantity * item.unitPrice - (item.discount ?? 0);
@@ -183,7 +182,7 @@ export function detailedBodyHtml(
 
     const body = `
     <div class="invoice-body inv-d inv-d--top">
-    <div class="d-parties${qr ? ' d-parties--qr' : ''}">
+    <div class="d-parties">
         <div class="d-party">
             <h3>Bill To</h3>
             <div class="d-kv"><span>Name:</span><span>${data.customerName ? esc(data.customerName) : 'Walk-in Customer'}</span></div>
@@ -194,7 +193,6 @@ export function detailedBodyHtml(
             ${data.shippingAddress ? `<p class="d-addr">${esc(data.shippingAddress)}</p>` : ''}
             <div class="d-kv"><span>Payment Status:</span><span>${paymentStatus(data.total, paid)}</span></div>
         </div>
-        ${qr ? `<div class="d-qr"><img src="${esc(qr)}" alt="Invoice QR code"></div>` : ''}
     </div>
 
     <table class="d-table">
@@ -215,9 +213,9 @@ export function detailedBodyHtml(
 
     const end = `
     <div class="invoice-body inv-d inv-d--end">
+    ${layout.amount_in_words ? `<p class="d-words"><strong>In Word:</strong> ${takaInWords(data.total)}</p>` : ''}
     <div class="d-sums">
         <div class="d-left">
-            ${layout.amount_in_words ? `<p class="d-words"><strong>In Word:</strong> ${takaInWords(data.total)}</p>` : ''}
             ${dues && layout.balance !== 'never' ? `<table class="d-block">${accountRows(data, dues)}</table>` : ''}
             ${payments}
         </div>
@@ -238,22 +236,16 @@ export function detailedBodyHtml(
 }
 
 /**
- * The foot of the page: the thank-you at the left, who prepared the invoice and
- * when it was printed at the right. A letterhead footer the tenant designed
- * replaces it, as it replaces every printer's own — `{{prepared_by}}` and
- * `{{print_date}}` let that footer say the same.
+ * The foot of the page: the thank-you at the left, who prepared the invoice at
+ * the right. A letterhead footer the tenant designed replaces it, as it
+ * replaces every printer's own — `{{prepared_by}}` lets that footer say the
+ * same. The print time is not here: it rides in the page margin with the page
+ * number (see `pageStamp`), so it prints whatever footer the letterhead has.
  */
-export function detailedFooterHtml(
-    data: InvoiceData,
-    thankYou: string,
-    printedAt: string,
-): string {
+export function detailedFooterHtml(data: InvoiceData, thankYou: string): string {
     return `<div class="p71-doc-ft d-foot">
         <div class="d-foot-l">${esc(thankYou)}</div>
-        <div class="d-foot-r">
-            <div>Prepared By- ${data.preparedBy ? esc(data.preparedBy) : ''}</div>
-            <div>Print Date: ${esc(printedAt)}</div>
-        </div>
+        <div class="d-foot-r">Prepared By- ${data.preparedBy ? esc(data.preparedBy) : ''}</div>
     </div>`;
 }
 
@@ -282,12 +274,12 @@ export function detailedStyles(layout: InvoicePrintPrefs): string {
         .d-strip strong { margin-right:8px; }
 
         .d-parties { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:16px; padding:0 6px; }
-        .d-parties--qr { grid-template-columns:1fr 1fr auto; }
-        .d-qr img { display:block; width:19mm; height:19mm; }
-        .d-kv { display:flex; gap:24px; margin-bottom:2px; }
-        .d-kv span:first-child { min-width:92px; }
-        .d-addr { margin-bottom:4px; }
-        .d-party:last-child .d-kv span:first-child { min-width:0; margin-right:8px; }
+        /* Each party is a two-column grid — label, value — so the label column is
+           exactly as wide as its longest label and every value starts just
+           after it, close to "Name:" and "Phone No:" alike. */
+        .d-party { display:grid; grid-template-columns:max-content 1fr; column-gap:8px; row-gap:2px; align-content:start; }
+        .d-party > h3, .d-party > .d-addr { grid-column:1 / -1; }
+        .d-kv { display:contents; }
 
         .d-table { width:100%; border-collapse:collapse; margin-bottom:10px; }
         .d-table th {
@@ -304,7 +296,8 @@ export function detailedStyles(layout: InvoicePrintPrefs): string {
         .d-sums { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; padding:0 6px; margin-bottom:16px; }
         .d-left { width:44%; }
         .d-right { width:46%; }
-        .d-words { margin-bottom:10px; font-size:13px; }
+        /* Across the full width, above the two blocks, so they start level. */
+        .d-words { margin:0 6px 10px; font-size:13px; }
         .d-block { width:100%; border-collapse:collapse; }
         .d-block td { padding:3px 0; font-size:13px; }
         .d-block td:last-child { text-align:right; white-space:nowrap; }
@@ -322,15 +315,17 @@ export function detailedStyles(layout: InvoicePrintPrefs): string {
 
         /* The page foot: thank-you left, preparer and print time right. */
         .d-foot { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; font-size:11px; color:#111; padding-top:8px; }
-        .d-foot-r { text-align:left; line-height:1.9; }
 
-        ${c} .d-strip { padding:4px 6px; margin-bottom:8px; font-size:12px; }
+        /* Compact drops the body's side padding, so the strip drops its inset
+           too — its rules stay exactly as wide as the item table. */
+        ${c} .d-strip { margin-left:0; margin-right:0; padding:4px 6px; margin-bottom:8px; font-size:12px; }
         ${c} .d-parties { margin-bottom:8px; gap:12px; }
         ${c} .inv-d, ${c} .d-table td, ${c} .d-table th, ${c} .d-block td { font-size:11px; }
         ${c} .d-table th { padding:3px 6px; }
         ${c} .d-table td { padding:2px 6px; }
         ${c} .d-block td { padding:1px 0; }
         ${c} .d-sums { margin-bottom:8px; }
+        ${c} .d-words { margin-bottom:6px; }
         ${c} .d-foot { font-size:10px; padding-top:4px; }
-        ${c} .d-foot-r { line-height:1.5; }`;
+`;
 }

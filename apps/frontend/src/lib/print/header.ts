@@ -350,12 +350,18 @@ function renderLogo(config: PrintHeaderConfig): string {
 }
 
 function renderDocBlock(config: PrintHeaderConfig, ctx: HeaderContext): string {
-    if (!config.title.show) return '';
-    const title = ctx.docTitle?.trim();
+    const qr = safeImageUrl(ctx.docQr);
+    // A template that hides its title still carries the code: it is a way into
+    // the document, not part of the wording.
+    if (!config.title.show && !qr) return '';
+    const showText = config.title.show;
+    const title = showText ? ctx.docTitle?.trim() : undefined;
     const meta: string[] = [];
-    if (ctx.docNumber?.trim()) meta.push(`# ${ctx.docNumber.trim()}`);
-    if (ctx.docDate?.trim()) meta.push(ctx.docDate.trim());
-    if (!title && meta.length === 0) return '';
+    if (showText && !ctx.hideDocMeta) {
+        if (ctx.docNumber?.trim()) meta.push(`# ${ctx.docNumber.trim()}`);
+        if (ctx.docDate?.trim()) meta.push(ctx.docDate.trim());
+    }
+    if (!title && meta.length === 0 && !qr) return '';
 
     const { row, align } = titleSlot(titlePosition(config));
     // Relative, so the block keeps its place in the flow and only its painted
@@ -369,6 +375,7 @@ function renderDocBlock(config: PrintHeaderConfig, ctx: HeaderContext): string {
     return `<div class="p71-hd-doc p71-hd-doc--${row} p71-hd-doc--${align}"${offset}>
         ${title ? `<div class="p71-hd-title">${escapeHtml(title)}</div>` : ''}
         ${meta.map((entry) => `<div class="p71-hd-meta">${escapeHtml(entry)}</div>`).join('')}
+        ${qr ? `<img class="p71-hd-qr" src="${escapeHtml(qr)}" alt="QR code">` : ''}
     </div>`;
 }
 
@@ -559,6 +566,9 @@ export function headerCss(
     .p71-hd-doc--left { text-align: left; }
     .p71-hd-doc--center { text-align: center; }
     .p71-hd-doc--right { text-align: right; }
+    .p71-hd-qr { display: block; width: 20mm; height: 20mm; margin-top: 1.5mm; }
+    .p71-hd-doc--right .p71-hd-qr { margin-left: auto; }
+    .p71-hd-doc--center .p71-hd-qr { margin-left: auto; margin-right: auto; }
     /* Out of the band it owns a full-width row, so its alignment has room to
        mean something. In the band it only takes the space the brand leaves. */
     .p71-hd-doc--above, .p71-hd-doc--below { width: 100%; }

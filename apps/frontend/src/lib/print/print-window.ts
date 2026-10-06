@@ -44,6 +44,37 @@ function pageCss(paperSize: PaperSize): string {
     return `@page { size: ${PAGE_SIZE[paperSize]}; margin: ${PAGE_MARGIN_MM[paperSize]}mm; }`;
 }
 
+/** A value as a CSS string literal, safe inside a `<style>` element. */
+function cssString(value: string): string {
+    return `"${value
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/</g, '\\3C ')}"`;
+}
+
+/**
+ * The page-margin line — see `PrintDocumentOptions.pageStamp`.
+ *
+ * Page-margin boxes are the only place a browser will write "page 2 of 3":
+ * the count exists only once the document has been paginated. Chrome and Edge
+ * print them (131+); a browser that does not simply prints the page without.
+ */
+function pageStampCss(
+    stamp: NonNullable<PrintDocumentOptions['pageStamp']>,
+    edge: 'top' | 'bottom',
+    pageNumbers: boolean,
+): string {
+    const box = 'font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; color: #6b7280;';
+    const left = stamp.text?.trim()
+        ? `@${edge}-left { content: ${cssString(stamp.text.trim())}; ${box} }`
+        : '';
+    const right = pageNumbers
+        ? `@${edge}-right { content: "Page " counter(page) " of " counter(pages); ${box} }`
+        : '';
+    return left || right ? `@page { ${left} ${right} }` : '';
+}
+
 /**
  * The printable height of one page — the sheet minus its two margins.
  *
@@ -97,6 +128,14 @@ export interface PrintDocumentOptions {
      * does not survive pagination.
      */
     repeatHeader?: boolean;
+    /**
+     * A small grey line in the page margin of every printed page: `text` at the
+     * left (the print time), "Page X of Y" at the right. In the bottom margin,
+     * under everything the letterhead prints — or the top margin when the
+     * footer bleeds into the bottom one. Sheet paper only, and page numbers
+     * only for a single document: a batch would count across its documents.
+     */
+    pageStamp?: { text?: string; pageNumbers?: boolean };
     /**
      * Push the document's own footer (`footerHtml`) to the bottom of the page,
      * the way a tenant footer does when it is set to pin. A tenant-designed
@@ -518,6 +557,9 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         }` : ''}
         ${headerCss(opts.headerConfig, opts.paperSize)}
         ${pageCss(opts.paperSize)}
+        ${opts.pageStamp && !thermal
+            ? pageStampCss(opts.pageStamp, bleeds ? 'top' : 'bottom', !!opts.pageStamp.pageNumbers && sheets.length === 1)
+            : ''}
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
         ${compactOn || compactSwitch ? compactCss() : ''}
         ${opts.styles ?? ''}
