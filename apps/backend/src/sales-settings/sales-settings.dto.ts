@@ -5,10 +5,12 @@ import {
   INVOICE_LAYOUTS,
   INVOICE_PADDINGS,
   INVOICE_TABLE_STYLES,
+  INVOICE_WARRANTY_COLUMNS,
   type InvoiceBalanceMode,
   type InvoiceLayout,
   type InvoicePadding,
   type InvoiceTableStyle,
+  type InvoiceWarrantyColumn,
 } from '@erp71/shared-types';
 
 export enum PaperSize {
@@ -92,8 +94,8 @@ export class UpdateMemberInvoicePrintDto {
   hide_empty_discount?: boolean;
 
   @IsOptional()
-  @IsBoolean()
-  hide_empty_warranty?: boolean;
+  @IsIn(INVOICE_WARRANTY_COLUMNS)
+  warranty_column?: InvoiceWarrantyColumn;
 
   /**
    * `null` goes back to the built-in thank-you; `''` prints no footer.

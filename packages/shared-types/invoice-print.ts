@@ -26,6 +26,14 @@
 export const INVOICE_LAYOUTS = ['standard', 'detailed'] as const;
 export type InvoiceLayout = (typeof INVOICE_LAYOUTS)[number];
 
+/**
+ * Whether the detailed layout prints its Warranty column: always (empty where
+ * no item has one, as a trade invoice's does), only when some item on the
+ * invoice has a warranty, or never.
+ */
+export const INVOICE_WARRANTY_COLUMNS = ['always', 'when-used', 'never'] as const;
+export type InvoiceWarrantyColumn = (typeof INVOICE_WARRANTY_COLUMNS)[number];
+
 /** Breathing room around the invoice body, on top of the page margin. */
 export const INVOICE_PADDINGS = ['narrow', 'normal', 'wide'] as const;
 export type InvoicePadding = (typeof INVOICE_PADDINGS)[number];
@@ -57,11 +65,8 @@ export interface InvoicePrintPrefs {
   signature_lines: boolean;
   /** Drop the Discount column when no line carries a discount. */
   hide_empty_discount: boolean;
-  /**
-   * Drop the detailed layout's Warranty column when no line carries a warranty.
-   * Off by default: the column prints, empty, as a trade invoice's does.
-   */
-  hide_empty_warranty: boolean;
+  /** The detailed layout's Warranty column — see `INVOICE_WARRANTY_COLUMNS`. */
+  warranty_column: InvoiceWarrantyColumn;
   /**
    * The line under the invoice. `null` prints the built-in thank-you; an empty
    * string prints no footer at all — the two are different answers.
@@ -80,7 +85,7 @@ export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   serial_column: false,
   signature_lines: false,
   hide_empty_discount: false,
-  hide_empty_warranty: false,
+  warranty_column: 'always',
   footer_text: null,
 };
 
@@ -116,7 +121,13 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
     serial_column: bool(r.serial_column, d.serial_column),
     signature_lines: bool(r.signature_lines, d.signature_lines),
     hide_empty_discount: bool(r.hide_empty_discount, d.hide_empty_discount),
-    hide_empty_warranty: bool(r.hide_empty_warranty, d.hide_empty_warranty),
+    warranty_column: oneOf(
+      INVOICE_WARRANTY_COLUMNS,
+      r.warranty_column,
+      // The first version of this option was an on/off switch, "hide when empty".
+      // Anyone who turned it on keeps what they chose.
+      r.hide_empty_warranty === true ? 'when-used' : d.warranty_column,
+    ),
     footer_text:
       typeof r.footer_text === 'string'
         ? r.footer_text.slice(0, INVOICE_FOOTER_MAX_LENGTH)

@@ -22,6 +22,50 @@ const ctx: HeaderContext = {
     vatRegNo: '00123456789',
 };
 
+describe('the header title block with a QR code', () => {
+    const ctx: HeaderContext = { docTitle: 'Invoice', docNumber: 'INV-001', docDate: '06/10/2026' };
+    const qr = 'data:image/png;base64,QQQQ';
+
+    it('prints the code under the title, after any number and date', () => {
+        const html = renderHeaderHtml({ title: { show: true } }, { ...ctx, docQr: qr }, 'A4');
+
+        expect(html.indexOf('p71-hd-title')).toBeLessThan(html.indexOf('p71-hd-qr'));
+        expect(html.indexOf('p71-hd-meta')).toBeLessThan(html.indexOf('p71-hd-qr'));
+    });
+
+    it('drops only the number and date when asked, leaving the title', () => {
+        const html = renderHeaderHtml({ title: { show: true } }, { ...ctx, docQr: qr, hideDocMeta: true }, 'A4');
+
+        expect(html).toContain('p71-hd-title');
+        expect(html).toContain('<img class="p71-hd-qr"');
+        expect(html).not.toContain('p71-hd-meta');
+        expect(html).not.toContain('INV-001');
+    });
+
+    it('keeps the code when the template hides its title', () => {
+        const html = renderHeaderHtml({ title: { show: false } }, { ...ctx, docQr: qr, hideDocMeta: true }, 'A4');
+
+        expect(html).toContain('<img class="p71-hd-qr"');
+        expect(html).not.toContain('p71-hd-title');
+    });
+
+    it('prints nothing for a hidden title and no code, as before', () => {
+        expect(renderHeaderHtml({ title: { show: false }, company: { show: false } }, ctx, 'A4')).not.toContain('p71-hd-doc');
+    });
+
+    it('accepts only an image data URL or https address', () => {
+        expect(renderHeaderHtml({}, { ...ctx, docQr: 'javascript:alert(1)' }, 'A4')).not.toContain('p71-hd-qr"');
+        expect(renderHeaderHtml({}, { ...ctx, docQr: 'https://cdn.example/q.png' }, 'A4')).toContain('p71-hd-qr"');
+    });
+
+    it('aligns the code with the title block it sits in', () => {
+        const css = headerCss({}, 'A4');
+
+        expect(css).toContain('.p71-hd-doc--right .p71-hd-qr { margin-left: auto; }');
+        expect(css).toContain('.p71-hd-qr { display: block; width: 20mm; height: 20mm;');
+    });
+});
+
 describe('applyTokens — who prepared it and when it printed', () => {
     it('fills {{prepared_by}} and {{print_date}} from the context', () => {
         expect(

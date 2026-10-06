@@ -8,6 +8,7 @@ import {
     type InvoicePadding,
     type InvoicePrintPrefs,
     type InvoiceTableStyle,
+    type InvoiceWarrantyColumn,
 } from '@erp71/shared-types';
 import { Checkbox, Field, Select, Textarea } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
@@ -43,12 +44,11 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
     const [mode, setMode] = useState<FooterMode>(() => footerMode(value.footer_text));
     const [customText, setCustomText] = useState(mode === 'custom' ? (value.footer_text ?? '') : '');
 
-    const toggles: { key: 'amount_in_words' | 'serial_column' | 'signature_lines' | 'hide_empty_discount' | 'hide_empty_warranty'; label: string }[] = [
+    const toggles: { key: 'amount_in_words' | 'serial_column' | 'signature_lines' | 'hide_empty_discount'; label: string }[] = [
         { key: 'amount_in_words', label: copy.amountInWords },
         { key: 'serial_column', label: copy.serialColumn },
         { key: 'signature_lines', label: copy.signatureLines },
         { key: 'hide_empty_discount', label: copy.hideEmptyDiscount },
-        { key: 'hide_empty_warranty', label: copy.hideEmptyWarranty },
     ];
 
     return (
@@ -100,6 +100,18 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
                     <option value="when-owed">{copy.balanceWhenOwed}</option>
                     <option value="always">{copy.balanceAlways}</option>
                     <option value="never">{copy.balanceNever}</option>
+                </Select>
+            </Field>
+
+            <Field label={copy.warrantyColumnLabel} htmlFor={`${id}-warranty`}>
+                <Select
+                    id={`${id}-warranty`}
+                    value={value.warranty_column}
+                    onChange={(e) => set('warranty_column', e.target.value as InvoiceWarrantyColumn)}
+                >
+                    <option value="always">{copy.warrantyAlways}</option>
+                    <option value="when-used">{copy.warrantyWhenUsed}</option>
+                    <option value="never">{copy.warrantyNever}</option>
                 </Select>
             </Field>
 

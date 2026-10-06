@@ -460,6 +460,14 @@ function invoiceSheet(
     };
 
     if (detailed) {
+        // The title block carries the QR code in place of the number and date,
+        // which the strip below already says. The context keeps them, so a
+        // template's own {{doc_number}} / {{date}} lines still fill.
+        const headerContext: HeaderContext = {
+            ...context,
+            docQr: data.qrDataUrl,
+            hideDocMeta: true,
+        };
         const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
         const { body, end } = detailedBodyHtml(data, layout, paid, resolveDues(data, layout));
         return {
@@ -467,12 +475,12 @@ function invoiceSheet(
             headerConfig: data.headerConfig,
             // The strip rides with the letterhead, so a long invoice's
             // continuation pages say which invoice they belong to.
-            headerHtml: renderHeaderHtml(data.headerConfig, context, paperSize) + detailedStripHtml(data),
+            headerHtml: renderHeaderHtml(data.headerConfig, headerContext, paperSize) + detailedStripHtml(data),
             bodyHtml: body,
             endHtml: end,
             // The member's own closing text takes the thank-you's place; an
             // empty one leaves the left of the foot blank.
-            footerHtml: detailedFooterHtml(data, layout.footer_text ?? THANK_YOU, stamp),
+            footerHtml: detailedFooterHtml(data, layout.footer_text ?? THANK_YOU),
         };
     }
 
@@ -486,6 +494,17 @@ function invoiceSheet(
 }
 
 /**
+ * The detailed design's page-margin line: when it was printed, and which page
+ * of how many. The window leaves the page count off a batch, where the count
+ * would run across invoices.
+ */
+function detailedPageStamp(layout: InvoicePrintPrefs, printedAt: string) {
+    return layout.layout === 'detailed'
+        ? { text: `Printed ${printedAt}`, pageNumbers: true }
+        : undefined;
+}
+
+/**
  * @param layout The printing member's own layout choices (see
  *   `useInvoicePrintPrefs`); the built-in layout when omitted.
  */
@@ -496,15 +515,17 @@ export function printSalesInvoice(
     layout: InvoicePrintPrefs = DEFAULT_INVOICE_PRINT_PREFS,
 ): void {
     const isThermal = isThermalPaper(paperSize);
+    const printedAt = data.printedAt ?? formatPrintStamp();
 
     openPrintWindow({
-        ...invoiceSheet(data, paperSize, layout, formatPrintStamp()),
+        ...invoiceSheet(data, paperSize, layout, printedAt),
         title: `Invoice ${data.referenceNumber}`,
         paperSize,
         styles: buildStyles(isThermal, layout),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
         pinFooter: !isThermal && layout.layout === 'detailed',
+        pageStamp: detailedPageStamp(layout, printedAt),
         // A long item list is exactly what compact is for.
         compactable: true,
         preview,
@@ -537,6 +558,7 @@ export function printSalesInvoices(
         styles: buildStyles(isThermal, layout),
         repeatHeader: !isThermal,
         pinFooter: !isThermal && layout.layout === 'detailed',
+        pageStamp: detailedPageStamp(layout, invoices[0].printedAt ?? printedAt),
         compactable: true,
         preview,
     });
