@@ -323,7 +323,7 @@ export function mapDiziSaleReturn(
 
 /** The quotation's business date, whichever field this Dizi build names it. */
 export function diziQuotationDate(header: DiziQuotationHeader): string | null {
-    return emptyToNull(header.TransactionDate ?? header.QuotationDate ?? header.Date ?? null);
+    return emptyToNull(header.TransactionDate ?? header.QuotationDate ?? header.Date ?? header.CreatedOn ?? header.CreatedDate ?? null);
 }
 
 /** Dizi's quotation states onto ours; anything unrecognised reads as sent. */
@@ -397,7 +397,18 @@ export function mapDiziQuotation(
     });
 
     const lineSum = Math.round(items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) * 100) / 100;
-    const date = diziQuotationDate(header) ?? emptyToNull(detail?.Date ?? detail?.QuotationDate ?? detail?.TransactionDate ?? null);
+    // A quotation whose date no field carries is still imported, dated today,
+    // rather than dropped; the warning says so.
+    let date = diziQuotationDate(header) ?? emptyToNull(detail?.Date ?? detail?.QuotationDate ?? detail?.TransactionDate ?? null);
+    if (!date) {
+        date = new Date().toISOString().slice(0, 10);
+        warnings.push({
+            entity: 'QUOTATION',
+            externalId,
+            code: 'QUOTATION_DATE_MISSING',
+            message: `Quotation ${slip}: no date could be read from Dizi — dated today`,
+        });
+    }
     const validUntil = emptyToNull(detail?.ValidUntil ?? detail?.ValidTill ?? detail?.ExpiryDate ?? null);
 
     const converted = detail?.IsConverted === true || Boolean(emptyToNull(detail?.SalesId ?? null));
