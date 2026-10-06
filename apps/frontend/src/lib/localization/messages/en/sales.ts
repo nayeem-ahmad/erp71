@@ -409,9 +409,13 @@ export const salesMessages = {
                 invoice: 'Invoice',
                 challan: 'Delivery Challan',
                 receipt: 'POS Receipt',
+                invoices: '{count} invoices',
             },
             loadFailed: 'Could not load the sale to print.',
             popupBlocked: 'Allow pop-ups for this site to print.',
+            printSelected: 'Print invoices',
+            bulkFailed: 'Could not load the selected sales to print.',
+            bulkPartial: '{skipped} of {total} selected sales could not be loaded and were left out.',
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

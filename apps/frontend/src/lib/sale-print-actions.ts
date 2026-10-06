@@ -1,6 +1,6 @@
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
-import { printSalesInvoice, type PaperSize } from '@/lib/sales-invoice-printer';
+import { printSalesInvoice, printSalesInvoices, type InvoiceData, type PaperSize } from '@/lib/sales-invoice-printer';
 import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { paperSizeLabel } from '@/lib/print';
@@ -98,12 +98,15 @@ function previewFor(
     size: PaperSize,
     ctx: SalePrintContext,
     skipPreview: boolean,
+    /** A batch names its count instead of one document. */
+    count?: number,
 ): PrintPreviewOptions | undefined {
     if (skipPreview) return undefined;
 
     const copy = ctx.menuLabels.preview;
-    const documentName =
-        doc === 'invoice' ? copy.invoice : doc === 'challan' ? copy.challan : copy.receipt;
+    const documentName = count != null
+        ? copy.invoices.replace('{count}', String(count))
+        : doc === 'invoice' ? copy.invoice : doc === 'challan' ? copy.challan : copy.receipt;
 
     return {
         title: copy.heading
@@ -122,13 +125,10 @@ function previewFor(
  * because a list row carries the stored total while the detail screen may hold
  * edited lines that have not been saved; taking the lines makes what prints
  * match what is on screen either way.
+ *
+ * Shared with the batch printer so a row and a selection cannot drift.
  */
-export function printSaleInvoice(
-    sale: PrintableSale,
-    size: PaperSize,
-    ctx: SalePrintContext,
-    skipPreview = false,
-): void {
+export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): InvoiceData {
     const items = sale.items.map((i) => ({
         name: itemName(i, ctx.unknownProductLabel),
         sku: i.product?.sku ?? undefined,
@@ -151,32 +151,68 @@ export function printSaleInvoice(
         ? storedPaid
         : payments.reduce((sum, p) => sum + p.amount, 0);
 
+    return {
+        referenceNumber: sale.reference_number || sale.serial_number,
+        date: formatDate(sale.sale_date ?? sale.created_at, ctx.locale),
+        companyName: ctx.invoiceHeader.companyName,
+        storeName: sale.store?.name,
+        companyAddress: sale.store?.address || undefined,
+        headerConfig: ctx.invoiceHeader.headerConfig,
+        customerName: sale.customer?.name,
+        customerPhone: sale.customer?.phone ?? undefined,
+        items,
+        payments,
+        subtotal,
+        // The difference between the lines and the stored total is whatever
+        // invoice-level adjustment was applied; showing it as rounding is
+        // closer than silently printing a total the lines do not sum to.
+        rounding: Math.abs(total - subtotal) > 0.005 ? total - subtotal : undefined,
+        total,
+        amountPaid,
+        previousDue: sale.previous_due,
+        note: sale.note ?? undefined,
+    };
+}
+
+export function printSaleInvoice(
+    sale: PrintableSale,
+    size: PaperSize,
+    ctx: SalePrintContext,
+    skipPreview = false,
+): void {
     printSalesInvoice(
-        {
-            referenceNumber: sale.reference_number || sale.serial_number,
-            date: formatDate(sale.sale_date ?? sale.created_at, ctx.locale),
-            companyName: ctx.invoiceHeader.companyName,
-            storeName: sale.store?.name,
-            companyAddress: sale.store?.address || undefined,
-            headerConfig: ctx.invoiceHeader.headerConfig,
-            customerName: sale.customer?.name,
-            customerPhone: sale.customer?.phone ?? undefined,
-            items,
-            payments,
-            subtotal,
-            // The difference between the lines and the stored total is whatever
-            // invoice-level adjustment was applied; showing it as rounding is
-            // closer than silently printing a total the lines do not sum to.
-            rounding: Math.abs(total - subtotal) > 0.005 ? total - subtotal : undefined,
-            total,
-            amountPaid,
-            previousDue: sale.previous_due,
-            note: sale.note ?? undefined,
-        },
+        saleToInvoiceData(sale, ctx),
         size,
         previewFor('invoice', size, ctx, skipPreview),
         ctx.invoiceLayout,
     );
+}
+
+/**
+ * The checked rows, as one print job. False when the browser blocked the window.
+ *
+ * `headerFor` gives each sale its own branch's letterhead, since a selection
+ * can span branches; without it every sheet takes `ctx.invoiceHeader`.
+ */
+export function printSaleInvoices(
+    sales: PrintableSale[],
+    size: PaperSize,
+    ctx: SalePrintContext,
+    skipPreview = false,
+    headerFor: (sale: PrintableSale) => SalePrintContext['invoiceHeader'] = () => ctx.invoiceHeader,
+): boolean {
+    const opened = printSalesInvoices(
+        sales.map((sale) => saleToInvoiceData(sale, { ...ctx, invoiceHeader: headerFor(sale) })),
+        size,
+        previewFor('invoice', size, ctx, skipPreview, sales.length),
+        ctx.invoiceLayout,
+    );
+    return opened != null;
+}
+
+/** The branch a sale was rung up at — whose letterhead its documents carry. */
+export function saleStoreId(sale: PrintableSale): string | undefined {
+    return sale.store_id ?? sale.store?.id ?? undefined;
 }
 
 /**

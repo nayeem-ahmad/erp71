@@ -142,6 +142,10 @@ export interface DataTableProps<T> {
     };
 }
 
+/** The label around a selection checkbox — see the injected `select` column. */
+const SELECT_HIT_AREA =
+    'inline-flex cursor-pointer items-center justify-center max-md:min-h-touch max-md:min-w-touch';
+
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
 /** Mirrors the backend `PaginationDto` hard cap on `take` (e.g. crm-leads.service.ts). Server-mode
  *  page-size options must not exceed this, or requesting a larger size silently gets clamped
@@ -314,27 +318,35 @@ export default function DataTable<T>({
         if (!enableRowSelection || hasCallerSelectColumn) return columns;
         const selectColumn: ColumnDef<T, any> = {
             id: 'select',
+            // The box stays 16px; the label around it is the 44px target a
+            // finger needs on a phone, and collapses to the box on desktop so
+            // the rows keep their density.
             header: ({ table }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
-                    checked={table.getIsAllPageRowsSelected()}
-                    ref={(el) => {
-                        if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected();
-                    }}
-                    onChange={table.getToggleAllPageRowsSelectedHandler()}
-                />
+                <label className={SELECT_HIT_AREA}>
+                    <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
+                        checked={table.getIsAllPageRowsSelected()}
+                        ref={(el) => {
+                            if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected();
+                        }}
+                        onChange={table.getToggleAllPageRowsSelectedHandler()}
+                    />
+                </label>
             ),
             cell: ({ row }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select row"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
-                    checked={row.getIsSelected()}
-                    onChange={row.getToggleSelectedHandler()}
-                    onClick={(e) => e.stopPropagation()}
-                />
+                // A click anywhere in the target must not also open the row.
+                <label className={SELECT_HIT_AREA} onClick={(e) => e.stopPropagation()}>
+                    <input
+                        type="checkbox"
+                        aria-label="Select row"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
+                        checked={row.getIsSelected()}
+                        onChange={row.getToggleSelectedHandler()}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </label>
             ),
             enableSorting: false,
             enableColumnFilter: false,

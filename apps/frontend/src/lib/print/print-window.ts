@@ -75,7 +75,8 @@ export interface PrintDocumentOptions {
     paperSize: PaperSize;
     /** Markup from `renderHeaderHtml`; omit for documents without a header. */
     headerHtml?: string;
-    bodyHtml: string;
+    /** Required unless `sheets` carries the documents. */
+    bodyHtml?: string;
     /**
      * The document's own footer. Used only when the tenant's template does not
      * design one — a tenant who writes their own footer does not also want the
@@ -119,6 +120,29 @@ export interface PrintDocumentOptions {
      * which is the whole reason it is not a separate screen.
      */
     preview?: PrintPreviewOptions;
+    /**
+     * Several documents in one job — a batch of invoices. Each is laid out
+     * exactly as it would print alone (its own letterhead, its own tenant
+     * footer, the same repeat and pin rules) and starts on a fresh page, so
+     * the printer gets one job instead of one popup per document, which the
+     * browser would block after the first. When given, the top-level
+     * `headerHtml`, `bodyHtml`, `footerHtml` and `context` are not used.
+     *
+     * Header and footer CSS still come from the top-level `headerConfig`: the
+     * template's rules are global class names, so a job can only carry one set.
+     */
+    sheets?: PrintSheet[];
+}
+
+/** One document in a job that holds several — see `PrintDocumentOptions.sheets`. */
+export interface PrintSheet {
+    headerHtml?: string;
+    bodyHtml: string;
+    footerHtml?: string;
+    /** Values this sheet's tenant footer {{tokens}} resolve against. */
+    context?: HeaderContext;
+    /** This sheet's template, for its footer's content; the job's when omitted. */
+    headerConfig?: DeepPartial<PrintHeaderConfig>;
 }
 
 export interface PrintPreviewOptions {
@@ -296,31 +320,65 @@ function layoutDocument(parts: {
 /** Builds the full HTML document. Exported for tests and the settings preview. */
 export function buildPrintDocument(opts: PrintDocumentOptions): string {
     const thermal = isThermalPaper(opts.paperSize);
-    const header = opts.headerHtml ?? '';
-
-    // Rendered here rather than by each caller so every print path picks up a
-    // tenant-designed footer without threading it through 13 printers.
-    const tenantFooter = renderFooterHtml(opts.headerConfig, opts.context ?? {}, opts.paperSize);
-    const footer = tenantFooter || (opts.footerHtml ?? '');
-
-    const repeatHeader = !!opts.repeatHeader && !!header;
-    const repeatFooter = !!tenantFooter && footerRepeats(opts.headerConfig, opts.paperSize);
-
-    // Pinning stretches the table to a full page so the browser pushes the
-    // `<tfoot>` down to the bottom edge. Only possible on a fixed-height sheet,
-    // so a roll — which prints to an open-ended length — never pins.
     const pageHeightMm = PAGE_CONTENT_HEIGHT_MM[opts.paperSize];
-    const bleeds = !!tenantFooter && footerBleeds(opts.headerConfig, opts.paperSize);
-    const pinFooter = !!tenantFooter
-        && !!pageHeightMm
-        && footerPinsToBottom(opts.headerConfig, opts.paperSize);
+    const batch = !!opts.sheets;
+    const sheets: PrintSheet[] = opts.sheets ?? [
+        {
+            headerHtml: opts.headerHtml,
+            bodyHtml: opts.bodyHtml ?? '',
+            footerHtml: opts.footerHtml,
+            context: opts.context,
+        },
+    ];
 
-    // Repeating and pinning are independent settings answering different
-    // questions — "every page or only the last?" versus "at the page bottom or
-    // right under the content?" — so they need different mechanisms. See
-    // `layoutDocument`.
-    const useTable = repeatHeader || repeatFooter;
-    const flexPin = pinFooter && !repeatFooter;
+    // Each sheet is laid out on its own, so a document prints the same in a
+    // batch as it does alone. The flags that choose CSS are the job's: true if
+    // any sheet needs the rules, which are inert on a sheet that does not.
+    let bleeds = false;
+    let pinnedTable = false;
+    let flexPinAny = false;
+    const contents = sheets.map((sheet) => {
+        const header = sheet.headerHtml ?? '';
+
+        // Rendered here rather than by each caller so every print path picks up a
+        // tenant-designed footer without threading it through 13 printers.
+        const tenantFooter = renderFooterHtml(
+            sheet.headerConfig ?? opts.headerConfig,
+            sheet.context ?? {},
+            opts.paperSize,
+        );
+        const footer = tenantFooter || (sheet.footerHtml ?? '');
+
+        const repeatHeader = !!opts.repeatHeader && !!header;
+        const repeatFooter = !!tenantFooter && footerRepeats(opts.headerConfig, opts.paperSize);
+
+        // Pinning stretches the table to a full page so the browser pushes the
+        // `<tfoot>` down to the bottom edge. Only possible on a fixed-height sheet,
+        // so a roll — which prints to an open-ended length — never pins.
+        const pinFooter = !!tenantFooter
+            && !!pageHeightMm
+            && footerPinsToBottom(opts.headerConfig, opts.paperSize);
+
+        // Repeating and pinning are independent settings answering different
+        // questions — "every page or only the last?" versus "at the page bottom or
+        // right under the content?" — so they need different mechanisms. See
+        // `layoutDocument`.
+        const flexPin = pinFooter && !repeatFooter;
+
+        bleeds ||= !!tenantFooter && footerBleeds(opts.headerConfig, opts.paperSize);
+        pinnedTable ||= pinFooter && repeatFooter;
+        flexPinAny ||= flexPin;
+
+        return layoutDocument({
+            header,
+            bodyHtml: sheet.bodyHtml,
+            footer,
+            repeatHeader,
+            repeatFooter,
+            pinFooter,
+            flexPin,
+        });
+    });
 
     // A roll has no page to fit more onto, so it neither compacts nor offers
     // the switch. The compact rules ship whenever the switch does, so it can
@@ -328,15 +386,16 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     const compactOn = opts.density === 'compact' && !thermal;
     const compactSwitch = !!opts.preview?.compactLabel && !thermal;
 
-    const content = layoutDocument({
-        header,
-        bodyHtml: opts.bodyHtml,
-        footer,
-        repeatHeader,
-        repeatFooter,
-        pinFooter,
-        flexPin,
-    });
+    // A batch draws each document on its own paper in the preview and starts
+    // each on a fresh page in print. A single document keeps its old markup.
+    const jobClass = batch ? ' p71-job' : '';
+    const body = opts.preview
+        ? contents
+            .map((c) => `<div class="p71-pv-sheet${jobClass}"><div class="p71-wrap">${c}</div></div>`)
+            .join('\n')
+        : `<div class="p71-wrap">${batch
+            ? contents.map((c) => `<section class="p71-job">${c}</section>`).join('\n')
+            : contents[0]}</div>`;
 
     return `<!DOCTYPE html>
 <html${compactOn ? ` class="${COMPACT_CLASS}"` : ''}>
@@ -357,7 +416,11 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         .p71-doc > thead > tr > td,
         .p71-doc > tfoot > tr > td,
         .p71-doc > tbody > tr > td { padding: 0; border: 0; }
-        ${pinFooter && repeatFooter ? `
+        ${batch ? `
+        /* Each document of a batch on its own page. Before the next rather
+           than after each, so the job does not end on a blank page. */
+        .p71-job + .p71-job { break-before: page; }` : ''}
+        ${pinnedTable ? `
         /* A full-page-height table leaves the tbody to absorb the slack, which
            pushes the repeating tfoot onto the bottom edge of every page. */
         @media print {
@@ -375,7 +438,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
                height in mm, as it does on paper. */
             .p71-pv-sheet .p71-doc--pinned { height: ${pageHeightMm}mm; }
         }` : ''}
-        ${flexPin ? `
+        ${flexPinAny ? `
         /* A page-tall flex column: the body absorbs the slack, so the footer is
            pushed to the page bottom when the document is short and flows past
            the break when it is long — the foot of the last page either way.
@@ -400,9 +463,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
 </head>
 <body>
 ${opts.preview ? previewToolbarHtml(opts.preview, { show: compactSwitch, on: compactOn }) : ''}
-${opts.preview
-        ? `<div class="p71-pv-sheet"><div class="p71-wrap">${content}</div></div>`
-        : `<div class="p71-wrap">${content}</div>`}
+${body}
 </body>
 </html>`;
 }

@@ -405,9 +405,13 @@ export const salesMessages = {
                 invoice: "انوائس",
                 challan: "ڈیلیوری چالان",
                 receipt: "پی او ایس رسید",
+                invoices: "{count} انوائسز",
             },
             loadFailed: "پرنٹ کے لیے سیل لوڈ نہیں ہو سکی۔",
             popupBlocked: "پرنٹ کرنے کے لیے اس سائٹ کے پاپ اپ کی اجازت دیں۔",
+            printSelected: "انوائسز پرنٹ کریں",
+            bulkFailed: "منتخب سیلز پرنٹ کے لیے لوڈ نہیں ہو سکیں۔",
+            bulkPartial: "منتخب {total} میں سے {skipped} سیلز لوڈ نہیں ہو سکیں اور چھوڑ دی گئیں۔",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

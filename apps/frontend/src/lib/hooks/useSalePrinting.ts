@@ -9,7 +9,9 @@ import type { PaperSize } from '@/lib/sales-invoice-printer';
 import {
     printSaleChallan,
     printSaleInvoice,
+    printSaleInvoices,
     printSaleReceipt,
+    saleStoreId,
     type PrintableSale,
     type SalePrintContext,
 } from '@/lib/sale-print-actions';
@@ -30,7 +32,7 @@ export interface UseSalePrintingOptions {
 }
 
 export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
-    const { t, locale } = useI18n();
+    const { t, locale, fmt } = useI18n();
     const invoiceHeader = usePrintHeader('SALES_INVOICE');
     // Its own template, so a shop can put a plainer letterhead on the copy a
     // rider carries than on the invoice the customer keeps.
@@ -41,6 +43,8 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
 
     /** The row currently being fetched, so its trigger can show a spinner. */
     const [busyId, setBusyId] = useState<string | null>(null);
+    /** A bulk print is in flight — one request for the whole selection. */
+    const [batchBusy, setBatchBusy] = useState(false);
 
     const ctx: SalePrintContext = useMemo(
         () => ({
@@ -72,7 +76,7 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                     toast.error(t.sales.printMenu.loadFailed);
                     return;
                 }
-                const storeId = sale.store_id ?? sale.store?.id ?? undefined;
+                const storeId = saleStoreId(sale);
                 const [invoice, challan, invoiceLayout] = await Promise.all([
                     invoiceHeader.resolve(storeId),
                     challanHeader.resolve(storeId),
@@ -109,6 +113,54 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
         [withSale, skipPreview],
     );
 
+    /**
+     * The checked rows as one print job: one request for the sales, then one
+     * letterhead per branch among them — never one per sale.
+     */
+    const printInvoices = useCallback(
+        async (ids: string[]) => {
+            const unique = [...new Set(ids.filter(Boolean))];
+            if (unique.length === 0) return;
+
+            setBatchBusy(true);
+            try {
+                const sales = await api.printSalesBatch(unique);
+                const loaded: PrintableSale[] = Array.isArray(sales) ? sales : [];
+                if (loaded.length === 0) {
+                    toast.error(t.sales.printMenu.bulkFailed);
+                    return;
+                }
+                const loadedIds = new Set(loaded.map((sale) => sale.id));
+                const skipped = unique.filter((id) => !loadedIds.has(id)).length;
+                if (skipped > 0) {
+                    toast.info(fmt(t.sales.printMenu.bulkPartial, { skipped, total: unique.length }));
+                }
+
+                const storeIds = [...new Set(loaded.map(saleStoreId))];
+                const [headers, invoiceLayout] = await Promise.all([
+                    Promise.all(storeIds.map((storeId) => invoiceHeader.resolve(storeId))),
+                    resolveInvoiceLayout(),
+                ]);
+                const headerByStore = new Map(storeIds.map((storeId, i) => [storeId, headers[i]]));
+
+                const opened = printSaleInvoices(
+                    loaded,
+                    paperSize,
+                    { ...ctx, invoiceLayout },
+                    skipPreview,
+                    (sale) => headerByStore.get(saleStoreId(sale)) ?? ctx.invoiceHeader,
+                );
+                if (!opened) toast.error(t.sales.printMenu.popupBlocked);
+            } catch (error) {
+                console.error('Failed to print invoices', error);
+                toast.error(t.sales.printMenu.bulkFailed);
+            } finally {
+                setBatchBusy(false);
+            }
+        },
+        [paperSize, ctx, skipPreview, t, fmt, invoiceHeader, resolveInvoiceLayout],
+    );
+
     // `skipPreview` is passed back out so a screen can offer it as a setting
     // rather than leaving the preview popup's own checkbox as the only way to
     // turn it off — one that is unreachable once it has been used.
@@ -120,9 +172,11 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
         density,
         setDensity,
         busyId,
+        batchBusy,
         printInvoice,
         printChallan,
         printReceipt,
+        printInvoices,
     };
 }
 

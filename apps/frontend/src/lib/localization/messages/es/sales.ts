@@ -405,9 +405,13 @@ export const salesMessages = {
                 invoice: "Factura",
                 challan: "Albarán de entrega",
                 receipt: "Recibo TPV",
+                invoices: "{count} facturas",
             },
             loadFailed: "No se pudo cargar la venta para imprimir.",
             popupBlocked: "Permita las ventanas emergentes de este sitio para imprimir.",
+            printSelected: "Imprimir facturas",
+            bulkFailed: "No se pudieron cargar las ventas seleccionadas para imprimir.",
+            bulkPartial: "No se pudieron cargar {skipped} de {total} ventas seleccionadas; se omitieron.",
         },
         challan: {
             /* The delivery challan — quantities only, never prices. */

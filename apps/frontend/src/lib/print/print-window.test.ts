@@ -250,6 +250,69 @@ describe('buildPrintDocument — tenant footer', () => {
     });
 });
 
+describe('a job of several documents', () => {
+    const footerConfig = {
+        footer: {
+            show: true,
+            lines: [{ text: 'Ref {{doc_number}}' }],
+            images: [],
+            rule: { show: false },
+            spacingMm: 4,
+            repeatOnEveryPage: true,
+            pinToPageBottom: true,
+        },
+    };
+    const sheets = [
+        { headerHtml: '<div>HEAD-1</div>', bodyHtml: '<p>body-1</p>', context: { docNumber: 'S-1' } },
+        { headerHtml: '<div>HEAD-2</div>', bodyHtml: '<p>body-2</p>', context: { docNumber: 'S-2' } },
+    ];
+
+    it('lays out each document with its own header and starts each on a fresh page', () => {
+        const html = buildPrintDocument({ title: 'Invoices', paperSize: 'A4', sheets, repeatHeader: true });
+
+        const jobs = html.split('<section class="p71-job">').slice(1);
+        expect(jobs).toHaveLength(2);
+        expect(jobs[0]).toContain('<thead><tr><td><div>HEAD-1</div></td></tr></thead>');
+        expect(jobs[0]).toContain('body-1');
+        expect(jobs[1]).toContain('<thead><tr><td><div>HEAD-2</div></td></tr></thead>');
+        expect(html).toContain('.p71-job + .p71-job { break-before: page; }');
+    });
+
+    it('fills each document\'s tenant footer from its own values, pinned as alone', () => {
+        const html = buildPrintDocument({
+            title: 'Invoices',
+            paperSize: 'A4',
+            sheets,
+            headerConfig: footerConfig,
+        });
+
+        const jobs = html.split('<section class="p71-job">').slice(1);
+        expect(jobs[0]).toContain('Ref S-1');
+        expect(jobs[0]).not.toContain('Ref S-2');
+        expect(jobs[1]).toContain('Ref S-2');
+        expect(html.match(/p71-doc p71-doc--pinned/g)).toHaveLength(2);
+        expect(html).toContain('.p71-doc--pinned { height: 267mm; }');
+    });
+
+    it('draws each document on its own paper in the preview', () => {
+        const html = buildPrintDocument({
+            title: 'Invoices',
+            paperSize: 'A4',
+            sheets,
+            preview: { title: '2 invoices — A4', printLabel: 'Print', closeLabel: 'Close' },
+        });
+
+        expect(html.match(/<div class="p71-pv-sheet p71-job">/g)).toHaveLength(2);
+    });
+
+    it('leaves a single document\'s markup alone', () => {
+        const html = buildPrintDocument({ ...base });
+
+        expect(html).not.toContain('p71-job');
+        expect(html).toContain('<div class="p71-wrap"><p>body</p></div>');
+    });
+});
+
 describe('a footer pinned to the page bottom', () => {
     const footer = {
         show: true,

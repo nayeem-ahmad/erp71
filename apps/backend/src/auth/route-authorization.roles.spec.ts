@@ -69,6 +69,7 @@ describe('route authorization by role', () => {
             'POST /sales',
             'GET /sales',
             'GET /sales/:id',
+            'POST /sales/print-batch',
             'GET /sales/:id/invoice',
             'GET /customers',
             'POST /customers',

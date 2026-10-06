@@ -405,9 +405,13 @@ export const salesMessages = {
                     invoice: "চালান",
                     challan: "ডেলিভারি চালান",
                     receipt: "পিওএস রসিদ",
+                    invoices: "{count}টি চালান",
                 },
                 loadFailed: "প্রিন্ট করার জন্য বিক্রয়টি লোড করা যায়নি।",
                 popupBlocked: "প্রিন্ট করতে এই সাইটের পপ-আপ অনুমতি দিন।",
+                printSelected: "চালান প্রিন্ট করুন",
+                bulkFailed: "নির্বাচিত বিক্রয়গুলো প্রিন্ট করার জন্য লোড করা যায়নি।",
+                bulkPartial: "নির্বাচিত {total}টির মধ্যে {skipped}টি বিক্রয় লোড করা যায়নি, সেগুলো বাদ দেওয়া হয়েছে।",
             },
             challan: {
                 /* The delivery challan — quantities only, never prices. */

@@ -1354,6 +1354,61 @@ describe('SalesService', () => {
     });
   });
 
+  describe('findForPrintBatch()', () => {
+    const postedAt = new Date('2026-09-01T10:00:00Z');
+    const sale = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      status: 'COMPLETED',
+      customer_id: null,
+      created_at: postedAt,
+      customer: null,
+      items: [{ quantity: 1, product: { name: 'Rice' } }],
+      payments: [],
+      ...extra,
+    });
+
+    it('returns this tenant\'s sales in request order and omits ids it does not have', async () => {
+      db.sale.findMany.mockResolvedValue([
+        sale('b'),
+        sale('a', {
+          customer_id: 'cust-1',
+          customer: { id: 'cust-1', due_balance: '1400.00' },
+        }),
+      ]);
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        { id: 'ct-1', type: 'CREDIT_SALE', amount: '400.00', created_at: postedAt },
+      ]);
+
+      const result = await service.findForPrintBatch('tenant-1', ['a', 'missing', 'b', 'a']);
+
+      expect(db.sale.findMany).toHaveBeenCalledTimes(1);
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenant_id: 'tenant-1', id: { in: ['a', 'missing', 'b'] } },
+          include: {
+            items: { include: { product: true } },
+            payments: true,
+            customer: true,
+            // The branch letterhead needs it, as the single sale's does.
+            store: { select: { id: true, name: true, address: true } },
+          },
+        }),
+      );
+      expect(result.map((row: { id: string }) => row.id)).toEqual(['a', 'b']);
+      // The same previous-due helper the single sale uses, not a second definition.
+      expect(result[0].previous_due).toBe(1000);
+      expect(result[1].previous_due).toBeNull();
+    });
+
+    it('rejects an empty list and more than 100 ids without querying', async () => {
+      await expect(service.findForPrintBatch('tenant-1', [])).rejects.toThrow(BadRequestException);
+      await expect(
+        service.findForPrintBatch('tenant-1', Array.from({ length: 101 }, (_, i) => `s${i}`)),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.sale.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getInvoiceData()', () => {
     it('loads the branch address, so the letterhead can print it', async () => {
       db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });

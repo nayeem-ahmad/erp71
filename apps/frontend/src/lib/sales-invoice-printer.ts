@@ -7,8 +7,15 @@ import { formatBDT } from './format';
 import { takaInWords } from './amount-in-words';
 import { invoiceDues, type InvoiceDues } from './customer-credit';
 import { paymentMethodLabel } from './payment-method-label';
-import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
+import { COMPACT_SCOPE, isThermalPaper, openPrintWindow, paperSizeLabel, renderHeaderHtml } from './print';
+import type {
+    DeepPartial,
+    HeaderContext,
+    PaperSize,
+    PrintHeaderConfig,
+    PrintPreviewOptions,
+    PrintSheet,
+} from './print';
 
 export { PAPER_SIZES, paperSizeLabel } from './print';
 export type { PaperSize } from './print';
@@ -383,6 +390,31 @@ function buildBody(data: InvoiceData, isThermal: boolean, layout: InvoicePrintPr
 }
 
 /**
+ * One invoice's header, body and footer — the parts a single print and a batch
+ * both lay out, so an invoice cannot print one way alone and another in a
+ * batch.
+ */
+function invoiceSheet(data: InvoiceData, paperSize: PaperSize, layout: InvoicePrintPrefs): PrintSheet {
+    const context: HeaderContext = {
+        docTitle: 'Invoice',
+        docNumber: data.referenceNumber,
+        docDate: data.date,
+        companyName: data.companyName || 'RETAIL STORE',
+        storeName: data.storeName,
+        address: data.companyAddress,
+        phone: data.companyPhone,
+    };
+
+    return {
+        context,
+        headerConfig: data.headerConfig,
+        headerHtml: renderHeaderHtml(data.headerConfig, context, paperSize),
+        bodyHtml: buildBody(data, isThermalPaper(paperSize), layout),
+        footerHtml: layout.footer_text === null ? `<div class="footer">${THANK_YOU}</div>` : '',
+    };
+}
+
+/**
  * @param layout The printing member's own layout choices (see
  *   `useInvoicePrintPrefs`); the built-in layout when omitted.
  */
@@ -392,31 +424,44 @@ export function printSalesInvoice(
     preview?: PrintPreviewOptions,
     layout: InvoicePrintPrefs = DEFAULT_INVOICE_PRINT_PREFS,
 ): void {
-    const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
-
-    const headerContext: HeaderContext = {
-        docTitle: 'Invoice',
-        docNumber: data.referenceNumber,
-        docDate: data.date,
-        companyName: data.companyName || 'RETAIL STORE',
-        storeName: data.storeName,
-        address: data.companyAddress,
-        phone: data.companyPhone,
-    };
-    const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);
+    const isThermal = isThermalPaper(paperSize);
 
     openPrintWindow({
-        context: headerContext,
+        ...invoiceSheet(data, paperSize, layout),
         title: `Invoice ${data.referenceNumber}`,
         paperSize,
-        headerConfig: data.headerConfig,
-        headerHtml,
-        bodyHtml: buildBody(data, isThermal, layout),
-        footerHtml: layout.footer_text === null ? `<div class="footer">${THANK_YOU}</div>` : '',
         styles: buildStyles(isThermal, layout),
         // Long item lists spill onto page 2 — keep the letterhead on every page.
         repeatHeader: !isThermal,
         // A long item list is exactly what compact is for.
+        compactable: true,
+        preview,
+    });
+}
+
+/**
+ * Every selected invoice in one print job, each starting on its own page with
+ * its own letterhead — a batch can span branches. Null when there was nothing
+ * to print or the browser blocked the window.
+ */
+export function printSalesInvoices(
+    invoices: InvoiceData[],
+    paperSize: PaperSize = 'A4',
+    preview?: PrintPreviewOptions,
+    layout: InvoicePrintPrefs = DEFAULT_INVOICE_PRINT_PREFS,
+): Window | null {
+    if (invoices.length === 0) return null;
+    const isThermal = isThermalPaper(paperSize);
+
+    return openPrintWindow({
+        sheets: invoices.map((data) => invoiceSheet(data, paperSize, layout)),
+        title: `Invoices (${invoices.length}) — ${paperSizeLabel(paperSize)}`,
+        paperSize,
+        // The template's CSS is global, so a job carries one: the first
+        // invoice's. Each sheet's own letterhead content still prints.
+        headerConfig: invoices[0].headerConfig,
+        styles: buildStyles(isThermal, layout),
+        repeatHeader: !isThermal,
         compactable: true,
         preview,
     });
