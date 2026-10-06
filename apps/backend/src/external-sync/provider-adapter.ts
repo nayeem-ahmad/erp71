@@ -278,7 +278,10 @@ class DiziProviderClient implements ProviderClient {
 
     async fetchQuotationDocuments(window: DateWindow) {
         const headers = (await this.inner.fetchQuotationHeaders()).filter(
-            (h) => !h.IsDeleted && inWindow(diziQuotationDate(h), window),
+            // An undated header cannot be placed in the window; keep it rather
+            // than silently dropping every quotation of a build that names its
+            // date field differently. The mapper warns and dates it.
+            (h) => !h.IsDeleted && (!diziQuotationDate(h) || inWindow(diziQuotationDate(h), window)),
         );
         const details = await mapWithConcurrency(headers, DIZI_DETAIL_CONCURRENCY, (h) =>
             this.inner.fetchQuotationDetail(h.Id).catch(() => null),

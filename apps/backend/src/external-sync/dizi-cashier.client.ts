@@ -195,6 +195,8 @@ export interface DiziQuotationHeader {
     TransactionDate?: string | null;
     QuotationDate?: string | null;
     Date?: string | null;
+    CreatedOn?: string | null;
+    CreatedDate?: string | null;
     TraderId?: string | null;
     CustomerId?: string | null;
     TotalAmount?: number | string | null;
