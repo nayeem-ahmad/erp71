@@ -122,9 +122,15 @@ function accountRows(data: InvoiceData, dues: InvoiceDues): string {
     // sale draws down — "Previous Due: -11,220" reads like an error.
     const advance = dues.previousDue < -0.005;
     const settled = dues.totalDue < -0.005;
+    const newDue = toPaisa(data.total - dues.paid);
     return [
         row(advance ? 'Advance Balance (৳)' : 'Previous Due (৳)', amount(dues.previousDue)),
-        row('Sale Amount (৳)', amount(data.total)),
+        // What this invoice leaves unpaid, so the block adds up on its own:
+        // previous due + new due = total due. Paid beyond the total, the excess
+        // went on the account and is shown as such.
+        newDue < -0.005
+            ? row('Paid in Excess (৳)', amount(newDue))
+            : row('New Due (৳)', amount(newDue)),
         // Still in credit after this sale: say so rather than print a negative due.
         row(settled ? 'Advance Remaining (৳)' : 'Total Due (৳)', amount(settled ? -dues.totalDue : dues.totalDue), 'rule'),
     ].join('');

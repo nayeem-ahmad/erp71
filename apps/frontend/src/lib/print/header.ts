@@ -364,13 +364,20 @@ function renderDocBlock(config: PrintHeaderConfig, ctx: HeaderContext): string {
     if (!title && meta.length === 0 && !qr) return '';
 
     const { row, align } = titleSlot(titlePosition(config));
-    // Relative, so the block keeps its place in the flow and only its painted
-    // position moves — a large nudge cannot make the title disappear.
+    // Across and up are relative, so the block keeps its place in the flow and
+    // only its painted position moves — a large nudge cannot make the title
+    // disappear. Down is a margin instead: the band grows to hold the block, so
+    // the divider under the header moves with it rather than being painted
+    // over. That matters once the block carries a QR code, which makes it the
+    // tallest thing in the band.
     const offsetX = num(config.title.offsetXMm, 0, -100, 100);
     const offsetY = num(config.title.offsetYMm, 0, -100, 100);
-    const offset = offsetX || offsetY
-        ? ` style="left:${offsetX}mm;top:${offsetY}mm"`
-        : '';
+    const declarations = [
+        offsetX ? `left:${offsetX}mm` : '',
+        offsetY > 0 ? `margin-top:${offsetY}mm` : '',
+        offsetY < 0 ? `top:${offsetY}mm` : '',
+    ].filter(Boolean);
+    const offset = declarations.length ? ` style="${declarations.join(';')}"` : '';
 
     return `<div class="p71-hd-doc p71-hd-doc--${row} p71-hd-doc--${align}"${offset}>
         ${title ? `<div class="p71-hd-title">${escapeHtml(title)}</div>` : ''}
