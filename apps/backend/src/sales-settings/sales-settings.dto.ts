@@ -91,6 +91,10 @@ export class UpdateMemberInvoicePrintDto {
   @IsBoolean()
   hide_empty_discount?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  hide_empty_warranty?: boolean;
+
   /**
    * `null` goes back to the built-in thank-you; `''` prints no footer.
    * `IsOptional` lets the null through without the string check.

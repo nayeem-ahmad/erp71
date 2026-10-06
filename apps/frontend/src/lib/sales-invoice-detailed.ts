@@ -4,7 +4,6 @@ import type { InvoiceDues } from './customer-credit';
 import { formatBDT, getActiveTimeZone } from './format';
 import { paymentMethodLabel } from './payment-method-label';
 import { COMPACT_SCOPE, escapeHtml as esc } from './print';
-import type { DeepPartial, PrintHeaderConfig } from './print';
 import type { InvoiceData } from './sales-invoice-printer';
 
 /**
@@ -54,22 +53,6 @@ export function formatPrintStamp(now: Date = new Date()): string {
     return `${get('day')}-${get('month')}-${get('year')} ${get('hour')}:${get('minute')}:${get('second')} ${get('dayPeriod').toUpperCase()}`;
 }
 
-/**
- * Adds the QR code to the letterhead as one more header image, aligned right.
- * Riding the template's own image strip means the letterhead needs no new
- * feature, and a repeating header repeats the code on every page.
- */
-export function withInvoiceQr(
-    config: DeepPartial<PrintHeaderConfig> | undefined,
-    qrDataUrl: string | undefined,
-): DeepPartial<PrintHeaderConfig> | undefined {
-    if (!qrDataUrl) return config;
-    return {
-        ...config,
-        images: [...(config?.images ?? []), { url: qrDataUrl, heightMm: 20, align: 'right' }],
-    };
-}
-
 /** One labelled row of the totals blocks. */
 function row(label: string, value: string, className = ''): string {
     return `<tr${className ? ` class="${className}"` : ''}><td>${label}</td><td>${value}</td></tr>`;
@@ -78,12 +61,12 @@ function row(label: string, value: string, className = ''): string {
 /**
  * The block on the right: the invoice's own money, top to bottom.
  *
- * A sale already posted keeps its prices tax-inclusive, so there the sub total
- * is the total *less* the stored tax — and a discount is already deducted from
- * that total, so it is listed as information rather than subtracted twice.
- * An invoice built on the entry screen still has its tax and discount to add
- * and take off, and reads the way the sample does: sub total, tax, discount,
- * total.
+ * A sale already posted keeps its prices tax-inclusive. When it carries tax,
+ * the sub total is the total *less* the stored tax, and a discount — already
+ * deducted from that total — is listed as information rather than subtracted
+ * twice. When it carries none there is nothing to back out, so the block reads
+ * sub total, discount, total, and foots as it stands. An invoice built on the
+ * entry screen still has its tax and discount to add and take off.
  */
 function invoiceTotalsRows(data: InvoiceData, paid: number): string {
     const inclusive = data.taxIncluded !== undefined;
@@ -91,15 +74,23 @@ function invoiceTotalsRows(data: InvoiceData, paid: number): string {
     const hasTax = tax > 0.005;
     const rows: string[] = [];
 
-    if (inclusive) {
-        rows.push(row(hasTax ? 'Sub Total (excl. tax) (৳):' : 'Sub Total (৳):', amount(data.total - tax)));
-        if (hasTax) rows.push(row('Total Tax (৳):', amount(tax)));
+    if (inclusive && hasTax) {
+        rows.push(row('Sub Total (excl. tax) (৳):', amount(data.total - tax)));
+        rows.push(row('Total Tax (৳):', amount(tax)));
 
         // The lines add up to more than the total: the difference is the
         // reduction taken off the invoice. Less, and it was added to it.
         const gap = toPaisa(data.subtotal - data.total);
         if (gap > 0.005) rows.push(row('Discount, already deducted (৳):', amount(gap), 'memo'));
         else if (gap < -0.005) rows.push(row('Adjustment, included (৳):', amount(-gap), 'memo'));
+    } else if (inclusive) {
+        // No tax inside the total, so nothing needs backing out: the sub total
+        // is the lines themselves — what the column above adds up to — and the
+        // reduction is taken off it, so the block foots on its face.
+        rows.push(row('Sub Total (৳):', amount(data.subtotal)));
+        const gap = toPaisa(data.subtotal - data.total);
+        if (gap > 0.005) rows.push(row('Discount (৳):', `-${amount(gap)}`, 'neg'));
+        else if (gap < -0.005) rows.push(row('Adjustment (৳):', amount(-gap)));
     } else {
         rows.push(row('Sub Total (৳):', amount(data.subtotal)));
         if (hasTax) rows.push(row('Total Tax (৳):', amount(tax)));
@@ -127,28 +118,56 @@ function invoiceTotalsRows(data: InvoiceData, paid: number): string {
  * running balance off the paper.
  */
 function accountRows(data: InvoiceData, dues: InvoiceDues): string {
+    // A negative balance is credit the customer holds with the shop, which the
+    // sale draws down — "Previous Due: -11,220" reads like an error.
+    const advance = dues.previousDue < -0.005;
+    const settled = dues.totalDue < -0.005;
     return [
-        row('Previous Due (৳)', amount(dues.previousDue)),
+        row(advance ? 'Advance Balance (৳)' : 'Previous Due (৳)', amount(dues.previousDue)),
         row('Sale Amount (৳)', amount(data.total)),
         row('Collected Amount (৳)', amount(dues.paid)),
-        row('Total Due (৳)', amount(dues.totalDue), 'rule'),
+        // Still in credit after this sale: say so rather than print a negative due.
+        row(settled ? 'Advance Remaining (৳)' : 'Total Due (৳)', amount(settled ? -dues.totalDue : dues.totalDue), 'rule'),
     ].join('');
 }
 
+/**
+ * Invoice no, order no and date on one ruled strip.
+ *
+ * Returned apart from the body so it can ride in the repeating letterhead:
+ * every continuation page of a long invoice then says which invoice it
+ * belongs to, and page one reads exactly as the strip under the letterhead.
+ */
+export function detailedStripHtml(data: InvoiceData): string {
+    return `<div class="d-strip">
+        <div><strong>Invoice No:</strong> ${esc(data.referenceNumber)}</div>
+        <div><strong>Order No:</strong> ${data.orderNumber ? esc(data.orderNumber) : ''}</div>
+        <div><strong>Invoice Date:</strong> ${esc(data.date)}</div>
+    </div>`;
+}
+
+/**
+ * The invoice in two parts. `body` is the parties and the item table, which
+ * runs over as many pages as the items need; `end` is the totals, note and
+ * signatures, which stay together and — see `PrintSheet.endHtml` — travel with
+ * the page-bottom footer.
+ */
 export function detailedBodyHtml(
     data: InvoiceData,
     layout: InvoicePrintPrefs,
     paid: number,
     dues: InvoiceDues | null,
-): string {
+): { body: string; end: string } {
     const showDiscount = data.items.some((item) => !!item.discount);
+    const showWarranty = !layout.hide_empty_warranty || data.items.some((item) => !!item.warranty);
+    const qr = data.qrDataUrl && /^data:image\//i.test(data.qrDataUrl) ? data.qrDataUrl : '';
 
     const itemRows = data.items.map((item, index) => {
         const lineTotal = item.quantity * item.unitPrice - (item.discount ?? 0);
         return `<tr>
             <td class="d-sl">${index + 1}</td>
             <td class="d-item">${esc(item.name)}</td>
-            <td class="d-warranty">${item.warranty ? esc(item.warranty) : ''}</td>
+            ${showWarranty ? `<td class="d-warranty">${item.warranty ? esc(item.warranty) : ''}</td>` : ''}
             <td class="d-num">${item.quantity}</td>
             <td class="d-num">${amount(item.unitPrice)}</td>
             ${showDiscount ? `<td class="d-num">${item.discount ? amount(item.discount) : ''}</td>` : ''}
@@ -162,15 +181,9 @@ export function detailedBodyHtml(
         ).join(' · ')}</p>`
         : '';
 
-    return `
-    <div class="invoice-body inv-d">
-    <div class="d-strip">
-        <div><strong>Invoice No:</strong> ${esc(data.referenceNumber)}</div>
-        <div><strong>Order No:</strong> ${data.orderNumber ? esc(data.orderNumber) : ''}</div>
-        <div><strong>Invoice Date:</strong> ${esc(data.date)}</div>
-    </div>
-
-    <div class="d-parties">
+    const body = `
+    <div class="invoice-body inv-d inv-d--top">
+    <div class="d-parties${qr ? ' d-parties--qr' : ''}">
         <div class="d-party">
             <h3>Bill To</h3>
             <div class="d-kv"><span>Name:</span><span>${data.customerName ? esc(data.customerName) : 'Walk-in Customer'}</span></div>
@@ -181,6 +194,7 @@ export function detailedBodyHtml(
             ${data.shippingAddress ? `<p class="d-addr">${esc(data.shippingAddress)}</p>` : ''}
             <div class="d-kv"><span>Payment Status:</span><span>${paymentStatus(data.total, paid)}</span></div>
         </div>
+        ${qr ? `<div class="d-qr"><img src="${esc(qr)}" alt="Invoice QR code"></div>` : ''}
     </div>
 
     <table class="d-table">
@@ -188,7 +202,7 @@ export function detailedBodyHtml(
             <tr>
                 <th class="d-sl">SL</th>
                 <th class="d-item">Item</th>
-                <th class="d-warranty">Warranty</th>
+                ${showWarranty ? '<th class="d-warranty">Warranty</th>' : ''}
                 <th class="d-num">Quantity</th>
                 <th class="d-num">Unit Price (৳)</th>
                 ${showDiscount ? '<th class="d-num">Discount (৳)</th>' : ''}
@@ -197,7 +211,10 @@ export function detailedBodyHtml(
         </thead>
         <tbody>${itemRows}</tbody>
     </table>
+    </div>`;
 
+    const end = `
+    <div class="invoice-body inv-d inv-d--end">
     <div class="d-sums">
         <div class="d-left">
             ${layout.amount_in_words ? `<p class="d-words"><strong>In Word:</strong> ${takaInWords(data.total)}</p>` : ''}
@@ -216,6 +233,8 @@ export function detailedBodyHtml(
         <div class="signature">Authorised Signature</div>
     </div>` : ''}
     </div>`;
+
+    return { body, end };
 }
 
 /**
@@ -238,22 +257,33 @@ export function detailedFooterHtml(
     </div>`;
 }
 
-export function detailedStyles(): string {
+/** Horizontal inset of the invoice body per padding choice, in mm — the strip, which rides in the letterhead, lines up with it. */
+const BODY_INSET_MM: Record<InvoicePrintPrefs['padding'], number> = { narrow: 1, normal: 4, wide: 8 };
+
+export function detailedStyles(layout: InvoicePrintPrefs): string {
     const c = COMPACT_SCOPE;
+    const inset = BODY_INSET_MM[layout.padding];
     return `
         /* Detailed invoice */
         .inv-d { font-size:13px; color:#111; }
+        /* The body and the closing block are two blocks of one invoice: the
+           padding between them is the body's own, not doubled. */
+        .inv-d--top { padding-bottom:0; }
+        .inv-d--end { padding-top:0; }
         .inv-d h3 { font-size:14px; font-weight:bold; margin-bottom:4px; }
 
         /* Invoice no / order no / date on one ruled strip. */
         .d-strip {
+            margin:10px ${inset}mm 0;
             display:flex; justify-content:space-between; gap:12px;
             border-top:3px solid #d1d5db; border-bottom:3px solid #d1d5db;
-            padding:7px 6px; margin-bottom:16px; font-size:14px;
+            padding:7px 6px; margin-bottom:16px; font-size:14px; color:#111;
         }
         .d-strip strong { margin-right:8px; }
 
         .d-parties { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:16px; padding:0 6px; }
+        .d-parties--qr { grid-template-columns:1fr 1fr auto; }
+        .d-qr img { display:block; width:19mm; height:19mm; }
         .d-kv { display:flex; gap:24px; margin-bottom:2px; }
         .d-kv span:first-child { min-width:92px; }
         .d-addr { margin-bottom:4px; }
@@ -283,6 +313,12 @@ export function detailedStyles(): string {
         .d-block .neg td:last-child { color:#ef4444; }
         .d-block .memo td { color:#6b7280; font-style:italic; }
         .d-paid-by { margin-top:8px; font-size:11px; color:#555; }
+
+        /* Where a long invoice breaks. A row, the totals, the signatures and the
+           foot each stay whole; the column headings repeat above every page's
+           rows (the table's own thead), and the strip repeats with the
+           letterhead. */
+        .d-table tr, .d-parties, .d-sums, .note-box, .signatures, .d-foot { break-inside:avoid; }
 
         /* The page foot: thank-you left, preparer and print time right. */
         .d-foot { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; font-size:11px; color:#111; padding-top:8px; }

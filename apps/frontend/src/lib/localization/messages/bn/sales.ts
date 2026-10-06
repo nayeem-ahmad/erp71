@@ -382,6 +382,7 @@ export const salesMessages = {
                     serialColumn: "ক্রমিক নম্বর (SL) কলাম",
                     signatureLines: "গ্রাহক ও অনুমোদিত স্বাক্ষরের লাইন",
                     hideEmptyDiscount: "কোনো আইটেমে ছাড় না থাকলে ছাড়ের কলাম লুকান",
+                    hideEmptyWarranty: "কোনো পণ্যের ওয়ারেন্টি না থাকলে ওয়ারেন্টি কলাম লুকান (বিস্তারিত ডিজাইন)",
                     footerLabel: "ফুটার",
                     footerDefault: "ধন্যবাদ বার্তা",
                     footerCustom: "নিজস্ব লেখা",

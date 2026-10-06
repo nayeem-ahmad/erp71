@@ -382,6 +382,7 @@ export const salesMessages = {
                 serialColumn: "عمود الرقم التسلسلي (SL)",
                 signatureLines: "سطرا توقيع العميل والمفوَّض",
                 hideEmptyDiscount: "إخفاء عمود الخصم عند عدم وجود خصم",
+                hideEmptyWarranty: "إخفاء عمود الضمان (التصميم المفصّل) عندما لا يكون لأي صنف ضمان",
                 footerLabel: "التذييل",
                 footerDefault: "سطر الشكر",
                 footerCustom: "نص مخصص",

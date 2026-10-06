@@ -43,11 +43,12 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
     const [mode, setMode] = useState<FooterMode>(() => footerMode(value.footer_text));
     const [customText, setCustomText] = useState(mode === 'custom' ? (value.footer_text ?? '') : '');
 
-    const toggles: { key: 'amount_in_words' | 'serial_column' | 'signature_lines' | 'hide_empty_discount'; label: string }[] = [
+    const toggles: { key: 'amount_in_words' | 'serial_column' | 'signature_lines' | 'hide_empty_discount' | 'hide_empty_warranty'; label: string }[] = [
         { key: 'amount_in_words', label: copy.amountInWords },
         { key: 'serial_column', label: copy.serialColumn },
         { key: 'signature_lines', label: copy.signatureLines },
         { key: 'hide_empty_discount', label: copy.hideEmptyDiscount },
+        { key: 'hide_empty_warranty', label: copy.hideEmptyWarranty },
     ];
 
     return (

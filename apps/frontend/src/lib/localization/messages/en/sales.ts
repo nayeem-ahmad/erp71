@@ -385,6 +385,7 @@ export const salesMessages = {
                 serialColumn: "Serial number (SL) column",
                 signatureLines: "Customer and authorised signature lines",
                 hideEmptyDiscount: "Hide the Discount column when no item has a discount",
+                hideEmptyWarranty: "Hide the Warranty column (detailed design) when no item has a warranty",
                 footerLabel: "Footer",
                 footerDefault: "Thank-you line",
                 footerCustom: "Custom text",

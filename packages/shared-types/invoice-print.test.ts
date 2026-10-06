@@ -22,6 +22,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       serial_column: false,
       signature_lines: false,
       hide_empty_discount: false,
+      hide_empty_warranty: false,
       footer_text: null,
     });
   });
@@ -37,6 +38,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       serial_column: true,
       signature_lines: true,
       hide_empty_discount: true,
+      hide_empty_warranty: true,
       footer_text: 'Goods once sold are not returnable.',
     };
     expect(normalizeInvoicePrintPrefs(saved)).toEqual(saved);

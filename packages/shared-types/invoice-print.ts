@@ -58,6 +58,11 @@ export interface InvoicePrintPrefs {
   /** Drop the Discount column when no line carries a discount. */
   hide_empty_discount: boolean;
   /**
+   * Drop the detailed layout's Warranty column when no line carries a warranty.
+   * Off by default: the column prints, empty, as a trade invoice's does.
+   */
+  hide_empty_warranty: boolean;
+  /**
    * The line under the invoice. `null` prints the built-in thank-you; an empty
    * string prints no footer at all — the two are different answers.
    */
@@ -75,6 +80,7 @@ export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   serial_column: false,
   signature_lines: false,
   hide_empty_discount: false,
+  hide_empty_warranty: false,
   footer_text: null,
 };
 
@@ -110,6 +116,7 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
     serial_column: bool(r.serial_column, d.serial_column),
     signature_lines: bool(r.signature_lines, d.signature_lines),
     hide_empty_discount: bool(r.hide_empty_discount, d.hide_empty_discount),
+    hide_empty_warranty: bool(r.hide_empty_warranty, d.hide_empty_warranty),
     footer_text:
       typeof r.footer_text === 'string'
         ? r.footer_text.slice(0, INVOICE_FOOTER_MAX_LENGTH)

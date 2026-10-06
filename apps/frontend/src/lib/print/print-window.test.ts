@@ -480,6 +480,75 @@ describe('a document\u2019s own footer that asks to be pinned', () => {
     });
 });
 
+describe('a closing block that stays with a pinned footer', () => {
+    const docFooter = '<div class="p71-doc-ft">Prepared By- Rina</div>';
+    const end = '<div class="d-sums">TOTALS</div>';
+    const opts = { ...base, endHtml: end, footerHtml: docFooter, pinFooter: true };
+
+    it('shares the last row of the page table with the footer, which cannot split', () => {
+        const html = buildPrintDocument(opts);
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).toContain('<table class="p71-doc p71-doc--end">');
+        const endRow = body.slice(body.indexOf('<tr class="p71-end">'));
+        expect(endRow.indexOf('TOTALS')).toBeLessThan(endRow.indexOf('Prepared By- Rina'));
+        expect(html).toContain('.p71-doc--end > tbody > tr.p71-end { height: 100%; break-inside: avoid; }');
+        // Not the flex column, whose footer can be left alone on a page.
+        expect(body).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('keeps the repeating letterhead above both, so the next page is identifiable', () => {
+        const html = buildPrintDocument({ ...opts, repeatHeader: true, headerHtml: '<div>HEADER</div>' });
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).toContain('<thead><tr><td><div>HEADER</div></td></tr></thead>');
+        expect(body.indexOf('</thead>')).toBeLessThan(body.indexOf('<tr class="p71-end">'));
+    });
+
+    it('is only more body when nothing is pinned', () => {
+        const html = buildPrintDocument({ ...opts, pinFooter: false });
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).not.toContain('p71-doc--end"');
+        expect(body.indexOf('TOTALS')).toBeLessThan(body.indexOf('Prepared By- Rina'));
+    });
+
+    it('is only more body on a roll, which has no page bottom', () => {
+        const body = buildPrintDocument({ ...opts, paperSize: 'Thermal80' });
+
+        expect(body).not.toContain('<tr class="p71-end">');
+        expect(body).toContain('TOTALS');
+    });
+
+    it('goes after the body, ahead of a tenant footer that repeats on every page', () => {
+        const html = buildPrintDocument({
+            ...opts,
+            footerHtml: undefined,
+            headerConfig: { footer: { show: true, lines: [{ text: 'Bank' }], repeatOnEveryPage: true } },
+        });
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).toContain('<tfoot>');
+        expect(body).not.toContain('<tr class="p71-end">');
+        expect(body).toContain('TOTALS');
+    });
+
+    it('gives every invoice of a batch its own page-tall table', () => {
+        const html = buildPrintDocument({
+            ...base,
+            paperSize: 'A4',
+            pinFooter: true,
+            sheets: [
+                { bodyHtml: 'ONE', endHtml: end, footerHtml: docFooter },
+                { bodyHtml: 'TWO', endHtml: end, footerHtml: docFooter },
+            ],
+        });
+
+        expect(html.match(/<tr class="p71-end">/g)).toHaveLength(2);
+        expect(html).toContain('.p71-job + .p71-job');
+    });
+});
+
 describe('preview toolbar', () => {
     const preview = {
         title: 'Invoice — A4',
