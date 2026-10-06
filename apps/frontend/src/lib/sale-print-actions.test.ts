@@ -1,6 +1,7 @@
 import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
-import { printSaleChallan, printSaleInvoice, printSaleReceipt, type PrintableSale, type SalePrintContext } from './sale-print-actions';
-import { printSalesInvoice } from './sales-invoice-printer';
+import { printSaleChallan, printSaleInvoice, printSaleInvoices, printSaleReceipt, saleToInvoiceData, type PrintableSale, type SalePrintContext } from './sale-print-actions';
+import { printSalesInvoice, printSalesInvoices } from './sales-invoice-printer';
+import { invoiceQrDataUrl } from './invoice-qr';
 import { printDeliveryChallan } from './delivery-challan-printer';
 import { printPOSReceipt } from './pos-receipt-printer';
 import { enMessages } from './localization/messages/en';
@@ -8,6 +9,10 @@ import { enMessages } from './localization/messages/en';
 jest.mock('./sales-invoice-printer', () => ({
     ...jest.requireActual('./sales-invoice-printer'),
     printSalesInvoice: jest.fn(),
+    printSalesInvoices: jest.fn(),
+}));
+jest.mock('./invoice-qr', () => ({
+    invoiceQrDataUrl: jest.fn().mockResolvedValue('data:image/png;base64,QR'),
 }));
 jest.mock('./pos-receipt-printer', () => ({
     printPOSReceipt: jest.fn().mockResolvedValue(undefined),
@@ -55,11 +60,11 @@ const cartShapedSale: PrintableSale = {
 beforeEach(() => jest.clearAllMocks());
 
 describe('printSaleInvoice', () => {
-    it('reads a list row and a cart row to the same invoice', () => {
-        printSaleInvoice(listShapedSale, 'A4', ctx, true);
+    it('reads a list row and a cart row to the same invoice', async () => {
+        await printSaleInvoice(listShapedSale, 'A4', ctx, true);
         const fromList = (printSalesInvoice as jest.Mock).mock.calls[0][0];
 
-        printSaleInvoice(cartShapedSale, 'A4', ctx, true);
+        await printSaleInvoice(cartShapedSale, 'A4', ctx, true);
         const fromCart = (printSalesInvoice as jest.Mock).mock.calls[1][0];
 
         // The two screens hold the same sale in different shapes; an operator
@@ -72,8 +77,8 @@ describe('printSaleInvoice', () => {
         expect(fromCart.payments[0]).toMatchObject({ method: 'CASH', amount: 3000 });
     });
 
-    it('prints at the size it is given', () => {
-        printSaleInvoice(listShapedSale, 'Thermal80', ctx, true);
+    it('prints at the size it is given', async () => {
+        await printSaleInvoice(listShapedSale, 'Thermal80', ctx, true);
         expect(printSalesInvoice).toHaveBeenCalledWith(
             expect.anything(),
             'Thermal80',
@@ -82,14 +87,14 @@ describe('printSaleInvoice', () => {
         );
     });
 
-    it('prints in the layout the member saved', () => {
+    it('prints in the layout the member saved', async () => {
         const invoiceLayout = { ...DEFAULT_INVOICE_PRINT_PREFS, table_style: 'grid' as const };
-        printSaleInvoice(listShapedSale, 'A4', { ...ctx, invoiceLayout }, true);
+        await printSaleInvoice(listShapedSale, 'A4', { ...ctx, invoiceLayout }, true);
         expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'A4', undefined, invoiceLayout);
     });
 
-    it('attaches a preview toolbar unless the operator opted out', () => {
-        printSaleInvoice(listShapedSale, 'A4', ctx, false);
+    it('attaches a preview toolbar unless the operator opted out', async () => {
+        await printSaleInvoice(listShapedSale, 'A4', ctx, false);
         const preview = (printSalesInvoice as jest.Mock).mock.calls[0][2];
 
         expect(preview).toMatchObject({
@@ -100,12 +105,12 @@ describe('printSaleInvoice', () => {
         expect(preview.title).toContain('Invoice');
 
         (printSalesInvoice as jest.Mock).mockClear();
-        printSaleInvoice(listShapedSale, 'A4', ctx, true);
+        await printSaleInvoice(listShapedSale, 'A4', ctx, true);
         expect((printSalesInvoice as jest.Mock).mock.calls[0][2]).toBeUndefined();
     });
 
-    it('hands the invoice what was paid and what the customer owed before', () => {
-        printSaleInvoice(
+    it('hands the invoice what was paid and what the customer owed before', async () => {
+        await printSaleInvoice(
             { ...listShapedSale, total_amount: '3000', amount_paid: '1000', previous_due: 2500 },
             'A4',
             ctx,
@@ -117,8 +122,8 @@ describe('printSaleInvoice', () => {
         expect(data.previousDue).toBe(2500);
     });
 
-    it('trusts the stored amount paid over payment rows an imported sale never had', () => {
-        printSaleInvoice(
+    it('trusts the stored amount paid over payment rows an imported sale never had', async () => {
+        await printSaleInvoice(
             { ...listShapedSale, amount_paid: '1200', payments: [], previous_due: 0 },
             'A4',
             ctx,
@@ -128,9 +133,9 @@ describe('printSaleInvoice', () => {
         expect((printSalesInvoice as jest.Mock).mock.calls[0][0].amountPaid).toBe(1200);
     });
 
-    it('carries the gap between the lines and the stored total as an adjustment', () => {
+    it('carries the gap between the lines and the stored total as an adjustment', async () => {
         // 3 x 1000 is 3000, but the sale was posted at 2900 after a discount.
-        printSaleInvoice({ ...listShapedSale, total_amount: '2900' }, 'A4', ctx, true);
+        await printSaleInvoice({ ...listShapedSale, total_amount: '2900' }, 'A4', ctx, true);
         const data = (printSalesInvoice as jest.Mock).mock.calls[0][0];
 
         expect(data.total).toBe(2900);
@@ -139,8 +144,8 @@ describe('printSaleInvoice', () => {
 });
 
 describe('the sale\u2019s store on the letterhead', () => {
-    it('passes the sale\u2019s store name and address onto the invoice', () => {
-        printSaleInvoice(
+    it('passes the sale\u2019s store name and address onto the invoice', async () => {
+        await printSaleInvoice(
             { ...listShapedSale, store: { name: 'Gulshan', address: '12 Gulshan Ave' } },
             'A4',
             ctx,
@@ -158,8 +163,8 @@ describe('the sale\u2019s store on the letterhead', () => {
         );
     });
 
-    it('leaves the address alone when the store has none', () => {
-        printSaleInvoice({ ...listShapedSale, store: { name: 'Gulshan', address: '' } }, 'A4', ctx, true);
+    it('leaves the address alone when the store has none', async () => {
+        await printSaleInvoice({ ...listShapedSale, store: { name: 'Gulshan', address: '' } }, 'A4', ctx, true);
         expect((printSalesInvoice as jest.Mock).mock.calls[0][0].companyAddress).toBeUndefined();
     });
 
@@ -184,6 +189,95 @@ describe('the sale\u2019s store on the letterhead', () => {
             'Thermal80',
             undefined,
         );
+    });
+});
+
+describe('the detailed invoice\u2019s data', () => {
+    const detailedCtx: SalePrintContext = {
+        ...ctx,
+        invoiceLayout: { ...DEFAULT_INVOICE_PRINT_PREFS, layout: 'detailed' },
+    };
+    const postedSale: PrintableSale = {
+        ...listShapedSale,
+        total_amount: '2850',
+        vat_amount: '300.00',
+        sd_amount: '50.00',
+        salesOrder: { order_number: 'SO-0042' },
+        prepared_by: 'Rina Akter',
+        customer: { name: 'Alice Smith', phone: '01700000000', address: '12 Mirpur Road' },
+        items: [
+            {
+                quantity: 3,
+                price_at_sale: '1000',
+                product: { name: 'Gadget X', sku: 'GX-1', warranty_enabled: true, warranty_duration_days: 180 },
+            },
+        ],
+    };
+
+    it('reads the stored tax, the order, the preparer and the shipping address off the sale', () => {
+        const data = saleToInvoiceData(postedSale, detailedCtx);
+
+        // Tax already inside the total: VAT and supplementary duty together.
+        expect(data.taxIncluded).toBe(350);
+        expect(data.orderNumber).toBe('SO-0042');
+        expect(data.preparedBy).toBe('Rina Akter');
+        expect(data.shippingAddress).toBe('12 Mirpur Road');
+    });
+
+    it('does not claim to know the tax of a sale that never reported it', () => {
+        expect(saleToInvoiceData(listShapedSale, detailedCtx).taxIncluded).toBeUndefined();
+    });
+
+    it('words a product\u2019s warranty period, and says nothing when it has none', () => {
+        const days = (n: number, enabled = true) =>
+            saleToInvoiceData(
+                {
+                    ...postedSale,
+                    items: [{ quantity: 1, price_at_sale: '1', product: { name: 'P', warranty_enabled: enabled, warranty_duration_days: n } }],
+                },
+                detailedCtx,
+            ).items[0].warranty;
+
+        expect(days(365)).toBe('1 year');
+        expect(days(730)).toBe('2 years');
+        expect(days(180)).toBe('6 months');
+        expect(days(30)).toBe('1 month');
+        expect(days(45)).toBe('45 days');
+        expect(days(180, false)).toBeUndefined();
+        expect(days(0)).toBeUndefined();
+    });
+
+    it('attaches the QR code for the sale when the member prints the detailed design', async () => {
+        await printSaleInvoice(postedSale, 'A4', detailedCtx, true);
+
+        expect(invoiceQrDataUrl).toHaveBeenCalledWith('sale-1');
+        expect((printSalesInvoice as jest.Mock).mock.calls[0][0].qrDataUrl).toBe('data:image/png;base64,QR');
+    });
+
+    it('does not draw a code for the standard design, which has nowhere to print it', async () => {
+        await printSaleInvoice(postedSale, 'A4', ctx, true);
+
+        expect(invoiceQrDataUrl).not.toHaveBeenCalled();
+        expect((printSalesInvoice as jest.Mock).mock.calls[0][0].qrDataUrl).toBeUndefined();
+    });
+
+    it('gives each invoice of a batch its own code', async () => {
+        (invoiceQrDataUrl as jest.Mock).mockImplementation(async (id: string) => `data:image/png;base64,${id}`);
+        (printSalesInvoices as jest.Mock).mockReturnValue({} as Window);
+
+        const opened = await printSaleInvoices(
+            [postedSale, { ...postedSale, id: 'sale-2' }],
+            'A4',
+            detailedCtx,
+            true,
+        );
+
+        expect(opened).toBe(true);
+        const sheets = (printSalesInvoices as jest.Mock).mock.calls[0][0];
+        expect(sheets.map((d: { qrDataUrl: string }) => d.qrDataUrl)).toEqual([
+            'data:image/png;base64,sale-1',
+            'data:image/png;base64,sale-2',
+        ]);
     });
 });
 

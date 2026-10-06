@@ -143,7 +143,7 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
                 ]);
                 const headerByStore = new Map(storeIds.map((storeId, i) => [storeId, headers[i]]));
 
-                const opened = printSaleInvoices(
+                const opened = await printSaleInvoices(
                     loaded,
                     paperSize,
                     { ...ctx, invoiceLayout },

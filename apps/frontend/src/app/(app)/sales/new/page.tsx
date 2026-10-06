@@ -22,6 +22,7 @@ import {
     type PaperSize,
 } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { invoiceQrDataUrl } from '@/lib/invoice-qr';
 import { useInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 import { toast } from '@/lib/toast';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
@@ -250,6 +251,8 @@ function NewSalePageContent() {
         headerConfig: printHeader.headerConfig,
         customerName: customer?.name,
         customerPhone: customer?.phone,
+        shippingAddress: customer?.address || undefined,
+        preparedBy: currentUser?.name || undefined,
         items: items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
@@ -413,7 +416,14 @@ function NewSalePageContent() {
             // that was just posted, not the blank screen it leaves behind. The
             // sale number stands in as the invoice reference when the operator
             // typed none, matching what the sale record prints later.
-            const invoice = buildInvoiceData(response.serial_number, response.previous_due);
+            const invoice: InvoiceData = {
+                ...buildInvoiceData(response.serial_number, response.previous_due),
+                // The sale has a page to open now, so the detailed layout can
+                // print its code — before the sale was saved it had none.
+                qrDataUrl: invoiceLayout.layout === 'detailed' && response.id
+                    ? await invoiceQrDataUrl(response.id)
+                    : undefined,
+            };
 
             // Clear cart and show success
             clearCart();

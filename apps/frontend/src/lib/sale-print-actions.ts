@@ -1,5 +1,6 @@
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
+import { invoiceQrDataUrl } from '@/lib/invoice-qr';
 import { printSalesInvoice, printSalesInvoices, type InvoiceData, type PaperSize } from '@/lib/sales-invoice-printer';
 import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
@@ -37,7 +38,12 @@ export interface PrintableSale {
         price?: number;
         discount?: number;
         name?: string;
-        product?: { name?: string; sku?: string | null } | null;
+        product?: {
+            name?: string;
+            sku?: string | null;
+            warranty_enabled?: boolean;
+            warranty_duration_days?: number | null;
+        } | null;
     }[];
     payments?: { payment_method?: string; method?: string; amount: string | number }[];
     /**
@@ -46,6 +52,16 @@ export interface PrintableSale {
      * dues at all.
      */
     previous_due?: number | null;
+    /**
+     * Tax contained in the total, stored with the sale when it was posted. The
+     * invoice reads it rather than working it out again from today's rates.
+     */
+    vat_amount?: string | number | null;
+    sd_amount?: string | number | null;
+    /** The order the sale was raised from, when it was. */
+    salesOrder?: { order_number?: string | null } | null;
+    /** Name of the user who prepared the sale, as the print endpoints resolve it. */
+    prepared_by?: string | null;
     /**
      * The branch the sale was rung up at. Its letterhead and name print on the
      * sale's documents, whatever branch the operator has selected now.
@@ -76,6 +92,23 @@ function unitPrice(item: PrintableSale['items'][number]): number {
     if (typeof item.price === 'number') return item.price;
     const raw = item.price_at_sale;
     return typeof raw === 'number' ? raw : parseFloat(raw ?? '0') || 0;
+}
+
+/** "6 months" for a product's warranty period; empty when it carries none. */
+function warrantyLabel(product: PrintableSale['items'][number]['product']): string | undefined {
+    const days = product?.warranty_duration_days;
+    if (!product?.warranty_enabled || !days || days <= 0) return undefined;
+    const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+    if (days % 365 === 0) return plural(days / 365, 'year');
+    if (days % 30 === 0) return plural(days / 30, 'month');
+    return plural(days, 'day');
+}
+
+/** A stored decimal as a number, or undefined when the sale does not carry it. */
+function storedAmount(value: string | number | null | undefined): number | undefined {
+    if (value == null) return undefined;
+    const parsed = typeof value === 'number' ? value : parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function paymentMethod(p: NonNullable<PrintableSale['payments']>[number]): string {
@@ -128,6 +161,12 @@ function previewFor(
  *
  * Shared with the batch printer so a row and a selection cannot drift.
  */
+function taxInside(sale: PrintableSale): number | undefined {
+    const vat = storedAmount(sale.vat_amount);
+    const sd = storedAmount(sale.sd_amount);
+    return vat === undefined && sd === undefined ? undefined : (vat ?? 0) + (sd ?? 0);
+}
+
 export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): InvoiceData {
     const items = sale.items.map((i) => ({
         name: itemName(i, ctx.unknownProductLabel),
@@ -135,6 +174,7 @@ export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): I
         quantity: i.quantity,
         unitPrice: unitPrice(i),
         discount: i.discount || 0,
+        warranty: warrantyLabel(i.product),
     }));
 
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity - (i.discount || 0), 0);
@@ -160,6 +200,9 @@ export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): I
         headerConfig: ctx.invoiceHeader.headerConfig,
         customerName: sale.customer?.name,
         customerPhone: sale.customer?.phone ?? undefined,
+        shippingAddress: sale.customer?.address ?? undefined,
+        orderNumber: sale.salesOrder?.order_number ?? undefined,
+        preparedBy: sale.prepared_by ?? undefined,
         items,
         payments,
         subtotal,
@@ -168,20 +211,33 @@ export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): I
         // closer than silently printing a total the lines do not sum to.
         rounding: Math.abs(total - subtotal) > 0.005 ? total - subtotal : undefined,
         total,
+        // Both stored columns, or neither: a sale carrying only one would read
+        // as having no tax inside it rather than an unknown amount.
+        taxIncluded: taxInside(sale),
         amountPaid,
         previousDue: sale.previous_due,
         note: sale.note ?? undefined,
     };
 }
 
-export function printSaleInvoice(
+/**
+ * The code the detailed layout prints, or nothing for any other layout — which
+ * would not use it, and should not wait on it.
+ */
+async function qrFor(sale: PrintableSale, ctx: SalePrintContext): Promise<string | undefined> {
+    return ctx.invoiceLayout?.layout === 'detailed' ? invoiceQrDataUrl(sale.id) : undefined;
+}
+
+export async function printSaleInvoice(
     sale: PrintableSale,
     size: PaperSize,
     ctx: SalePrintContext,
     skipPreview = false,
-): void {
+): Promise<void> {
+    // Drawn before the window opens, so the page is complete when it appears.
+    const qrDataUrl = await qrFor(sale, ctx);
     printSalesInvoice(
-        saleToInvoiceData(sale, ctx),
+        { ...saleToInvoiceData(sale, ctx), qrDataUrl },
         size,
         previewFor('invoice', size, ctx, skipPreview),
         ctx.invoiceLayout,
@@ -194,15 +250,19 @@ export function printSaleInvoice(
  * `headerFor` gives each sale its own branch's letterhead, since a selection
  * can span branches; without it every sheet takes `ctx.invoiceHeader`.
  */
-export function printSaleInvoices(
+export async function printSaleInvoices(
     sales: PrintableSale[],
     size: PaperSize,
     ctx: SalePrintContext,
     skipPreview = false,
     headerFor: (sale: PrintableSale) => SalePrintContext['invoiceHeader'] = () => ctx.invoiceHeader,
-): boolean {
+): Promise<boolean> {
+    const codes = await Promise.all(sales.map((sale) => qrFor(sale, ctx)));
     const opened = printSalesInvoices(
-        sales.map((sale) => saleToInvoiceData(sale, { ...ctx, invoiceHeader: headerFor(sale) })),
+        sales.map((sale, i) => ({
+            ...saleToInvoiceData(sale, { ...ctx, invoiceHeader: headerFor(sale) }),
+            qrDataUrl: codes[i],
+        })),
         size,
         previewFor('invoice', size, ctx, skipPreview, sales.length),
         ctx.invoiceLayout,

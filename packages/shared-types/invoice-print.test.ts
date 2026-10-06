@@ -14,6 +14,7 @@ describe('normalizeInvoicePrintPrefs', () => {
   it('defaults to how the invoice printed before the setting existed', () => {
     expect(DEFAULT_INVOICE_PRINT_PREFS).toEqual({
       version: 1,
+      layout: 'standard',
       padding: 'normal',
       balance: 'when-owed',
       table_style: 'minimal',
@@ -28,6 +29,7 @@ describe('normalizeInvoicePrintPrefs', () => {
   it('keeps every valid answer', () => {
     const saved = {
       version: 1,
+      layout: 'detailed',
       padding: 'wide',
       balance: 'never',
       table_style: 'grid',
@@ -44,6 +46,11 @@ describe('normalizeInvoicePrintPrefs', () => {
     expect(
       normalizeInvoicePrintPrefs({ padding: 'huge', table_style: 'striped', serial_column: 'yes' }),
     ).toEqual({ ...DEFAULT_INVOICE_PRINT_PREFS, table_style: 'striped' });
+  });
+
+  it('reads an unknown layout as the standard one', () => {
+    expect(normalizeInvoicePrintPrefs({ layout: 'fancy' }).layout).toBe('standard');
+    expect(normalizeInvoicePrintPrefs({ layout: 'detailed' }).layout).toBe('detailed');
   });
 
   it('keeps an empty footer as "no footer", distinct from the default', () => {

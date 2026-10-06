@@ -167,6 +167,10 @@ describe('SalesService', () => {
       tenant: {
         findUnique: jest.fn().mockResolvedValue({ name: 'Tenant 1', sms_on_sale: true }),
       },
+      // Names the "Prepared By" line of a printed invoice.
+      user: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       // Read to work out a sale's previous due. Empty is a customer whose
       // ledger has not moved since the sale.
       customerCreditTransaction: {
@@ -1333,6 +1337,24 @@ describe('SalesService', () => {
       expect(result.previous_due).toBe(1000);
     });
 
+    it('says who prepared the sale, so its invoice can print the line', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', created_by: 'user-1', items: [], payments: [] });
+      db.user.findMany.mockResolvedValue([{ id: 'user-1', name: 'Rina Akter', email: 'rina@example.com' }]);
+
+      const result = await service.findOne('tenant-1', 's1');
+
+      expect(result.prepared_by).toBe('Rina Akter');
+    });
+
+    it('leaves prepared_by empty for a sale nobody is recorded against', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', created_by: null, items: [], payments: [] });
+
+      const result = await service.findOne('tenant-1', 's1');
+
+      expect(result.prepared_by).toBeNull();
+      expect(db.user.findMany).not.toHaveBeenCalled();
+    });
+
     it('should throw NotFoundException when sale does not exist', async () => {
       db.sale.findFirst.mockResolvedValue(null);
 
@@ -1389,6 +1411,7 @@ describe('SalesService', () => {
             items: { include: { product: true } },
             payments: true,
             customer: true,
+            salesOrder: { select: { id: true, order_number: true } },
             // The branch letterhead needs it, as the single sale's does.
             store: { select: { id: true, name: true, address: true } },
           },
@@ -1398,6 +1421,27 @@ describe('SalesService', () => {
       // The same previous-due helper the single sale uses, not a second definition.
       expect(result[0].previous_due).toBe(1000);
       expect(result[1].previous_due).toBeNull();
+    });
+
+    it('names who prepared each sale with one lookup for the whole batch', async () => {
+      db.sale.findMany.mockResolvedValue([
+        sale('a', { created_by: 'user-1' }),
+        sale('b', { created_by: 'user-1' }),
+        sale('c', { created_by: null }),
+      ]);
+      db.user.findMany.mockResolvedValue([{ id: 'user-1', name: 'Rina Akter', email: 'rina@example.com' }]);
+
+      const result = await service.findForPrintBatch('tenant-1', ['a', 'b', 'c']);
+
+      expect(db.user.findMany).toHaveBeenCalledTimes(1);
+      expect(db.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['user-1'] } } }),
+      );
+      expect(result.map((row: { prepared_by: string | null }) => row.prepared_by)).toEqual([
+        'Rina Akter',
+        'Rina Akter',
+        null,
+      ]);
     });
 
     it('rejects an empty list and more than 100 ids without querying', async () => {
@@ -1423,6 +1467,30 @@ describe('SalesService', () => {
           }),
         }),
       );
+    });
+
+    it('loads the order the sale came from and who prepared it, for the invoice header and footer', async () => {
+      db.sale.findFirst.mockResolvedValue({
+        id: 's1',
+        created_by: 'user-1',
+        salesOrder: { id: 'so-1', order_number: 'SO-0042' },
+        items: [],
+        payments: [],
+      });
+      db.tenant.findUnique.mockResolvedValue({ name: 'Rahim Store' });
+      db.user.findMany.mockResolvedValue([{ id: 'user-1', name: null, email: 'rina@example.com' }]);
+
+      const result = await service.getInvoiceData('tenant-1', 's1');
+
+      expect(db.sale.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            salesOrder: { select: { id: true, order_number: true } },
+          }),
+        }),
+      );
+      // An account with no name is still identified, by its email.
+      expect(result.sale.prepared_by).toBe('rina@example.com');
     });
 
     it('puts the previous due on the sale, worked back past later payments', async () => {

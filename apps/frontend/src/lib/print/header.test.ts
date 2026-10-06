@@ -22,6 +22,21 @@ const ctx: HeaderContext = {
     vatRegNo: '00123456789',
 };
 
+describe('applyTokens — who prepared it and when it printed', () => {
+    it('fills {{prepared_by}} and {{print_date}} from the context', () => {
+        expect(
+            applyTokens('By {{prepared_by}} on {{print_date}}', {
+                preparedBy: 'Rina Akter',
+                printDate: '06-10-2026 1:02:59 PM',
+            }).text,
+        ).toBe('By Rina Akter on 06-10-2026 1:02:59 PM');
+    });
+
+    it('drops the line when neither is known, rather than printing a bare label', () => {
+        expect(applyTokens('Prepared by: {{prepared_by}}', {}).empty).toBe(true);
+    });
+});
+
 describe('applyTokens', () => {
     it('substitutes known tokens and ignores case/whitespace', () => {
         expect(applyTokens('{{company_name}} — {{ PHONE }}', ctx)).toEqual({

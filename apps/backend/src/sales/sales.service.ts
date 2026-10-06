@@ -17,6 +17,7 @@ import { resolvePaymentMethodAccountId } from '../accounting/payment-account.uti
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 import { resolveSalePreviousDue } from './sale-previous-due.util';
+import { loadPreparerNames, preparerOf } from './sale-preparer.util';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
@@ -1129,17 +1130,19 @@ export class SalesService {
             throw new NotFoundException('Sale not found');
         }
 
-        const [posting, previousDue] = await Promise.all([
+        const [posting, previousDue, preparers] = await Promise.all([
             loadPostingSummary(this.db, tenantId, 'sales', 'sale', sale.id),
             // Printed with the invoice, which the list and this screen both
             // print from this response.
             resolveSalePreviousDue(this.db, tenantId, sale, Number(sale.customer?.due_balance ?? 0)),
+            loadPreparerNames(this.db, [sale]),
         ]);
 
         return {
             ...sale,
             ...posting,
             previous_due: previousDue,
+            prepared_by: preparerOf(preparers, sale),
         };
     }
 
@@ -1159,10 +1162,13 @@ export class SalesService {
                 items: { include: { product: true } },
                 payments: true,
                 customer: true,
+                // The order the sale was raised from prints as its Order No.
+                salesOrder: { select: { id: true, order_number: true } },
                 // The branch's name and address print on its letterhead.
                 store: { select: { id: true, name: true, address: true } },
             },
         });
+        const preparers = await loadPreparerNames(this.db, sales);
         const byId = new Map(sales.map((sale) => [sale.id, sale]));
         const found = ordered.flatMap((id) => {
             const sale = byId.get(id);
@@ -1171,6 +1177,7 @@ export class SalesService {
 
         return mapWithConcurrency(found, PRINT_BATCH_CONCURRENCY, async (sale) => ({
             ...sale,
+            prepared_by: preparerOf(preparers, sale),
             previous_due: await resolveSalePreviousDue(
                 this.db,
                 tenantId,
@@ -1647,6 +1654,8 @@ export class SalesService {
                     items: { include: { product: true } },
                     payments: true,
                     customer: true,
+                    // The order the sale was raised from prints as its Order No.
+                    salesOrder: { select: { id: true, order_number: true } },
                     // The branch's name and address print on its letterhead.
                     store: { select: { id: true, name: true, address: true } },
                 },
@@ -1674,7 +1683,9 @@ export class SalesService {
             Number(sale.customer?.due_balance ?? 0),
         );
 
-        return { sale: { ...sale, previous_due: previousDue }, tenant };
+        const preparers = await loadPreparerNames(this.db, [sale]);
+
+        return { sale: { ...sale, previous_due: previousDue, prepared_by: preparerOf(preparers, sale) }, tenant };
     }
 
     private validateWarrantySerials(

@@ -359,6 +359,10 @@ export const salesMessages = {
             invoiceLayout: {
                 heading: "Mise en page de la facture",
                 hint: "Enregistrée dans votre compte, elle vous suit sur tout appareil.",
+                layoutLabel: "Présentation de la facture",
+                layoutHint: "Le mode détaillé ajoute une bande facture / commande / date, une colonne Garantie, la taxe à côté des totaux, un pied de page indiquant qui l'a préparée et quand, et un QR code qui ouvre la facture pour toute personne autorisée à la voir. Imprimé en A4, A5 et Letter ; les rouleaux gardent la présentation standard.",
+                layoutStandard: "Standard",
+                layoutDetailed: "Détaillée",
                 paddingLabel: "Espace autour du contenu",
                 paddingNarrow: "Étroit",
                 paddingNormal: "Normal",

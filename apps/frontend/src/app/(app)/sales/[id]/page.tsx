@@ -269,9 +269,17 @@ function SaleDetailPageContent() {
                 quantity: i.quantity,
                 price: i.price,
                 discount: i.discount || 0,
+                // The cart line carries no catalogue detail; the invoice's
+                // Warranty column reads it off the product the sale was posted with.
+                product: (sale.items || []).find((s: any) => s.product_id === i.productId)?.product ?? null,
             })),
             payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
             previous_due: sale.previous_due ?? null,
+            // Stored with the sale when it was posted, so they print as posted.
+            vat_amount: sale.vat_amount,
+            sd_amount: sale.sd_amount,
+            salesOrder: sale.salesOrder ?? null,
+            prepared_by: sale.prepared_by ?? null,
             // Prints on the branch it was rung up at, whatever branch is selected now.
             store_id: sale.store_id,
             store: sale.store,
