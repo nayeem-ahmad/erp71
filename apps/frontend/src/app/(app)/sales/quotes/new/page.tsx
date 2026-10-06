@@ -24,6 +24,8 @@ import ProformaTermsFields, {
     type ProformaTerms,
 } from '../ProformaTermsFields';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { documentPricing, documentVatTotals, productTaxRates } from '@/lib/sale-vat';
 import { useI18n } from '@/lib/i18n';
 
 export default function NewQuotationPage() {
@@ -57,21 +59,34 @@ export default function NewQuotationPage() {
         api.getCurrentUser().then(setCurrentUser).catch(() => {});
     }, []);
 
-    // A quotation stores only a total, so the subtotal is the total. The
-    // adjustment rows are hidden for the same reason (see TotalsFooter).
-    const totals = useMemo(() => {
-        const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-        return {
-            subtotal,
-            discount: 0,
-            discountPercent: 0,
-            vat: 0,
-            transportCost: 0,
-            laborCost: 0,
-            rounding: 0,
-            total: subtotal,
-        };
-    }, [items]);
+    // A quotation stores its lines and total, with no discount or other
+    // adjustment rows (hidden for that reason — see TotalsFooter). A shop that
+    // prices before VAT adds it on top here too; the VAT is stored with the
+    // document and is part of its total. Prices that include VAT add nothing.
+    const taxPricing = useTaxPricing();
+    const pricing = useMemo(
+        () => documentPricing(taxPricing.pricesIncludeVat, taxPricing.defaultVatRate, isProforma ? terms.currency : 'BDT'),
+        [taxPricing.pricesIncludeVat, taxPricing.defaultVatRate, isProforma, terms.currency],
+    );
+    const docTotals = useMemo(
+        () => documentVatTotals(
+            items.map((item) => ({ quantity: item.quantity, unitPrice: item.price, vatRate: item.vatRate, sdRate: item.sdRate })),
+            pricing,
+        ),
+        [items, pricing],
+    );
+    const totals = {
+        subtotal: docTotals.subtotal,
+        discount: 0,
+        discountPercent: 0,
+        vat: docTotals.vatAmount,
+        vatIncluded: false,
+        vatRate: docTotals.vatRate,
+        transportCost: 0,
+        laborCost: 0,
+        rounding: 0,
+        total: docTotals.total,
+    };
 
     const handleAddItem = (
         product: any,
@@ -85,6 +100,7 @@ export default function NewQuotationPage() {
             subgroup: product.subgroup?.name,
             quantity: options?.quantity ?? 1,
             discount: 0,
+            ...productTaxRates(product),
             availableQty: options?.availableQty,
         });
     };
@@ -139,6 +155,8 @@ export default function NewQuotationPage() {
                     unitPrice: item.price,
                 })),
                 totalAmount: totals.total,
+                pricesIncludeVat: pricing.pricesIncludeVat,
+                vatAmount: totals.vat,
                 validUntil: validUntil || undefined,
                 notes: description || undefined,
                 ...(isProforma ? proformaTermsPayload(terms, 'PROFORMA') : {}),
@@ -217,7 +235,7 @@ export default function NewQuotationPage() {
                 <TotalsFooter
                     totals={totals}
                     onTotalsChange={() => {}}
-                    tenantVatRate={0}
+                    tenantVatRate={pricing.defaultVatRate}
                     showAdjustments={false}
                 />
             }

@@ -177,6 +177,50 @@ describe('InvoicePage', () => {
             .toHaveAttribute('href', '/sales/test-sale-1/mushak');
     });
 
+    it('totals with the VAT stored with the sale, so the block foots after a discount', async () => {
+        // 1,150 of lines discounted to 1,000: 130.43 of VAT is inside, not 150.
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: {
+                ...mockInvoiceData.sale,
+                total_amount: '1000',
+                amount_paid: '1000',
+                vat_amount: '130.43',
+                sd_amount: '0',
+                items: [{ id: 'item-1', quantity: 1, price_at_sale: '1150', vat_rate: '15.00', product: { name: 'Premium Widget', sku: 'PW-001', vat_rate: 15 } }],
+            },
+        });
+        render(<InvoicePage />);
+
+        await waitFor(() => expect(screen.getByText('Subtotal (excl. VAT)')).toBeInTheDocument());
+        expect(screen.getAllByText(/869\.57/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/130\.43/).length).toBeGreaterThan(0);
+    });
+
+    it('shows a sale entered before VAT the way it was entered', async () => {
+        // 1,000 before VAT, 10 off, 15% on top: stored as 1,150 / 1,138.50 / 148.50.
+        getApi().getSaleInvoice.mockResolvedValue({
+            ...mockInvoiceData,
+            sale: {
+                ...mockInvoiceData.sale,
+                total_amount: '1138.50',
+                amount_paid: '1138.50',
+                vat_amount: '148.50',
+                sd_amount: '0',
+                prices_include_vat: false,
+                items: [{ id: 'item-1', quantity: 1, price_at_sale: '1150', vat_rate: '15.00', product: { name: 'Premium Widget', sku: 'PW-001', vat_rate: 15 } }],
+            },
+        });
+        render(<InvoicePage />);
+
+        await waitFor(() => expect(screen.getByText('Discount')).toBeInTheDocument());
+        // Unit price and amount before VAT, then the discount, VAT and total.
+        expect(screen.getAllByText(/1,000\.00/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/-.*10\.00/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/148\.50/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/1,138\.50/).length).toBeGreaterThan(0);
+    });
+
     it('prefers the VAT stored with the sale over the catalogue rate', async () => {
         // The point of the snapshot: an invoice the customer already holds must
         // not change when the product's rate is edited afterwards.

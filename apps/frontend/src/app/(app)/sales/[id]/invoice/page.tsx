@@ -21,6 +21,11 @@ interface InvoiceData {
         status: string;
         total_amount: string;
         amount_paid: string;
+        /** VAT and SD stored with the sale when it was posted. */
+        vat_amount?: string | null;
+        sd_amount?: string | null;
+        /** False when the sale was entered before VAT, with the tax added on top. */
+        prices_include_vat?: boolean | null;
         note: string | null;
         store_id?: string;
         store: { id?: string; name: string; address?: string | null } | null;
@@ -131,39 +136,50 @@ export default function InvoicePage() {
 
     // The RATE comes from the snapshot taken when the sale was posted, so
     // editing a product's VAT later cannot restate an invoice the customer
-    // already holds. The amounts are still derived from the line totals shown
-    // here rather than read off the stored columns, because those account for
-    // an invoice-level discount that this page has no row for — see the
-    // adjustment-breakdown item in TODO.md. For an undiscounted sale, which is
-    // almost all of them, the two are the same figure.
+    // already holds. Each line's VAT is backed out of its VAT-inclusive total
+    // (every sale is stored that way), which is the VAT before any
+    // invoice-level discount.
     //
-    // The document that must foot exactly is the Mushak 6.3, and it does: it
-    // spreads the reduction over its lines before taxing them.
+    // The totals use the VAT stored with the sale instead — the figure the
+    // Mushak 6.3 declares, after the discount — so the block foots: VAT plus
+    // the value excluding it is the total. A sale entered before VAT shows its
+    // lines before VAT too, with the discount and the VAT added on top.
     const defaultVatRate = tenant?.default_vat_rate ?? 0;
+    const beforeVat = sale.prices_include_vat === false;
     const lineItems = sale.items.map(item => {
-        const unitPrice = parseFloat(item.price_at_sale);
+        const grossUnit = parseFloat(item.price_at_sale);
         const qty = item.quantity;
-        const lineTotal = unitPrice * qty;
+        const grossTotal = grossUnit * qty;
 
         const vatRate = item.vat_rate != null
             ? parseFloat(item.vat_rate)
             : (item.product?.vat_rate ?? defaultVatRate);
-        const vatAmount = vatRate > 0 ? lineTotal * (vatRate / (100 + vatRate)) : 0;
-        const baseAmount = lineTotal - vatAmount;
+        const vatAmount = vatRate > 0 ? grossTotal * (vatRate / (100 + vatRate)) : 0;
+        const baseAmount = grossTotal - vatAmount;
 
         return {
             ...item,
-            unitPrice,
-            lineTotal,
+            // Before VAT for a sale entered that way, as charged otherwise.
+            unitPrice: beforeVat && qty > 0 ? Math.round((baseAmount / qty) * 100) / 100 : grossUnit,
+            lineTotal: beforeVat ? baseAmount : grossTotal,
             vatRate,
             vatAmount,
             baseAmount,
         };
     });
 
-    const subtotal = lineItems.reduce((s, i) => s + i.baseAmount, 0);
-    const totalVat = lineItems.reduce((s, i) => s + i.vatAmount, 0);
     const grandTotal = parseFloat(sale.total_amount);
+    const storedTax = sale.vat_amount != null || sale.sd_amount != null
+        ? Number(sale.vat_amount ?? 0) + Number(sale.sd_amount ?? 0)
+        : null;
+    const totalVat = storedTax ?? lineItems.reduce((s, i) => s + i.vatAmount, 0);
+    const subtotal = beforeVat
+        ? lineItems.reduce((s, i) => s + i.baseAmount, 0)
+        : storedTax != null
+            ? grandTotal - storedTax
+            : lineItems.reduce((s, i) => s + i.baseAmount, 0);
+    // Entered before VAT: what separates the lines plus VAT from the total.
+    const discountShown = beforeVat ? Math.round((subtotal + totalVat - grandTotal) * 100) / 100 : 0;
     const amountPaid = parseFloat(sale.amount_paid);
     const balance = amountPaid - grandTotal;
     const dues = invoiceDues(grandTotal, amountPaid, sale.previous_due);
@@ -362,6 +378,12 @@ export default function InvoicePage() {
                                             <span>{t.sales.invoice.subtotalExclVat}</span>
                                             <span>{formatBDT(subtotal, { locale })}</span>
                                         </div>
+                                        {discountShown > 0.005 && (
+                                            <div className="flex justify-between text-gray-600">
+                                                <span>{t.common.discount}</span>
+                                                <span>-{formatBDT(discountShown, { locale })}</span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between text-gray-600">
                                             <span>{t.sales.invoice.vat}</span>
                                             <span>{formatBDT(totalVat, { locale })}</span>

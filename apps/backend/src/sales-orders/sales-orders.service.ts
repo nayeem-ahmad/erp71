@@ -49,6 +49,8 @@ export class SalesOrdersService {
                     customer_id: dto.customerId,
                     order_number: orderNumber,
                     total_amount: dto.totalAmount,
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
+                    vat_amount: dto.vatAmount ?? 0,
                     status: dto.status || 'DRAFT',
                     payment_status: 'UNPAID',
                     delivery_date: deliveryDate,
@@ -186,6 +188,8 @@ export class SalesOrdersService {
             if (dto.deliveryDate !== undefined) {
                 updateData.delivery_date = this.normalizeDeliveryDate(dto.deliveryDate);
             }
+
+            if (dto.vatAmount !== undefined) updateData.vat_amount = dto.vatAmount;
 
             if (dto.items && dto.items.length > 0) {
                 // Delete old items and create new ones

@@ -281,6 +281,52 @@ describe('the detailed invoice\u2019s data', () => {
     });
 });
 
+describe('a sale entered before VAT', () => {
+    // 1,000 before VAT less a 10 discount, with 15% added on top: stored as a
+    // 1,150 line, a 1,138.50 total and 148.50 of VAT.
+    const onTopSale: PrintableSale = {
+        ...listShapedSale,
+        total_amount: '1138.50',
+        amount_paid: '1138.50',
+        vat_amount: '148.50',
+        sd_amount: '0',
+        prices_include_vat: false,
+        items: [{ quantity: 1, price_at_sale: '1150.00', vat_rate: '15.00', sd_rate: '0', product: { name: 'Gadget X' } }],
+    };
+
+    it('prints the before-VAT price, the discount and the VAT added on top', () => {
+        const data = saleToInvoiceData(onTopSale, ctx);
+
+        expect(data.items[0].unitPrice).toBe(1000);
+        expect(data.subtotal).toBe(1000);
+        expect(data.discountAmount).toBe(10);
+        expect(data.vat).toBe(148.5);
+        expect(data.total).toBe(1138.5);
+        // Not the "VAT inside the prices" reading, and no stray rounding row.
+        expect(data.taxIncluded).toBeUndefined();
+        expect(data.rounding).toBeUndefined();
+    });
+
+    it('takes a cart line\u2019s price as already before VAT', () => {
+        const data = saleToInvoiceData(
+            { ...onTopSale, items: [{ quantity: 1, price: 1000, name: 'Gadget X' }] },
+            ctx,
+        );
+
+        expect(data.items[0].unitPrice).toBe(1000);
+        expect(data.discountAmount).toBe(10);
+    });
+
+    it('leaves a VAT-inclusive sale as it always printed', () => {
+        const data = saleToInvoiceData({ ...onTopSale, prices_include_vat: true }, ctx);
+
+        expect(data.items[0].unitPrice).toBe(1150);
+        expect(data.taxIncluded).toBe(148.5);
+        expect(data.vat).toBeUndefined();
+        expect(data.rounding).toBe(-11.5);
+    });
+});
+
 describe('printSaleChallan', () => {
     it('carries the goods and the parties but never a price', () => {
         printSaleChallan(listShapedSale, 'A4', ctx, true);

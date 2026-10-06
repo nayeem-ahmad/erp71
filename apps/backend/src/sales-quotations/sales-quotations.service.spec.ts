@@ -82,6 +82,52 @@ describe('SalesQuotationsService', () => {
     expect(result).toEqual({ id: 'quote-1' });
   });
 
+  it('create() stores the VAT added on top and how the prices were entered', async () => {
+    db.quotation.create.mockResolvedValue({ id: 'quote-1' });
+
+    await service.create('tenant-1', {
+        storeId: 'store-1',
+        totalAmount: 1150,
+        vatAmount: 150,
+        pricesIncludeVat: false,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 1000 }],
+    } as any);
+
+    expect(db.quotation.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+            data: expect.objectContaining({ total_amount: 1150, vat_amount: 150, prices_include_vat: false }),
+        }),
+    );
+  });
+
+  it('create() counts a quotation that does not say how it was priced as VAT-inclusive', async () => {
+    db.quotation.create.mockResolvedValue({ id: 'quote-1' });
+
+    await service.create('tenant-1', {
+        storeId: 'store-1',
+        totalAmount: 500,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 500 }],
+    } as any);
+
+    expect(db.quotation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ prices_include_vat: true, vat_amount: 0 }) }),
+    );
+  });
+
+  it('revise() carries the VAT and its mode to the new version', async () => {
+    db.quotation.findUnique.mockResolvedValue({
+        id: 'quote-1', version: 1, status: 'DRAFT', total_amount: 1150, vat_amount: 150, prices_include_vat: false,
+        items: [{ product_id: 'prod-1', quantity: 1, unit_price: 1000 }],
+    });
+    db.quotation.create.mockResolvedValue({ id: 'quote-2', version: 2 });
+
+    await service.revise('tenant-1', 'quote-1');
+
+    expect(db.quotation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ vat_amount: 150, prices_include_vat: false }) }),
+    );
+  });
+
   it('revise() should duplicate a specific quote keeping status updated', async () => {
     const oldQuote = {
         id: 'quote-1',
@@ -270,6 +316,40 @@ describe('SalesQuotationsService', () => {
           data: { status: 'CONVERTED' }
       });
       expect(result.id).toEqual('order-99');
+  });
+
+  it('convertToOrder() prices the order exactly as the quotation was', async () => {
+      db.quotation.findUnique.mockResolvedValue({
+          id: 'quote-2', status: 'ACCEPTED', total_amount: 1150, vat_amount: 150, prices_include_vat: false,
+          items: [{ product_id: 'prod-1', quantity: 1, unit_price: 1000 }],
+      });
+      ordersService.create.mockResolvedValue({ id: 'order-99' });
+
+      await service.convertToOrder('tenant-1', 'user-1', 'quote-2');
+
+      expect(ordersService.create).toHaveBeenCalledWith('tenant-1', 'user-1', expect.objectContaining({
+          totalAmount: 1150,
+          vatAmount: 150,
+          pricesIncludeVat: false,
+          items: [{ productId: 'prod-1', quantity: 1, priceAtOrder: 1000 }],
+      }));
+  });
+
+  it('update() stores a new VAT figure with the edited lines', async () => {
+      db.quotation.findFirst.mockResolvedValue({ id: 'q1', status: 'DRAFT', items: [{ id: 'qi-1' }] });
+      db.quotation.update.mockResolvedValue({ id: 'q1' });
+
+      await service.update('tenant-1', 'q1', {
+          items: [{ productId: 'prod-1', quantity: 2, unitPrice: 1000 }],
+          totalAmount: 2300,
+          vatAmount: 300,
+      } as any);
+
+      expect(db.quotation.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+              data: expect.objectContaining({ total_amount: 2300, vat_amount: 300 }),
+          }),
+      );
   });
 
   it('convertToOrder() should throw if already converted', async () => {

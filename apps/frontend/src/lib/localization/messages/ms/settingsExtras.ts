@@ -243,6 +243,13 @@ export const settingsExtrasMessages = {
                 placeholder: "cth. 15",
                 hint: "Biarkan kosong untuk melumpuhkan VAT. Produk boleh mengatasi kadar ini secara individu.",
             },
+            pricing: {
+                label: "Cara harga dimasukkan",
+                included: "Harga termasuk VAT",
+                addedOnTop: "VAT ditambah di atas harga",
+                hint: "Termasuk: harga yang anda taip ialah apa yang dibayar pelanggan, dan VAT dikira daripadanya. Ditambah: anda taip harga sebelum VAT, dan jualan, sebut harga serta pesanan menambah VAT di atasnya. Setiap dokumen kekal dengan cara ia dimasukkan.",
+                posWarning: "Kaunter POS masih menganggap harga termasuk VAT. Sehingga ia mengikut tetapan ini, jualan POS mengenakan harga sebelum VAT tanpa menambah VAT.",
+            },
             vatReg: {
                 label: "Nombor Pendaftaran VAT (BIN)",
                 placeholder: "cth. 000000000-0101",

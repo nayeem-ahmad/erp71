@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import NewQuotationPage from './page';
-import { api } from '@/lib/api';
+import { api, fetchWithAuth } from '@/lib/api';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -18,6 +18,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
+    // Settings › Tax: unset here (the API mock answers nothing) unless a test says.
+    fetchWithAuth: jest.fn().mockResolvedValue(null),
     api: {
         getCurrentUser: jest.fn(),
         getCustomers: jest.fn(),
@@ -103,6 +105,45 @@ describe('NewQuotationPage', () => {
             );
         });
         expect(push).toHaveBeenCalledWith('/sales/quotes');
+    });
+
+    it('adds VAT on top in a shop that prices before VAT, and stores it with the quotation', async () => {
+        (fetchWithAuth as jest.Mock).mockResolvedValueOnce({ default_vat_rate: 15, prices_include_vat: false });
+        await act(async () => { render(<NewQuotationPage />); });
+        await addRiceToCart();
+
+        expect(await screen.findByText('VAT (15%)')).toBeInTheDocument();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Create Quotation/i }));
+        });
+
+        // 250 before VAT, typed as is; 37.50 of VAT on top.
+        await waitFor(() => {
+            expect(api.createQuotation).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    totalAmount: 287.5,
+                    vatAmount: 37.5,
+                    pricesIncludeVat: false,
+                    items: [{ productId: 'prod-1', quantity: 1, unitPrice: 250 }],
+                }),
+            );
+        });
+    });
+
+    it('adds nothing when the shop\u2019s prices include VAT', async () => {
+        (fetchWithAuth as jest.Mock).mockResolvedValueOnce({ default_vat_rate: 15, prices_include_vat: true });
+        await act(async () => { render(<NewQuotationPage />); });
+        await addRiceToCart();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Create Quotation/i }));
+        });
+        await waitFor(() => {
+            expect(api.createQuotation).toHaveBeenCalledWith(
+                expect.objectContaining({ totalAmount: 250, vatAmount: 0, pricesIncludeVat: true }),
+            );
+        });
+        expect(screen.queryByText(/VAT/)).not.toBeInTheDocument();
     });
 
     it('keeps the submit button disabled until an item is added', async () => {

@@ -19,6 +19,17 @@ interface TotalsFooterProps {
         transportCost: number;
         laborCost: number;
         total: number;
+        /** Supplementary duty, beside the VAT. */
+        sd?: number;
+        /** The discount to show when it differs from `discount` by rounding — see `SaleTotals`. */
+        discountShown?: number;
+        /**
+         * True (or left out): the VAT is inside the prices and is shown for
+         * information. False: it was added on top and is part of the total.
+         */
+        vatIncluded?: boolean;
+        /** The rate for the VAT label; null when the lines carry different rates. */
+        vatRate?: number | null;
     };
     onTotalsChange: (newTotals: any) => void;
     tenantVatRate: number;
@@ -69,6 +80,34 @@ export default function TotalsFooter({
     /** Money and percentages are both typed to the paisa; carry no further. */
     const round2 = (value: number) => Math.round(value * 100) / 100;
 
+    // The VAT row says whether the tax sits inside the prices or was added on
+    // top: "VAT 15% (included)" is information, "VAT (15%)" is part of the sum.
+    const vatIncluded = totals.vatIncluded !== false;
+    const rateLabel = totals.vatRate === undefined ? tenantVatRate : totals.vatRate;
+    const vatLabel = vatIncluded
+        ? rateLabel == null ? 'VAT (included)' : `VAT ${rateLabel}% (included)`
+        : rateLabel == null ? 'VAT' : `VAT (${rateLabel}%)`;
+    const sd = totals.sd ?? 0;
+    const discountShown = totals.discountShown ?? totals.discount;
+    const vatRows = (
+        <>
+            {(Math.abs(totals.vat) > 0.005 || !readOnly) && (
+                <div className="flex justify-between items-center">
+                    <span className={vatIncluded ? 'text-gray-400' : 'text-gray-500'}>{vatLabel}</span>
+                    <span className={vatIncluded ? 'text-gray-400' : 'font-medium'}>{amount(totals.vat)}</span>
+                </div>
+            )}
+            {Math.abs(sd) > 0.005 && (
+                <div className="flex justify-between items-center">
+                    <span className={vatIncluded ? 'text-gray-400' : 'text-gray-500'}>
+                        {vatIncluded ? 'SD (included)' : 'SD'}
+                    </span>
+                    <span className={vatIncluded ? 'text-gray-400' : 'font-medium'}>{amount(sd)}</span>
+                </div>
+            )}
+        </>
+    );
+
     const byAmount = totals.discountMode === 'AMOUNT';
     /**
      * Keep the discount itself across a switch of units: the figure on screen
@@ -105,11 +144,10 @@ export default function TotalsFooter({
                 label: totals.discountPercent > 0.005
                     ? `Discount (${percent(totals.discountPercent)})`
                     : 'Discount',
-                value: -totals.discount,
+                value: -discountShown,
                 className: 'text-red-600',
             });
         }
-        if (Math.abs(totals.vat) > 0.005) rows.push({ label: `VAT (${tenantVatRate}%)`, value: totals.vat });
         if (Math.abs(totals.transportCost) > 0.005) rows.push({ label: 'Transport', value: totals.transportCost });
         if (Math.abs(totals.laborCost) > 0.005) rows.push({ label: 'Labor', value: totals.laborCost });
         if (Math.abs(totals.rounding) > 0.005) rows.push({ label: roundingLabel, value: totals.rounding });
@@ -122,13 +160,18 @@ export default function TotalsFooter({
                 <span className="font-medium">{amount(totals.subtotal)}</span>
             </div>
 
-            {!showAdjustments ? null : readOnly ? (
-                rows.map((row) => (
-                    <div key={row.label} className="flex justify-between items-center">
-                        <span className="text-gray-500">{row.label}</span>
-                        <span className={`font-medium ${row.className ?? ''}`}>{amount(row.value)}</span>
-                    </div>
-                ))
+            {/* Documents without the adjustment rows (quotations, orders) still
+                show VAT that was added on top: it is part of their total. */}
+            {!showAdjustments ? (Math.abs(totals.vat) > 0.005 || Math.abs(sd) > 0.005 ? vatRows : null) : readOnly ? (
+                <>
+                    {rows.map((row) => (
+                        <div key={row.label} className="flex justify-between items-center">
+                            <span className="text-gray-500">{row.label}</span>
+                            <span className={`font-medium ${row.className ?? ''}`}>{amount(row.value)}</span>
+                        </div>
+                    ))}
+                    {vatRows}
+                </>
             ) : (
                 <>
                     {/* Discount takes either unit: type a percentage and the
@@ -184,7 +227,7 @@ export default function TotalsFooter({
                                 {byAmount ? (
                                     <span className="w-20 text-end text-xs text-gray-500">{percent(totals.discountPercent)}</span>
                                 ) : (
-                                    <span className="font-medium w-20 text-end text-red-600">-{amount(totals.discount)}</span>
+                                    <span className="font-medium w-20 text-end text-red-600">-{amount(discountShown)}</span>
                                 )}
                             </div>
                         </div>
@@ -195,10 +238,7 @@ export default function TotalsFooter({
                         )}
                     </div>
 
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-500">VAT ({tenantVatRate}%)</span>
-                        <span className="font-medium">{amount(totals.vat)}</span>
-                    </div>
+                    {vatRows}
 
                     <div className="flex justify-between items-center gap-2">
                         <span className="text-gray-500 whitespace-nowrap">Transport</span>

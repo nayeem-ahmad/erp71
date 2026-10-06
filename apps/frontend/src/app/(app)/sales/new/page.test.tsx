@@ -1,7 +1,7 @@
 import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import NewSalePage from './page';
-import { api } from '@/lib/api';
+import { api, fetchWithAuth } from '@/lib/api';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -836,5 +836,109 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+});
+
+
+describe('NewSalePage — VAT from the shop\u2019s tax settings', () => {
+    const taxSettings = (settings: Record<string, unknown>) =>
+        (fetchWithAuth as jest.Mock).mockImplementation((path: string) =>
+            Promise.resolve(path === '/tenants/tax-settings' ? settings : null),
+        );
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSearchParams();
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({});
+        (api.getOpenCashierSession as jest.Mock).mockResolvedValue(null);
+        (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
+        (api.getCustomers as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
+        (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
+            { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '100.00', vat_rate: null, stocks: [{ quantity: 7 }] },
+        ]);
+        (api.createNewSale as jest.Mock).mockResolvedValue({ serial_number: 'S-00001' });
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
+        (api.getInventorySettings as jest.Mock).mockResolvedValue({});
+        window.sessionStorage.setItem('store_id', 'store-1');
+    });
+
+    afterEach(() => {
+        (fetchWithAuth as jest.Mock).mockReset();
+        (fetchWithAuth as jest.Mock).mockResolvedValue(null);
+    });
+
+    async function addRiceAndPay(amount: string) {
+        await act(async () => {
+            render(<NewSalePage />);
+        });
+        await waitFor(() => expect(fetchWithAuth).toHaveBeenCalledWith('/tenants/tax-settings'));
+
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        const cashInput = await screen.findByLabelText('Cash amount');
+        fireEvent.change(cashInput, { target: { value: amount } });
+    }
+
+    it('reads the VAT rate from Settings \u203a Tax and shows the VAT inside VAT-inclusive prices', async () => {
+        taxSettings({ default_vat_rate: 15, prices_include_vat: true });
+        await addRiceAndPay('100');
+
+        // 100 includes 13.04 of 15% VAT; the total does not move.
+        expect(await screen.findByText('VAT 15% (included)')).toBeInTheDocument();
+        expect(screen.getAllByText('৳13.04').length).toBeGreaterThan(0);
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Create Sale'));
+        });
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        expect(api.createNewSale).toHaveBeenCalledWith(
+            expect.objectContaining({
+                totalAmount: 100,
+                pricesIncludeVat: true,
+                items: [expect.objectContaining({ productId: 'prod-1', priceAtSale: 100 })],
+            }),
+        );
+    });
+
+    it('adds VAT on top in a shop that prices before VAT, and posts the VAT-inclusive figures', async () => {
+        taxSettings({ default_vat_rate: 15, prices_include_vat: false });
+        await addRiceAndPay('115');
+
+        expect(await screen.findByText('VAT (15%)')).toBeInTheDocument();
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Create Sale'));
+        });
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        // The server stores every sale VAT-inclusive: 100 before VAT is 115.
+        expect(api.createNewSale).toHaveBeenCalledWith(
+            expect.objectContaining({
+                totalAmount: 115,
+                pricesIncludeVat: false,
+                items: [expect.objectContaining({ productId: 'prod-1', priceAtSale: 115 })],
+            }),
+        );
+    });
+
+    it('still takes a sale when the tax settings cannot be read', async () => {
+        (fetchWithAuth as jest.Mock).mockImplementation((path: string) =>
+            path === '/tenants/tax-settings' ? Promise.reject(new Error('offline')) : Promise.resolve(null),
+        );
+        await addRiceAndPay('100');
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Create Sale'));
+        });
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        expect(api.createNewSale).toHaveBeenCalledWith(
+            expect.objectContaining({ totalAmount: 100, pricesIncludeVat: true }),
+        );
     });
 });

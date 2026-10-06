@@ -243,6 +243,13 @@ export const settingsExtrasMessages = {
             placeholder: "par ex. 15",
             hint: "Laissez vide pour désactiver la TVA. Les produits peuvent remplacer ce taux individuellement.",
         },
+        pricing: {
+            label: "Saisie des prix",
+            included: "Les prix incluent la TVA",
+            addedOnTop: "La TVA s'ajoute aux prix",
+            hint: "Incluse : le prix saisi est celui que paie le client, et la TVA en est extraite. Ajoutée : vous saisissez le prix hors TVA, et les ventes, devis et commandes y ajoutent la TVA. Chaque document garde le mode dans lequel il a été saisi.",
+            posWarning: "La caisse (POS) traite toujours les prix comme TTC. Tant qu'elle ne suit pas ce réglage, une vente en caisse facture le prix hors TVA sans ajouter la TVA.",
+        },
         vatReg: {
             label: "Numéro d'immatriculation TVA (BIN)",
             placeholder: "par ex. 000000000-0101",

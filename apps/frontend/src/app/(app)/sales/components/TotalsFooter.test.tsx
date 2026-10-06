@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import TotalsFooter from './TotalsFooter';
-import { computeSaleTotals, EMPTY_ADJUSTMENTS, type SaleAdjustments } from './SaleEntryLayout';
+import { computeSaleTotals, EMPTY_ADJUSTMENTS, NO_VAT_PRICING, type SaleAdjustments } from './SaleEntryLayout';
 import type { LineItem } from '@/lib/hooks/useNewSaleCart';
 
 const line = (price: number, quantity: number): LineItem => ({
@@ -11,11 +11,101 @@ const line = (price: number, quantity: number): LineItem => ({
     discount: 0,
 });
 
+/** A shop that prices before VAT and adds 15% on top. */
+const ON_TOP_15 = { defaultVatRate: 15, pricesIncludeVat: false };
+/** A shop whose prices include 15% VAT — the default. */
+const INCLUDED_15 = { defaultVatRate: 15, pricesIncludeVat: true };
+
 /** One ৳1,000 cart, so a 10% discount and a ৳100 one are the same money. */
 const CART = [line(500, 2)];
 
 const totalsFor = (adjustments: Partial<SaleAdjustments>, items: LineItem[] = CART) =>
-    computeSaleTotals(items, { ...EMPTY_ADJUSTMENTS, ...adjustments }, 0);
+    computeSaleTotals(items, { ...EMPTY_ADJUSTMENTS, ...adjustments }, NO_VAT_PRICING);
+
+describe('computeSaleTotals — how the shop prices VAT', () => {
+    it('shows the VAT inside VAT-inclusive prices without adding it', () => {
+        const totals = computeSaleTotals([line(1150, 1)], EMPTY_ADJUSTMENTS, INCLUDED_15);
+
+        expect(totals.vatIncluded).toBe(true);
+        expect(totals.vat).toBe(150);
+        expect(totals.total).toBe(1150);
+        expect(totals.postedUnitPrices).toEqual([1150]);
+    });
+
+    it('adds VAT on top of before-VAT prices and posts them VAT-inclusive', () => {
+        const totals = computeSaleTotals([line(1000, 1)], EMPTY_ADJUSTMENTS, ON_TOP_15);
+
+        expect(totals.vatIncluded).toBe(false);
+        expect(totals.subtotal).toBe(1000);
+        expect(totals.vat).toBe(150);
+        expect(totals.total).toBe(1150);
+        expect(totals.postedUnitPrices).toEqual([1150]);
+    });
+
+    it('posts the discount in the same VAT-inclusive terms as the prices', () => {
+        const totals = computeSaleTotals(
+            [line(6040, 1)],
+            { ...EMPTY_ADJUSTMENTS, discountMode: 'AMOUNT', discountAmount: 10 },
+            ON_TOP_15,
+        );
+
+        expect(totals.discountShown).toBe(10);
+        expect(totals.postedDiscount).toBe(11.5);
+        expect(totals.vat).toBe(904.5);
+        expect(totals.total).toBe(6934.5);
+    });
+
+    it('taxes each line at its product\u2019s own rate, falling back to the shop default', () => {
+        const zeroRated: LineItem = { ...line(1000, 1), productId: 'zero', vatRate: 0 };
+        const totals = computeSaleTotals([line(1000, 1), zeroRated], EMPTY_ADJUSTMENTS, ON_TOP_15);
+
+        expect(totals.postedUnitPrices).toEqual([1150, 1000]);
+        expect(totals.vat).toBe(150);
+        // Two rates in the sale: the label cannot name one.
+        expect(totals.vatRate).toBeNull();
+    });
+
+    it('carries supplementary duty under the VAT', () => {
+        const withSd: LineItem = { ...line(1000, 1), sdRate: 10 };
+        const totals = computeSaleTotals([withSd], EMPTY_ADJUSTMENTS, ON_TOP_15);
+
+        expect(totals.sd).toBe(100);
+        expect(totals.vat).toBe(165);
+        expect(totals.total).toBe(1265);
+    });
+});
+
+describe('TotalsFooter — the VAT row', () => {
+    const renderFooter = (totals: ReturnType<typeof computeSaleTotals>) =>
+        render(<TotalsFooter totals={totals} onTotalsChange={() => {}} tenantVatRate={15} />);
+
+    it('says the VAT is included when it is inside the prices', () => {
+        renderFooter(computeSaleTotals([line(1150, 1)], EMPTY_ADJUSTMENTS, INCLUDED_15));
+
+        expect(screen.getByText('VAT 15% (included)')).toBeInTheDocument();
+        expect(screen.getByText('৳150.00')).toBeInTheDocument();
+    });
+
+    it('names the rate as part of the sum when VAT is added on top', () => {
+        renderFooter(computeSaleTotals([line(1000, 1)], EMPTY_ADJUSTMENTS, ON_TOP_15));
+
+        expect(screen.getByText('VAT (15%)')).toBeInTheDocument();
+        expect(screen.getByText('৳1150.00')).toBeInTheDocument();
+    });
+
+    it('shows VAT added on top even on a document without adjustment rows', () => {
+        render(
+            <TotalsFooter
+                totals={computeSaleTotals([line(1000, 1)], EMPTY_ADJUSTMENTS, ON_TOP_15)}
+                onTotalsChange={() => {}}
+                tenantVatRate={15}
+                showAdjustments={false}
+            />,
+        );
+
+        expect(screen.getByText('VAT (15%)')).toBeInTheDocument();
+    });
+});
 
 describe('computeSaleTotals — overall discount', () => {
     it('derives the taka from the percentage in PERCENT mode', () => {
@@ -65,12 +155,12 @@ describe('computeSaleTotals — overall discount', () => {
         const byPercent = computeSaleTotals(
             CART,
             { ...EMPTY_ADJUSTMENTS, discountPercent: 10, transportCost: 50 },
-            15,
+            ON_TOP_15,
         );
         const byAmount = computeSaleTotals(
             CART,
             { ...EMPTY_ADJUSTMENTS, discountMode: 'AMOUNT', discountAmount: 100, transportCost: 50 },
-            15,
+            ON_TOP_15,
         );
 
         expect(byPercent.vat).toBe(135);

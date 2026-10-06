@@ -1,4 +1,5 @@
 import {
+    IsBoolean,
     IsString,
     IsArray,
     IsNumber,
@@ -125,6 +126,21 @@ export class CreateQuotationDto extends ProformaTermsDto {
     @IsNumber()
     totalAmount: number;
 
+    /**
+     * False when the lines were typed before VAT and the VAT below was added on
+     * top (and is part of `totalAmount`). Left out, the document is
+     * VAT-inclusive, as every quotation was before the option existed.
+     */
+    @IsOptional()
+    @IsBoolean()
+    pricesIncludeVat?: boolean;
+
+    /** VAT added on top of the lines; part of `totalAmount`. */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    vatAmount?: number;
+
     @IsOptional()
     @IsDateString()
     validUntil?: string;
@@ -148,6 +164,12 @@ export class UpdateQuotationDto extends ProformaTermsDto {
     @IsOptional()
     @IsNumber()
     totalAmount?: number;
+
+    /** VAT added on top of the lines; the document keeps the mode it was made in. */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    vatAmount?: number;
 
     @IsOptional()
     @IsDateString()

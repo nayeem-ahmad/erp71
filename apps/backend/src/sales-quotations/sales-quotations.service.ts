@@ -110,6 +110,8 @@ export class SalesQuotationsService {
                     customer_id: dto.customerId,
                     quote_number: quoteNumber,
                     total_amount: dto.totalAmount,
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
+                    vat_amount: dto.vatAmount ?? 0,
                     valid_until: dto.validUntil ? new Date(dto.validUntil) : null,
                     notes: dto.notes,
                     ...terms,
@@ -156,6 +158,8 @@ export class SalesQuotationsService {
                     customer_id: oldQuote.customer_id,
                     quote_number: oldQuote.quote_number,
                     total_amount: oldQuote.total_amount,
+                    prices_include_vat: oldQuote.prices_include_vat,
+                    vat_amount: oldQuote.vat_amount,
                     valid_until: oldQuote.valid_until,
                     notes: oldQuote.notes,
                     version: newVersion,
@@ -240,6 +244,9 @@ export class SalesQuotationsService {
             storeId: quote.store_id,
             customerId: quote.customer_id || undefined,
             totalAmount: toBdt(quote.total_amount),
+            // The order is priced exactly as the quotation was.
+            pricesIncludeVat: quote.prices_include_vat ?? true,
+            vatAmount: toBdt(quote.vat_amount),
             items: quote.items.map(item => ({
                 productId: item.product_id,
                 quantity: item.quantity,
@@ -306,6 +313,10 @@ export class SalesQuotationsService {
 
             if (dto.validUntil !== undefined) {
                 updateData.valid_until = dto.validUntil ? new Date(dto.validUntil) : null;
+            }
+
+            if (dto.vatAmount !== undefined) {
+                updateData.vat_amount = dto.vatAmount;
             }
 
             if (dto.items && dto.items.length > 0) {
@@ -493,6 +504,7 @@ export class SalesQuotationsService {
                 valid_until: true,
                 notes: true,
                 total_amount: true,
+                vat_amount: true,
                 doc_kind: true,
                 currency: true,
                 incoterm: true,

@@ -24,6 +24,8 @@ import {
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { invoiceQrDataUrl } from '@/lib/invoice-qr';
 import { useInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
+import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { productTaxRates } from '@/lib/sale-vat';
 import { toast } from '@/lib/toast';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import PaperSizeMenu from '../components/PaperSizeMenu';
@@ -126,13 +128,21 @@ function NewSalePageContent() {
         loadPageData();
     }, []);
 
+    // The shop's VAT rate and whether its prices include VAT, from Settings ›
+    // Tax. (The rate used to be read off the sales settings, which never carry
+    // it, so this screen always showed VAT as zero.)
+    const taxPricing = useTaxPricing();
+
     // Seed the cart from the document being converted. Runs once per id: the
     // user is free to edit the lines afterwards, and re-seeding would undo that.
+    // Waits for the tax settings, since a shop that prices before VAT seeds
+    // its lines in those terms.
     useEffect(() => {
         if (!quotationId && !salesOrderId && !duplicateSaleId) {
             setSource(null);
             return;
         }
+        if (!taxPricing.loaded) return;
 
         let cancelled = false;
         setLoadingSource(true);
@@ -166,9 +176,9 @@ function NewSalePageContent() {
                 // Held separately from `seeded` because only a copied sale
                 // carries a rounding figure, and a union of the three seeds
                 // loses the type of a field two of them do not have.
-                const duplicated = duplicateSaleId ? seedFromSale(doc) : null;
+                const duplicated = duplicateSaleId ? seedFromSale(doc, taxPricing) : null;
                 const seeded = duplicated
-                    ?? (quotationId ? seedFromQuotation(doc) : seedFromSalesOrder(doc));
+                    ?? (quotationId ? seedFromQuotation(doc, taxPricing) : seedFromSalesOrder(doc, taxPricing));
 
                 loadCart({
                     items: seeded.items,
@@ -177,9 +187,12 @@ function NewSalePageContent() {
                 });
                 // A copied sale carries the gap between its line subtotal and
                 // its stored total, so the duplicate totals to the same figure.
-                setAdjustments(duplicated
-                    ? { ...EMPTY_ADJUSTMENTS, rounding: duplicated.rounding }
-                    : EMPTY_ADJUSTMENTS);
+                // Before VAT, the gap is a discount the VAT goes on top of again.
+                setAdjustments(!duplicated
+                    ? EMPTY_ADJUSTMENTS
+                    : duplicated.discountAmount > 0
+                        ? { ...EMPTY_ADJUSTMENTS, discountMode: 'AMOUNT', discountAmount: duplicated.discountAmount }
+                        : { ...EMPTY_ADJUSTMENTS, rounding: duplicated.rounding });
                 if (duplicated?.warehouseId) setWarehouseId(duplicated.warehouseId);
                 // Reveal the column when the copied sale was genuinely split,
                 // so the overrides carried over are visible rather than silent.
@@ -194,7 +207,7 @@ function NewSalePageContent() {
         })();
 
         return () => { cancelled = true; };
-    }, [quotationId, salesOrderId, duplicateSaleId, loadCart, t.sales.detail.duplicateLoadFailed]);
+    }, [quotationId, salesOrderId, duplicateSaleId, loadCart, t.sales.detail.duplicateLoadFailed, taxPricing]);
 
     /**
      * Drop the source document once its sale has been saved. Clearing the query
@@ -205,10 +218,9 @@ function NewSalePageContent() {
         if (source) router.replace(routes.sales.new);
     };
 
-    const vatRate = salesSettings?.tenant?.default_vat_rate || 0;
     const totals = useMemo(
-        () => computeSaleTotals(items, adjustments, vatRate),
-        [items, adjustments, vatRate],
+        () => computeSaleTotals(items, adjustments, taxPricing),
+        [items, adjustments, taxPricing],
     );
 
     const loadPageData = async () => {
@@ -261,14 +273,18 @@ function NewSalePageContent() {
         })),
         payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
         subtotal: totals.subtotal,
-        discountAmount: totals.discount > 0 ? totals.discount : undefined,
+        discountAmount: totals.discountShown > 0 ? totals.discountShown : undefined,
         // Rounded because a flat discount derives its percentage from the
         // subtotal, and "Discount (7.142857142857143%)" is not a line anyone
         // wants on an invoice.
         discountPercent: totals.discountPercent > 0
             ? Math.round(totals.discountPercent * 100) / 100
             : undefined,
-        vat: totals.vat > 0 ? totals.vat : undefined,
+        // Added on top, the VAT is a line of the sum; included, it is already
+        // inside the prices and the detailed invoice backs it out to show it.
+        ...(totals.vatIncluded
+            ? { taxIncluded: totals.vat + totals.sd > 0.005 ? totals.vat + totals.sd : undefined }
+            : { vat: totals.vat + totals.sd > 0.005 ? totals.vat + totals.sd : undefined }),
         transportCost: totals.transportCost > 0 ? totals.transportCost : undefined,
         laborCost: totals.laborCost > 0 ? totals.laborCost : undefined,
         rounding: totals.rounding || undefined,
@@ -299,6 +315,8 @@ function NewSalePageContent() {
             subgroup: product.subgroup?.name,
             quantity: options?.quantity ?? 1,
             discount: 0,
+            // The product's own rates, when it has them; the shop default otherwise.
+            ...productTaxRates(product),
             // Voice-entry products come without stock rows — leave availableQty
             // undefined there rather than claiming zero stock.
             availableQty: options?.availableQty
@@ -370,10 +388,13 @@ function NewSalePageContent() {
         customerId: customerDraft ? undefined : customer?.id,
         newCustomer: newCustomerPayload(customerDraft),
         warehouseId: warehouseId || undefined,
-        items: items.map((item) => ({
+        // Always VAT-inclusive: with VAT added on top, each price typed before
+        // VAT is grossed up with its line's rates — see `computeEntryTax`.
+        pricesIncludeVat: taxPricing.pricesIncludeVat,
+        items: items.map((item, index) => ({
             productId: item.productId,
             quantity: item.quantity,
-            priceAtSale: item.price,
+            priceAtSale: totals.postedUnitPrices[index] ?? item.price,
             // Only sent while the per-line column is showing: a line keeps its
             // override in state when the column is hidden, and posting one the
             // user cannot see would be a trap.
@@ -381,7 +402,7 @@ function NewSalePageContent() {
         })),
         totalAmount: totals.total,
         amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
-        discountAmount: totals.discount > 0 ? totals.discount : undefined,
+        discountAmount: totals.postedDiscount > 0 ? totals.postedDiscount : undefined,
         note: description || undefined,
         saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
         payments: payments.map((p) => ({
@@ -562,7 +583,7 @@ function NewSalePageContent() {
             setDescription={setDescription}
             totals={totals}
             onTotalsChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
-            tenantVatRate={vatRate}
+            tenantVatRate={taxPricing.defaultVatRate}
             payments={payments}
             onPaymentChange={updatePayment}
             warehouses={warehouses}

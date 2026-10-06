@@ -171,6 +171,16 @@ export class CreateSaleDto {
     pointsToRedeem?: number;
 
     /**
+     * How the screen entered the prices: false when they were typed before VAT
+     * and grossed up on the way here. The posted prices and total are
+     * VAT-inclusive either way; this only lets the sale be shown back the way
+     * it was entered. Left out (POS, imports), the sale counts as VAT-inclusive.
+     */
+    @IsOptional()
+    @IsBoolean()
+    pricesIncludeVat?: boolean;
+
+    /**
      * Park the entry as a DRAFT: the sale and its lines are stored, but nothing
      * is posted — no stock movement, credit check, loyalty, or accounting entry.
      */

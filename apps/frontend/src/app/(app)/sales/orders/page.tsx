@@ -28,6 +28,8 @@ interface SalesOrder {
     order_number: string;
     created_at: string;
     total_amount: string;
+    /** VAT added on top of the lines; part of `total_amount`. */
+    vat_amount?: string | null;
     amount_paid: string;
     status: string;
     payment_status: string;
@@ -136,6 +138,7 @@ export default function OrdersPage() {
                     <thead><tr><th>${t.shared.print.product}</th><th>${t.shared.print.qty}</th><th>${t.shared.print.price}</th><th>${t.shared.print.subtotal}</th></tr></thead>
                     <tbody>
                         ${order.items.map((item: any) => `<tr><td>${item.product?.name || t.shared.item}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.price_at_order), { locale })}</td><td>${formatBDT(item.quantity * Number(item.price_at_order), { locale })}</td></tr>`).join('')}
+                        ${Number(order.vat_amount ?? 0) > 0.005 ? `<tr><td colspan="3">${t.sales.invoice.vat}</td><td>${formatBDT(Number(order.vat_amount), { locale })}</td></tr>` : ''}
                         <tr class="total-row"><td colspan="3">${t.shared.print.total}</td><td>${formatBDT(Number(order.total_amount), { locale })}</td></tr>
                     </tbody>
                 </table>

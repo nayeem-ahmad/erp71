@@ -83,6 +83,24 @@ describe('SalesOrdersService', () => {
     expect(result).toEqual({ id: 'order-1' });
   });
 
+  it('create() stores the VAT added on top and how the prices were entered', async () => {
+    db.salesOrder.create.mockResolvedValue({ id: 'order-1' });
+
+    await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1150,
+        vatAmount: 150,
+        pricesIncludeVat: false,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtOrder: 1000 }],
+    } as any);
+
+    expect(db.salesOrder.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+            data: expect.objectContaining({ total_amount: 1150, vat_amount: 150, prices_include_vat: false }),
+        }),
+    );
+  });
+
   it('updateStatus() should decrement stock when delivering', async () => {
     const mockOrder = {
         id: 'order-1',

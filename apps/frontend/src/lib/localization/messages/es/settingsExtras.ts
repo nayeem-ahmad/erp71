@@ -243,6 +243,13 @@ export const settingsExtrasMessages = {
             placeholder: "p. ej. 15",
             hint: "Déjelo en blanco para desactivar el IVA. Los productos pueden anular este tipo individualmente.",
         },
+        pricing: {
+            label: "Cómo se introducen los precios",
+            included: "Los precios incluyen el IVA",
+            addedOnTop: "El IVA se suma a los precios",
+            hint: "Incluido: el precio que escribe es lo que paga el cliente y el IVA se calcula a partir de él. Sumado: escribe el precio antes del IVA, y las ventas, cotizaciones y pedidos le suman el IVA. Cada documento conserva la forma en que se introdujo.",
+            posWarning: "El punto de venta (POS) sigue tratando los precios como con IVA incluido. Hasta que siga este ajuste, una venta en el POS cobra el precio antes del IVA sin sumarlo.",
+        },
         vatReg: {
             label: "Número de registro de IVA (BIN)",
             placeholder: "p. ej. 000000000-0101",
