@@ -9,7 +9,6 @@ import { invoiceDues, type InvoiceDues } from './customer-credit';
 import {
     detailedBodyHtml,
     detailedFooterHtml,
-    detailedStripHtml,
     detailedStyles,
     formatPrintStamp,
 } from './sales-invoice-detailed';
@@ -59,6 +58,8 @@ export interface InvoiceData {
     /** Tenant header design; falls back to the built-in default when omitted. */
     headerConfig?: DeepPartial<PrintHeaderConfig>;
     customerName?: string;
+    /** The customer's code ("C00404") — the detailed layout's Customer ID. */
+    customerCode?: string;
     customerPhone?: string;
     customerAddress?: string;
     /** Where the goods go — the detailed layout's Shipping Address block. */
@@ -239,7 +240,7 @@ function buildStyles(isThermal: boolean, layout: InvoicePrintPrefs): string {
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
         ${isThermal ? '' : compactStyles()}
-        ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles(layout)}
+        ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles()}
     `;
 }
 
@@ -474,7 +475,7 @@ function invoiceSheet(
 
     if (detailed) {
         // The title block carries the QR code in place of the number and date,
-        // which the strip below already says. The context keeps them, so a
+        // which the box below already says. The context keeps them, so a
         // template's own {{doc_number}} / {{date}} lines still fill.
         const headerContext: HeaderContext = {
             ...context,
@@ -486,14 +487,12 @@ function invoiceSheet(
         return {
             context,
             headerConfig: data.headerConfig,
-            // The strip rides with the letterhead, so a long invoice's
-            // continuation pages say which invoice they belong to.
-            headerHtml: renderHeaderHtml(data.headerConfig, headerContext, paperSize) + detailedStripHtml(data),
+            headerHtml: renderHeaderHtml(data.headerConfig, headerContext, paperSize),
             bodyHtml: body,
             endHtml: end,
             // The member's own closing text takes the thank-you's place; an
             // empty one leaves the left of the foot blank.
-            footerHtml: detailedFooterHtml(data, layout.footer_text ?? THANK_YOU),
+            footerHtml: detailedFooterHtml(layout.footer_text ?? THANK_YOU),
         };
     }
 

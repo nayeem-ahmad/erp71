@@ -31,7 +31,7 @@ export interface PrintableSale {
     total_amount: string;
     amount_paid: string;
     note?: string | null;
-    customer?: { name?: string; phone?: string | null; address?: string | null } | null;
+    customer?: { name?: string; phone?: string | null; address?: string | null; customer_code?: string | null } | null;
     items: {
         quantity: number;
         /** The list endpoint says `price_at_sale`; the cart says `price`. */
@@ -241,6 +241,7 @@ export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): I
         companyAddress: sale.store?.address || undefined,
         headerConfig: ctx.invoiceHeader.headerConfig,
         customerName: sale.customer?.name,
+        customerCode: sale.customer?.customer_code ?? undefined,
         customerPhone: sale.customer?.phone ?? undefined,
         shippingAddress: sale.customer?.address ?? undefined,
         orderNumber: sale.salesOrder?.order_number ?? undefined,

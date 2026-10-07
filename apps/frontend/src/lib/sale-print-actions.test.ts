@@ -204,7 +204,7 @@ describe('the detailed invoice\u2019s data', () => {
         sd_amount: '50.00',
         salesOrder: { order_number: 'SO-0042' },
         prepared_by: 'Rina Akter',
-        customer: { name: 'Alice Smith', phone: '01700000000', address: '12 Mirpur Road' },
+        customer: { name: 'Alice Smith', phone: '01700000000', address: '12 Mirpur Road', customer_code: 'C00404' },
         items: [
             {
                 quantity: 3,
@@ -214,7 +214,7 @@ describe('the detailed invoice\u2019s data', () => {
         ],
     };
 
-    it('reads the stored tax, the order, the preparer and the shipping address off the sale', () => {
+    it('reads the stored tax, the order, the preparer, the customer code and the address off the sale', () => {
         const data = saleToInvoiceData(postedSale, detailedCtx);
 
         // Tax already inside the total: VAT and supplementary duty together.
@@ -222,6 +222,7 @@ describe('the detailed invoice\u2019s data', () => {
         expect(data.orderNumber).toBe('SO-0042');
         expect(data.preparedBy).toBe('Rina Akter');
         expect(data.shippingAddress).toBe('12 Mirpur Road');
+        expect(data.customerCode).toBe('C00404');
     });
 
     it('does not claim to know the tax of a sale that never reported it', () => {
