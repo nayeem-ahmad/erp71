@@ -67,7 +67,7 @@ export class SalesDashboardService {
         };
     }
 
-    private saleWhere(tenantId: string, window: DateWindow, storeId?: string) {
+    saleWhere(tenantId: string, window: DateWindow, storeId?: string) {
         return {
             tenant_id: tenantId,
             status: 'COMPLETED',
@@ -84,7 +84,8 @@ export class SalesDashboardService {
         };
     }
 
-    private async getSales(tenantId: string, window: DateWindow, storeId?: string) {
+    /** Public for the mobile pulse, which asks it for three single-day windows. */
+    async getSales(tenantId: string, window: DateWindow, storeId?: string) {
         const [sold, returned] = await Promise.all([
             this.db.sale.aggregate({
                 where: this.saleWhere(tenantId, window, storeId),
@@ -121,7 +122,7 @@ export class SalesDashboardService {
      * treated as free stock: a margin computed over half the lines is not a
      * margin, and the caller needs to know how much of the basket it covers.
      */
-    private async getMargin(tenantId: string, window: DateWindow, storeId?: string) {
+    async getMargin(tenantId: string, window: DateWindow, storeId?: string) {
         const items = await this.db.saleItem.findMany({
             where: { sale: this.saleWhere(tenantId, window, storeId) },
             select: { quantity: true, price_at_sale: true, unit_cost_at_sale: true },
@@ -155,7 +156,7 @@ export class SalesDashboardService {
     }
 
     /** A balance across the whole book — windowing it would answer nothing. */
-    private async getReceivables(tenantId: string) {
+    async getReceivables(tenantId: string) {
         const [total, owing] = await Promise.all([
             this.db.customer.aggregate({
                 where: { tenant_id: tenantId, deleted_at: null },

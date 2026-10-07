@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/access.dart';
 import '../core/auth/auth_controller.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/auth/splash_screen.dart';
 import '../features/auth/two_factor_screen.dart';
-import '../features/crm/access.dart';
+import '../features/business/cashiers/cashiers_screen.dart';
+import '../features/business/cashiers/till_detail_screen.dart';
+import '../features/business/home/business_home_screen.dart';
 import '../features/crm/activities/activities_screen.dart';
 import '../features/crm/contacts/contact_detail_screen.dart';
 import '../features/crm/contacts/contact_form_screen.dart';
@@ -46,14 +49,18 @@ String? redirectFor(AuthState auth, String location) {
     case AuthSignedIn(:final workspaces, :final workspace):
       if (workspaces.isEmpty) return only('/no-workspace');
       if (workspace == null) return only('/workspaces');
-      if (!canUseCrm(workspace)) {
+      final access = MobileAccess.of(workspace);
+      if (!access.any) {
         return {'/no-crm', '/workspaces', '/account'}.contains(location)
             ? null
             : '/no-crm';
       }
       // `/workspaces` stays reachable for switching.
       if (location == '/workspaces') return null;
-      return _entryLocations.contains(location) ? '/home' : null;
+      if (_entryLocations.contains(location)) return access.startLocation;
+      // A link into an area this member cannot open — or one left over from
+      // the workspace they just switched away from — lands on their start.
+      return access.allows(location) ? null : access.startLocation;
   }
 }
 
@@ -90,7 +97,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   final router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/home',
+    initialLocation: '/splash',
     refreshListenable: refresh,
     redirect: (context, state) =>
         redirectFor(ref.read(authControllerProvider), state.matchedLocation),
@@ -132,10 +139,37 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => HomeShell(shell: shell),
+        // Every branch exists for everyone, in ShellBranch order; the
+        // redirect keeps a member out of the ones they cannot use and the bar
+        // shows only theirs.
         branches: [
           StatefulShellBranch(
             routes: [
-              GoRoute(path: '/home', builder: (_, _) => const CrmHomeScreen()),
+              GoRoute(
+                path: '/home',
+                builder: (_, _) => const BusinessHomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/cashiers',
+                builder: (_, _) => const CashiersScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (_, state) => TillDetailScreen(
+                      sessionId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/crm', builder: (_, _) => const CrmHomeScreen()),
             ],
           ),
           StatefulShellBranch(

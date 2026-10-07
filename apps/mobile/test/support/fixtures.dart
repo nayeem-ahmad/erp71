@@ -287,3 +287,157 @@ List<Map<String, Object?>> channelsJson() => [
       'updated_at': '2026-09-01T00:00:00.000Z',
     },
 ];
+
+/// An owner of two branches: every business area plus the CRM.
+Map<String, Object?> ownerWorkspaceJson() => workspaceJson(
+  role: 'OWNER',
+  permissions: const [],
+  stores: const [
+    {'id': 'store-1', 'name': 'Main Store', 'tenant_id': 'tenant-1'},
+    {'id': 'store-2', 'name': 'Mirpur Branch', 'tenant_id': 'tenant-1'},
+  ],
+);
+
+Map<String, Object?> daySalesJson(String date, num net, {int count = 4}) => {
+  'date': date,
+  'gross': net,
+  'returns': 0,
+  'net': net,
+  'count': count,
+  'returns_count': 0,
+  'avg_ticket': count > 0 ? net / count : null,
+};
+
+/// GET /mobile/pulse for Wednesday 7 October 2026.
+Map<String, Object?> pulseJson({
+  num todayNet = 6000,
+  bool payables = true,
+  num returns = 0,
+}) => {
+  'store_id': null,
+  'date': '2026-10-07',
+  'generated_at': '2026-10-07T08:00:00.000Z',
+  'today': {
+    ...daySalesJson('2026-10-07', todayNet),
+    'returns': returns,
+    'returns_count': returns > 0 ? 1 : 0,
+  },
+  'yesterday': daySalesJson('2026-10-06', 4000, count: 2),
+  'last_week': daySalesJson('2026-09-30', 0, count: 0),
+  'change': {'vs_yesterday_pct': 50, 'vs_last_week_pct': null},
+  'margin': {
+    'gross_profit': 1500,
+    'margin_pct': 25,
+    'costed_items': 4,
+    'uncosted_items': 0,
+    'units': 6,
+  },
+  'tenders': [
+    {'key': 'bkash', 'label': 'bKash', 'amount': 2500},
+    {'key': 'cash', 'label': 'Cash', 'amount': 1500},
+  ],
+  'trend': [
+    for (final (i, net) in [1000, 0, 2000, 3000, 2500, 4000, todayNet].indexed)
+      {
+        'date': '2026-10-0${i + 1}',
+        'net_sales': net,
+        'orders': 2,
+        'returns': 0,
+      },
+  ],
+  'receivables': {'outstanding': 8000, 'customers_owing': 5},
+  'payables': payables ? {'outstanding': 12000, 'suppliers_owing': 3} : null,
+};
+
+Map<String, Object?> tillJson({
+  String id = 'sess-1',
+  String status = 'OPEN',
+  String cashier = 'Rina Akter',
+  String store = 'Main Store',
+  num? expected = 1500,
+  num? closing,
+  num? variance,
+  int sales = 1,
+  num salesTotal = 500,
+}) => {
+  'id': id,
+  'status': status,
+  'store': {'id': 'store-1', 'name': store},
+  'counter': {'id': 'c1', 'name': 'Counter 1', 'counter_number': 1},
+  'cashier': {'id': 'u-$id', 'name': cashier},
+  'opened_at': '2026-10-07T03:00:00.000Z',
+  'closed_at': status == 'CLOSED' ? '2026-10-07T07:00:00.000Z' : null,
+  'opening_cash': 1000,
+  'sales_count': sales,
+  'sales_total': salesTotal,
+  'cash_takings': status == 'OPEN' ? 500 : null,
+  'expected_cash': expected,
+  'closing_cash': closing,
+  'variance': variance,
+};
+
+/// GET /cashier-sessions/overview: one till open, one closed ৳600 short.
+Map<String, Object?> cashierOverviewJson() => {
+  'store_id': null,
+  'open': [tillJson()],
+  'closed_today': [
+    tillJson(
+      id: 'sess-2',
+      status: 'CLOSED',
+      cashier: 'Kamal Hossain',
+      store: 'Mirpur Branch',
+      expected: 4500,
+      closing: 3900,
+      variance: -600,
+      sales: 7,
+      salesTotal: 3200,
+    ),
+  ],
+  'totals': {
+    'open_count': 1,
+    'expected_cash': 1500,
+    'sales_total': 3700,
+    'closed_count': 1,
+    'short': -600,
+    'over': 0,
+  },
+};
+
+/// GET /cashier-sessions/sess-1/summary — camelCase, as the backend sends it.
+Map<String, Object?> tillSummaryJson() => {
+  'sessionId': 'sess-1',
+  'salesCount': 1,
+  'salesTotal': 500,
+  'cashTakings': 500,
+  'refunds': 0,
+  'openingCash': 1000,
+  'cashIn': 200,
+  'cashOut': 200,
+  'expectedCash': 1500,
+  'closingCash': null,
+  'variance': null,
+  'paymentBreakdown': [
+    {'method': 'Cash', 'amount': 500},
+  ],
+};
+
+List<Map<String, Object?>> cashMovementsJson() => [
+  {
+    'id': 'tx-1',
+    'tenant_id': 'tenant-1',
+    'session_id': 'sess-1',
+    'amount': '-200.00',
+    'type': 'PAYOUT',
+    'description': 'Tea for staff',
+    'created_at': '2026-10-07T05:00:00.000Z',
+  },
+  {
+    'id': 'tx-2',
+    'tenant_id': 'tenant-1',
+    'session_id': 'sess-1',
+    'amount': '200.00',
+    'type': 'OTHER',
+    'description': null,
+    'created_at': '2026-10-07T05:30:00.000Z',
+  },
+];
