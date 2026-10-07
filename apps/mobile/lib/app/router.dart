@@ -129,7 +129,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/contacts/new',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (_, _) => const ContactFormScreen(),
+        builder: (_, state) => ContactFormScreen(
+          scanOnOpen: state.uri.queryParameters['scan'] == '1',
+        ),
       ),
       GoRoute(
         path: '/contacts/:id/edit',
