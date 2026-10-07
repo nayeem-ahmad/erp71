@@ -1,8 +1,11 @@
 import {
     applyToPool,
+    applyCostAdjustmentToPool,
     applyCostMovement,
     costBehaviourFor,
     mergePools,
+    recordCostAdjustment,
+    resolveAdjustmentReason,
     resolveProductCosts,
     type CostPool,
 } from './product-cost.utils';
@@ -315,6 +318,167 @@ describe('applyCostMovement', () => {
     });
 });
 
+describe('resolveAdjustmentReason', () => {
+    it('records any cost set on a product with no basis as an opening cost', () => {
+        expect(resolveAdjustmentReason(null, 120)).toBe('OPENING_COST');
+        // What was asked for does not matter: there is nothing to correct or
+        // write down yet.
+        expect(resolveAdjustmentReason(null, 120, 'WRITE_DOWN')).toBe('OPENING_COST');
+    });
+
+    it('refuses a zero opening cost, which would read as free stock', () => {
+        expect(resolveAdjustmentReason(null, 0)).toEqual({ error: expect.stringMatching(/above zero/) });
+    });
+
+    it('refuses a negative or non-numeric cost', () => {
+        expect(resolveAdjustmentReason(null, -1)).toEqual({ error: expect.any(String) });
+        expect(resolveAdjustmentReason(80, Number.NaN, 'CORRECTION')).toEqual({ error: expect.any(String) });
+    });
+
+    it('makes the caller say why when a basis is already on file', () => {
+        // Overwriting a real average with a typed figure is never the default.
+        expect(resolveAdjustmentReason(80, 90)).toEqual({ error: expect.stringMatching(/correction or a write-down/) });
+        expect(resolveAdjustmentReason(80, 90, 'OPENING_COST')).toEqual({ error: expect.any(String) });
+    });
+
+    it('accepts a correction in either direction', () => {
+        expect(resolveAdjustmentReason(80, 90, 'CORRECTION')).toBe('CORRECTION');
+        expect(resolveAdjustmentReason(80, 70, 'CORRECTION')).toBe('CORRECTION');
+    });
+
+    it('only lets a write-down lower the cost (lower of cost and NRV)', () => {
+        expect(resolveAdjustmentReason(80, 50, 'WRITE_DOWN')).toBe('WRITE_DOWN');
+        expect(resolveAdjustmentReason(80, 0, 'WRITE_DOWN')).toBe('WRITE_DOWN');
+        expect(resolveAdjustmentReason(80, 90, 'WRITE_DOWN')).toEqual({ error: expect.stringMatching(/only lower/) });
+    });
+
+    it('refuses a correction to zero — that is a write-down', () => {
+        expect(resolveAdjustmentReason(80, 0, 'CORRECTION')).toEqual({ error: expect.stringMatching(/Write the stock down/) });
+    });
+
+    it('refuses a change to the cost already on file', () => {
+        expect(resolveAdjustmentReason(80, 80.00001, 'CORRECTION')).toEqual({ error: expect.stringMatching(/already the cost/) });
+    });
+});
+
+describe('applyCostAdjustmentToPool', () => {
+    it('sets the average and keeps the quantity it is held against', () => {
+        expect(applyCostAdjustmentToPool({ avgCost: 80, qtyOnHand: 12 }, 65.123456)).toEqual({ avgCost: 65.1235, qtyOnHand: 12 });
+        expect(applyCostAdjustmentToPool(EMPTY, 40)).toEqual({ avgCost: 40, qtyOnHand: 0 });
+    });
+
+    it('lets the next receipt blend against the stated cost', () => {
+        const adjusted = applyCostAdjustmentToPool({ avgCost: null, qtyOnHand: 10 }, 100);
+        const outcome = applyToPool(adjusted, { quantityDelta: 10, movementType: 'PURCHASE_RECEIPT', unitCost: 120 });
+        expect(outcome.pool).toEqual({ avgCost: 110, qtyOnHand: 20 });
+    });
+
+    it('is replaced outright by the first receipt when nothing is on hand', () => {
+        // An opening cost set ahead of any stock is an estimate; the first real
+        // bill is a fact, and it should win.
+        const adjusted = applyCostAdjustmentToPool(EMPTY, 100);
+        const outcome = applyToPool(adjusted, { quantityDelta: 5, movementType: 'PURCHASE_RECEIPT', unitCost: 130 });
+        expect(outcome.pool).toEqual({ avgCost: 130, qtyOnHand: 5 });
+    });
+
+    it('is what a later sale is costed at', () => {
+        const adjusted = applyCostAdjustmentToPool({ avgCost: null, qtyOnHand: 8 }, 55);
+        const outcome = applyToPool(adjusted, { quantityDelta: -2, movementType: 'SALE' });
+        expect(outcome.movementUnitCost).toBe(55);
+    });
+});
+
+describe('recordCostAdjustment', () => {
+    const dbWith = (opts: {
+        product?: { id: string; name: string; type: string } | null;
+        pool?: { avg_cost: number } | null;
+        onHand?: number | null;
+    } = {}) => ({
+        product: {
+            findFirst: jest.fn().mockResolvedValue(
+                opts.product === undefined ? { id: 'p1', name: 'Rice 5kg', type: 'GOODS' } : opts.product,
+            ),
+        },
+        productCost: {
+            findUnique: jest.fn().mockResolvedValue(opts.pool ?? null),
+            upsert: jest.fn().mockResolvedValue({}),
+        },
+        productStock: {
+            aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: opts.onHand === undefined ? 30 : opts.onHand } }),
+        },
+        productCostAdjustment: {
+            create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'adj1', ...data })),
+        },
+    }) as any;
+
+    it('seeds a pool for an uncosted product at the stock actually on hand', async () => {
+        const tx = dbWith({ pool: null, onHand: 30 });
+
+        const row = await recordCostAdjustment(tx, { tenantId: 't1', productId: 'p1', newCost: 42.5, userId: 'u1' });
+
+        expect(tx.productCost.upsert).toHaveBeenCalledWith({
+            where: { tenant_id_product_id: { tenant_id: 't1', product_id: 'p1' } },
+            update: { avg_cost: 42.5, qty_on_hand: 30 },
+            create: { tenant_id: 't1', product_id: 'p1', avg_cost: 42.5, qty_on_hand: 30 },
+        });
+        expect(row).toMatchObject({
+            reason: 'OPENING_COST',
+            previous_cost: null,
+            new_cost: 42.5,
+            qty_on_hand: 30,
+            created_by: 'u1',
+        });
+    });
+
+    it('resyncs the pool quantity to stock on hand when correcting', async () => {
+        // The pool only starts counting at the first costed receipt, so it can
+        // hold less than the shelf does.
+        const tx = dbWith({ pool: { avg_cost: 80 }, onHand: 25 });
+
+        const row = await recordCostAdjustment(tx, {
+            tenantId: 't1', productId: 'p1', newCost: 70, reason: 'CORRECTION', note: '  supplier invoice re-read  ',
+        });
+
+        expect(tx.productCost.upsert).toHaveBeenCalledWith(
+            expect.objectContaining({ update: { avg_cost: 70, qty_on_hand: 25 } }),
+        );
+        expect(row).toMatchObject({ reason: 'CORRECTION', previous_cost: 80, new_cost: 70, note: 'supplier invoice re-read' });
+    });
+
+    it('treats a product with no stock rows as zero on hand', async () => {
+        const tx = dbWith({ onHand: null });
+
+        const row = await recordCostAdjustment(tx, { tenantId: 't1', productId: 'p1', newCost: 10 });
+
+        expect(row.qty_on_hand).toBe(0);
+    });
+
+    it('writes nothing when the rules refuse the change', async () => {
+        const tx = dbWith({ pool: { avg_cost: 80 } });
+
+        await expect(
+            recordCostAdjustment(tx, { tenantId: 't1', productId: 'p1', newCost: 90, reason: 'WRITE_DOWN' }),
+        ).rejects.toThrow(/Rice 5kg: A write-down can only lower the cost/);
+        expect(tx.productCost.upsert).not.toHaveBeenCalled();
+        expect(tx.productCostAdjustment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a service, which carries no stock', async () => {
+        const tx = dbWith({ product: { id: 'p1', name: 'Binding', type: 'SERVICE' } });
+
+        await expect(recordCostAdjustment(tx, { tenantId: 't1', productId: 'p1', newCost: 10 })).rejects.toThrow(/service/);
+    });
+
+    it('scopes the product lookup to the tenant and skips deleted products', async () => {
+        const tx = dbWith({ product: null });
+
+        await expect(recordCostAdjustment(tx, { tenantId: 't1', productId: 'p1', newCost: 10 })).rejects.toThrow(/not found/);
+        expect(tx.product.findFirst).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: 'p1', tenant_id: 't1', deleted_at: null } }),
+        );
+    });
+});
+
 describe('resolveProductCosts', () => {
     const dbWith = (opts: {
         costingMethod?: string | null;
@@ -359,7 +523,7 @@ describe('resolveProductCosts', () => {
         expect((await call(tx)).has('p1')).toBe(false);
     });
 
-    it('ignores the pool entirely under LATEST_COST', async () => {
+    it('prefers the price-list cost over the pool under LATEST_COST', async () => {
         const tx = dbWith({
             costingMethod: 'LATEST_COST',
             pools: [{ product_id: 'p1', avg_cost: 82.5 }],
@@ -367,7 +531,18 @@ describe('resolveProductCosts', () => {
         });
 
         expect((await call(tx)).get('p1')).toBe(100);
-        expect(tx.productCost.findMany).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the pool under LATEST_COST for a product with no price-list cost', async () => {
+        // An opening cost set by hand, or a receipt, on a product nobody ever
+        // priced in the list. Without the fallback it sells uncosted forever.
+        const tx = dbWith({
+            costingMethod: 'LATEST_COST',
+            pools: [{ product_id: 'p1', avg_cost: 82.5 }],
+            prices: [],
+        });
+
+        expect((await call(tx)).get('p1')).toBe(82.5);
     });
 
     it('defaults to weighted average when the tenant has no settings row', async () => {

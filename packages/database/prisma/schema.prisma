@@ -178,6 +178,13 @@ enum StorePermission {
   /// of them. That is a finance action, not a warehouse one.
   MANAGE_IMPORT_COSTS
 
+  // Inventory costing
+  /// Setting what a product's stock on hand cost — an opening cost for stock
+  /// nobody priced, a correction, or a write-down. It changes the COGS of every
+  /// later sale of the product, so it is a finance action and is held apart
+  /// from EDIT_PRODUCT_PRICES, which sets what the shop charges.
+  ADJUST_PRODUCT_COST
+
   // Short Links
   MANAGE_SHORT_LINKS
 
@@ -455,6 +462,7 @@ model User {
   createdCreditTransactions         CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
   createdImportShipments            ImportShipment[]            @relation("ImportShipmentCreator")
+  createdProductCostAdjustments     ProductCostAdjustment[]     @relation("ProductCostAdjustmentCreator")
   uploadedImportDocuments           ImportDocument[]            @relation("ImportDocumentUploader")
   createdCampaigns                  CrmCampaign[]               @relation("CampaignCreator")
   managedProjects                   Project[]                   @relation("ProjectManager")
@@ -862,6 +870,7 @@ model Tenant {
   productSubgroups           ProductSubgroup[]
   productStocks              ProductStock[]
   productCosts               ProductCost[]
+  productCostAdjustments     ProductCostAdjustment[]
   inventoryMovements         InventoryMovement[]
   inventoryReasons           InventoryReason[]
   inventorySettings          InventorySettings?
@@ -1667,6 +1676,7 @@ model Product {
   subgroup               ProductSubgroup?         @relation(fields: [subgroup_id], references: [id])
   stocks                 ProductStock[]
   cost                   ProductCost?
+  costAdjustments        ProductCostAdjustment[]
   inventoryMovements     InventoryMovement[]
   transferItems          WarehouseTransferItem[]
   shrinkageItems         InventoryShrinkageItem[]
@@ -1751,6 +1761,57 @@ model ProductCost {
   @@unique([tenant_id, product_id])
   @@index([tenant_id])
   @@map("product_costs")
+}
+
+/// Someone stating what a product's stock on hand cost per unit, outside of a
+/// stock movement — the only way to set the weighted-average pool other than
+/// receiving goods against a document.
+///
+/// Three reasons, and the rules differ:
+///   OPENING_COST — the product has no cost basis at all (stock brought in by
+///                  an import, a count, or before this system), so the figure
+///                  supplies a missing fact rather than changing one.
+///   CORRECTION   — the basis on file is wrong, either way.
+///   WRITE_DOWN   — the stock is now worth less than it cost (damaged,
+///                  obsolete, expired, market price fell). Lower of cost and
+///                  net realisable value, IAS 2 §9; only ever downwards.
+///
+/// Under the periodic inventory model this system books (see
+/// posting-contract.ts), none of the three posts a voucher: purchases were
+/// expensed when they were billed, inventory is not carried in the ledger, and
+/// ProductCost is a valuation basis rather than a balance. What an adjustment
+/// changes is the COGS of goods leaving *after* it, and what stock on hand is
+/// valued at. Past sales keep the cost they were snapshotted at. A row keeps
+/// the before, the after and the quantity it applied to, which is everything a
+/// perpetual-inventory voucher (Dr/Cr Inventory against revaluation) would
+/// need if the books ever move to that model.
+///
+/// Replayed by `backfill-product-costs.ts` alongside the movement ledger, so a
+/// pool rebuilt from history keeps every adjustment made since.
+model ProductCostAdjustment {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  product_id    String
+  /// OPENING_COST | CORRECTION | WRITE_DOWN
+  reason        String
+  /// The pool's average before. Null when there was none — every OPENING_COST.
+  previous_cost Decimal? @db.Decimal(12, 4)
+  new_cost      Decimal  @db.Decimal(12, 4)
+  /// Units on hand across every warehouse when the cost was set: the quantity
+  /// the new cost applies to, and the basis the pool blends the next receipt
+  /// against. Can be zero (a cost set ahead of the first receipt) or negative.
+  qty_on_hand   Int
+  note          String?
+  created_by    String?
+  created_at    DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  creator User?   @relation("ProductCostAdjustmentCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, created_at])
+  @@index([tenant_id, product_id, created_at])
+  @@map("product_cost_adjustments")
 }
 
 model ProductSerial {

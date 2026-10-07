@@ -115,6 +115,9 @@ describe('a decided mapping takes precedence over adoption', () => {
                 findFirst: jest.fn().mockResolvedValue(null),
                 create: jest.fn().mockResolvedValue({ id: 'created-1' }),
             },
+            // Costed already, so the opening-cost seed has nothing to do here.
+            productCost: { findMany: jest.fn().mockResolvedValue([{ product_id: 'chosen-1' }, { product_id: 'created-1' }]) },
+            productPrice: { findMany: jest.fn().mockResolvedValue([]) },
         };
         const service = new ExternalSyncService(db as never, { decrypt: jest.fn() } as never, {} as never);
         return { db, service };

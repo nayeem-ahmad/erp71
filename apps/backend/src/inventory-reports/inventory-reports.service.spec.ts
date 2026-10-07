@@ -21,6 +21,7 @@ describe('InventoryReportsService', () => {
             warehouse: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
             productStock: { aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }) },
             productPrice: { findMany: jest.fn().mockResolvedValue([]) },
+            productCost: { findMany: jest.fn().mockResolvedValue([]) },
             sale: { findMany: jest.fn().mockResolvedValue([]) },
             purchase: { findMany: jest.fn().mockResolvedValue([]) },
             warehouseTransfer: { findMany: jest.fn().mockResolvedValue([]) },
@@ -286,6 +287,33 @@ describe('InventoryReportsService', () => {
 
             const warehouseSum = result.warehouses.reduce((sum, warehouse) => sum + warehouse.stockValue, 0);
             expect(warehouseSum).toBeCloseTo(result.summary.totalStockValue, 6);
+        });
+
+        it('values stock at the cost pool ahead of the purchase-movement average', async () => {
+            // The pool is what sales are costed at, and the only place a cost set
+            // by hand — a write-down, say — is recorded.
+            db.product.findMany.mockResolvedValue([product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 10 }])]);
+            db.$queryRaw.mockResolvedValue([{ product_id: 'p1', cost_total: 1200, quantity_total: 20 }]);
+            db.productCost.findMany.mockResolvedValue([{ product_id: 'p1', avg_cost: 48.5 }]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].averageUnitCost).toBe(48.5);
+            expect(result.rows[0].costBasis).toBe('WEIGHTED_AVERAGE');
+            expect(result.rows[0].totalStockValue).toBe(485);
+            expect(db.productCost.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenant_id: 'tenant-1' } }));
+        });
+
+        it('costs stock that only ever arrived as opening stock through its pool', async () => {
+            // No purchase movement to average, and no price-list cost — this
+            // used to read UNCOSTED even with a cost entered on the product.
+            db.product.findMany.mockResolvedValue([product('p1', 'Rice', [{ warehouse_id: 'wh-1', quantity: 3 }])]);
+            db.productCost.findMany.mockResolvedValue([{ product_id: 'p1', avg_cost: 20 }]);
+
+            const result = await service.getStockOnHand('tenant-1', {});
+
+            expect(result.rows[0].costBasis).toBe('WEIGHTED_AVERAGE');
+            expect(result.summary.uncostedProductCount).toBe(0);
         });
 
         it('falls back to the latest recorded cost when nothing was purchased through the ledger', async () => {

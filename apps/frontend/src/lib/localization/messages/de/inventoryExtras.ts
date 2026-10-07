@@ -395,6 +395,7 @@ export const inventoryExtrasMessages = {
             "warehousesCounted": "Lager",
             "valuationBasisNote": "Bewertet zum gleitenden durchschnittlichen Einkaufspreis, abzüglich Einkaufsretouren. Produkte, die nie über das Buchungsjournal eingekauft wurden, werden mit ihrem zuletzt erfassten Preis bewertet.",
             "uncostedWarning": "{count} Produkt(e) mit {quantity} Einheit(en) haben keinen hinterlegten Einkaufspreis und werden mit null bewertet — die Summe unten ist zu niedrig.",
+            "setCostsLink": "Fehlende Kosten erfassen",
             "costBasis": {
                 "WEIGHTED_AVERAGE": "Gleitender Durchschnitt",
                 "LATEST_COST": "Zuletzt erfasste Kosten",
@@ -586,6 +587,96 @@ export const inventoryExtrasMessages = {
         "variance": "Abweichung {value}",
         "note": "Notiz"
     },
+    "productCosts": {
+        "title": "Produktkosten",
+        "subtitle": "Was der Bestand jedes Produkts gekostet hat. Verkäufe werden zu diesen Werten bewertet — ein Produkt ohne Kosten bucht keinen Wareneinsatz.",
+        "stats": {
+            "products": "Lagerprodukte",
+            "uncosted": "Keine Kosten hinterlegt",
+            "uncostedInStock": "Ohne Kosten, mit Bestand",
+            "costingMethod": "Bewertungsmethode"
+        },
+        "costingMethods": {
+            "WEIGHTED_AVERAGE": "Gewichteter Durchschnitt",
+            "LATEST_COST": "Letzte Kosten"
+        },
+        "uncostedBanner": "{count} Produkt(e) mit Bestand haben keine hinterlegten Kosten. Ihre Verkäufe buchen keinen Wareneinsatz, der Rohertrag darauf ist nicht messbar, und die Bestandsbewertung setzt sie mit null an. Tragen Sie unten Kosten ein oder füllen Sie die Lücken mit dem letzten Einkaufspreis.",
+        "readOnlyNotice": "Sie können Produktkosten ansehen. Zum Festlegen brauchen Sie die Berechtigung „Produktkosten festlegen & korrigieren“.",
+        "loadError": "Produktkosten konnten nicht geladen werden: {message}",
+        "loadErrorEmpty": "Produktkosten konnten nicht geladen werden.",
+        "emptyMessage": "Keine Produkte entsprechen diesen Filtern.",
+        "invalidCost": "Kosten müssen eine Zahl von null oder mehr sein. Korrigieren Sie die markierten Felder vor dem Speichern.",
+        "searchPlaceholder": "Name oder SKU suchen",
+        "statusLabel": "Kostenstatus",
+        "statusFilter": {
+            "ALL": "Alle Produkte",
+            "UNCOSTED": "Keine Kosten hinterlegt",
+            "COSTED": "Mit Kosten"
+        },
+        "inStockOnly": "Nur Produkte mit Bestand",
+        "columns": {
+            "product": "Produkt",
+            "onHand": "Bestand",
+            "currentCost": "Aktuelle Kosten",
+            "lastPurchase": "Letzter Einkaufspreis",
+            "newCost": "Neue Kosten",
+            "stockValue": "Bestandswert"
+        },
+        "basis": {
+            "WEIGHTED_AVERAGE": "Durchschnittskosten",
+            "LATEST_COST": "Preisliste",
+            "UNCOSTED": "Keine Kosten hinterlegt"
+        },
+        "useLastPurchase": "Übernehmen",
+        "useLastPurchaseFor": "Letzten Einkaufspreis für {product} übernehmen",
+        "newCostFor": "Neue Kosten für {product}",
+        "newCostPlaceholder": "Kosten eingeben",
+        "fillFromLastPurchase": "Lücken aus letztem Einkauf füllen",
+        "saveCosts": "{count} Kosten speichern",
+        "saved": "{count} Produktkosten gespeichert.",
+        "previousPage": "Zurück",
+        "nextPage": "Weiter",
+        "pageOf": "Seite {page} von {pages}",
+        "reasons": {
+            "OPENING_COST": "Anfangskosten",
+            "CORRECTION": "Korrektur",
+            "WRITE_DOWN": "Abwertung"
+        },
+        "history": {
+            "title": "Kostenänderungen",
+            "subtitle": "Alle manuell festgelegten Kosten, mit dem vorherigen Wert und dem betroffenen Bestand.",
+            "empty": "Es wurden noch keine Kosten manuell festgelegt.",
+            "loadMore": "Mehr laden",
+            "columns": {
+                "date": "Datum",
+                "product": "Produkt",
+                "reason": "Grund",
+                "change": "Kosten",
+                "quantity": "Menge",
+                "valueChange": "Wertänderung",
+                "by": "Von",
+                "note": "Notiz"
+            }
+        },
+        "confirm": {
+            "title": "Produktkosten speichern",
+            "intro": "{count} Produkt(e) werden zu den eingegebenen Werten bewertet.",
+            "openingCount": "{count} haben noch keine Kosten. Für sie werden Anfangskosten erfasst.",
+            "changeCount": "{count} haben bereits Kosten. Warum ändern sie sich?",
+            "reasonPlaceholder": "Grund wählen",
+            "reasonCorrection": "Korrektur — die hinterlegten Kosten waren falsch",
+            "reasonWriteDown": "Abwertung — der Bestand ist weniger wert, als er gekostet hat (beschädigt, abgelaufen, veraltet, Preis gefallen)",
+            "reasonRequired": "Wählen Sie, warum sich die bestehenden Kosten ändern.",
+            "writeDownHint": "Eine Abwertung kann Kosten nur senken. Waren die hinterlegten Kosten einfach falsch, verwenden Sie eine Korrektur.",
+            "noteLabel": "Notiz (optional)",
+            "notePlaceholder": "z. B. Anfangsinventur, Lieferantenrechnung geprüft",
+            "accountingTitle": "So wird gebucht",
+            "accountingNote": "Es wird kein Buchungsbeleg erstellt. Ihre Buchhaltung nutzt die periodische Bestandsführung: Ware wurde beim Einkauf als Aufwand gebucht, daher sind Produktkosten die Grundlage für Wareneinsatz und Bestandsbewertung, kein Kontosaldo. Die neuen Kosten gelten für Verkäufe ab jetzt; frühere Verkäufe behalten ihre erfassten Kosten. Jede Änderung wird mit dem Bearbeiter protokolliert.",
+            "save": "Kosten speichern",
+            "saving": "Wird gespeichert...",
+            "cancel": "Abbrechen"
+        }
+    },
     "addProductModal": {
         "editTitle": "Produkt bearbeiten",
         "addTitle": "Neues Produkt anlegen",
@@ -597,6 +688,8 @@ export const inventoryExtrasMessages = {
         "salePrice": "Verkaufspreis (৳)",
         "featuredLabel": "Produkt als hervorgehoben markieren (erscheint unter „Beliebt“)",
         "initialStock": "Anfangsbestand",
+        "unitCost": "Stückkosten",
+        "unitCostHint": "Was Sie eine Einheit im Einkauf kostet. Verkäufe werden damit bewertet, bis die erste Einkaufsrechnung ihn ersetzt. Leer lassen, wenn unbekannt.",
         "warrantyEnabled": "Garantie aktiviert",
         "warrantyDuration": "Garantiedauer (Tage)",
         "reorderLevel": "Meldebestand",
@@ -622,6 +715,7 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
+            "unitCost": "z. B. 85.00",
             "warrantyDays": "z. B. 365",
             "vatRate": "z. B. 15",
             "sdRate": "z. B. 25"

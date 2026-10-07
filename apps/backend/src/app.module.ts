@@ -27,6 +27,7 @@ import { TeamModule } from './team/team.module';
 import { StoresModule } from './stores/stores.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProductsModule } from './products/products.module';
+import { ProductCostsModule } from './product-costs/product-costs.module';
 import { AssetsModule } from './assets/assets.module';
 import { SalesModule } from './sales/sales.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
@@ -171,6 +172,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         StoresModule,
         NotificationsModule,
         ProductsModule,
+        ProductCostsModule,
         AssetsModule,
         SalesModule,
         PaymentMethodsModule,

@@ -403,6 +403,7 @@ export const coreMessages = {
             marginExceptions: "Excepciones de margen",
             marginBridge: "Puente de margen",
             stockOnHand: "Existencias disponibles",
+            productCosts: "Costes de productos",
             productTransactionHistory: "Historial de movimientos",
             reorderReport: "Informe de reposición",
             shrinkageReport: "Informe de mermas",

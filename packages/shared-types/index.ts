@@ -127,6 +127,13 @@ export const StorePermission = {
   // them. That is a finance action, not a warehouse one.
   MANAGE_IMPORT_COSTS: "MANAGE_IMPORT_COSTS",
 
+  // Inventory costing
+  // Setting what a product's stock on hand cost: an opening cost for stock
+  // nobody priced, a correction, or a write-down. It moves the COGS of every
+  // later sale of the product, so like MANAGE_IMPORT_COSTS it is a finance
+  // action, held apart from EDIT_PRODUCT_PRICES (what the shop charges).
+  ADJUST_PRODUCT_COST: "ADJUST_PRODUCT_COST",
+
   // Short Links
   MANAGE_SHORT_LINKS: "MANAGE_SHORT_LINKS",
 
@@ -986,6 +993,7 @@ export const STORE_PERMISSION_LABELS: Record<StorePermission, string> = {
   [StorePermission.VIEW_IMPORTS]: "View import shipments",
   [StorePermission.MANAGE_IMPORTS]: "Create & edit import shipments",
   [StorePermission.MANAGE_IMPORT_COSTS]: "Record import costs & receive shipments",
+  [StorePermission.ADJUST_PRODUCT_COST]: "Set & correct product costs",
   [StorePermission.MANAGE_SHORT_LINKS]: "Manage short links",
   [StorePermission.VIEW_BLOG]: "View storefront blog posts",
   [StorePermission.MANAGE_BLOG]: "Write & edit storefront blog posts",
@@ -1016,6 +1024,7 @@ export const STORE_PERMISSION_GROUPS: { label: string; permissions: StorePermiss
       StorePermission.STOCK_TAKE,
       StorePermission.CREATE_PRODUCT_DEMAND,
       StorePermission.APPROVE_PRODUCT_DEMAND,
+      StorePermission.ADJUST_PRODUCT_COST,
     ],
   },
   {

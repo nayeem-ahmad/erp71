@@ -6,6 +6,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { recordCostAdjustment } from '../database/product-cost.utils';
 import { EncryptionService } from '../common/encryption.service';
 import { assertValidBaseUrl } from './express-retail.client';
 import {
@@ -76,6 +77,14 @@ type SyncStats = Record<
     | 'quotations',
     EntityTally
 >;
+
+/** An imported product whose provider row carried a buying rate. */
+interface OpeningCostCandidate {
+    productId: string;
+    rate: number;
+    sku: string;
+    externalId: string;
+}
 
 /** Warnings are stored on the run row; cap them so one bad import cannot bloat it. */
 const MAX_STORED_WARNINGS = 500;
@@ -651,9 +660,15 @@ export class ExternalSyncService {
         const rows = await client.fetchProducts();
         const claimedSkus = new Set<string>();
         const map = await this.loadMappings(connection.id, 'PRODUCT');
+        const costCandidates: OpeningCostCandidate[] = [];
 
         for (const row of rows) {
             const mapped = mappers.product(row, claimedSkus);
+            const noteCost = (productId: string) => {
+                if (!mapped.isService && mapped.purchaseRate > 0) {
+                    costCandidates.push({ productId, rate: mapped.purchaseRate, sku: mapped.sku, externalId: mapped.externalId });
+                }
+            };
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
             try {
@@ -674,6 +689,7 @@ export class ExternalSyncService {
                     });
                     if (count > 0) {
                         stats.products.updated++;
+                        noteCost(existingId);
                         continue;
                     }
                     await this.forgetStaleMapping(connection.id, 'PRODUCT', mapped.externalId, map, warnings, `Product ${mapped.sku}`);
@@ -717,6 +733,7 @@ export class ExternalSyncService {
 
                 await this.writeMapping(connection, 'PRODUCT', mapped.externalId, productId, mapped.externalUpdatedAt);
                 map.set(mapped.externalId, productId);
+                noteCost(productId);
             } catch (error: any) {
                 stats.products.skipped++;
                 warnings.push({
@@ -728,7 +745,68 @@ export class ExternalSyncService {
             }
         }
 
+        if (!dryRun) {
+            await this.seedOpeningCosts(connection.tenant_id, costCandidates, warnings);
+        }
+
         return map;
+    }
+
+    /**
+     * Give each imported product with no cost on file the provider's buying
+     * rate as its opening cost.
+     *
+     * The rate came with every product row and used to be dropped, so stock
+     * brought over from another system arrived with no cost basis at all:
+     * imported purchases replay as quantity-only `PURCHASE` movements, which by
+     * design never revalue the pool, so nothing else would ever cost them. Every
+     * sale of such a product then booked no COGS.
+     *
+     * Only ever fills a gap. A product with a pool or a price-list cost keeps
+     * it — a real average from bills entered here outranks the other system's
+     * figure — so re-running the sync is safe, and it is also how a tenant who
+     * imported before this existed gets their costs: the next product sync fills
+     * every product that is still uncosted. One transaction per product, so one
+     * refusal costs that product its opening cost and nothing else.
+     */
+    private async seedOpeningCosts(tenantId: string, candidates: OpeningCostCandidate[], warnings: SyncWarning[]) {
+        if (candidates.length === 0) return;
+
+        const ids = [...new Set(candidates.map((candidate) => candidate.productId))];
+        const [pools, priced] = await Promise.all([
+            this.db.productCost.findMany({
+                where: { tenant_id: tenantId, product_id: { in: ids } },
+                select: { product_id: true },
+            }),
+            this.db.productPrice.findMany({
+                where: { tenant_id: tenantId, product_id: { in: ids }, cost: { not: null } },
+                select: { product_id: true },
+            }),
+        ]);
+        const hasBasis = new Set([...pools, ...priced].map((row) => row.product_id));
+
+        for (const candidate of candidates) {
+            // Also skips a second provider row adopted onto the same product.
+            if (hasBasis.has(candidate.productId)) continue;
+            hasBasis.add(candidate.productId);
+            try {
+                await this.db.$transaction((tx) =>
+                    recordCostAdjustment(tx, {
+                        tenantId,
+                        productId: candidate.productId,
+                        newCost: candidate.rate,
+                        note: 'Buying rate from the imported product list',
+                    }),
+                );
+            } catch (error: any) {
+                warnings.push({
+                    entity: 'PRODUCT',
+                    externalId: candidate.externalId,
+                    code: 'COST_NOT_SET',
+                    message: `Product ${candidate.sku} has no cost on file, and its buying rate ${candidate.rate} could not be set as one: ${error?.message ?? error}`,
+                });
+            }
+        }
     }
 
     private async syncCustomers(

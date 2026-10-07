@@ -403,6 +403,7 @@ export const coreMessages = {
             marginExceptions: 'تجاوزات الهامش',
             marginBridge: 'جسر الهامش',
             stockOnHand: 'المخزون المتاح',
+            productCosts: "تكاليف المنتجات",
             productTransactionHistory: 'سجل الحركات',
             reorderReport: 'تقرير إعادة الطلب',
             shrinkageReport: 'تقرير الهدر',

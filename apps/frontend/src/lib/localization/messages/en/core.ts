@@ -403,6 +403,7 @@ export const coreMessages = {
             marginExceptions: 'Margin Exceptions',
             marginBridge: 'Margin Bridge',
             stockOnHand: 'Stock on Hand',
+            productCosts: "Product Costs",
             productTransactionHistory: 'Transaction History',
             reorderReport: 'Reorder Report',
             shrinkageReport: 'Shrinkage Report',

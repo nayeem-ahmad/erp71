@@ -403,6 +403,7 @@ export const coreMessages = {
             marginExceptions: 'مارجن کی خلاف ورزیاں',
             marginBridge: 'مارجن برج',
             stockOnHand: 'دستیاب اسٹاک',
+            productCosts: "پروڈکٹ لاگت",
             productTransactionHistory: 'ٹرانزیکشن ہسٹری',
             reorderReport: 'دوبارہ آرڈر کی رپورٹ',
             shrinkageReport: 'ضیاع کی رپورٹ',
