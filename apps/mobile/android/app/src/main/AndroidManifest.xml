@@ -2,6 +2,8 @@
     <!-- Flutter's template only grants this in the debug and profile manifests,
          which is why a release build would otherwise ship unable to reach the API. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- The optional app lock: fingerprint or face, falling back to the screen lock. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:label="ERP71"
         android:name="${applicationName}"

@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/api/api_exception.dart';
 import '../../../core/format/format.dart';
 import '../../../ui/launch.dart';
 import '../../../ui/theme.dart';
 import '../../../ui/widgets.dart';
 import '../data/crm_providers.dart';
 import '../data/models.dart';
-
-/// What to tell the user about a failed load.
-String describeError(Object? error) =>
-    error is ApiException ? error.message : 'Something went wrong. Try again.';
 
 /// A list that loads page by page as it scrolls, refreshes on pull, and shows
 /// loading, empty and failed states in one consistent way.

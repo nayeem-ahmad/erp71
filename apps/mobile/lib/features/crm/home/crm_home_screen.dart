@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/access.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/format/format.dart';
 import '../../../ui/theme.dart';
@@ -24,13 +25,16 @@ class CrmHomeScreen extends ConsumerWidget {
     final mine = ref.watch(crmMineOnlyProvider);
     final canOverview = ref.can(CrmPermission.viewLeads);
     final canActivities = ref.can(CrmPermission.viewActivities);
+    // Folded into one tab beside the business screens, the CRM's other lists
+    // have no tab of their own; they are reached from here.
+    final folded = workspace != null && MobileAccess.of(workspace).business;
 
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Overview'),
+            Text(folded ? 'CRM' : 'Overview'),
             if (workspace != null)
               Text(
                 workspace.name,
@@ -73,6 +77,7 @@ class CrmHomeScreen extends ConsumerWidget {
                   ref.read(crmMineOnlyProvider.notifier).set(value.first),
             ),
             const SizedBox(height: 12),
+            if (folded) ...[const _Shortcuts(), const SizedBox(height: 12)],
             if (canOverview)
               _Overview(mine: mine, agenda: canActivities)
             else ...[
@@ -91,6 +96,35 @@ class CrmHomeScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Leads, Activities and Contacts, for when they are not tabs.
+class _Shortcuts extends StatelessWidget {
+  const _Shortcuts();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget link(String label, IconData icon, String location) => Expanded(
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, kTouchTarget),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+        ),
+        onPressed: () => context.go(location),
+        icon: Icon(icon, size: 18),
+        label: FittedBox(fit: BoxFit.scaleDown, child: Text(label)),
+      ),
+    );
+    return Row(
+      children: [
+        link('Leads', Icons.people_alt_outlined, '/leads'),
+        const SizedBox(width: 8),
+        link('Activities', Icons.event_note_outlined, '/activities'),
+        const SizedBox(width: 8),
+        link('Contacts', Icons.contacts_outlined, '/contacts'),
+      ],
     );
   }
 }

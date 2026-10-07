@@ -1,10 +1,16 @@
 # ERP71 mobile
 
-The Flutter app for Android and iOS. The first release covers **Google sign-in
-and the CRM**: an overview of the pipeline and today's work, leads, activities
-(follow-ups and logged calls), and contacts. It talks to the same NestJS API as
-the web app and needs nothing from it that the web does not already use, apart
-from `POST /auth/logout/session` (see [Signing out](#signing-out)).
+The Flutter app for Android and iOS. It covers **Google sign-in, the CRM**
+(an overview of the pipeline and today's work, leads, activities and
+contacts), and for people who run the shop, **Home** (how today's sales
+compare with yesterday and the same weekday last week, how they were paid,
+and what is owed) and **Cashiers** (every till open now and every shift
+closed today, with its drawer count). An optional **App lock** asks for the
+phone's fingerprint, face or PIN. It talks to the same NestJS API as the web
+app; the endpoints written for it are `POST /auth/logout/session` (see
+[Signing out](#signing-out)), `GET /mobile/pulse` and
+`GET /cashier-sessions/overview`. The plan behind the business screens is
+`docs/mobile-admin-plan.md`.
 
 ## Running it
 
@@ -76,6 +82,36 @@ client exists.
   `CREATE_CRM_INTERACTIONS` to mark done. Leads and contacts need no
   permission beyond membership.
 
+## Which tabs a member gets
+
+The bottom bar is built from what the member can use in the chosen workspace
+(`core/access.dart`, mirroring `apps/backend/src/auth/permission-sets.ts`):
+
+| Tab | Shown when | Server check |
+|---|---|---|
+| Home | any `SALES_READ` permission, active or trial subscription | as Sales › Overview |
+| Cashiers | `CREATE_SALE` or `MANAGE_COUNTERS` (`POS_STAFF`) | as the cashier-session reads |
+| CRM | the CRM rules above | as every CRM endpoint |
+
+Someone with Home or Cashiers gets *Home · Cashiers · CRM*, with Leads,
+Activities and Contacts reached from the CRM overview. A CRM-only member keeps
+the CRM's own four tabs. Owners, and members holding
+`VIEW_CONSOLIDATED_REPORTS`, can switch Home and Cashiers between *All
+branches* and each branch; everyone else sees their own branch. Payables are
+left off Home for a member who cannot read purchasing.
+
+## App lock
+
+Off by default; turned on from Account → Security. The setting belongs to the
+phone, kept in secure storage beside the session. When on, the app is covered
+at launch and whenever it comes back after five minutes out of sight, until
+the phone's own check passes. The check is fingerprint or face, falling back
+to the phone's PIN, pattern or passcode. A phone whose screen lock was
+removed afterwards is let in and the lock switched off, rather than locking
+its owner out. The platform pieces it needs are already in place: Android's
+`MainActivity` is a `FlutterFragmentActivity` with the `USE_BIOMETRIC`
+permission, and iOS has `NSFaceIDUsageDescription` in `Info.plist`.
+
 ## Signing out
 
 Signing out ends **this phone's** session only, through
@@ -96,7 +132,11 @@ lib/
   core/format/             money, dates and times, the web's formats
   features/auth/           sign-in, two-step verification, launch
   features/workspace/      workspace picker, account, branch
+  core/access.dart         which areas a member may open, from their permissions
+  core/security/           the app lock
+  features/business/       Home (the pulse) and Cashiers (tills and shifts)
   features/crm/            overview, leads, activities, contacts
+  features/lock/           the lock screen and its setting
   ui/                      theme and shared widgets
 ```
 
