@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Copy, MessageCircle, X } from 'lucide-react';
+import { Check, Copy, MessageCircle, Printer, X } from 'lucide-react';
 import ModalShell from '@/components/ModalShell';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
@@ -18,6 +18,11 @@ type Props = {
      * is never told a revocation happened that did not.
      */
     onRevoke?: () => Promise<void>;
+    /**
+     * Offers an "open print-ready copy" link to the same URL, for shares whose
+     * page is a document the sender may want to see (or print) first.
+     */
+    showPrintLink?: boolean;
     onClose: () => void;
 };
 
@@ -28,7 +33,7 @@ type Props = {
  * Nothing here is quotation-specific — the subject is a prop and every string
  * comes from the catalog — so the storefront-product share can reuse it as-is.
  */
-export default function ShareModal({ subject, shortPath, onRevoke, onClose }: Props) {
+export default function ShareModal({ subject, shortPath, onRevoke, showPrintLink, onClose }: Props) {
     const { t } = useI18n();
     const m = t.components.shareModal;
 
@@ -101,6 +106,18 @@ export default function ShareModal({ subject, shortPath, onRevoke, onClose }: Pr
                     <MessageCircle className="h-4 w-4" />
                     {m.whatsapp}
                 </a>
+
+                {showPrintLink && (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                        <Printer className="h-4 w-4" />
+                        {m.openPrint}
+                    </a>
+                )}
 
                 {onRevoke && (
                     <div className="border-t border-gray-100 pt-3">

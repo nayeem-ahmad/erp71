@@ -260,6 +260,7 @@ export const componentsMessages = {
         copy: "Copier",
         copied: "Copié",
         whatsapp: "Partager sur WhatsApp",
+        openPrint: "Ouvrir la copie prête à imprimer",
         close: "Fermer",
         revoke: "Révoquer le lien",
         revokePrompt: "Révoquer ce lien ? Toutes les personnes à qui vous l'avez déjà envoyé perdront l'accès.",

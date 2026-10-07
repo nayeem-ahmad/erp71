@@ -37,6 +37,7 @@ export const routes = {
         quotes: '/sales/quotes',
         quoteNew: '/sales/quotes/new',
         quoteDetail: (id: string) => `/sales/quotes/${id}` as const,
+        quoteEdit: (id: string) => `/sales/quotes/${id}/edit` as const,
         warrantyClaims: '/sales/warranty-claims',
         cashierSessions: '/sales/cashier-sessions',
         dailyReport: '/sales/daily-report',

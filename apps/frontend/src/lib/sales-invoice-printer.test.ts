@@ -528,30 +528,76 @@ describe('detailed invoice layout', () => {
 
     it('keeps the standard design unless the member chose this one', () => {
         const html = render(posted, 'A4');
-        expect(html).not.toContain('d-strip');
+        expect(html).not.toContain('d-info');
         expect(html).toContain('Invoice Details');
     });
 
-    it('writes invoice no, order no and date on one labelled strip', () => {
-        const html = render(posted, 'A4', detailed);
-        expect(html).toMatch(/<strong>Invoice No:<\/strong> S0020090001/);
-        expect(html).toMatch(/<strong>Order No:<\/strong> SO-0042/);
-        expect(html).toMatch(/<strong>Invoice Date:<\/strong> 06\/10\/2026/);
+    /** The customer side and the invoice side of the boxed block. */
+    function infoBox(html: string): { left: string; right: string } {
+        const start = html.indexOf('<div class="d-info">');
+        const box = html.slice(start, html.indexOf('</thead>', start));
+        return {
+            left: box.slice(box.indexOf('d-info-l'), box.indexOf('d-info-r')),
+            right: box.slice(box.indexOf('d-info-r')),
+        };
+    }
+
+    const customerLine = (label: string, value: string) =>
+        `<span class="d-info-k">${label}</span><span class="d-info-c">:</span><span>${value}</span>`;
+
+    it('boxes the customer on the left and the invoice on the right', () => {
+        const html = render({ ...posted, customerCode: 'C00404', salesBy: 'Rafiq Islam' }, 'A4', detailed);
+        const { left, right } = infoBox(html);
+
+        const customer = [
+            customerLine('Customer ID', 'C00404'),
+            customerLine('Name', 'Bio Care'),
+            customerLine('Address', '12 Mirpur Road'),
+            customerLine('Mobile', '185'),
+        ];
+        const invoice = [
+            '<div><strong>Invoice No.:</strong> S0020090001</div>',
+            '<div><strong>Order No.:</strong> SO-0042</div>',
+            '<div><strong>Invoice Date:</strong> 06/10/2026</div>',
+            '<div><strong>Sales By:</strong> Rafiq Islam</div>',
+            '<div><strong>Entry By:</strong> Rina Akter</div>',
+        ];
+        // Each present, and top to bottom in this order.
+        for (const [side, lines] of [[left, customer], [right, invoice]] as const) {
+            const at = lines.map((line) => side.indexOf(line));
+            expect(at.every((i) => i >= 0)).toBe(true);
+            expect([...at].sort((a, b) => a - b)).toEqual(at);
+        }
     });
 
-    it('prints bill to and the shipping block with the payment status', () => {
-        const html = render(posted, 'A4', detailed);
-        expect(html).toContain('Bill To');
-        expect(html).toContain('Bio Care');
-        expect(html).toContain('Phone No:');
-        expect(html).toContain('Shipping Address');
-        expect(html).toContain('12 Mirpur Road');
-        expect(html).toMatch(/Payment Status:<\/span><span>Due</);
+    it('leaves out a line it has nothing for, and names a walk-in as such', () => {
+        const walkIn = {
+            ...posted,
+            customerName: undefined,
+            customerPhone: undefined,
+            shippingAddress: undefined,
+            orderNumber: undefined,
+            preparedBy: undefined,
+        };
+        const { left, right } = infoBox(render(walkIn, 'A4', detailed));
+
+        expect(left).toContain(customerLine('Name', 'Walk-in Customer'));
+        for (const label of ['Customer ID', 'Address', 'Mobile']) expect(left).not.toContain(`>${label}<`);
+        for (const label of ['Order No.', 'Sales By', 'Entry By']) expect(right).not.toContain(label);
+        expect(right).toContain('Invoice No.:');
+        expect(right).toContain('Invoice Date:');
     });
 
-    it('reads Paid when nothing is left to pay and Partial when some is', () => {
-        expect(render({ ...posted, amountPaid: 6936 }, 'A4', detailed)).toMatch(/Payment Status:<\/span><span>Paid</);
-        expect(render({ ...posted, amountPaid: 1000 }, 'A4', detailed)).toMatch(/Payment Status:<\/span><span>Partial</);
+    it('prints the customer\u2019s own address when there is no delivery address', () => {
+        const { left } = infoBox(render({ ...posted, shippingAddress: undefined, customerAddress: 'Pabna' }, 'A4', detailed));
+        expect(left).toContain(customerLine('Address', 'Pabna'));
+    });
+
+    it('replaces the strip, the bill-to and shipping blocks and the payment status', () => {
+        const html = render(posted, 'A4', detailed);
+        for (const gone of ['d-strip', 'd-parties', 'Bill To', 'Shipping Address', 'Payment Status']) {
+            expect(html).not.toContain(gone);
+        }
     });
 
     it('lists SL, item, warranty, quantity, unit price and total, with ৳ in the headers only', () => {
@@ -641,9 +687,12 @@ describe('detailed invoice layout', () => {
         expect(sums).not.toContain('class="d-words"');
     });
 
-    it('puts who entered the sale in a footer pinned to the page bottom', () => {
+    it('pins the foot to the page bottom, with who entered the sale up in the box', () => {
         const html = render(posted, 'A4', detailed);
-        expect(html).toContain('Entry By: Rina Akter');
+        // Once, in the box — not again in the foot.
+        expect(html.match(/Entry By:/g)).toHaveLength(1);
+        expect(infoBox(html).right).toContain('<strong>Entry By:</strong> Rina Akter');
+        expect(html).not.toContain('d-foot-r');
         // The print time moved to the page margin, beside the page number.
         expect(html).not.toContain('Print Date:');
         expect(html).toContain('class="p71-doc-ft d-foot"');
@@ -656,11 +705,10 @@ describe('detailed invoice layout', () => {
         expect(ruleFor(html, '.p71-doc--end > tbody > tr.p71-end')).toContain('break-inside: avoid');
     });
 
-    it('names the sales rep with the customer', () => {
+    it('names the sales rep above who entered the sale', () => {
         const html = render({ ...posted, salesBy: 'Rafiq Islam' }, 'A4', detailed);
-        expect(html).toContain('<div class="d-kv"><span>Sales By:</span><span>Rafiq Islam</span></div>');
-        // Under the phone number, in the Bill To block.
-        expect(html.indexOf('Phone No:')).toBeLessThan(html.indexOf('Sales By:'));
+        expect(html).toContain('<div><strong>Sales By:</strong> Rafiq Islam</div>');
+        expect(html.indexOf('Sales By:')).toBeLessThan(html.indexOf('Entry By:'));
         expect(render(posted, 'A4', detailed)).not.toContain('Sales By:');
     });
 
@@ -686,10 +734,15 @@ describe('detailed invoice layout', () => {
     });
 
     it('escapes what a customer or a user typed', () => {
-        const html = render({ ...posted, customerName: '<b>Bio</b>', preparedBy: 'A & B' }, 'A4', detailed);
+        const html = render(
+            { ...posted, customerName: '<b>Bio</b>', customerCode: 'C<1>', preparedBy: 'A & B' },
+            'A4',
+            detailed,
+        );
         expect(html).not.toContain('<b>Bio</b>');
         expect(html).toContain('&lt;b&gt;Bio&lt;/b&gt;');
-        expect(html).toContain('Entry By: A &amp; B');
+        expect(html).toContain('<span>C&lt;1&gt;</span>');
+        expect(html).toContain('<strong>Entry By:</strong> A &amp; B');
     });
 
     it('prints the QR code under the title in the header, in place of the number and date', () => {
@@ -698,9 +751,9 @@ describe('detailed invoice layout', () => {
 
         expect(header).toContain('<img class="p71-hd-qr" src="data:image/png;base64,AAAA"');
         expect(header.indexOf('p71-hd-title')).toBeLessThan(header.indexOf('p71-hd-qr'));
-        // The strip below still says the number and date; the title block does not.
+        // The box below still says the number and date; the title block does not.
         expect(header).not.toContain('p71-hd-meta');
-        expect(header).toContain('<strong>Invoice No:</strong> S0020090001');
+        expect(infoBox(html).right).toContain('<strong>Invoice No.:</strong> S0020090001');
         expect(html.match(/data:image\/png;base64,AAAA/g)).toHaveLength(1);
     });
 
@@ -737,18 +790,46 @@ describe('detailed invoice layout', () => {
         expect(html).toContain('Ref S0020090001 on 06/10/2026');
     });
 
-    it('repeats the invoice strip with the letterhead, so continuation pages say which invoice they are', () => {
+    it('repeats the box with the column headings, so continuation pages say which invoice and customer they are', () => {
         const html = render(posted, 'A4', detailed);
         const body = html.slice(html.indexOf('<body>'));
-        // Inside the repeating <thead>, ahead of the invoice body.
-        expect(body.indexOf('<thead>')).toBeLessThan(body.indexOf('d-strip'));
-        expect(body.indexOf('d-strip')).toBeLessThan(body.indexOf('</thead>'));
-        expect(body.indexOf('</thead>')).toBeLessThan(body.indexOf('invoice-body'));
+        const table = body.slice(body.indexOf('<table class="d-table">'));
+        const tableHead = table.slice(0, table.indexOf('</thead>'));
+
+        // The first row of the item table's own head, above the headings,
+        // spanning every column.
+        expect(tableHead).toContain('<tr class="d-info-row"><td colspan="6"><div class="d-info">');
+        expect(tableHead.indexOf('d-info')).toBeLessThan(tableHead.indexOf('>SL</th>'));
+        // Not in the letterhead's head: the two together are taller than the
+        // quarter page Chrome will repeat, and neither would.
+        const letterhead = body.slice(body.indexOf('<thead>'), body.indexOf('</thead>'));
+        expect(letterhead).toContain('p71-hd');
+        expect(letterhead).not.toContain('d-info');
+    });
+
+    it('spans the box over however many columns the table has', () => {
+        const html = (data: InvoiceData, layout: Partial<InvoicePrintPrefs>) => render(data, 'A4', { ...detailed, ...layout });
+        const span = (page: string) => page.match(/<tr class="d-info-row"><td colspan="(\d)">/)?.[1];
+        const headings = (page: string) => {
+            const table = page.slice(page.indexOf('<table class="d-table">'));
+            return String(table.slice(0, table.indexOf('</thead>')).match(/<th /g)?.length);
+        };
+        const discounted = { ...posted, items: [{ ...posted.items[0], discount: 50 }] };
+
+        for (const page of [
+            html(posted, { warranty_column: 'never' }),
+            html(posted, {}),
+            html(discounted, {}),
+        ]) {
+            expect(span(page)).toBe(headings(page));
+        }
+        expect(span(html(posted, { warranty_column: 'never' }))).toBe('5');
+        expect(span(html(discounted, {}))).toBe('7');
     });
 
     it('keeps rows, totals and the foot whole across a page break', () => {
         const html = render(posted, 'A4', detailed);
-        expect(ruleFor(html, '.d-table tr, .d-parties, .d-sums, .note-box, .signatures, .d-foot')).toContain('break-inside:avoid');
+        expect(ruleFor(html, '.d-table tr, .d-sums, .note-box, .signatures, .d-foot')).toContain('break-inside:avoid');
     });
 
     describe('warranty column', () => {
@@ -805,15 +886,10 @@ describe('detailed invoice layout', () => {
         });
     });
 
-    it('keeps the strip exactly as wide as the table under Compact, which drops the side padding', () => {
+    it('sets the box flush with the table, with a gap before the headings, tighter under Compact', () => {
         const html = render(posted, 'A4', detailed);
-        expect(ruleFor(html, 'html.p71-compact .d-strip')).toContain('margin-left:0; margin-right:0');
-        expect(ruleFor(html, 'html.p71-compact .invoice-body')).toContain('padding:1mm 0');
-    });
-
-    it('lines the strip up with the body\u2019s own padding', () => {
-        expect(ruleFor(render(posted, 'A4', { ...detailed, padding: 'wide' }), '.d-strip')).toContain('margin:10px 8mm 0');
-        expect(ruleFor(render(posted, 'A4', detailed), '.d-strip')).toContain('margin:10px 4mm 0');
+        expect(ruleFor(html, '.d-table .d-info-row > td')).toContain('padding:0 0 12px');
+        expect(ruleFor(html, 'html.p71-compact .d-table .d-info-row > td')).toContain('padding:0 0 6px');
     });
 
     it('foots a discounted sale with no tax on its face: lines, less the discount, is the total', () => {
@@ -852,7 +928,7 @@ describe('detailed invoice layout', () => {
 
     it('does not change a roll — the standard design prints whatever was chosen', () => {
         const html = render(posted, 'Thermal80', detailed);
-        expect(html).not.toContain('d-strip');
+        expect(html).not.toContain('d-info');
         expect(html).not.toContain('Prepared By');
     });
 
