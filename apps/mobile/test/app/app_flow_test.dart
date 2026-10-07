@@ -39,12 +39,13 @@ void main() {
   testWidgets('the sign-in screen says what the app is for', (tester) async {
     await pumpApp(tester, backend: crmBackend());
 
-    expect(find.text('Your CRM, on your phone'), findsOneWidget);
-    expect(find.text('Leads by stage'), findsOneWidget);
-    expect(find.text('Follow-ups and calls'), findsOneWidget);
+    expect(find.text('Your CRM, on your phone.'), findsOneWidget);
+    expect(find.text('Leads'), findsOneWidget);
+    expect(find.text('Follow-ups'), findsOneWidget);
     expect(find.text('Contacts'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
     expect(
-      find.widgetWithText(TextButton, 'Create a workspace'),
+      find.widgetWithText(TextButton, 'Create your workspace at app.erp71.com'),
       findsOneWidget,
     );
   });
