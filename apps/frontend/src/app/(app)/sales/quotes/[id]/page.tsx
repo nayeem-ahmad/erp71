@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { Package, FileText, ClipboardList, PlusCircle, Printer, Pencil, Save, Share2, X, Search, Trash2 } from 'lucide-react';
+import { Package, FileText, ClipboardList, PlusCircle, Printer, Pencil, Share2, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -10,27 +10,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { PageShell } from '@/components/ui';
-import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
-import { documentPricing, documentVatTotals, enteredBeforeVat, productTaxRates } from '@/lib/sale-vat';
-import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
-import ProformaTermsFields, {
-    emptyProformaTerms,
-    proformaTermsPayload,
-    type ProformaTerms,
-} from '../ProformaTermsFields';
-
-interface EditQuoteItem {
-    productId: string;
-    productName: string;
-    sku: string;
-    quantity: number;
-    unitPrice: number;
-    /** The product's own rates, for VAT added on top; null takes the shop default. */
-    vatRate?: number | null;
-    sdRate?: number | null;
-}
 
 /** One term of a proforma, omitted entirely when it was never filled in. */
 function ReadOnlyTerm({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -51,21 +32,8 @@ function QuoteDetailsPageContent() {
     const [quote, setQuote] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
     const isEditMode = searchParams.get('edit') === 'true';
 
-    const [customers, setCustomers] = useState<any[]>([]);
-    const [products, setProducts] = useState<any[]>([]);
-    const [editCustomerId, setEditCustomerId] = useState<string>('');
-    const [editValidUntil, setEditValidUntil] = useState('');
-    const [editNotes, setEditNotes] = useState('');
-    const [editItems, setEditItems] = useState<EditQuoteItem[]>([]);
-    // The shop's default VAT rate, for lines without their own. Whether VAT is
-    // added on top follows the quotation itself, priced the way it was made.
-    const taxPricing = useTaxPricing();
-    const [productSearch, setProductSearch] = useState('');
-    const [showProductDropdown, setShowProductDropdown] = useState(false);
-    const [editTerms, setEditTerms] = useState<ProformaTerms>(emptyProformaTerms);
     const isProforma = quote?.doc_kind === 'PROFORMA';
     /**
      * Shared with the quotations list so both mint the same link the same way.
@@ -78,42 +46,10 @@ function QuoteDetailsPageContent() {
     }, [id]);
 
 
+    // Old `?edit=true` links land on the entry-style edit screen.
     useEffect(() => {
-        if (isEditMode) {
-            api.getCustomers().then(setCustomers).catch(() => {});
-            api.getProducts().then(setProducts).catch(() => {});
-        }
-    }, [isEditMode]);
-
-    useEffect(() => {
-        if (isEditMode && quote) {
-            setEditCustomerId(quote.customer_id || '');
-            setEditValidUntil(quote.valid_until ? new Date(quote.valid_until).toISOString().slice(0, 10) : '');
-            setEditNotes(quote.notes || '');
-            setEditItems((quote.items || []).map((item: any) => ({
-                productId: item.product_id,
-                productName: item.product?.name || t.shared.item,
-                sku: item.product?.sku || '',
-                quantity: item.quantity,
-                unitPrice: Number(item.unit_price),
-                ...productTaxRates(item.product),
-            })));
-            // Every term back to a string, because the inputs are controlled and
-            // a null would flip them to uncontrolled on first render.
-            setEditTerms({
-                currency: quote.currency || 'BDT',
-                exchangeRate: quote.exchange_rate == null ? '' : String(quote.exchange_rate),
-                incoterm: quote.incoterm || '',
-                portOfLoading: quote.port_of_loading || '',
-                portOfDischarge: quote.port_of_discharge || '',
-                paymentTerms: quote.payment_terms || '',
-                advancePercent: quote.advance_percent == null ? '' : String(quote.advance_percent),
-                deliveryLeadTimeDays:
-                    quote.delivery_lead_time_days == null ? '' : String(quote.delivery_lead_time_days),
-                countryOfOrigin: quote.country_of_origin || '',
-            });
-        }
-    }, [isEditMode, quote]);
+        if (isEditMode) router.replace(routes.sales.quoteEdit(id as string));
+    }, [isEditMode, id, router]);
 
     const loadQuote = async () => {
         try {
@@ -123,83 +59,6 @@ function QuoteDetailsPageContent() {
             console.error('Failed to load quote', error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const filteredProducts = products.filter((product) =>
-        product.name?.toLowerCase().includes(productSearch.toLowerCase()) ||
-        product.sku?.toLowerCase().includes(productSearch.toLowerCase()),
-    ).slice(0, 8);
-
-    const addItem = (product: any) => {
-        const existing = editItems.find((item) => item.productId === product.id);
-        if (existing) {
-            setEditItems(editItems.map((item) => (
-                item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item
-            )));
-        } else {
-            setEditItems([
-                ...editItems,
-                {
-                    productId: product.id,
-                    productName: product.name,
-                    sku: product.sku || '',
-                    quantity: 1,
-                    unitPrice: parseFloat(product.price),
-                    ...productTaxRates(product),
-                },
-            ]);
-        }
-        setProductSearch('');
-        setShowProductDropdown(false);
-    };
-
-    const updateItem = (index: number, field: 'quantity' | 'unitPrice', value: number) => {
-        setEditItems(editItems.map((item, itemIndex) => (
-            itemIndex === index ? { ...item, [field]: value } : item
-        )));
-    };
-
-    const removeItem = (index: number) => {
-        setEditItems(editItems.filter((_, itemIndex) => itemIndex !== index));
-    };
-
-    const editPricing = documentPricing(
-        !enteredBeforeVat(quote),
-        taxPricing.defaultVatRate,
-        isProforma ? editTerms.currency : quote?.currency,
-    );
-    const editTotals = documentVatTotals(editItems, editPricing);
-    const editTotalAmount = editTotals.total;
-
-    const handleSave = async () => {
-        if (!quote || editItems.length === 0) return;
-
-        setSaving(true);
-        try {
-            await api.updateQuotation(quote.id, {
-                customerId: editCustomerId || undefined,
-                validUntil: editValidUntil || undefined,
-                notes: editNotes || undefined,
-                items: editItems.map((item) => ({
-                    productId: item.productId,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                })),
-                totalAmount: editTotalAmount,
-                vatAmount: editTotals.vatAmount,
-                // Sent only for a proforma. A quotation has no terms to write,
-                // and posting docKind: 'QUOTE' at an already-promoted document
-                // is refused by the service.
-                ...(isProforma ? proformaTermsPayload(editTerms, 'PROFORMA') : {}),
-            });
-            await loadQuote();
-            router.push(`/sales/quotes/${quote.id}`);
-        } catch (error) {
-            console.error('Failed to save quotation', error);
-            alert(t.shared.errors.saveQuotation);
-        } finally {
-            setSaving(false);
         }
     };
 
@@ -268,36 +127,6 @@ function QuoteDetailsPageContent() {
 
     return (
         <PageShell>
-            {isEditMode && (
-                <div className="px-8 pt-6">
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                            <Pencil className="w-4 h-4 text-amber-600" />
-                            <span className="text-sm font-bold text-amber-800">
-                                {t.shared.editMode.quote}
-                            </span>
-                        </div>
-                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                            <button
-                                onClick={handleSave}
-                                disabled={saving || editItems.length === 0}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 rtl:space-x-reverse transition-all disabled:opacity-50"
-                            >
-                                <Save className="w-3.5 h-3.5" />
-                                <span>{saving ? t.quotes.detail.saving : t.quotes.detail.saveChanges}</span>
-                            </button>
-                            <button
-                                onClick={() => router.push(`/sales/quotes/${quote.id}`)}
-                                className="text-xs font-bold uppercase tracking-widest text-amber-600 hover:text-amber-800 transition-colors flex items-center space-x-1 rtl:space-x-reverse"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                                <span>{t.common.cancel}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
                 <div className="px-8 py-6">
                     <PageHeader
@@ -412,95 +241,6 @@ function QuoteDetailsPageContent() {
                             <div className="p-6 border-b border-gray-100 print:px-0">
                                 <h2 className="font-bold tracking-tight">{t.quotes.detail.proposedItems}</h2>
                             </div>
-                            {isEditMode ? (
-                                <div className="p-6 space-y-6 print:hidden">
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.shared.form.addProducts}</label>
-                                        <div className="relative">
-                                            <div className="flex items-center space-x-2 rtl:space-x-reverse bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
-                                                <Search className="w-4 h-4 text-gray-400" />
-                                                <input
-                                                    type="text"
-                                                    placeholder={t.shared.form.searchProducts}
-                                                    value={productSearch}
-                                                    onChange={(e) => {
-                                                        setProductSearch(e.target.value);
-                                                        setShowProductDropdown(true);
-                                                    }}
-                                                    onFocus={() => setShowProductDropdown(true)}
-                                                    className="flex-1 bg-transparent text-sm font-medium outline-none"
-                                                />
-                                            </div>
-                                            {showProductDropdown && productSearch.length > 0 && filteredProducts.length > 0 && (
-                                                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                                    {filteredProducts.map((product) => (
-                                                        <button
-                                                            key={product.id}
-                                                            onClick={() => addItem(product)}
-                                                            className="w-full text-start px-4 py-3 hover:bg-blue-50 flex items-center justify-between transition-colors"
-                                                        >
-                                                            <div>
-                                                                <span className="text-sm font-bold">{product.name}</span>
-                                                                <span className="text-xs text-gray-400 ms-2">{product.sku}</span>
-                                                            </div>
-                                                            <span className="text-sm font-bold text-blue-600">{formatBDT(parseFloat(product.price), { locale })}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-100">
-                                                <th className="text-start pb-2 text-xs font-medium text-gray-500">{t.shared.columns.product}</th>
-                                                <th className="text-center pb-2 text-xs font-medium text-gray-500 w-24">{t.shared.columns.qty}</th>
-                                                <th className="text-end pb-2 text-xs font-medium text-gray-500 w-32">{t.shared.columns.unitPrice}</th>
-                                                <th className="text-end pb-2 text-xs font-medium text-gray-500 w-28">{t.shared.columns.subtotal}</th>
-                                                <th className="w-10"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {editItems.map((item, index) => (
-                                                <tr key={`${item.productId}-${index}`}>
-                                                    <td className="py-3">
-                                                        <span className="text-sm font-bold">{item.productName}</span>
-                                                        <span className="text-xs text-gray-400 ms-2">{item.sku}</span>
-                                                    </td>
-                                                    <td className="py-3">
-                                                        <input
-                                                            type="number"
-                                                            min={1}
-                                                            value={item.quantity}
-                                                            onChange={(e) => updateItem(index, 'quantity', Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                                            className="w-full text-center bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
-                                                        />
-                                                    </td>
-                                                    <td className="py-3">
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            step={0.01}
-                                                            value={item.unitPrice}
-                                                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                                            className="w-full text-end bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
-                                                        />
-                                                    </td>
-                                                    <td className="py-3 text-end text-sm font-bold text-blue-600">
-                                                        {formatBDT(item.quantity * item.unitPrice, { locale })}
-                                                    </td>
-                                                    <td className="py-3 text-center">
-                                                        <button onClick={() => removeItem(index)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
                                 <div className="divide-y divide-gray-50">
                                     {quote.items.map((item: any) => (
                                         <div key={item.id} className="p-6 flex items-center justify-between print:px-0">
@@ -520,42 +260,11 @@ function QuoteDetailsPageContent() {
                                         </div>
                                     ))}
                                 </div>
-                            )}
                         </div>
 
                         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 print:shadow-none print:border-none print:px-0">
                             <h2 className="font-bold tracking-tight mb-4">{t.quotes.detail.targetAccount}</h2>
-                            {isEditMode ? (
-                                <div className="space-y-4 print:hidden">
-                                    <IdSearchSelect
-                                        items={customers}
-                                        value={editCustomerId}
-                                        onChange={setEditCustomerId}
-                                        label={t.common.customer}
-                                        placeholder={t.shared.walkInCustomer}
-                                        emptyLabel={t.customerPayments.noCustomers}
-                                        noMatchLabel={t.customerPayments.noCustomers}
-                                    />
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.shared.form.validUntil}</label>
-                                        <input
-                                            type="date"
-                                            value={editValidUntil}
-                                            onChange={(e) => setEditValidUntil(e.target.value)}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">{t.shared.form.notes}</label>
-                                        <textarea
-                                            value={editNotes}
-                                            onChange={(e) => setEditNotes(e.target.value)}
-                                            rows={4}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 resize-none"
-                                        />
-                                    </div>
-                                </div>
-                            ) : quote.customer ? (
+                            {quote.customer ? (
                                 <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
                                     <p className="font-bold text-lg text-purple-900">{quote.customer.name}</p>
                                     <p className="text-sm font-bold text-purple-600 uppercase tracking-widest mt-1">{quote.customer.phone}</p>
@@ -565,11 +274,7 @@ function QuoteDetailsPageContent() {
                             )}
                         </div>
                         
-                        {isProforma && isEditMode && (
-                            <ProformaTermsFields terms={editTerms} onChange={setEditTerms} disabled={saving} />
-                        )}
-
-                        {isProforma && !isEditMode && (
+                        {isProforma && (
                             <div className="rounded-lg border border-gray-200 bg-white p-4">
                                 <p className="mb-3 text-xs font-semibold uppercase text-gray-500">
                                     {t.quotes.detail.terms.heading}
@@ -611,7 +316,7 @@ function QuoteDetailsPageContent() {
                             </div>
                         )}
 
-                        {!isEditMode && quote.notes && (
+                        {quote.notes && (
                             <div className="bg-yellow-50 text-yellow-800 p-6 rounded-lg text-sm font-medium italic">
                                 &quot;{quote.notes}&quot;
                             </div>
@@ -626,15 +331,15 @@ function QuoteDetailsPageContent() {
                             <div className="p-6 space-y-4">
                                 {/* VAT added on top of before-VAT prices is part of the
                                     total, so it is shown with it. */}
-                                {(isEditMode ? editTotals.vatAmount : Number(quote.vat_amount ?? 0)) > 0.005 && (
+                                {Number(quote.vat_amount ?? 0) > 0.005 && (
                                     <div className="flex justify-between items-center text-sm text-gray-600">
                                         <span>{t.sales.invoice.vat}</span>
-                                        <span>{formatBDT(isEditMode ? editTotals.vatAmount : Number(quote.vat_amount), { locale })}</span>
+                                        <span>{formatBDT(Number(quote.vat_amount), { locale })}</span>
                                     </div>
                                 )}
                                 <div className="pt-2 flex justify-between items-center text-gray-900">
                                     <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{t.quotes.detail.grandTotal}</span>
-                                    <span className="font-bold text-3xl tracking-tight">{formatBDT(isEditMode ? editTotalAmount : totalAmount, { locale })}</span>
+                                    <span className="font-bold text-3xl tracking-tight">{formatBDT(totalAmount, { locale })}</span>
                                 </div>
                             </div>
                         </div>
