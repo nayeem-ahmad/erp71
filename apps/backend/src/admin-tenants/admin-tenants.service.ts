@@ -40,6 +40,7 @@ import {
 } from './ledger-balance.util';
 import { REMINDER_EVENT_TYPES } from './reminder-event-types';
 import { applySubscriptionDiscount } from '../billing/discount.util';
+import { FIRST_STORE_CODE } from '../stores/store-code.util';
 import {
     ListAdminTenantsQueryDto,
     ListAdminUsersQueryDto,
@@ -839,7 +840,7 @@ export class AdminTenantsService {
             });
 
             const store = await tx.store.create({
-                data: { tenant_id: tenant.id, name: dto.storeName, address: dto.address ?? null },
+                data: { tenant_id: tenant.id, name: dto.storeName, address: dto.address ?? null, code: FIRST_STORE_CODE },
             });
 
             // Resolved before the subscription row so the dunning clock below can

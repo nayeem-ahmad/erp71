@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import {
   Palette, Globe, Receipt, Monitor, ShoppingBag, CreditCard, Tag, Gift,
   Bell, Mail, HandCoins, Sparkles, FileSearch, Database, Store, Printer,
-  BarChart3, Link2, KeyRound,
+  BarChart3, Link2, KeyRound, Hash,
 } from 'lucide-react';
 import CompactLinkGrid from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -33,6 +33,7 @@ const SECTIONS: Section[] = [
   { key: 'salesPos', cards: [
     { href: routes.settings.counters, key: 'counters', icon: Monitor, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
     { href: routes.settings.sales, key: 'sales', icon: ShoppingBag, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+    { href: routes.settings.documentNumbering, key: 'documentNumbering', icon: Hash, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
     { href: routes.settings.printTemplates, key: 'printTemplates', icon: Printer, accent: 'bg-slate-50 text-slate-700 border-slate-200' },
     { href: routes.settings.paymentMethods, key: 'paymentMethods', icon: CreditCard, accent: 'bg-primary-light text-blue-700 border-primary-border' },
     { href: routes.settings.discountCodes, key: 'discountCodes', icon: Tag, accent: 'bg-danger-light text-danger-text border-red-200' },

@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantContext } from '../database/tenant.decorator';
 import { CreateStoreDto } from './create-store.dto';
+import { nextStoreCode } from './store-code.util';
 
 const VALID_PERMISSIONS = new Set<string>(Object.values(StorePermission));
 
@@ -46,7 +47,7 @@ export class StoresService {
         try {
             return await this.db.$transaction(async (tx) => {
                 const created = await tx.store.create({
-                    data: { tenant_id: ctx.tenantId, name, address },
+                    data: { tenant_id: ctx.tenantId, name, address, code: await nextStoreCode(tx, ctx.tenantId) },
                     select: { id: true, name: true, address: true },
                 });
 

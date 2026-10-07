@@ -131,7 +131,7 @@ describe('StoresService.rename', () => {
 
 describe('StoresService.create', () => {
     const tx = {
-        store: { create: jest.fn() },
+        store: { create: jest.fn(), findMany: jest.fn() },
         tenantUser: { findMany: jest.fn(), findUnique: jest.fn() },
         userStoreAccess: { createMany: jest.fn() },
         userStorePermission: { createMany: jest.fn() },
@@ -149,6 +149,8 @@ describe('StoresService.create', () => {
         db.$transaction.mockImplementation((fn: any) => fn(tx));
         db.store.findFirst.mockResolvedValue(null);
         tx.store.create.mockResolvedValue({ id: 's-new', name: 'Dhanmondi Branch', address: null });
+        // The tenant's existing branch codes: S1, and one an owner typed.
+        tx.store.findMany.mockResolvedValue([{ code: 'S1' }, { code: 'DHK' }]);
         tx.tenantUser.findMany.mockResolvedValue([{ user_id: 'u-owner' }]);
         tx.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER', tenantRole: null });
         service = new StoresService(db as any, audit as any, authCache as any);
@@ -157,7 +159,7 @@ describe('StoresService.create', () => {
     it('creates the branch with a trimmed name and a null address when none is given', async () => {
         const result = await service.create(OWNER_CTX, { name: '  Dhanmondi Branch  ' });
         expect(tx.store.create).toHaveBeenCalledWith({
-            data: { tenant_id: 't1', name: 'Dhanmondi Branch', address: null },
+            data: { tenant_id: 't1', name: 'Dhanmondi Branch', address: null, code: 'S2' },
             select: { id: true, name: true, address: true },
         });
         expect(result).toEqual({ id: 's-new', name: 'Dhanmondi Branch', address: null });
@@ -166,7 +168,7 @@ describe('StoresService.create', () => {
     it('keeps a trimmed address when one is given', async () => {
         await service.create(OWNER_CTX, { name: 'Uttara', address: '  Sector 7  ' });
         expect(tx.store.create).toHaveBeenCalledWith({
-            data: { tenant_id: 't1', name: 'Uttara', address: 'Sector 7' },
+            data: { tenant_id: 't1', name: 'Uttara', address: 'Sector 7', code: 'S2' },
             select: { id: true, name: true, address: true },
         });
     });
