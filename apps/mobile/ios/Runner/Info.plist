@@ -14,6 +14,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>ERP71 uses Face ID to unlock the app when you turn on App lock.</string>
 	<key>CFBundleName</key>
 	<string>ERP71</string>
 	<key>CFBundlePackageType</key>

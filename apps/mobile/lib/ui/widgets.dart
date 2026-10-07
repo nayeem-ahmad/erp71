@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/api/api_exception.dart';
 import 'theme.dart';
 
 export '../core/format/format.dart' show initialsOf;
@@ -29,6 +30,11 @@ extension ToneColors on Tone {
 /// shown through this key, never a page-local messenger.
 final GlobalKey<ScaffoldMessengerState> rootMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
+
+/// What to tell the person when a request failed: the server's own message
+/// when it gave one, never a stack trace.
+String describeError(Object? error) =>
+    error is ApiException ? error.message : 'Something went wrong. Try again.';
 
 void showToast(String message, {Tone tone = Tone.neutral}) {
   final messenger = rootMessengerKey.currentState;

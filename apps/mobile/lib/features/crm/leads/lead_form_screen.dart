@@ -8,7 +8,6 @@ import '../activities/activity_sheets.dart' show DueTimePicker;
 import '../data/crm_providers.dart';
 import '../data/crm_repository.dart';
 import '../data/models.dart';
-import '../widgets/crm_widgets.dart';
 
 /// Creates a lead, or edits one when [leadId] is given.
 class LeadFormScreen extends ConsumerWidget {

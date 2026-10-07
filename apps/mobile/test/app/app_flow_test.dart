@@ -33,6 +33,9 @@ void main() {
     expect(overview.headers['Authorization'], 'Bearer access-1');
     // A manager starts on "Mine".
     expect(overview.url.queryParameters, {'mine': 'true'});
+    // A CRM-only member never asks for the business screens they lack.
+    expect(backend.sent('GET', '/mobile/pulse'), isEmpty);
+    expect(backend.sent('GET', '/cashier-sessions/overview'), isEmpty);
   });
 
   testWidgets('an address with no ERP71 account is pointed at the web', (

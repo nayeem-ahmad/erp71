@@ -3,6 +3,7 @@ import 'package:erp71_mobile/config/app_config.dart';
 import 'package:erp71_mobile/core/auth/token_store.dart';
 import 'package:erp71_mobile/core/format/format.dart';
 import 'package:erp71_mobile/core/providers.dart';
+import 'package:erp71_mobile/core/security/app_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +19,7 @@ Future<void> pumpApp(
   required FakeBackend backend,
   FakeGoogleAuth? google,
   InMemoryKeyValueStore? storage,
+  FakeDeviceAuthenticator? authenticator,
 }) async {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 3;
@@ -36,6 +38,9 @@ Future<void> pumpApp(
         ),
         httpClientProvider.overrideWithValue(backend.client),
         googleAuthProvider.overrideWithValue(google ?? FakeGoogleAuth()),
+        deviceAuthenticatorProvider.overrideWithValue(
+          authenticator ?? FakeDeviceAuthenticator(),
+        ),
       ],
       child: const Erp71App(),
     ),
@@ -105,6 +110,24 @@ FakeBackend crmBackend() {
     ..on('GET', '/crm/lead-taxonomy/categories', (_) => <Object?>[]);
   return backend;
 }
+
+/// [crmBackend] signed in as an owner of two branches, with the business
+/// endpoints answering.
+FakeBackend ownerBackend() => crmBackend()
+  ..on(
+    'POST',
+    '/auth/google',
+    (_) => authResponse(tenants: [ownerWorkspaceJson()]),
+  )
+  ..on('GET', '/auth/me', (_) => meJson(tenants: [ownerWorkspaceJson()]))
+  ..on('GET', '/mobile/pulse', (_) => pulseJson())
+  ..on('GET', '/cashier-sessions/overview', (_) => cashierOverviewJson())
+  ..on('GET', '/cashier-sessions/:id/summary', (_) => tillSummaryJson())
+  ..on(
+    'GET',
+    '/cashier-sessions/:id/cash-transactions',
+    (_) => cashMovementsJson(),
+  );
 
 /// From the sign-in screen, through Google, onto the Overview.
 Future<void> signInWithGoogle(WidgetTester tester) async {

@@ -1,6 +1,7 @@
 # Mobile app for tenant admins — plan
 
-Status: **proposed, 2026-10-07.** Nothing here is built. Written in answer to
+Status: **Phases 0 and 1 built, 2026-10-07** (see §4.1 for what shipped and
+where it differs from the plan). Phases 2–5 not started. Written in answer to
 "make a plan for the Top Picks", the five mobile features proposed for tenant
 admins:
 
@@ -264,6 +265,30 @@ Phase 5 is independent and small, so it can be done in parallel by anyone
 whenever there is capacity. Phases 1 and 3 are where the value is. Phase 2 is
 the only one with an ops dependency, so the Firebase and APNs setup should start
 on day one.
+
+### 4.1 What shipped in Phases 0 and 1
+
+- **Backend.** `GET mobile/pulse` (`apps/backend/src/mobile/`). It is built on
+  `SalesDashboardService`, so net sales match Sales › Overview, and is cached
+  60 s per tenant and branch. Payables are withheld from a caller who cannot
+  read purchasing, decided per request so the cache never leaks them.
+  `GET cashier-sessions/overview` covers one branch or all of them. Open
+  tills come through `getSessionSummary`; closed shifts report the
+  `expected_cash`/`variance` frozen at close.
+- **Mobile.** Home, Cashiers (list and till detail), the permission-driven
+  shell (`core/access.dart`), and the opt-in App lock (`local_auth`).
+- **Different from §2.1.** The bar is *Home · Cashiers · CRM*, not *Home ·
+  Approvals · Alerts · More*. Approvals and Alerts do not exist until Phases
+  2–3, and a tab that leads nowhere is worse than no tab. When they land,
+  Cashiers and CRM move under *More* as planned. A CRM-only member keeps the
+  CRM's own four tabs.
+- **Different from §3.1.** Cash in the drawers is not part of the pulse. It
+  needs `POS_STAFF`, which `SALES_READ` does not imply, so Home reads it from
+  the cashier overview when the member may see tills. The home-screen widget
+  is still a follow-up.
+- **Not verified here.** The debug APK build: this environment cannot reach
+  the Android SDK. CI's *Build Android (debug)* job is the first build with
+  `FlutterFragmentActivity`.
 
 ---
 
