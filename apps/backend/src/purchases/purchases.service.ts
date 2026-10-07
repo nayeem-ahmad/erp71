@@ -15,6 +15,7 @@ import { nextSupplierPaymentNumber } from '../suppliers/supplier-payment-number.
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { paymentInstrumentData } from '../common/payment-instrument.util';
 import { purchasePaymentStatus } from './purchase-status';
+import { issueDocumentNumber } from '../database/document-number.utils';
 
 const PURCHASE_SORTABLE: SortableMap = {
     purchase_number: (dir) => ({ purchase_number: dir }),
@@ -88,8 +89,15 @@ export class PurchasesService {
                 }
             }
 
-            const count = await tx.purchase.count({ where: { tenant_id: tenantId } });
-            const purchaseNumber = `PUR-${String(count + 1).padStart(5, '0')}`;
+            // In the tenant's own format (Settings → Document Numbering). This
+            // used to be `count() + 1`, which handed two purchases saved at
+            // once the same number; the engine continues after the numbers
+            // that scheme already printed.
+            const purchaseNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'PURCHASE',
+                storeId: dto.storeId,
+            });
 
             const purchase = await tx.purchase.create({
                 data: {

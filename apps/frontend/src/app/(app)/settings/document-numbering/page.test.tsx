@@ -77,7 +77,7 @@ describe('DocumentNumberingPage', () => {
         render(<DocumentNumberingPage />);
         fireEvent.change(await screen.findByLabelText('Start from'), { target: { value: 'per-branch' } });
 
-        const dhaka = screen.getByLabelText('Dhaka', { selector: '#code-dhk' });
+        const dhaka = screen.getByLabelText('Dhaka', { selector: '#sale-code-dhk' });
         fireEvent.change(dhaka, { target: { value: 'dhk' } });
         // The preview follows the code as it is typed.
         expect(screen.getAllByText('DHK-2627-00001').length).toBeGreaterThan(0);
@@ -114,6 +114,41 @@ describe('DocumentNumberingPage', () => {
         await waitFor(() => expect(api.updateDocumentNumbering).toHaveBeenCalledWith('SALE', expect.objectContaining({
             nextNumbers: [{ scopeKey: '', nextNumber: 1848 }],
         })));
+    });
+
+    it('edits each document type on its own tab, saving only that type', async () => {
+        api.getDocumentNumbering.mockImplementation(async (docType: string) => (docType === 'PURCHASE'
+            ? {
+                ...loaded,
+                docType: 'PURCHASE',
+                config: { template: 'PUR-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5 },
+                // Continuing after the purchases numbered before there was a counter.
+                sequences: [{ periodKey: '', scopeKey: '', nextNumber: 1849 }],
+            }
+            : loaded));
+        render(<DocumentNumberingPage />);
+        const salesFormat = await screen.findByLabelText(/Format/);
+        fireEvent.change(salesFormat, { target: { value: 'BILL-{FY}-{SEQ}' } });
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Purchases' }));
+
+        expect(await screen.findByText('PUR-01849', { selector: '.font-semibold' })).toBeInTheDocument();
+        expect(screen.getByText('Next purchase:', { exact: false })).toBeInTheDocument();
+        // A supplier bill has no till: no per-counter series, no {COUNTER} button.
+        const series = screen.getByLabelText('Series', { selector: '#purchase-scope' }) as HTMLSelectElement;
+        expect([...series.options].map((o) => o.value)).toEqual(['TENANT', 'STORE']);
+        expect(screen.queryByRole('button', { name: /\{COUNTER\}/ })).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(api.updateDocumentNumbering).toHaveBeenCalledWith('PURCHASE', {
+            template: 'PUR-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5,
+        }));
+
+        // The sales edit is still there when its tab comes back.
+        fireEvent.click(screen.getByRole('tab', { name: 'Sales invoices' }));
+        expect((screen.getByLabelText(/Format/, { selector: '#sale-template' }) as HTMLInputElement).value).toBe('BILL-{FY}-{SEQ}');
+        expect(screen.getByLabelText(/Format/, { selector: '#purchase-template' })).not.toBeVisible();
+        expect(api.getDocumentNumbering).toHaveBeenCalledTimes(2);
     });
 
     it('says so when the page cannot load', async () => {

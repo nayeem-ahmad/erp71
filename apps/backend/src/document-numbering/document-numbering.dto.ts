@@ -94,7 +94,9 @@ export interface DocumentNumberingResponse {
     counters: { id: string; storeId: string; name: string; counterNumber: number }[];
     /**
      * The counters already started in the current period of every reset policy,
-     * so the page can show "next number" for whichever policy is picked.
+     * so the page can show "next number" for whichever policy is picked. For
+     * the saved format, every counter it draws from is listed, at the number it
+     * will really issue next — past any already printed in that shape.
      */
     sequences: { periodKey: string; scopeKey: string; nextNumber: number }[];
 }

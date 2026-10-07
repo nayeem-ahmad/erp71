@@ -8,7 +8,10 @@ function makeDb(options: {
     stores?: { id: string; name: string; code: string | null }[];
     counters?: { id: string; store_id: string; name: string; counter_number: number; status?: string }[];
     sequences?: { period_key: string; scope_key: string; next_number: number }[];
+    /** Purchase numbers already printed. */
+    purchases?: string[];
 } = {}) {
+    const purchases = options.purchases ?? [];
     const stores = (options.stores ?? [{ id: 'store-1', name: 'Main', code: 'S1' }]).map((s) => ({ ...s }));
     const counters = options.counters ?? [];
     const sequences = (options.sequences ?? []).map((s) => ({ ...s }));
@@ -44,6 +47,14 @@ function makeDb(options: {
                 }
                 return { count };
             }),
+        },
+        // What the engine reads to see where a counter really continues.
+        sale: { findMany: jest.fn().mockResolvedValue([]) },
+        quotation: { findMany: jest.fn().mockResolvedValue([]) },
+        purchase: {
+            findMany: jest.fn(async ({ where }: any) => purchases
+                .filter((n) => n.startsWith(where.purchase_number.startsWith))
+                .map((purchase_number) => ({ purchase_number }))),
         },
         posCounter: {
             findMany: jest.fn(async () => counters.filter((c) => (c.status ?? 'ACTIVE') === 'ACTIVE')),
@@ -114,9 +125,19 @@ describe('DocumentNumberingService', () => {
             });
         });
 
+        it('shows purchases continuing after the ones numbered before there was a counter', async () => {
+            const { db } = makeDb({ purchases: ['PUR-00001', 'PUR-00002', 'PUR-00003', 'PUR-IMP-2526-00001'] });
+            const service = new DocumentNumberingService(db, audit as any);
+
+            const result = await service.get('t1', 'purchase');
+
+            expect(result.config).toEqual({ template: 'PUR-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5 });
+            expect(result.sequences).toEqual([{ periodKey: '', scopeKey: '', nextNumber: 4 }]);
+        });
+
         it('refuses a document type that is not configurable', async () => {
             const service = new DocumentNumberingService(makeDb().db, audit as any);
-            await expect(service.get('t1', 'PURCHASE')).rejects.toThrow(NotFoundException);
+            await expect(service.get('t1', 'IMPORT_SHIPMENT')).rejects.toThrow(NotFoundException);
         });
     });
 
@@ -149,6 +170,15 @@ describe('DocumentNumberingService', () => {
                 .rejects.toThrow(BadRequestException);
             expect(db.$transaction).not.toHaveBeenCalled();
             expect(tx.documentNumbering.upsert).not.toHaveBeenCalled();
+        });
+
+        it('refuses POS counters for a document that is not rung up at one', async () => {
+            const { db } = makeDb();
+            const service = new DocumentNumberingService(db, audit as any);
+
+            await expect(service.update(CTX, 'QUOTE', {
+                template: '{STORE}{COUNTER}-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'COUNTER', seqWidth: 5,
+            })).rejects.toThrow(/not rung up at a POS counter/);
         });
 
         it('lets two branches swap codes', async () => {

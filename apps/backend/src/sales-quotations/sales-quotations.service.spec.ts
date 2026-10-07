@@ -5,6 +5,13 @@ import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { ShortLinksService } from '../short-links/short-links.service';
 import { PrintTemplatesService } from '../print-templates/print-templates.service';
 import { BadRequestException } from '@nestjs/common';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+// The numbering engine has its own spec; here it only matters which series a
+// quotation asks for.
+jest.mock('../database/document-number.utils', () => ({
+    issueDocumentNumber: jest.fn().mockResolvedValue('QT-2627-00001'),
+}));
 
 describe('SalesQuotationsService', () => {
   let service: SalesQuotationsService;
@@ -14,6 +21,7 @@ describe('SalesQuotationsService', () => {
   let printTemplates: any;
 
   beforeEach(async () => {
+    (issueDocumentNumber as jest.Mock).mockClear();
     db = {
       $transaction: jest.fn().mockImplementation(async (cb) => cb(db)),
       quotation: {
@@ -28,12 +36,6 @@ describe('SalesQuotationsService', () => {
       },
       quotationItem: {
         deleteMany: jest.fn(),
-      },
-      documentSequence: {
-        createMany: jest.fn().mockResolvedValue({ count: 1 }),
-        // The reserved number is one below what `update` returns, so this
-        // stands for "this tenant's first document in the series".
-        update: jest.fn().mockResolvedValue({ next_number: 2 }),
       },
       shortLink: {
         updateMany: jest.fn(),
@@ -80,6 +82,24 @@ describe('SalesQuotationsService', () => {
     const result = await service.create('tenant-1', mockDto as any);
     expect(db.quotation.create).toHaveBeenCalled();
     expect(result).toEqual({ id: 'quote-1' });
+  });
+
+  it('create() numbers quotations and proforma invoices in their own series', async () => {
+    db.quotation.create.mockResolvedValue({ id: 'quote-1' });
+    const dto = { storeId: 'store-1', totalAmount: 500, items: [{ productId: 'prod-1', quantity: 1, unitPrice: 500 }] };
+    (issueDocumentNumber as jest.Mock).mockResolvedValueOnce('QT-2627-00042').mockResolvedValueOnce('PI-2627-00007');
+
+    await service.create('tenant-1', dto as any);
+    await service.create('tenant-1', { ...dto, docKind: 'PROFORMA' } as any);
+
+    expect(issueDocumentNumber).toHaveBeenNthCalledWith(1, db, { tenantId: 'tenant-1', docType: 'QUOTE', storeId: 'store-1' });
+    expect(issueDocumentNumber).toHaveBeenNthCalledWith(2, db, { tenantId: 'tenant-1', docType: 'PROFORMA', storeId: 'store-1' });
+    expect(db.quotation.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      data: expect.objectContaining({ quote_number: 'QT-2627-00042' }),
+    }));
+    expect(db.quotation.create).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      data: expect.objectContaining({ quote_number: 'PI-2627-00007' }),
+    }));
   });
 
   it('create() stores the VAT added on top and how the prices were entered', async () => {

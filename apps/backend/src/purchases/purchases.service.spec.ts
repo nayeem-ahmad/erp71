@@ -11,6 +11,7 @@ import {
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { costBehaviourFor } from '../database/product-cost.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -43,6 +44,12 @@ function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
     );
     (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set<string>());
 }
+
+// The numbering engine has its own spec; here it only matters that a purchase
+// asks it for the PURCHASE series instead of counting rows.
+jest.mock('../database/document-number.utils', () => ({
+    issueDocumentNumber: jest.fn(),
+}));
 
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn(),
@@ -137,12 +144,32 @@ describe('PurchasesService', () => {
             voucherNumber: 'CP-00001',
             voucherType: 'cash_payment',
         });
+        (issueDocumentNumber as jest.Mock).mockReset();
+        (issueDocumentNumber as jest.Mock).mockResolvedValue('PUR-00001');
+    });
+
+    it('numbers the purchase from the tenant format rather than by counting rows', async () => {
+        db.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
+        db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
+        tx.purchase.create.mockResolvedValue({ id: 'purchase-1' });
+        tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
+        (issueDocumentNumber as jest.Mock).mockResolvedValue('DHK-PUR-2627-00007');
+
+        await service.create('tenant-1', 'user-1', {
+            storeId: 'store-1',
+            items: [{ productId: 'prod-1', quantity: 1, unitCost: 10 }],
+        });
+
+        expect(issueDocumentNumber).toHaveBeenCalledWith(tx, { tenantId: 'tenant-1', docType: 'PURCHASE', storeId: 'store-1' });
+        expect(tx.purchase.count).not.toHaveBeenCalled();
+        expect(tx.purchase.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({ purchase_number: 'DHK-PUR-2627-00007' }),
+        });
     });
 
     it('creates a purchase, persists line items, and increments stock atomically', async () => {
         db.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
         db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
-        tx.purchase.count.mockResolvedValue(0);
         tx.purchase.create.mockResolvedValue({ id: 'purchase-1' });
         tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
 
@@ -210,7 +237,6 @@ describe('PurchasesService', () => {
         tx.supplier.findUnique.mockResolvedValue(null);
         tx.supplier.create.mockResolvedValue({ id: 'sup-1' });
         tx.supplier.findFirst.mockResolvedValue({ due_balance: 0 });
-        tx.purchase.count.mockResolvedValue(2);
         tx.purchase.create.mockResolvedValue({ id: 'purchase-2' });
         tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-2', supplier_id: 'sup-1' });
 
@@ -253,7 +279,6 @@ describe('PurchasesService', () => {
         // supplier if the purchase were simply pointed at it.
         tx.supplier.findUnique.mockResolvedValue({ id: 'sup-deleted', deleted_at: new Date() });
         tx.supplier.findFirst.mockResolvedValue({ due_balance: 0 });
-        tx.purchase.count.mockResolvedValue(2);
         tx.purchase.create.mockResolvedValue({ id: 'purchase-2' });
         tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-2', supplier_id: 'sup-deleted' });
 
@@ -326,7 +351,6 @@ describe('PurchasesService', () => {
         const setup = (...productIds: string[]) => {
             db.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
             db.product.findMany.mockResolvedValue(productIds.map((id) => ({ id })));
-            tx.purchase.count.mockResolvedValue(0);
             tx.purchase.create.mockResolvedValue({ id: 'purchase-1' });
             tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
         };
@@ -402,7 +426,6 @@ describe('PurchasesService', () => {
             db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
             tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 200 });
             tx.supplierCreditTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'txn-1', ...data }));
-            tx.purchase.count.mockResolvedValue(0);
             tx.purchase.create.mockResolvedValue({ id: 'purchase-1', purchase_number: 'PUR-00001', total_amount: 1000 });
             tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
 

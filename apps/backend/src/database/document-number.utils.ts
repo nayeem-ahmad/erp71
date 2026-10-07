@@ -3,75 +3,71 @@ import { Prisma } from '@prisma/client';
 import {
     DEFAULT_DOCUMENT_NUMBERING,
     NUMBERING_RESET_POLICIES,
-    NUMBERING_SCOPES,
+    fiscalYearLabel,
+    numberingMatcher,
     numberingPeriodKey,
+    numberingScopesFor,
     renderDocumentNumber,
     templateUsesToken,
     type DocumentNumberingConfig,
     type NumberingDocType,
+    type NumberingRenderContext,
     type NumberingResetPolicy,
     type NumberingScope,
 } from '@erp71/shared-types';
 import { resolveZone, zonedParts } from '../common/tenant-time.util';
 import { ensureStoreCode } from '../stores/store-code.util';
+import { DOCUMENT_NUMBER_SOURCES } from './document-number-sources';
 
 /**
- * Human-readable document numbers: `PI-2526-00001`, `INV-2627-00042`.
+ * Human-readable document numbers: `INV-2627-00042`, `PUR-01849`.
  *
  * Two properties the callers depend on:
  *
  * 1. **Numbers are never reissued.** Quotations can be deleted, so the
- *    `count() + 1` pattern used elsewhere in the codebase would hand a fresh
- *    document the number a customer is already holding on a printed page. The
+ *    `count() + 1` pattern purchases used would hand a fresh document the
+ *    number a customer or supplier is already holding on a printed page. The
  *    counter is stored, not derived.
  * 2. **The series is legible.** `QT-1755764812345` (epoch millis, the previous
  *    quotation scheme) tells a shop owner nothing; `QT-2526-00042` tells them
  *    it is the 42nd quote of this fiscal year.
  *
- * Two entry points. `nextDocumentNumber` issues the fixed built-in series
- * (quotations, proforma invoices, import shipments). `issueDocumentNumber`
- * issues a series the tenant formats itself under Settings → Document
- * Numbering — sales invoices so far; the fixed series move across one by one.
+ * Two entry points. `issueDocumentNumber` issues a series the tenant formats
+ * itself under Settings → Document Numbering (sales, quotations, proforma
+ * invoices, purchases). `nextDocumentNumber` issues the one fixed series left,
+ * import shipments.
  */
 
-/** Series a tenant can hold a counter for. */
+/** Series that still have a fixed format. */
 export const DocumentSeries = {
-    QUOTE: 'QUOTE',
-    PROFORMA: 'PROFORMA',
     IMPORT_SHIPMENT: 'IMPORT_SHIPMENT',
 } as const;
 
 export type DocumentSeries = (typeof DocumentSeries)[keyof typeof DocumentSeries];
 
 const SERIES_PREFIX: Record<DocumentSeries, string> = {
-    QUOTE: 'QT',
-    PROFORMA: 'PI',
     IMPORT_SHIPMENT: 'IMP',
 };
 
 /**
- * How many already-used numbers `issueDocumentNumber` steps over before giving
- * up. A used number only turns up after an owner raises "next number" past
- * numbers typed by hand, or changes format onto an older one — a handful at
- * most. Running out means something else is wrong, and saying so beats a loop.
+ * How many times `issueDocumentNumber` finds its candidate already in use
+ * before giving up. Each collision moves the counter past every number in use
+ * after it, so a second one only happens when another transaction claims a
+ * number in between — a handful at most. Running out means something else is
+ * wrong, and saying so beats a loop.
  */
-const MAX_TAKEN_SKIPS = 50;
+const MAX_COLLISIONS = 5;
 
-/**
- * Bangladeshi fiscal year label for a date: July 2025–June 2026 is `2526`.
- *
- * Exported for the tests and for any report that wants to label a period the
- * same way the document numbers do. Uses local-time getters deliberately — the
- * fiscal year is a local calendar fact, and a UTC reading would put a document
- * created at 06:30 on 1 July into the previous year for a UTC+6 tenant.
- */
-export function fiscalYearKey(date: Date): string {
-    const year = date.getFullYear();
-    // getMonth() is 0-indexed, so 6 is July.
-    const startYear = date.getMonth() >= 6 ? year : year - 1;
-    const two = (n: number) => String(n % 100).padStart(2, '0');
-    return `${two(startYear)}${two(startYear + 1)}`;
-}
+type SequenceKey = { tenantId: string; docType: string; periodKey: string; scopeKey: string };
+
+const sequenceWhere = (key: SequenceKey) => ({
+    tenant_id_doc_type_period_key_scope_key: {
+        tenant_id: key.tenantId,
+        doc_type: key.docType,
+        period_key: key.periodKey,
+        scope_key: key.scopeKey,
+    },
+});
 
 /**
  * Reserves the next number of one counter and returns it.
@@ -84,17 +80,9 @@ export function fiscalYearKey(date: Date): string {
  */
 async function reserveSequenceNumber(
     tx: Prisma.TransactionClient,
-    params: { tenantId: string; docType: string; periodKey: string; scopeKey: string; prefix: string },
+    key: SequenceKey,
+    prefix: string,
 ): Promise<number> {
-    const where = {
-        tenant_id_doc_type_period_key_scope_key: {
-            tenant_id: params.tenantId,
-            doc_type: params.docType,
-            period_key: params.periodKey,
-            scope_key: params.scopeKey,
-        },
-    };
-
     // Create-if-missing then increment, rather than one upsert. Prisma's upsert
     // here is a read followed by an insert, so two transactions starting the
     // same counter at once (the first two sales of a month, or of a new till)
@@ -104,18 +92,18 @@ async function reserveSequenceNumber(
     // its turn on the row lock.
     await tx.documentSequence.createMany({
         data: [{
-            tenant_id: params.tenantId,
-            doc_type: params.docType,
-            period_key: params.periodKey,
-            scope_key: params.scopeKey,
-            prefix: params.prefix,
+            tenant_id: key.tenantId,
+            doc_type: key.docType,
+            period_key: key.periodKey,
+            scope_key: key.scopeKey,
+            prefix,
             next_number: 1,
         }],
         skipDuplicates: true,
     });
 
     const reserved = await tx.documentSequence.update({
-        where,
+        where: sequenceWhere(key),
         data: { next_number: { increment: 1 } },
         select: { next_number: true },
     });
@@ -126,7 +114,7 @@ async function reserveSequenceNumber(
 }
 
 /**
- * Reserves and returns the next number in a built-in series. See
+ * Reserves and returns the next import shipment number. See
  * `reserveSequenceNumber` for why it must run inside the creating transaction.
  */
 export async function nextDocumentNumber(
@@ -142,16 +130,14 @@ export async function nextDocumentNumber(
 ): Promise<string> {
     const { tenantId, series } = params;
     const resetsYearly = params.resetsYearly ?? true;
-    const periodKey = resetsYearly ? fiscalYearKey(params.on ?? new Date()) : '';
+    let periodKey = '';
+    if (resetsYearly) {
+        const date = await tenantCalendarMonth(tx, tenantId, params.on ?? new Date());
+        periodKey = fiscalYearLabel(date.year, date.month);
+    }
     const prefix = SERIES_PREFIX[series];
 
-    const number = await reserveSequenceNumber(tx, {
-        tenantId,
-        docType: series,
-        periodKey,
-        scopeKey: '',
-        prefix,
-    });
+    const number = await reserveSequenceNumber(tx, { tenantId, docType: series, periodKey, scopeKey: '' }, prefix);
     const body = String(number).padStart(5, '0');
 
     return periodKey ? `${prefix}-${periodKey}-${body}` : `${prefix}-${body}`;
@@ -170,13 +156,14 @@ export async function loadNumberingConfig(
         return { config: { ...DEFAULT_DOCUMENT_NUMBERING[docType] }, isDefault: true };
     }
     // The page validates before saving; these guards only keep a hand-edited
-    // row from turning into a sale that cannot be numbered.
+    // row from turning into a document that cannot be numbered.
+    const fallback = DEFAULT_DOCUMENT_NUMBERING[docType];
     const resetPolicy = (NUMBERING_RESET_POLICIES as readonly string[]).includes(row.reset_policy)
         ? (row.reset_policy as NumberingResetPolicy)
-        : DEFAULT_DOCUMENT_NUMBERING[docType].resetPolicy;
-    const scope = (NUMBERING_SCOPES as readonly string[]).includes(row.scope)
+        : fallback.resetPolicy;
+    const scope = (numberingScopesFor(docType) as string[]).includes(row.scope)
         ? (row.scope as NumberingScope)
-        : DEFAULT_DOCUMENT_NUMBERING[docType].scope;
+        : fallback.scope;
     return {
         config: { template: row.template, resetPolicy, scope, seqWidth: row.seq_width },
         isDefault: false,
@@ -185,8 +172,8 @@ export async function loadNumberingConfig(
 
 /**
  * The calendar year and month of an instant in the tenant's own timezone. Not
- * the server's: the container runs in UTC, which would put a sale rung up at
- * 00:30 on 1 July in Dhaka into the previous fiscal year.
+ * the server's: the container runs in UTC, which would put a document raised
+ * at 00:30 on 1 July in Dhaka into the previous fiscal year.
  */
 export async function tenantCalendarMonth(
     tx: Prisma.TransactionClient,
@@ -218,13 +205,45 @@ export function numberingScopeKey(
 }
 
 /**
+ * The first number at or after `from` that no document of this type already
+ * prints for this counter. Used when a candidate turns out to be taken — and
+ * by the settings page, to show where a counter will really continue.
+ *
+ * Purchases are why this has to look at the documents rather than trust the
+ * counter: they were numbered `count() + 1` before they had one, so a tenant's
+ * first configured purchase finds `PUR-00001`…`PUR-01848` already printed and
+ * must continue at 1849, not walk the 1848 numbers one at a time.
+ */
+export async function firstUnusedNumber(
+    tx: Prisma.TransactionClient,
+    params: {
+        tenantId: string;
+        docType: NumberingDocType;
+        config: DocumentNumberingConfig;
+        ctx: NumberingRenderContext;
+        from: number;
+    },
+): Promise<number> {
+    const { prefix, seqOf } = numberingMatcher(params.config, params.ctx);
+    const numbers = await DOCUMENT_NUMBER_SOURCES[params.docType].numbersStartingWith(tx, params.tenantId, prefix);
+    const used = new Set<number>();
+    for (const number of numbers) {
+        const seq = seqOf(number);
+        if (seq !== null) used.add(seq);
+    }
+    let next = Math.max(1, params.from);
+    while (used.has(next)) next += 1;
+    return next;
+}
+
+/**
  * Reserves and returns the next number of a tenant-formatted series.
  *
  * Runs inside the transaction that creates the document, for the same reason
- * as `nextDocumentNumber`. `isTaken` lets the caller step over a number that
- * is already in use — one typed by hand, or left by an earlier format that
- * happened to print the same way — so a format change can never stop a sale at
- * the till on a unique violation.
+ * as `nextDocumentNumber`. A candidate already in use — typed by hand as a
+ * reference, printed by an earlier format, or one of the purchases numbered
+ * before there was a counter — moves the counter past it rather than stopping
+ * the document on a unique violation.
  */
 export async function issueDocumentNumber(
     tx: Prisma.TransactionClient,
@@ -236,7 +255,6 @@ export async function issueDocumentNumber(
         counterId?: string | null;
         /** The document's date. Defaults to now. */
         on?: Date;
-        isTaken?: (candidate: string) => Promise<boolean>;
     },
 ): Promise<string> {
     const { tenantId, docType, storeId } = params;
@@ -257,25 +275,25 @@ export async function issueDocumentNumber(
         })
         : null;
 
-    const periodKey = numberingPeriodKey(config.resetPolicy, date);
-    const scopeKey = numberingScopeKey(config.scope, { storeId, counterId: counter?.id ?? null });
+    const ctx: NumberingRenderContext = { ...date, storeCode, counterNumber: counter?.counter_number ?? null };
+    const key: SequenceKey = {
+        tenantId,
+        docType,
+        periodKey: numberingPeriodKey(config.resetPolicy, date),
+        scopeKey: numberingScopeKey(config.scope, { storeId, counterId: counter?.id ?? null }),
+    };
+    const source = DOCUMENT_NUMBER_SOURCES[docType];
 
-    for (let attempt = 0; attempt <= MAX_TAKEN_SKIPS; attempt += 1) {
-        const seq = await reserveSequenceNumber(tx, {
-            tenantId,
-            docType,
-            periodKey,
-            scopeKey,
-            prefix: config.template,
-        });
-        const candidate = renderDocumentNumber(config, seq, {
-            ...date,
-            storeCode,
-            counterNumber: counter?.counter_number ?? null,
-        });
-        if (!params.isTaken || !(await params.isTaken(candidate))) {
+    for (let attempt = 0; attempt < MAX_COLLISIONS; attempt += 1) {
+        const seq = await reserveSequenceNumber(tx, key, config.template);
+        const candidate = renderDocumentNumber(config, seq, ctx);
+        if (!(await source.isTaken(tx, tenantId, candidate))) {
             return candidate;
         }
+        // This transaction holds the counter's row lock from the increment
+        // above, so moving it here cannot race another issuer.
+        const next = await firstUnusedNumber(tx, { tenantId, docType, config, ctx, from: seq + 1 });
+        await tx.documentSequence.update({ where: sequenceWhere(key), data: { next_number: next } });
     }
 
     throw new ConflictException(

@@ -1,5 +1,5 @@
 import {
-    fiscalYearKey,
+    firstUnusedNumber,
     issueDocumentNumber,
     loadNumberingConfig,
     nextDocumentNumber,
@@ -8,68 +8,36 @@ import {
     DocumentSeries,
 } from './document-number.utils';
 
-describe('fiscalYearKey', () => {
-    // Constructed with local-time components on purpose: the function reads the
-    // local calendar, so a `new Date('2025-07-01')` (parsed as UTC midnight)
-    // would be the previous day — and the previous fiscal year — west of GMT.
-    const local = (y: number, m: number, d: number) => new Date(y, m - 1, d);
-
-    it('starts a new year in July', () => {
-        expect(fiscalYearKey(local(2025, 6, 30))).toBe('2425');
-        expect(fiscalYearKey(local(2025, 7, 1))).toBe('2526');
-    });
-
-    it('keeps January to June on the year that started the previous July', () => {
-        expect(fiscalYearKey(local(2026, 1, 15))).toBe('2526');
-        expect(fiscalYearKey(local(2026, 6, 30))).toBe('2526');
-        expect(fiscalYearKey(local(2026, 7, 1))).toBe('2627');
-    });
-
-    it('pads a single-digit year', () => {
-        expect(fiscalYearKey(local(2009, 8, 1))).toBe('0910');
-    });
-
-    it('handles the century roll', () => {
-        expect(fiscalYearKey(local(2099, 8, 1))).toBe('9900');
-    });
-});
-
 describe('nextDocumentNumber', () => {
-    const makeTx = (afterIncrement: number) => ({
+    const makeTx = (afterIncrement: number, timezone = 'Asia/Dhaka') => ({
         documentSequence: {
             createMany: jest.fn().mockResolvedValue({ count: 1 }),
             update: jest.fn().mockResolvedValue({ next_number: afterIncrement }),
         },
+        tenant: { findUnique: jest.fn().mockResolvedValue({ timezone }) },
     });
+    // 10:00 on 10 September 2025 in Dhaka.
+    const september = new Date('2025-09-10T04:00:00.000Z');
 
     it('returns the number it reserved, not the incremented one', async () => {
-        const tx = makeTx(2);
-
-        const number = await nextDocumentNumber(tx as any, {
+        const number = await nextDocumentNumber(makeTx(2) as any, {
             tenantId: 't1',
-            series: DocumentSeries.PROFORMA,
-            on: new Date(2025, 8, 10),
+            series: DocumentSeries.IMPORT_SHIPMENT,
+            on: september,
         });
 
-        expect(number).toBe('PI-2526-00001');
+        expect(number).toBe('IMP-2526-00001');
     });
 
     it('pads to five digits and keeps counting past them', async () => {
-        expect(
-            await nextDocumentNumber(makeTx(43) as any, {
-                tenantId: 't1',
-                series: DocumentSeries.QUOTE,
-                on: new Date(2025, 8, 10),
-            }),
-        ).toBe('QT-2526-00042');
+        const issue = (afterIncrement: number) => nextDocumentNumber(makeTx(afterIncrement) as any, {
+            tenantId: 't1',
+            series: DocumentSeries.IMPORT_SHIPMENT,
+            on: september,
+        });
 
-        expect(
-            await nextDocumentNumber(makeTx(100001) as any, {
-                tenantId: 't1',
-                series: DocumentSeries.QUOTE,
-                on: new Date(2025, 8, 10),
-            }),
-        ).toBe('QT-2526-100000');
+        expect(await issue(43)).toBe('IMP-2526-00042');
+        expect(await issue(100001)).toBe('IMP-2526-100000');
     });
 
     it('keys the counter by series and fiscal year', async () => {
@@ -78,7 +46,7 @@ describe('nextDocumentNumber', () => {
         await nextDocumentNumber(tx as any, {
             tenantId: 't1',
             series: DocumentSeries.IMPORT_SHIPMENT,
-            on: new Date(2026, 2, 1),
+            on: new Date('2026-03-01T04:00:00.000Z'),
         });
 
         expect(tx.documentSequence.createMany).toHaveBeenCalledWith({
@@ -95,14 +63,24 @@ describe('nextDocumentNumber', () => {
         });
     });
 
+    it('reads the fiscal year in the tenant zone, not the UTC server clock', async () => {
+        // 00:30 on 1 July in Dhaka is still 30 June in UTC.
+        const firstOfJuly = new Date('2026-06-30T18:30:00.000Z');
+
+        expect(await nextDocumentNumber(makeTx(2) as any, { tenantId: 't1', series: DocumentSeries.IMPORT_SHIPMENT, on: firstOfJuly }))
+            .toBe('IMP-2627-00001');
+        expect(await nextDocumentNumber(makeTx(2, 'Europe/London') as any, { tenantId: 't1', series: DocumentSeries.IMPORT_SHIPMENT, on: firstOfJuly }))
+            .toBe('IMP-2526-00001');
+    });
+
     it('omits the period segment for a series that never resets', async () => {
         const number = await nextDocumentNumber(makeTx(8) as any, {
             tenantId: 't1',
-            series: DocumentSeries.QUOTE,
+            series: DocumentSeries.IMPORT_SHIPMENT,
             resetsYearly: false,
         });
 
-        expect(number).toBe('QT-00007');
+        expect(number).toBe('IMP-00007');
     });
 });
 
@@ -115,7 +93,16 @@ function makeNumberingTx(options: {
     timezone?: string | null;
     stores?: { id: string; code: string | null }[];
     counters?: { id: string; counter_number: number }[];
+    /** Numbers already printed, per table. */
+    sales?: { serial_number: string; reference_number?: string | null }[];
+    purchases?: string[];
+    quotations?: string[];
 } = {}) {
+    const sales = (options.sales ?? []).map((s) => ({ reference_number: null, ...s }));
+    const purchases = options.purchases ?? [];
+    const quotations = options.quotations ?? [];
+    const startsWith = (value: string | null | undefined, filter: any) =>
+        typeof filter === 'string' ? value === filter : Boolean(value && value.startsWith(filter.startsWith));
     const sequences = new Map<string, number>();
     const keyOf = (where: any) => {
         const k = where.tenant_id_doc_type_period_key_scope_key;
@@ -154,10 +141,34 @@ function makeNumberingTx(options: {
             }),
             update: jest.fn(async ({ where, data }: any) => {
                 const key = keyOf(where);
-                const next = (sequences.get(key) ?? 1) + data.next_number.increment;
+                const next = typeof data.next_number === 'number'
+                    ? data.next_number
+                    : (sequences.get(key) ?? 1) + data.next_number.increment;
                 sequences.set(key, next);
                 return { next_number: next };
             }),
+        },
+        // The tables document-number-sources.ts reads, answering the two
+        // queries it makes from the rows given.
+        sale: {
+            findFirst: jest.fn(async ({ where }: any) => sales.find((row) => where.OR.some((clause: any) =>
+                Object.entries(clause).every(([column, filter]) => startsWith((row as any)[column], filter)))) ?? null),
+            findMany: jest.fn(async ({ where }: any) => sales.filter((row) => where.OR.some((clause: any) =>
+                Object.entries(clause).every(([column, filter]) => startsWith((row as any)[column], filter))))),
+        },
+        purchase: {
+            findFirst: jest.fn(async ({ where }: any) =>
+                (purchases.includes(where.purchase_number) ? { id: where.purchase_number } : null)),
+            findMany: jest.fn(async ({ where }: any) => purchases
+                .filter((number) => number.startsWith(where.purchase_number.startsWith))
+                .map((purchase_number) => ({ purchase_number }))),
+        },
+        quotation: {
+            findFirst: jest.fn(async ({ where }: any) =>
+                (quotations.includes(where.quote_number) ? { id: where.quote_number } : null)),
+            findMany: jest.fn(async ({ where }: any) => [...new Set(quotations)]
+                .filter((number) => number.startsWith(where.quote_number.startsWith))
+                .map((quote_number) => ({ quote_number }))),
         },
     };
     return tx;
@@ -259,25 +270,88 @@ describe('issueDocumentNumber', () => {
         expect(await issue(new Date('2026-11-01T04:00:00.000Z'))).toBe('2611-001');
     });
 
-    it('steps over a number that is already in use', async () => {
-        const tx = makeNumberingTx();
-        const taken = new Set(['INV-2627-00001', 'INV-2627-00002']);
-
-        const number = await issueDocumentNumber(tx as any, {
-            tenantId: 't1', docType: 'SALE', storeId: 'store-1', on: october,
-            isTaken: async (candidate) => taken.has(candidate),
+    it('steps over a number typed by hand as another sale\'s reference', async () => {
+        const tx = makeNumberingTx({
+            sales: [{ serial_number: 'SL-1755764812345', reference_number: 'INV-2627-00001' }],
         });
 
-        expect(number).toBe('INV-2627-00003');
+        const number = await issueDocumentNumber(tx as any, { tenantId: 't1', docType: 'SALE', storeId: 'store-1', on: october });
+
+        expect(number).toBe('INV-2627-00002');
+        expect(tx.sequences.get('t1|SALE|2627|')).toBe(3);
+    });
+
+    it('continues purchases after the ones numbered before there was a counter', async () => {
+        const tx = makeNumberingTx({
+            purchases: [
+                ...Array.from({ length: 1848 }, (_, i) => `PUR-${String(i + 1).padStart(5, '0')}`),
+                // An import's purchase shares the prefix but not the series.
+                'PUR-IMP-2526-00007',
+            ],
+        });
+        const issue = () => issueDocumentNumber(tx as any, { tenantId: 't1', docType: 'PURCHASE', storeId: 'store-1', on: october });
+
+        expect(await issue()).toBe('PUR-01849');
+        expect(await issue()).toBe('PUR-01850');
+        // One jump, not 1,848 steps.
+        expect(tx.purchase.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('jumps only to the first free number, so a stray high one leaves no gap', async () => {
+        const tx = makeNumberingTx({ purchases: ['PUR-00001', 'PUR-00002', 'PUR-09999'] });
+        const issue = () => issueDocumentNumber(tx as any, { tenantId: 't1', docType: 'PURCHASE', storeId: 'store-1', on: october });
+
+        expect(await issue()).toBe('PUR-00003');
+        expect(await issue()).toBe('PUR-00004');
+    });
+
+    it('numbers quotations and proforma invoices in separate series that cannot repeat each other', async () => {
+        const tx = makeNumberingTx({ quotations: ['QT-2627-00001'] });
+        const issue = (docType: 'QUOTE' | 'PROFORMA') =>
+            issueDocumentNumber(tx as any, { tenantId: 't1', docType, storeId: 'store-1', on: october });
+
+        expect(await issue('QUOTE')).toBe('QT-2627-00002');
+        expect(await issue('PROFORMA')).toBe('PI-2627-00001');
+        expect(await issue('PROFORMA')).toBe('PI-2627-00002');
+        expect(tx.sequences.get('t1|QUOTE|2627|')).toBe(3);
+        expect(tx.sequences.get('t1|PROFORMA|2627|')).toBe(3);
+    });
+
+    it('keeps an existing quotation counter going', async () => {
+        const tx = makeNumberingTx();
+        // Started by the fixed QT series before quotations were configurable.
+        tx.sequences.set('t1|QUOTE|2627|', 43);
+
+        const number = await issueDocumentNumber(tx as any, { tenantId: 't1', docType: 'QUOTE', storeId: 'store-1', on: october });
+
+        expect(number).toBe('QT-2627-00043');
     });
 
     it('gives up loudly rather than looping forever', async () => {
         const tx = makeNumberingTx();
+        // Every candidate reads as taken, yet none shows up as printed.
+        tx.sale.findFirst.mockResolvedValue({ id: 'ghost' } as any);
 
-        await expect(issueDocumentNumber(tx as any, {
-            tenantId: 't1', docType: 'SALE', storeId: 'store-1', on: october,
-            isTaken: async () => true,
-        })).rejects.toThrow(/Could not find an unused document number/);
+        await expect(issueDocumentNumber(tx as any, { tenantId: 't1', docType: 'SALE', storeId: 'store-1', on: october }))
+            .rejects.toThrow(/Could not find an unused document number/);
+    });
+});
+
+describe('firstUnusedNumber', () => {
+    const october = { year: 2026, month: 10 };
+
+    it('reads the numbers already printed in the format, at any padding', async () => {
+        const tx = makeNumberingTx({ purchases: ['PUR-1', 'PUR-00002', 'PUR-0003', 'PUR-00005'] });
+
+        const next = await firstUnusedNumber(tx as any, {
+            tenantId: 't1',
+            docType: 'PURCHASE',
+            config: { template: 'PUR-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5 },
+            ctx: october,
+            from: 1,
+        });
+
+        expect(next).toBe(4);
     });
 });
 
@@ -300,6 +374,16 @@ describe('loadNumberingConfig', () => {
 
         expect(isDefault).toBe(false);
         expect(config).toEqual({ template: 'X-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 3 });
+    });
+
+    it('never runs a quotation per POS counter, even if a row says so', async () => {
+        const tx = makeNumberingTx({
+            numbering: { template: 'QT-{SEQ}', reset_policy: 'NEVER', scope: 'COUNTER', seq_width: 3 },
+        });
+
+        const { config } = await loadNumberingConfig(tx as any, 't1', 'QUOTE');
+
+        expect(config.scope).toBe('TENANT');
     });
 });
 

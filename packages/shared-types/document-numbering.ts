@@ -20,9 +20,31 @@
  * sale at the till.
  */
 
-/** Document types a tenant can configure. Only sales so far; the rest follow. */
-export const NUMBERING_DOC_TYPES = ['SALE'] as const;
+/** Document types a tenant can configure. Import shipments still use a fixed series. */
+export const NUMBERING_DOC_TYPES = ['SALE', 'QUOTE', 'PROFORMA', 'PURCHASE'] as const;
 export type NumberingDocType = (typeof NUMBERING_DOC_TYPES)[number];
+
+export interface NumberingDocTypeInfo {
+  /** The tab and section heading: "Quotations". */
+  label: string;
+  /** One of them, for "Next quotation: …". */
+  noun: string;
+  /** What the built-in formats and presets print in front of the number. */
+  prefix: string;
+  /**
+   * Whether the document is rung up at a POS counter. Only then do `{COUNTER}`
+   * and per-counter series mean anything: a quotation or a supplier bill has
+   * no till, so every one would print counter 0.
+   */
+  hasCounter: boolean;
+}
+
+export const NUMBERING_DOC_TYPE_INFO: Record<NumberingDocType, NumberingDocTypeInfo> = {
+  SALE: { label: 'Sales invoices', noun: 'invoice', prefix: 'INV', hasCounter: true },
+  QUOTE: { label: 'Quotations', noun: 'quotation', prefix: 'QT', hasCounter: false },
+  PROFORMA: { label: 'Proforma invoices', noun: 'proforma invoice', prefix: 'PI', hasCounter: false },
+  PURCHASE: { label: 'Purchases', noun: 'purchase', prefix: 'PUR', hasCounter: false },
+};
 
 export const NUMBERING_RESET_POLICIES = ['NEVER', 'FISCAL_YEAR', 'CALENDAR_YEAR', 'MONTHLY'] as const;
 export type NumberingResetPolicy = (typeof NUMBERING_RESET_POLICIES)[number];
@@ -51,36 +73,72 @@ export const NUMBERING_NEXT_NUMBER_MAX = 999_999_999;
 export const STORE_CODE_PATTERN = /^[A-Z0-9]{1,6}$/;
 
 /**
- * What a tenant gets until it saves its own format. Fiscal-year reset because
- * that is the period Bangladeshi VAT returns and audits run on.
+ * What a tenant gets until it saves its own format — the formats each document
+ * printed before it was configurable, so turning this on renumbers nothing.
+ * Fiscal-year reset is the period Bangladeshi VAT returns and audits run on;
+ * purchases have always been one running series.
  */
 export const DEFAULT_DOCUMENT_NUMBERING: Record<NumberingDocType, DocumentNumberingConfig> = {
   SALE: { template: 'INV-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 },
+  QUOTE: { template: 'QT-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 },
+  PROFORMA: { template: 'PI-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 },
+  PURCHASE: { template: 'PUR-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5 },
 };
 
+export interface DocumentNumberingPreset {
+  key: string;
+  label: string;
+  config: DocumentNumberingConfig;
+}
+
 /** Ready-made formats the settings page offers before "Custom". */
-export const DOCUMENT_NUMBERING_PRESETS: { key: string; label: string; config: DocumentNumberingConfig }[] = [
-  {
-    key: 'fiscal-year',
-    label: 'Yearly series (resets every July)',
-    config: { template: 'INV-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 },
-  },
-  {
-    key: 'per-branch',
-    label: 'Separate series per branch',
-    config: { template: '{STORE}-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'STORE', seqWidth: 5 },
-  },
-  {
-    key: 'monthly',
-    label: 'Monthly series',
-    config: { template: '{YY}{MM}-{SEQ}', resetPolicy: 'MONTHLY', scope: 'TENANT', seqWidth: 4 },
-  },
-  {
-    key: 'running',
-    label: 'Running number, never resets',
-    config: { template: 'INV-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 6 },
-  },
-];
+export function documentNumberingPresets(docType: NumberingDocType): DocumentNumberingPreset[] {
+  const p = NUMBERING_DOC_TYPE_INFO[docType].prefix;
+  // Sales keep the shapes they shipped with: the monthly one is the
+  // `2610-042` look the old reference numbers had.
+  const sale = docType === 'SALE';
+  return [
+    {
+      key: 'fiscal-year',
+      label: 'Yearly series (resets every July)',
+      config: { template: `${p}-{FY}-{SEQ}`, resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 },
+    },
+    {
+      key: 'per-branch',
+      label: 'Separate series per branch',
+      config: {
+        template: sale ? '{STORE}-{FY}-{SEQ}' : `{STORE}-${p}-{FY}-{SEQ}`,
+        resetPolicy: 'FISCAL_YEAR',
+        scope: 'STORE',
+        seqWidth: 5,
+      },
+    },
+    {
+      key: 'monthly',
+      label: 'Monthly series',
+      config: sale
+        ? { template: '{YY}{MM}-{SEQ}', resetPolicy: 'MONTHLY', scope: 'TENANT', seqWidth: 3 }
+        : { template: `${p}-{YY}{MM}-{SEQ}`, resetPolicy: 'MONTHLY', scope: 'TENANT', seqWidth: 4 },
+    },
+    {
+      key: 'running',
+      label: 'Running number, never resets',
+      config: { template: `${p}-{SEQ}`, resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: sale ? 6 : 5 },
+    },
+  ];
+}
+
+/** The scopes a document type can be numbered under — see `hasCounter`. */
+export function numberingScopesFor(docType: NumberingDocType): NumberingScope[] {
+  return NUMBERING_DOC_TYPE_INFO[docType].hasCounter ? [...NUMBERING_SCOPES] : ['TENANT', 'STORE'];
+}
+
+/** The tokens a document type's format may use — see `hasCounter`. */
+export function numberingTokensFor(docType: NumberingDocType): NumberingToken[] {
+  return NUMBERING_DOC_TYPE_INFO[docType].hasCounter
+    ? [...NUMBERING_TOKENS]
+    : NUMBERING_TOKENS.filter((token) => token !== 'COUNTER');
+}
 
 export const NUMBERING_RESET_LABELS: Record<NumberingResetPolicy, string> = {
   NEVER: 'Never',
@@ -155,7 +213,10 @@ export function templateUsesToken(template: string, token: NumberingToken): bool
  * Every reason this format cannot be saved, in the order the owner should fix
  * them. Empty when it is valid.
  */
-export function validateNumberingConfig(config: DocumentNumberingConfig): string[] {
+export function validateNumberingConfig(
+  config: DocumentNumberingConfig,
+  docType: NumberingDocType = 'SALE',
+): string[] {
   const errors: string[] = [];
   const template = typeof config.template === 'string' ? config.template.trim() : '';
 
@@ -205,6 +266,10 @@ export function validateNumberingConfig(config: DocumentNumberingConfig): string
   }
   if (config.resetPolicy === 'MONTHLY' && !(month && (year || fy))) {
     errors.push('A monthly reset needs {MM} and a year ({YYYY}, {YY} or {FY}), or numbers would repeat.');
+  }
+
+  if (!NUMBERING_DOC_TYPE_INFO[docType].hasCounter && (config.scope === 'COUNTER' || has('COUNTER'))) {
+    errors.push(`${NUMBERING_DOC_TYPE_INFO[docType].label} are not rung up at a POS counter, so {COUNTER} and per-counter series do not apply.`);
   }
 
   // Likewise the scope: separate counters only stay apart if the number says whose it is.
@@ -264,26 +329,63 @@ export function renderDocumentNumber(
 ): string {
   const { parts } = parseNumberingTemplate(config.template.trim());
   return parts
-    .map((part) => {
-      if ('literal' in part) return part.literal;
-      switch (part.token) {
-        case 'SEQ':
-          return String(seq).padStart(config.seqWidth, '0');
-        case 'FY':
-          return fiscalYearLabel(ctx.year, ctx.month);
-        case 'YYYY':
-          return String(ctx.year);
-        case 'YY':
-          return String(ctx.year % 100).padStart(2, '0');
-        case 'MM':
-          return String(ctx.month).padStart(2, '0');
-        case 'STORE':
-          return ctx.storeCode ?? '';
-        case 'COUNTER':
-          return String(ctx.counterNumber ?? 0);
-      }
-    })
+    .map((part) => ('literal' in part ? part.literal : renderToken(part.token, seq, config.seqWidth, ctx)))
     .join('');
+}
+
+function renderToken(token: NumberingToken, seq: number, seqWidth: number, ctx: NumberingRenderContext): string {
+  switch (token) {
+    case 'SEQ':
+      return String(seq).padStart(seqWidth, '0');
+    case 'FY':
+      return fiscalYearLabel(ctx.year, ctx.month);
+    case 'YYYY':
+      return String(ctx.year);
+    case 'YY':
+      return String(ctx.year % 100).padStart(2, '0');
+    case 'MM':
+      return String(ctx.month).padStart(2, '0');
+    case 'STORE':
+      return ctx.storeCode ?? '';
+    case 'COUNTER':
+      return String(ctx.counterNumber ?? 0);
+  }
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+
+/**
+ * How to recognise the numbers a format has already printed for one counter,
+ * so a counter used for the first time can continue after them rather than
+ * hand them out again — a tenant switching to a format it used before, or a
+ * document type whose old numbers were never counted (purchases were
+ * `count() + 1`).
+ *
+ * `prefix` is the fixed text in front of the running number, for a cheap
+ * starts-with query; `seqOf` reads the running number back out of a candidate,
+ * or returns null when the candidate is not one of this counter's numbers.
+ * Assumes a config that passed `validateNumberingConfig` (one `{SEQ}`).
+ */
+export function numberingMatcher(
+  config: Pick<DocumentNumberingConfig, 'template'>,
+  ctx: NumberingRenderContext,
+): { prefix: string; seqOf: (candidate: string) => number | null } {
+  const { parts } = parseNumberingTemplate(config.template.trim());
+  const seqAt = parts.findIndex((part) => 'token' in part && part.token === 'SEQ');
+  const text = (from: number, to: number) => parts
+    .slice(from, to)
+    .map((part) => ('literal' in part ? part.literal : renderToken(part.token, 0, 0, ctx)))
+    .join('');
+  const before = text(0, seqAt);
+  const after = text(seqAt + 1, parts.length);
+  const pattern = new RegExp(`^${escapeRegExp(before)}(\\d+)${escapeRegExp(after)}$`);
+  return {
+    prefix: before,
+    seqOf: (candidate: string) => {
+      const match = pattern.exec(candidate);
+      return match ? Number(match[1]) : null;
+    },
+  };
 }
 
 /** Upper-cases and trims a branch code; `null` when it is not a valid one. */

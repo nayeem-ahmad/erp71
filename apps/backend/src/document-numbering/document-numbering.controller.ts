@@ -10,8 +10,8 @@ import { DocumentNumberingResponse, UpdateDocumentNumberingDto } from './documen
 
 /**
  * Settings → Document Numbering. Both routes are admin-only: the read shows
- * every branch's code and counter, and the write changes what every invoice
- * from now on is called.
+ * every branch's code and counter, and the write changes what every document
+ * of that type is called from now on.
  */
 @Controller('document-numbering')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)

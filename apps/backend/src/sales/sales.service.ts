@@ -1778,11 +1778,9 @@ export class SalesService {
     }
 
     /**
-     * The next invoice number in the tenant's Document Numbering format.
-     *
-     * Steps over a number already printed on another sale, as its invoice
-     * number or as a typed reference: the printed invoice shows the reference
-     * when there is one, so the two must not repeat each other either.
+     * The next invoice number in the tenant's Document Numbering format. What
+     * counts as already used — another sale's invoice number or typed
+     * reference — is the engine's `DOCUMENT_NUMBER_SOURCES.SALE`.
      */
     private issueSaleNumber(
         tx: any,
@@ -1795,13 +1793,6 @@ export class SalesService {
             storeId: target.storeId,
             counterId: target.counterId,
             on: target.on,
-            isTaken: async (candidate) => Boolean(await tx.sale.findFirst({
-                where: {
-                    tenant_id: tenantId,
-                    OR: [{ serial_number: candidate }, { reference_number: candidate }],
-                },
-                select: { id: true },
-            })),
         });
     }
 }

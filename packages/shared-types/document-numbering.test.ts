@@ -1,7 +1,11 @@
 import {
   DEFAULT_DOCUMENT_NUMBERING,
-  DOCUMENT_NUMBERING_PRESETS,
+  NUMBERING_DOC_TYPES,
+  documentNumberingPresets,
   fiscalYearLabel,
+  numberingMatcher,
+  numberingScopesFor,
+  numberingTokensFor,
   normalizeStoreCode,
   numberingPeriodKey,
   parseNumberingTemplate,
@@ -17,11 +21,21 @@ const config = (overrides: Partial<DocumentNumberingConfig> = {}): DocumentNumbe
 });
 
 describe('validateNumberingConfig', () => {
-  it('accepts the default and every preset', () => {
-    expect(validateNumberingConfig(DEFAULT_DOCUMENT_NUMBERING.SALE)).toEqual([]);
-    for (const preset of DOCUMENT_NUMBERING_PRESETS) {
-      expect(validateNumberingConfig(preset.config)).toEqual([]);
+  it('accepts every document type\'s default and presets', () => {
+    for (const docType of NUMBERING_DOC_TYPES) {
+      expect(validateNumberingConfig(DEFAULT_DOCUMENT_NUMBERING[docType], docType)).toEqual([]);
+      for (const preset of documentNumberingPresets(docType)) {
+        expect(validateNumberingConfig(preset.config, docType)).toEqual([]);
+      }
     }
+  });
+
+  it('keeps POS counters to the documents rung up at one', () => {
+    const perCounter = config({ template: '{STORE}{COUNTER}-{FY}-{SEQ}', scope: 'COUNTER' });
+    expect(validateNumberingConfig(perCounter, 'SALE')).toEqual([]);
+    expect(validateNumberingConfig(perCounter, 'QUOTE').join()).toMatch(/not rung up at a POS counter/);
+    expect(validateNumberingConfig(config({ template: 'PUR-{COUNTER}-{SEQ}', resetPolicy: 'NEVER' }), 'PURCHASE').join())
+      .toMatch(/not rung up at a POS counter/);
   });
 
   it('requires exactly one {SEQ}', () => {
@@ -152,5 +166,62 @@ describe('helpers', () => {
     expect(normalizeStoreCode('D-1')).toBeNull();
     expect(normalizeStoreCode('')).toBeNull();
     expect(normalizeStoreCode(7)).toBeNull();
+  });
+});
+
+describe('document types', () => {
+  it('defaults each type to the format it printed before it was configurable', () => {
+    const october = { year: 2026, month: 10 };
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.QUOTE, 42, october)).toBe('QT-2627-00042');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.PROFORMA, 7, october)).toBe('PI-2627-00007');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.PURCHASE, 1848, october)).toBe('PUR-01848');
+  });
+
+  it('offers presets in the document\'s own prefix', () => {
+    expect(documentNumberingPresets('PURCHASE').map((p) => p.config.template))
+      .toEqual(['PUR-{FY}-{SEQ}', '{STORE}-PUR-{FY}-{SEQ}', 'PUR-{YY}{MM}-{SEQ}', 'PUR-{SEQ}']);
+    // The purchase default is one of its presets, so the page shows it selected.
+    expect(documentNumberingPresets('PURCHASE').some((p) => p.config.template === DEFAULT_DOCUMENT_NUMBERING.PURCHASE.template
+      && p.config.seqWidth === DEFAULT_DOCUMENT_NUMBERING.PURCHASE.seqWidth
+      && p.config.resetPolicy === DEFAULT_DOCUMENT_NUMBERING.PURCHASE.resetPolicy)).toBe(true);
+    // Sales keep the old reference look for their monthly preset.
+    expect(documentNumberingPresets('SALE').find((p) => p.key === 'monthly')!.config)
+      .toEqual({ template: '{YY}{MM}-{SEQ}', resetPolicy: 'MONTHLY', scope: 'TENANT', seqWidth: 3 });
+  });
+
+  it('offers counters only where there is a till', () => {
+    expect(numberingScopesFor('SALE')).toEqual(['TENANT', 'STORE', 'COUNTER']);
+    expect(numberingScopesFor('PURCHASE')).toEqual(['TENANT', 'STORE']);
+    expect(numberingTokensFor('QUOTE')).not.toContain('COUNTER');
+    expect(numberingTokensFor('SALE')).toContain('COUNTER');
+  });
+});
+
+describe('numberingMatcher', () => {
+  const october = { year: 2026, month: 10 };
+
+  it('recognises the numbers one counter has printed, whatever their padding', () => {
+    const { prefix, seqOf } = numberingMatcher({ template: 'PUR-{SEQ}' }, october);
+    expect(prefix).toBe('PUR-');
+    expect(seqOf('PUR-00042')).toBe(42);
+    expect(seqOf('PUR-1848')).toBe(1848);
+    // An import's purchase shares the prefix but is not one of this series.
+    expect(seqOf('PUR-IMP-2526-00007')).toBeNull();
+    expect(seqOf('XPUR-00001')).toBeNull();
+  });
+
+  it('pins the period and branch the counter belongs to', () => {
+    const { prefix, seqOf } = numberingMatcher({ template: '{STORE}-{YY}{MM}-{SEQ}/A' }, { ...october, storeCode: 'DHK' });
+    expect(prefix).toBe('DHK-2610-');
+    expect(seqOf('DHK-2610-007/A')).toBe(7);
+    expect(seqOf('DHK-2611-007/A')).toBeNull();
+    expect(seqOf('CTG-2610-007/A')).toBeNull();
+    expect(seqOf('DHK-2610-007')).toBeNull();
+  });
+
+  it('treats literal punctuation literally', () => {
+    const { seqOf } = numberingMatcher({ template: 'A.{SEQ}' }, october);
+    expect(seqOf('A.12')).toBe(12);
+    expect(seqOf('AX12')).toBeNull();
   });
 });

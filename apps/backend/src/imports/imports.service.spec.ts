@@ -96,6 +96,8 @@ describe('ImportsService', () => {
                 createMany: jest.fn().mockResolvedValue({ count: 1 }),
                 update: jest.fn().mockResolvedValue({ next_number: 2 }),
             },
+            // The shipment number's fiscal year is read in the tenant's zone.
+            tenant: { findUnique: jest.fn().mockResolvedValue({ timezone: 'Asia/Dhaka' }) },
             product: { findMany: jest.fn() },
             importShipment: {
                 create: jest.fn(),

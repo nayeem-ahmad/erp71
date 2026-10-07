@@ -274,24 +274,6 @@ describe('SalesService', () => {
       }));
     });
 
-    it('steps over a number already printed as another sale\'s invoice or reference', async () => {
-      await service.create('tenant-1', 'user-1', saleDto);
-      const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls[0][1];
-
-      tx.sale.findFirst.mockResolvedValueOnce({ id: 'old-sale' });
-      await expect(isTaken('INV-2627-00001')).resolves.toBe(true);
-      expect(tx.sale.findFirst).toHaveBeenLastCalledWith({
-        where: {
-          tenant_id: 'tenant-1',
-          OR: [{ serial_number: 'INV-2627-00001' }, { reference_number: 'INV-2627-00001' }],
-        },
-        select: { id: true },
-      });
-
-      tx.sale.findFirst.mockResolvedValueOnce(null);
-      await expect(isTaken('INV-2627-00002')).resolves.toBe(false);
-    });
-
     it('issues no number for a sale that fails validation', async () => {
       await expect(service.create('tenant-1', 'user-1', { ...saleDto, totalAmount: 5 }))
         .rejects.toThrow(BadRequestException);
