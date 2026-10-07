@@ -262,7 +262,6 @@ export const coreMessages = {
         branchFilterAll: 'सभी शाखाएँ',
         branchFilterLocked: 'आपको केवल इस शाखा की पहुँच है',
         branchFilterForbidden: 'आपको उस शाखा का दृश्य देखने की अनुमति नहीं है। आपकी शाखा दिखाई जा रही है।',
-        headerMoreMenuAria: "अधिक विकल्प",
         userFallbackRole: "स्टाफ़",
         onboardingMessage: "स्वागत है! उत्पाद जोड़कर और पहली बिक्री करके शुरुआत करें।",
         startSetup: "सेटअप शुरू करें",

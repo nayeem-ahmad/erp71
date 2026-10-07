@@ -262,7 +262,6 @@ export const coreMessages = {
         branchFilterAll: 'Toutes les succursales',
         branchFilterLocked: 'Vous n\'avez accès qu\'à cette succursale',
         branchFilterForbidden: 'Vous n\'avez pas accès à cette vue de succursale. Votre succursale est affichée à la place.',
-        headerMoreMenuAria: "Plus d'options",
         userFallbackRole: "Personnel",
         onboardingMessage: "Bienvenue ! Commencez par ajouter des produits et réaliser votre première vente.",
         startSetup: "Démarrer la configuration",

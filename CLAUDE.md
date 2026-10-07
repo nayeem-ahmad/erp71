@@ -83,6 +83,7 @@ Full spec: `docs/ui-design-guidelines.md`. Non-negotiables for all new/changed U
 - Compact density: `text-sm`/`text-xs` body, `p-3 md:p-4` page padding, `space-y-4` sections
 - Notifications go through the global `Toaster` store only — no page-local toasts; validation errors are inline per field, never `alert()`
 - No floating action buttons hiding features — persistent actions live in the header, sidebar, or `PageHeader` actions. `FloatingPanel` (the time tracker) is the one sanctioned floating surface: movable, position remembered, collapsible, and never the only way to reach a feature — see §2.8 of the UI spec
+- App header (top bar): a control earns a place only by showing live state (voice mic, timer, AI, unread counts). Preferences and help go in the avatar menu, and anything with a page goes in the sidebar. No `⋯` overflow. See §2.12 of the UI spec
 - Mobile: ≥44px touch targets (`min-h-touch`), `hideOnMobile` on secondary columns of wide tables, no horizontal body scroll at 360px
 - Money always via `formatBDT()` — never a literal `$`. Sole exception: a document genuinely denominated in a foreign currency (proforma invoices, import shipments) uses `formatCurrency(value, { currency })` — see `docs/ui-design-guidelines.md`
 

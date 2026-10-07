@@ -9,13 +9,11 @@ import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import ActivationPendingBanner from '@/components/ActivationPendingBanner';
 // Fetched on their own after the page is up, and only when rendered; see the file.
-import { AiChatWidget, FeedbackWidget, TimeTracker, VoiceNavWidget } from '@/components/app-shell-widgets';
+import { AiChatWidget, SupportDialog, TimeTracker, VoiceNavWidget } from '@/components/app-shell-widgets';
 import TimerChip from '@/components/projects/TimerChip';
-import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
@@ -102,6 +100,7 @@ function AppShell({ children }: DashboardLayoutProps) {
     const [emailVerificationDismissed, setEmailVerificationDismissed] = useState(false);
     const [resendingVerification, setResendingVerification] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const [supportOpen, setSupportOpen] = useState(false);
     const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
     const accountPlatformFeatures: PlatformFeatures = user?.platform_features ?? DEFAULT_PLATFORM_FEATURES;
     // Derived rather than set once on load: `me` now refreshes in the background,
@@ -457,6 +456,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         && hasPlanEntitlement(planFeatures, 'premiumAi')
         && !inPlatformAdminMode
         && !inRefereeMode;
+    const canOpenSupport = platformFeatures.support || platformFeatures.feedback;
     const effectivePlatformFeatures: PlatformFeatures = {
         ...platformFeatures,
         voice: canAccessVoice,
@@ -736,18 +736,16 @@ function AppShell({ children }: DashboardLayoutProps) {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
+                    {/* Only things with live state get a control here: a mic, a
+                        running clock, the assistant, unread counts. Preferences
+                        and help live in the avatar menu, and anything with a page
+                        of its own is in the sidebar — see §2.12 of the UI spec. */}
+                    <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
                         <div className={headerActionsClass}>
-                            <div className="hidden md:contents">
-                                {canAccessVoice ? <VoiceNavWidget /> : null}
-                                {canAccessVoice ? <div className="h-8 w-px bg-gray-200 hidden sm:block" /> : null}
-                                <LanguageSwitcher />
-                            </div>
-                            <AppHeaderMobileMenu />
+                            {canAccessVoice ? <VoiceNavWidget /> : null}
                         </div>
                         {canTrackTime && canRenderChildren ? <TimerChip /> : null}
                         <div className={headerActionsClass}>
-                            {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
                             {canAccessAiChat ? <AiChatWidget /> : null}
                             <ChatBell />
                             <NotificationBell />
@@ -773,6 +771,7 @@ function AppShell({ children }: DashboardLayoutProps) {
                                 }
                                 avatarUrl={user?.avatar_url}
                                 canSwitchAccount={canSwitchAccount}
+                                onOpenSupport={canOpenSupport ? () => setSupportOpen(true) : undefined}
                             />
                         </div>
                     </div>
@@ -877,6 +876,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             </div>
 
             {canTrackTime && canRenderChildren ? <TimeTracker /> : null}
+            {supportOpen && canOpenSupport ? <SupportDialog onClose={() => setSupportOpen(false)} /> : null}
             <Toaster />
             <ServiceWorkerRegistrar />
         </div>
