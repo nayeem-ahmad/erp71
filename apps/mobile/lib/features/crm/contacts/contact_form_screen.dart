@@ -6,7 +6,6 @@ import '../../../core/api/api_exception.dart';
 import '../../../ui/widgets.dart';
 import '../data/crm_providers.dart';
 import '../data/models.dart';
-import '../widgets/crm_widgets.dart';
 import 'card_photo.dart';
 
 /// Creates a contact, or edits one when [contactId] is given.

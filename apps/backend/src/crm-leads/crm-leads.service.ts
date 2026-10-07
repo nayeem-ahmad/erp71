@@ -1061,7 +1061,8 @@ export class CrmLeadsService {
         });
     }
 
-    async convert(tenantId: string, id: string) {
+    /** `storeId`: the branch the new customer is added at — the header branch. */
+    async convert(tenantId: string, id: string, storeId?: string) {
         const lead = await this.db.lead.findFirst({ where: { id, tenant_id: tenantId } });
         if (!lead) throw new NotFoundException('Lead not found');
         if (lead.status === LeadStatus.CONVERTED) {
@@ -1084,7 +1085,7 @@ export class CrmLeadsService {
             phone: lead.mobile,
             email: lead.email ?? undefined,
             address: lead.address ?? undefined,
-        });
+        }, { storeId });
 
         await this.closeOutPlannedActivities(tenantId, id);
 

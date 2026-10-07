@@ -23,6 +23,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       signature_lines: false,
       hide_empty_discount: false,
       warranty_column: 'always',
+      table_borders: 'none',
       footer_text: null,
     });
   });
@@ -39,6 +40,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       signature_lines: true,
       hide_empty_discount: true,
       warranty_column: 'never',
+      table_borders: 'columns',
       footer_text: 'Goods once sold are not returnable.',
     };
     expect(normalizeInvoicePrintPrefs(saved)).toEqual(saved);
@@ -53,6 +55,12 @@ describe('normalizeInvoicePrintPrefs', () => {
   it('reads an unknown layout as the standard one', () => {
     expect(normalizeInvoicePrintPrefs({ layout: 'fancy' }).layout).toBe('standard');
     expect(normalizeInvoicePrintPrefs({ layout: 'detailed' }).layout).toBe('detailed');
+  });
+
+  it('reads the table borders choice, and an unknown one as none', () => {
+    expect(normalizeInvoicePrintPrefs({ table_borders: 'columns' }).table_borders).toBe('columns');
+    expect(normalizeInvoicePrintPrefs({ table_borders: 'thick' }).table_borders).toBe('none');
+    expect(normalizeInvoicePrintPrefs({}).table_borders).toBe('none');
   });
 
   it('reads each warranty column choice, and an unknown one as always', () => {

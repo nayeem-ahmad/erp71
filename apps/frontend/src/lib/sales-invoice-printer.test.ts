@@ -857,6 +857,47 @@ describe('detailed invoice layout', () => {
         });
     });
 
+    describe('table borders', () => {
+        const ruled = { ...detailed, table_borders: 'columns' as const };
+        const itemTable = (html: string) => {
+            const start = html.indexOf('<table class="d-table');
+            return html.slice(start, html.indexOf('</table>', start));
+        };
+
+        it('prints no borders by default, as before the option', () => {
+            const html = render(posted, 'A4', detailed);
+            // The rules are always in the stylesheet; the table just does not take them.
+            expect(html).toContain('<table class="d-table">');
+            expect(html.slice(html.indexOf('<body>'))).not.toContain('d-table--ruled');
+            expect(itemTable(html)).not.toContain('<tfoot>');
+        });
+
+        it('rules the item cells, not the box row that heads the same table', () => {
+            const html = render(posted, 'A4', ruled);
+            expect(html).toContain('<table class="d-table d-table--ruled">');
+
+            const cells = ruleFor(html, '.d-table--ruled > thead > tr:not(.d-info-row) > th, .d-table--ruled > tbody > tr > td');
+            expect(cells).toContain('border-left:1px solid #9ca3af');
+            expect(cells).toContain('border-right:1px solid #9ca3af');
+            expect(ruleFor(html, '.d-table--ruled > thead > tr:not(.d-info-row) > th')).toContain('border-top:1px solid #9ca3af');
+        });
+
+        it('closes the table under the last row on every page with a repeating foot', () => {
+            const table = itemTable(render(posted, 'A4', ruled));
+            // After the rows, spanning every column, as tall as its own rule.
+            expect(table.indexOf('</tbody>')).toBeLessThan(table.indexOf('<tfoot>'));
+            expect(table).toContain('<tfoot><tr class="d-close"><td colspan="6"></td></tr></tfoot>');
+            expect(ruleFor(render(posted, 'A4', ruled), '.d-table--ruled > tfoot > tr.d-close > td')).toContain(
+                'border-top:1px solid #9ca3af',
+            );
+        });
+
+        it('leaves the standard design to its own table style', () => {
+            const html = render(posted, 'A4', { table_borders: 'columns' });
+            expect(html).not.toContain('d-table');
+        });
+    });
+
     describe('page margin line', () => {
         it('prints when the invoice was printed and page X of Y on every page', () => {
             const html = render(posted, 'A4', detailed);

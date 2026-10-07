@@ -140,14 +140,14 @@ describe('CrmLeadsService', () => {
             customersService.create.mockResolvedValueOnce({ id: 'cust-1', name: 'Jane Doe', phone: '01700000000' });
             db.lead.update.mockResolvedValueOnce({ ...lead, status: LeadStatus.CONVERTED, converted_customer_id: 'cust-1', score: 100 });
 
-            const result = await service.convert('tenant-1', 'lead-1');
+            const result = await service.convert('tenant-1', 'lead-1', 'branch-a');
 
             expect(customersService.create).toHaveBeenCalledWith('tenant-1', {
                 name: 'Jane Doe',
                 phone: '01700000000',
                 email: 'jane@example.com',
                 address: 'Dhaka',
-            });
+            }, { storeId: 'branch-a' });
             expect(db.lead.update).toHaveBeenCalledWith({
                 where: { id: 'lead-1' },
                 data: {

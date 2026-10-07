@@ -7,6 +7,7 @@ import {
     type InvoiceLayout,
     type InvoicePadding,
     type InvoicePrintPrefs,
+    type InvoiceTableBorders,
     type InvoiceTableStyle,
     type InvoiceWarrantyColumn,
 } from '@erp71/shared-types';
@@ -112,6 +113,17 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
                     <option value="always">{copy.warrantyAlways}</option>
                     <option value="when-used">{copy.warrantyWhenUsed}</option>
                     <option value="never">{copy.warrantyNever}</option>
+                </Select>
+            </Field>
+
+            <Field label={copy.tableBordersLabel} htmlFor={`${id}-borders`}>
+                <Select
+                    id={`${id}-borders`}
+                    value={value.table_borders}
+                    onChange={(e) => set('table_borders', e.target.value as InvoiceTableBorders)}
+                >
+                    <option value="none">{copy.tableBordersNone}</option>
+                    <option value="columns">{copy.tableBordersColumns}</option>
                 </Select>
             </Field>
 

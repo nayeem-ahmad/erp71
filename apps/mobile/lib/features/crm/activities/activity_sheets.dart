@@ -11,7 +11,6 @@ import '../access.dart';
 import '../data/crm_providers.dart';
 import '../data/crm_repository.dart';
 import '../data/models.dart';
-import '../widgets/crm_widgets.dart';
 
 // The sheets that record work against a lead: log something that happened,
 // plan the next follow-up, and close out a planned one.

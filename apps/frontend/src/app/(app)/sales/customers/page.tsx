@@ -13,8 +13,9 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, Button, Input } from '@/components/ui';
+import { BranchFilter, PageShell, Button, Input } from '@/components/ui';
 import { useServerList } from '@/hooks/useServerList';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'customer_code', label: 'Customer Code', required: false },
@@ -38,6 +39,8 @@ interface Customer {
     profile_pic_url?: string | null;
     customer_group_id?: string | null;
     territory_id?: string | null;
+    store_id?: string | null;
+    store?: { id: string; name: string } | null;
     credit_limit?: string | number | null;
     default_discount_pct?: string | number | null;
     birthday?: string | null;
@@ -83,6 +86,10 @@ export default function CustomersPage() {
     // The tenant admin's Sales Settings switch. Off until it reads true, so the
     // column never flashes in for a shop that has it off.
     const [showCredit, setShowCredit] = useState(false);
+    // Customers are company-level, so a member who may see every branch starts
+    // on all of them. A limited member sees only their branches' customers —
+    // the server enforces that whatever is sent; see customer-visibility.ts.
+    const branch = useBranchScope({ startOnAll: true });
 
     useEffect(() => {
         let cancelled = false;
@@ -119,6 +126,7 @@ export default function CustomersPage() {
     const {
         items: customers,
         loading,
+        error: listError,
         serverPagination,
         reload: loadCustomers,
     } = useServerList<Customer>({
@@ -128,18 +136,22 @@ export default function CustomersPage() {
             segment: segment || undefined,
             customerType: customerType || undefined,
             ...applyCreatedRangeQuery(createdRange),
+            storeId: branch.apiStoreId,
             ...p,
         }),
-        deps: [debouncedSearch, segment, customerType, createdRange],
+        deps: [debouncedSearch, segment, customerType, createdRange, branch.apiStoreId],
+        enabled: branch.ready,
     });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
     useEffect(() => {
-        loadSegmentStats();
-    }, []);
+        if (branch.ready) loadSegmentStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId]);
 
     const loadSegmentStats = async () => {
         try {
-            const stats = await api.getCustomerSegmentStats();
+            const stats = await api.getCustomerSegmentStats(branch.apiStoreId);
             setSegmentStats(stats);
         } catch (error) {
             console.error('Failed to load segment stats', error);
@@ -387,6 +399,7 @@ export default function CustomersPage() {
                     )}
                     actions={
                         <>
+                            <BranchFilter scope={branch} />
                             <button
                                 onClick={handleRunSegmentation}
                                 disabled={runningSegmentation}
@@ -442,6 +455,7 @@ export default function CustomersPage() {
                     onClose={closeModal}
                     onSave={handleSaveCustomer}
                     customer={editTarget}
+                    branches={branch.canSeeAll && !branch.hidden ? branch.branches : undefined}
                 />
 
                 <ImportDialog

@@ -1936,11 +1936,14 @@ export const api = {
         sortDir?: string;
         createdFrom?: string;
         createdTo?: string;
+        /** A branch id or `all`; omitted, the server shows every customer the member may see. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.search) query.set('search', params.search);
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.segment) query.set('segment', params.segment);
         if (params?.customerType) query.set('customerType', params.customerType);
         if (params?.sortBy) query.set('sortBy', params.sortBy);
@@ -1959,7 +1962,8 @@ export const api = {
         return fetchWithAuth(`/customers/${id}/history${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerHistory: (id: string) => fetchWithAuth(`/customers/${id}/history`),
-    getCustomerSegmentStats: () => fetchWithAuth('/customers/segment-stats'),
+    getCustomerSegmentStats: (storeId?: string) =>
+        fetchWithAuth(`/customers/segment-stats${storeId ? `?storeId=${encodeURIComponent(storeId)}` : ''}`),
     runCustomerSegmentation: () => fetchWithAuth('/customers/run-segmentation', { method: 'POST' }),
     evaluateCustomerSegments: () => fetchWithAuth('/customers/segments/evaluate', { method: 'POST' }),
     createCustomer: (data: any) => fetchWithAuth('/customers', {

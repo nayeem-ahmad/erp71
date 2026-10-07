@@ -1,5 +1,5 @@
 name: erp71_mobile
-description: "ERP71 for Android and iOS: Google sign-in and CRM."
+description: "ERP71 for Android and iOS: the business pulse, cashiers and the CRM."
 publish_to: 'none'
 
 version: 0.1.0+1
@@ -17,6 +17,7 @@ dependencies:
   http: ^1.6.0
   image_picker: ^1.1.2
   intl: ^0.20.2
+  local_auth: ^3.0.2
   timezone: ^0.11.1
   url_launcher: ^6.3.2
 

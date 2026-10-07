@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/lock/app_lock_gate.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'router.dart';
@@ -17,6 +18,7 @@ class Erp71App extends ConsumerWidget {
       themeMode: ThemeMode.light,
       scaffoldMessengerKey: rootMessengerKey,
       routerConfig: ref.watch(routerProvider),
+      builder: (context, child) => AppLockGate(child: child!),
     );
   }
 }

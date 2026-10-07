@@ -172,6 +172,16 @@ export class UpdateCustomerDto {
     @IsUUID()
     sales_rep_id?: string | null;
 
+    /**
+     * The branch the customer belongs to besides those they bought at — see
+     * `customer-visibility.ts`. Null clears it. Only a member who sees every
+     * branch may change it.
+     */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    store_id?: string | null;
+
     @IsOptional()
     @IsNumber()
     @Min(0)
