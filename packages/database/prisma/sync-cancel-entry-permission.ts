@@ -41,7 +41,8 @@
  * it belongs to no legacy role and to no module template, only to Tenant Admin
  * (which holds every permission) — so it reuses this reconciler through
  * `--permission=` rather than copying it. Only the permissions listed in
- * TENANT_ADMIN_ONLY_PERMISSIONS are accepted.
+ * TENANT_ADMIN_ONLY_PERMISSIONS are accepted. It runs on boot as its own step,
+ * `sync:adjust-product-cost-permission` in apps/backend/scripts/db-prepare.sh.
  *
  * Usage:
  *   npx tsx prisma/sync-cancel-entry-permission.ts --dry-run

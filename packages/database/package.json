@@ -27,6 +27,7 @@
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",
     "sync:tenant-role-templates": "tsx prisma/sync-tenant-role-templates.ts",
     "sync:cancel-entry-permission": "tsx prisma/sync-cancel-entry-permission.ts",
+    "sync:adjust-product-cost-permission": "tsx prisma/sync-cancel-entry-permission.ts --permission=ADJUST_PRODUCT_COST",
     "sync:work-schedules": "tsx prisma/sync-work-schedules.ts",
     "sync:salary-components": "tsx prisma/sync-salary-components.ts",
     "sync:support-thread-creators": "tsx prisma/sync-support-thread-creators.ts",
