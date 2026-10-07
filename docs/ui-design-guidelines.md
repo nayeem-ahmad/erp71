@@ -208,12 +208,11 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 | Voice mic (premium voice) | Listening state. **One button**: the examples show in a popover while it listens, not behind a `?` of their own |
 | `TimerChip` (projects + `LOG_PROJECT_TIME`) | The running clock, and the tracker's anchor (§2.8) |
 | AI assistant (premium AI) | Opens a docked panel that keeps a conversation going across pages |
-| Team chat (chat add-on) | Unread count |
 | Notifications | Unread count |
 | Avatar menu | Who you are, and everything below |
 
 - **Preferences and help go in the avatar menu**: switch account, profile, language (`LanguageSwitcher` is a menu row), Support (`SupportDialog`, the composer that captures the current page), sign out.
-- **Anything with a page of its own goes in the sidebar**, not the header — Help, Support, Chat all have sidebar entries already.
+- **Anything with a page of its own goes in the sidebar**, not the header — Help, Support, Chat all have sidebar entries already. A page's live count rides on its sidebar link instead: team chat's unread count is a blue `NavCountBadge` on the Chat link (a dot on the icon when the sidebar is collapsed), the way the voucher approval queue is an amber one on Vouchers. On a phone the sidebar is a drawer, so the menu button carries a dot while chat has unread messages (`useChatUnreadCount`, polled by the shell and passed to the sidebar). Team chat had its own header icon until 2026-10-07.
 - Header icon buttons are `min-h-touch min-w-touch`, `h-5 w-5` icons, `text-gray-500` idle. No accent colour and no idle animation: a control pulses only while something is happening (listening, a running timer).
 - No `⋯` overflow menu in the header. If the header does not fit at 360px, the fix is to take a control out (into the avatar menu or the sidebar), not to fold it away.
 - Adding a header control is a design decision, not a feature's default: say which live state it shows, and what leaves to make room.

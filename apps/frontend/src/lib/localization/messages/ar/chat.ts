@@ -78,8 +78,8 @@ export const chatMessages = {
         back: "العودة إلى المحادثات",
         starting: "جارٍ البدء…",
     },
-    bell: {
-        label: "دردشة الفريق",
+    badge: {
+        unread: "{count, plural, one {# رسالة غير مقروءة} other {# رسائل غير مقروءة}}",
     },
     errors: {
         listFailed: "تعذّر تحميل محادثاتك",
