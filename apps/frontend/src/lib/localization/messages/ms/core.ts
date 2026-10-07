@@ -262,7 +262,6 @@ export const coreMessages = {
             branchFilterAll: 'Semua cawangan',
             branchFilterLocked: 'Anda hanya mempunyai akses ke cawangan ini',
             branchFilterForbidden: 'Anda tiada akses ke paparan cawangan itu. Cawangan anda dipaparkan.',
-            headerMoreMenuAria: "Lagi pilihan",
             userFallbackRole: "Kakitangan",
             onboardingMessage: "Selamat datang! Mulakan dengan menambah produk dan membuat jualan pertama anda.",
             startSetup: "Mulakan persediaan",

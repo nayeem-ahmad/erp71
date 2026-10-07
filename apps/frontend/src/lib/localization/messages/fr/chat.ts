@@ -78,8 +78,8 @@ export const chatMessages = {
         back: "Retour aux conversations",
         starting: "Démarrage…",
     },
-    bell: {
-        label: "Discussion d'équipe",
+    badge: {
+        unread: "{count, plural, one {# message non lu} other {# messages non lus}}",
     },
     errors: {
         listFailed: "Impossible de charger vos conversations",

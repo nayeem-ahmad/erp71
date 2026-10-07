@@ -107,9 +107,12 @@ function setBranding(overrides: { logoUrl?: string | null; businessName?: string
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('../lib/localization/messages/en');
 
+    const { formatMessage } = jest.requireActual('@/lib/i18n');
+
     return {
         useI18n: () => ({
             t: enMessages,
+            fmt: (template: string, values: Record<string, string | number>) => formatMessage(template, values, 'en'),
         }),
     };
 }, { virtual: true });
@@ -581,5 +584,34 @@ describe('Sidebar — URL shortener under Admin', () => {
 
         expect(screen.getByText('Billing')).toBeInTheDocument();
         expect(screen.queryByText('URL Shortener')).not.toBeInTheDocument();
+    });
+});
+
+describe('Sidebar — team chat unread badge', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        setBranding();
+    });
+
+    it('badges the Chat link with the unread count that used to be a header icon', () => {
+        render(<Sidebar planFeatures={{ teamChat: true }} chatUnreadCount={3} />);
+
+        const chat = screen.getByRole('link', { name: /Chat/ });
+        expect(chat).toHaveTextContent('3');
+        expect(screen.getByTitle('3 unread messages')).toBeInTheDocument();
+    });
+
+    it('stays quiet at zero', () => {
+        render(<Sidebar planFeatures={{ teamChat: true }} chatUnreadCount={0} />);
+
+        expect(screen.getByRole('link', { name: /Chat/ })).not.toHaveTextContent(/\d/);
+    });
+
+    it('puts the count in the tooltip when the sidebar is collapsed to icons', () => {
+        render(<Sidebar planFeatures={{ teamChat: true }} chatUnreadCount={1} />);
+
+        fireEvent.click(screen.getByTitle('Collapse sidebar'));
+
+        expect(screen.getByTitle('Chat · 1 unread message')).toBeInTheDocument();
     });
 });

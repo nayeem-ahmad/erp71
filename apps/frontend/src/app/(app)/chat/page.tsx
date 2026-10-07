@@ -21,6 +21,7 @@ import {
 import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { api } from '@/lib/api';
 import { fetchMe } from '@/hooks/use-me';
+import { notifyChatUnreadChanged } from '@/hooks/useChatUnreadCount';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -132,6 +133,8 @@ export default function ChatPage() {
                     marked.through >= (newest?.createdAt ?? '');
                 if (newest && newest.sender.id !== currentUserIdRef.current && !alreadyMarked) {
                     await api.markChatConversationRead(conversationId);
+                    // The sidebar's unread badge polls once a minute; tell it now.
+                    notifyChatUnreadChanged();
                     // Recorded as the message we read up to rather than the wall
                     // clock: the server stamps now(), which is never earlier.
                     markedReadRef.current = { conversationId, through: newest.createdAt };
