@@ -55,94 +55,231 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final notice = auth is AuthSignedOut ? auth.notice : null;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.canvas,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _Wordmark(),
-                  const SizedBox(height: 32),
-                  Text(
-                    'Sign in',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 22,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Use the Google account you use for ERP71 on the web.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  if (notice != null && _error == null) ...[
-                    InlineNotice(message: notice),
-                    const SizedBox(height: 16),
-                  ],
-                  OutlinedButton(
-                    onPressed: _busy ? null : _signIn,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      backgroundColor: AppColors.surface,
-                    ),
-                    child: _busy
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              GoogleLogo(),
-                              SizedBox(width: 12),
-                              Flexible(
-                                child: Text(
-                                  'Continue with Google',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+        // Fills the screen so the sign-in sits at the bottom, in thumb reach,
+        // and scrolls instead of overflowing on a short phone or with a long
+        // error under the button.
+        child: CustomScrollView(
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _Wordmark(),
+                        const SizedBox(height: 28),
+                        Text(
+                          'Your CRM, on your phone',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                            height: 1.15,
                           ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    InlineNotice(message: _error!, tone: Tone.danger),
-                  ],
-                  const SizedBox(height: 32),
-                  Text(
-                    'New to ERP71?',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  TextButton(
-                    onPressed: () => launchUrl(
-                      webAppUrl,
-                      mode: LaunchMode.externalApplication,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Sign in to pick up where you left off on the web.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: 15,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const _WhatsInside(),
+                        const SizedBox(height: 24),
+                        const Spacer(),
+                        if (notice != null && _error == null) ...[
+                          InlineNotice(message: notice),
+                          const SizedBox(height: 12),
+                        ],
+                        _GoogleButton(busy: _busy, onPressed: _signIn),
+                        if (_error != null) ...[
+                          const SizedBox(height: 12),
+                          InlineNotice(message: _error!, tone: Tone.danger),
+                        ],
+                        const SizedBox(height: 10),
+                        Text(
+                          'Use the Google account you sign in with on '
+                          'app.erp71.com.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'New to ERP71?',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => launchUrl(
+                                webAppUrl,
+                                mode: LaunchMode.externalApplication,
+                              ),
+                              child: const Text('Create a workspace'),
+                            ),
+                          ],
+                        ),
+                        if (kDebugMode)
+                          Text(
+                            'API: ${ref.watch(appConfigProvider).apiBaseUrl}',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                      ],
                     ),
-                    child: const Text('Create your workspace at app.erp71.com'),
                   ),
-                  if (kDebugMode) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'API: ${ref.watch(appConfigProvider).apiBaseUrl}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textHint,
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+/// Google's own light button (its sign-in branding guidelines): white, a
+/// gray-green stroke, near-black label. While busy it keeps a label next to
+/// the spinner, so a slow picker doesn't look like a dead button.
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.busy, required this.onPressed});
+
+  final bool busy;
+  final VoidCallback onPressed;
+
+  static const _stroke = Color(0xFF747775);
+  static const _label = Color(0xFF1F1F1F);
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: busy ? null : onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        backgroundColor: AppColors.surface,
+        foregroundColor: _label,
+        side: BorderSide(color: busy ? AppColors.border : _stroke),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+      ),
+      child: busy
+          ? const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Flexible(
+                  child: Text('Signing in…', overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            )
+          : const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GoogleLogo(),
+                SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    'Continue with Google',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+/// What the app holds, with the icons its bottom navigation uses, so the
+/// first screen previews the one a person lands on.
+class _WhatsInside extends StatelessWidget {
+  const _WhatsInside();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Card(
+      child: Column(
+        children: [
+          _Feature(
+            icon: Icons.people_alt_outlined,
+            title: 'Leads by stage',
+            detail: 'See your pipeline and move a lead to its next stage.',
+          ),
+          Divider(),
+          _Feature(
+            icon: Icons.event_note_outlined,
+            title: 'Follow-ups and calls',
+            detail: "Plan the next follow-up, log a call, see today's work.",
+          ),
+          Divider(),
+          _Feature(
+            icon: Icons.contacts_outlined,
+            title: 'Contacts',
+            detail: "Your customers' details wherever you are.",
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Feature extends StatelessWidget {
+  const _Feature({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primaryTint,
+              borderRadius: BorderRadius.circular(AppRadius.control),
+            ),
+            child: Icon(icon, size: 20, color: AppColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text(detail, style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -156,27 +293,27 @@ class _Wordmark extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 40,
-          height: 40,
+          width: 32,
+          height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.primary,
-            borderRadius: BorderRadius.circular(AppRadius.card),
+            borderRadius: BorderRadius.circular(AppRadius.control),
           ),
           child: const Text(
             '71',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
-              fontSize: 16,
+              fontSize: 13,
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         const Text(
           'ERP71',
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.w800,
             color: AppColors.text,
             letterSpacing: -0.3,

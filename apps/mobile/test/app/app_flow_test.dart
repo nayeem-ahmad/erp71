@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:erp71_mobile/features/crm/leads/lead_detail_screen.dart';
@@ -33,6 +34,57 @@ void main() {
     expect(overview.headers['Authorization'], 'Bearer access-1');
     // A manager starts on "Mine".
     expect(overview.url.queryParameters, {'mine': 'true'});
+  });
+
+  testWidgets('the sign-in screen says what the app is for', (tester) async {
+    await pumpApp(tester, backend: crmBackend());
+
+    expect(find.text('Your CRM, on your phone'), findsOneWidget);
+    expect(find.text('Leads by stage'), findsOneWidget);
+    expect(find.text('Follow-ups and calls'), findsOneWidget);
+    expect(find.text('Contacts'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextButton, 'Create a workspace'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('says sign-in is under way while Google is open', (tester) async {
+    final google = FakeGoogleAuth()..hold = Completer<void>();
+    await pumpApp(tester, backend: crmBackend(), google: google);
+
+    await tester.tap(find.text('Continue with Google'));
+    await tester.pump();
+
+    expect(find.text('Signing in…'), findsOneWidget);
+    expect(find.text('Continue with Google'), findsNothing);
+
+    google.hold!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Open leads'), findsOneWidget);
+  });
+
+  testWidgets('on a short phone the sign-in screen scrolls, not overflows', (
+    tester,
+  ) async {
+    final backend = crmBackend()
+      ..on(
+        'POST',
+        '/auth/google',
+        (_) => apiError(400, 'Please accept the Terms of Service to continue.'),
+      );
+    await pumpApp(tester, backend: backend, size: const Size(360, 560));
+
+    // The longest the screen gets: the no-account message under the button.
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.pumpAndSettle();
+    await signInWithGoogle(tester);
+    final message = find.textContaining(
+      'No ERP71 account uses this Google address',
+    );
+    await tester.ensureVisible(message);
+    await tester.pumpAndSettle();
+    expect(message, findsOneWidget);
   });
 
   testWidgets('an address with no ERP71 account is pointed at the web', (

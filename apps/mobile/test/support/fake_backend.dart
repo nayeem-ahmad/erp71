@@ -111,9 +111,14 @@ class FakeGoogleAuth implements GoogleAuth {
   String? lastServerClientId;
   int signOuts = 0;
 
+  /// When set, the picker stays open until this completes — a person still
+  /// choosing their account.
+  Completer<void>? hold;
+
   @override
   Future<String?> obtainIdToken({required String serverClientId}) async {
     lastServerClientId = serverClientId;
+    await hold?.future;
     if (error != null) throw error!;
     return idToken;
   }

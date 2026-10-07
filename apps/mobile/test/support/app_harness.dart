@@ -11,15 +11,16 @@ import 'fake_backend.dart';
 import 'fixtures.dart';
 
 /// The whole app against [backend], on a 360 × 780 phone — the narrowest
-/// width the UI rules require to work without horizontal scrolling. A layout
-/// that overflows fails the test.
+/// width the UI rules require to work without horizontal scrolling — unless
+/// [size] says otherwise. A layout that overflows fails the test.
 Future<void> pumpApp(
   WidgetTester tester, {
   required FakeBackend backend,
   FakeGoogleAuth? google,
   InMemoryKeyValueStore? storage,
+  Size size = const Size(360, 780),
 }) async {
-  tester.view.physicalSize = const Size(1080, 2340);
+  tester.view.physicalSize = size * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
   addTearDown(() => setActiveTimeZone(null));
