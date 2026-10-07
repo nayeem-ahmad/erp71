@@ -259,6 +259,15 @@ step db:seed:platform \
 step sync:accounting \
     npm run sync:accounting --workspace=@erp71/database
 
+# sync:store-code gives every branch without one a code (S1, S2, ...), which a
+# document number format prints for {STORE}. Store.code is nullable, so db push
+# adds it without help; this fills what the migration's backfill would have.
+# Idempotent (fills NULLs only, never an owner's own code), and not load-bearing:
+# the numbering engine assigns a missing code on first use. See
+# prisma/sync-store-code.ts.
+step sync:store-code \
+    npm run sync:store-code --workspace=@erp71/database
+
 # sync:lead-taxonomy plays the same role for CRM lead sources/categories, and
 # additionally backfills Lead.source_id / Lead.category_id from the legacy enum
 # columns. It is idempotent and additive-only, and it degrades to "seed defaults

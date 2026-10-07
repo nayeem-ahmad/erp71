@@ -31,6 +31,7 @@ import { AssetsModule } from './assets/assets.module';
 import { SalesModule } from './sales/sales.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { SalesSettingsModule } from './sales-settings/sales-settings.module';
+import { DocumentNumberingModule } from './document-numbering/document-numbering.module';
 import { PrintTemplatesModule } from './print-templates/print-templates.module';
 import { CustomersModule } from './customers/customers.module';
 import { CustomerGroupsModule } from './customer-groups/customer-groups.module';
@@ -175,6 +176,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         SalesModule,
         PaymentMethodsModule,
         SalesSettingsModule,
+        DocumentNumberingModule,
         PrintTemplatesModule,
         CustomersModule,
         CustomerGroupsModule,

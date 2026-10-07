@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { ShoppingBag, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { fetchMe } from '@/hooks/use-me';
@@ -10,8 +11,9 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
 import { isOwner } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
-import { Button, Checkbox, Field, Input, PageShell, Select } from '@/components/ui';
+import { Button, Checkbox, Field, PageShell, Select } from '@/components/ui';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { routes } from '@/lib/routes';
 
 const PAPER_SIZE_OPTIONS: { value: PaperSize; label: string }[] = [
     { value: 'A4', label: 'A4 (210 × 297 mm)' },
@@ -28,7 +30,6 @@ export default function SalesSettingsPage() {
     const [saving, setSaving] = useState(false);
 
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
-    const [refFormat, setRefFormat] = useState('');
     const [posEnabled, setPosEnabled] = useState(true);
     const [requireCashierSession, setRequireCashierSession] = useState(false);
     const [showCustomerCredit, setShowCustomerCredit] = useState(false);
@@ -43,7 +44,6 @@ export default function SalesSettingsPage() {
 
             if (data?.default_paper_size) setPaperSize(data.default_paper_size as PaperSize);
             if (data?.paper_size) setPaperSize(data.paper_size as PaperSize);
-            if (data?.reference_number_format) setRefFormat(data.reference_number_format);
             setPosEnabled(data?.pos_enabled !== false);
             setRequireCashierSession(Boolean(data?.require_cashier_session));
             setShowCustomerCredit(Boolean(data?.show_customer_credit));
@@ -64,7 +64,6 @@ export default function SalesSettingsPage() {
         try {
             await api.updateSalesSettings({
                 paper_size: paperSize,
-                ...(refFormat ? { reference_number_format: refFormat } : {}),
                 ...(isShopOwner ? { pos_enabled: posEnabled, require_cashier_session: requireCashierSession, show_customer_credit: showCustomerCredit } : {}),
             });
             window.dispatchEvent(new Event('erp71:sales-settings-updated'));
@@ -87,7 +86,7 @@ export default function SalesSettingsPage() {
                             {pageTitle}
                         </span>
                     )}
-                    subtitle="Configure invoice printing and reference number format"
+                    subtitle="Configure invoice printing and checkout"
                     breadcrumbs={modulePageBreadcrumbs(
                         t.dashboardHome.breadcrumbHome,
                         t.sidebar.modules.accountSettings,
@@ -167,23 +166,16 @@ export default function SalesSettingsPage() {
                         </div>
                     ) : null}
 
-                    {/* Reference Number Format */}
-                    <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
-                        <h2 className="text-sm font-semibold text-gray-700">Reference Number</h2>
-
-                        <Field label="Format Template" className="max-w-xs">
-                            <Input
-                                type="text"
-                                value={refFormat}
-                                onChange={(e) => setRefFormat(e.target.value)}
-                                placeholder="e.g. INV-{YYYY}-{####}"
-                                className="font-mono"
-                            />
-                        </Field>
-                        <p className="mt-1 text-xs text-gray-400">
-                            Tokens: <code className="bg-gray-100 px-1 rounded">{'{YYYY}'}</code> year,{' '}
-                            <code className="bg-gray-100 px-1 rounded">{'{MM}'}</code> month,{' '}
-                            <code className="bg-gray-100 px-1 rounded">{'{####}'}</code> auto-incremented sequence.
+                    {/* Invoice numbers moved to their own page, shared by every document type. */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-2">
+                        <h2 className="text-sm font-semibold text-gray-700">Invoice Number</h2>
+                        <p className="text-xs text-gray-500">
+                            The format of sales invoice numbers (for example INV-2627-00042), per-branch series and
+                            where numbering continues from are set under{' '}
+                            <Link href={routes.settings.documentNumbering} className="text-blue-600 hover:underline">
+                                Document Numbering
+                            </Link>
+                            .
                         </p>
                     </div>
 
