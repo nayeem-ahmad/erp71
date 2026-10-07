@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { SegmentsService } from './segments.service';
+import { CustomerScopeService } from './customer-scope.service';
 import {
     CreateCustomerDto,
     UpdateCustomerDto,
@@ -23,6 +24,10 @@ import { CUSTOMER_CREDIT_READ, CUSTOMER_CREDIT_WRITE, CUSTOMER_READ, CUSTOMER_WR
 // permission, so every other route behaves exactly as before — the guard is a
 // no-op without `@RequireStorePermission`. Same arrangement as
 // sales.controller.ts and its cancel route.
+//
+// Every route reads and writes only the customers the member may see — see
+// `customer-visibility.ts`. A customer outside that is a 404, never a 403, so
+// another branch's customer cannot be told from no customer.
 @Controller('customers')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -30,18 +35,26 @@ export class CustomersController {
     constructor(
         private readonly customersService: CustomersService,
         private readonly segmentsService: SegmentsService,
+        private readonly customerScope: CustomerScopeService,
     ) {}
+
+    private scope(tenant: TenantContext, requested?: string) {
+        return this.customerScope.resolve(tenant, requested);
+    }
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateCustomerDto) {
-        return this.customersService.create(tenant.tenantId, dto);
+        return this.customersService.create(tenant.tenantId, dto, {
+            storeId: tenant.storeId,
+            scope: await this.scope(tenant),
+        });
     }
 
     @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get('segment-stats')
-    async getSegmentStats(@Tenant() tenant: TenantContext) {
-        return this.customersService.getSegmentStats(tenant.tenantId);
+    async getSegmentStats(@Tenant() tenant: TenantContext, @Query('storeId') storeId?: string) {
+        return this.customersService.getSegmentStats(tenant.tenantId, await this.scope(tenant, storeId));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
@@ -63,8 +76,10 @@ export class CustomersController {
         @Query('sortDir') sortDir?: string,
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
+        @Query('storeId') storeId?: string,
     ) {
         return this.customersService.findAll(tenant.tenantId, { timezone: tenant.timezone,
+            scope: await this.scope(tenant, storeId),
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             search,
@@ -83,7 +98,11 @@ export class CustomersController {
         @Tenant() tenant: TenantContext,
         @Query() query: ListCustomerCreditPaymentsQueryDto,
     ) {
-        return this.customersService.listCreditPayments(tenant.tenantId, { ...query, timezone: tenant.timezone });
+        return this.customersService.listCreditPayments(tenant.tenantId, {
+            ...query,
+            timezone: tenant.timezone,
+            scope: await this.scope(tenant),
+        });
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
@@ -92,7 +111,7 @@ export class CustomersController {
         @Tenant() tenant: TenantContext,
         @Param('paymentId') paymentId: string,
     ) {
-        return this.customersService.getCreditPayment(tenant.tenantId, paymentId);
+        return this.customersService.getCreditPayment(tenant.tenantId, paymentId, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
@@ -102,7 +121,13 @@ export class CustomersController {
         @Param('paymentId') paymentId: string,
         @Body() dto: UpdateCreditPaymentDto,
     ) {
-        return this.customersService.updateCreditPayment(tenant.tenantId, paymentId, dto, tenant.storeId);
+        return this.customersService.updateCreditPayment(
+            tenant.tenantId,
+            paymentId,
+            dto,
+            tenant.storeId,
+            await this.scope(tenant),
+        );
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
@@ -111,7 +136,7 @@ export class CustomersController {
         @Tenant() tenant: TenantContext,
         @Param('paymentId') paymentId: string,
     ) {
-        return this.customersService.deleteCreditPayment(tenant.tenantId, paymentId);
+        return this.customersService.deleteCreditPayment(tenant.tenantId, paymentId, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
@@ -122,8 +147,14 @@ export class CustomersController {
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Post('import')
-    importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
-        return this.customersService.importRows(tenant.tenantId, body.rows, body.mode);
+    async importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        return this.customersService.importRows(
+            tenant.tenantId,
+            body.rows,
+            body.mode,
+            tenant.storeId,
+            await this.scope(tenant),
+        );
     }
 
     /**
@@ -140,7 +171,7 @@ export class CustomersController {
     @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get(':id')
     async findOne(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.customersService.findOne(tenant.tenantId, id);
+        return this.customersService.findOne(tenant.tenantId, id, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_READ)
@@ -158,13 +189,13 @@ export class CustomersController {
             limit: limit ? parseInt(limit, 10) : undefined,
             from,
             to,
-        });
+        }, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_READ)
     @Get(':id/analytics')
     async getAnalytics(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.customersService.getAnalytics(tenant.tenantId, id);
+        return this.customersService.getAnalytics(tenant.tenantId, id, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
@@ -182,7 +213,7 @@ export class CustomersController {
             limit: limit ? parseInt(limit, 10) : undefined,
             from,
             to,
-        });
+        }, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
@@ -193,7 +224,7 @@ export class CustomersController {
         @Query('from') from?: string,
         @Query('to') to?: string,
     ) {
-        return this.customersService.getGlLedger(tenant.tenantId, id, { from, to });
+        return this.customersService.getGlLedger(tenant.tenantId, id, { from, to }, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
@@ -203,7 +234,14 @@ export class CustomersController {
         @Param('id') id: string,
         @Body() dto: RecordCreditPaymentDto,
     ) {
-        return this.customersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto, tenant.storeId);
+        return this.customersService.recordCreditPayment(
+            tenant.tenantId,
+            id,
+            tenant.userId,
+            dto,
+            tenant.storeId,
+            await this.scope(tenant),
+        );
     }
 
     /**
@@ -219,6 +257,7 @@ export class CustomersController {
         return this.customersService.listWriteOffs(tenant.tenantId, {
             ...query,
             timezone: tenant.timezone,
+            scope: await this.scope(tenant),
         });
     }
 
@@ -228,7 +267,7 @@ export class CustomersController {
         @Tenant() tenant: TenantContext,
         @Param('writeOffId') writeOffId: string,
     ) {
-        return this.customersService.reverseWriteOff(tenant.tenantId, writeOffId);
+        return this.customersService.reverseWriteOff(tenant.tenantId, writeOffId, await this.scope(tenant));
     }
 
     @Post(':id/credit/write-off')
@@ -244,18 +283,22 @@ export class CustomersController {
             tenant.userId,
             dto,
             tenant.storeId,
+            await this.scope(tenant),
         );
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
     @Get('reports/due-aging')
     async getDueAgingReport(@Tenant() tenant: TenantContext) {
-        return this.customersService.getDueAgingReport(tenant.tenantId);
+        return this.customersService.getDueAgingReport(tenant.tenantId, await this.scope(tenant));
     }
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCustomerDto) {
-        return this.customersService.update(tenant.tenantId, id, dto);
+        return this.customersService.update(tenant.tenantId, id, dto, {
+            scope: await this.scope(tenant),
+            canSetBranch: await this.customerScope.canSeeAll(tenant),
+        });
     }
 }

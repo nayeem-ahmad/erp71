@@ -31,11 +31,12 @@ export function mockBranchScope(next: Overrides = {}) {
     resetToHeaderSpy.mockClear();
 }
 
-export function useMockBranchScope(opts: { allowAll?: boolean } = {}): UseBranchScope {
+export function useMockBranchScope(opts: { allowAll?: boolean; startOnAll?: boolean } = {}): UseBranchScope {
     const base: BranchScopeState = {
         branches: MOCK_BRANCHES,
         headerBranchId: 'store-1',
         value: 'store-1',
+        defaultValue: 'store-1',
         canSeeAll: opts.allowAll !== false,
         locked: false,
         hidden: false,

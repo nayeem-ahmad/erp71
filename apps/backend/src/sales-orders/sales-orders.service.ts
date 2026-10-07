@@ -30,7 +30,7 @@ export class SalesOrdersService {
     async create(tenantId: string, userId: string, dto: CreateSalesOrderDto) {
         return this.db.$transaction(async (tx) => {
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
             const orderNumber = `ORD-${Date.now()}`;

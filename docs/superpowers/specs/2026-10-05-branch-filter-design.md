@@ -59,6 +59,17 @@ be cosmetic without closing this.
   (decision 2 below). The TODO about those two unenforced settings stays open.
 - Company-level records with no branch of their own: customers, suppliers,
   products, employees, customer credit / AR.
+  - **Amended 2026-10-07 — customers now have a branch scope.** A member
+    limited to some branches sees only the customers added at one of them
+    (`Customer.store_id`) or with a sale there that was not cancelled, on every
+    `/customers` route (list, pickers, detail, credit, aging); owners and
+    `VIEW_CONSOLIDATED_REPORTS` holders see every customer. The customer list
+    carries the `BranchFilter`, starting on “All branches” for those who may see
+    it (`useBranchScope({ startOnAll: true })`). Unlike the other pages, an
+    omitted `storeId` means *all the member's branches*, not the header branch,
+    because every customer picker sends none. Rules:
+    `apps/backend/src/customers/customer-visibility.ts` and
+    `customer-scope.service.ts`.
 - Voucher-ledger reports where most rows are company-level (cashbook,
   bankbook, account ledger, AR/AP aging, cash flow, VAT, ratios,
   budget-vs-actual, comparative P&L), HR attendance, and CRM — phase 5, later.

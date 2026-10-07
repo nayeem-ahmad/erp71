@@ -124,7 +124,7 @@ export class SalesService {
             // Resolve a quick-created customer first: credit limits, loyalty
             // redemption and the postings below all key off `customerId`.
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
             const prep = await this.prepareSale(tx, tenantId, dto);
@@ -772,7 +772,7 @@ export class SalesService {
             // A parked draft is picked up again later, so its quick-created
             // customer is saved with it rather than deferred to finalisation.
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
             const referenceNumber = dto.referenceNumber

@@ -23,6 +23,9 @@ export interface CustomerFormValues {
     territory_id?: string | null;
     /** The employee who looks after the customer — "Sales By" on their sales. */
     sales_rep_id?: string | null;
+    /** The branch the customer was added at (they also belong to every branch they bought at). */
+    store_id?: string | null;
+    store?: { id: string; name: string } | null;
     credit_limit?: string | number | null;
     default_discount_pct?: string | number | null;
     birthday?: string | null;
@@ -35,11 +38,17 @@ interface CustomerFormModalProps {
     onSave: (data: any) => Promise<void>;
     /** Customer being edited; leave unset for the create flow. */
     customer?: CustomerFormValues | null;
+    /**
+     * Branches an edited customer can be moved to. Pass them only to a member
+     * who sees every branch — the server refuses a branch change from anyone
+     * else. Unset, the field is not shown and the branch is left as it is.
+     */
+    branches?: { id: string; name: string }[];
 }
 
 const emptyForm = {
     customer_code: '', name: '', owner_name: '', phone: '', email: '', address: '', bin: '', profile_pic_url: '',
-    customer_type: 'INDIVIDUAL', customer_group_id: '', territory_id: '', sales_rep_id: '',
+    customer_type: 'INDIVIDUAL', customer_group_id: '', territory_id: '', sales_rep_id: '', store_id: '',
     credit_limit: '', default_discount_pct: '', birthday: '',
 };
 
@@ -56,13 +65,14 @@ const toForm = (customer: CustomerFormValues): typeof emptyForm => ({
     customer_group_id: customer.customer_group_id ?? '',
     territory_id: customer.territory_id ?? '',
     sales_rep_id: customer.sales_rep_id ?? '',
+    store_id: customer.store_id ?? '',
     credit_limit: customer.credit_limit != null ? String(customer.credit_limit) : '',
     default_discount_pct: customer.default_discount_pct != null ? String(customer.default_discount_pct) : '',
     // `<input type="date">` only accepts yyyy-mm-dd; the API returns a full ISO timestamp.
     birthday: customer.birthday ? String(customer.birthday).slice(0, 10) : '',
 });
 
-export default function CustomerFormModal({ isOpen, onClose, onSave, customer }: CustomerFormModalProps) {
+export default function CustomerFormModal({ isOpen, onClose, onSave, customer, branches }: CustomerFormModalProps) {
     const { t } = useI18n();
     const isEdit = Boolean(customer);
     const [formData, setFormData] = useState({ ...emptyForm });
@@ -76,6 +86,11 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
     const repOptions = customer?.sales_rep_id && !salesReps.some((rep) => rep.id === customer.sales_rep_id)
         ? [...salesReps, { id: customer.sales_rep_id, name: (customer as any).salesRep?.name ?? customer.sales_rep_id }]
         : salesReps;
+    // Never let a branch missing from the options read as "none" and clear it on save.
+    const showBranch = Boolean(customer && branches);
+    const branchOptions = customer?.store_id && branches && !branches.some((b) => b.id === customer.store_id)
+        ? [...branches, { id: customer.store_id, name: customer.store?.name ?? customer.store_id }]
+        : branches ?? [];
 
     useEffect(() => {
         if (isOpen) {
@@ -134,6 +149,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
             default_discount_pct: formData.default_discount_pct === '' ? null : parseFloat(formData.default_discount_pct),
             birthday: formData.birthday || null,
         };
+        if (showBranch) payload.store_id = formData.store_id || null;
         // The column is NOT NULL, so a cleared code keeps whatever the customer already has.
         if (formData.customer_code.trim()) payload.customer_code = formData.customer_code.trim();
         return payload;
@@ -241,6 +257,16 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer }:
                                 {repOptions.map(rep => <option key={rep.id} value={rep.id}>{rep.name}</option>)}
                             </select>
                         </div>
+
+                        {showBranch && (
+                            <div className="space-y-2">
+                                <label htmlFor="customer-branch" className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.branch} <span className="text-gray-300">({t.common.optional})</span></label>
+                                <select id="customer-branch" value={formData.store_id} onChange={set('store_id')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
+                                    <option value="">{t.common.none}</option>
+                                    {branchOptions.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.customers.modal.creditLimit} <span className="text-gray-300">({t.common.optional})</span></label>

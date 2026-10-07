@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomersService } from './customers.service';
 import { DatabaseService } from '../database/database.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EncryptionService } from '../common/encryption.service';
 import { CustomerPaymentDirectionDto } from './customer.dto';
+import { customerInBranchesWhere } from './customer-visibility';
 
 jest.mock('@erp71/database', () => {
   const actual = jest.requireActual('@erp71/database');
@@ -89,6 +90,172 @@ describe('CustomersService', () => {
           name: 'Nayeem', phone: '+123', email: '', address: ''
       });
       expect(res.id).toEqual('cust-1');
+  });
+
+  // A member limited to some branches sees only those branches' customers —
+  // see customer-visibility.ts. `null` is the whole tenant.
+  describe('branch scope', () => {
+    const SCOPE = ['branch-a'];
+    const inScope = { AND: [customerInBranchesWhere(SCOPE)] };
+
+    beforeEach(() => {
+      db.store = { findFirst: jest.fn() };
+    });
+
+    it('lists only the scoped customers, keeping the search OR intact', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.customer.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', search: 'rahim', scope: SCOPE });
+
+      const where = db.customer.findMany.mock.calls[0][0].where;
+      expect(where).toMatchObject({ tenant_id: 'tenant-1', deleted_at: null, ...inScope });
+      expect(where.OR).toHaveLength(4);
+      expect(db.customer.count).toHaveBeenCalledWith({ where });
+    });
+
+    it('lists every customer when unscoped, as before', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.customer.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka' });
+
+      expect(db.customer.findMany.mock.calls[0][0].where.AND).toBeUndefined();
+    });
+
+    it('shows a scoped customer with only the sales at the member\'s branches', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', nid: null });
+
+      await service.findOne('tenant-1', 'cust-1', SCOPE);
+
+      const args = db.customer.findFirst.mock.calls[0][0];
+      expect(args.where).toMatchObject({ id: 'cust-1', ...inScope });
+      expect(args.include.sales.where).toEqual({ store_id: { in: SCOPE } });
+    });
+
+    it('answers 404 for a customer outside the scope', async () => {
+      db.customer.findFirst.mockResolvedValue(null);
+
+      await expect(service.findOne('tenant-1', 'cust-other', SCOPE)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getCreditLedger('tenant-1', 'cust-other', {}, SCOPE)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.recordCreditPayment('tenant-1', 'cust-other', 'user-1', { amount: 100 } as any, 'branch-a', SCOPE),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('limits purchase history to the member\'s branches', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1' });
+      db.sale.count.mockResolvedValue(0);
+      db.sale.findMany.mockResolvedValue([]);
+
+      await service.getPurchaseHistory('tenant-1', 'cust-1', {}, SCOPE);
+
+      expect(db.customer.findFirst.mock.calls[0][0].where).toMatchObject(inScope);
+      expect(db.sale.findMany.mock.calls[0][0].where).toEqual({ customer_id: 'cust-1', store_id: { in: SCOPE } });
+    });
+
+    it('scopes credit rows through their customer', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([]);
+      db.customerCreditTransaction.count.mockResolvedValue(0);
+
+      await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka', scope: SCOPE } as any);
+      await service.getDueAgingReport('tenant-1', SCOPE);
+
+      for (const [args] of db.customerCreditTransaction.findMany.mock.calls) {
+        expect(args.where.customer).toEqual(customerInBranchesWhere(SCOPE));
+      }
+    });
+
+    it('adds a customer at the request\'s branch', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({ id: 'cust-1' });
+
+      await service.create('tenant-1', { name: 'Rahim', phone: '01711000001' } as any, { storeId: 'branch-a' });
+
+      expect(db.customer.create.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-a' });
+    });
+
+    it('says a clashing phone is another branch\'s customer when the caller cannot see them', async () => {
+      db.customer.findUnique.mockResolvedValue({ id: 'cust-other', deleted_at: null });
+      db.customer.count.mockResolvedValue(0);
+
+      await expect(
+        service.create('tenant-1', { name: 'Rahim', phone: '01711000001' } as any, { scope: SCOPE }),
+      ).rejects.toThrow(/customer of another branch/);
+    });
+
+    it('keeps the plain duplicate message for a customer the caller can see', async () => {
+      db.customer.findUnique.mockResolvedValue({ id: 'cust-1', deleted_at: null });
+      db.customer.count.mockResolvedValue(1);
+
+      await expect(
+        service.create('tenant-1', { name: 'Rahim', phone: '01711000001' } as any, { scope: SCOPE }),
+      ).rejects.toThrow('A customer with this phone number already exists.');
+    });
+
+    it('refuses a branch change from a member who cannot see every branch', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: 'branch-a', phone: null });
+
+      await expect(
+        service.update('tenant-1', 'cust-1', { store_id: 'branch-b' }, { scope: SCOPE, canSetBranch: false }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(db.customer.update).not.toHaveBeenCalled();
+    });
+
+    it('lets a limited member save the form with the branch unchanged', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: 'branch-a', phone: null });
+      db.store.findFirst.mockResolvedValue({ id: 'branch-a' });
+      db.customer.update.mockResolvedValue({ id: 'cust-1', nid: null });
+
+      await service.update('tenant-1', 'cust-1', { name: 'Rahim', store_id: 'branch-a' }, { scope: SCOPE, canSetBranch: false });
+
+      expect(db.customer.update).toHaveBeenCalled();
+    });
+
+    it('moves a customer to another branch of the tenant, or clears it', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: null, phone: null });
+      db.store.findFirst.mockResolvedValue({ id: 'branch-b' });
+      db.customer.update.mockResolvedValue({ id: 'cust-1', nid: null });
+
+      await service.update('tenant-1', 'cust-1', { store_id: 'branch-b' }, { canSetBranch: true });
+      expect(db.store.findFirst).toHaveBeenCalledWith({ where: { id: 'branch-b', tenant_id: 'tenant-1' }, select: { id: true } });
+      expect(db.customer.update.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-b' });
+
+      await service.update('tenant-1', 'cust-1', { store_id: null }, { canSetBranch: true });
+      expect(db.customer.update.mock.calls[1][0].data).toMatchObject({ store_id: null });
+    });
+
+    it('rejects a branch from another tenant', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: null, phone: null });
+      db.store.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.update('tenant-1', 'cust-1', { store_id: 'branch-x' }, { canSetBranch: true }),
+      ).rejects.toThrow('Branch not found.');
+    });
+
+    it('imports new rows at the request\'s branch and will not upsert another branch\'s customer', async () => {
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customerGroup.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({});
+      db.customer.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'cust-other' });
+      db.customer.count.mockResolvedValue(0);
+
+      const result = await service.importRows(
+        'tenant-1',
+        [{ name: 'New', phone: '01711000001' }, { name: 'Theirs', phone: '01711000002' }],
+        'upsert',
+        'branch-a',
+        SCOPE,
+      );
+
+      expect(db.customer.create.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-a' });
+      expect(db.customer.update).not.toHaveBeenCalled();
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([expect.stringMatching(/^Row \d+: matches a customer of another branch/)]);
+    });
   });
 
   describe('sales rep', () => {

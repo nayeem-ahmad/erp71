@@ -34,6 +34,26 @@ describe('resolveInlineCustomer', () => {
         });
     });
 
+    it('adds a new customer at the document\'s branch', async () => {
+        const tx = makeTx();
+
+        await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim', phone: '01711111111' }, 'branch-a');
+
+        expect(tx.customer.create.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-a' });
+    });
+
+    // The sale itself makes a reused customer one of this branch's; their own
+    // branch stays the one they were added at.
+    it('leaves a reused customer\'s branch alone', async () => {
+        const tx = makeTx();
+        tx.customer.findUnique.mockResolvedValue({ id: 'cust-1', deleted_at: null });
+
+        await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim', phone: '01711111111' }, 'branch-b');
+
+        expect(tx.customer.create).not.toHaveBeenCalled();
+        expect(tx.customer.update).not.toHaveBeenCalled();
+    });
+
     it('starts the series at CUST-00001 for a tenant with no generated codes', async () => {
         const tx = makeTx();
 

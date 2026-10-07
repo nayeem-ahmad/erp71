@@ -19,6 +19,9 @@ import { toast } from '@/lib/toast';
  *   owners and `VIEW_CONSOLIDATED_REPORTS` holders.
  * - It is **disabled** for a member limited to one branch of several, and
  *   **hidden** in a one-branch shop, where there is nothing to choose.
+ * - `startOnAll` (company-level lists — customers) starts a member who may see
+ *   the whole company on **“All branches”** instead, so the list reads as it did
+ *   before it had a filter; everyone else still starts on the header branch.
  *
  * The server applies the same rules (`BranchScopeService`), so this is about
  * not offering what would be refused, not about security.
@@ -42,6 +45,8 @@ export type BranchScopeState = {
     headerBranchId: string | null;
     /** A branch id, or `ALL_BRANCHES`; `''` only while `/auth/me` is loading. */
     value: string;
+    /** What the filter starts on, and what dropping `?branch=` goes back to. */
+    defaultValue: string;
     /** Owner or `VIEW_CONSOLIDATED_REPORTS`, and the page allows it. */
     canSeeAll: boolean;
     /** Limited to one branch of a multi-branch shop: show it, disabled. */
@@ -76,6 +81,7 @@ export function resolveBranchScope(input: {
     headerBranchId: string | null;
     requested: string | null;
     allowAll?: boolean;
+    startOnAll?: boolean;
 }): BranchScopeState {
     const { tenant, headerBranchId, requested } = input;
     const allowAll = input.allowAll !== false;
@@ -85,6 +91,7 @@ export function resolveBranchScope(input: {
             branches: [],
             headerBranchId,
             value: '',
+            defaultValue: '',
             canSeeAll: false,
             locked: false,
             hidden: true,
@@ -100,7 +107,8 @@ export function resolveBranchScope(input: {
         Boolean(id) && branches.some((branch) => branch.id === id);
 
     const fallback = isBranch(headerBranchId) ? headerBranchId : branches[0]?.id ?? '';
-    let value = fallback;
+    const defaultValue = input.startOnAll && canSeeAll ? ALL_BRANCHES : fallback;
+    let value = defaultValue;
     if (requested === ALL_BRANCHES) {
         if (canSeeAll) value = ALL_BRANCHES;
     } else if (isBranch(requested)) {
@@ -111,6 +119,7 @@ export function resolveBranchScope(input: {
         branches,
         headerBranchId: isBranch(headerBranchId) ? headerBranchId : fallback || null,
         value,
+        defaultValue,
         canSeeAll,
         locked: storeCount > 1 && branches.length === 1 && !canSeeAll,
         hidden: storeCount <= 1 || branches.length === 0,
@@ -122,11 +131,11 @@ export function resolveBranchScope(input: {
 export type UseBranchScope = BranchScopeState & {
     /** Pick a branch (or `ALL_BRANCHES`) for this page. */
     setValue: (next: string) => void;
-    /** Back to the header branch — e.g. after the server refused the choice. */
+    /** Back to where the filter starts — e.g. after the server refused the choice. */
     resetToHeader: () => void;
 };
 
-export function useBranchScope(opts: { allowAll?: boolean } = {}): UseBranchScope {
+export function useBranchScope(opts: { allowAll?: boolean; startOnAll?: boolean } = {}): UseBranchScope {
     const { data: me } = useMe();
     const router = useRouter();
     const pathname = usePathname();
@@ -137,15 +146,21 @@ export function useBranchScope(opts: { allowAll?: boolean } = {}): UseBranchScop
     const requested = searchParams?.get(BRANCH_PARAM) ?? searchParams?.get(LEGACY_BRANCH_PARAM) ?? null;
 
     const state = useMemo(
-        () => resolveBranchScope({ tenant, headerBranchId, requested, allowAll: opts.allowAll }),
-        [tenant, headerBranchId, requested, opts.allowAll],
+        () => resolveBranchScope({
+            tenant,
+            headerBranchId,
+            requested,
+            allowAll: opts.allowAll,
+            startOnAll: opts.startOnAll,
+        }),
+        [tenant, headerBranchId, requested, opts.allowAll, opts.startOnAll],
     );
 
     const setValue = useCallback(
         (next: string) => {
             const params = new URLSearchParams(searchParams?.toString() ?? '');
             params.delete(LEGACY_BRANCH_PARAM);
-            if (!next || next === state.headerBranchId) {
+            if (!next || next === state.defaultValue) {
                 params.delete(BRANCH_PARAM);
             } else {
                 params.set(BRANCH_PARAM, next);
@@ -153,7 +168,7 @@ export function useBranchScope(opts: { allowAll?: boolean } = {}): UseBranchScop
             const query = params.toString();
             router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
         },
-        [pathname, router, searchParams, state.headerBranchId],
+        [pathname, router, searchParams, state.defaultValue],
     );
 
     const resetToHeader = useCallback(() => setValue(''), [setValue]);

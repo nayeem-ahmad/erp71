@@ -1478,6 +1478,7 @@ model Store {
   externalSyncConnections  ExternalSyncConnection[]
   projects                 Project[]
   productDemands           ProductDemand[]
+  customers                Customer[]
 
   // A tenant cannot hold two branches of the same name: the branch switcher and
   // every store picker show the name alone, so a repeat leaves "which branch am
@@ -2810,6 +2811,12 @@ model Customer {
   /// invoices. Each sale takes a copy when it is made (`Sale.sales_rep_id`), so
   /// reassigning a customer later does not rewrite who sold what.
   sales_rep_id         String?
+  /// The branch the customer was added at. A member limited to some branches
+  /// sees a customer added at one of them or with a sale there — see
+  /// `customers/customer-visibility.ts`. Null for customers from before this
+  /// column and for storefront / external-sync customers: those reach a branch
+  /// only through a sale.
+  store_id             String?
   credit_limit         Decimal?     @db.Decimal(12, 2)
   default_discount_pct Decimal?     @db.Decimal(5, 2)
   total_spent          Decimal      @default(0) @db.Decimal(12, 2)
@@ -2844,6 +2851,7 @@ model Customer {
   customerGroup       CustomerGroup?              @relation(fields: [customer_group_id], references: [id])
   territory           Territory?                  @relation(fields: [territory_id], references: [id])
   salesRep            Employee?                   @relation("CustomerSalesRep", fields: [sales_rep_id], references: [id], onDelete: SetNull)
+  store               Store?                      @relation(fields: [store_id], references: [id], onDelete: SetNull)
   user                User?                       @relation(fields: [user_id], references: [id])
   sales               Sale[]
   salesOrders         SalesOrder[]
@@ -2863,6 +2871,7 @@ model Customer {
   @@unique([tenant_id, user_id])
   @@index([tenant_id, deleted_at])
   @@index([tenant_id, email])
+  @@index([tenant_id, store_id])
 }
 
 model CustomerGroup {
