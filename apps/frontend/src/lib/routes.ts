@@ -294,6 +294,7 @@ export const routes = {
         paymentMethods: '/settings/payment-methods',
         sales: '/settings/sales',
         printTemplates: '/settings/print-templates',
+        documentNumbering: '/settings/document-numbering',
         team: '/team',
         counters: '/settings/counters',
         localization: '/settings/localization',

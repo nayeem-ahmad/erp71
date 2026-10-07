@@ -726,6 +726,7 @@ export const coreMessages = {
                 counters: 'POS Counters',
                 sales: 'Sales Settings',
                 printTemplates: 'Print Header',
+                documentNumbering: 'Document Numbering',
                 paymentMethods: 'Payment Methods',
                 discountCodes: 'Discount Codes',
                 urlShortener: 'URL Shortener',

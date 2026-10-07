@@ -726,6 +726,7 @@ export const coreMessages = {
                 counters: 'پی او ایس کاؤنٹرز',
                 sales: 'سیلز ترتیبات',
                 printTemplates: 'پرنٹ ہیڈر',
+                documentNumbering: 'دستاویز نمبرنگ',
                 paymentMethods: 'ادائیگی کے طریقے',
                 discountCodes: 'رعایتی کوڈ',
                 urlShortener: 'یو آر ایل شارٹنر',

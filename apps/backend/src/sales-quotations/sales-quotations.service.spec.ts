@@ -30,7 +30,7 @@ describe('SalesQuotationsService', () => {
         deleteMany: jest.fn(),
       },
       documentSequence: {
-        upsert: jest.fn().mockResolvedValue({}),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
         // The reserved number is one below what `update` returns, so this
         // stands for "this tenant's first document in the series".
         update: jest.fn().mockResolvedValue({ next_number: 2 }),

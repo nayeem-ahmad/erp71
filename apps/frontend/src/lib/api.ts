@@ -5415,6 +5415,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    // Settings → Document Numbering (see packages/shared-types/document-numbering.ts).
+    getDocumentNumbering: (docType: string) => fetchWithAuth(`/document-numbering/${encodeURIComponent(docType)}`),
+    updateDocumentNumbering: (docType: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/document-numbering/${encodeURIComponent(docType)}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // The signed-in member's own invoice layout (see useInvoicePrintPrefs).
     getMyInvoicePrint: () => fetchWithAuth('/sales-settings/my-invoice-print'),
     updateMyInvoicePrint: (data: Record<string, unknown>) => fetchWithAuth('/sales-settings/my-invoice-print', {

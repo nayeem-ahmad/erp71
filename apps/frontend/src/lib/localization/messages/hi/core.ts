@@ -726,6 +726,7 @@ export const coreMessages = {
                 counters: "POS काउंटर",
                 sales: "बिक्री सेटिंग्स",
                 printTemplates: "प्रिंट हेडर",
+                documentNumbering: "दस्तावेज़ क्रमांकन",
                 paymentMethods: "भुगतान विधियाँ",
                 discountCodes: "छूट कोड",
                 urlShortener: "URL शॉर्टनर",

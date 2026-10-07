@@ -726,6 +726,7 @@ export const coreMessages = {
                 counters: "Kassenplätze",
                 sales: "Verkaufseinstellungen",
                 printTemplates: "Druckkopf",
+                documentNumbering: "Belegnummerierung",
                 paymentMethods: "Zahlungsarten",
                 discountCodes: "Rabattcodes",
                 urlShortener: "URL-Kürzer",

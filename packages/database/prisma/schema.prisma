@@ -896,6 +896,7 @@ model Tenant {
   accounts                   Account[]
   voucherSequences           VoucherSequence[]
   documentSequences          DocumentSequence[]
+  documentNumberings         DocumentNumbering[]
   importShipments            ImportShipment[]
   importCosts                ImportCost[]
   importDocuments            ImportDocument[]
@@ -1298,7 +1299,10 @@ model SalesSettings {
   id                      String  @id @default(uuid())
   tenant_id               String  @unique
   paper_size              String  @default("A4") // A4, A5, Letter, Thermal80, Thermal58
-  reference_number_format String  @default("YYMM-#") // Format template
+  /// Retired: sales no longer generate a reference number — the invoice number
+  /// is `Sale.serial_number`, formatted under Document Numbering. Kept so the
+  /// column can be dropped in its own migration once nothing reads it.
+  reference_number_format String  @default("YYMM-#")
   pos_enabled             Boolean @default(true)
   /// When on, POS refuses to check out unless the seller has an open cashier
   /// session. Off by default so no existing tenant is stopped mid-sale by an
@@ -1448,6 +1452,12 @@ model Store {
   id         String   @id @default(uuid())
   tenant_id  String
   name       String
+  /// Short branch code (`DHK`, `S1`) printed inside document numbers when a
+  /// tenant's format uses `{STORE}`. Unique per tenant so two branches can never
+  /// print the same number. Assigned `S<n>` on creation and editable under
+  /// Document Numbering; nullable only so a row created by a path that predates
+  /// it still loads — the numbering engine assigns one on first use.
+  code       String?
   address    String?
   /// Decimal degrees. Set only when a tenant turns on geofenced attendance —
   /// a store with no coordinates cannot be the anchor for a check-in, which is
@@ -1496,6 +1506,7 @@ model Store {
   printTemplateAssignments PrintTemplateStoreAssignment[]
 
   @@unique([tenant_id, name])
+  @@unique([tenant_id, code])
 }
 
 model PosCounter {
@@ -2751,8 +2762,14 @@ model Sale {
   /// till reconcilable — `counter_id` alone cannot separate the morning
   /// cashier from the evening one on the same counter.
   session_id       String?
+  /// The invoice number, issued from the tenant's Document Numbering format
+  /// when the sale is completed (`INV-2627-00042`). A parked draft holds a
+  /// `DRAFT-…` placeholder instead so it consumes no number; rows from before
+  /// the format existed keep their `SL-<epoch>` value.
   serial_number    String
-  reference_number String? // User-editable reference, unique per tenant
+  /// Optional number the user types (a PO or manual book number). Printed in
+  /// place of the serial when present. Unique per tenant; no longer generated.
+  reference_number String?
   total_amount     Decimal  @db.Decimal(12, 2)
   amount_paid      Decimal  @default(0) @db.Decimal(12, 2)
   status           String
@@ -3844,8 +3861,8 @@ model AccountingSettings {
   @@map("accounting_settings")
 }
 
-/// A named, tenant-scoped, optionally year-resetting counter for human-readable
-/// document numbers (`PI-2526-00001`, `IMP-2526-00007`).
+/// A named, tenant-scoped, optionally resetting counter for human-readable
+/// document numbers (`PI-2526-00001`, `INV-2627-00042`, `DHK-2627-00007`).
 ///
 /// Deliberately NOT `VoucherSequence`, which it resembles: that table is keyed
 /// by `voucher_type` and read by the posting engine, and widening it to hold
@@ -3858,13 +3875,21 @@ model AccountingSettings {
 model DocumentSequence {
   id          String   @id @default(uuid())
   tenant_id   String
-  /// Logical series: QUOTE | PROFORMA | IMPORT_SHIPMENT.
+  /// Logical series: QUOTE | PROFORMA | IMPORT_SHIPMENT | SALE.
   doc_type    String
-  /// Bangladeshi fiscal year the series resets on — "2526" means July 2025 to
-  /// June 2026. Empty string for a series that never resets, so the unique
+  /// The reset period this counter belongs to — see `numberingPeriodKey` in
+  /// shared-types. "2526" is the fiscal year July 2025 to June 2026 (the form
+  /// the quotation series has always used); "Y2026" a calendar year; "M2026-10"
+  /// a month. Empty string for a series that never resets, so the unique
   /// constraint below stays usable either way (a nullable column would let two
   /// never-resetting rows coexist, since NULL != NULL in Postgres).
   period_key  String   @default("")
+  /// Whose counter this is when a tenant numbers per branch or per POS counter:
+  /// "store:<id>", "counter:<id>" or "store:<id>:none" (a sale on no counter).
+  /// Empty for a business-wide series, which is every series but a configured one.
+  scope_key   String   @default("")
+  /// The template the row was created under, for whoever reads the table. The
+  /// printed number is rendered from the tenant's current format, not from this.
   prefix      String
   next_number Int      @default(1)
   created_at  DateTime @default(now())
@@ -3872,9 +3897,35 @@ model DocumentSequence {
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
-  @@unique([tenant_id, doc_type, period_key])
+  @@unique([tenant_id, doc_type, period_key, scope_key])
   @@index([tenant_id])
   @@map("document_sequences")
+}
+
+/// A tenant's own format for one kind of document number, edited under
+/// Settings → Document Numbering. No row means the built-in default
+/// (`DEFAULT_DOCUMENT_NUMBERING` in shared-types). The rules that keep a format
+/// collision-free live in `validateNumberingConfig`, shared with the page.
+model DocumentNumbering {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  /// SALE so far — see `NUMBERING_DOC_TYPES`.
+  doc_type     String
+  /// Literal text and tokens: `INV-{FY}-{SEQ}`.
+  template     String
+  /// NEVER | FISCAL_YEAR | CALENDAR_YEAR | MONTHLY
+  reset_policy String   @default("FISCAL_YEAR")
+  /// TENANT | STORE | COUNTER
+  scope        String   @default("TENANT")
+  /// Minimum digits `{SEQ}` is zero-padded to.
+  seq_width    Int      @default(5)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, doc_type])
+  @@map("document_numbering")
 }
 
 model VoucherSequence {

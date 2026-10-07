@@ -726,6 +726,7 @@ export const coreMessages = {
                 counters: 'نقاط البيع',
                 sales: 'إعدادات المبيعات',
                 printTemplates: 'ترويسة الطباعة',
+                documentNumbering: 'ترقيم المستندات',
                 paymentMethods: 'طرق الدفع',
                 discountCodes: 'رموز الخصم',
                 urlShortener: 'مختصر الروابط',

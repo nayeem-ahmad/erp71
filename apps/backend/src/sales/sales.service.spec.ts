@@ -13,6 +13,7 @@ import {
     usableWarehouseIds,
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
 import { computeEntryTax } from '@erp71/shared-types';
 
 jest.mock('../database/inventory.utils', () => ({
@@ -50,6 +51,12 @@ function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
 jest.mock('../accounting/posting.utils', () => ({
   autoPostFromRules: jest.fn(),
   voidAutoPostedVoucher: jest.fn(),
+}));
+
+// The numbering engine has its own spec; here it only matters which number the
+// service asks for and where it puts it.
+jest.mock('../database/document-number.utils', () => ({
+  issueDocumentNumber: jest.fn(),
 }));
 
 describe('SalesService', () => {
@@ -209,6 +216,88 @@ describe('SalesService', () => {
     db.voucher.findMany.mockResolvedValue([]);
     db.voucher.findFirst.mockResolvedValue(null);
     db.postingEvent.findMany.mockResolvedValue([]);
+    (issueDocumentNumber as jest.Mock).mockReset();
+    (issueDocumentNumber as jest.Mock).mockResolvedValue('INV-2627-00001');
+  });
+
+  describe('invoice numbering', () => {
+    const saleDto = {
+      storeId: 'store-1',
+      totalAmount: 100,
+      amountPaid: 100,
+      items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+    });
+
+    it('issues the invoice number from the tenant format, for the sale date, store and counter', async () => {
+      await service.create('tenant-1', 'user-1', {
+        ...saleDto,
+        counterId: 'counter-2',
+        saleDate: '2026-06-30T20:00:00.000Z',
+      });
+
+      expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+        tenantId: 'tenant-1',
+        docType: 'SALE',
+        storeId: 'store-1',
+        counterId: 'counter-2',
+        on: new Date('2026-06-30T20:00:00.000Z'),
+      }));
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          serial_number: 'INV-2627-00001',
+          sale_date: new Date('2026-06-30T20:00:00.000Z'),
+        }),
+      }));
+    });
+
+    it('no longer invents a reference number the user did not type', async () => {
+      await service.create('tenant-1', 'user-1', saleDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ reference_number: null }),
+      }));
+    });
+
+    it('keeps a reference number the user typed', async () => {
+      db.sale.findFirst.mockResolvedValue(null);
+
+      await service.create('tenant-1', 'user-1', { ...saleDto, referenceNumber: 'PO-7781' });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ serial_number: 'INV-2627-00001', reference_number: 'PO-7781' }),
+      }));
+    });
+
+    it('steps over a number already printed as another sale\'s invoice or reference', async () => {
+      await service.create('tenant-1', 'user-1', saleDto);
+      const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls[0][1];
+
+      tx.sale.findFirst.mockResolvedValueOnce({ id: 'old-sale' });
+      await expect(isTaken('INV-2627-00001')).resolves.toBe(true);
+      expect(tx.sale.findFirst).toHaveBeenLastCalledWith({
+        where: {
+          tenant_id: 'tenant-1',
+          OR: [{ serial_number: 'INV-2627-00001' }, { reference_number: 'INV-2627-00001' }],
+        },
+        select: { id: true },
+      });
+
+      tx.sale.findFirst.mockResolvedValueOnce(null);
+      await expect(isTaken('INV-2627-00002')).resolves.toBe(false);
+    });
+
+    it('issues no number for a sale that fails validation', async () => {
+      await expect(service.create('tenant-1', 'user-1', { ...saleDto, totalAmount: 5 }))
+        .rejects.toThrow(BadRequestException);
+
+      expect(issueDocumentNumber).not.toHaveBeenCalled();
+    });
   });
 
   describe('create() — Story 10.3: Atomic Sale Transaction', () => {
@@ -694,6 +783,15 @@ describe('SalesService', () => {
       expect(result.posting_status).toBe('skipped');
     });
 
+    it('parks a draft under a placeholder, so an abandoned draft leaves no gap in the series', async () => {
+      await service.create('tenant-1', 'user-1', draftDto);
+
+      expect(issueDocumentNumber).not.toHaveBeenCalled();
+      const { data } = tx.sale.create.mock.calls[0][0];
+      expect(data.serial_number).toMatch(/^DRAFT-[0-9A-F]{10}$/);
+      expect(data.reference_number).toBeNull();
+    });
+
     it('rejects a draft referencing a product that no longer exists', async () => {
       tx.product.count.mockResolvedValue(0);
 
@@ -756,6 +854,35 @@ describe('SalesService', () => {
       });
       expect(autoPostFromRules).toHaveBeenCalled();
       expect(result.status).toBe('COMPLETED');
+    });
+
+    it('issues the invoice number when the draft is completed, not when it was parked', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue({ id: 'session-1', counter_id: 'counter-3' });
+      const parkedOn = new Date('2026-07-02T04:00:00.000Z');
+      tx.sale.findFirst.mockResolvedValue({ ...draftRow, sale_date: parkedOn });
+
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+        tenantId: 'tenant-1',
+        docType: 'SALE',
+        storeId: 'store-1',
+        // The till completing it, which is often not the one that parked it.
+        counterId: 'counter-3',
+        on: parkedOn,
+      }));
+      expect(tx.sale.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'draft-1' },
+        data: expect.objectContaining({ serial_number: 'INV-2627-00001', status: 'COMPLETED' }),
+      }));
+    });
+
+    it('numbers a completed draft for the date it is completed on, when one is given', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1', { saleDate: '2026-10-07T06:00:00.000Z' });
+
+      expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+        on: new Date('2026-10-07T06:00:00.000Z'),
+      }));
     });
 
     it('accepts edited items and payments on the way out', async () => {
@@ -1644,29 +1771,6 @@ describe('SalesService', () => {
       db.sale.findFirst.mockResolvedValue(null);
 
       await expect(service.getInvoiceData('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('generateReferenceNumber()', () => {
-    it('increments the max sequence for the YYMM prefix across all dates', async () => {
-      const now = new Date();
-      const yymm = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
-      tx.salesSettings.findUnique.mockResolvedValue({ reference_number_format: 'YYMM-#' });
-      tx.sale.findMany.mockResolvedValue([
-        { reference_number: `${yymm}-001` },
-        { reference_number: `${yymm}-005` },
-      ]);
-
-      const result = await service.generateReferenceNumber('tenant-1', tx);
-
-      expect(tx.sale.findMany).toHaveBeenCalledWith({
-        where: {
-          tenant_id: 'tenant-1',
-          reference_number: { startsWith: `${yymm}-` },
-        },
-        select: { reference_number: true },
-      });
-      expect(result).toBe(`${yymm}-006`);
     });
   });
 
