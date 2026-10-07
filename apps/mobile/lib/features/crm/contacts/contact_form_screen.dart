@@ -7,17 +7,25 @@ import '../../../ui/widgets.dart';
 import '../data/crm_providers.dart';
 import '../data/models.dart';
 import '../widgets/crm_widgets.dart';
+import 'card_photo.dart';
 
 /// Creates a contact, or edits one when [contactId] is given.
 class ContactFormScreen extends ConsumerWidget {
-  const ContactFormScreen({super.key, this.contactId});
+  const ContactFormScreen({
+    super.key,
+    this.contactId,
+    this.scanOnOpen = false,
+  });
 
   final String? contactId;
+
+  /// Opens the card scanner straight away (new contacts only).
+  final bool scanOnOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final id = contactId;
-    if (id == null) return const _ContactForm();
+    if (id == null) return _ContactForm(scanOnOpen: scanOnOpen);
     return ref
         .watch(contactProvider(id))
         .when(
@@ -47,9 +55,10 @@ const _fields = <(String, String, TextInputType)>[
 ];
 
 class _ContactForm extends ConsumerStatefulWidget {
-  const _ContactForm({this.original});
+  const _ContactForm({this.original, this.scanOnOpen = false});
 
   final Contact? original;
+  final bool scanOnOpen;
 
   @override
   ConsumerState<_ContactForm> createState() => _ContactFormState();
@@ -64,10 +73,84 @@ class _ContactFormState extends ConsumerState<_ContactForm> {
       key: TextEditingController(text: _originalValue(key)),
   };
   bool _saving = false;
+  bool _scanning = false;
+
+  /// The card the fields were read from; kept against the contact once saved.
+  CardPhoto? _card;
   String? _mobileError;
   String? _error;
 
   bool get _editing => widget.original != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.scanOnOpen && !_editing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scan();
+      });
+    }
+  }
+
+  Future<CardPhotoSource?> _chooseSource() => showModalBottomSheet<CardPhotoSource>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(context, CardPhotoSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from gallery'),
+            onTap: () => Navigator.pop(context, CardPhotoSource.gallery),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  /// Photographs a card, has the server read it, and fills the form for the
+  /// user to correct. Nothing is saved until they tap Save.
+  Future<void> _scan() async {
+    final source = await _chooseSource();
+    if (source == null || !mounted) return;
+    setState(() {
+      _error = null;
+      _scanning = true;
+    });
+    try {
+      final photo = await ref.read(cardPhotoPickerProvider)(source);
+      if (photo == null) return;
+      final fields = await ref
+          .read(crmRepositoryProvider)
+          .scanBusinessCard(photo.dataUrl, photo.mimeType);
+      if (!mounted) return;
+      setState(() {
+        _card = photo;
+        for (final entry in fields.entries) {
+          if (entry.key == 'name') {
+            _name.text = entry.value;
+          } else {
+            _controllers[entry.key]?.text = entry.value;
+          }
+        }
+      });
+      showToast('Card read. Check the details, then save.', tone: Tone.success);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not open the camera or photo library.');
+      }
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
 
   String? _originalValue(String key) {
     final c = widget.original;
@@ -114,9 +197,25 @@ class _ContactFormState extends ConsumerState<_ContactForm> {
     setState(() => _saving = true);
     try {
       if (original == null) {
-        final contact = await repo.createContact(_values);
+        final card = _card;
+        final contact = await repo.createContact({
+          ..._values,
+          if (card != null) 'capture_source': 'BUSINESS_CARD',
+        });
         ref.refreshContactViews();
         showToast('Contact added', tone: Tone.success);
+        if (card != null) {
+          // The contact is already saved; a failed upload must not undo that.
+          try {
+            await repo.addContactCardImage(
+              contact.id,
+              card.dataUrl,
+              card.mimeType,
+            );
+          } on ApiException {
+            showToast('Saved, but the card photo could not be kept.');
+          }
+        }
         if (mounted) context.go('/contacts/${contact.id}');
       } else {
         final changes = {
@@ -174,6 +273,25 @@ class _ContactFormState extends ConsumerState<_ContactForm> {
           children: [
             if (_error != null) ...[
               InlineNotice(message: _error!, tone: Tone.danger),
+              const SizedBox(height: 16),
+            ],
+            if (!_editing) ...[
+              OutlinedButton.icon(
+                onPressed: _scanning || _saving ? null : _scan,
+                icon: _scanning
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.document_scanner_outlined, size: 18),
+                label: Text(
+                  _scanning
+                      ? 'Reading card…'
+                      : _card == null
+                      ? 'Scan business card'
+                      : 'Scan a different card',
+                ),
+              ),
               const SizedBox(height: 16),
             ],
             TextFormField(

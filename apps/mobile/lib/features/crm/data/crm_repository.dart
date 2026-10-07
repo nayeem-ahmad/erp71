@@ -357,6 +357,43 @@ class CrmRepository {
     );
   }
 
+  /// Reads a business-card photo (a `data:` URL) and returns the fields found
+  /// on it, keyed by contact field name. Nothing is saved.
+  Future<Map<String, String>> scanBusinessCard(
+    String imageDataUrl,
+    String mimeType,
+  ) async {
+    final data =
+        await _api.post(
+              '/crm/contacts/scan-card',
+              body: {'imageBase64': imageDataUrl, 'mimeType': mimeType},
+            )
+            as Map<String, dynamic>;
+    final fields = data['fields'];
+    return {
+      if (fields is Map<String, dynamic>)
+        for (final entry in fields.entries)
+          if (entry.value is String && (entry.value as String).trim().isNotEmpty)
+            entry.key: (entry.value as String).trim(),
+    };
+  }
+
+  /// Keeps the card photo against a saved contact.
+  Future<void> addContactCardImage(
+    String contactId,
+    String imageDataUrl,
+    String mimeType,
+  ) async {
+    await _api.post(
+      '/crm/contacts/$contactId/attachments',
+      body: {
+        'imageBase64': imageDataUrl,
+        'mimeType': mimeType,
+        'fileName': 'business-card',
+      },
+    );
+  }
+
   /// On update `''` clears an optional field, so blanks are sent as blanks.
   Future<Contact> updateContact(
     String id,

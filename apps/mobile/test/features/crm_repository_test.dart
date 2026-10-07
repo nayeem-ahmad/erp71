@@ -337,6 +337,38 @@ void main() {
     });
   });
 
+  group('business card scan', () {
+    test('returns only the non-blank fields', () async {
+      backend.on(
+        'POST',
+        '/crm/contacts/scan-card',
+        (_) => {
+          'fields': {'name': ' Nusrat ', 'email': '', 'company': 'Acme'},
+          'capture_source': 'BUSINESS_CARD',
+        },
+      );
+
+      final fields = await repo.scanBusinessCard('data:image/jpeg;base64,AA', 'image/jpeg');
+
+      expect(fields, {'name': 'Nusrat', 'company': 'Acme'});
+      expect(backend.lastBody('POST', '/crm/contacts/scan-card'), {
+        'imageBase64': 'data:image/jpeg;base64,AA',
+        'mimeType': 'image/jpeg',
+      });
+    });
+
+    test('the card photo is attached to the saved contact', () async {
+      backend.on('POST', '/crm/contacts/contact-1/attachments', (_) => {});
+
+      await repo.addContactCardImage('contact-1', 'data:image/jpeg;base64,AA', 'image/jpeg');
+
+      expect(
+        backend.lastBody('POST', '/crm/contacts/contact-1/attachments'),
+        containsPair('mimeType', 'image/jpeg'),
+      );
+    });
+  });
+
   test('taxonomy lists drop retired rows', () async {
     backend.on('GET', '/crm/lead-taxonomy/channels', (_) => channelsJson());
 
