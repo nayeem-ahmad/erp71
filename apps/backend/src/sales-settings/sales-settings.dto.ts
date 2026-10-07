@@ -4,11 +4,13 @@ import {
   INVOICE_FOOTER_MAX_LENGTH,
   INVOICE_LAYOUTS,
   INVOICE_PADDINGS,
+  INVOICE_TABLE_BORDERS,
   INVOICE_TABLE_STYLES,
   INVOICE_WARRANTY_COLUMNS,
   type InvoiceBalanceMode,
   type InvoiceLayout,
   type InvoicePadding,
+  type InvoiceTableBorders,
   type InvoiceTableStyle,
   type InvoiceWarrantyColumn,
 } from '@erp71/shared-types';
@@ -96,6 +98,10 @@ export class UpdateMemberInvoicePrintDto {
   @IsOptional()
   @IsIn(INVOICE_WARRANTY_COLUMNS)
   warranty_column?: InvoiceWarrantyColumn;
+
+  @IsOptional()
+  @IsIn(INVOICE_TABLE_BORDERS)
+  table_borders?: InvoiceTableBorders;
 
   /**
    * `null` goes back to the built-in thank-you; `''` prints no footer.
