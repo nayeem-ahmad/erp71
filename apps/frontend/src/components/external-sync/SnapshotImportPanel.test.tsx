@@ -285,6 +285,42 @@ describe('SnapshotImportPanel', () => {
         expect(onMatchesConfirmed).toHaveBeenCalledTimes(1);
     });
 
+    it('lists everything a snapshot found, and why quotations are missing', async () => {
+        const snapshot: ExternalSyncSnapshot = {
+            ...READY,
+            counts: {
+                products: 120,
+                customers: 30,
+                suppliers: 4,
+                sales: 800,
+                purchases: 50,
+                customerPayments: 200,
+                supplierPayments: 40,
+                saleReturns: 3,
+                quotations: 0,
+            },
+            error_message: 'Quotations not extracted: Dizi Cashier api/SaleQuotation/ failed (HTTP 500)',
+        };
+        render(
+            <SnapshotImportPanel
+                provider="DIZI_CASHIER"
+                providerLabel="Dizi Cashier"
+                connectionId="conn-1"
+                adapter={makeAdapter({ listSnapshots: jest.fn().mockResolvedValue([snapshot]) })}
+                steps={['MASTERS']}
+                windowForm={{ dateFrom: '', dateTo: '', fullResync: false }}
+                phase="extract"
+            />,
+        );
+
+        expect(await screen.findByText('800 sales')).toBeInTheDocument();
+        expect(screen.getByText('120 products')).toBeInTheDocument();
+        expect(screen.getByText('0 quotations')).toBeInTheDocument();
+        expect(screen.getByText('200 customer payments')).toBeInTheDocument();
+        expect(screen.getByText('3 sale returns')).toBeInTheDocument();
+        expect(screen.getByText(/Quotations not extracted/)).toBeInTheDocument();
+    });
+
     it('hides mapping review while the extract step is showing', async () => {
         render(
             <SnapshotImportPanel

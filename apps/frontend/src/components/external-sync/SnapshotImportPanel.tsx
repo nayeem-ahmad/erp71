@@ -6,6 +6,7 @@ import { Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
 import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { downloadMatchWorkbook } from '@/lib/match-workbook';
+import { snapshotCountEntries } from '@/lib/snapshot-counts';
 import {
     applyBulkDecision,
     assembleDecisionRows,
@@ -496,13 +497,27 @@ export function SnapshotImportPanel({
                                                     </span>
                                                 ) : null}
                                                 {snap.error_message ? (
-                                                    <span className="ms-2 text-danger">{snap.error_message}</span>
+                                                    // On a READY snapshot it is a partial extract
+                                                    // (quotations only), not a failure.
+                                                    <span
+                                                        className={`ms-2 ${snap.status === 'READY' ? 'text-warning-text' : 'text-danger'}`}
+                                                    >
+                                                        {snap.error_message}
+                                                    </span>
                                                 ) : null}
                                             </td>
                                             <td className="py-2 pe-3 text-gray-500">
-                                                {snap.counts
-                                                    ? `${snap.counts.products ?? 0}p / ${snap.counts.customers ?? 0}c / ${snap.counts.suppliers ?? 0}s`
-                                                    : '—'}
+                                                {snap.counts ? (
+                                                    <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                                        {snapshotCountEntries(snap.counts).map((entry) => (
+                                                            <span key={entry.key} className="whitespace-nowrap">
+                                                                {entry.count} {entry.label}
+                                                            </span>
+                                                        ))}
+                                                    </span>
+                                                ) : (
+                                                    '—'
+                                                )}
                                             </td>
                                             <td className="py-2">
                                                 <div className="flex flex-wrap gap-2">

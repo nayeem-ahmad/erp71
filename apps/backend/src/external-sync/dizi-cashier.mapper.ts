@@ -348,9 +348,9 @@ const DIZI_QUOTATION_STATUS: Record<string, string> = {
  * quotation whose detail could not be fetched still imports as a header with
  * its total, and says so, rather than vanishing.
  *
- * The quotation payload was never recorded from the live account (see the
- * types in dizi-cashier.client.ts), so each value is read from the field names
- * Dizi uses for the same thing on its sales, with fallbacks.
+ * The field names come from Dizi's own quotation screen, not a recorded
+ * payload (see the types in dizi-cashier.client.ts), so the header values
+ * still fall back through the spellings Dizi uses on its sales.
  */
 export function mapDiziQuotation(
     header: DiziQuotationHeader,
@@ -364,7 +364,7 @@ export function mapDiziQuotation(
     );
     const slip = number ?? externalId;
 
-    const lines = detail?.QuotationItems ?? detail?.Items ?? null;
+    const lines = detail?.SaleQuotationItems?.filter((line) => !line.IsDeleted) ?? null;
     if (!detail || !lines) {
         warnings.push({
             entity: 'QUOTATION',
@@ -384,15 +384,13 @@ export function mapDiziQuotation(
                 message: `Quotation ${slip}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
             });
         }
-        // The offered (tax-inclusive, post-discount) unit price, falling back
-        // through the less specific fields and finally the line total.
-        const lineTotal = toMoney(line.TotalAmount) || toMoney(line.SubTotalAmount);
-        const unitPrice =
-            toMoney(line.DiscountedPricePerUnitWithTax) ||
-            toMoney(line.PricePerUnitWithTax) ||
-            toMoney(line.DiscountedPricePerUnit) ||
-            toMoney(line.PricePerUnit) ||
-            (quantity > 0 ? Math.round((lineTotal / quantity) * 100) / 100 : 0);
+        // The offered (tax-inclusive, post-discount) unit price. Dizi keeps the
+        // line pre-tax and spreads the header discount over the lines, so the
+        // line's net over its quantity is that price, and the lines add up to
+        // the quotation total.
+        const gross = toMoney(line.SubTotalAmount) || toMoney(line.PricePerUnit) * originalQuantity;
+        const net = gross + toMoney(line.TaxAmount) - toMoney(line.DiscountAmount) - toMoney(line.DiscountOnTax);
+        const unitPrice = originalQuantity > 0 ? Math.round((net / originalQuantity) * 100) / 100 : toMoney(line.PricePerUnit);
         return { externalProductId: String(line.ItemId ?? ''), quantity, unitPrice };
     });
 
