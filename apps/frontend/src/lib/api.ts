@@ -882,6 +882,8 @@ export async function fetchPaginated<T = any>(endpoint: string, options: Request
 const MAX_PAGE_SIZE = 100;
 /** Backstop against an endpoint that never reports a shrinking remainder. */
 const MAX_PAGES_FETCHED = 100;
+/** Pages `fetchAllPages` requests at once after the first. */
+const FETCH_ALL_CONCURRENCY = 5;
 
 /**
  * Fetch every page of a paginated list endpoint and return the rows as one flat array.
@@ -919,10 +921,23 @@ export async function fetchAllPages<T = any>(endpoint: string): Promise<T[]> {
 
     // A non-paginated endpoint reports total === items.length, so this loop never runs.
     const pages = Math.min(first.pages || 1, MAX_PAGES_FETCHED);
-    for (let page = 2; page <= pages; page++) {
-        const next = await fetchPaginated<T>(`${endpoint}${join}page=${page}&limit=${MAX_PAGE_SIZE}`);
-        if (!next.items.length) break;
-        all.push(...next.items);
+    // Pages 2..n are independent once the first reports the count, so fetch them in
+    // small parallel batches (order preserved) instead of one round trip at a time.
+    for (let start = 2; start <= pages; start += FETCH_ALL_CONCURRENCY) {
+        const batch: number[] = [];
+        for (let page = start; page <= pages && batch.length < FETCH_ALL_CONCURRENCY; page++) batch.push(page);
+        const results = await Promise.all(
+            batch.map((page) => fetchPaginated<T>(`${endpoint}${join}page=${page}&limit=${MAX_PAGE_SIZE}`)),
+        );
+        let exhausted = false;
+        for (const next of results) {
+            if (!next.items.length) {
+                exhausted = true;
+                break;
+            }
+            all.push(...next.items);
+        }
+        if (exhausted) break;
     }
     return all;
 }

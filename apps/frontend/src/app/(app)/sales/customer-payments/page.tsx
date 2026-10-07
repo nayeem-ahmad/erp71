@@ -231,7 +231,9 @@ function CustomerPaymentsContent() {
             setToast({ type: 'success', message: copy.paymentSaved });
             setShowForm(false);
             resetForm();
-            await loadData();
+            // The payment is already saved; refresh the list behind the closed form
+            // rather than keeping Save busy until every page has been re-fetched.
+            void loadData();
         } catch (error: unknown) {
             setToast({
                 type: 'error',
@@ -288,7 +290,7 @@ function CustomerPaymentsContent() {
             });
             setToast({ type: 'success', message: copy.paymentUpdated });
             setEditPayment(null);
-            await loadData();
+            void loadData();
         } catch (error: unknown) {
             setToast({
                 type: 'error',
@@ -306,7 +308,7 @@ function CustomerPaymentsContent() {
             setToast({ type: 'success', message: copy.paymentDeleted });
             if (viewPayment?.id === payment.id) setViewPayment(null);
             if (editPayment?.id === payment.id) setEditPayment(null);
-            await loadData();
+            void loadData();
         } catch (error: unknown) {
             setToast({
                 type: 'error',
