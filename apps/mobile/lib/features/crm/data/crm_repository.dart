@@ -378,6 +378,19 @@ class CrmRepository {
     };
   }
 
+  /// Image URLs of the cards kept against a contact, newest first.
+  Future<List<String>> contactCardImages(String contactId) async {
+    final data = await _api.get('/crm/contacts/$contactId/attachments');
+    if (data is! List) return const [];
+    return [
+      for (final item in data)
+        if (item is Map<String, dynamic> &&
+            item['file_url'] is String &&
+            ((item['mime_type'] as String?)?.startsWith('image/') ?? true))
+          item['file_url'] as String,
+    ];
+  }
+
   /// Keeps the card photo against a saved contact.
   Future<void> addContactCardImage(
     String contactId,

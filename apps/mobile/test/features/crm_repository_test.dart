@@ -357,6 +357,21 @@ void main() {
       });
     });
 
+    test('lists the image URLs kept against a contact', () async {
+      backend.on(
+        'GET',
+        '/crm/contacts/contact-1/attachments',
+        (_) => [
+          {'file_url': 'https://cdn.test/a.jpg', 'mime_type': 'image/jpeg'},
+          {'file_url': 'https://cdn.test/b.pdf', 'mime_type': 'application/pdf'},
+        ],
+      );
+
+      expect(await repo.contactCardImages('contact-1'), [
+        'https://cdn.test/a.jpg',
+      ]);
+    });
+
     test('the card photo is attached to the saved contact', () async {
       backend.on('POST', '/crm/contacts/contact-1/attachments', (_) => {});
 

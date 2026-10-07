@@ -458,8 +458,10 @@ Proposal: `docs/dynamic-payment-methods-plan.md`. Asked as "in sales/purchase, p
 
 Spec: `docs/superpowers/specs/2026-10-05-branch-filter-design.md`. Phases 0–4 and the branch access fix are in `## COMPLETED`. Left over:
 
+- [x] Mobile: contact detail shows the saved business-card photo(s) in a "Business card" section (tap for a zoomable full-screen view), via `GET /crm/contacts/:id/attachments`. Not compiled — no Flutter toolchain this session — done 2026-10-07
+
 - [x] Mobile app: business-card scanning in Contacts — scan icon on the list and a "Scan business card" button on the new-contact form (camera or gallery via `image_picker`, downscaled to 1600px) call `POST /crm/contacts/scan-card`, fill the form for review, and on save send `capture_source: BUSINESS_CARD` and keep the photo as an attachment (a failed upload only warns). Not compiled or run — no Flutter toolchain in this session; `flutter pub get`, `flutter analyze` and `flutter test` still to be run, and a camera/gallery check on a device (iOS usage strings added to `Info.plist`) — done 2026-10-07
-- [ ] Mobile: show a contact's saved card photo on the contact detail screen (`GET /crm/contacts/:id/attachments`) and add a widget test for the scan flow with a fake `cardPhotoPickerProvider` — added 2026-10-07
+- [ ] Mobile: add a widget test for the scan flow with a fake `cardPhotoPickerProvider` — added 2026-10-07
 
 - [ ] **Phase 5 — company-level ledgers, HR, CRM** — cashbook, bankbook, account ledger, AR/AP aging, cash flow, VAT, ratios, budget-vs-actual, comparative P&L (company-level vouchers have no branch); HR attendance (`Employee` has no `store_id`); CRM (nullable `store_id`, and CRM create endpoints write `dto.store_id` with no check at all — `crm-leads.service.ts:384` and siblings)
 - [ ] **Write paths trust body store ids** — out of the branch-filter spec, found while planning: voucher create/update writes `dto.storeId`/`counterpartyStoreId` without a tenant check (`accounting.service.ts:1492-1494,1586-1588`); sales, sales-orders and quotations take `dto.storeId` without a tenant lookup (`sales.service.ts:90`, `sales-orders.service.ts:48`, `sales-quotations.service.ts:109`). Fix with `BranchScopeService.resolveStoreId(..., { allowAll: false })`. (Cashier `openSession` and `POST /counters` were fixed with the branch filter.)
