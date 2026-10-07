@@ -5,6 +5,7 @@ import { CreateProductDto, MergeProductDto, ProductTypeDto, UpdateProductDto } f
 import { commitMerge, parseTakeFields, planMerge, throwIfBlocked } from './products.merge';
 import { CsvProductRow } from './import-products.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { recordCostAdjustment } from '../database/product-cost.utils';
 import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { RedisService } from '../cache/redis.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
@@ -45,7 +46,7 @@ export class ProductsService {
         private planEntitlements: PlanEntitlementsService,
     ) { }
 
-    async create(tenantId: string, dto: CreateProductDto) {
+    async create(tenantId: string, dto: CreateProductDto, userId?: string) {
         await this.planEntitlements.assertProductQuota(tenantId);
         const result = await this.db.$transaction(async (tx) => {
             const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
@@ -101,6 +102,19 @@ export class ProductsService {
                     // average at retail and reported its first sales at zero
                     // margin. Omitted when unknown: no basis beats a wrong one.
                     unitCost: dto.cost,
+                });
+            } else if (dto.type !== ProductTypeDto.SERVICE && (dto.cost ?? 0) > 0) {
+                // A cost and no opening stock still means something: it is what
+                // the product is expected to cost, and it used to be dropped on
+                // the floor — the product sold uncosted until its first bill.
+                // Held as an opening cost against nothing on hand, so the first
+                // real receipt replaces it outright rather than blending with it.
+                await recordCostAdjustment(tx, {
+                    tenantId,
+                    productId: product.id,
+                    newCost: dto.cost!,
+                    note: 'Entered with the product',
+                    userId,
                 });
             }
 
@@ -436,6 +450,7 @@ export class ProductsService {
     async importFromCsv(
         tenantId: string,
         rows: CsvProductRow[],
+        userId?: string,
     ): Promise<{ created: number; skipped: number; errors: string[] }> {
         let created = 0;
         let skipped = 0;
@@ -476,6 +491,7 @@ export class ProductsService {
 
                 const price = Number(row.selling_price) || 0;
                 const initialStock = Number(row.stock_quantity) || 0;
+                const cost = parseCsvCost(row.cost_price);
 
                 let createdProductId: string | null = null;
                 await this.db.$transaction(async (tx) => {
@@ -504,7 +520,19 @@ export class ProductsService {
                             movementType: 'INITIAL_STOCK',
                             referenceType: 'PRODUCT',
                             referenceId: product.id,
-                            unitCost: row.cost_price != null ? Number(row.cost_price) : price,
+                            // No fallback to the selling price. It used to stand in
+                            // for a missing cost_price, which started the product's
+                            // average at retail and reported every early sale at
+                            // zero margin — the same bug the create path had.
+                            unitCost: cost,
+                        });
+                    } else if (cost !== undefined) {
+                        await recordCostAdjustment(tx, {
+                            tenantId,
+                            productId: product.id,
+                            newCost: cost,
+                            note: 'Imported from CSV',
+                            userId,
                         });
                     }
                 });
@@ -714,6 +742,17 @@ export class ProductsService {
             throw new BadRequestException('Brand not found for this tenant.');
         }
     }
+}
+
+/**
+ * A CSV cell's cost, or undefined when it says nothing usable. Blank, zero,
+ * negative and non-numeric all read as "not known": a zero would seed the pool
+ * as free stock, which is a claim, where an empty cell is an absence.
+ */
+function parseCsvCost(value: unknown): number | undefined {
+    if (value === null || value === undefined || String(value).trim() === '') return undefined;
+    const cost = Number(value);
+    return Number.isFinite(cost) && cost > 0 ? cost : undefined;
 }
 
 function txLike(db: DatabaseService) {

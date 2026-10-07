@@ -10,6 +10,7 @@
  * `ProductPrice.cost` — a standard cost someone typed in, which drifted from
  * real buying prices the moment a supplier changed a rate.
  */
+import { BadRequestException } from '@nestjs/common';
 
 /** How a movement type is allowed to touch the average. */
 export type CostBehaviour =
@@ -189,6 +190,78 @@ export function mergePools(keeper: CostPool, duplicate: CostPool | null): CostPo
     return { avgCost: keeper.avgCost, qtyOnHand: qty };
 }
 
+/**
+ * Why someone set a product's cost by hand. See ProductCostAdjustment in
+ * schema.prisma for what each one means and why none of them posts a voucher.
+ */
+export const COST_ADJUSTMENT_REASONS = ['OPENING_COST', 'CORRECTION', 'WRITE_DOWN'] as const;
+export type CostAdjustmentReason = (typeof COST_ADJUSTMENT_REASONS)[number];
+
+export function isCostAdjustmentReason(value: unknown): value is CostAdjustmentReason {
+    return typeof value === 'string' && (COST_ADJUSTMENT_REASONS as readonly string[]).includes(value);
+}
+
+/**
+ * Decide which reason an adjustment is recorded under, or say why it may not
+ * be made. Pure, so the rules read in one place and test without a database.
+ *
+ *  - No basis on file: always OPENING_COST, whatever was asked for. There is
+ *    nothing to correct or write down; the figure supplies a missing fact.
+ *  - A basis on file: the caller has to say which of CORRECTION or WRITE_DOWN
+ *    this is. Silently overwriting a real average with a typed number is the
+ *    very thing the pool was built to stop, so it is never the default.
+ *  - WRITE_DOWN only lowers the cost. Inventory is carried at the lower of cost
+ *    and net realisable value (IAS 2 §9); writing stock *up* past what was paid
+ *    is not a write-down, and if the recorded cost was simply wrong that is a
+ *    CORRECTION.
+ *  - Zero is reserved for WRITE_DOWN. A zero cost reads as free stock — every
+ *    later sale at 100% margin — which is right for goods written off as
+ *    worthless and wrong as a placeholder for "not known yet".
+ *
+ * Returns the reason on success, or `{ error }` with a message fit to show the
+ * person who asked.
+ */
+export function resolveAdjustmentReason(
+    previousCost: number | null,
+    newCost: number,
+    requested?: string | null,
+): CostAdjustmentReason | { error: string } {
+    if (!Number.isFinite(newCost) || newCost < 0) {
+        return { error: 'The cost must be a number of zero or more.' };
+    }
+
+    if (previousCost === null) {
+        if (newCost === 0) {
+            return { error: 'An opening cost must be above zero. Zero reads as free stock in every margin report.' };
+        }
+        return 'OPENING_COST';
+    }
+
+    if (requested !== 'CORRECTION' && requested !== 'WRITE_DOWN') {
+        return { error: 'This product already has a cost on file. Say whether the change is a correction or a write-down.' };
+    }
+    if (round4(newCost) === round4(previousCost)) {
+        return { error: 'That is already the cost on file.' };
+    }
+    if (requested === 'WRITE_DOWN' && newCost > previousCost) {
+        return { error: 'A write-down can only lower the cost. Use a correction if the cost on file was wrong.' };
+    }
+    if (requested === 'CORRECTION' && newCost === 0) {
+        return { error: 'A corrected cost must be above zero. Write the stock down instead if it is worth nothing.' };
+    }
+    return requested;
+}
+
+/**
+ * An adjustment's effect on a pool: the average becomes the stated cost, and
+ * the quantity it is held against is left as it is. Pure — shared by the live
+ * path below and the history replay in backfill-product-costs.ts, so the two
+ * cannot disagree about what an adjustment does.
+ */
+export function applyCostAdjustmentToPool(pool: CostPool, newCost: number): CostPool {
+    return { avgCost: round4(newCost), qtyOnHand: pool.qtyOnHand };
+}
+
 type DbLike = any;
 
 /**
@@ -249,6 +322,99 @@ export async function applyCostMovement(
     return outcome;
 }
 
+/**
+ * Set a product's cost by hand, inside the caller's transaction.
+ *
+ * Writes the pool and the ProductCostAdjustment row that explains it. Posts no
+ * voucher — see the model's comment for why that is the correct accounting
+ * under this system's periodic inventory — and never touches a past sale: the
+ * new cost applies to goods leaving from now on.
+ *
+ * The quantity the new average is held against is re-read from stock on hand
+ * rather than kept from the pool. The pool only starts counting at a product's
+ * first costed receipt (`applyCostMovement` writes no row while there is no
+ * basis), so a product whose early stock arrived uncosted carries a pool
+ * quantity short of what is on the shelf, and the next receipt would blend
+ * against too little. Stating a cost is stating what *every* unit on hand is
+ * worth, so it is the point to resync. A sale of the same product committing
+ * between that read and this write can leave the quantity one sale stale — the
+ * same class of race `applyCostMovement` accepts, and corrected by the next
+ * adjustment.
+ *
+ * Throws BadRequest for a product that cannot carry a cost (missing, deleted,
+ * or a service) or for an adjustment the rules in `resolveAdjustmentReason`
+ * refuse.
+ */
+export async function recordCostAdjustment(
+    tx: DbLike,
+    params: {
+        tenantId: string;
+        productId: string;
+        newCost: number;
+        reason?: string | null;
+        note?: string | null;
+        userId?: string | null;
+    },
+) {
+    const { tenantId, productId, newCost } = params;
+
+    const product = await tx.product.findFirst({
+        where: { id: productId, tenant_id: tenantId, deleted_at: null },
+        select: { id: true, name: true, type: true },
+    });
+    if (!product) {
+        throw new BadRequestException(`Product ${productId} was not found.`);
+    }
+    if (product.type === 'SERVICE') {
+        // A service is never stock-tracked, so there is no stock for a cost to
+        // value and no movement that would ever read it.
+        throw new BadRequestException(`${product.name} is a service and carries no stock cost.`);
+    }
+
+    const existing = await tx.productCost.findUnique({
+        where: { tenant_id_product_id: { tenant_id: tenantId, product_id: productId } },
+        select: { avg_cost: true },
+    });
+    const previousCost = existing ? Number(existing.avg_cost) : null;
+
+    const reason = resolveAdjustmentReason(previousCost, newCost, params.reason);
+    if (typeof reason !== 'string') {
+        throw new BadRequestException(`${product.name}: ${reason.error}`);
+    }
+
+    const stock = await tx.productStock.aggregate({
+        where: { tenant_id: tenantId, product_id: productId },
+        _sum: { quantity: true },
+    });
+    const qtyOnHand = stock._sum.quantity ?? 0;
+
+    const pool = applyCostAdjustmentToPool({ avgCost: previousCost, qtyOnHand }, newCost);
+
+    await tx.productCost.upsert({
+        where: { tenant_id_product_id: { tenant_id: tenantId, product_id: productId } },
+        update: { avg_cost: pool.avgCost, qty_on_hand: pool.qtyOnHand },
+        create: {
+            tenant_id: tenantId,
+            product_id: productId,
+            avg_cost: pool.avgCost,
+            qty_on_hand: pool.qtyOnHand,
+        },
+    });
+
+    return tx.productCostAdjustment.create({
+        data: {
+            tenant_id: tenantId,
+            product_id: productId,
+            reason,
+            previous_cost: previousCost,
+            new_cost: pool.avgCost,
+            qty_on_hand: pool.qtyOnHand,
+            note: params.note?.trim() || null,
+            created_by: params.userId ?? null,
+        },
+    });
+}
+
 export const COSTING_METHODS = ['WEIGHTED_AVERAGE', 'LATEST_COST'] as const;
 export type CostingMethod = (typeof COSTING_METHODS)[number];
 
@@ -297,9 +463,10 @@ export async function resolveProductCosts(
         : 'WEIGHTED_AVERAGE';
 
     // The standard cost someone typed into the price list. Under LATEST_COST it
-    // is the answer; under WEIGHTED_AVERAGE it is the fallback for products the
-    // pool has never seen — goods bought before this system, or stocked only by
-    // transfer from a warehouse whose receipts predate the pool.
+    // is the answer where there is one; under WEIGHTED_AVERAGE it is the
+    // fallback for products the pool has never seen — goods bought before this
+    // system, or stocked only by transfer from a warehouse whose receipts
+    // predate the pool.
     const priceListCosts = new Map<string, number>();
     const productPrices = await tx.productPrice.findMany({
         where: {
@@ -323,19 +490,24 @@ export async function resolveProductCosts(
         }
     }
 
-    if (method === 'LATEST_COST') {
-        return priceListCosts;
-    }
-
     const pools = await tx.productCost.findMany({
         where: { tenant_id: tenantId, product_id: { in: productIds } },
         select: { product_id: true, avg_cost: true },
     });
+    const poolCosts = new Map<string, number>();
     for (const pool of pools) {
-        costs.set(pool.product_id, Number(pool.avg_cost));
+        poolCosts.set(pool.product_id, Number(pool.avg_cost));
     }
 
-    for (const [productId, cost] of priceListCosts) {
+    // Each method falls back to the other for a product it cannot answer for.
+    // Under LATEST_COST that matters for stock nobody ever priced in the list
+    // but whose cost was stated since — an opening cost or a receipt — which
+    // would otherwise sell uncosted forever on a tenant that picked this method.
+    const [primary, fallback] = method === 'LATEST_COST' ? [priceListCosts, poolCosts] : [poolCosts, priceListCosts];
+    for (const [productId, cost] of primary) {
+        costs.set(productId, cost);
+    }
+    for (const [productId, cost] of fallback) {
         if (!costs.has(productId)) {
             costs.set(productId, cost);
         }

@@ -401,6 +401,7 @@ export const coreMessages = {
                 marginExceptions: "মার্জিন ব্যতিক্রম",
                 marginBridge: "মার্জিন ব্রিজ",
                 stockOnHand: "স্টক অন হ্যান্ড",
+                productCosts: "পণ্যের খরচ",
                 productTransactionHistory: "লেনদেন ইতিহাস",
                 reorderReport: "রি-অর্ডার রিপোর্ট",
                 shrinkageReport: "শ্রিংকেজ রিপোর্ট",

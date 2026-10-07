@@ -163,6 +163,7 @@ export const routes = {
         warehouses: '/inventory/warehouses',
         settings: '/inventory/settings',
         brands: '/inventory/brands',
+        productCosts: '/inventory/product-costs',
         reports: {
             reorder: '/inventory/reports/reorder',
             shrinkage: '/inventory/reports/shrinkage',

@@ -101,6 +101,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     // ── Exempt: periodic inventory (deliberately no journal) ─────────────────
     { model: 'InventoryMovement', exempt: 'Periodic inventory: stock is expensed at purchase, so a movement posts nothing.' },
     { model: 'ProductCost', exempt: 'Running weighted-average cost, a reporting basis rather than a balance; periodic inventory posts nothing when it changes.' },
+    { model: 'ProductCostAdjustment', exempt: 'Someone setting the ProductCost basis (opening cost, correction, write-down). Periodic inventory carries no Inventory balance for it to move: purchases were expensed when billed, so the change reaches profit through the COGS of later sales, never through a voucher. Keeps before/after/qty so a perpetual model could post Dr/Cr Inventory against revaluation from it.' },
     { model: 'ProductionJob', exempt: 'Manufacturing cost reclassification; periodic inventory, no new money.' },
     { model: 'ProductionWastage', exempt: 'Quantity, not money; periodic inventory.' },
     { model: 'BomComponent', exempt: 'Quantity, not money.' },

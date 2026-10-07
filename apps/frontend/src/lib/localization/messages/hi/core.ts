@@ -402,6 +402,7 @@ export const coreMessages = {
             marginExceptions: "मार्जिन अपवाद",
             marginBridge: "मार्जिन ब्रिज",
             stockOnHand: "उपलब्ध स्टॉक",
+            productCosts: "उत्पाद लागत",
             productTransactionHistory: "लेनदेन इतिहास",
             reorderReport: "पुनः ऑर्डर रिपोर्ट",
             shrinkageReport: "क्षति रिपोर्ट",

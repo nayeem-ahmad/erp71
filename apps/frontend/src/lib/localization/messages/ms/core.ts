@@ -401,6 +401,7 @@ export const coreMessages = {
                 marginExceptions: "Pengecualian Margin",
                 marginBridge: "Jambatan Margin",
                 stockOnHand: "Stok Ada",
+                productCosts: "Kos Produk",
                 productTransactionHistory: "Sejarah Transaksi",
                 reorderReport: "Laporan Pesanan Semula",
                 shrinkageReport: "Laporan Susut",

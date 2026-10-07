@@ -329,6 +329,14 @@ step sync:tenant-role-templates \
 step sync:cancel-entry-permission \
     npm run sync:cancel-entry-permission --workspace=@erp71/database
 
+# sync:adjust-product-cost-permission is the same reconciler for
+# ADJUST_PRODUCT_COST (Inventory -> Product Costs), which likewise belongs to
+# Tenant Admin alone among the seeded roles. Without it an existing workspace's
+# Tenant Admins see the page read-only while the owner can set costs. Same
+# ordering constraint as above, and needs the enum value `prisma db push` adds.
+step sync:adjust-product-cost-permission \
+    npm run sync:adjust-product-cost-permission --workspace=@erp71/database
+
 # sync:work-schedules gives every tenant a default work schedule and every
 # employee an assignment to it (HRIS Phase 2). Attendance still works without it
 # — resolveScheduleDays falls back to an in-code default — but the tenant would

@@ -1629,6 +1629,38 @@ export const api = {
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/reorder-suggestions${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /**
+     * What every stock product costs, with tenant-wide counts of the ones that
+     * have no cost on file. Not a bare paginated list — the page and its
+     * totals sit under `pagination`, next to `summary` and `costingMethod`.
+     */
+    getProductCosts: (params?: { search?: string; groupId?: string; status?: 'ALL' | 'UNCOSTED' | 'COSTED'; inStockOnly?: boolean; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.groupId) query.set('groupId', params.groupId);
+        if (params?.status) query.set('status', params.status);
+        if (params?.inStockOnly) query.set('inStockOnly', 'true');
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/product-costs${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** Every cost set by hand, newest first. */
+    getProductCostAdjustments: (params?: { productId?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.productId) query.set('productId', params.productId);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchPaginated(`/product-costs/adjustments${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /**
+     * Set one or more product costs, all-or-nothing. `reason` applies to the
+     * products that already have a cost on file; the rest are opening costs.
+     */
+    createProductCostAdjustments: (body: {
+        items: { productId: string; unitCost: number }[];
+        reason?: 'CORRECTION' | 'WRITE_DOWN';
+        note?: string;
+    }) => fetchWithAuth('/product-costs/adjustments', { method: 'POST', body: JSON.stringify(body) }),
     getStockOnHand: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
         const query = new URLSearchParams();
         if (params?.storeId) query.set('storeId', params.storeId);
