@@ -237,7 +237,7 @@ export default function QuotesPage() {
                                 <Eye className="w-4 h-4" />
                             </Link>
                             <Link
-                                href={`/sales/quotes/${quote.id}?edit=true`}
+                                href={routes.sales.quoteEdit(quote.id)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
                                 title={t.common.edit}
                             >
@@ -357,6 +357,7 @@ export default function QuotesPage() {
                         subject={share.subject}
                         shortPath={share.path}
                         onRevoke={revokeShare}
+                        showPrintLink
                         onClose={closeShare}
                     />
                 )}

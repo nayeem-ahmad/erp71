@@ -257,6 +257,7 @@ export const componentsMessages = {
             copy: "Salin",
             copied: "Disalin",
             whatsapp: "Kongsi di WhatsApp",
+            openPrint: "Buka salinan sedia cetak",
             close: "Tutup",
             revoke: "Batalkan pautan",
             revokePrompt: "Batalkan pautan ini? Sesiapa yang sudah menerimanya akan hilang akses.",

@@ -228,11 +228,20 @@ describe('QuoteDetailsPage', () => {
         expect(pushMock).toHaveBeenCalledWith('/sales/orders/order-1');
     });
 
+    it('sends legacy ?edit=true links to the edit screen', async () => {
+        const replace = jest.fn();
+        const nav = require('next/navigation');
+        nav.useRouter.mockReturnValue({ push: pushMock, replace });
+        setEditMode(true);
+        render(<QuoteDetailsPage />);
+        await waitFor(() => expect(replace).toHaveBeenCalledWith('/sales/quotes/quote-1/edit'));
+    });
+
     it('navigates to edit mode when Edit button is clicked', async () => {
         render(<QuoteDetailsPage />);
         await waitFor(() => screen.getByRole('button', { name: /^edit$/i }));
         fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
-        expect(pushMock).toHaveBeenCalledWith('/sales/quotes/quote-1?edit=true');
+        expect(pushMock).toHaveBeenCalledWith('/sales/quotes/quote-1/edit');
     });
 
     it('prints when Print PDF is clicked', async () => {
@@ -347,83 +356,6 @@ describe('QuoteDetailsPage', () => {
             expect(window.alert).not.toHaveBeenCalled();
 
             toastErrorSpy.mockRestore();
-        });
-    });
-
-    describe('Edit mode', () => {
-        beforeEach(() => {
-            setEditMode(true);
-        });
-
-        it('shows edit mode banner and loads customers/products', async () => {
-            const api = getApi();
-            render(<QuoteDetailsPage />);
-            await waitFor(() => {
-                expect(screen.getByText(/edit mode/i)).toBeInTheDocument();
-            });
-            expect(api.getCustomers).toHaveBeenCalled();
-            expect(api.getProducts).toHaveBeenCalled();
-        });
-
-        it('shows Save Changes button in edit mode', async () => {
-            render(<QuoteDetailsPage />);
-            await waitFor(() => {
-                expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
-            });
-        });
-
-        it('shows product search input in edit mode', async () => {
-            render(<QuoteDetailsPage />);
-            await waitFor(() => {
-                expect(screen.getByPlaceholderText(/search products by name or sku/i)).toBeInTheDocument();
-            });
-        });
-
-        it('shows product search dropdown when typing', async () => {
-            render(<QuoteDetailsPage />);
-            await waitFor(() => screen.getByPlaceholderText(/search products by name or sku/i));
-            fireEvent.change(screen.getByPlaceholderText(/search products by name or sku/i), {
-                target: { value: 'Beta' },
-            });
-            await waitFor(() => {
-                expect(screen.getByText('Product Beta')).toBeInTheDocument();
-            });
-        });
-
-        it('calls updateQuotation on save', async () => {
-            const api = getApi();
-            render(<QuoteDetailsPage />);
-            // Wait for quote to load and edit items to populate (button becomes enabled)
-            await waitFor(() => {
-                const btn = screen.getByRole('button', { name: /save changes/i });
-                expect(btn).not.toBeDisabled();
-            });
-            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
-            await waitFor(() => {
-                expect(api.updateQuotation).toHaveBeenCalledWith('quote-1', expect.any(Object));
-            });
-            expect(pushMock).toHaveBeenCalledWith('/sales/quotes/quote-1');
-        });
-
-        it('cancel navigates back to view mode', async () => {
-            render(<QuoteDetailsPage />);
-            await waitFor(() => screen.getByRole('button', { name: /cancel/i }));
-            fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
-            expect(pushMock).toHaveBeenCalledWith('/sales/quotes/quote-1');
-        });
-
-        it('shows customer select dropdown in edit mode', async () => {
-            render(<QuoteDetailsPage />);
-            await waitFor(() => {
-                expect(screen.getByPlaceholderText('Walk-in Customer')).toBeInTheDocument();
-            });
-        });
-
-        it('shows valid until date input in edit mode', async () => {
-            render(<QuoteDetailsPage />);
-            await waitFor(() => {
-                expect(screen.getByDisplayValue('2026-12-31')).toBeInTheDocument();
-            });
         });
     });
 });
