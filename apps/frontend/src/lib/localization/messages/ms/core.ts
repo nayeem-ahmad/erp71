@@ -726,6 +726,7 @@ export const coreMessages = {
                     counters: "Kaunter POS",
                     sales: "Tetapan Jualan",
                     printTemplates: "Pengepala Cetakan",
+                    documentNumbering: "Penomboran Dokumen",
                     paymentMethods: "Kaedah Pembayaran",
                     discountCodes: "Kod Diskaun",
                     urlShortener: "Pemendek URL",
