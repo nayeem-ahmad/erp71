@@ -74,6 +74,13 @@ final contactProvider = FutureProvider.autoDispose.family<Contact, String>((
   return ref.watch(crmRepositoryProvider).contact(id);
 });
 
+/// Card photos kept against a contact.
+final contactCardsProvider = FutureProvider.autoDispose
+    .family<List<String>, String>((ref, id) {
+      _watchContext(ref);
+      return ref.watch(crmRepositoryProvider).contactCardImages(id);
+    });
+
 /// A list that loads a page at a time as the user scrolls.
 class PagedState<T> {
   const PagedState({

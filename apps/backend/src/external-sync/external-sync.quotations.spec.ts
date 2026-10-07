@@ -18,7 +18,7 @@ const DOC = {
     detail: {
         Id: 'q-1',
         Status: 'Accepted',
-        QuotationItems: [
+        SaleQuotationItems: [
             { ItemId: 'item-ext', Quantity: 3, PricePerUnit: 250 },
             { ItemId: 'deleted-item', Quantity: 1, PricePerUnit: 99 },
         ],

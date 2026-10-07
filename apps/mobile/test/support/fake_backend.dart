@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:erp71_mobile/core/auth/google_auth.dart';
+import 'package:erp71_mobile/core/security/app_lock.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -120,4 +121,25 @@ class FakeGoogleAuth implements GoogleAuth {
 
   @override
   Future<void> signOut() async => signOuts++;
+}
+
+/// The phone's fingerprint, face or PIN check, answered by the test.
+class FakeDeviceAuthenticator implements DeviceAuthenticator {
+  FakeDeviceAuthenticator({
+    this.available = true,
+    this.result = DeviceAuthResult.passed,
+  });
+
+  bool available;
+  DeviceAuthResult result;
+  final List<String> reasons = [];
+
+  @override
+  Future<bool> isAvailable() async => available;
+
+  @override
+  Future<DeviceAuthResult> authenticate(String reason) async {
+    reasons.add(reason);
+    return result;
+  }
 }

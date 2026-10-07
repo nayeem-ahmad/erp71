@@ -14,6 +14,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>ERP71 uses Face ID to unlock the app when you turn on App lock.</string>
 	<key>CFBundleName</key>
 	<string>ERP71</string>
 	<key>CFBundlePackageType</key>
@@ -37,6 +39,10 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>ERP71 uses the camera to scan business cards into your contacts.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ERP71 reads a photo of a business card you choose to add it to your contacts.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

@@ -651,6 +651,7 @@ export default function TenantExternalSyncPage() {
                                     <th className="py-2 pe-3 font-medium">Status</th>
                                     <th className="py-2 pe-3 font-medium">Window</th>
                                     <th className="py-2 pe-3 font-medium">Sales</th>
+                                    <th className="py-2 pe-3 font-medium">Quotations</th>
                                     <th className="py-2 pe-3 font-medium">Purchases</th>
                                     <th className="py-2 pe-3 font-medium">Returns</th>
                                     <th className="py-2 pe-3 font-medium">Payments</th>
@@ -704,6 +705,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                     {run.window_from.slice(0, 10)} → {run.window_to.slice(0, 10)}
                 </td>
                 <td className="py-2 pe-3">{formatTally(run, 'sales')}</td>
+                <td className="py-2 pe-3">{formatTally(run, 'quotations')}</td>
                 <td className="py-2 pe-3">{formatTally(run, 'purchases')}</td>
                 <td className="py-2 pe-3">{formatTally(run, 'saleReturns')}</td>
                 <td className="py-2 pe-3 text-gray-500">{formatPaymentTally(run)}</td>
@@ -724,7 +726,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
             </tr>
             {showWarnings ? (
                 <tr>
-                    <td colSpan={9} className="py-2">
+                    <td colSpan={10} className="py-2">
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning: ExternalSyncWarning, index: number) => (
                                 <li key={`${warning.entity}-${warning.externalId}-${index}`}>
@@ -831,7 +833,7 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
     );
 }
 
-function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases' | 'saleReturns') {
+function formatTally(run: ExternalSyncRun, key: 'sales' | 'quotations' | 'purchases' | 'saleReturns') {
     const tally = run.stats?.[key];
     if (!tally) return '—';
     const parts = [`${tally.created} new`, `${tally.updated} updated`];

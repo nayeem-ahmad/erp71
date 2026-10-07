@@ -32,6 +32,11 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         title: const Text('Contacts'),
         actions: [
           IconButton(
+            tooltip: 'Scan business card',
+            icon: const Icon(Icons.document_scanner_outlined),
+            onPressed: () => context.push('/contacts/new?scan=1'),
+          ),
+          IconButton(
             tooltip: 'New contact',
             icon: const Icon(Icons.person_add_alt_outlined),
             onPressed: () => context.push('/contacts/new'),
