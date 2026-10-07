@@ -89,7 +89,7 @@ export class SalesQuotationsService {
 
         return this.db.$transaction(async (tx) => {
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
             const quoteNumber = await nextDocumentNumber(tx, {

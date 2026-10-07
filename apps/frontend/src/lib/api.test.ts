@@ -1276,6 +1276,13 @@ describe('api.getCustomerSegmentStats', () => {
         mockOk({ data: {} });
         await api.getCustomerSegmentStats();
         expect(lastUrl()).toContain('/customers/segment-stats');
+        expect(lastUrl()).not.toContain('storeId');
+    });
+
+    it('passes the branch filter on', async () => {
+        mockOk({ data: {} });
+        await api.getCustomerSegmentStats('all');
+        expect(lastUrl()).toContain('/customers/segment-stats?storeId=all');
     });
 });
 

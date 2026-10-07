@@ -100,6 +100,13 @@ export class BranchScopeService {
         return ids;
     }
 
+    /** Every branch the member may use — their `UserStoreAccess` rows. */
+    async memberStoreIds(ctx: TenantContext): Promise<string[]> {
+        if (!ctx.userId) return [];
+        const access = await loadMemberStoreAccess(this.db, this.authCache, ctx.userId, ctx.tenantId);
+        return access.map((row) => row.store_id);
+    }
+
     /** Owner, or `VIEW_CONSOLIDATED_REPORTS` held in the header branch. */
     async canSeeAllBranches(ctx: TenantContext): Promise<boolean> {
         if (ctx.userRole === 'OWNER') return true;

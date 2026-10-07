@@ -43,6 +43,12 @@ export async function resolveInlineCustomer(
     tx: DbLike,
     tenantId: string,
     draft: InlineCustomerDraft,
+    /**
+     * The document's branch: a new customer is added at it. A reused one keeps
+     * the branch they were added at — the sale itself makes them a customer of
+     * this branch too (see `customer-visibility.ts`).
+     */
+    storeId?: string,
 ): Promise<string> {
     const name = draft.name?.trim();
     if (!name) {
@@ -82,6 +88,7 @@ export async function resolveInlineCustomer(
                     phone,
                     email: draft.email?.trim() || undefined,
                     address: draft.address?.trim() || undefined,
+                    ...(storeId ? { store_id: storeId } : {}),
                 },
                 select: { id: true },
             });

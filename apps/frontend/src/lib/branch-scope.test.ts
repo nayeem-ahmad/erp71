@@ -54,6 +54,34 @@ describe('resolveBranchScope', () => {
         expect(owner.value).toBe('A');
     });
 
+    // Company-level lists (customers) start where they were before the filter.
+    it('starts on "all" with startOnAll, for a member who may see it', () => {
+        const owner = resolveBranchScope({
+            tenant: tenant({ role: 'OWNER', permissions: [] }),
+            headerBranchId: 'A',
+            requested: null,
+            startOnAll: true,
+        });
+        expect(owner.value).toBe(ALL_BRANCHES);
+        expect(owner.defaultValue).toBe(ALL_BRANCHES);
+        expect(owner.apiStoreId).toBe(ALL_BRANCHES);
+
+        const picked = resolveBranchScope({
+            tenant: tenant({ role: 'OWNER', permissions: [] }),
+            headerBranchId: 'A',
+            requested: 'A',
+            startOnAll: true,
+        });
+        expect(picked.value).toBe('A');
+    });
+
+    it('still starts a limited member on the header branch with startOnAll', () => {
+        const state = resolveBranchScope({ tenant: tenant(), headerBranchId: 'B', requested: null, startOnAll: true });
+        expect(state.canSeeAll).toBe(false);
+        expect(state.value).toBe('B');
+        expect(state.defaultValue).toBe('B');
+    });
+
     it('never offers "all" on a one-branch page', () => {
         const state = resolveBranchScope({
             tenant: tenant({ role: 'OWNER' }),
