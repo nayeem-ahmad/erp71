@@ -11,11 +11,7 @@ import 'card_photo.dart';
 
 /// Creates a contact, or edits one when [contactId] is given.
 class ContactFormScreen extends ConsumerWidget {
-  const ContactFormScreen({
-    super.key,
-    this.contactId,
-    this.scanOnOpen = false,
-  });
+  const ContactFormScreen({super.key, this.contactId, this.scanOnOpen = false});
 
   final String? contactId;
 
@@ -92,27 +88,28 @@ class _ContactFormState extends ConsumerState<_ContactForm> {
     }
   }
 
-  Future<CardPhotoSource?> _chooseSource() => showModalBottomSheet<CardPhotoSource>(
-    context: context,
-    showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.photo_camera_outlined),
-            title: const Text('Take a photo'),
-            onTap: () => Navigator.pop(context, CardPhotoSource.camera),
+  Future<CardPhotoSource?> _chooseSource() =>
+      showModalBottomSheet<CardPhotoSource>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.pop(context, CardPhotoSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.pop(context, CardPhotoSource.gallery),
+              ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.photo_library_outlined),
-            title: const Text('Choose from gallery'),
-            onTap: () => Navigator.pop(context, CardPhotoSource.gallery),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 
   /// Photographs a card, has the server read it, and fills the form for the
   /// user to correct. Nothing is saved until they tap Save.

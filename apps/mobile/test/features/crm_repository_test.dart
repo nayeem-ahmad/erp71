@@ -348,7 +348,10 @@ void main() {
         },
       );
 
-      final fields = await repo.scanBusinessCard('data:image/jpeg;base64,AA', 'image/jpeg');
+      final fields = await repo.scanBusinessCard(
+        'data:image/jpeg;base64,AA',
+        'image/jpeg',
+      );
 
       expect(fields, {'name': 'Nusrat', 'company': 'Acme'});
       expect(backend.lastBody('POST', '/crm/contacts/scan-card'), {
@@ -363,7 +366,10 @@ void main() {
         '/crm/contacts/contact-1/attachments',
         (_) => [
           {'file_url': 'https://cdn.test/a.jpg', 'mime_type': 'image/jpeg'},
-          {'file_url': 'https://cdn.test/b.pdf', 'mime_type': 'application/pdf'},
+          {
+            'file_url': 'https://cdn.test/b.pdf',
+            'mime_type': 'application/pdf',
+          },
         ],
       );
 
@@ -375,7 +381,11 @@ void main() {
     test('the card photo is attached to the saved contact', () async {
       backend.on('POST', '/crm/contacts/contact-1/attachments', (_) => {});
 
-      await repo.addContactCardImage('contact-1', 'data:image/jpeg;base64,AA', 'image/jpeg');
+      await repo.addContactCardImage(
+        'contact-1',
+        'data:image/jpeg;base64,AA',
+        'image/jpeg',
+      );
 
       expect(
         backend.lastBody('POST', '/crm/contacts/contact-1/attachments'),

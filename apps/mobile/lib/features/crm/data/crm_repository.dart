@@ -373,7 +373,8 @@ class CrmRepository {
     return {
       if (fields is Map<String, dynamic>)
         for (final entry in fields.entries)
-          if (entry.value is String && (entry.value as String).trim().isNotEmpty)
+          if (entry.value is String &&
+              (entry.value as String).trim().isNotEmpty)
             entry.key: (entry.value as String).trim(),
     };
   }
