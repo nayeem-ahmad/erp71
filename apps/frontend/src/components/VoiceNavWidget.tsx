@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { HelpCircle, Mic, MicOff, X } from 'lucide-react';
+import { Mic, MicOff } from 'lucide-react';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { useDismissable } from '@/hooks/useDismissable';
 import {
     classifySpeechRecognitionError,
     extractBestTranscript,
@@ -31,7 +30,6 @@ export default function VoiceNavWidget() {
     const router = useRouter();
     const [supported, setSupported] = useState(false);
     const [listening, setListening] = useState(false);
-    const [hintOpen, setHintOpen] = useState(false);
     const [heard, setHeard] = useState<string | null>(null);
     const heardRef = useRef<string | null>(null);
     const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -40,13 +38,10 @@ export default function VoiceNavWidget() {
     const networkAttemptsRef = useRef(0);
     const handledRef = useRef(false);
     const startingRef = useRef(false);
-    const rootRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setSupported(isSpeechRecognitionSupported());
     }, []);
-
-    useDismissable(rootRef, () => setHintOpen(false), hintOpen);
 
     const clearListenTimeout = useCallback(() => {
         if (timeoutRef.current) {
@@ -100,7 +95,6 @@ export default function VoiceNavWidget() {
         const pageLabel = m.targets[match.route.id];
         toast.success(formatMessage(m.navigating, { page: pageLabel }));
         router.push(match.route.path);
-        setHintOpen(false);
     }, [m, router]);
 
     const handleTranscript = useCallback((transcript: string) => {
@@ -262,7 +256,6 @@ export default function VoiceNavWidget() {
                 return;
             }
 
-            setHintOpen(false);
             networkAttemptsRef.current = 0;
             const langChain = speechLocaleFallbackChain(locale);
             launchRecognition(langChain[0], langChain, 0);
@@ -284,39 +277,26 @@ export default function VoiceNavWidget() {
 
     const hintTargets = getVoiceNavHintIds();
 
+    // One button. The examples used to sit behind a `?` of their own, which
+    // read as the app's Help and cost the header a second icon; they now show
+    // while the mic is listening, which is the moment they are needed.
     return (
-        <div ref={rootRef} className="relative flex items-center gap-0.5">
-            <style>{`
-                @keyframes voiceHeaderGlow {
-                    0%, 100% { box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4); }
-                    50% { box-shadow: 0 0 0 4px rgba(147, 51, 234, 0); }
-                }
-                @keyframes voiceHeaderPulse {
-                    0%, 100% { transform: scale(1); }
-                    50% { transform: scale(1.08); }
-                }
-            `}</style>
-
-            {hintOpen && (
-                <div className="absolute end-0 top-full z-50 mt-2 w-72 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
-                    <div className="mb-2 flex items-center justify-between">
-                        <p className="text-sm font-bold text-gray-800">{m.hintTitle}</p>
-                        <button
-                            type="button"
-                            onClick={() => setHintOpen(false)}
-                            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                            aria-label={m.closeAria}
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                    </div>
-                    <p className="mb-2 text-xs text-gray-500">{m.hintDescription}</p>
-                    <ul className="flex flex-col gap-1.5">
+        <div className="relative flex items-center">
+            {listening && (
+                <div
+                    role="status"
+                    // Full width under the header on a phone: the mic sits well left
+                    // of the screen edge there, so an end-anchored card would run off.
+                    className="fixed inset-x-3 top-16 z-50 rounded-xl border border-gray-200 bg-white p-3 shadow-xl md:absolute md:inset-x-auto md:end-0 md:top-full md:mt-2 md:w-72"
+                >
+                    <p className="text-sm font-semibold text-gray-800">{m.listeningTitle}</p>
+                    {heard ? (
+                        <p className="mt-1 truncate text-xs text-gray-600">{formatMessage(m.heard, { phrase: heard })}</p>
+                    ) : null}
+                    <p className="mb-1.5 mt-2 text-xs text-gray-500">{m.hintDescription}</p>
+                    <ul className="flex flex-col gap-1">
                         {hintTargets.map((id) => (
-                            <li
-                                key={id}
-                                className="rounded-lg bg-purple-50 px-2.5 py-1.5 text-xs font-medium text-purple-800"
-                            >
+                            <li key={id} className="rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700">
                                 “{m.examples[id]}”
                             </li>
                         ))}
@@ -326,40 +306,19 @@ export default function VoiceNavWidget() {
 
             <button
                 type="button"
-                onClick={() => setHintOpen((open) => !open)}
-                className={`rounded-lg p-2 transition-colors ${
-                    hintOpen
-                        ? 'bg-purple-50 text-purple-700'
-                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                }`}
-                aria-label={m.hintAria}
-                title={m.hintTitle}
-            >
-                <HelpCircle className="h-4 w-4" />
-            </button>
-
-            <button
-                type="button"
                 onClick={handleMicClick}
                 disabled={!supported}
-                className={`relative rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`relative flex min-h-touch min-w-touch items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     listening
                         ? 'bg-red-50 text-red-600'
-                        : 'text-purple-600 hover:bg-purple-50 hover:text-purple-700'
+                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
-                style={{
-                    animation: supported && listening
-                        ? 'voiceHeaderPulse 1.2s ease-in-out infinite'
-                        : supported && !listening
-                            ? 'voiceHeaderGlow 2.4s ease-in-out infinite'
-                            : undefined,
-                }}
                 aria-label={listening ? m.stopAria : m.startAria}
                 title={!supported ? m.unsupported : listening ? m.listeningTitle : m.startTitle}
             >
-                {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                {listening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                 {listening && (
-                    <span className="absolute end-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                    <span className="absolute end-2 top-2 h-2 w-2 animate-pulse rounded-full bg-red-500 ring-2 ring-white" />
                 )}
             </button>
         </div>

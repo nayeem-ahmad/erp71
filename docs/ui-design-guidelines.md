@@ -154,7 +154,7 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 
 **Rule: no feature is reachable *only* via a floating button.**
 
-- **FeedbackWidget: remove the floating dock.** Move Feedback into the header (icon button next to the notification bell) and/or the sidebar footer. `FloatingAssistDock` goes away.
+- **FeedbackWidget: remove the floating dock.** `FloatingAssistDock` is gone. Feedback first moved to a header icon; since 2026-10-07 it is the **Support** item of the avatar menu (`SupportDialog`), with the sidebar's Support page for the conversation list — see §2.12.
 - Allowed fixed-position elements, exhaustively: toasts (`z-70`), the mobile sidebar drawer + backdrop, ModalShell overlays, header-anchored dropdowns, and `FloatingPanel` (`z-20`).
 - **`FloatingPanel`** is the one sanctioned floating *surface*, and the time tracker is its only current use. What earns it the exception: it holds a form — choosing a task, a note, tags, manual logging — that is too big for a header and needs to be reachable from any page. **It is no longer what keeps a running clock visible**: that is `TimerChip` in the app header, which is on every `(app)` page, always in the same place, and covers nothing. The earlier version of this rule said no header could do that job; it was wrong, because the header lives in the `(app)` layout and survives client-side navigation exactly as the panel does. What the panel must obey — every one of these, or it is a FAB with extra steps:
   - it never replaces an inline entry point (the hour log's own header still opens it, a task card still starts a timer, and the board card has a play button);
@@ -198,6 +198,24 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
     than merely looking wrong. Everything else, including every BDT-denominated
     document, stays on `formatBDT()`.
 - Layouts must tolerate Bangla text expansion (~20% longer than English) — no fixed-width labels.
+
+### 2.12 App header (top bar)
+
+**Rule: a header control has to show live state.** The header grew one icon per feature until it held nine controls and two dividers — a `?` that read as Help but was voice-command examples, a language pill, a support bubble beside two other chat bubbles — and on a phone it left no room for the shop name. It is now held to this, in this order (2026-10-07):
+
+| Control | Why it earns the header |
+|---|---|
+| Voice mic (premium voice) | Listening state. **One button**: the examples show in a popover while it listens, not behind a `?` of their own |
+| `TimerChip` (projects + `LOG_PROJECT_TIME`) | The running clock, and the tracker's anchor (§2.8) |
+| AI assistant (premium AI) | Opens a docked panel that keeps a conversation going across pages |
+| Notifications | Unread count |
+| Avatar menu | Who you are, and everything below |
+
+- **Preferences and help go in the avatar menu**: switch account, profile, language (`LanguageSwitcher` is a menu row), Support (`SupportDialog`, the composer that captures the current page), sign out.
+- **Anything with a page of its own goes in the sidebar**, not the header — Help, Support, Chat all have sidebar entries already. A page's live count rides on its sidebar link instead: team chat's unread count is a blue `NavCountBadge` on the Chat link (a dot on the icon when the sidebar is collapsed), the way the voucher approval queue is an amber one on Vouchers. On a phone the sidebar is a drawer, so the menu button carries a dot while chat has unread messages (`useChatUnreadCount`, polled by the shell and passed to the sidebar). Team chat had its own header icon until 2026-10-07.
+- Header icon buttons are `min-h-touch min-w-touch`, `h-5 w-5` icons, `text-gray-500` idle. No accent colour and no idle animation: a control pulses only while something is happening (listening, a running timer).
+- No `⋯` overflow menu in the header. If the header does not fit at 360px, the fix is to take a control out (into the avatar menu or the sidebar), not to fold it away.
+- Adding a header control is a design decision, not a feature's default: say which live state it shows, and what leaves to make room.
 
 ---
 

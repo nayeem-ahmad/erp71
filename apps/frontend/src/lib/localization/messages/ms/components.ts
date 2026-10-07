@@ -104,12 +104,9 @@ export const componentsMessages = {
         voiceNavWidget: {
             startAria: 'Navigasi suara — sebut nama halaman',
             stopAria: 'Berhenti mendengar',
-            hintAria: 'Contoh arahan suara',
-            closeAria: 'Tutup',
             startTitle: 'Sebut nama halaman (cth. sales entry)',
             listeningTitle: 'Mendengar… ketik untuk berhenti',
-            hintTitle: 'Navigasi suara',
-            hintDescription: 'Ketik mikrofon dan sebut salah satu perkara ini:',
+            hintDescription: 'Sebut salah satu perkara ini:',
             heard: 'Didengar: “{phrase}”',
             navigating: 'Membuka {page}',
             notRecognized: 'Tidak dikenali. Cuba: {hints}',

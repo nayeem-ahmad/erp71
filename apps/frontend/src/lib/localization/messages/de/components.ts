@@ -104,12 +104,9 @@ export const componentsMessages = {
     voiceNavWidget: {
         startAria: "Sprachnavigation — Seitennamen sprechen",
         stopAria: "Zuhören beenden",
-        hintAria: "Beispiele für Sprachbefehle",
-        closeAria: "Schließen",
         startTitle: "Sprechen Sie einen Seitennamen (z. B. Verkaufserfassung)",
         listeningTitle: "Hört zu… zum Beenden tippen",
-        hintTitle: "Sprachnavigation",
-        hintDescription: "Tippen Sie auf das Mikrofon und sagen Sie eines davon:",
+        hintDescription: "Sagen Sie eines davon:",
         heard: "Gehört: „{phrase}“",
         navigating: "{page} wird geöffnet",
         notRecognized: "Das wurde nicht erkannt. Versuchen Sie: {hints}",

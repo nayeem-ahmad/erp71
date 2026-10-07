@@ -262,7 +262,6 @@ export const coreMessages = {
         branchFilterAll: 'All branches',
         branchFilterLocked: 'You have access to this branch only',
         branchFilterForbidden: 'You don\'t have access to that branch view. Showing your branch instead.',
-        headerMoreMenuAria: 'More options',
         userFallbackRole: 'Staff',
         onboardingMessage: 'Welcome! Get started by adding products and making your first sale.',
         startSetup: 'Start setup',

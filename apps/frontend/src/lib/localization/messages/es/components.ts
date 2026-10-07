@@ -104,12 +104,9 @@ export const componentsMessages = {
     voiceNavWidget: {
         startAria: "Navegación por voz: diga el nombre de una página",
         stopAria: "Dejar de escuchar",
-        hintAria: "Ejemplos de comandos de voz",
-        closeAria: "Cerrar",
         startTitle: "Diga el nombre de una página (p. ej. registro de venta)",
         listeningTitle: "Escuchando… toque para detener",
-        hintTitle: "Navegación por voz",
-        hintDescription: "Toque el micrófono y diga una de estas frases:",
+        hintDescription: "Diga una de estas frases:",
         heard: "Se oyó: «{phrase}»",
         navigating: "Abriendo {page}",
         notRecognized: "No se reconoció. Pruebe: {hints}",

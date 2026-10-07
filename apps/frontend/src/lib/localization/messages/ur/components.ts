@@ -104,12 +104,9 @@ export const componentsMessages = {
     voiceNavWidget: {
         startAria: "صوتی نیویگیشن — صفحے کا نام بولیں",
         stopAria: "سننا بند کریں",
-        hintAria: "صوتی کمانڈ کی مثالیں",
-        closeAria: "بند کریں",
         startTitle: "صفحے کا نام بولیں (مثلاً سیلز انٹری)",
         listeningTitle: "سن رہا ہے… روکنے کے لیے ٹیپ کریں",
-        hintTitle: "صوتی نیویگیشن",
-        hintDescription: "مائیک پر ٹیپ کریں اور ان میں سے کوئی ایک بولیں:",
+        hintDescription: "ان میں سے کوئی ایک بولیں:",
         heard: "سنا گیا: ”{phrase}“",
         navigating: "{page} کھولا جا رہا ہے",
         notRecognized: "یہ پہچانا نہیں جا سکا۔ آزمائیں: {hints}",
