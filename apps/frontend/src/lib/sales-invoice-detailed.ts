@@ -202,6 +202,7 @@ export function detailedBodyHtml(
 
     // SL, item, quantity, unit price and total, and the two optional columns.
     const columns = 5 + (showWarranty ? 1 : 0) + (showDiscount ? 1 : 0);
+    const ruled = layout.table_borders === 'columns';
 
     // The box is the first row of the item table's head, so it repeats with
     // the column headings at the top of every page a long invoice runs to.
@@ -211,7 +212,7 @@ export function detailedBodyHtml(
     // Apart, each is under the limit and both repeat.
     const body = `
     <div class="invoice-body inv-d inv-d--top">
-    <table class="d-table">
+    <table class="d-table${ruled ? ' d-table--ruled' : ''}">
         <thead>
             <tr class="d-info-row"><td colspan="${columns}">${infoBoxHtml(data)}</td></tr>
             <tr>
@@ -225,6 +226,7 @@ export function detailedBodyHtml(
             </tr>
         </thead>
         <tbody>${itemRows}</tbody>
+        ${ruled ? `<tfoot><tr class="d-close"><td colspan="${columns}"></td></tr></tfoot>` : ''}
     </table>
     </div>`;
 
@@ -301,6 +303,16 @@ export function detailedStyles(): string {
         .d-table .d-sl { width:5%; text-align:left; }
         .d-table .d-warranty { width:14%; }
         .d-table th.d-num, .d-table td.d-num { text-align:right; white-space:nowrap; }
+
+        /* Thin rules around the item table and between its columns, when the
+           member asks for them. On the cells, never the table: the box above
+           the headings is a row of the same table and stays outside the rules.
+           The table is closed by an empty repeating foot rather than the last
+           row's own border, so a page that breaks mid-table is closed too. */
+        .d-table--ruled > thead > tr:not(.d-info-row) > th, .d-table--ruled > tbody > tr > td { border-left:1px solid #9ca3af; border-right:1px solid #9ca3af; }
+        .d-table--ruled > thead > tr:not(.d-info-row) > th { border-top:1px solid #9ca3af; border-bottom:1px solid #9ca3af; }
+        .d-table--ruled > tbody > tr:last-child > td { border-bottom:0; }
+        .d-table--ruled > tfoot > tr.d-close > td { padding:0; height:0; border-top:1px solid #9ca3af; }
 
         .d-sums { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; padding:0 6px; margin-bottom:16px; }
         .d-left { width:44%; }

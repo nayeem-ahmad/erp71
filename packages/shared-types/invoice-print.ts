@@ -34,6 +34,14 @@ export type InvoiceLayout = (typeof INVOICE_LAYOUTS)[number];
 export const INVOICE_WARRANTY_COLUMNS = ['always', 'when-used', 'never'] as const;
 export type InvoiceWarrantyColumn = (typeof INVOICE_WARRANTY_COLUMNS)[number];
 
+/**
+ * Rules on the detailed layout's item table: none (its shaded header and rows
+ * alone), or a thin line around the table and between its columns. The
+ * standard layout has its own `table_style`.
+ */
+export const INVOICE_TABLE_BORDERS = ['none', 'columns'] as const;
+export type InvoiceTableBorders = (typeof INVOICE_TABLE_BORDERS)[number];
+
 /** Breathing room around the invoice body, on top of the page margin. */
 export const INVOICE_PADDINGS = ['narrow', 'normal', 'wide'] as const;
 export type InvoicePadding = (typeof INVOICE_PADDINGS)[number];
@@ -67,6 +75,8 @@ export interface InvoicePrintPrefs {
   hide_empty_discount: boolean;
   /** The detailed layout's Warranty column — see `INVOICE_WARRANTY_COLUMNS`. */
   warranty_column: InvoiceWarrantyColumn;
+  /** The detailed layout's item table rules — see `INVOICE_TABLE_BORDERS`. */
+  table_borders: InvoiceTableBorders;
   /**
    * The line under the invoice. `null` prints the built-in thank-you; an empty
    * string prints no footer at all — the two are different answers.
@@ -86,6 +96,7 @@ export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   signature_lines: false,
   hide_empty_discount: false,
   warranty_column: 'always',
+  table_borders: 'none',
   footer_text: null,
 };
 
@@ -128,6 +139,7 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
       // Anyone who turned it on keeps what they chose.
       r.hide_empty_warranty === true ? 'when-used' : d.warranty_column,
     ),
+    table_borders: oneOf(INVOICE_TABLE_BORDERS, r.table_borders, d.table_borders),
     footer_text:
       typeof r.footer_text === 'string'
         ? r.footer_text.slice(0, INVOICE_FOOTER_MAX_LENGTH)
