@@ -274,6 +274,7 @@ function NewSalePageContent() {
         companyName: currentUser?.store?.name || salesSettings?.tenant?.business_name || printHeader.companyName,
         headerConfig: printHeader.headerConfig,
         customerName: customer?.name,
+        customerCode: customer?.customer_code || undefined,
         customerPhone: customer?.phone,
         shippingAddress: customer?.address || undefined,
         preparedBy: currentUser?.name || undefined,

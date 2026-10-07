@@ -8,9 +8,9 @@ import type { InvoiceData } from './sales-invoice-printer';
 
 /**
  * The detailed invoice: the full trade layout a business hands a trade
- * customer — a labelled invoice / order / date strip, bill-to beside the
- * payment status, a warranty column, tax and discount broken out beside the
- * totals, and a footer that says who prepared it and when it was printed.
+ * customer — one boxed block with the customer on one side and the invoice
+ * (number, order, date, who sold and who entered it) on the other, a warranty
+ * column, and tax and discount broken out beside the totals.
  *
  * Sheet paper only. It shares everything around the body with the standard
  * invoice — the letterhead, the footer pinning, density, the batch job — so
@@ -27,12 +27,6 @@ function amount(value: number): string {
 }
 
 const toPaisa = (value: number) => Math.round(value * 100) / 100;
-
-/** What this invoice's payment status reads: Paid, Partial or Due. */
-export function paymentStatus(total: number, paid: number): 'Paid' | 'Partial' | 'Due' {
-    if (toPaisa(total - paid) <= 0.005) return 'Paid';
-    return paid > 0.005 ? 'Partial' : 'Due';
-}
 
 /**
  * "06-10-2026 1:02:59 PM" — the moment of printing, in the workspace's zone so
@@ -137,23 +131,43 @@ function accountRows(data: InvoiceData, dues: InvoiceDues): string {
 }
 
 /**
- * Invoice no, order no and date on one ruled strip.
+ * The boxed block under the letterhead: who the customer is on the left, with
+ * the labels' colons in one column, and the invoice on the right — its number,
+ * order and date, the employee it is credited to and who entered it.
  *
- * Returned apart from the body so it can ride in the repeating letterhead:
- * every continuation page of a long invoice then says which invoice it
- * belongs to, and page one reads exactly as the strip under the letterhead.
+ * A line with nothing to say is left out rather than printed blank, so a
+ * walk-in's box is their name and the invoice's own lines.
  */
-export function detailedStripHtml(data: InvoiceData): string {
-    return `<div class="d-strip">
-        <div><strong>Invoice No:</strong> ${esc(data.referenceNumber)}</div>
-        <div><strong>Order No:</strong> ${data.orderNumber ? esc(data.orderNumber) : ''}</div>
-        <div><strong>Invoice Date:</strong> ${esc(data.date)}</div>
+function infoBoxHtml(data: InvoiceData): string {
+    const customer: [string, string | undefined][] = [
+        ['Customer ID', data.customerCode],
+        ['Name', data.customerName || 'Walk-in Customer'],
+        ['Address', data.shippingAddress || data.customerAddress],
+        ['Mobile', data.customerPhone],
+    ];
+    const invoice: [string, string | undefined][] = [
+        ['Invoice No.', data.referenceNumber],
+        ['Order No.', data.orderNumber],
+        ['Invoice Date', data.date],
+        ['Sales By', data.salesBy],
+        ['Entry By', data.preparedBy],
+    ];
+    const present = (lines: [string, string | undefined][]) =>
+        lines.filter((line): line is [string, string] => !!line[1]);
+
+    return `<div class="d-info">
+        <div class="d-info-l">${present(customer).map(([label, value]) =>
+            `<span class="d-info-k">${label}</span><span class="d-info-c">:</span><span>${esc(value)}</span>`,
+        ).join('')}</div>
+        <div class="d-info-r">${present(invoice).map(([label, value]) =>
+            `<div><strong>${label}:</strong> ${esc(value)}</div>`,
+        ).join('')}</div>
     </div>`;
 }
 
 /**
- * The invoice in two parts. `body` is the parties and the item table, which
- * runs over as many pages as the items need; `end` is the totals, note and
+ * The invoice in two parts. `body` is the item table, which runs over as
+ * many pages as the items need; `end` is the totals, note and
  * signatures, which stay together and — see `PrintSheet.endHtml` — travel with
  * the page-bottom footer.
  */
@@ -186,24 +200,20 @@ export function detailedBodyHtml(
         ).join(' · ')}</p>`
         : '';
 
+    // SL, item, quantity, unit price and total, and the two optional columns.
+    const columns = 5 + (showWarranty ? 1 : 0) + (showDiscount ? 1 : 0);
+
+    // The box is the first row of the item table's head, so it repeats with
+    // the column headings at the top of every page a long invoice runs to.
+    // Not in the letterhead's head with the strip it replaced: Chrome repeats
+    // no table head taller than about a quarter of the page, and letterhead
+    // and box together are — the whole head then printed on page one only.
+    // Apart, each is under the limit and both repeat.
     const body = `
     <div class="invoice-body inv-d inv-d--top">
-    <div class="d-parties">
-        <div class="d-party">
-            <h3>Bill To</h3>
-            <div class="d-kv"><span>Name:</span><span>${data.customerName ? esc(data.customerName) : 'Walk-in Customer'}</span></div>
-            ${data.customerPhone ? `<div class="d-kv"><span>Phone No:</span><span>${esc(data.customerPhone)}</span></div>` : ''}
-            ${data.salesBy ? `<div class="d-kv"><span>Sales By:</span><span>${esc(data.salesBy)}</span></div>` : ''}
-        </div>
-        <div class="d-party">
-            <h3>Shipping Address</h3>
-            ${data.shippingAddress ? `<p class="d-addr">${esc(data.shippingAddress)}</p>` : ''}
-            <div class="d-kv"><span>Payment Status:</span><span>${paymentStatus(data.total, paid)}</span></div>
-        </div>
-    </div>
-
     <table class="d-table">
         <thead>
+            <tr class="d-info-row"><td colspan="${columns}">${infoBoxHtml(data)}</td></tr>
             <tr>
                 <th class="d-sl">SL</th>
                 <th class="d-item">Item</th>
@@ -243,25 +253,20 @@ export function detailedBodyHtml(
 }
 
 /**
- * The foot of the page: the thank-you at the left, who entered the sale at
- * the right. A letterhead footer the tenant designed replaces it, as it
- * replaces every printer's own — `{{entry_by}}` lets that footer say the same.
- * The print time and who printed are not here: they ride in the page margin
- * with the page number (see `pageStamp`), so they print whatever the footer.
+ * The foot of the page: the thank-you. A letterhead footer the tenant designed
+ * replaces it, as it replaces every printer's own. Who entered the sale is in
+ * the box under the letterhead, and the print time and who printed ride in the
+ * page margin with the page number (see `pageStamp`), so they print whatever
+ * the footer.
  */
-export function detailedFooterHtml(data: InvoiceData, thankYou: string): string {
+export function detailedFooterHtml(thankYou: string): string {
     return `<div class="p71-doc-ft d-foot">
         <div class="d-foot-l">${esc(thankYou)}</div>
-        <div class="d-foot-r">Entry By: ${data.preparedBy ? esc(data.preparedBy) : ''}</div>
     </div>`;
 }
 
-/** Horizontal inset of the invoice body per padding choice, in mm — the strip, which rides in the letterhead, lines up with it. */
-const BODY_INSET_MM: Record<InvoicePrintPrefs['padding'], number> = { narrow: 1, normal: 4, wide: 8 };
-
-export function detailedStyles(layout: InvoicePrintPrefs): string {
+export function detailedStyles(): string {
     const c = COMPACT_SCOPE;
-    const inset = BODY_INSET_MM[layout.padding];
     return `
         /* Detailed invoice */
         .inv-d { font-size:13px; color:#111; }
@@ -269,24 +274,21 @@ export function detailedStyles(layout: InvoicePrintPrefs): string {
            padding between them is the body's own, not doubled. */
         .inv-d--top { padding-bottom:0; }
         .inv-d--end { padding-top:0; }
-        .inv-d h3 { font-size:14px; font-weight:bold; margin-bottom:4px; }
 
-        /* Invoice no / order no / date on one ruled strip. */
-        .d-strip {
-            margin:10px ${inset}mm 0;
-            display:flex; justify-content:space-between; gap:12px;
-            border-top:3px solid #d1d5db; border-bottom:3px solid #d1d5db;
-            padding:7px 6px; margin-bottom:16px; font-size:14px; color:#111;
+        /* The customer and the invoice in one rounded box, spanning the item
+           table it heads. The customer side is a label / colon / value grid, so
+           the colons stand in one column and every value starts just after
+           them; the invoice side is set flush to the box's far edge. */
+        .d-table .d-info-row > td { padding:0 0 12px; background:none; }
+        .d-info {
+            display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+            border:1.5px solid #6b7280; border-radius:6px;
+            padding:6px 12px; font-size:13px; line-height:1.5; color:#111;
         }
-        .d-strip strong { margin-right:8px; }
-
-        .d-parties { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:16px; padding:0 6px; }
-        /* Each party is a two-column grid — label, value — so the label column is
-           exactly as wide as its longest label and every value starts just
-           after it, close to "Name:" and "Phone No:" alike. */
-        .d-party { display:grid; grid-template-columns:max-content 1fr; column-gap:8px; row-gap:2px; align-content:start; }
-        .d-party > h3, .d-party > .d-addr { grid-column:1 / -1; }
-        .d-kv { display:contents; }
+        .d-info-l { display:grid; grid-template-columns:max-content max-content 1fr; column-gap:6px; min-width:0; }
+        .d-info-l > span { overflow-wrap:anywhere; }
+        .d-info-k { font-weight:bold; }
+        .d-info-r { text-align:right; flex-shrink:0; }
 
         .d-table { width:100%; border-collapse:collapse; margin-bottom:10px; }
         .d-table th {
@@ -316,17 +318,15 @@ export function detailedStyles(layout: InvoicePrintPrefs): string {
 
         /* Where a long invoice breaks. A row, the totals, the signatures and the
            foot each stay whole; the column headings repeat above every page's
-           rows (the table's own thead), and the strip repeats with the
+           rows (the table's own thead), and the box repeats with the
            letterhead. */
-        .d-table tr, .d-parties, .d-sums, .note-box, .signatures, .d-foot { break-inside:avoid; }
+        .d-table tr, .d-sums, .note-box, .signatures, .d-foot { break-inside:avoid; }
 
-        /* The page foot: thank-you left, preparer and print time right. */
+        /* The page foot: the thank-you. */
         .d-foot { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; font-size:11px; color:#111; padding-top:8px; }
 
-        /* Compact drops the body's side padding, so the strip drops its inset
-           too — its rules stay exactly as wide as the item table. */
-        ${c} .d-strip { margin-left:0; margin-right:0; padding:4px 6px; margin-bottom:8px; font-size:12px; }
-        ${c} .d-parties { margin-bottom:8px; gap:12px; }
+        ${c} .d-table .d-info-row > td { padding:0 0 6px; }
+        ${c} .d-info { padding:3px 8px; font-size:11px; line-height:1.4; }
         ${c} .inv-d, ${c} .d-table td, ${c} .d-table th, ${c} .d-block td { font-size:11px; }
         ${c} .d-table th { padding:3px 6px; }
         ${c} .d-table td { padding:2px 6px; }
