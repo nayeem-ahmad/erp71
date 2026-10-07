@@ -77,6 +77,7 @@ function QuoteDetailsPageContent() {
         loadQuote();
     }, [id]);
 
+
     useEffect(() => {
         if (isEditMode) {
             api.getCustomers().then(setCustomers).catch(() => {});
@@ -354,7 +355,7 @@ function QuoteDetailsPageContent() {
                                     {t.quotes.detail.share}
                                 </button>
                                 <button
-                                    onClick={() => router.push(`/sales/quotes/${quote.id}?edit=true`)}
+                                    onClick={() => router.push(routes.sales.quoteEdit(quote.id))}
                                     className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all"
                                 >
                                     <Pencil className="w-4 h-4 me-2 text-gray-400" />
@@ -646,6 +647,7 @@ function QuoteDetailsPageContent() {
                     subject={share.subject}
                     shortPath={share.path}
                     onRevoke={revokeShare}
+                    showPrintLink
                     onClose={closeShare}
                 />
             )}

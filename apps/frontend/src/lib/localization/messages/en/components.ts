@@ -260,6 +260,7 @@ export const componentsMessages = {
         copy: 'Copy',
         copied: 'Copied',
         whatsapp: 'Share on WhatsApp',
+        openPrint: 'Open print-ready copy',
         close: 'Close',
         revoke: 'Revoke link',
         revokePrompt: 'Revoke this link? Anyone you already sent it to will lose access.',

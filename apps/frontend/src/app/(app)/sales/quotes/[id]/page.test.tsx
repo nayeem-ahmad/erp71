@@ -232,7 +232,7 @@ describe('QuoteDetailsPage', () => {
         render(<QuoteDetailsPage />);
         await waitFor(() => screen.getByRole('button', { name: /^edit$/i }));
         fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
-        expect(pushMock).toHaveBeenCalledWith('/sales/quotes/quote-1?edit=true');
+        expect(pushMock).toHaveBeenCalledWith('/sales/quotes/quote-1/edit');
     });
 
     it('prints when Print PDF is clicked', async () => {
