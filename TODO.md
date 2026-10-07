@@ -1433,6 +1433,8 @@ A CRM-first tenant landed on `RetailDashboard` — sales, stock, top products �
 
 ## ROADMAP — Post-launch features
 
+- [ ] **Customer Payments list still loads every payment and every customer up front** — found 2026-10-07. Moving the table to server pagination (`useServerList`) needs a totals endpoint, since the page sums amounts across all rows; the customer picker should move onto `api.searchCustomers`. Separately, `nextCustomerCreditNumber` reads the last number without a lock (two simultaneous saves can hit the `payment_number` unique constraint) and orders `payment_number` as a string, which misorders past 99,999.
+
 - [ ] Lead edit form: a lead on a since-hidden stage shows that stage under its lifecycle label (e.g. "Qualified") rather than its own name, because the form only holds `status_id`. Thread `lead.statusOption` into `LeadFormFields` so the extra option is labelled correctly. Found 2026-10-01 building dynamic lead statuses.
 - [ ] Lead statuses review leftovers (2026-10-01, all minor): CRM Setup shows seeded stage names in English rather than via `stageOptionLabel`; a bare lifecycle code (old mobile, CSV) can still land a lead on a *hidden* seeded stage while `status_id` refuses hidden ones; mobile "Move to" offers a not-yet-backfilled lead its own stage; the mobile widget-test harness (`apps/mobile/test/support/app_harness.dart`) registers no `/crm/lead-taxonomy/statuses` route, so no widget test exercises the stage UI; "Clear all data" (`tenants.service.ts`) leaves stage customisations in place, as it does channels and purposes.
 - [ ] Decide whether an unrecognised CSV `status` cell should fail the import row (as unknown sources and categories do) instead of falling back to New — kept as New on 2026-10-01 to preserve the importer's existing behaviour when stages became tenant-managed.
@@ -1830,6 +1832,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **Customer Payments felt slow to save** — reported by a user; diagnosed by reading code, not measured. `handleSubmit` awaited `loadData()` with `saving` still true, and `loadData` goes through `fetchAllPages`, which fetched every payment page strictly one after another (100 rows each, a count + voucher lookup per page), so Save stayed busy for the whole history. Fixed two ways: (1) `fetchAllPages` now fetches pages 2..n in parallel batches of 5, order preserved, which also speeds every other caller (the 751-customer picker included); (2) save/edit/delete on the page close the modal and refresh the list in the background (`void loadData()`). Tests: updated the early-stop assertion (now bounded by one batch) and added a parallel-order test; customer-payments, api, fetch-all-pages and manufacturing suites 430/430. **Not done: no browser/timing pass against a large tenant** — done 2026-10-07
 
 - [x] **Removed the legacy inline `?edit=true` mode from the quotation detail page** — done 2026-10-07. The detail page is now read-only; `?edit=true` links redirect to `/sales/quotes/[id]/edit`. Unused edit-only i18n keys (`t.shared.editMode.quote`, `t.shared.form.addProducts/searchProducts`, `t.quotes.detail.saveChanges/saving`) may be prunable if nothing else uses them.
 

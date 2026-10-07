@@ -308,7 +308,19 @@ describe('fetchAllPages', () => {
         const rows = await fetchAllPages('/things');
 
         expect(rows).toEqual([{ id: 'a' }]);
-        expect(mockFetch).toHaveBeenCalledTimes(2);
+        // Pages after the first go out in a parallel batch of 5, so a misreported page
+        // count wastes at most one batch — it must not walk all 9 pages.
+        expect(mockFetch).toHaveBeenCalledTimes(6);
+    });
+
+    it('fetches the remaining pages in parallel batches and keeps page order', async () => {
+        const page = (n: number) => okJson({ data: [{ id: `p${n}` }], meta: { total: 7, page: n, limit: 100, pages: 7 } });
+        mockFetch.mockImplementation((url: string) => page(Number(/page=(\d+)/.exec(url)![1])));
+
+        const rows = await fetchAllPages('/things');
+
+        expect(rows.map((r: { id: string }) => r.id)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']);
+        expect(mockFetch).toHaveBeenCalledTimes(7);
     });
 });
 
