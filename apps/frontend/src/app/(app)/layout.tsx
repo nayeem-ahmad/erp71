@@ -8,6 +8,7 @@ import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
+import AppShellSidebar from '@/components/app-shell/AppShellSidebar';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import ActivationPendingBanner from '@/components/ActivationPendingBanner';
 // Fetched on their own after the page is up, and only when rendered; see the file.
@@ -101,6 +102,9 @@ function AppShell({ children }: DashboardLayoutProps) {
     const [emailVerificationDismissed, setEmailVerificationDismissed] = useState(false);
     const [resendingVerification, setResendingVerification] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    // Stable, so the drawer's focus trap does not re-run (and re-focus its first
+    // control) every time the shell re-renders behind it.
+    const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
     const [supportOpen, setSupportOpen] = useState(false);
     const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
     const accountPlatformFeatures: PlatformFeatures = user?.platform_features ?? DEFAULT_PLATFORM_FEATURES;
@@ -678,6 +682,31 @@ function AppShell({ children }: DashboardLayoutProps) {
 
     const tenantLocaleConfig = (inPlatformAdminMode || inRefereeMode) ? null : activeTenant;
 
+    // What the nav gates on. The classic sidebar, the app rail and the Home
+    // tiles all resolve their menu from this, so they cannot disagree.
+    const navGates = {
+        appStates,
+        canAccessAccounting,
+        canAccessInventoryReports,
+        canAccessAccountingAdvanced,
+        canAccessPremiumCrm: hasPremiumCrm,
+        canAccessManufacturing,
+        canAccessProjects,
+        canAccessPlatformAccounting,
+        canAccessAdmin: isPlatformAdmin,
+        canManageBilling,
+        canManageTeam,
+        canManageShortLinks,
+        platformAdminMode: inPlatformAdminMode,
+        helpEnabled: platformFeatures.help,
+        supportEnabled: platformFeatures.support || platformFeatures.feedback,
+        accountingOnlyMode,
+        posEnabled,
+        planFeatures,
+        memberPermissions: perms,
+        memberIsOwner: owner,
+    };
+
     // Somebody still on a password an admin chose for them — today that means an
     // employee whose login HR just created. `JwtAuthGuard` refuses every endpoint
     // but the four the gate needs, so rendering the shell here would paint a
@@ -701,35 +730,26 @@ function AppShell({ children }: DashboardLayoutProps) {
         <TenantLocaleProvider tenant={tenantLocaleConfig}>
         <TenantLocaleSync tenant={tenantLocaleConfig} />
         <div className="flex h-dvh min-h-dvh bg-canvas font-sans text-gray-900">
-            <Sidebar
-                chatUnreadCount={chatUnreadCount}
-                canAccessAccounting={canAccessAccounting}
-                canAccessInventoryReports={canAccessInventoryReports}
-                canAccessAccountingAdvanced={canAccessAccountingAdvanced}
-                canAccessPremiumCrm={hasPremiumCrm}
-                canAccessManufacturing={canAccessManufacturing}
-                canAccessProjects={canAccessProjects}
-                canAccessPlatformAccounting={canAccessPlatformAccounting}
-                canAccessAdmin={isPlatformAdmin}
-                canManageBilling={canManageBilling}
-                canManageTeam={canManageTeam}
-                canManageShortLinks={canManageShortLinks}
-                platformAdminMode={inPlatformAdminMode}
-                refereeMode={inRefereeMode}
-                employeeMode={inEmployeeMode}
-                helpEnabled={platformFeatures.help}
-                supportEnabled={platformFeatures.support || platformFeatures.feedback}
-                activePlanCode={activePlanCode}
-                accountingOnlyMode={accountingOnlyMode}
-                posEnabled={posEnabled}
-                planFeatures={planFeatures}
-                memberPermissions={perms}
-                memberIsOwner={owner}
-                appStates={appStates}
-                compactNav={useCompactChrome}
-                isOpen={mobileNavOpen}
-                onClose={() => setMobileNavOpen(false)}
-            />
+            {appShellOn ? (
+                <AppShellSidebar
+                    {...navGates}
+                    chatUnreadCount={chatUnreadCount}
+                    compactNav={useCompactChrome}
+                    isOpen={mobileNavOpen}
+                    onClose={closeMobileNav}
+                />
+            ) : (
+                <Sidebar
+                    {...navGates}
+                    chatUnreadCount={chatUnreadCount}
+                    refereeMode={inRefereeMode}
+                    employeeMode={inEmployeeMode}
+                    activePlanCode={activePlanCode}
+                    compactNav={useCompactChrome}
+                    isOpen={mobileNavOpen}
+                    onClose={closeMobileNav}
+                />
+            )}
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top header */}
