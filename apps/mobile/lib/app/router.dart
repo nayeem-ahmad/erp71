@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/access.dart';
 import '../core/auth/auth_controller.dart';
+import '../features/alerts/alert_settings_screen.dart';
 import '../features/alerts/alerts_screen.dart';
 import '../features/approvals/approvals_screen.dart';
 import '../features/auth/sign_in_screen.dart';
@@ -118,6 +119,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/no-crm', builder: (_, _) => const NoCrmScreen()),
       GoRoute(path: '/account', builder: (_, _) => const AccountScreen()),
+      GoRoute(
+        path: '/notification-settings',
+        builder: (_, _) => const AlertSettingsScreen(),
+      ),
       GoRoute(
         path: '/leads/new',
         parentNavigatorKey: rootNavigatorKey,

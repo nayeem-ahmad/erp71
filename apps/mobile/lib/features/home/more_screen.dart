@@ -69,6 +69,12 @@ class MoreScreen extends ConsumerWidget {
             title: 'You',
             entries: [
               _Entry(
+                icon: Icons.notifications_active_outlined,
+                label: 'Notifications',
+                detail: 'What reaches this phone, and quiet hours',
+                onTap: () => context.push('/notification-settings'),
+              ),
+              _Entry(
                 icon: Icons.account_circle_outlined,
                 label: 'Account',
                 detail: 'Workspace, branch, app lock, sign out',

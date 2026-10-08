@@ -9,6 +9,7 @@ import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
 import { formatZonedDate } from '../common/tenant-time.util';
 import { PushService } from '../push/push.service';
+import { AlertPolicy } from './alert-policy';
 
 /* ── Report types ─────────────────────────────────────────────────── */
 
@@ -41,12 +42,21 @@ export class NotificationsService {
         private sms: SmsService,
         private jobTracker: JobTrackerService,
         private push: PushService,
+        private alertPolicy: AlertPolicy,
     ) {}
 
     /* ------------------------------------------------------------------ */
     /*  In-app notification CRUD                                           */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * Writes a bell notification and, through AlertPolicy, pushes it to the
+     * person's phones.
+     *
+     * With a `dedupeKey`, a second notification of the same type and key for
+     * the same person within ten minutes is not written at all: the scanner
+     * and repeated events must not stack identical rows.
+     */
     async create(
         tenantId: string,
         userId: string,
@@ -54,24 +64,96 @@ export class NotificationsService {
         title: string,
         body: string,
         link?: string,
+        options: { dedupeKey?: string } = {},
     ) {
+        if (options.dedupeKey) {
+            const existing = await this.alertPolicy.recentDuplicate(tenantId, userId, type, options.dedupeKey);
+            if (existing) return existing;
+        }
         const notification = await this.db.notification.create({
-            data: { tenant_id: tenantId, user_id: userId, type, title, body, link },
+            data: { tenant_id: tenantId, user_id: userId, type, title, body, link, dedupe_key: options.dedupeKey ?? null },
         });
-        // Every in-app notification also reaches the person's phones, so the
-        // bell and the phone never disagree. The row is the record; the push is
-        // best effort on top of it and never holds up or fails the caller.
-        void this.push.sendToUsers([userId], {
-            title,
-            body,
-            data: {
-                notification_id: notification.id,
-                tenant_id: tenantId,
-                type,
-                ...(link ? { link } : {}),
-            },
-        });
+        // The row is the record; the push is best effort on top of it and
+        // never holds up or fails the caller.
+        void this.deliver(notification);
         return notification;
+    }
+
+    /** Pushes now, holds for quiet hours, or leaves it to the bell. */
+    private async deliver(notification: {
+        id: string; tenant_id: string; user_id: string; type: string; title: string; body: string; link: string | null;
+    }): Promise<void> {
+        if (!this.push.enabled) return;
+        try {
+            const decision = await this.alertPolicy.decide(notification.tenant_id, notification.user_id, notification.type);
+            if (decision === 'hold') {
+                await this.db.notification.update({ where: { id: notification.id }, data: { push_held: true } });
+                return;
+            }
+            if (decision === 'skip') return;
+            const reached = await this.push.sendToUsers([notification.user_id], {
+                title: notification.title,
+                body: notification.body,
+                data: {
+                    notification_id: notification.id,
+                    tenant_id: notification.tenant_id,
+                    type: notification.type,
+                    ...(notification.link ? { link: notification.link } : {}),
+                },
+            });
+            if (reached > 0) {
+                await this.db.notification.update({ where: { id: notification.id }, data: { pushed_at: new Date() } });
+            }
+        } catch (error) {
+            this.logger.warn(`Push for notification ${notification.id} failed: ${error}`);
+        }
+    }
+
+    /**
+     * Once someone's quiet hours are over, everything held for them goes out
+     * as one push — "4 alerts while you were away" — rather than a burst.
+     */
+    @Cron('*/15 * * * *', { timeZone: 'Asia/Dhaka' })
+    async sendHeldAlerts(): Promise<void> {
+        await this.jobTracker.track(JOB_NAMES.HELD_ALERTS, () => this.sendHeldAlertsImpl());
+    }
+
+    async sendHeldAlertsImpl(now = new Date()): Promise<void> {
+        // Tracked either way, so the health dashboard sees it run; nothing is
+        // ever held while push is off.
+        if (!this.push.enabled) return;
+        const held = await this.db.notification.findMany({
+            where: { push_held: true },
+            select: { id: true, tenant_id: true, user_id: true, title: true, created_at: true },
+            orderBy: { created_at: 'asc' },
+            take: 5000,
+        });
+        const byPerson = new Map<string, typeof held>();
+        for (const row of held) {
+            const key = `${row.tenant_id}:${row.user_id}`;
+            byPerson.set(key, [...(byPerson.get(key) ?? []), row]);
+        }
+
+        for (const rows of byPerson.values()) {
+            const { tenant_id: tenantId, user_id: userId } = rows[0];
+            if (await this.alertPolicy.isQuietFor(tenantId, userId, now)) continue;
+
+            const ids = rows.map((row) => row.id);
+            const single = rows.length === 1;
+            const reached = await this.push.sendToUsers([userId], {
+                title: single ? rows[0].title : `${rows.length} alerts while you were away`,
+                body: single ? 'Sent after your quiet hours.' : rows.slice(-3).map((row) => row.title).join(' · '),
+                data: {
+                    tenant_id: tenantId,
+                    type: 'ALERT_DIGEST',
+                    ...(single ? { notification_id: rows[0].id } : {}),
+                },
+            });
+            await this.db.notification.updateMany({
+                where: { id: { in: ids } },
+                data: { push_held: false, ...(reached > 0 ? { pushed_at: now } : {}) },
+            });
+        }
     }
 
     async listForUser(tenantId: string, userId: string, page = 1, limit = 20): Promise<PaginatedResult<unknown>> {

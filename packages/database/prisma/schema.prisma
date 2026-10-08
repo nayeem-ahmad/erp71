@@ -426,6 +426,7 @@ model User {
   termsAcceptances                  TermsAcceptance[]
   refreshTokens                     RefreshToken[]
   deviceTokens                      DeviceToken[]
+  alertPreferences                  UserAlertPreference[]
   sentInvitations                   UserInvitation[]            @relation("InvitationSender")
   feedbacks                         Feedback[]
   supportMessages                   SupportMessage[]            @relation("SupportMessageSender")
@@ -941,6 +942,8 @@ model Tenant {
   loyaltyTransactions        LoyaltyTransaction[]
   discountCodes              DiscountCode[]
   notifications              Notification[]
+  alertSettings              AlertSettings?
+  alertPreferences           UserAlertPreference[]
   posCounters                PosCounter[]
   departments                Department[]
   designations               Designation[]
@@ -4991,12 +4994,65 @@ model Notification {
   link       String?
   read_at    DateTime?
   created_at DateTime  @default(now())
+  /// Collapses repeats: a second notification with the same type and key for
+  /// the same person within ten minutes is not written (see AlertPolicy).
+  dedupe_key String?
+  /// When it went to the person's phones. Null: not pushed (muted, over the
+  /// day's cap, held for quiet hours, or push not set up).
+  pushed_at  DateTime?
+  /// Held during the person's quiet hours, to go out in one summary after.
+  push_held  Boolean   @default(false)
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, user_id, created_at])
   @@index([user_id, read_at])
+  @@index([user_id, type, dedupe_key, created_at])
+  @@index([push_held])
+}
+
+/// The shop-wide lines the alert scanner draws (AlertScannerService). One row
+/// per workspace, written the first time someone changes a value; absent
+/// means every default below.
+model AlertSettings {
+  tenant_id             String   @id
+  /// A completed sale at or above this many taka tells the managers.
+  large_sale_amount     Decimal  @default(50000) @db.Decimal(12, 2)
+  /// A refund at or above this.
+  large_refund_amount   Decimal  @default(10000) @db.Decimal(12, 2)
+  /// A till closing this many taka or more short.
+  till_shortfall_amount Decimal  @default(500) @db.Decimal(12, 2)
+  updated_at            DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
+
+/// One person's say over what reaches their phone in one workspace. Absent
+/// means everything is pushed, with quiet hours 22:00–08:00 workspace time.
+/// The bell lists every notification regardless.
+model UserAlertPreference {
+  id            String   @id @default(uuid())
+  user_id       String
+  tenant_id     String
+  /// Notification types not pushed (still in the bell).
+  muted_types   String[] @default([])
+  quiet_enabled Boolean  @default(true)
+  /// Minutes after midnight, workspace time. A window may wrap midnight.
+  quiet_from    Int      @default(1320)
+  quiet_to      Int      @default(480)
+  updated_at    DateTime @updatedAt
+
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, tenant_id])
+}
+
+/// How far the alert scanner has read, so each row is looked at once.
+model AlertScanCursor {
+  name       String   @id
+  scanned_to DateTime
 }
 
 model Department {

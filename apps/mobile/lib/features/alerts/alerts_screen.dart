@@ -38,6 +38,11 @@ class AlertsScreen extends ConsumerWidget {
                 }
               },
             ),
+          IconButton(
+            tooltip: 'Notification settings',
+            icon: const Icon(Icons.tune),
+            onPressed: () => context.push('/notification-settings'),
+          ),
           const AccountButton(),
         ],
       ),

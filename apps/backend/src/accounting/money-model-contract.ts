@@ -93,6 +93,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'CustomerGroup', exempt: 'Default-discount config.' },
     { model: 'Customer', exempt: 'Config (credit_limit, discount) + denormalized due_balance/total_spent derived from the AR ledger.' },
     { model: 'Tenant', exempt: 'Tenant-level rate config (vat, loyalty).' },
+    { model: 'AlertSettings', exempt: 'Alert thresholds (config): the amounts at which a sale, refund or short till notifies managers. Nothing posts.' },
 
     // ── Exempt: denormalized balance / cache ─────────────────────────────────
     { model: 'Supplier', exempt: 'Denormalized due_balance; the AP ledger (vouchers / SupplierCreditTransaction) is the source.' },
