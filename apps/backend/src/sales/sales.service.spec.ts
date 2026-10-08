@@ -4,7 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
     applyInventoryMovement,
     resolveEntryWarehouses,
@@ -2239,6 +2239,193 @@ describe('SalesService', () => {
         where: { id: 'quote-1', tenant_id: 'tenant-1', status: { not: 'CONVERTED' } },
         data: { status: 'CONVERTED' },
       });
+    });
+  });
+
+  describe('createFromQuotations()', () => {
+    const openQuote = (overrides: Record<string, unknown> = {}) => ({
+      id: 'quote-1',
+      quote_number: 'QT-0001',
+      status: 'SENT',
+      store_id: 'store-1',
+      customer_id: 'cust-1',
+      currency: 'BDT',
+      exchange_rate: null,
+      prices_include_vat: true,
+      total_amount: '30',
+      notes: 'Deliver Friday',
+      items: [{ product_id: 'prod-1', quantity: 2, unit_price: '15', product: { vat_rate: null, sd_rate: null } }],
+      ...overrides,
+    });
+
+    let createSpy: jest.SpyInstance;
+    const canSellIn = jest.fn();
+
+    beforeEach(() => {
+      db.quotation = { findMany: jest.fn().mockResolvedValue([openQuote()]) };
+      db.sale.findMany.mockResolvedValue([]);
+      db.tenant.findUnique.mockResolvedValue({ default_vat_rate: '15' });
+      canSellIn.mockReset().mockResolvedValue(true);
+      createSpy = jest.spyOn(service, 'create').mockImplementation(async (_tenant, _user, dto: any) => ({
+        id: `sale-for-${dto.quotationId}`,
+        serial_number: `INV-${dto.quotationId}`,
+        total_amount: dto.totalAmount,
+      }) as any);
+    });
+
+    afterEach(() => createSpy.mockRestore());
+
+    it('invoices each quotation as a credit sale that claims the quotation', async () => {
+      const result = await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['quote-1'] }, canSellIn);
+
+      expect(createSpy).toHaveBeenCalledWith(
+        'tenant-1',
+        'user-1',
+        {
+          storeId: 'store-1',
+          customerId: 'cust-1',
+          quotationId: 'quote-1',
+          items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 15 }],
+          totalAmount: 30,
+          amountPaid: 0,
+          pricesIncludeVat: true,
+          note: 'Deliver Friday',
+        },
+        { claimQuotation: true },
+      );
+      expect(result).toEqual({
+        converted: [{
+          quotationId: 'quote-1',
+          quoteNumber: 'QT-0001',
+          saleId: 'sale-for-quote-1',
+          serialNumber: 'INV-quote-1',
+          totalAmount: 30,
+        }],
+        skipped: [],
+        failed: [],
+      });
+    });
+
+    it('reads the quotations and the sales already raised against them inside the tenant', async () => {
+      await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['quote-1', 'quote-1'] }, canSellIn);
+
+      expect(db.quotation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { tenant_id: 'tenant-1', id: { in: ['quote-1'] } },
+        orderBy: { created_at: 'asc' },
+      }));
+      expect(db.sale.findMany).toHaveBeenCalledWith({
+        where: { tenant_id: 'tenant-1', quotation_id: { in: ['quote-1'] }, status: { not: 'CANCELLED' } },
+        select: { quotation_id: true },
+      });
+    });
+
+    it('skips, with a reason, every quotation a batch should not invoice', async () => {
+      db.quotation.findMany.mockResolvedValue([
+        openQuote({ id: 'q-converted', quote_number: 'QT-2', status: 'CONVERTED' }),
+        openQuote({ id: 'q-invoiced', quote_number: 'QT-3' }),
+        openQuote({ id: 'q-walk-in', quote_number: 'QT-4', customer_id: null }),
+        openQuote({ id: 'q-other-branch', quote_number: 'QT-5', store_id: 'store-2' }),
+        openQuote({ id: 'q-repriced', quote_number: 'QT-6', total_amount: '45' }),
+      ]);
+      db.sale.findMany.mockResolvedValue([{ quotation_id: 'q-invoiced' }]);
+      canSellIn.mockImplementation(async (storeId: string) => storeId === 'store-1');
+
+      const result = await service.createFromQuotations(
+        'tenant-1',
+        'user-1',
+        { quotationIds: ['q-converted', 'q-invoiced', 'q-walk-in', 'q-other-branch', 'q-repriced', 'q-missing'] },
+        canSellIn,
+      );
+
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(result.converted).toEqual([]);
+      expect(result.skipped).toEqual([
+        { quotationId: 'q-missing', quoteNumber: null, reason: 'NOT_FOUND' },
+        { quotationId: 'q-converted', quoteNumber: 'QT-2', reason: 'NOT_CONVERTIBLE', status: 'CONVERTED' },
+        { quotationId: 'q-invoiced', quoteNumber: 'QT-3', reason: 'ALREADY_INVOICED', status: 'SENT' },
+        { quotationId: 'q-walk-in', quoteNumber: 'QT-4', reason: 'NO_CUSTOMER', status: 'SENT' },
+        { quotationId: 'q-other-branch', quoteNumber: 'QT-5', reason: 'BRANCH_FORBIDDEN', status: 'SENT' },
+        { quotationId: 'q-repriced', quoteNumber: 'QT-6', reason: 'TOTAL_CHANGED', status: 'SENT' },
+      ]);
+    });
+
+    it('asks about each branch once, however many quotations come from it', async () => {
+      db.quotation.findMany.mockResolvedValue([
+        openQuote({ id: 'q-a' }),
+        openQuote({ id: 'q-b' }),
+        openQuote({ id: 'q-c', store_id: 'store-2' }),
+      ]);
+
+      await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['q-a', 'q-b', 'q-c'] }, canSellIn);
+
+      expect(canSellIn).toHaveBeenCalledTimes(2);
+      expect(canSellIn).toHaveBeenCalledWith('store-1');
+      expect(canSellIn).toHaveBeenCalledWith('store-2');
+    });
+
+    it('carries on past a sale that is refused, and says why', async () => {
+      db.quotation.findMany.mockResolvedValue([
+        openQuote({ id: 'q-a', quote_number: 'QT-A' }),
+        openQuote({ id: 'q-b', quote_number: 'QT-B' }),
+        openQuote({ id: 'q-c', quote_number: 'QT-C' }),
+      ]);
+      createSpy.mockImplementation(async (_tenant, _user, dto: any) => {
+        if (dto.quotationId === 'q-a') throw new BadRequestException('Credit limit exceeded for this customer.');
+        if (dto.quotationId === 'q-b') throw new Error('connection reset by peer');
+        return { id: 'sale-c', serial_number: 'INV-C', total_amount: 30 } as any;
+      });
+
+      const result = await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['q-a', 'q-b', 'q-c'] }, canSellIn);
+
+      expect(result.converted).toEqual([
+        { quotationId: 'q-c', quoteNumber: 'QT-C', saleId: 'sale-c', serialNumber: 'INV-C', totalAmount: 30 },
+      ]);
+      expect(result.failed).toEqual([
+        { quotationId: 'q-a', quoteNumber: 'QT-A', message: 'Credit limit exceeded for this customer.' },
+        // An unexpected error's own text is database detail, not something to show.
+        {
+          quotationId: 'q-b',
+          quoteNumber: 'QT-B',
+          message: 'Something went wrong converting this quotation. Try converting it on its own.',
+        },
+      ]);
+    });
+  });
+
+  describe('create() — claiming the quotation for a batch', () => {
+    const dto = {
+      storeId: 'store-1',
+      customerId: 'cust-1',
+      quotationId: 'quote-1',
+      totalAmount: 30,
+      amountPaid: 30,
+      items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 15 }],
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 30 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.quotation.findFirst.mockResolvedValue({ id: 'quote-1' });
+    });
+
+    it('converts the quotation before the sale is written, only from an open status', async () => {
+      await service.create('tenant-1', 'user-1', dto, { claimQuotation: true });
+
+      expect(tx.quotation.updateMany).toHaveBeenNthCalledWith(1, {
+        where: { id: 'quote-1', tenant_id: 'tenant-1', status: { in: ['DRAFT', 'SENT', 'ACCEPTED'] } },
+        data: { status: 'CONVERTED' },
+      });
+      expect(tx.quotation.updateMany.mock.invocationCallOrder[0])
+        .toBeLessThan(tx.sale.create.mock.invocationCallOrder[0]);
+    });
+
+    it('writes no sale when another run converted the quotation first', async () => {
+      tx.quotation.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.create('tenant-1', 'user-1', dto, { claimQuotation: true }))
+        .rejects.toThrow(ConflictException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
     });
   });
 });

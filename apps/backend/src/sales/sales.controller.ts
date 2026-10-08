@@ -1,7 +1,7 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete, ForbiddenException } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { SalesService } from './sales.service';
-import { CreateSaleDto, FinalizeSaleDto, PrintSalesBatchDto, UpdateSaleDto } from './sale.dto';
+import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, PrintSalesBatchDto, UpdateSaleDto } from './sale.dto';
 import { CancelEntryDto } from '../common/cancel-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
@@ -58,6 +58,27 @@ export class SalesController {
             createdFrom: createdFrom || undefined,
             createdTo: createdTo || undefined,
         });
+    }
+
+    /**
+     * Invoices the quotations selected on the quotations list, each as a credit
+     * sale in its own branch. A branch the caller cannot sell in is skipped for
+     * that quotation rather than refusing the whole batch.
+     */
+    @RequireAnyStorePermission(...SALE_WRITE)
+    @Post('from-quotations')
+    async createFromQuotations(@Tenant() tenant: TenantContext, @Body() dto: CreateSalesFromQuotationsDto) {
+        return this.salesService.createFromQuotations(tenant.tenantId, tenant.userId, dto, (storeId) =>
+            this.branchScope
+                .resolveStoreId(tenant, storeId, { permissions: SALE_WRITE, allowAll: false })
+                .then(
+                    () => true,
+                    (error) => {
+                        if (error instanceof ForbiddenException) return false;
+                        throw error;
+                    },
+                ),
+        );
     }
 
     @RequireAnyStorePermission(...SALES_READ)
