@@ -136,3 +136,26 @@ describe('LeadDetailPage — owner and address', () => {
         expect(payload.address).toBe('9 Banani Rd, Dhaka');
     });
 });
+
+describe('LeadDetailPage — photo', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('shows the lead photo in the identity bar when one is saved', async () => {
+        api.getLead.mockResolvedValue({ ...lead, photo_url: 'https://res.cloudinary.com/demo/lead.jpg' });
+        render(<LeadDetailPage />);
+
+        const photo = await screen.findByRole('img', { name: 'Karim Traders' });
+        expect(photo).toHaveAttribute('src', 'https://res.cloudinary.com/demo/lead.jpg');
+        expect(screen.queryByText('KT')).not.toBeInTheDocument();
+    });
+
+    it('falls back to initials when the lead has no photo', async () => {
+        api.getLead.mockResolvedValue({ ...lead, photo_url: null });
+        render(<LeadDetailPage />);
+
+        expect(await screen.findByText('KT')).toBeInTheDocument();
+        expect(screen.queryByRole('img', { name: 'Karim Traders' })).not.toBeInTheDocument();
+    });
+});
