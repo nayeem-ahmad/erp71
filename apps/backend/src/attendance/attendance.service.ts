@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import {
     UpsertAttendanceDto,
@@ -28,6 +29,7 @@ export class AttendanceService {
          * capture service knows about schedules and holidays, not about leave.
          */
         private readonly capture: AttendanceCaptureService,
+        private readonly approvals: ApprovalNotifier,
     ) {}
 
     // ── Leave Types ───────────────────────────────────────────────────────────
@@ -328,7 +330,7 @@ export class AttendanceService {
             throw new BadRequestException(this.describeLeaveErrors(errors, remaining));
         }
 
-        return this.db.leaveRequest.create({
+        const created = await this.db.leaveRequest.create({
             data: {
                 tenant_id: tenantId,
                 employee_id: dto.employee_id,
@@ -340,6 +342,14 @@ export class AttendanceService {
                 status: 'PENDING',
             },
         });
+        void this.approvals.requested({
+            tenantId,
+            kind: 'LEAVE_REQUEST',
+            id: created.id,
+            summary: `${employee.name} · ${leaveType.name}, ${dto.days} ${dto.days === 1 ? 'day' : 'days'} from ${dto.start_date.slice(0, 10)}`,
+            requestedBy: employee.user_id ?? null,
+        });
+        return created;
     }
 
     /** Turn the policy codes into something a person can act on. */
@@ -504,9 +514,26 @@ export class AttendanceService {
             where: { id: request.leave_type_id, tenant_id: tenantId },
         });
 
+        const level = (request.approvals_given ?? 0) + 1;
+
+        // Take this level before acting on it. Two approvers who both read the
+        // request above would otherwise both sign the same level, and on the
+        // last one both would take the days off the balance.
+        const claimed = await this.db.leaveRequest.updateMany({
+            where: {
+                id: requestId,
+                tenant_id: tenantId,
+                status: 'PENDING',
+                approvals_given: request.approvals_given ?? 0,
+            },
+            data: { approvals_given: level },
+        });
+        if (claimed.count === 0) {
+            throw new ConflictException('Someone else has just reviewed this leave request.');
+        }
+
         // Record this signature regardless of the outcome, so "who signed, when
         // and what they said" survives a later rejection.
-        const level = (request.approvals_given ?? 0) + 1;
         await this.db.leaveRequestApproval.upsert({
             where: { request_id_level: { request_id: requestId, level } },
             create: {

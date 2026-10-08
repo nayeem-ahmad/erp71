@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../core/access.dart';
 import '../core/auth/auth_controller.dart';
+import '../features/alerts/alert_settings_screen.dart';
+import '../features/alerts/alerts_screen.dart';
+import '../features/approvals/approvals_screen.dart';
+import '../features/ask/ask_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/auth/splash_screen.dart';
 import '../features/auth/two_factor_screen.dart';
@@ -22,6 +26,7 @@ import '../features/crm/leads/lead_form_screen.dart';
 import '../features/crm/leads/leads_screen.dart';
 import '../features/crm/no_crm_screen.dart';
 import '../features/home/home_shell.dart';
+import '../features/home/more_screen.dart';
 import '../features/workspace/workspace_screens.dart';
 
 /// Screens that belong to getting signed in, and are left once that is done.
@@ -115,6 +120,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/no-crm', builder: (_, _) => const NoCrmScreen()),
       GoRoute(path: '/account', builder: (_, _) => const AccountScreen()),
+      GoRoute(path: '/ask', builder: (_, _) => const AskScreen()),
+      GoRoute(
+        path: '/notification-settings',
+        builder: (_, _) => const AlertSettingsScreen(),
+      ),
       GoRoute(
         path: '/leads/new',
         parentNavigatorKey: rootNavigatorKey,
@@ -219,6 +229,24 @@ final routerProvider = Provider<GoRouter>((ref) {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/more', builder: (_, _) => const MoreScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/approvals',
+                builder: (_, _) => const ApprovalsScreen(),
               ),
             ],
           ),

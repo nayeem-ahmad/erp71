@@ -1,5 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
 import { createdAtRange } from '../common/created-range.util';
 import { assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import {
@@ -27,7 +28,10 @@ import {
  */
 @Injectable()
 export class ProductDemandsService {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly approvals: ApprovalNotifier,
+    ) {}
 
     // ── Reads ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +81,7 @@ export class ProductDemandsService {
         this.assertUniqueLines(dto.items);
         const neededBy = this.parseNeededBy(dto.neededBy);
 
-        return this.db.$transaction(async (tx) => {
+        return this.announceIfSubmitted(tenantId, await this.db.$transaction(async (tx) => {
             await assertWarehouseBelongsToTenant(tx, tenantId, dto.warehouseId);
             await this.assertProductsBelongToTenant(tx, tenantId, dto.items.map((item) => item.productId));
 
@@ -107,7 +111,7 @@ export class ProductDemandsService {
             });
 
             return demand;
-        });
+        }));
     }
 
     /**
@@ -176,11 +180,33 @@ export class ProductDemandsService {
             throw new BadRequestException('A demand needs at least one product before it can be submitted.');
         }
 
-        return this.db.productDemand.update({
-            where: { id },
-            data: { status: 'SUBMITTED', submitted_at: new Date() },
-            include: this.demandInclude(),
-        });
+        return this.announceIfSubmitted(
+            tenantId,
+            await this.db.productDemand.update({
+                where: { id },
+                data: { status: 'SUBMITTED', submitted_at: new Date() },
+                include: this.demandInclude(),
+            }),
+        );
+    }
+
+    /** Tells the branch's approvers a demand is waiting. After the write, never inside it. */
+    private announceIfSubmitted<T extends { id: string; status: string; demand_number: string; store_id: string | null; requested_by: string | null; items?: unknown[] }>(
+        tenantId: string,
+        demand: T,
+    ): T {
+        if (demand?.status === 'SUBMITTED') {
+            const lines = demand.items?.length ?? 0;
+            void this.approvals.requested({
+                tenantId,
+                kind: 'PRODUCT_DEMAND',
+                id: demand.id,
+                summary: `${demand.demand_number} · ${lines} ${lines === 1 ? 'product' : 'products'} asked for`,
+                storeId: demand.store_id,
+                requestedBy: demand.requested_by,
+            });
+        }
+        return demand;
     }
 
     /** Withdraw your own demand, while it is still yours to withdraw. */
@@ -238,6 +264,21 @@ export class ProductDemandsService {
         }
 
         return this.db.$transaction(async (tx) => {
+            // The decision first, and only while the demand is still submitted:
+            // two reviewers who both read SUBMITTED above must not both decide.
+            const claimed = await tx.productDemand.updateMany({
+                where: { id, tenant_id: tenantId, status: 'SUBMITTED' },
+                data: {
+                    status: dto.status,
+                    reviewed_by: reviewerUserId ?? null,
+                    reviewed_at: new Date(),
+                    review_note: dto.reviewNote ?? null,
+                },
+            });
+            if (claimed.count === 0) {
+                throw new ConflictException('Someone else has just reviewed this demand.');
+            }
+
             for (const line of resolved) {
                 await tx.productDemandItem.update({
                     where: { id: line.id },
@@ -248,14 +289,8 @@ export class ProductDemandsService {
                 });
             }
 
-            return tx.productDemand.update({
-                where: { id },
-                data: {
-                    status: dto.status,
-                    reviewed_by: reviewerUserId ?? null,
-                    reviewed_at: new Date(),
-                    review_note: dto.reviewNote ?? null,
-                },
+            return tx.productDemand.findFirst({
+                where: { id, tenant_id: tenantId },
                 include: this.demandInclude(),
             });
         });

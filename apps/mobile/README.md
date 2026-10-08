@@ -1,16 +1,23 @@
 # ERP71 mobile
 
-The Flutter app for Android and iOS. It covers **Google sign-in, the CRM**
-(an overview of the pipeline and today's work, leads, activities and
-contacts), and for people who run the shop, **Home** (how today's sales
-compare with yesterday and the same weekday last week, how they were paid,
-and what is owed) and **Cashiers** (every till open now and every shift
-closed today, with its drawer count). An optional **App lock** asks for the
-phone's fingerprint, face or PIN. It talks to the same NestJS API as the web
-app; the endpoints written for it are `POST /auth/logout/session` (see
-[Signing out](#signing-out)), `GET /mobile/pulse` and
-`GET /cashier-sessions/overview`. The plan behind the business screens is
-`docs/mobile-admin-plan.md`.
+The Flutter app for Android and iOS, for the people who run a shop and the
+people who sell for it:
+
+- **Home**: how today's sales compare with yesterday and the same weekday
+  last week, how they were paid, and what is owed.
+- **Approvals**: expense claims, leave, product demands, stock transfers and
+  vouchers waiting for a decision.
+- **Alerts**: the bell, also delivered as push notifications. That covers
+  approvals waiting, short tills, large sales and refunds, cancelled sales,
+  website enquiries, low stock and a daily anomaly check.
+- **Cashiers**: open tills and today's closed shifts, with their drawer counts.
+- **The CRM**: leads, activities and contacts.
+- **Ask ERP71**: questions about the business, typed or spoken, in English or
+  Bangla.
+- **App lock**: optional, using the phone's fingerprint, face or PIN.
+
+It talks to the same NestJS API as the web app. The plan behind it is
+`docs/mobile-admin-plan.md`; push setup is `docs/ops/mobile-push-setup.md`.
 
 ## Running it
 
@@ -87,18 +94,57 @@ client exists.
 The bottom bar is built from what the member can use in the chosen workspace
 (`core/access.dart`, mirroring `apps/backend/src/auth/permission-sets.ts`):
 
-| Tab | Shown when | Server check |
+| Area | Shown when | Server check |
 |---|---|---|
 | Home | any `SALES_READ` permission, active or trial subscription | as Sales › Overview |
-| Cashiers | `CREATE_SALE` or `MANAGE_COUNTERS` (`POS_STAFF`) | as the cashier-session reads |
+| Approvals | `MANAGE_HR`, `APPROVE_PRODUCT_DEMAND`, `APPROVE_GOODS_TRANSFER` or `APPROVE_VOUCHER` | each kind as its own approve endpoint; branch entries only in branches where the member holds it |
+| Alerts | always | the member's own notifications |
+| Cashiers (under More) | `CREATE_SALE` or `MANAGE_COUNTERS` (`POS_STAFF`) | as the cashier-session reads |
 | CRM | the CRM rules above | as every CRM endpoint |
+| Ask ERP71 | the plan includes AI (`premiumAi`) | the assistant's own plan, credit and tool checks |
 
-Someone with Home or Cashiers gets *Home · Cashiers · CRM*, with Leads,
-Activities and Contacts reached from the CRM overview. A CRM-only member keeps
-the CRM's own four tabs. Owners, and members holding
-`VIEW_CONSOLIDATED_REPORTS`, can switch Home and Cashiers between *All
-branches* and each branch; everyone else sees their own branch. Payables are
-left off Home for a member who cannot read purchasing.
+Someone with Home, Approvals or Cashiers gets *Home · Approvals · Alerts ·
+More*, with Cashiers, the CRM, Ask and notification settings under More. A
+CRM-only member keeps the CRM's four tabs plus Alerts. Owners, and members
+holding `VIEW_CONSOLIDATED_REPORTS`, can switch Home and Cashiers between
+*All branches* and each branch; everyone else sees their own branch. Payables
+are left off Home for a member who cannot read purchasing.
+
+## Notifications
+
+Every bell notification is also pushed, through Firebase Cloud Messaging. This
+is off until the server has a key (`docs/ops/mobile-push-setup.md`). The app
+asks `GET /push/config` for the Firebase values, so there is no
+`google-services.json`. It registers its token with `POST /push/devices` at
+each sign-in, naming the session by its refresh token, and the server only
+pushes to phones whose session is still live. Tapping a notification switches
+to its workspace and opens the matching screen, or Alerts when the phone has
+none.
+
+What reaches a phone is each person's choice, under More › Notifications (or
+the tune button on Alerts):
+
+- each kind of alert on or off;
+- quiet hours, default 22:00–08:00 shop time, with anything held sent as one
+  summary afterwards.
+
+The server also caps pushes at 30 a day and collapses repeats within ten
+minutes. People who manage users set the shop's alert amounts on the same
+screen.
+
+## Approvals
+
+A decision sheet shows the entry. Approve takes an optional note. Reject needs
+a reason, said on the field when missing. Approving ৳50,000 or more asks for
+the phone's own lock first. If someone else decided the entry first, the
+server answers 409; the app says so and drops it from the list.
+
+## Ask ERP71
+
+The same `POST /ai/chat` the web assistant uses, so it reads only what the
+member's role can see, and each answer spends the workspace's AI credits. The
+microphone (`speech_to_text`, `en_US` or `bn_BD`) fills the question box. What
+was heard is never sent until the person taps Send.
 
 ## App lock
 
@@ -111,6 +157,9 @@ removed afterwards is let in and the lock switched off, rather than locking
 its owner out. The platform pieces it needs are already in place: Android's
 `MainActivity` is a `FlutterFragmentActivity` with the `USE_BIOMETRIC`
 permission, and iOS has `NSFaceIDUsageDescription` in `Info.plist`.
+Voice adds `RECORD_AUDIO`, the Bluetooth headset permissions and the
+`RecognitionService` query on Android, and the microphone and speech usage
+strings on iOS.
 
 ## Signing out
 
@@ -133,7 +182,12 @@ lib/
   features/auth/           sign-in, two-step verification, launch
   features/workspace/      workspace picker, account, branch
   core/access.dart         which areas a member may open, from their permissions
+  core/push/               Firebase behind PushChannel, and the registrar
   core/security/           the app lock
+  core/voice/              speech to text behind SpeechInput
+  features/alerts/         the Alerts tab, push taps, notification settings
+  features/approvals/      the Approvals tab and decision sheet
+  features/ask/            Ask ERP71
   features/business/       Home (the pulse) and Cashiers (tills and shifts)
   features/crm/            overview, leads, activities, contacts
   features/lock/           the lock screen and its setting
@@ -170,6 +224,7 @@ always through `formatBDT`.
 
 ## Not done yet
 
-Tracked in `TODO.md` under *Mobile App*: release signing and store listings,
-push notifications for assigned activities, business-card scanning, custom
-lead fields, customers' activity timelines, Bangla strings, and offline use.
+Tracked in `TODO.md` under *Mobile App* and *Mobile app for tenant admins*:
+release signing and store listings, turning push on in production, iOS push,
+business-card scanning, custom lead fields, customers' activity timelines,
+Bangla strings for the app itself, the home-screen widget, and offline use.

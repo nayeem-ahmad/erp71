@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import {
     CreateWarehouseTransferDto,
@@ -21,13 +22,16 @@ export const TRANSFER_REJECTED = 'REJECTED';
 
 @Injectable()
 export class WarehouseTransfersService {
-    constructor(private db: DatabaseService) {}
+    constructor(
+        private db: DatabaseService,
+        private readonly approvals: ApprovalNotifier,
+    ) {}
 
     async create(tenantId: string, dto: CreateWarehouseTransferDto) {
         this.assertDistinctWarehouses(dto.sourceWarehouseId, dto.destinationWarehouseId);
         this.assertUniqueLines(dto.items.map((item) => item.productId));
 
-        return this.db.$transaction(async (tx) => {
+        return this.announceIfHeld(tenantId, await this.db.$transaction(async (tx) => {
             const sourceWarehouse = await assertWarehouseBelongsToTenant(tx, tenantId, dto.sourceWarehouseId);
             const destinationWarehouse = await assertWarehouseBelongsToTenant(tx, tenantId, dto.destinationWarehouseId);
             await this.assertProductsBelongToTenant(tx, tenantId, dto.items.map((item) => item.productId));
@@ -113,7 +117,7 @@ export class WarehouseTransfersService {
             });
 
             return { ...created, ...posting };
-        });
+        }));
     }
 
     async findAll(
@@ -164,7 +168,7 @@ export class WarehouseTransfersService {
      * a request for another branch's stock, but it may not help itself to it.
      */
     async send(tenantId: string, id: string) {
-        return this.db.$transaction(async (tx) => {
+        return this.announceIfHeld(tenantId, await this.db.$transaction(async (tx) => {
             const transfer = await tx.warehouseTransfer.findFirst({
                 where: { id, tenant_id: tenantId },
                 include: this.transferInclude(),
@@ -200,7 +204,7 @@ export class WarehouseTransfersService {
             }
 
             return this.dispatch(tx, tenantId, transfer);
-        });
+        }));
     }
 
     /**
@@ -216,10 +220,7 @@ export class WarehouseTransfersService {
         return this.db.$transaction(async (tx) => {
             const transfer = await this.findPendingForDecision(tx, tenantId, id);
 
-            await tx.warehouseTransfer.update({
-                where: { id },
-                data: { approved_by: userId, approval_date: new Date() },
-            });
+            await this.claimForDecision(tx, tenantId, id, { approved_by: userId, approval_date: new Date() });
 
             return this.dispatch(tx, tenantId, transfer);
         });
@@ -234,14 +235,11 @@ export class WarehouseTransfersService {
         return this.db.$transaction(async (tx) => {
             await this.findPendingForDecision(tx, tenantId, id);
 
-            await tx.warehouseTransfer.update({
-                where: { id },
-                data: {
-                    status: TRANSFER_REJECTED,
-                    rejected_by: userId,
-                    rejected_at: new Date(),
-                    rejection_reason: dto.reason?.trim() || null,
-                },
+            await this.claimForDecision(tx, tenantId, id, {
+                status: TRANSFER_REJECTED,
+                rejected_by: userId,
+                rejected_at: new Date(),
+                rejection_reason: dto.reason?.trim() || null,
             });
 
             return tx.warehouseTransfer.findFirst({
@@ -307,6 +305,47 @@ export class WarehouseTransfersService {
     }
 
     /** The transfer an approve/reject may act on, or the reason it may not. */
+    /**
+     * Tells the source branch's approvers about a transfer that has just parked
+     * at PENDING_APPROVAL. After the transaction, so nobody is told about a
+     * transfer that then rolled back.
+     */
+    private announceIfHeld<T extends { id?: string; status?: string; transfer_number?: string; source_store_id?: string | null; items?: unknown[] } | null>(
+        tenantId: string,
+        transfer: T,
+    ): T {
+        if (transfer?.id && transfer.status === TRANSFER_PENDING_APPROVAL) {
+            const lines = transfer.items?.length ?? 0;
+            void this.approvals.requested({
+                tenantId,
+                kind: 'WAREHOUSE_TRANSFER',
+                id: transfer.id,
+                summary: `${transfer.transfer_number} · ${lines} ${lines === 1 ? 'item' : 'items'} to move between branches`,
+                storeId: transfer.source_store_id,
+            });
+        }
+        return transfer;
+    }
+
+    /**
+     * Writes a decision only if the transfer is still awaiting one.
+     *
+     * `findPendingForDecision` reads the status, but two approvers can both
+     * read PENDING_APPROVAL before either writes, and an approval moves stock —
+     * so the second would move it again. The status in the WHERE makes the
+     * write itself the check: Postgres holds the second transaction on the row
+     * until the first commits, then re-reads a status that no longer matches.
+     */
+    private async claimForDecision(tx: any, tenantId: string, id: string, data: Record<string, unknown>) {
+        const claimed = await tx.warehouseTransfer.updateMany({
+            where: { id, tenant_id: tenantId, status: TRANSFER_PENDING_APPROVAL },
+            data,
+        });
+        if (claimed.count === 0) {
+            throw new ConflictException('Someone else has just approved or rejected this transfer.');
+        }
+    }
+
     private async findPendingForDecision(tx: any, tenantId: string, id: string) {
         const transfer = await tx.warehouseTransfer.findFirst({
             where: { id, tenant_id: tenantId },

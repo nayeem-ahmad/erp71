@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { AttendanceCaptureService } from './attendance-capture.service';
 import { DatabaseService } from '../database/database.service';
 import { LeaveRequestStatusDto } from './attendance.dto';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
 
 /**
  * HRIS Phase 11 — the policy engine as it behaves through `AttendanceService`.
@@ -11,6 +12,7 @@ import { LeaveRequestStatusDto } from './attendance.dto';
  * wiring: balance checks on create, the approval chain, and carry-forward.
  */
 describe('AttendanceService — leave policy', () => {
+    const approvals = { requested: jest.fn().mockResolvedValue(undefined) };
     let service: AttendanceService;
     let db: any;
     let capture: any;
@@ -46,6 +48,8 @@ describe('AttendanceService — leave policy', () => {
                 findMany: jest.fn().mockResolvedValue([]),
                 create: jest.fn().mockResolvedValue({}),
                 update: jest.fn().mockResolvedValue({}),
+                // Each level is taken before it is acted on.
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
             leaveRequestApproval: { upsert: jest.fn().mockResolvedValue({}) },
         };
@@ -58,6 +62,7 @@ describe('AttendanceService — leave policy', () => {
             providers: [
                 AttendanceService,
                 { provide: DatabaseService, useValue: db },
+                { provide: ApprovalNotifier, useValue: approvals },
                 { provide: AttendanceCaptureService, useValue: capture },
             ],
         }).compile();
@@ -70,9 +75,20 @@ describe('AttendanceService — leave policy', () => {
     });
 
     describe('policy checks on create', () => {
-        it('accepts a request inside the balance', async () => {
+        it('accepts a request inside the balance, and tells the approvers', async () => {
+            db.leaveRequest.create.mockResolvedValue({ id: 'req-9' });
             await service.createLeaveRequest('t1', createDto() as any);
             expect(db.leaveRequest.create).toHaveBeenCalled();
+            expect(approvals.requested).toHaveBeenCalledWith(
+                expect.objectContaining({ tenantId: 't1', kind: 'LEAVE_REQUEST', id: 'req-9' }),
+            );
+        });
+
+        it('tells nobody about a request it refused', async () => {
+            approvals.requested.mockClear();
+            db.leaveBalance.findFirst.mockResolvedValue(null);
+            await expect(service.createLeaveRequest('t1', createDto() as any)).rejects.toThrow();
+            expect(approvals.requested).not.toHaveBeenCalled();
         });
 
         it('refuses more days than remain', async () => {
@@ -148,6 +164,31 @@ describe('AttendanceService — leave policy', () => {
             } as any);
 
             expect(db.leaveRequest.update.mock.calls.at(-1)[0].data.status).toBe('REJECTED');
+        });
+
+        it('takes the level only while the request is still at the one it read', async () => {
+            db.leaveRequest.findFirst.mockResolvedValue(REQUEST({ approvals_given: 1 }));
+            db.leaveType.findFirst.mockResolvedValue(TYPE({ approval_levels: 2 }));
+
+            await service.reviewLeaveRequest('t1', 'req-1', 'user-2', {
+                status: LeaveRequestStatusDto.APPROVED,
+            } as any);
+
+            expect(db.leaveRequest.updateMany).toHaveBeenCalledWith({
+                where: { id: 'req-1', tenant_id: 't1', status: 'PENDING', approvals_given: 1 },
+                data: { approvals_given: 2 },
+            });
+        });
+
+        it('loses a race to another approver without signing or deducting twice', async () => {
+            db.leaveRequest.updateMany.mockResolvedValue({ count: 0 });
+
+            await expect(service.reviewLeaveRequest('t1', 'req-1', 'user-2', {
+                status: LeaveRequestStatusDto.APPROVED,
+            } as any)).rejects.toThrow(ConflictException);
+            expect(db.leaveRequestApproval.upsert).not.toHaveBeenCalled();
+            expect(db.leaveBalance.upsert).not.toHaveBeenCalled();
+            expect(capture.markLeaveDays).not.toHaveBeenCalled();
         });
 
         it('records the level on each signature', async () => {

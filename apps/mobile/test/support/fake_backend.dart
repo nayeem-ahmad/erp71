@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:erp71_mobile/core/auth/google_auth.dart';
+import 'package:erp71_mobile/core/push/push_channel.dart';
 import 'package:erp71_mobile/core/security/app_lock.dart';
+import 'package:erp71_mobile/core/voice/speech_input.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -142,4 +144,73 @@ class FakeDeviceAuthenticator implements DeviceAuthenticator {
     reasons.add(reason);
     return result;
   }
+}
+
+/// Firebase, without Firebase: a test decides whether permission is given,
+/// and plays taps and arrivals through the controllers.
+class FakePushChannel implements PushChannel {
+  FakePushChannel({this.token = 'fcm-token-1'});
+
+  /// What `start` returns: a token, or null for "the person declined".
+  String? token;
+  final List<PushConfig> started = [];
+  final tokenRefreshController = StreamController<String>.broadcast();
+  final tapController = StreamController<PushTap>.broadcast();
+  final arrivalController = StreamController<PushTap>.broadcast();
+  PushTap? launch;
+
+  @override
+  Future<String?> start(PushConfig config) async {
+    started.add(config);
+    return token;
+  }
+
+  @override
+  Stream<String> get tokenRefreshes => tokenRefreshController.stream;
+
+  @override
+  Stream<PushTap> get taps => tapController.stream;
+
+  @override
+  Stream<PushTap> get arrivals => arrivalController.stream;
+
+  @override
+  Future<PushTap?> launchTap() async => launch;
+}
+
+/// The microphone, played by the test: `say` delivers words as the
+/// recognizer would, `finish` ends listening.
+class FakeSpeechInput implements SpeechInput {
+  FakeSpeechInput({this.available = true});
+
+  bool available;
+  String? lastLocale;
+  void Function(String words, bool isFinal)? _onWords;
+  void Function()? _onDone;
+  bool listening = false;
+
+  @override
+  Future<bool> start({
+    required String localeId,
+    required void Function(String words, bool isFinal) onWords,
+    required void Function() onDone,
+  }) async {
+    if (!available) return false;
+    lastLocale = localeId;
+    _onWords = onWords;
+    _onDone = onDone;
+    listening = true;
+    return true;
+  }
+
+  void say(String words, {bool isFinal = false}) =>
+      _onWords?.call(words, isFinal);
+
+  void finish() {
+    listening = false;
+    _onDone?.call();
+  }
+
+  @override
+  Future<void> stop() async => finish();
 }
