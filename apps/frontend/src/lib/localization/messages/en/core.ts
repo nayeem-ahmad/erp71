@@ -1312,6 +1312,8 @@ export const coreMessages = {
         advanceBalance: 'Advance balance',
         receiveHint: 'Reduces due balance; excess becomes customer advance.',
         payHint: 'Increases due balance or uses customer advance.',
+        paymentDate: 'Date & time',
+        dateInFuture: 'Date and time cannot be in the future.',
         amount: 'Amount',
         amountPlaceholder: 'Enter amount',
         notes: 'Notes',

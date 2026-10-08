@@ -127,6 +127,7 @@ export class CustomersController {
             dto,
             tenant.storeId,
             await this.scope(tenant),
+            tenant.timezone,
         );
     }
 
@@ -241,6 +242,7 @@ export class CustomersController {
             dto,
             tenant.storeId,
             await this.scope(tenant),
+            tenant.timezone,
         );
     }
 

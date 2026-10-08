@@ -19,6 +19,7 @@ import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
+import { DEFAULT_TENANT_TIMEZONE, parseTenantDateTime } from '../common/tenant-time.util';
 import { customerLedgerDueDelta } from './customer-credit.utils';
 import { CUSTOMER_PAYMENT_DISCOUNT_LEG, nextCustomerCreditNumber } from './customer-payment-number.util';
 import { type CustomerScope, customerInBranchesWhere, customerScopeWhere, saleScopeWhere } from './customer-visibility';
@@ -41,6 +42,13 @@ const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
 const AMOUNT_EPSILON = 0.005;
 
 const DISCOUNT_LEG = CUSTOMER_PAYMENT_DISCOUNT_LEG;
+
+/**
+ * How far past the server's clock a payment date may sit. The picker works in
+ * whole minutes and the browser's clock drifts, so "now" can arrive a little
+ * ahead; anything further out is a typo, not a payment.
+ */
+const PAYMENT_DATE_SKEW_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class CustomersService {
@@ -120,6 +128,21 @@ export class CustomersService {
         throw new BadRequestException('Could not allocate a unique customer code. Please try again.');
     }
 
+    /**
+     * A payment's date as the operator picked it, or undefined when they did
+     * not pick one. Backdating is the point — money taken yesterday and entered
+     * today — but a date in the future is refused.
+     */
+    private paymentDate(value: string | undefined, timeZone?: string): Date | undefined {
+        if (!value) return undefined;
+        const date = parseTenantDateTime(value, timeZone ?? DEFAULT_TENANT_TIMEZONE);
+        if (!date) throw new BadRequestException('Invalid payment date');
+        if (date.getTime() > Date.now() + PAYMENT_DATE_SKEW_MS) {
+            throw new BadRequestException('Payment date cannot be in the future');
+        }
+        return date;
+    }
+
     private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number, discount = 0): number {
         return customerLedgerDueDelta(type, amount, discount);
     }
@@ -168,6 +191,8 @@ export class CustomersService {
             type: 'PAYMENT' | 'PAYOUT';
             amount: number;
             discount: number;
+            /** The payment's own date; the vouchers are dated to match it. */
+            date?: Date;
             storeId?: string;
         },
     ) {
@@ -180,6 +205,7 @@ export class CustomersService {
             sourceModule: 'customers',
             sourceId: input.paymentId,
             referenceNumber: input.paymentNumber,
+            date: input.date,
             storeId: input.storeId,
             partyType: 'CUSTOMER' as const,
             partyId: input.customerId,
@@ -828,6 +854,7 @@ export class CustomersService {
         dto: UpdateCreditPaymentDto,
         storeId?: string,
         scope: CustomerScope = null,
+        timeZone?: string,
     ) {
         const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId, scope);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
@@ -840,6 +867,9 @@ export class CustomersService {
         const newAmount = dto.amount ?? oldAmount;
         const newDiscount = dto.discount ?? oldDiscount;
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
+        // Kept when not changed: the vouchers are voided and reposted below,
+        // and a repost left undated would move an old payment into today.
+        const newDate = this.paymentDate(dto.date, timeZone) ?? payment.created_at;
 
         return this.db.$transaction(async (tx) => {
             const customer = await tx.customer.findFirst({
@@ -863,6 +893,7 @@ export class CustomersService {
                     discount_amount: newDiscount,
                     balance_after: balanceAfter,
                     notes: newNotes,
+                    created_at: newDate,
                 },
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
@@ -884,6 +915,7 @@ export class CustomersService {
                 type: newType,
                 amount: newAmount,
                 discount: newDiscount,
+                date: newDate,
                 storeId,
             });
 
@@ -933,6 +965,7 @@ export class CustomersService {
         dto: RecordCreditPaymentDto,
         storeId?: string,
         scope: CustomerScope = null,
+        timeZone?: string,
     ) {
         const customer = await this.db.customer.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
@@ -947,6 +980,7 @@ export class CustomersService {
         const currentDue = Number(customer.due_balance);
         this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
+        const paymentDate = this.paymentDate(dto.date, timeZone) ?? new Date();
 
         return this.db.$transaction(async (tx) => {
             const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
@@ -962,6 +996,7 @@ export class CustomersService {
                     payment_number,
                     notes: dto.notes,
                     created_by: userId,
+                    created_at: paymentDate,
                 },
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
@@ -983,6 +1018,7 @@ export class CustomersService {
                 type: txType,
                 amount: dto.amount,
                 discount,
+                date: paymentDate,
                 storeId,
             });
 

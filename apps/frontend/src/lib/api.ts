@@ -2045,7 +2045,7 @@ export const api = {
             },
         );
     },
-    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -2064,7 +2064,7 @@ export const api = {
         return fetchAllPages(`/customers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerCreditPayment: (paymentId: string) => fetchWithAuth(`/customers/credit/payments/${paymentId}`),
-    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string }) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),

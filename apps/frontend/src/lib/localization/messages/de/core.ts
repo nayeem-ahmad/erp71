@@ -1312,6 +1312,8 @@ export const coreMessages = {
         advanceBalance: "Guthaben aus Anzahlungen",
         receiveHint: "Verringert den offenen Saldo; der Überschuss wird zum Kundenguthaben.",
         payHint: "Erhöht den offenen Saldo oder verwendet das Kundenguthaben.",
+        paymentDate: "Datum & Uhrzeit",
+        dateInFuture: "Datum und Uhrzeit dürfen nicht in der Zukunft liegen.",
         amount: "Betrag",
         amountPlaceholder: "Betrag eingeben",
         notes: "Notizen",

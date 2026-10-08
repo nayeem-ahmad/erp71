@@ -213,3 +213,86 @@ describe('CustomerPaymentsPage — discount', () => {
         expect(screen.queryByLabelText('Discount allowed')).not.toBeInTheDocument();
     });
 });
+
+describe('CustomerPaymentsPage — date and time', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (api.getCustomerCreditPayments as jest.Mock).mockResolvedValue([payment]);
+        (api.getCustomers as jest.Mock).mockResolvedValue([
+            { id: 'cust-1', name: 'Alice Corp', phone: '01700000001', due_balance: 1000 },
+        ]);
+        (api.recordCreditPayment as jest.Mock).mockResolvedValue({ id: 'pay-2' });
+        (api.updateCustomerCreditPayment as jest.Mock).mockResolvedValue({ id: 'pay-1' });
+    });
+
+    const openNewPayment = async () => {
+        render(<CustomerPaymentsPage />);
+        await screen.findByText('CP-00007');
+        fireEvent.click(screen.getByRole('button', { name: /new customer payment/i }));
+        fireEvent.change(await screen.findByLabelText('Amount'), { target: { value: '100' } });
+    };
+
+    it('opens on the current time and sends no date when left there', async () => {
+        await openNewPayment();
+
+        expect((screen.getByLabelText('Date & time') as HTMLInputElement).value)
+            .toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        await waitFor(() => expect(api.recordCreditPayment).toHaveBeenCalled());
+        expect((api.recordCreditPayment as jest.Mock).mock.calls[0][1].date).toBeUndefined();
+    });
+
+    it('records a backdated payment at the picked time, in workspace time', async () => {
+        await openNewPayment();
+
+        fireEvent.change(screen.getByLabelText('Date & time'), { target: { value: '2026-01-15T09:30' } });
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        await waitFor(() => {
+            expect(api.recordCreditPayment).toHaveBeenCalledWith('cust-1', expect.objectContaining({
+                amount: 100,
+                date: '2026-01-15T09:30:00+06:00',
+            }));
+        });
+    });
+
+    it('blocks a payment dated in the future', async () => {
+        await openNewPayment();
+
+        fireEvent.change(screen.getByLabelText('Date & time'), { target: { value: '2099-01-01T10:00' } });
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Date and time cannot be in the future.');
+        expect(api.recordCreditPayment).not.toHaveBeenCalled();
+    });
+
+    it('edits open on the payment\'s own date and move it only when changed', async () => {
+        render(<CustomerPaymentsPage />);
+        fireEvent.click(await screen.findByTitle('Edit'));
+
+        // 10:00 UTC is 16:00 in Dhaka.
+        expect(await screen.findByLabelText('Date & time')).toHaveValue('2026-03-20T16:00');
+
+        fireEvent.change(screen.getByLabelText('Date & time'), { target: { value: '2026-03-18T11:15' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(api.updateCustomerCreditPayment).toHaveBeenCalledWith('pay-1', expect.objectContaining({
+                date: '2026-03-18T11:15:00+06:00',
+            }));
+        });
+    });
+
+    it('leaves an edited payment on its date when the picker is untouched', async () => {
+        render(<CustomerPaymentsPage />);
+        fireEvent.click(await screen.findByTitle('Edit'));
+        await screen.findByLabelText('Date & time');
+
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.updateCustomerCreditPayment).toHaveBeenCalled());
+        expect((api.updateCustomerCreditPayment as jest.Mock).mock.calls[0][1].date).toBeUndefined();
+    });
+});
