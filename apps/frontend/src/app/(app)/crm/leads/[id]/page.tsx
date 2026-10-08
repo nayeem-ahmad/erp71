@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { PageShell, PageHeader, Button, Select, StatusBadge } from '@/components/ui';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import Avatar from '@/components/Avatar';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import CrmActivityPanel from '@/components/crm/CrmActivityPanel';
@@ -249,9 +250,7 @@ export default function LeadDetailPage() {
                 not about either column under it. */}
             <div className="rounded-lg border border-gray-100 bg-white p-4">
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-semibold text-sm uppercase shrink-0">
-                        {lead.name.substring(0, 2)}
-                    </div>
+                    <Avatar src={lead.photo_url} name={lead.name} size="base" />
                     <div className="flex-1 min-w-0">
                         <p className="text-base font-semibold text-gray-900">{lead.name}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-1.5">
