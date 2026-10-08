@@ -1,7 +1,8 @@
 # Mobile app for tenant admins — plan
 
-Status: **Phases 0 and 1 built, 2026-10-07** (see §4.1 for what shipped and
-where it differs from the plan). Phases 2–5 not started. Written in answer to
+Status: **all five phases built, 2026-10-07/08.** §4.1 and §4.2 record what
+shipped and where it differs from this plan. Push is off in production until the
+Firebase key is set (`docs/ops/mobile-push-setup.md`). Written in answer to
 "make a plan for the Top Picks", the five mobile features proposed for tenant
 admins:
 
@@ -289,6 +290,39 @@ on day one.
 - **Not verified here.** The debug APK build: this environment cannot reach
   the Android SDK. CI's *Build Android (debug)* job is the first build with
   `FlutterFragmentActivity`.
+
+### 4.2 What shipped in Phases 2–5
+
+- **Push (Phase 2).** `DeviceToken` is tied to the session family that
+  registered it, not only to the user. `PushService` sends only to devices
+  whose session still holds a live refresh token. That covers 2.3's "tokens
+  outliving sessions" for every way a session ends, without a hook in each.
+  `FcmSender` signs the service-account assertion with `node:crypto` instead
+  of adding `google-auth-library`. The app gets its Firebase values from
+  `GET /push/config` and ships no `google-services.json`.
+- **Approvals (Phase 3).** Five kinds: expense claims, leave, product demands,
+  stock transfers and vouchers. **Payroll runs are out:** a DRAFT run is work
+  in progress, not a request, and has no reject. Overtime, warranty and fund
+  transfers are out for the reasons in `approvals/approval-kinds.ts`.
+  Building the 409 rule exposed real races in the existing approve paths:
+  two approvers could both move a transfer's stock, or both take leave days
+  off a balance. Those paths now claim the entry with a conditional update,
+  which fixes the web too. **No undo snackbar:** the decision sheet is the
+  confirmation, and the decision is sent at once.
+- **Alerts (Phase 4).** A five-minute **scanner** over recently written rows,
+  not hooks in each module, so a sale, refund or till close is no slower and
+  can never fail because of an alert. Recipients are owners plus
+  `VIEW_FINANCIAL_REPORTS` holders in the entry's branch (`VIEW_LEADS` for
+  enquiries), never the person who did it. **Not built:** the big-discount
+  alert (a sale stores no bill discount to read) and copy in the reader's
+  language (the bell has no translations anywhere yet). Both are in TODO.md.
+  The thresholds are `AlertSettings` rather than `MobileAlertSettings`,
+  because the web will show them too.
+- **Ask (Phase 5).** As planned. The recognizer is the phone's own (Android's
+  may use Google's servers), and the words fill the box for review.
+- **Bar.** *Home · Approvals · Alerts · More*, with Cashiers, the CRM, Ask and
+  Notifications under More. A CRM-only member keeps the four CRM tabs plus
+  Alerts. Someone who only approves starts on Approvals.
 
 ---
 
