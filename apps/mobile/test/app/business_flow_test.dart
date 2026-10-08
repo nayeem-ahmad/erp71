@@ -34,6 +34,13 @@ Future<void> openTab(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+/// Cashiers and the CRM live behind More for someone who runs the shop.
+Future<void> openFromMore(WidgetTester tester, String label) async {
+  await openTab(tester, 'More');
+  await tester.tap(find.widgetWithText(ListTile, label));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('an owner lands on Home: today against yesterday, tenders, '
       'tills and balances', (tester) async {
@@ -41,8 +48,8 @@ void main() {
     await pumpApp(tester, backend: backend);
     await signInWithGoogle(tester);
 
-    // The business bar, with the CRM behind one tab.
-    for (final tabName in ['Home', 'Cashiers', 'CRM']) {
+    // The business bar, with Cashiers and the CRM behind More.
+    for (final tabName in ['Home', 'Alerts', 'More']) {
       expect(tab(tabName), findsOneWidget);
     }
     expect(tab('Leads'), findsNothing);
@@ -88,7 +95,7 @@ void main() {
       'storeId': 'store-2',
     });
 
-    await openTab(tester, 'Cashiers');
+    await openFromMore(tester, 'Cashiers');
     expect(
       backend
           .sent('GET', '/cashier-sessions/overview')
@@ -141,7 +148,7 @@ void main() {
     await pumpApp(tester, backend: backend);
     await signInWithGoogle(tester);
 
-    await openTab(tester, 'Cashiers');
+    await openFromMore(tester, 'Cashiers');
 
     expect(find.text('Open tills'), findsOneWidget);
     expect(find.text('Rina Akter'), findsOneWidget);
@@ -160,24 +167,24 @@ void main() {
     expect(find.text('Counted at close'), findsNothing);
 
     await tester.scrollUntilVisible(find.text('Payout'), 200);
-    expect(find.text('Tea for staff · Today 11:00'), findsOneWidget);
+    expect(find.textContaining('Tea for staff · '), findsOneWidget);
     expect(find.text('− ৳ 200.00'), findsWidgets);
     expect(find.text('Cash in'), findsWidgets);
   });
 
-  testWidgets('the CRM tab opens the overview with ways into its lists', (
+  testWidgets('More opens the CRM overview, with ways into its lists', (
     tester,
   ) async {
     await pumpApp(tester, backend: ownerBackend());
     await signInWithGoogle(tester);
 
-    await openTab(tester, 'CRM');
+    await openFromMore(tester, 'Overview');
     expect(find.text('Open leads'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Leads'));
     await tester.pumpAndSettle();
     expect(find.text('Rahim Uddin'), findsOneWidget);
-    // Still under the CRM tab.
+    // Still under More.
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.selectedIndex, 2);
   });

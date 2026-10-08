@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/access.dart';
 import '../core/auth/auth_controller.dart';
+import '../features/alerts/alerts_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/auth/splash_screen.dart';
 import '../features/auth/two_factor_screen.dart';
@@ -22,6 +23,7 @@ import '../features/crm/leads/lead_form_screen.dart';
 import '../features/crm/leads/leads_screen.dart';
 import '../features/crm/no_crm_screen.dart';
 import '../features/home/home_shell.dart';
+import '../features/home/more_screen.dart';
 import '../features/workspace/workspace_screens.dart';
 
 /// Screens that belong to getting signed in, and are left once that is done.
@@ -218,6 +220,16 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                 ],
               ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/more', builder: (_, _) => const MoreScreen()),
             ],
           ),
         ],

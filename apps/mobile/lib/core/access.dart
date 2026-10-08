@@ -74,6 +74,7 @@ class MobileAccess {
   bool allows(String location) {
     bool under(String root) =>
         location == root || location.startsWith('$root/');
+    if (under('/more')) return business;
     if (under('/home')) return home;
     if (under('/cashiers')) return cashiers;
     if (under('/crm') ||

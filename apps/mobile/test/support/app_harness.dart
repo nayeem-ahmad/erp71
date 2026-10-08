@@ -3,6 +3,7 @@ import 'package:erp71_mobile/config/app_config.dart';
 import 'package:erp71_mobile/core/auth/token_store.dart';
 import 'package:erp71_mobile/core/format/format.dart';
 import 'package:erp71_mobile/core/providers.dart';
+import 'package:erp71_mobile/core/push/push_channel.dart';
 import 'package:erp71_mobile/core/security/app_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,7 @@ Future<void> pumpApp(
   FakeGoogleAuth? google,
   InMemoryKeyValueStore? storage,
   FakeDeviceAuthenticator? authenticator,
+  FakePushChannel? push,
 }) async {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 3;
@@ -41,6 +43,7 @@ Future<void> pumpApp(
         deviceAuthenticatorProvider.overrideWithValue(
           authenticator ?? FakeDeviceAuthenticator(),
         ),
+        pushChannelProvider.overrideWithValue(push ?? FakePushChannel()),
       ],
       child: const Erp71App(),
     ),
@@ -70,6 +73,10 @@ FakeBackend crmBackend() {
     )
     ..on('POST', '/auth/google', (_) => authResponse())
     ..on('POST', '/auth/logout/session', (_) => null)
+    // Push is off unless a test turns it on; the bell starts empty.
+    ..on('GET', '/push/config', (_) => {'enabled': false})
+    ..on('GET', '/notifications', (_) => page([]))
+    ..on('GET', '/notifications/unread-count', (_) => {'count': 0})
     ..on('GET', '/crm/dashboard/overview', (_) => overviewJson())
     ..on(
       'GET',

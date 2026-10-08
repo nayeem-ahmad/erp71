@@ -51,6 +51,9 @@ export const OPEN_ROUTES: Record<string, string> = {
     'DemoDataController.status': "loading demo data asserts OWNER in the service; the reads are status only", // GET /tenants/demo-data/status
     'DemoDataController.batches': "loading demo data asserts OWNER in the service; the reads are status only", // GET /tenants/demo-data/batches
     'DemoDataController.options': "loading demo data asserts OWNER in the service; the reads are status only", // GET /tenants/demo-data/options
+    'PushController.config': "self-scoped: the app's own push setup, the same for every member and nothing tenant-owned", // GET /push/config
+    'PushController.register': "self-scoped: registers the signed-in person's own phone against their own session", // POST /push/devices
+    'PushController.unregister': "self-scoped: removes only the signed-in person's own phone", // POST /push/devices/unregister
     'TenantExternalSyncController.getMatchCandidates': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/match-candidates
     'TenantExternalSyncController.applyMatchDecisions': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/match-decisions
     'TenantExternalSyncController.listProviders': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/providers

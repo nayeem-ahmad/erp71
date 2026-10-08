@@ -110,6 +110,7 @@ import { InventoryDashboardModule } from './inventory-dashboard/inventory-dashbo
 import { PurchaseDashboardModule } from './purchase-dashboard/purchase-dashboard.module';
 import { SalesDashboardModule } from './sales-dashboard/sales-dashboard.module';
 import { MobileModule } from './mobile/mobile.module';
+import { PushModule } from './push/push.module';
 import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
 import { HrReportsModule } from './hr-reports/hr-reports.module';
 import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
@@ -246,6 +247,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         PurchaseDashboardModule,
         SalesDashboardModule,
         MobileModule,
+        PushModule,
         HrDashboardModule,
         HrReportsModule,
         AdminDashboardModule,

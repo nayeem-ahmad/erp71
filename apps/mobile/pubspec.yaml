@@ -8,6 +8,8 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.4.3

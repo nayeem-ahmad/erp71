@@ -425,6 +425,7 @@ model User {
   emailVerificationTokens           EmailVerificationToken[]
   termsAcceptances                  TermsAcceptance[]
   refreshTokens                     RefreshToken[]
+  deviceTokens                      DeviceToken[]
   sentInvitations                   UserInvitation[]            @relation("InvitationSender")
   feedbacks                         Feedback[]
   supportMessages                   SupportMessage[]            @relation("SupportMessageSender")
@@ -513,6 +514,32 @@ model PasswordResetToken {
 ///
 /// Only the sha256 of the opaque token is stored: a database leak must not hand
 /// the reader a working session, the same rule PasswordResetToken follows.
+/// A phone's push address (an FCM registration token), tied to the sign-in it
+/// was registered under. A push goes only to devices whose session family
+/// still holds a live refresh token, so every way a session ends — signing
+/// out on the phone, "sign out everywhere", a password change, a replayed
+/// token — stops its pushes without each of those paths having to know about
+/// devices. Rows of dead sessions are pruned when a send finds them.
+model DeviceToken {
+  id                String   @id @default(uuid())
+  user_id           String
+  /// FCM registration token. Unique: a reinstall or a second account on the
+  /// same phone takes the row over rather than duplicating it.
+  token             String   @unique
+  /// `RefreshToken.family_id` of the session that registered it (the token's
+  /// own id for a pre-family token, as `RefreshTokenService` treats it).
+  session_family_id String
+  platform          String // android | ios
+  app_version       String?
+  created_at        DateTime @default(now())
+  last_seen_at      DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([session_family_id])
+}
+
 model RefreshToken {
   id          String    @id @default(uuid())
   user_id     String

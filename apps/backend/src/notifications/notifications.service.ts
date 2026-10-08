@@ -8,6 +8,7 @@ import { SmsService } from '../sms/sms.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
 import { formatZonedDate } from '../common/tenant-time.util';
+import { PushService } from '../push/push.service';
 
 /* ── Report types ─────────────────────────────────────────────────── */
 
@@ -39,6 +40,7 @@ export class NotificationsService {
         private email: EmailService,
         private sms: SmsService,
         private jobTracker: JobTrackerService,
+        private push: PushService,
     ) {}
 
     /* ------------------------------------------------------------------ */
@@ -53,9 +55,23 @@ export class NotificationsService {
         body: string,
         link?: string,
     ) {
-        return this.db.notification.create({
+        const notification = await this.db.notification.create({
             data: { tenant_id: tenantId, user_id: userId, type, title, body, link },
         });
+        // Every in-app notification also reaches the person's phones, so the
+        // bell and the phone never disagree. The row is the record; the push is
+        // best effort on top of it and never holds up or fails the caller.
+        void this.push.sendToUsers([userId], {
+            title,
+            body,
+            data: {
+                notification_id: notification.id,
+                tenant_id: tenantId,
+                type,
+                ...(link ? { link } : {}),
+            },
+        });
+        return notification;
     }
 
     async listForUser(tenantId: string, userId: string, page = 1, limit = 20): Promise<PaginatedResult<unknown>> {

@@ -5,12 +5,14 @@ import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { PushService } from '../push/push.service';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let db: any;
   let email: any;
   let sms: any;
+  let push: any;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -66,6 +68,8 @@ describe('NotificationsService', () => {
       sendLowStockAlert: jest.fn(),
     };
 
+    push = { sendToUsers: jest.fn().mockResolvedValue(1) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
@@ -73,6 +77,7 @@ describe('NotificationsService', () => {
         { provide: EmailService, useValue: email },
         { provide: SmsService, useValue: sms },
         { provide: JobTrackerService, useValue: { track: (_n: string, fn: () => any) => fn(), purgeOlderThan: jest.fn().mockResolvedValue(0) } },
+        { provide: PushService, useValue: push },
       ],
     }).compile();
 
@@ -108,6 +113,18 @@ describe('NotificationsService', () => {
           body: 'World',
           link: '/dashboard',
         },
+      });
+    });
+
+    it("pushes the notification to the person's phones, carrying its workspace", async () => {
+      db.notification.create.mockResolvedValue({ id: 'n-1' });
+
+      await service.create('t-1', 'u-1', 'LOW_STOCK', 'Low stock', '3 items', '/inventory');
+
+      expect(push.sendToUsers).toHaveBeenCalledWith(['u-1'], {
+        title: 'Low stock',
+        body: '3 items',
+        data: { notification_id: 'n-1', tenant_id: 't-1', type: 'LOW_STOCK', link: '/inventory' },
       });
     });
 
