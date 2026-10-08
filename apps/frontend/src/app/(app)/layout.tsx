@@ -448,7 +448,9 @@ function AppShell({ children }: DashboardLayoutProps) {
     });
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
     // Who may hide apps: the backend's rule for workspace-wide display settings.
-    const canManageApps = owner || activeTenant?.role === 'MANAGER';
+    // Not on an accounting-only plan, where there is nothing worth hiding and
+    // the settings page sits outside the workspace's allowed paths.
+    const canManageApps = (owner || activeTenant?.role === 'MANAGER') && !accountingOnlyMode;
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
     // The permission half of the /short-links guards; the Sidebar applies the
