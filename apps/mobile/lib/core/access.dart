@@ -23,6 +23,15 @@ abstract final class AreaPermissions {
   /// `POS_STAFF`: the till monitor, guarded as the cashier-session reads.
   static const tills = {'CREATE_SALE', 'MANAGE_COUNTERS'};
 
+  /// Any of the permissions behind the approvals inbox (the server narrows
+  /// it to the kinds each one decides).
+  static const approvals = {
+    'MANAGE_HR',
+    'APPROVE_PRODUCT_DEMAND',
+    'APPROVE_GOODS_TRANSFER',
+    'APPROVE_VOUCHER',
+  };
+
   /// Reading every branch at once (`storeId=all`).
   static const consolidated = 'VIEW_CONSOLIDATED_REPORTS';
 }
@@ -33,6 +42,7 @@ class MobileAccess {
     required this.home,
     required this.cashiers,
     required this.crm,
+    this.approvals = false,
   });
 
   factory MobileAccess.of(Workspace workspace) {
@@ -43,6 +53,7 @@ class MobileAccess {
       home: workspace.subscriptionActive && any(AreaPermissions.sales),
       cashiers: any(AreaPermissions.tills),
       crm: canUseCrm(workspace),
+      approvals: any(AreaPermissions.approvals),
     );
   }
 
@@ -55,16 +66,21 @@ class MobileAccess {
   /// Leads, activities and contacts.
   final bool crm;
 
-  bool get any => home || cashiers || crm;
+  /// Entries waiting for this member's decision.
+  final bool approvals;
+
+  bool get any => home || cashiers || crm || approvals;
 
   /// Someone who runs the shop, not only its sales pipeline. They get the
   /// business tabs, with the CRM folded into one; a CRM-only member keeps the
   /// CRM's own four tabs.
-  bool get business => home || cashiers;
+  bool get business => home || cashiers || approvals;
 
   /// Where signing in, or a link to somewhere this member cannot go, lands.
   String get startLocation => home
       ? '/home'
+      : approvals
+      ? '/approvals'
       : cashiers
       ? '/cashiers'
       : '/crm';
@@ -76,6 +92,7 @@ class MobileAccess {
         location == root || location.startsWith('$root/');
     if (under('/more')) return business;
     if (under('/home')) return home;
+    if (under('/approvals')) return approvals;
     if (under('/cashiers')) return cashiers;
     if (under('/crm') ||
         under('/leads') ||

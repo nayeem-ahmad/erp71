@@ -59,7 +59,7 @@ class AlertsScreen extends ConsumerWidget {
           alert: alert,
           onTap: () {
             controller.markRead(alert).catchError((_) {});
-            final route = mobileRouteFor(alert.link);
+            final route = mobileRouteForAlert(alert.type, alert.link);
             if (route != null) context.go(route);
           },
         ),

@@ -129,6 +129,11 @@ final unreadAlertsProvider = FutureProvider.autoDispose<int>((ref) {
   return ref.watch(alertsRepositoryProvider).unreadCount();
 });
 
+/// Where tapping a notification goes: approvals open the inbox whatever
+/// page the web links them to; everything else follows [mobileRouteFor].
+String? mobileRouteForAlert(String? type, String? link) =>
+    type == 'APPROVAL_REQUEST' ? '/approvals' : mobileRouteFor(link);
+
 /// Where a notification's web link opens on the phone, or null when the
 /// phone has no screen for it and the alert itself is the whole message.
 /// Only the shape of the path is trusted; anything unrecognised stays put.

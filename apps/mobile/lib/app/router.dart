@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../core/access.dart';
 import '../core/auth/auth_controller.dart';
 import '../features/alerts/alerts_screen.dart';
+import '../features/approvals/approvals_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/auth/splash_screen.dart';
 import '../features/auth/two_factor_screen.dart';
@@ -230,6 +231,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(path: '/more', builder: (_, _) => const MoreScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/approvals',
+                builder: (_, _) => const ApprovalsScreen(),
+              ),
             ],
           ),
         ],

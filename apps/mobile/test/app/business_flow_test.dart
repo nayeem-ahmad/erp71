@@ -49,7 +49,7 @@ void main() {
     await signInWithGoogle(tester);
 
     // The business bar, with Cashiers and the CRM behind More.
-    for (final tabName in ['Home', 'Alerts', 'More']) {
+    for (final tabName in ['Home', 'Approvals', 'Alerts', 'More']) {
       expect(tab(tabName), findsOneWidget);
     }
     expect(tab('Leads'), findsNothing);
@@ -184,9 +184,9 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Leads'));
     await tester.pumpAndSettle();
     expect(find.text('Rahim Uddin'), findsOneWidget);
-    // Still under More.
+    // Still under More (Home · Approvals · Alerts · More for an owner).
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(bar.selectedIndex, 2);
+    expect(bar.selectedIndex, 3);
   });
 
   group('app lock', () {

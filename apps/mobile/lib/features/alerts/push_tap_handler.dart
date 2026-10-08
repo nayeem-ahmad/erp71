@@ -78,7 +78,9 @@ class _PushTapHandlerState extends ConsumerState<PushTapHandler> {
       );
     }
     if (!mounted) return;
-    ref.read(routerProvider).go(mobileRouteFor(tap.link) ?? '/alerts');
+    ref
+        .read(routerProvider)
+        .go(mobileRouteForAlert(tap.data['type'], tap.link) ?? '/alerts');
   }
 
   @override

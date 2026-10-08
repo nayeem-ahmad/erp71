@@ -128,6 +128,16 @@ FakeBackend ownerBackend() => crmBackend()
   )
   ..on('GET', '/auth/me', (_) => meJson(tenants: [ownerWorkspaceJson()]))
   ..on('GET', '/mobile/pulse', (_) => pulseJson())
+  ..on(
+    'GET',
+    '/approvals/inbox',
+    (_) => {
+      'items': <Object?>[],
+      'kinds': ['EXPENSE_CLAIM', 'LEAVE_REQUEST'],
+      'counts': <String, Object?>{},
+      'total': 0,
+    },
+  )
   ..on('GET', '/cashier-sessions/overview', (_) => cashierOverviewJson())
   ..on('GET', '/cashier-sessions/:id/summary', (_) => tillSummaryJson())
   ..on(
