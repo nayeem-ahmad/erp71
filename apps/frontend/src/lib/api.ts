@@ -3136,6 +3136,14 @@ export const api = {
     convertQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/convert`, {
         method: 'POST',
     }),
+    /**
+     * Invoices each quotation as a credit sale. Never throws for a quotation it
+     * could not convert — those come back under `skipped` / `failed` with why.
+     */
+    createSalesFromQuotations: (quotationIds: string[]) => fetchWithAuth('/sales/from-quotations', {
+        method: 'POST',
+        body: JSON.stringify({ quotationIds }),
+    }),
     /** Idempotent — calling this again returns the same live code rather than minting a new one. */
     shareQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'POST' }),
     /** Clears the share token, killing every link ever sent for this quotation. */

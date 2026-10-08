@@ -20,6 +20,7 @@ import { BranchFilter, PageShell } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
+import ConvertToSalesModal from './ConvertToSalesModal';
 
 interface Quotation {
     id: string;
@@ -33,8 +34,10 @@ interface Quotation {
     version: number;
     doc_kind?: string;
     currency?: string;
+    exchange_rate?: string | null;
     notes?: string | null;
     items: any[];
+    customer_id?: string | null;
     customer?: { name: string; phone?: string };
     store_id?: string;
 }
@@ -71,6 +74,11 @@ export default function QuotesPage() {
     // Same endpoint and same modal the detail page uses, so a link minted from a
     // row and one minted from the quotation itself are the one link.
     const { share, sharingId, openShare, revokeShare, closeShare } = useQuotationShare();
+    // The rows "Convert to sales" was pressed on. Captured when the modal opens,
+    // so reloading the list behind it once sales exist cannot change what the
+    // open modal is reporting on.
+    const [converting, setConverting] = useState<Quotation[] | null>(null);
+    const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
 
     useEffect(() => {
         if (!branch.ready) return;
@@ -294,6 +302,17 @@ export default function QuotesPage() {
         [t, locale, openShare, sharingId],
     );
 
+    const bulkActions = useMemo(
+        () => [
+            {
+                label: t.quotes.bulkConvert.action,
+                icon: <ReceiptText className="w-4 h-4" />,
+                onClick: (rows: Quotation[]) => setConverting(rows),
+            },
+        ],
+        [t],
+    );
+
     const filterPresets = useMemo(
         () => [
             { label: t.quotes.filterPresets.draft, filters: [{ id: 'status', value: 'DRAFT' }] },
@@ -350,7 +369,22 @@ export default function QuotesPage() {
                     emptyIcon={<FileText className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.quotes.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
+                    enableRowSelection
+                    getRowId={(quote) => quote.id}
+                    bulkActions={bulkActions}
+                    clearSelectionSignal={clearSelectionSignal}
                 />
+
+                {converting && (
+                    <ConvertToSalesModal
+                        quotes={converting}
+                        onClose={() => setConverting(null)}
+                        onConverted={() => {
+                            setClearSelectionSignal((signal) => signal + 1);
+                            void loadQuotes();
+                        }}
+                    />
+                )}
 
                 {share && (
                     <ShareModal

@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 import { PaymentInstrumentDto } from '../common/payment-instrument.dto';
 import { InlineCustomerDto } from '../customers/customer.dto';
+import { QUOTATION_BATCH_LIMIT } from './quotation-to-sale.util';
 
 export class CreateSaleItemDto {
     @IsString()
@@ -365,4 +366,18 @@ export class PrintSalesBatchDto {
     @IsString({ each: true })
     @IsNotEmpty({ each: true })
     ids: string[];
+}
+
+/**
+ * The quotations "Convert to sales" invoices in one go, each as a credit sale.
+ * A list page's worth: every sale is posted one after another, so a larger
+ * batch only means a longer wait on a request that cannot be resumed.
+ */
+export class CreateSalesFromQuotationsDto {
+    @IsArray()
+    @ArrayMinSize(1)
+    @ArrayMaxSize(QUOTATION_BATCH_LIMIT)
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    quotationIds: string[];
 }
