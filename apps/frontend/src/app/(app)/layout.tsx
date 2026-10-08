@@ -4,18 +4,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Menu, Zap, X } from 'lucide-react';
-import ChatBell from '@/components/ChatBell';
 import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import ActivationPendingBanner from '@/components/ActivationPendingBanner';
 // Fetched on their own after the page is up, and only when rendered; see the file.
-import { AiChatWidget, FeedbackWidget, TimeTracker, VoiceNavWidget } from '@/components/app-shell-widgets';
+import { AiChatWidget, SupportDialog, TimeTracker, VoiceNavWidget } from '@/components/app-shell-widgets';
 import TimerChip from '@/components/projects/TimerChip';
-import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
@@ -34,6 +31,7 @@ import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
 import { isAccountingAdvancedReportPath } from '@/lib/plan-gated-paths';
 import { isPlatformAdminOnlyPath } from '@/lib/platform-admin-paths';
 import { NavLayoutProvider } from '@/contexts/NavLayoutContext';
+import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
 import TenantLocaleSync from '@/components/TenantLocaleSync';
 import { BrandingProvider } from '@/lib/branding';
 import { formatPlanDisplayName } from '@/lib/plan-display';
@@ -81,7 +79,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 }
 
 function AppShell({ children }: DashboardLayoutProps) {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const pathname = usePathname();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -102,6 +100,7 @@ function AppShell({ children }: DashboardLayoutProps) {
     const [emailVerificationDismissed, setEmailVerificationDismissed] = useState(false);
     const [resendingVerification, setResendingVerification] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const [supportOpen, setSupportOpen] = useState(false);
     const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
     const accountPlatformFeatures: PlatformFeatures = user?.platform_features ?? DEFAULT_PLATFORM_FEATURES;
     // Derived rather than set once on load: `me` now refreshes in the background,
@@ -457,6 +456,19 @@ function AppShell({ children }: DashboardLayoutProps) {
         && hasPlanEntitlement(planFeatures, 'premiumAi')
         && !inPlatformAdminMode
         && !inRefereeMode;
+    const canOpenSupport = platformFeatures.support || platformFeatures.feedback;
+    // The gates the sidebar's Chat entry and the chat API apply: the add-on, the
+    // member's permission, and a workspace whose sidebar carries the module.
+    const canUseTeamChat =
+        hasPlanEntitlement(planFeatures, 'teamChat')
+        && (owner || hasPermission(perms, 'USE_TEAM_CHAT'))
+        && !accountingOnlyMode
+        && !inPlatformAdminMode
+        && !inRefereeMode;
+    // Badged on the sidebar's Chat link, and on the mobile menu button that
+    // opens it; team chat no longer has a header icon (UI spec §2.12).
+    const chatUnreadCount = useChatUnreadCount(canUseTeamChat);
+    const chatUnreadLabel = chatUnreadCount > 0 ? fmt(t.chat.badge.unread, { count: chatUnreadCount }) : '';
     const effectivePlatformFeatures: PlatformFeatures = {
         ...platformFeatures,
         voice: canAccessVoice,
@@ -670,6 +682,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         <TenantLocaleSync tenant={tenantLocaleConfig} />
         <div className="flex h-dvh min-h-dvh bg-canvas font-sans text-gray-900">
             <Sidebar
+                chatUnreadCount={chatUnreadCount}
                 canAccessAccounting={canAccessAccounting}
                 canAccessInventoryReports={canAccessInventoryReports}
                 canAccessAccountingAdvanced={canAccessAccountingAdvanced}
@@ -703,11 +716,16 @@ function AppShell({ children }: DashboardLayoutProps) {
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button
                             type="button"
-                            className="md:hidden min-h-touch min-w-touch flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
+                            className="relative md:hidden min-h-touch min-w-touch flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
                             onClick={() => setMobileNavOpen(true)}
-                            aria-label={t.sidebar.openNavigation}
+                            aria-label={[t.sidebar.openNavigation, chatUnreadLabel].filter(Boolean).join(' · ')}
                         >
                             <Menu className="w-5 h-5" />
+                            {/* On a phone the Chat link is inside the drawer, so its
+                                unread count needs a trace on the way in. */}
+                            {chatUnreadCount > 0 ? (
+                                <span aria-hidden className="absolute end-2 top-2 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white" />
+                            ) : null}
                         </button>
                         <div className="flex min-w-0 flex-col justify-center gap-0.5">
                             {tenantStores.length > 1 && !inPlatformAdminMode && !inRefereeMode ? (
@@ -736,20 +754,17 @@ function AppShell({ children }: DashboardLayoutProps) {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
+                    {/* Only things with live state get a control here: a mic, a
+                        running clock, the assistant, notifications. Preferences
+                        and help live in the avatar menu, and anything with a page
+                        of its own is in the sidebar — see §2.12 of the UI spec. */}
+                    <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
                         <div className={headerActionsClass}>
-                            <div className="hidden md:contents">
-                                {canAccessVoice ? <VoiceNavWidget /> : null}
-                                {canAccessVoice ? <div className="h-8 w-px bg-gray-200 hidden sm:block" /> : null}
-                                <LanguageSwitcher />
-                            </div>
-                            <AppHeaderMobileMenu />
+                            {canAccessVoice ? <VoiceNavWidget /> : null}
                         </div>
                         {canTrackTime && canRenderChildren ? <TimerChip /> : null}
                         <div className={headerActionsClass}>
-                            {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
                             {canAccessAiChat ? <AiChatWidget /> : null}
-                            <ChatBell />
                             <NotificationBell />
                             <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                             <AvatarDropdown
@@ -773,6 +788,7 @@ function AppShell({ children }: DashboardLayoutProps) {
                                 }
                                 avatarUrl={user?.avatar_url}
                                 canSwitchAccount={canSwitchAccount}
+                                onOpenSupport={canOpenSupport ? () => setSupportOpen(true) : undefined}
                             />
                         </div>
                     </div>
@@ -877,6 +893,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             </div>
 
             {canTrackTime && canRenderChildren ? <TimeTracker /> : null}
+            {supportOpen && canOpenSupport ? <SupportDialog onClose={() => setSupportOpen(false)} /> : null}
             <Toaster />
             <ServiceWorkerRegistrar />
         </div>

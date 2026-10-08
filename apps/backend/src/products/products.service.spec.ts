@@ -142,6 +142,101 @@ describe('ProductsService', () => {
       expect(tx.productStock.upsert).not.toHaveBeenCalled();
       expect(result.id).toBe('prod-2');
     });
+
+    it('stamps opening stock with the cost entered, never the selling price', async () => {
+      tx.product.create.mockResolvedValue({ id: 'prod-1', name: 'Coffee', price: 10 });
+      tx.product.findFirst.mockResolvedValue({ id: 'prod-1', stocks: [] });
+
+      await service.create('tenant-1', { name: 'Coffee', price: 10, cost: 6.5, initialStock: 50 });
+
+      expect(tx.productCost.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: expect.objectContaining({ avg_cost: 6.5, qty_on_hand: 50 }) }),
+      );
+    });
+
+    it('holds a cost entered without opening stock as an opening cost', async () => {
+      // Used to be dropped: the product then sold uncosted until its first bill.
+      tx.product.create.mockResolvedValue({ id: 'prod-3', name: 'Sugar', price: 120 });
+      tx.product.findFirst
+        .mockResolvedValueOnce({ id: 'prod-3', name: 'Sugar', type: 'GOODS' })
+        .mockResolvedValue({ id: 'prod-3', stocks: [] });
+      tx.productStock.aggregate = jest.fn().mockResolvedValue({ _sum: { quantity: null } });
+      tx.productCostAdjustment = { create: jest.fn().mockResolvedValue({}) };
+
+      await service.create('tenant-1', { name: 'Sugar', price: 120, cost: 95 }, 'user-1');
+
+      expect(tx.productCostAdjustment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenant_id: 'tenant-1',
+          product_id: 'prod-3',
+          reason: 'OPENING_COST',
+          new_cost: 95,
+          qty_on_hand: 0,
+          created_by: 'user-1',
+        }),
+      });
+    });
+
+    it('records no cost for a service', async () => {
+      tx.product.create.mockResolvedValue({ id: 'prod-4', name: 'Binding', price: 50 });
+      tx.product.findFirst.mockResolvedValue({ id: 'prod-4', stocks: [] });
+      tx.productCostAdjustment = { create: jest.fn() };
+
+      await service.create('tenant-1', { name: 'Binding', price: 50, cost: 20, type: 'SERVICE' as any });
+
+      expect(tx.productCostAdjustment.create).not.toHaveBeenCalled();
+      expect(tx.productCost.upsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('importFromCsv()', () => {
+    beforeEach(() => {
+      db.product.findFirst.mockResolvedValue(null);
+      tx.product.create.mockResolvedValue({ id: 'prod-csv', name: 'Lentils' });
+      tx.productCostAdjustment = { create: jest.fn().mockResolvedValue({}) };
+      tx.productStock.aggregate = jest.fn().mockResolvedValue({ _sum: { quantity: 0 } });
+    });
+
+    it('leaves opening stock uncosted when the row has no cost_price, rather than costing it at retail', async () => {
+      await service.importFromCsv('tenant-1', [{ name: 'Lentils', selling_price: 140, stock_quantity: 20 }]);
+
+      expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ movement_type: 'INITIAL_STOCK', quantity_delta: 20, unit_cost: null }),
+      });
+      expect(tx.productCost.upsert).not.toHaveBeenCalled();
+    });
+
+    it('costs opening stock at the row\'s cost_price', async () => {
+      await service.importFromCsv('tenant-1', [{ name: 'Lentils', selling_price: 140, cost_price: 110, stock_quantity: 20 }]);
+
+      expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ movement_type: 'INITIAL_STOCK', unit_cost: 110 }),
+      });
+    });
+
+    it('records a cost_price on a row with no stock as an opening cost', async () => {
+      tx.product.findFirst.mockResolvedValue({ id: 'prod-csv', name: 'Lentils', type: 'GOODS' });
+
+      const result = await service.importFromCsv(
+        'tenant-1',
+        [{ name: 'Lentils', selling_price: 140, cost_price: 110 }],
+        'user-1',
+      );
+
+      expect(result.errors).toEqual([]);
+      expect(tx.productCostAdjustment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ reason: 'OPENING_COST', new_cost: 110, created_by: 'user-1', note: 'Imported from CSV' }),
+      });
+    });
+
+    it('treats a blank or zero cost_price as unknown', async () => {
+      await service.importFromCsv('tenant-1', [
+        { name: 'Lentils', selling_price: 140, cost_price: '' as any },
+        { name: 'Oil', selling_price: 200, cost_price: 0 },
+      ]);
+
+      expect(tx.productCostAdjustment.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('findAll()', () => {

@@ -35,9 +35,19 @@
  *
  * Additive and idempotent, so it is safe on every deploy.
  *
+ * Other Tenant-Admin-only permissions
+ * -----------------------------------
+ * ADJUST_PRODUCT_COST fell through both general scripts for the same reason —
+ * it belongs to no legacy role and to no module template, only to Tenant Admin
+ * (which holds every permission) — so it reuses this reconciler through
+ * `--permission=` rather than copying it. Only the permissions listed in
+ * TENANT_ADMIN_ONLY_PERMISSIONS are accepted. It runs on boot as its own step,
+ * `sync:adjust-product-cost-permission` in apps/backend/scripts/db-prepare.sh.
+ *
  * Usage:
  *   npx tsx prisma/sync-cancel-entry-permission.ts --dry-run
  *   npx tsx prisma/sync-cancel-entry-permission.ts
+ *   npx tsx prisma/sync-cancel-entry-permission.ts --permission=ADJUST_PRODUCT_COST
  */
 import { config } from 'dotenv';
 import { resolve } from 'path';
@@ -51,6 +61,13 @@ const prisma = new PrismaClient();
 /** `TenantRole.template_key` of the role this permission belongs to. */
 const TENANT_ADMIN_TEMPLATE_KEY = 'tenant_admin';
 
+/** Permissions that, among the seeded roles, only Tenant Admin holds. */
+export const TENANT_ADMIN_ONLY_PERMISSIONS = [
+    StorePermission.CANCEL_ENTRY,
+    StorePermission.ADJUST_PRODUCT_COST,
+] as const;
+export type TenantAdminOnlyPermission = (typeof TENANT_ADMIN_ONLY_PERMISSIONS)[number];
+
 export interface SyncResult {
     /** Roles that gained the permission. */
     roleGrants: number;
@@ -60,9 +77,9 @@ export interface SyncResult {
 
 export async function syncCancelEntryPermission(
     prisma: any,
-    options: { dryRun?: boolean } = {},
+    options: { dryRun?: boolean; permission?: TenantAdminOnlyPermission } = {},
 ): Promise<SyncResult> {
-    const permission = StorePermission.CANCEL_ENTRY;
+    const permission = options.permission ?? StorePermission.CANCEL_ENTRY;
 
     const roles = await prisma.tenantRole.findMany({
         where: { template_key: TENANT_ADMIN_TEMPLATE_KEY },
@@ -145,17 +162,22 @@ export async function syncCancelEntryPermission(
 
 async function main() {
     const dryRun = process.argv.includes('--dry-run');
-    console.log(`Sync CANCEL_ENTRY permission (${dryRun ? 'DRY RUN' : 'LIVE'})`);
+    const requested = process.argv.find((arg) => arg.startsWith('--permission='))?.split('=')[1];
+    const permission = (requested ?? StorePermission.CANCEL_ENTRY) as TenantAdminOnlyPermission;
+    if (!(TENANT_ADMIN_ONLY_PERMISSIONS as readonly string[]).includes(permission)) {
+        throw new Error(`--permission must be one of ${TENANT_ADMIN_ONLY_PERMISSIONS.join(', ')}`);
+    }
+    console.log(`Sync ${permission} permission (${dryRun ? 'DRY RUN' : 'LIVE'})`);
 
-    const result = await syncCancelEntryPermission(prisma, { dryRun });
+    const result = await syncCancelEntryPermission(prisma, { dryRun, permission });
 
     if (result.roleGrants === 0 && result.memberGrants === 0) {
-        console.log('  Every Tenant Admin role already holds CANCEL_ENTRY. Nothing to do.');
+        console.log(`  Every Tenant Admin role already holds ${permission}. Nothing to do.`);
         return;
     }
 
     console.log(
-        `  ${dryRun ? 'would grant' : 'granted'} CANCEL_ENTRY to ${result.roleGrants} role(s) ` +
+        `  ${dryRun ? 'would grant' : 'granted'} ${permission} to ${result.roleGrants} role(s) ` +
         `and ${result.memberGrants} member/store pair(s).`,
     );
     if (dryRun) console.log('DRY RUN — nothing was written.');

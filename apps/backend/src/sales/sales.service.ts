@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
@@ -35,11 +36,21 @@ import {
     nextCustomerCreditNumber,
 } from '../customers/customer-payment-number.util';
 import { netOfChange, splitSaleOverpayment } from './sale-overpayment.util';
+import { issueDocumentNumber } from '../database/document-number.utils';
 import {
     assertSessionForPosSale,
     findOpenSessionForUser,
     requiresCashierSession,
 } from '../cashier-sessions/active-session.util';
+
+/**
+ * What a parked draft carries in `serial_number` until it is finalised. Random
+ * rather than a timestamp so two drafts parked in the same millisecond cannot
+ * collide on the unique index; prefixed so nobody mistakes it for an invoice.
+ */
+export function draftPlaceholderNumber(): string {
+    return `DRAFT-${randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+}
 
 /** One list page — the largest a server-paged table shows — not the tenant's whole history. */
 const PRINT_BATCH_LIMIT = 100;
@@ -133,15 +144,19 @@ export class SalesService {
             // Credited to the customer's own rep unless the screen names one.
             const salesRepId = await salesRepForSale(tx, tenantId, dto.salesRepId, dto.customerId);
 
-            // 1. Generate Serial Number (Simplified for v0.1)
-            const serialNumber = `SL-${Date.now()}`;
+            // The invoice number, in the tenant's own format. Issued after the
+            // checks above so a rejected sale consumes no number — the counter
+            // update rolls back with everything else.
+            const saleDate = dto.saleDate ? new Date(dto.saleDate) : new Date();
+            const serialNumber = await this.issueSaleNumber(tx, tenantId, {
+                storeId: dto.storeId,
+                counterId: session.counterId,
+                on: saleDate,
+            });
 
-            // 2. Generate and validate reference number
-            const referenceNumber = dto.referenceNumber
-                ? await this.validateReferenceNumber(tenantId, dto.referenceNumber)
-                : await this.generateReferenceNumber(tenantId, tx);
+            // Only ever what the user typed — see the column comment on Sale.
+            const referenceNumber = await this.validateReferenceNumber(tenantId, dto.referenceNumber);
 
-            // 3. Create Sale Record
             const sale = await tx.sale.create({
                 data: {
                     tenant_id: tenantId,
@@ -162,7 +177,7 @@ export class SalesService {
                     prices_include_vat: dto.pricesIncludeVat ?? true,
                     sales_rep_id: salesRepId,
                     amount_paid: prep.amountPaid,
-                    sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
+                    sale_date: saleDate,
                     status: 'COMPLETED',
                     note: dto.note,
                     created_by: userId,
@@ -775,9 +790,7 @@ export class SalesService {
                 dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
-            const referenceNumber = dto.referenceNumber
-                ? await this.validateReferenceNumber(tenantId, dto.referenceNumber)
-                : await this.generateReferenceNumber(tenantId, tx);
+            const referenceNumber = await this.validateReferenceNumber(tenantId, dto.referenceNumber);
 
             // The link is recorded, but the quotation is deliberately *not*
             // marked CONVERTED here: a parked draft posts nothing, so the quote
@@ -808,7 +821,11 @@ export class SalesService {
                     counter_id: draftSession.counterId,
                     session_id: draftSession.sessionId,
                     customer_id: dto.customerId,
-                    serial_number: `SL-${Date.now()}`,
+                    // A placeholder, not an invoice number: a parked draft may
+                    // never be completed, and one that is abandoned must not
+                    // leave a hole in the series. finalizeDraft() issues the
+                    // real number.
+                    serial_number: draftPlaceholderNumber(),
                     reference_number: referenceNumber,
                     quotation_id: source.quotationId,
                     sales_order_id: source.salesOrderId,
@@ -863,7 +880,8 @@ export class SalesService {
     /**
      * Turn a parked DRAFT into a real sale: the same validation, stock movement,
      * loyalty, credit and accounting work a direct sale goes through, applied to
-     * the existing Sale row so its serial and reference number survive. Optional
+     * the existing Sale row so its id and reference number survive. The invoice
+     * number is issued here, not when the draft was parked — see createDraft(). Optional
      * overrides let the user adjust lines/payments on the way out — warranty
      * serials can *only* arrive here, since a draft never captured them.
      */
@@ -951,9 +969,16 @@ export class SalesService {
                 });
             }
 
+            const serialNumber = await this.issueSaleNumber(tx, tenantId, {
+                storeId: draft.store_id,
+                counterId: finalizeSession.counterId,
+                on: dto.saleDate ? new Date(dto.saleDate) : draft.sale_date,
+            });
+
             const sale = await tx.sale.update({
                 where: { id },
                 data: {
+                    serial_number: serialNumber,
                     customer_id: saleDto.customerId ?? null,
                     status: 'COMPLETED',
                     total_amount: prep.computedTotal,
@@ -1752,41 +1777,31 @@ export class SalesService {
         return referenceNumber;
     }
 
-    async generateReferenceNumber(tenantId: string, tx: any): Promise<string> {
-        const settings = await tx.salesSettings.findUnique({ where: { tenant_id: tenantId } });
-        const format = settings?.reference_number_format || 'YYMM-#';
-
-        // Generate based on format
-        if (format.includes('YYMM')) {
-            const now = new Date();
-            const yy = String(now.getFullYear()).slice(-2);
-            const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const template = format.replace('YYMM', `${yy}${mm}`); // e.g. '2606-#'
-            // The literal prefix is everything before the '#' placeholder. Matching
-            // on `template` directly would include the '#' and never match a stored
-            // reference, so the sequence always reset to 001 and collided.
-            const literalPrefix = template.slice(0, template.indexOf('#'));
-
-            // Take the highest existing sequence for this YYMM prefix and add one.
-            // The prefix already scopes the period (e.g. 2606- = June 2026), so do not
-            // filter by created_at — yesterday's 2606-005 must yield 2606-006 today.
-            const existing = await tx.sale.findMany({
+    /**
+     * The next invoice number in the tenant's Document Numbering format.
+     *
+     * Steps over a number already printed on another sale, as its invoice
+     * number or as a typed reference: the printed invoice shows the reference
+     * when there is one, so the two must not repeat each other either.
+     */
+    private issueSaleNumber(
+        tx: any,
+        tenantId: string,
+        target: { storeId: string; counterId: string | null; on: Date },
+    ): Promise<string> {
+        return issueDocumentNumber(tx, {
+            tenantId,
+            docType: 'SALE',
+            storeId: target.storeId,
+            counterId: target.counterId,
+            on: target.on,
+            isTaken: async (candidate) => Boolean(await tx.sale.findFirst({
                 where: {
                     tenant_id: tenantId,
-                    reference_number: { startsWith: literalPrefix },
+                    OR: [{ serial_number: candidate }, { reference_number: candidate }],
                 },
-                select: { reference_number: true },
-            });
-
-            let maxSeq = 0;
-            for (const { reference_number } of existing) {
-                const seq = parseInt(reference_number.slice(literalPrefix.length), 10);
-                if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
-            }
-
-            return `${literalPrefix}${String(maxSeq + 1).padStart(3, '0')}`;
-        }
-
-        throw new BadRequestException('Invalid reference number format in settings');
+                select: { id: true },
+            })),
+        });
     }
 }

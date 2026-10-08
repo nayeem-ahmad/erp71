@@ -130,7 +130,7 @@ export class ProductsController {
             }
         }
 
-        const result = await this.productsService.importFromCsv(tenant.tenantId, rows);
+        const result = await this.productsService.importFromCsv(tenant.tenantId, rows, tenant.userId);
 
         return {
             created: result.created,
@@ -142,7 +142,7 @@ export class ProductsController {
     @RequireAnyStorePermission(...PRODUCT_WRITE)
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateProductDto) {
-        return this.productsService.create(tenant.tenantId, dto);
+        return this.productsService.create(tenant.tenantId, dto, tenant.userId);
     }
 
     @RequireAnyStorePermission(...CATALOG_READ)

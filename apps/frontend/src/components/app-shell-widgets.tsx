@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
  *
  * Every `(app)` page used to download all four, whether or not the person could
  * see them: the AI chat (its panel, history and speech input), voice
- * navigation (its phrase tables), the feedback composer and the time tracker's
+ * navigation (its phrase tables), the support composer and the time tracker's
  * form. Three of them hang on a premium plan or the projects module, which a
  * shop on the retail plan never has, and nobody opens feedback on the way to a
  * sale. The layout keeps deciding which of them to render; this file only
@@ -19,7 +19,8 @@ import dynamic from 'next/dynamic';
  * from `/auth/me`, which the server does not have, so there is nothing to
  * pre-render. Each header button gets a placeholder of its own size in the
  * meantime, so the header does not shift when it lands — the button is simply
- * not there to press for the moment it takes.
+ * not there to press for the moment it takes. The support dialog is only
+ * rendered once its avatar-menu item is pressed, so its code arrives then.
  *
  * TimerChip is deliberately not here. It is the header's running clock and the
  * thing that asks the server whether a timer is running, so it should be on
@@ -31,16 +32,6 @@ function HeaderButtonSlot() {
     return <span aria-hidden className="inline-flex min-h-touch min-w-touch" />;
 }
 
-/** Voice navigation's two `p-2` icon buttons, side by side, empty. */
-function VoiceNavSlot() {
-    return (
-        <span aria-hidden className="flex items-center gap-0.5">
-            <span className="h-8 w-8" />
-            <span className="h-8 w-8" />
-        </span>
-    );
-}
-
 export const AiChatWidget = dynamic(() => import('./AiChatWidget'), {
     ssr: false,
     loading: HeaderButtonSlot,
@@ -48,12 +39,13 @@ export const AiChatWidget = dynamic(() => import('./AiChatWidget'), {
 
 export const VoiceNavWidget = dynamic(() => import('./VoiceNavWidget'), {
     ssr: false,
-    loading: VoiceNavSlot,
+    loading: HeaderButtonSlot,
 });
 
-export const FeedbackWidget = dynamic(() => import('./FeedbackWidget'), {
+/** A modal: nothing to hold a place for while it loads. */
+export const SupportDialog = dynamic(() => import('./SupportDialog'), {
     ssr: false,
-    loading: HeaderButtonSlot,
+    loading: () => null,
 });
 
 /** The floating tracker draws nothing until it is opened, so it needs no placeholder. */

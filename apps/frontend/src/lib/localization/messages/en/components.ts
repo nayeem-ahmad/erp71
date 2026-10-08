@@ -104,12 +104,9 @@ export const componentsMessages = {
     voiceNavWidget: {
         startAria: 'Voice navigation — speak a page name',
         stopAria: 'Stop listening',
-        hintAria: 'Voice command examples',
-        closeAria: 'Close',
         startTitle: 'Say a page name (e.g. sales entry)',
         listeningTitle: 'Listening… tap to stop',
-        hintTitle: 'Voice navigation',
-        hintDescription: 'Tap the mic and say one of these:',
+        hintDescription: 'Say one of these:',
         heard: 'Heard: “{phrase}”',
         navigating: 'Opening {page}',
         notRecognized: 'Did not recognize that. Try: {hints}',

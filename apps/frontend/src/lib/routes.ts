@@ -163,6 +163,7 @@ export const routes = {
         warehouses: '/inventory/warehouses',
         settings: '/inventory/settings',
         brands: '/inventory/brands',
+        productCosts: '/inventory/product-costs',
         reports: {
             reorder: '/inventory/reports/reorder',
             shrinkage: '/inventory/reports/shrinkage',
@@ -293,6 +294,7 @@ export const routes = {
         paymentMethods: '/settings/payment-methods',
         sales: '/settings/sales',
         printTemplates: '/settings/print-templates',
+        documentNumbering: '/settings/document-numbering',
         team: '/team',
         counters: '/settings/counters',
         localization: '/settings/localization',
