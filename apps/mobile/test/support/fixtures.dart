@@ -12,6 +12,7 @@ Map<String, Object?> workspaceJson({
     'MANAGE_CRM_TASKS',
   ],
   Object? premiumCrm = true,
+  Object? premiumAi = false,
   String status = 'ACTIVE',
   List<Map<String, Object?>> stores = const [
     {'id': 'store-1', 'name': 'Main Store', 'tenant_id': 'tenant-1'},
@@ -32,7 +33,11 @@ Map<String, Object?> workspaceJson({
     'plan': {
       'code': 'PREMIUM',
       'name': 'Premium',
-      'features_json': {'premiumCrm': premiumCrm, 'aiCreditsMonthly': 100},
+      'features_json': {
+        'premiumCrm': premiumCrm,
+        'premiumAi': premiumAi,
+        'aiCreditsMonthly': 100,
+      },
     },
   },
 };

@@ -104,12 +104,9 @@ export const componentsMessages = {
     voiceNavWidget: {
         startAria: "التنقل الصوتي — انطق اسم صفحة",
         stopAria: "إيقاف الاستماع",
-        hintAria: "أمثلة على الأوامر الصوتية",
-        closeAria: "إغلاق",
         startTitle: "انطق اسم صفحة (مثل: إدخال مبيعات)",
         listeningTitle: "يستمع… اضغط للإيقاف",
-        hintTitle: "التنقل الصوتي",
-        hintDescription: "اضغط على الميكروفون وانطق أحد هذه:",
+        hintDescription: "انطق أحد هذه:",
         heard: "سُمع: ”{phrase}“",
         navigating: "جارٍ فتح {page}",
         notRecognized: "لم يتم التعرف على ذلك. جرّب: {hints}",

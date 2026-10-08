@@ -24,6 +24,9 @@ export const JOB_NAMES = {
     ACCOUNTING_RECURRING_VOUCHERS: 'accounting.post-due-recurring-vouchers',
     FEEDBACK_PLAN_BATCH: 'feedback-automation.batch-propose-plans',
     IMPORTS_LC_EXPIRY: 'imports.lc-expiry-alerts',
+    HELD_ALERTS: 'notifications.send-held-alerts',
+    ALERT_SCAN: 'alerts.scan-recent-activity',
+    ANOMALY_DIGEST: 'alerts.daily-anomaly-digest',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -87,6 +90,9 @@ export interface JobDefinition {
  * | Feedback automation batch             | hourly                   | hourly             | unchanged              |
  * | Blog / tenant blog: publish scheduled | hourly (untracked)       | hourly             | unchanged              |
  * | CRM: process scheduled campaigns      | every 5 min              | every 5 min        | unchanged              |
+ * | Alerts: scan recent activity          | — (new 2026-10-08)       | every 5 min        | mobile alerts          |
+ * | Notifications: send held alerts       | — (new 2026-10-08)       | every 15 min       | after quiet hours      |
+ * | Alerts: daily anomaly digest          | — (new 2026-10-08)       | 20:30              | after the shop day     |
  * | System health: evaluate alerts        | every 5 min              | every 5 min        | unchanged              |
  *
  * The billing chain keeps its order and hour spacing (retry → dunning → fees),
@@ -122,4 +128,7 @@ export const JOB_REGISTRY: JobDefinition[] = [
     { name: JOB_NAMES.ACCOUNTING_RECURRING_VOUCHERS, label: 'Accounting: post due recurring vouchers', schedule: '0 12 * * *', maxIntervalMs: DAY + 2 * HOUR },
     { name: JOB_NAMES.FEEDBACK_PLAN_BATCH, label: 'Feedback automation: batch propose plans', schedule: '0 * * * *', maxIntervalMs: 2 * HOUR },
     { name: JOB_NAMES.IMPORTS_LC_EXPIRY, label: 'Imports: LC expiry and acceptance maturity alerts', schedule: '0 13 * * *', maxIntervalMs: DAY + 2 * HOUR },
+    { name: JOB_NAMES.HELD_ALERTS, label: 'Notifications: send alerts held for quiet hours', schedule: '*/15 * * * *', maxIntervalMs: 45 * 60 * 1000 },
+    { name: JOB_NAMES.ALERT_SCAN, label: 'Alerts: scan recent sales, refunds, tills and enquiries', schedule: '*/5 * * * *', maxIntervalMs: 15 * 60 * 1000 },
+    { name: JOB_NAMES.ANOMALY_DIGEST, label: 'Alerts: daily anomaly digest', schedule: '30 20 * * *', maxIntervalMs: DAY + 2 * HOUR },
 ];

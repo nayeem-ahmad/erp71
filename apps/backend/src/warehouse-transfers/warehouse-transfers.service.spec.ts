@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { WarehouseTransfersService } from './warehouse-transfers.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -15,6 +16,7 @@ jest.mock('../accounting/posting.utils', () => ({
 }));
 
 describe('WarehouseTransfersService', () => {
+    const approvals = { requested: jest.fn().mockResolvedValue(undefined) };
     let service: WarehouseTransfersService;
     let db: any;
     let tx: any;
@@ -33,6 +35,8 @@ describe('WarehouseTransfersService', () => {
                 create: jest.fn(),
                 findFirst: jest.fn(),
                 update: jest.fn(),
+                // The decision is written only while the transfer is pending.
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
             warehouseTransferItem: {
                 update: jest.fn(),
@@ -51,7 +55,8 @@ describe('WarehouseTransfersService', () => {
         };
 
         const module: TestingModule = await Test.createTestingModule({
-            providers: [WarehouseTransfersService, { provide: DatabaseService, useValue: db }],
+            providers: [WarehouseTransfersService, { provide: DatabaseService, useValue: db },
+                { provide: ApprovalNotifier, useValue: approvals }],
         }).compile();
 
         service = module.get(WarehouseTransfersService);
@@ -379,6 +384,27 @@ describe('WarehouseTransfersService', () => {
             });
         });
 
+        it("tells the source branch's approvers once the parked transfer is saved", async () => {
+            acrossBranches();
+            tx.warehouseTransfer.create.mockResolvedValue({ id: 'transfer-1' });
+            // What create re-reads and returns once the row is written.
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1', status: 'PENDING_APPROVAL', transfer_number: 'TRF-00001',
+                source_store_id: 'store-1', items: [{ id: 'item-1' }],
+            });
+
+            await service.create('tenant-1', {
+                sourceWarehouseId: 'wh-source',
+                destinationWarehouseId: 'wh-dest',
+                status: 'SENT',
+                items: [{ productId: 'prod-1', quantity: 3 }],
+            });
+
+            expect(approvals.requested).toHaveBeenCalledWith(
+                expect.objectContaining({ tenantId: 'tenant-1', kind: 'WAREHOUSE_TRANSFER', id: 'transfer-1', storeId: 'store-1' }),
+            );
+        });
+
         it('moves no stock while a cross-branch transfer awaits approval', async () => {
             acrossBranches();
 
@@ -472,8 +498,8 @@ describe('WarehouseTransfersService', () => {
 
             await service.approve('tenant-1', 'transfer-1', 'user-1');
 
-            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
-                where: { id: 'transfer-1' },
+            expect(tx.warehouseTransfer.updateMany).toHaveBeenCalledWith({
+                where: { id: 'transfer-1', tenant_id: 'tenant-1', status: 'PENDING_APPROVAL' },
                 data: expect.objectContaining({ approved_by: 'user-1', approval_date: expect.any(Date) }),
             });
             expect(applyInventoryMovement).toHaveBeenCalledWith(
@@ -523,8 +549,8 @@ describe('WarehouseTransfersService', () => {
 
             await service.reject('tenant-1', 'transfer-1', 'user-1', { reason: '  not enough stock here  ' });
 
-            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
-                where: { id: 'transfer-1' },
+            expect(tx.warehouseTransfer.updateMany).toHaveBeenCalledWith({
+                where: { id: 'transfer-1', tenant_id: 'tenant-1', status: 'PENDING_APPROVAL' },
                 data: expect.objectContaining({
                     status: 'REJECTED',
                     rejected_by: 'user-1',
@@ -543,10 +569,23 @@ describe('WarehouseTransfersService', () => {
 
             await service.reject('tenant-1', 'transfer-1', 'user-1', { reason: '   ' });
 
-            expect(tx.warehouseTransfer.update).toHaveBeenCalledWith({
-                where: { id: 'transfer-1' },
-                data: expect.objectContaining({ rejection_reason: null }),
+            expect(tx.warehouseTransfer.updateMany).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ rejection_reason: null }) }),
+            );
+        });
+
+        it('loses a race to another approver without moving the stock twice', async () => {
+            // Both read PENDING_APPROVAL; the other one's write landed first.
+            tx.warehouseTransfer.findFirst.mockResolvedValue({
+                id: 'transfer-1',
+                status: 'PENDING_APPROVAL',
+                items: [{ id: 'item-1', product_id: 'prod-1', quantity_sent: 3, note: null, product: { price: 100 } }],
             });
+            tx.warehouseTransfer.updateMany.mockResolvedValue({ count: 0 });
+
+            await expect(service.approve('tenant-1', 'transfer-1', 'user-2')).rejects.toThrow(ConflictException);
+            await expect(service.reject('tenant-1', 'transfer-1', 'user-2', {})).rejects.toThrow(ConflictException);
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
         });
 
         it.each(['DRAFT', 'SENT', 'RECEIVED', 'REJECTED'])(

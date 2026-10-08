@@ -178,6 +178,13 @@ enum StorePermission {
   /// of them. That is a finance action, not a warehouse one.
   MANAGE_IMPORT_COSTS
 
+  // Inventory costing
+  /// Setting what a product's stock on hand cost — an opening cost for stock
+  /// nobody priced, a correction, or a write-down. It changes the COGS of every
+  /// later sale of the product, so it is a finance action and is held apart
+  /// from EDIT_PRODUCT_PRICES, which sets what the shop charges.
+  ADJUST_PRODUCT_COST
+
   // Short Links
   MANAGE_SHORT_LINKS
 
@@ -425,6 +432,8 @@ model User {
   emailVerificationTokens           EmailVerificationToken[]
   termsAcceptances                  TermsAcceptance[]
   refreshTokens                     RefreshToken[]
+  deviceTokens                      DeviceToken[]
+  alertPreferences                  UserAlertPreference[]
   sentInvitations                   UserInvitation[]            @relation("InvitationSender")
   feedbacks                         Feedback[]
   supportMessages                   SupportMessage[]            @relation("SupportMessageSender")
@@ -455,6 +464,7 @@ model User {
   createdCreditTransactions         CustomerCreditTransaction[] @relation("CreditTransactionCreator")
   createdSupplierCreditTransactions SupplierCreditTransaction[] @relation("SupplierCreditTransactionCreator")
   createdImportShipments            ImportShipment[]            @relation("ImportShipmentCreator")
+  createdProductCostAdjustments     ProductCostAdjustment[]     @relation("ProductCostAdjustmentCreator")
   uploadedImportDocuments           ImportDocument[]            @relation("ImportDocumentUploader")
   createdCampaigns                  CrmCampaign[]               @relation("CampaignCreator")
   managedProjects                   Project[]                   @relation("ProjectManager")
@@ -513,6 +523,32 @@ model PasswordResetToken {
 ///
 /// Only the sha256 of the opaque token is stored: a database leak must not hand
 /// the reader a working session, the same rule PasswordResetToken follows.
+/// A phone's push address (an FCM registration token), tied to the sign-in it
+/// was registered under. A push goes only to devices whose session family
+/// still holds a live refresh token, so every way a session ends — signing
+/// out on the phone, "sign out everywhere", a password change, a replayed
+/// token — stops its pushes without each of those paths having to know about
+/// devices. Rows of dead sessions are pruned when a send finds them.
+model DeviceToken {
+  id                String   @id @default(uuid())
+  user_id           String
+  /// FCM registration token. Unique: a reinstall or a second account on the
+  /// same phone takes the row over rather than duplicating it.
+  token             String   @unique
+  /// `RefreshToken.family_id` of the session that registered it (the token's
+  /// own id for a pre-family token, as `RefreshTokenService` treats it).
+  session_family_id String
+  platform          String // android | ios
+  app_version       String?
+  created_at        DateTime @default(now())
+  last_seen_at      DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([session_family_id])
+}
+
 model RefreshToken {
   id          String    @id @default(uuid())
   user_id     String
@@ -862,6 +898,7 @@ model Tenant {
   productSubgroups           ProductSubgroup[]
   productStocks              ProductStock[]
   productCosts               ProductCost[]
+  productCostAdjustments     ProductCostAdjustment[]
   inventoryMovements         InventoryMovement[]
   inventoryReasons           InventoryReason[]
   inventorySettings          InventorySettings?
@@ -887,6 +924,7 @@ model Tenant {
   accounts                   Account[]
   voucherSequences           VoucherSequence[]
   documentSequences          DocumentSequence[]
+  documentNumberings         DocumentNumbering[]
   importShipments            ImportShipment[]
   importCosts                ImportCost[]
   importDocuments            ImportDocument[]
@@ -914,6 +952,8 @@ model Tenant {
   loyaltyTransactions        LoyaltyTransaction[]
   discountCodes              DiscountCode[]
   notifications              Notification[]
+  alertSettings              AlertSettings?
+  alertPreferences           UserAlertPreference[]
   posCounters                PosCounter[]
   departments                Department[]
   designations               Designation[]
@@ -1289,7 +1329,10 @@ model SalesSettings {
   id                      String  @id @default(uuid())
   tenant_id               String  @unique
   paper_size              String  @default("A4") // A4, A5, Letter, Thermal80, Thermal58
-  reference_number_format String  @default("YYMM-#") // Format template
+  /// Retired: sales no longer generate a reference number — the invoice number
+  /// is `Sale.serial_number`, formatted under Document Numbering. Kept so the
+  /// column can be dropped in its own migration once nothing reads it.
+  reference_number_format String  @default("YYMM-#")
   pos_enabled             Boolean @default(true)
   /// When on, POS refuses to check out unless the seller has an open cashier
   /// session. Off by default so no existing tenant is stopped mid-sale by an
@@ -1439,6 +1482,12 @@ model Store {
   id         String   @id @default(uuid())
   tenant_id  String
   name       String
+  /// Short branch code (`DHK`, `S1`) printed inside document numbers when a
+  /// tenant's format uses `{STORE}`. Unique per tenant so two branches can never
+  /// print the same number. Assigned `S<n>` on creation and editable under
+  /// Document Numbering; nullable only so a row created by a path that predates
+  /// it still loads — the numbering engine assigns one on first use.
+  code       String?
   address    String?
   /// Decimal degrees. Set only when a tenant turns on geofenced attendance —
   /// a store with no coordinates cannot be the anchor for a check-in, which is
@@ -1487,6 +1536,7 @@ model Store {
   printTemplateAssignments PrintTemplateStoreAssignment[]
 
   @@unique([tenant_id, name])
+  @@unique([tenant_id, code])
 }
 
 model PosCounter {
@@ -1667,6 +1717,7 @@ model Product {
   subgroup               ProductSubgroup?         @relation(fields: [subgroup_id], references: [id])
   stocks                 ProductStock[]
   cost                   ProductCost?
+  costAdjustments        ProductCostAdjustment[]
   inventoryMovements     InventoryMovement[]
   transferItems          WarehouseTransferItem[]
   shrinkageItems         InventoryShrinkageItem[]
@@ -1751,6 +1802,57 @@ model ProductCost {
   @@unique([tenant_id, product_id])
   @@index([tenant_id])
   @@map("product_costs")
+}
+
+/// Someone stating what a product's stock on hand cost per unit, outside of a
+/// stock movement — the only way to set the weighted-average pool other than
+/// receiving goods against a document.
+///
+/// Three reasons, and the rules differ:
+///   OPENING_COST — the product has no cost basis at all (stock brought in by
+///                  an import, a count, or before this system), so the figure
+///                  supplies a missing fact rather than changing one.
+///   CORRECTION   — the basis on file is wrong, either way.
+///   WRITE_DOWN   — the stock is now worth less than it cost (damaged,
+///                  obsolete, expired, market price fell). Lower of cost and
+///                  net realisable value, IAS 2 §9; only ever downwards.
+///
+/// Under the periodic inventory model this system books (see
+/// posting-contract.ts), none of the three posts a voucher: purchases were
+/// expensed when they were billed, inventory is not carried in the ledger, and
+/// ProductCost is a valuation basis rather than a balance. What an adjustment
+/// changes is the COGS of goods leaving *after* it, and what stock on hand is
+/// valued at. Past sales keep the cost they were snapshotted at. A row keeps
+/// the before, the after and the quantity it applied to, which is everything a
+/// perpetual-inventory voucher (Dr/Cr Inventory against revaluation) would
+/// need if the books ever move to that model.
+///
+/// Replayed by `backfill-product-costs.ts` alongside the movement ledger, so a
+/// pool rebuilt from history keeps every adjustment made since.
+model ProductCostAdjustment {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  product_id    String
+  /// OPENING_COST | CORRECTION | WRITE_DOWN
+  reason        String
+  /// The pool's average before. Null when there was none — every OPENING_COST.
+  previous_cost Decimal? @db.Decimal(12, 4)
+  new_cost      Decimal  @db.Decimal(12, 4)
+  /// Units on hand across every warehouse when the cost was set: the quantity
+  /// the new cost applies to, and the basis the pool blends the next receipt
+  /// against. Can be zero (a cost set ahead of the first receipt) or negative.
+  qty_on_hand   Int
+  note          String?
+  created_by    String?
+  created_at    DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  creator User?   @relation("ProductCostAdjustmentCreator", fields: [created_by], references: [id])
+
+  @@index([tenant_id, created_at])
+  @@index([tenant_id, product_id, created_at])
+  @@map("product_cost_adjustments")
 }
 
 model ProductSerial {
@@ -2690,8 +2792,14 @@ model Sale {
   /// till reconcilable — `counter_id` alone cannot separate the morning
   /// cashier from the evening one on the same counter.
   session_id       String?
+  /// The invoice number, issued from the tenant's Document Numbering format
+  /// when the sale is completed (`INV-2627-00042`). A parked draft holds a
+  /// `DRAFT-…` placeholder instead so it consumes no number; rows from before
+  /// the format existed keep their `SL-<epoch>` value.
   serial_number    String
-  reference_number String? // User-editable reference, unique per tenant
+  /// Optional number the user types (a PO or manual book number). Printed in
+  /// place of the serial when present. Unique per tenant; no longer generated.
+  reference_number String?
   total_amount     Decimal  @db.Decimal(12, 2)
   amount_paid      Decimal  @default(0) @db.Decimal(12, 2)
   status           String
@@ -3783,8 +3891,8 @@ model AccountingSettings {
   @@map("accounting_settings")
 }
 
-/// A named, tenant-scoped, optionally year-resetting counter for human-readable
-/// document numbers (`PI-2526-00001`, `IMP-2526-00007`).
+/// A named, tenant-scoped, optionally resetting counter for human-readable
+/// document numbers (`PI-2526-00001`, `INV-2627-00042`, `DHK-2627-00007`).
 ///
 /// Deliberately NOT `VoucherSequence`, which it resembles: that table is keyed
 /// by `voucher_type` and read by the posting engine, and widening it to hold
@@ -3797,13 +3905,21 @@ model AccountingSettings {
 model DocumentSequence {
   id          String   @id @default(uuid())
   tenant_id   String
-  /// Logical series: QUOTE | PROFORMA | IMPORT_SHIPMENT.
+  /// Logical series: QUOTE | PROFORMA | IMPORT_SHIPMENT | SALE.
   doc_type    String
-  /// Bangladeshi fiscal year the series resets on — "2526" means July 2025 to
-  /// June 2026. Empty string for a series that never resets, so the unique
+  /// The reset period this counter belongs to — see `numberingPeriodKey` in
+  /// shared-types. "2526" is the fiscal year July 2025 to June 2026 (the form
+  /// the quotation series has always used); "Y2026" a calendar year; "M2026-10"
+  /// a month. Empty string for a series that never resets, so the unique
   /// constraint below stays usable either way (a nullable column would let two
   /// never-resetting rows coexist, since NULL != NULL in Postgres).
   period_key  String   @default("")
+  /// Whose counter this is when a tenant numbers per branch or per POS counter:
+  /// "store:<id>", "counter:<id>" or "store:<id>:none" (a sale on no counter).
+  /// Empty for a business-wide series, which is every series but a configured one.
+  scope_key   String   @default("")
+  /// The template the row was created under, for whoever reads the table. The
+  /// printed number is rendered from the tenant's current format, not from this.
   prefix      String
   next_number Int      @default(1)
   created_at  DateTime @default(now())
@@ -3811,9 +3927,35 @@ model DocumentSequence {
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
-  @@unique([tenant_id, doc_type, period_key])
+  @@unique([tenant_id, doc_type, period_key, scope_key])
   @@index([tenant_id])
   @@map("document_sequences")
+}
+
+/// A tenant's own format for one kind of document number, edited under
+/// Settings → Document Numbering. No row means the built-in default
+/// (`DEFAULT_DOCUMENT_NUMBERING` in shared-types). The rules that keep a format
+/// collision-free live in `validateNumberingConfig`, shared with the page.
+model DocumentNumbering {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  /// SALE so far — see `NUMBERING_DOC_TYPES`.
+  doc_type     String
+  /// Literal text and tokens: `INV-{FY}-{SEQ}`.
+  template     String
+  /// NEVER | FISCAL_YEAR | CALENDAR_YEAR | MONTHLY
+  reset_policy String   @default("FISCAL_YEAR")
+  /// TENANT | STORE | COUNTER
+  scope        String   @default("TENANT")
+  /// Minimum digits `{SEQ}` is zero-padded to.
+  seq_width    Int      @default(5)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, doc_type])
+  @@map("document_numbering")
 }
 
 model VoucherSequence {
@@ -4964,12 +5106,65 @@ model Notification {
   link       String?
   read_at    DateTime?
   created_at DateTime  @default(now())
+  /// Collapses repeats: a second notification with the same type and key for
+  /// the same person within ten minutes is not written (see AlertPolicy).
+  dedupe_key String?
+  /// When it went to the person's phones. Null: not pushed (muted, over the
+  /// day's cap, held for quiet hours, or push not set up).
+  pushed_at  DateTime?
+  /// Held during the person's quiet hours, to go out in one summary after.
+  push_held  Boolean   @default(false)
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, user_id, created_at])
   @@index([user_id, read_at])
+  @@index([user_id, type, dedupe_key, created_at])
+  @@index([push_held])
+}
+
+/// The shop-wide lines the alert scanner draws (AlertScannerService). One row
+/// per workspace, written the first time someone changes a value; absent
+/// means every default below.
+model AlertSettings {
+  tenant_id             String   @id
+  /// A completed sale at or above this many taka tells the managers.
+  large_sale_amount     Decimal  @default(50000) @db.Decimal(12, 2)
+  /// A refund at or above this.
+  large_refund_amount   Decimal  @default(10000) @db.Decimal(12, 2)
+  /// A till closing this many taka or more short.
+  till_shortfall_amount Decimal  @default(500) @db.Decimal(12, 2)
+  updated_at            DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
+
+/// One person's say over what reaches their phone in one workspace. Absent
+/// means everything is pushed, with quiet hours 22:00–08:00 workspace time.
+/// The bell lists every notification regardless.
+model UserAlertPreference {
+  id            String   @id @default(uuid())
+  user_id       String
+  tenant_id     String
+  /// Notification types not pushed (still in the bell).
+  muted_types   String[] @default([])
+  quiet_enabled Boolean  @default(true)
+  /// Minutes after midnight, workspace time. A window may wrap midnight.
+  quiet_from    Int      @default(1320)
+  quiet_to      Int      @default(480)
+  updated_at    DateTime @updatedAt
+
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, tenant_id])
+}
+
+/// How far the alert scanner has read, so each row is looked at once.
+model AlertScanCursor {
+  name       String   @id
+  scanned_to DateTime
 }
 
 model Department {

@@ -7,6 +7,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/format/format.dart';
 import '../../../ui/theme.dart';
 import '../../../ui/widgets.dart';
+import '../../ask/ask_screen.dart' show AskButton;
 import '../../home/home_shell.dart';
 import '../access.dart';
 import '../activities/activity_sheets.dart';
@@ -52,6 +53,7 @@ class CrmHomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.person_add_alt_1_outlined),
             onPressed: () => context.push('/leads/new'),
           ),
+          const AskButton(),
           const AccountButton(),
         ],
       ),

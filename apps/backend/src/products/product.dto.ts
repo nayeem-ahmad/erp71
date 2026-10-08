@@ -26,10 +26,11 @@ export class CreateProductDto {
     price: number;
 
     /**
-     * What a unit costs to buy. Seeds the weighted-average pool when the
-     * product is created with opening stock. Optional — a product entered
-     * without one simply has no cost basis until its first purchase receipt,
-     * which is more honest than assuming the selling price.
+     * What a unit costs to buy. Seeds the weighted-average pool: through the
+     * opening-stock movement when there is opening stock, otherwise as an
+     * opening cost held until the first receipt replaces it. Optional — a
+     * product entered without one simply has no cost basis until its first
+     * purchase receipt, which is more honest than assuming the selling price.
      */
     @IsOptional()
     @IsNumber()

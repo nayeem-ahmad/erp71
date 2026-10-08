@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../core/access.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../ui/widgets.dart';
+import '../alerts/alerts_data.dart' show unreadAlertsProvider;
+import '../approvals/approvals_data.dart' show approvalsInboxProvider;
 
 /// The shell's branches, in the order the router declares them. Fixed, so a
 /// link like `/leads?status=open` resolves the same way whichever tabs this
-/// member is shown.
+/// member is shown. New areas are appended, never inserted.
 abstract final class ShellBranch {
   static const home = 0;
   static const cashiers = 1;
@@ -16,6 +18,9 @@ abstract final class ShellBranch {
   static const leads = 3;
   static const activities = 4;
   static const contacts = 5;
+  static const alerts = 6;
+  static const more = 7;
+  static const approvals = 8;
 }
 
 /// One entry of the bottom bar, and the branches it stands for.
@@ -35,9 +40,16 @@ class ShellTab {
   final List<int> branches;
 }
 
-/// The bar for [access]. Someone who runs the shop gets Home and Cashiers,
-/// with the whole CRM behind one tab; a CRM-only member keeps the CRM's own
-/// four tabs, exactly as before the business screens existed.
+const _alertsTab = ShellTab(
+  label: 'Alerts',
+  icon: Icons.notifications_none,
+  selectedIcon: Icons.notifications,
+  branches: [ShellBranch.alerts],
+);
+
+/// The bar for [access]. Someone who runs the shop gets *Home · Approvals ·
+/// Alerts · More*, with Cashiers and the CRM behind More; a CRM-only member
+/// keeps the CRM's own four tabs, with Alerts beside them.
 List<ShellTab> shellTabsFor(MobileAccess access) {
   if (!access.business) {
     return const [
@@ -65,6 +77,7 @@ List<ShellTab> shellTabsFor(MobileAccess access) {
         selectedIcon: Icons.contacts,
         branches: [ShellBranch.contacts],
       ),
+      _alertsTab,
     ];
   }
   return [
@@ -75,25 +88,27 @@ List<ShellTab> shellTabsFor(MobileAccess access) {
         selectedIcon: Icons.insights,
         branches: [ShellBranch.home],
       ),
-    if (access.cashiers)
+    if (access.approvals)
       const ShellTab(
-        label: 'Cashiers',
-        icon: Icons.point_of_sale_outlined,
-        selectedIcon: Icons.point_of_sale,
-        branches: [ShellBranch.cashiers],
+        label: 'Approvals',
+        icon: Icons.fact_check_outlined,
+        selectedIcon: Icons.fact_check,
+        branches: [ShellBranch.approvals],
       ),
-    if (access.crm)
-      const ShellTab(
-        label: 'CRM',
-        icon: Icons.people_alt_outlined,
-        selectedIcon: Icons.people_alt,
-        branches: [
-          ShellBranch.crm,
-          ShellBranch.leads,
-          ShellBranch.activities,
-          ShellBranch.contacts,
-        ],
-      ),
+    _alertsTab,
+    const ShellTab(
+      label: 'More',
+      icon: Icons.menu,
+      selectedIcon: Icons.menu_open,
+      branches: [
+        ShellBranch.more,
+        ShellBranch.cashiers,
+        ShellBranch.crm,
+        ShellBranch.leads,
+        ShellBranch.activities,
+        ShellBranch.contacts,
+      ],
+    ),
   ];
 }
 
@@ -113,6 +128,10 @@ class HomeShell extends ConsumerWidget {
     final selected = tabs.indexWhere(
       (tab) => tab.branches.contains(shell.currentIndex),
     );
+    final unread = ref.watch(unreadAlertsProvider).value ?? 0;
+    final waiting = tabs.any((t) => t.branches.first == ShellBranch.approvals)
+        ? ref.watch(approvalsInboxProvider).value?.total ?? 0
+        : 0;
 
     return Scaffold(
       body: shell,
@@ -132,13 +151,29 @@ class HomeShell extends ConsumerWidget {
               destinations: [
                 for (final tab in tabs)
                   NavigationDestination(
-                    icon: Icon(tab.icon),
-                    selectedIcon: Icon(tab.selectedIcon),
+                    icon: _withBadge(tab, Icon(tab.icon), unread, waiting),
+                    selectedIcon: _withBadge(
+                      tab,
+                      Icon(tab.selectedIcon),
+                      unread,
+                      waiting,
+                    ),
                     label: tab.label,
                   ),
               ],
             ),
     );
+  }
+
+  Widget _withBadge(ShellTab tab, Widget icon, int unread, int waiting) {
+    final count = switch (tab.branches.first) {
+      ShellBranch.alerts => unread,
+      ShellBranch.approvals => waiting,
+      _ => 0,
+    };
+    return count > 0
+        ? Badge(label: Text(count > 99 ? '99+' : '$count'), child: icon)
+        : icon;
   }
 }
 

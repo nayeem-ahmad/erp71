@@ -209,6 +209,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'inventory.setup.categories': { id: 'inventory.setup.categories', kind: 'link', icon: 'FolderTree', labelKey: 'sidebar.items.categories', href: '/inventory/categories' },
   'inventory.setup.warehouses': { id: 'inventory.setup.warehouses', kind: 'link', icon: 'Warehouse', labelKey: 'sidebar.items.warehouses', href: '/inventory/warehouses' },
   'inventory.setup.settings': { id: 'inventory.setup.settings', kind: 'link', icon: 'Settings', labelKey: 'sidebar.items.inventorySettings', href: '/inventory/settings' },
+  'inventory.setup.product-costs': { id: 'inventory.setup.product-costs', kind: 'link', icon: 'Calculator', labelKey: 'sidebar.items.productCosts', href: '/inventory/product-costs' },
 
   // The module keeps no `href` of its own: its four screens are child links, and
   // a module that is both a link and an accordion swallows the click that opens
@@ -465,6 +466,9 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   imports: ['VIEW_IMPORTS', 'MANAGE_IMPORTS', 'MANAGE_IMPORT_COSTS'],
 
   inventory: INVENTORY_ANY,
+  // What stock cost is financial information, gated like the gross-profit
+  // reports; changing it is ADJUST_PRODUCT_COST alone.
+  'inventory.setup.product-costs': ['ADJUST_PRODUCT_COST', 'VIEW_FINANCIAL_REPORTS'],
 
   manufacturing: [
     'CREATE_INVENTORY_MOVEMENTS',
@@ -662,6 +666,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('inventory.setup.brands', 'inventory.setup', 2),
   layoutNode('inventory.setup.warehouses', 'inventory.setup', 3),
   layoutNode('inventory.setup.settings', 'inventory.setup', 4),
+  layoutNode('inventory.setup.product-costs', 'inventory.setup', 5),
 
   layoutNode('crm', null, 8),
   layoutNode('crm.overview', 'crm', 0),

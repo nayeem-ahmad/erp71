@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Warehouse } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
@@ -305,7 +307,10 @@ export default function StockOnHandPage() {
                     {formatMessage(strings.uncostedWarning, {
                         count: summary.uncostedProductCount,
                         quantity: summary.uncostedQuantity,
-                    })}
+                    })}{' '}
+                    <Link href={routes.inventory.productCosts} className="font-semibold text-blue-600 hover:underline">
+                        {strings.setCostsLink}
+                    </Link>
                 </div>
             )}
 

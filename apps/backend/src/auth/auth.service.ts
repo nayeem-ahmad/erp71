@@ -48,6 +48,7 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { ReferralsService } from '../referrals/referrals.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { AuthCacheService } from '../database/auth-cache.service';
+import { FIRST_STORE_CODE } from '../stores/store-code.util';
 
 
 /** The columns `login()` needs off a user row to finish authenticating them. */
@@ -1367,6 +1368,7 @@ export class AuthService {
                 tenant_id: tenant.id,
                 name: dto.storeName,
                 address: dto.address,
+                code: FIRST_STORE_CODE,
             },
         });
 

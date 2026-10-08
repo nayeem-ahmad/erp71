@@ -192,20 +192,29 @@ export class InventoryReportsService {
      * total. This one answers "what is sitting where, and what did it cost us".
      *
      * Cost basis, in priority order per product:
-     *   1. WEIGHTED_AVERAGE — SUM(unit_cost x qty) / SUM(qty) over the product's
-     *      purchase movements. Purchase returns carry a negative delta and their
-     *      own unit_cost, so they fall out of both sums naturally; no special case.
-     *   2. LATEST_COST — the newest ProductPrice.cost, the same field sales uses
-     *      for unit_cost_at_sale. Covers products bought before the ledger
-     *      existed, or stocked by transfer/manufacturing only.
+     *   1. WEIGHTED_AVERAGE — the product's ProductCost pool: the running average
+     *      every sale is costed at, kept by every stock movement and by any cost
+     *      set by hand (an opening cost, a correction, a write-down). Tenant-wide
+     *      by design, so a branch's shelves are valued at the same unit cost as
+     *      everyone else's — the report agrees with the margin reports.
+     *      Failing a pool, SUM(unit_cost x qty) / SUM(qty) over the product's
+     *      purchase movements (narrowed to the branch or warehouse asked for),
+     *      which is how this report costed stock before the pool existed and
+     *      still answers for a product whose receipts predate it. Purchase
+     *      returns carry a negative delta and their own unit_cost, so they fall
+     *      out of both sums naturally; no special case.
+     *   2. LATEST_COST — the newest ProductPrice.cost. Covers products with
+     *      neither, if someone priced them in the list.
      *   3. UNCOSTED — no basis at all. Valued at zero and counted separately, so
      *      a low total reads as "some stock has no cost on file" rather than
-     *      silently understating the whole report.
+     *      silently understating the whole report. Inventory → Product Costs is
+     *      where they get one.
      *
-     * INITIAL_STOCK movements are deliberately excluded from step 1 even though
-     * they carry a unit_cost: products.service.ts stamps the *selling* price
-     * there on the create path, so folding them in would drag every average
-     * toward retail and quietly overstate inventory value.
+     * INITIAL_STOCK movements are deliberately excluded from the movement
+     * fallback even though they carry a unit_cost: until the pool landed,
+     * products.service.ts stamped the *selling* price there, so folding the
+     * history in would drag averages toward retail. Opening stock entered since
+     * carries a real cost, and reaches this report through the pool instead.
      */
     async getStockOnHand(tenantId: string, query: GetStockOnHandDto) {
         const warehouses = await this.db.warehouse.findMany({
@@ -289,7 +298,8 @@ export class InventoryReportsService {
             orderBy: { name: 'asc' },
         });
 
-        const [averageCostByProduct, latestCostByProduct] = await Promise.all([
+        const [poolCostByProduct, movementCostByProduct, latestCostByProduct] = await Promise.all([
+            this.getPoolCosts(tenantId),
             this.getWeightedAveragePurchaseCosts(tenantId, query),
             this.getLatestRecordedCosts(tenantId),
         ]);
@@ -303,7 +313,7 @@ export class InventoryReportsService {
                 }
 
                 const totalQuantity = warehouseIds.reduce((sum, id) => sum + quantityByWarehouse[id], 0);
-                const averageCost = averageCostByProduct.get(product.id);
+                const averageCost = poolCostByProduct.get(product.id) ?? movementCostByProduct.get(product.id);
                 const latestCost = latestCostByProduct.get(product.id);
                 const unitCost = averageCost ?? latestCost ?? null;
                 const costBasis = averageCost != null ? 'WEIGHTED_AVERAGE' : latestCost != null ? 'LATEST_COST' : 'UNCOSTED';
@@ -404,6 +414,15 @@ export class InventoryReportsService {
             costs.set(row.product_id, cost / quantity);
         }
         return costs;
+    }
+
+    /** The weighted-average pool per product — what a sale of it today would be costed at. */
+    private async getPoolCosts(tenantId: string) {
+        const pools = await this.db.productCost.findMany({
+            where: { tenant_id: tenantId },
+            select: { product_id: true, avg_cost: true },
+        });
+        return new Map<string, number>(pools.map((pool) => [pool.product_id, Number(pool.avg_cost)]));
     }
 
     /** Newest ProductPrice.cost per product — the fallback when nothing was ever purchased through the ledger. */

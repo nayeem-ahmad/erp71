@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ApprovalNotifyModule } from '../approvals/approval-notify.module';
 import { DatabaseModule } from '../database/database.module';
 import { WorkSchedulesModule } from '../work-schedules/work-schedules.module';
 import { AttendanceController } from './attendance.controller';
@@ -8,7 +9,7 @@ import { AttendancePunchService } from './attendance-punch.service';
 import { OvertimeService } from './overtime.service';
 
 @Module({
-    imports: [DatabaseModule, WorkSchedulesModule],
+    imports: [DatabaseModule, WorkSchedulesModule, ApprovalNotifyModule],
     controllers: [AttendanceController],
     providers: [AttendanceService, AttendanceCaptureService, AttendancePunchService, OvertimeService],
     // Exported so the employee portal can apply for and cancel leave through

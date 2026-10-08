@@ -78,8 +78,8 @@ export const chatMessages = {
         back: "Kembali ke perbualan",
         starting: "Memulakan…",
     },
-    bell: {
-        label: "Sembang pasukan",
+    badge: {
+        unread: "{count, plural, one {# mesej belum dibaca} other {# mesej belum dibaca}}",
     },
     errors: {
         listFailed: "Tidak dapat memuatkan perbualan anda",

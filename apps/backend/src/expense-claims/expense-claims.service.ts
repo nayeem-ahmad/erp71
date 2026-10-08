@@ -1,5 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
+import { formatTaka } from '../common/format-taka';
 import { AssetsService } from '../assets/assets.service';
 
 /**
@@ -20,6 +22,7 @@ export class ExpenseClaimsService {
     constructor(
         private readonly db: DatabaseService,
         private readonly assets: AssetsService,
+        private readonly approvals: ApprovalNotifier,
     ) {}
 
     /**
@@ -183,11 +186,24 @@ export class ExpenseClaimsService {
             throw new BadRequestException('A claim needs at least one line before it can be submitted.');
         }
 
-        return this.db.expenseClaim.update({
+        const submitted = await this.db.expenseClaim.update({
             where: { id },
             data: { status: 'SUBMITTED' },
             include: this.claimInclude(),
         });
+        void this.approvals.requested({
+            tenantId,
+            kind: 'EXPENSE_CLAIM',
+            id,
+            summary: [claim.employee?.name, formatTaka(Number(submitted.total_amount)), submitted.title]
+                .filter(Boolean)
+                .join(' · '),
+            // Not told about their own claim, should the claimant also approve.
+            requestedBy: (
+                await this.db.employee.findFirst({ where: { id: claim.employee_id }, select: { user_id: true } })
+            )?.user_id ?? null,
+        });
+        return submitted;
     }
 
     /** Withdraw your own claim. Allowed while it is still pending a decision. */
@@ -217,16 +233,21 @@ export class ExpenseClaimsService {
             throw new BadRequestException('Only a submitted claim can be reviewed.');
         }
 
-        return this.db.expenseClaim.update({
-            where: { id },
+        // Only while it is still submitted: two reviewers who both read
+        // SUBMITTED above must not both decide, the second overwriting the first.
+        const claimed = await this.db.expenseClaim.updateMany({
+            where: { id, tenant_id: tenantId, status: 'SUBMITTED' },
             data: {
                 status: dto.status,
                 approved_by: reviewerUserId,
                 approved_at: new Date(),
                 approver_note: dto.approver_note ?? null,
             },
-            include: this.claimInclude(),
         });
+        if (claimed.count === 0) {
+            throw new ConflictException('Someone else has just reviewed this claim.');
+        }
+        return this.get(tenantId, id);
     }
 
     /**

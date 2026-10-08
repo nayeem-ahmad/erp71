@@ -41,14 +41,20 @@ import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
 /*  Navigation structure                                               */
 /* ------------------------------------------------------------------ */
 
-/** Count pill on a nav link. Renders nothing at zero so links stay quiet. */
-function NavCountBadge({ count, title }: { count: number; title: string }) {
+/**
+ * Count pill on a nav link. Renders nothing at zero so links stay quiet.
+ * Amber is work waiting on you (the approval queue); blue is something new to
+ * read (team chat), and stays legible on the active link's blue fill.
+ */
+function NavCountBadge({ count, title, tone = 'amber' }: { count: number; title: string; tone?: 'amber' | 'blue' }) {
     if (count <= 0) return null;
 
     return (
         <span
             title={title}
-            className="ms-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+            className={`ms-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                tone === 'blue' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-800'
+            }`}
         >
             {count > 99 ? '99+' : count}
         </span>
@@ -169,6 +175,7 @@ export default function Sidebar({
     supportEnabled = false,
     activePlanCode,
     accountingOnlyMode = false,
+    chatUnreadCount = 0,
     posEnabled = true,
     compactNav = false,
     isOpen = false,
@@ -200,6 +207,11 @@ export default function Sidebar({
     activePlanCode?: string | null;
     /** When true, show only accounting-focused modules. */
     accountingOnlyMode?: boolean;
+    /**
+     * Unread team-chat messages, badged on the Chat link. The shell owns the
+     * poll because the mobile menu button shows the same count.
+     */
+    chatUnreadCount?: number;
     /** When false, hide POS from sales navigation. */
     posEnabled?: boolean;
     /** Tighter nav when inside the accounting module trial */
@@ -222,7 +234,7 @@ export default function Sidebar({
     const pathname = usePathname();
     const isMdUp = useIsMdUp();
     const { logoUrl, businessName, primaryColor } = useBranding();
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const { tenantLayout, platformAdminLayout } = useNavLayouts();
     const defaultWidth = compactNav ? SIDEBAR_DEFAULT_WIDTH.compact : SIDEBAR_DEFAULT_WIDTH.normal;
     const [collapsed, setCollapsed] = useState(false);
@@ -674,7 +686,7 @@ export default function Sidebar({
         href === routes.accounting.vouchers ? pendingVoucherCount : 0;
 
     const linkCls = (active: boolean) =>
-        `flex items-center rounded-xl transition-all duration-150 group ${
+        `relative flex items-center rounded-xl transition-all duration-150 group ${
             collapsed
                 ? `justify-center ${compactNav ? 'w-9 h-9' : 'w-10 h-10'} mx-auto`
                 : `space-x-2.5 rtl:space-x-reverse px-2.5 ${navPad}`
@@ -853,15 +865,28 @@ export default function Sidebar({
                         /* --- Direct link (Dashboard, Inventory, Settings) --- */
                         if (mod.href) {
                             const active = isActive(mod.href);
+                            // Team chat's unread count lives here rather than as a
+                            // header icon of its own (UI spec §2.12).
+                            const unread = mod.key === 'chat' ? chatUnreadCount : 0;
+                            const unreadLabel = unread > 0 ? fmt(t.chat.badge.unread, { count: unread }) : '';
                             return (
                                 <Link
                                     key={mod.key}
                                     href={mod.href}
-                                    title={collapsed ? mod.label : undefined}
+                                    title={collapsed ? [mod.label, unreadLabel].filter(Boolean).join(' · ') : undefined}
                                     className={linkCls(active)}
                                 >
                                     <Icon className={`flex-shrink-0 w-5 h-5 ${active ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
                                     {!collapsed && <span className={navLabelCls}>{mod.label}</span>}
+                                    {!collapsed && <NavCountBadge count={unread} title={unreadLabel} tone="blue" />}
+                                    {collapsed && unread > 0 ? (
+                                        <span
+                                            aria-hidden
+                                            className={`absolute end-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ${
+                                                active ? 'bg-white ring-blue-600' : 'bg-blue-600 ring-white'
+                                            }`}
+                                        />
+                                    ) : null}
                                 </Link>
                             );
                         }

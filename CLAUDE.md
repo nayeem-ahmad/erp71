@@ -23,7 +23,7 @@ ERP71 platform targeting Bangladeshi small/medium retailers. Monorepo:
 
 - `apps/backend` — NestJS REST API
 - `apps/frontend` — Next.js 15 app
-- `apps/mobile` — Flutter app for Android/iOS: Google sign-in, business pulse, cashier monitor, CRM. Own toolchain and CI workflow (`.github/workflows/mobile.yml`); setup in `apps/mobile/README.md`
+- `apps/mobile` — Flutter app for Android/iOS: Google sign-in, business pulse, approvals, push alerts, cashier monitor, CRM, Ask ERP71. Own toolchain and CI workflow (`.github/workflows/mobile.yml`); setup in `apps/mobile/README.md`
 - `packages/database` — Prisma schema + migrations
 - `packages/shared-types` — shared TypeScript types and permission matrix
 
@@ -83,6 +83,7 @@ Full spec: `docs/ui-design-guidelines.md`. Non-negotiables for all new/changed U
 - Compact density: `text-sm`/`text-xs` body, `p-3 md:p-4` page padding, `space-y-4` sections
 - Notifications go through the global `Toaster` store only — no page-local toasts; validation errors are inline per field, never `alert()`
 - No floating action buttons hiding features — persistent actions live in the header, sidebar, or `PageHeader` actions. `FloatingPanel` (the time tracker) is the one sanctioned floating surface: movable, position remembered, collapsible, and never the only way to reach a feature — see §2.8 of the UI spec
+- App header (top bar): a control earns a place only by showing live state (voice mic, timer, AI, notifications). Preferences and help go in the avatar menu. Anything with a page goes in the sidebar, and its count goes on its sidebar link as a badge. No `⋯` overflow. See §2.12 of the UI spec
 - Mobile: ≥44px touch targets (`min-h-touch`), `hideOnMobile` on secondary columns of wide tables, no horizontal body scroll at 360px
 - Money always via `formatBDT()` — never a literal `$`. Sole exception: a document genuinely denominated in a foreign currency (proforma invoices, import shipments) uses `formatCurrency(value, { currency })` — see `docs/ui-design-guidelines.md`
 
