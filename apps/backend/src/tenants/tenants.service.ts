@@ -1,6 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
-import { checkMushakIssuer, isDashboardPreference, normalizePasswordPolicy, type PasswordPolicy } from '@erp71/shared-types';
+import {
+    BUSINESS_APP_IDS,
+    checkMushakIssuer,
+    isDashboardPreference,
+    normalizePasswordPolicy,
+    sanitizeHiddenApps,
+    type PasswordPolicy,
+} from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
@@ -10,6 +17,7 @@ import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateTaxSettingsDto } from './tax-settings.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
+import { UpdateAppSettingsDto } from './app-settings.dto';
 import {
     PASSWORD_POLICY_SELECT,
     columnsFromPolicy,
@@ -313,6 +321,49 @@ export class TenantsService {
         });
 
         return { dashboard_preference: tenant.dashboard_preference };
+    }
+
+    async getAppSettings(tenantId: string) {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { hidden_apps: true },
+        });
+
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        // An id the registry no longer knows (a retired module) is dropped on
+        // read rather than migrated: it hid nothing, and the next save cleans it.
+        return { hidden_apps: sanitizeHiddenApps(tenant.hidden_apps) };
+    }
+
+    /**
+     * Which apps the whole workspace sees, so it is restricted exactly like the
+     * dashboard setting. Hiding is presentation only — nothing here closes an
+     * endpoint — which is why a manager may do it and no audit row is written.
+     */
+    async updateAppSettings(
+        tenantId: string,
+        dto: UpdateAppSettingsDto,
+        userRole: string | undefined,
+    ) {
+        if (userRole !== 'OWNER' && userRole !== 'MANAGER') {
+            throw new ForbiddenException('Only an owner or manager can change which apps the workspace shows.');
+        }
+
+        const unknown = dto.hidden_apps.filter((id) => !BUSINESS_APP_IDS.includes(id));
+        if (unknown.length > 0) {
+            throw new BadRequestException(`Not an app that can be hidden: ${unknown.join(', ')}`);
+        }
+
+        const tenant = await this.db.tenant.update({
+            where: { id: tenantId },
+            data: { hidden_apps: sanitizeHiddenApps(dto.hidden_apps) },
+            select: { hidden_apps: true },
+        });
+
+        return { hidden_apps: tenant.hidden_apps };
     }
 
     /**
