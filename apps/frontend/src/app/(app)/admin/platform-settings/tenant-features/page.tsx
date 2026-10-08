@@ -21,6 +21,7 @@ type FeatureSettings = {
     projects_enabled: string;
     platform_projects_enabled: string;
     platform_accounting_enabled: string;
+    app_shell_enabled: string;
 };
 
 const DEFAULTS: FeatureSettings = {
@@ -34,13 +35,14 @@ const DEFAULTS: FeatureSettings = {
     projects_enabled: 'false',
     platform_projects_enabled: 'true',
     platform_accounting_enabled: 'true',
+    app_shell_enabled: 'false',
 };
 
 type FeatureToggleKey = keyof FeatureSettings;
 
 const FEATURE_TOGGLES: Array<{
     key: FeatureToggleKey;
-    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport' | 'projects' | 'platformProjects' | 'platformAccounting';
+    labelKey: 'feedback' | 'support' | 'help' | 'voice' | 'manufacturing' | 'aiChat' | 'externalImport' | 'projects' | 'platformProjects' | 'platformAccounting' | 'appShell';
 }> = [
     { key: 'feedback_enabled', labelKey: 'feedback' },
     { key: 'support_enabled', labelKey: 'support' },
@@ -50,6 +52,9 @@ const FEATURE_TOGGLES: Array<{
     { key: 'ai_chat_enabled', labelKey: 'aiChat' },
     { key: 'external_import_enabled', labelKey: 'externalImport' },
     { key: 'projects_enabled', labelKey: 'projects' },
+    // The rail-of-apps shell. Pilot it on a tenant through that tenant's
+    // override before switching it on here for everyone.
+    { key: 'app_shell_enabled', labelKey: 'appShell' },
     // Not a shop switch: this one governs the platform team's own project
     // workspace in the admin console. It lives here because this page is where
     // every platform feature switch is, not because tenants are affected by it.
