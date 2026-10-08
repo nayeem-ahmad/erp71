@@ -18,6 +18,7 @@ import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
 import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
+import { AppShellProvider } from '@/contexts/AppShellContext';
 import { TenantLocaleProvider } from '@/contexts/TenantLocaleContext';
 import {
     DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
@@ -446,6 +447,8 @@ function AppShell({ children }: DashboardLayoutProps) {
         isPlatformAdmin: inPlatformAdminMode,
     });
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
+    // Who may hide apps: the backend's rule for workspace-wide display settings.
+    const canManageApps = owner || activeTenant?.role === 'MANAGER';
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
     // The permission half of the /short-links guards; the Sidebar applies the
@@ -727,6 +730,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             platformAdminLayout={platformAdminNavLayout}
         >
         <PlatformFeaturesProvider features={effectivePlatformFeatures}>
+        <AppShellProvider value={{ enabled: appShellOn, navGates, canManageBilling, canManageApps }}>
         <TenantLocaleProvider tenant={tenantLocaleConfig}>
         <TenantLocaleSync tenant={tenantLocaleConfig} />
         <div className="flex h-dvh min-h-dvh bg-canvas font-sans text-gray-900">
@@ -939,6 +943,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             <ServiceWorkerRegistrar />
         </div>
         </TenantLocaleProvider>
+        </AppShellProvider>
         </PlatformFeaturesProvider>
         </NavLayoutProvider>
         </BrandingProvider>

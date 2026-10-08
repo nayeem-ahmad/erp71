@@ -4549,6 +4549,17 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // The business apps the owner hid from the rail and Home (app shell).
+    getTenantAppSettings: (): Promise<{ hidden_apps: string[] }> => fetchWithAuth('/tenants/app-settings'),
+    updateTenantAppSettings: (data: { hidden_apps: string[] }): Promise<{ hidden_apps: string[] }> =>
+        fetchWithAuth('/tenants/app-settings', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    // One count per app for the Home tiles; the header branch unless one is given.
+    getHomePulse: (params?: { storeId?: string }): Promise<Record<string, { count: number; href: string }>> =>
+        fetchWithAuth(`/home/pulse${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getTenantLocalizationSettings: () => fetchWithAuth('/tenants/localization-settings'),
     updateTenantLocalizationSettings: (data: { default_locale?: SupportedLocaleCode; timezone?: string }) => fetchWithAuth('/tenants/localization-settings', {
         method: 'PATCH',

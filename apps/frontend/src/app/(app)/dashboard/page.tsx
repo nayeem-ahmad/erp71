@@ -9,8 +9,12 @@ import { tenantDashboardVariant } from '@/lib/plan-entitlements';
 import AccountingDashboard from '@/components/dashboard/AccountingDashboard';
 import CrmDashboard from '@/components/dashboard/CrmDashboard';
 import ProjectsDashboard from '@/components/dashboard/ProjectsDashboard';
+import type { DashboardIdentity } from '@/components/dashboard/dashboard-identity';
 import RetailDashboard from '@/components/dashboard/RetailDashboard';
 import PageShell from '@/components/ui/compact/PageShell';
+import AppTiles from '@/components/app-shell/AppTiles';
+import HomeLanding from '@/components/app-shell/HomeLanding';
+import { useAppShell } from '@/contexts/AppShellContext';
 import { getWorkspaceItem } from '@/lib/session-store';
 
 type Resolved = {
@@ -39,6 +43,7 @@ export default function DashboardPage() {
     const copy = t.dashboardHome;
 
     const { data: me, isError, error } = useMe();
+    const { enabled: appShellEnabled } = useAppShell();
     const tenantId = getWorkspaceItem('tenant_id');
 
     const resolved = useMemo<Resolved | null>(() => {
@@ -69,29 +74,37 @@ export default function DashboardPage() {
         return resolved?.userName ? `${base}, ${resolved.userName} 👋` : `${base} 👋`;
     }, [copy, resolved?.userName]);
 
-    if (!resolved) {
-        return (
-            <PageShell maxWidth="full">
-                <div className="space-y-4">
-                    <div className="h-12 animate-pulse rounded-xl bg-gray-100" />
-                    <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                        {Array.from({ length: 4 }).map((_, index) => (
-                            <div key={index} className="h-24 animate-pulse rounded-xl bg-gray-100" />
-                        ))}
-                    </div>
+    const skeleton = (
+        <PageShell maxWidth="full">
+            <div className="space-y-4">
+                <div className="h-12 animate-pulse rounded-xl bg-gray-100" />
+                <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <div key={index} className="h-24 animate-pulse rounded-xl bg-gray-100" />
+                    ))}
                 </div>
-            </PageShell>
-        );
-    }
+            </div>
+        </PageShell>
+    );
+
+    if (!resolved) return skeleton;
 
     const identity = {
         greeting,
         tenantName: resolved.tenantName || copy.yourBusiness,
         renewalEnd: resolved.renewalEnd,
+        // With the app shell on, Home leads with the apps under the greeting.
+        homeSlot: appShellEnabled ? <AppTiles /> : undefined,
     };
 
-    if (resolved.variant === 'ACCOUNTING') return <AccountingDashboard {...identity} />;
-    if (resolved.variant === 'CRM') return <CrmDashboard {...identity} />;
-    if (resolved.variant === 'PROJECTS') return <ProjectsDashboard {...identity} />;
+    const dashboard = renderVariant(resolved.variant, identity);
+    // A member with a single app is sent into it rather than shown Home.
+    return appShellEnabled ? <HomeLanding fallback={skeleton}>{dashboard}</HomeLanding> : dashboard;
+}
+
+function renderVariant(variant: DashboardVariant, identity: DashboardIdentity) {
+    if (variant === 'ACCOUNTING') return <AccountingDashboard {...identity} />;
+    if (variant === 'CRM') return <CrmDashboard {...identity} />;
+    if (variant === 'PROJECTS') return <ProjectsDashboard {...identity} />;
     return <RetailDashboard {...identity} />;
 }
