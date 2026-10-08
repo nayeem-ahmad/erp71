@@ -220,17 +220,21 @@ Metrics (one per app; an app without one shows no pulse line):
 
 | App | Count | Links to |
 |---|---|---|
-| Sales | sales awaiting delivery | delivery list |
+| Sales | sales orders to fulfil | sales orders |
 | Inventory | low-stock products | reorder report |
 | Accounting | vouchers awaiting approval | vouchers |
-| CRM | follow-ups due today or overdue | follow-ups |
-| Projects | my open tasks | my tasks |
+| CRM | activities due today or overdue | activities |
+| Projects | my open tasks | tasks (assignee: me) |
 | HR | leave requests awaiting approval | leaves |
 | Purchase | purchase orders still open | purchase orders |
-| Online Store | online orders awaiting action | storefront orders |
+| Online Store | online orders awaiting confirmation | storefront orders |
+| Manufacturing | production jobs in progress | jobs |
+| Imports | shipments not yet received | shipments |
 
-(Exact queries and permission sets are fixed in the implementation plan from a
-read of each module.)
+Exact queries and permission sets are in the implementation plan, Task 3.
+Sales counts open sales orders rather than "awaiting delivery": `Sale.status`
+never holds a delivery status, so the dashboard's existing delivery count is
+always 0.
 
 ### Single-app landing
 
