@@ -879,6 +879,10 @@ export const adminMessages = {
                 label: 'Platform Accounting',
                 hint: 'ERP71’s own books in the admin console — subscription revenue, platform expenses and the financial statements. Not a shop feature. On by default.',
             },
+            appShell: {
+                label: "App shell (rail of apps)",
+                hint: "Replaces the long sidebar with a rail of apps, each with its own menu, and adds app tiles with live counts to Home. Off by default — pilot it per tenant.",
+            },
             saved: 'Tenant feature settings saved.',
         },
         sms: {

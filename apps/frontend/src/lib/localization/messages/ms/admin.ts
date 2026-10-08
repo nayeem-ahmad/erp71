@@ -872,6 +872,10 @@ export const adminMessages = {
                     label: "Perakaunan Platform",
                     hint: "Buku kira-kira ERP71 sendiri dalam konsol pentadbir — hasil langganan, perbelanjaan platform dan penyata kewangan. Bukan ciri kedai. Dihidupkan secara lalai.",
                 },
+                appShell: {
+                    label: "Rel aplikasi",
+                    hint: "Menggantikan bar sisi panjang dengan rel aplikasi, setiap satu dengan menunya sendiri, dan menambah jubin aplikasi dengan kiraan langsung di Laman Utama. Mati secara lalai — rintis bagi setiap penyewa.",
+                },
                 saved: 'Tetapan ciri penyewa disimpan.',
             },
             sms: {

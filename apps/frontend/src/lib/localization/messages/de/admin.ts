@@ -879,6 +879,10 @@ export const adminMessages = {
                 label: "Plattform-Buchhaltung",
                 hint: "Die eigenen Bücher von ERP71 in der Admin-Konsole — Abo-Erlöse, Plattformausgaben und die Abschlüsse. Keine Shop-Funktion. Standardmäßig an.",
             },
+            appShell: {
+                label: "App-Leiste",
+                hint: "Ersetzt die lange Seitenleiste durch eine Leiste mit Apps, jede mit eigenem Menü, und ergänzt die Startseite um App-Kacheln mit Live-Zahlen. Standardmäßig aus – pro Mandant testen.",
+            },
             saved: "Einstellungen der Mandantenfunktionen gespeichert.",
         },
         sms: {
