@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:erp71_mobile/core/auth/google_auth.dart';
 import 'package:erp71_mobile/core/push/push_channel.dart';
 import 'package:erp71_mobile/core/security/app_lock.dart';
+import 'package:erp71_mobile/core/voice/speech_input.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -175,4 +176,41 @@ class FakePushChannel implements PushChannel {
 
   @override
   Future<PushTap?> launchTap() async => launch;
+}
+
+/// The microphone, played by the test: `say` delivers words as the
+/// recognizer would, `finish` ends listening.
+class FakeSpeechInput implements SpeechInput {
+  FakeSpeechInput({this.available = true});
+
+  bool available;
+  String? lastLocale;
+  void Function(String words, bool isFinal)? _onWords;
+  void Function()? _onDone;
+  bool listening = false;
+
+  @override
+  Future<bool> start({
+    required String localeId,
+    required void Function(String words, bool isFinal) onWords,
+    required void Function() onDone,
+  }) async {
+    if (!available) return false;
+    lastLocale = localeId;
+    _onWords = onWords;
+    _onDone = onDone;
+    listening = true;
+    return true;
+  }
+
+  void say(String words, {bool isFinal = false}) =>
+      _onWords?.call(words, isFinal);
+
+  void finish() {
+    listening = false;
+    _onDone?.call();
+  }
+
+  @override
+  Future<void> stop() async => finish();
 }

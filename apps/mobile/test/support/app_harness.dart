@@ -4,6 +4,7 @@ import 'package:erp71_mobile/core/auth/token_store.dart';
 import 'package:erp71_mobile/core/format/format.dart';
 import 'package:erp71_mobile/core/providers.dart';
 import 'package:erp71_mobile/core/push/push_channel.dart';
+import 'package:erp71_mobile/core/voice/speech_input.dart';
 import 'package:erp71_mobile/core/security/app_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +23,7 @@ Future<void> pumpApp(
   InMemoryKeyValueStore? storage,
   FakeDeviceAuthenticator? authenticator,
   FakePushChannel? push,
+  FakeSpeechInput? speech,
 }) async {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 3;
@@ -44,6 +46,7 @@ Future<void> pumpApp(
           authenticator ?? FakeDeviceAuthenticator(),
         ),
         pushChannelProvider.overrideWithValue(push ?? FakePushChannel()),
+        speechInputProvider.overrideWithValue(speech ?? FakeSpeechInput()),
       ],
       child: const Erp71App(),
     ),

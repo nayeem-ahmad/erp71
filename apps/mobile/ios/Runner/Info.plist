@@ -14,6 +14,10 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ERP71 listens when you tap the microphone to ask a question by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>ERP71 turns your spoken question into text so you can check it before sending.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>ERP71 uses Face ID to unlock the app when you turn on App lock.</string>
 	<key>CFBundleName</key>

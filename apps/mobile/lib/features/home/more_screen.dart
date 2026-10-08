@@ -65,6 +65,19 @@ class MoreScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          if (access?.ask ?? false)
+            _Section(
+              title: 'Assistant',
+              entries: [
+                _Entry(
+                  icon: Icons.auto_awesome_outlined,
+                  label: 'Ask ERP71',
+                  detail:
+                      'Questions about sales, stock and dues — typed or spoken',
+                  onTap: () => context.push('/ask'),
+                ),
+              ],
+            ),
           _Section(
             title: 'You',
             entries: [

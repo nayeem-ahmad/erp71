@@ -43,6 +43,7 @@ class MobileAccess {
     required this.cashiers,
     required this.crm,
     this.approvals = false,
+    this.ask = false,
   });
 
   factory MobileAccess.of(Workspace workspace) {
@@ -54,6 +55,10 @@ class MobileAccess {
       cashiers: any(AreaPermissions.tills),
       crm: canUseCrm(workspace),
       approvals: any(AreaPermissions.approvals),
+      // The assistant's endpoints check the plan and the platform switch; this
+      // only keeps the button off for a workspace whose plan has no AI.
+      ask:
+          workspace.subscriptionActive && workspace.hasPlanFeature('premiumAi'),
     );
   }
 
@@ -68,6 +73,9 @@ class MobileAccess {
 
   /// Entries waiting for this member's decision.
   final bool approvals;
+
+  /// Asking the assistant about the business.
+  final bool ask;
 
   bool get any => home || cashiers || crm || approvals;
 
@@ -91,6 +99,7 @@ class MobileAccess {
     bool under(String root) =>
         location == root || location.startsWith('$root/');
     if (under('/more')) return business;
+    if (under('/ask')) return ask;
     if (under('/home')) return home;
     if (under('/approvals')) return approvals;
     if (under('/cashiers')) return cashiers;

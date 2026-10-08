@@ -10,6 +10,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/format/format.dart';
 import '../../../ui/theme.dart';
 import '../../../ui/widgets.dart';
+import '../../ask/ask_screen.dart' show AskButton;
 import '../../home/home_shell.dart';
 import '../data/business_providers.dart';
 import '../data/models.dart';
@@ -32,7 +33,7 @@ class BusinessHomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const TitleWithWorkspace('Home'),
-        actions: const [AccountButton()],
+        actions: const [AskButton(), AccountButton()],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
