@@ -12,9 +12,10 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printCustomerPaymentReceipt } from '@/lib/customer-payment-receipt';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
+import { isoToTenantLocal, tenantLocalToIso } from '@/lib/schedule-time';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button, Alert } from '@/components/ui';
+import { PageShell, Button, Alert, Field, Input } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import { PaymentDiscountField, paymentDiscountError } from '@/components/payments/PaymentDiscountField';
@@ -69,6 +70,17 @@ function discountOf(payment: CustomerCreditPayment): number {
     return Number(payment.discount_amount ?? 0);
 }
 
+/** The current minute as a `datetime-local` value, in workspace time. */
+function nowLocal(): string {
+    return isoToTenantLocal(new Date().toISOString());
+}
+
+/** Whether a `datetime-local` value, read in workspace time, is still to come. */
+function isFutureLocal(value: string): boolean {
+    const iso = tenantLocalToIso(value);
+    return !!iso && new Date(iso).getTime() > Date.now();
+}
+
 /** A form value as a non-negative number, or NaN when it is not one. */
 function parseNonNegative(value: string): number {
     if (value.trim() === '') return 0;
@@ -102,6 +114,10 @@ function CustomerPaymentsContent() {
     const [formAmount, setFormAmount] = useState('');
     const [formDiscount, setFormDiscount] = useState('');
     const [formNotes, setFormNotes] = useState('');
+    // Empty means "now": the picker shows the current time and nothing is
+    // sent, so the server stamps the moment of saving rather than the minute
+    // the form was opened. Only a time the operator picked goes over the wire.
+    const [formDate, setFormDate] = useState('');
     // Set when the create form was opened as a copy of an existing payment;
     // names the source in the modal so a duplicate is never mistaken for it.
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
@@ -112,6 +128,8 @@ function CustomerPaymentsContent() {
     const [editAmount, setEditAmount] = useState('');
     const [editDiscount, setEditDiscount] = useState('');
     const [editNotes, setEditNotes] = useState('');
+    // Empty means "unchanged", as with the create form's date.
+    const [editDate, setEditDate] = useState('');
 
     const loadData = async () => {
         setLoading(true);
@@ -173,6 +191,7 @@ function CustomerPaymentsContent() {
         setFormAmount('');
         setFormDiscount('');
         setFormNotes('');
+        setFormDate('');
         setDuplicatedFrom('');
     };
 
@@ -191,6 +210,8 @@ function CustomerPaymentsContent() {
         // copy will be settling a different one.
         setFormDiscount('');
         setFormNotes(payment.notes ?? '');
+        // Not copied either: the copy is a new payment, taken now.
+        setFormDate('');
         setDuplicatedFrom(payment.payment_number ?? '');
         setShowForm(true);
     };
@@ -202,6 +223,7 @@ function CustomerPaymentsContent() {
     const formDiscountError = formDiscountApplies && selectedFormCustomer
         ? paymentDiscountError(dueBalance, formAmount, formDiscount, copy.discount.tooLarge)
         : null;
+    const formDateError = isFutureLocal(formDate) ? copy.dateInFuture : null;
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -219,7 +241,7 @@ function CustomerPaymentsContent() {
             setToast({ type: 'error', message: formDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
             return;
         }
-        if (formDiscountError) return;
+        if (formDiscountError || formDateError) return;
         setSaving(true);
         try {
             await api.recordCreditPayment(formCustomerId, {
@@ -227,6 +249,7 @@ function CustomerPaymentsContent() {
                 discount: discount > 0 ? discount : undefined,
                 direction: formDirection,
                 notes: formNotes.trim() || undefined,
+                date: tenantLocalToIso(formDate) ?? undefined,
             });
             setToast({ type: 'success', message: copy.paymentSaved });
             setShowForm(false);
@@ -250,6 +273,7 @@ function CustomerPaymentsContent() {
         setEditAmount(String(payment.amount));
         setEditDiscount(discountOf(payment) > 0 ? String(discountOf(payment)) : '');
         setEditNotes(payment.notes ?? '');
+        setEditDate('');
     };
 
     const editDiscountApplies = editDirection === 'receive';
@@ -265,6 +289,7 @@ function CustomerPaymentsContent() {
     const editDiscountError = editDiscountApplies
         ? paymentDiscountError(editDueBefore, editAmount, editDiscount, copy.discount.tooLarge)
         : null;
+    const editDateError = isFutureLocal(editDate) ? copy.dateInFuture : null;
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -279,7 +304,7 @@ function CustomerPaymentsContent() {
             setToast({ type: 'error', message: editDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
             return;
         }
-        if (editDiscountError) return;
+        if (editDiscountError || editDateError) return;
         setSaving(true);
         try {
             await api.updateCustomerCreditPayment(editPayment.id, {
@@ -287,6 +312,7 @@ function CustomerPaymentsContent() {
                 discount,
                 direction: editDirection,
                 notes: editNotes.trim() || undefined,
+                date: tenantLocalToIso(editDate) ?? undefined,
             });
             setToast({ type: 'success', message: copy.paymentUpdated });
             setEditPayment(null);
@@ -374,7 +400,9 @@ function CustomerPaymentsContent() {
                 },
                 size: 110,
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            // A payment can be backdated, so this is when the money changed
+            // hands rather than when the row was keyed in.
+            createdAtColumn(columnHelper, { header: copy.columns.dateTime, locale }),
             columnHelper.accessor((row) => row.customer?.name ?? '—', {
                 id: 'customer',
                 header: copy.columns.customer,
@@ -527,7 +555,7 @@ function CustomerPaymentsContent() {
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="space-y-1 sm:col-span-2">
-                                <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
+                                <span className="text-xs font-medium text-gray-500">{copy.columns.dateTime}</span>
                                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                             </div>
                             <div className="space-y-1">
@@ -653,6 +681,16 @@ function CustomerPaymentsContent() {
                                             labels={copy.discount}
                                         />
                                     ) : null}
+                                    <Field label={copy.paymentDate} htmlFor="customer-payment-date" error={formDateError ?? undefined}>
+                                        <Input
+                                            id="customer-payment-date"
+                                            type="datetime-local"
+                                            value={formDate || nowLocal()}
+                                            onChange={(e) => setFormDate(e.target.value)}
+                                            error={!!formDateError}
+                                            className="w-full"
+                                        />
+                                    </Field>
                                     <label className="block space-y-1">
                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                         <textarea
@@ -841,6 +879,16 @@ function CustomerPaymentsContent() {
                                     labels={copy.discount}
                                 />
                             ) : null}
+                            <Field label={copy.paymentDate} htmlFor="customer-payment-edit-date" error={editDateError ?? undefined}>
+                                <Input
+                                    id="customer-payment-edit-date"
+                                    type="datetime-local"
+                                    value={editDate || isoToTenantLocal(editPayment.created_at)}
+                                    onChange={(e) => setEditDate(e.target.value)}
+                                    error={!!editDateError}
+                                    className="w-full"
+                                />
+                            </Field>
                             <label className="block space-y-1">
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                 <textarea

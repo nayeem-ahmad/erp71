@@ -1312,6 +1312,8 @@ export const coreMessages = {
         advanceBalance: "Solde d'avance",
         receiveHint: "Réduit le solde dû ; l'excédent devient une avance client.",
         payHint: "Augmente le solde dû ou utilise l'avance client.",
+        paymentDate: "Date et heure",
+        dateInFuture: "La date et l'heure ne peuvent pas être dans le futur.",
         amount: "Montant",
         amountPlaceholder: "Saisir le montant",
         notes: "Notes",

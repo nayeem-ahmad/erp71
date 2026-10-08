@@ -1312,6 +1312,8 @@ export const coreMessages = {
         advanceBalance: 'ایڈوانس بیلنس',
         receiveHint: 'واجب بیلنس کم کرتی ہے؛ زائد رقم گاہک کا ایڈوانس بن جاتی ہے۔',
         payHint: 'واجب بیلنس بڑھاتی ہے یا گاہک کا ایڈوانس استعمال کرتی ہے۔',
+        paymentDate: 'تاریخ اور وقت',
+        dateInFuture: 'تاریخ اور وقت مستقبل میں نہیں ہو سکتے۔',
         amount: 'رقم',
         amountPlaceholder: 'رقم درج کریں',
         notes: 'نوٹس',

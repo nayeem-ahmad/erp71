@@ -1312,6 +1312,8 @@ export const coreMessages = {
         advanceBalance: "अग्रिम शेष",
         receiveHint: "बकाया शेष घटाता है; अतिरिक्त राशि ग्राहक अग्रिम बन जाती है।",
         payHint: "बकाया शेष बढ़ाता है या ग्राहक अग्रिम का उपयोग करता है।",
+        paymentDate: "तारीख और समय",
+        dateInFuture: "तारीख और समय भविष्य में नहीं हो सकते।",
         amount: "राशि",
         amountPlaceholder: "राशि दर्ज करें",
         notes: "टिप्पणियाँ",

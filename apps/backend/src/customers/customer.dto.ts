@@ -250,6 +250,16 @@ export class RecordCreditPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /**
+     * When the money changed hands. Defaults to now. Backdating is allowed so a
+     * payment entered late lands in the period it belongs to, and is refused by
+     * the fiscal-period lock if that period is closed. An offsetless value is
+     * read as the tenant's wall clock.
+     */
+    @IsOptional()
+    @IsDateString()
+    date?: string;
 }
 
 /**
@@ -349,6 +359,11 @@ export class UpdateCreditPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /** Omitted keeps the payment's current date. */
+    @IsOptional()
+    @IsDateString()
+    date?: string;
 }
 
 export class ListCustomerCreditPaymentsQueryDto extends PaginationDto {

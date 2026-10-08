@@ -1313,6 +1313,8 @@ export const coreMessages = {
             advanceBalance: "Baki pendahuluan",
             receiveHint: "Mengurangkan tertunggak; lebihan menjadi pendahuluan pelanggan.",
             payHint: "Meningkatkan tertunggak atau menggunakan pendahuluan pelanggan.",
+            paymentDate: "Tarikh & masa",
+            dateInFuture: "Tarikh dan masa tidak boleh pada masa hadapan.",
             amount: "Jumlah",
             amountPlaceholder: "Masukkan jumlah",
             notes: "Nota",

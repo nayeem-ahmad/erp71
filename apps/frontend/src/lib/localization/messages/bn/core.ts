@@ -1312,6 +1312,8 @@ export const coreMessages = {
             advanceBalance: "অগ্রিম ব্যালেন্স",
             receiveHint: "বকেয়া কমায়; অতিরিক্ত অংশ গ্রাহকের অগ্রিম হিসেবে থাকে।",
             payHint: "বকেয়া বাড়ায় বা গ্রাহকের অগ্রিম ব্যবহার করে।",
+            paymentDate: "তারিখ ও সময়",
+            dateInFuture: "তারিখ ও সময় ভবিষ্যতের হতে পারবে না।",
             amount: "পরিমাণ",
             amountPlaceholder: "পরিমাণ লিখুন",
             notes: "নোট",

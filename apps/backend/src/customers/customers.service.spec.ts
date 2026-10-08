@@ -723,6 +723,81 @@ describe('CustomersService', () => {
     });
   });
 
+  describe('payment date', () => {
+    const posting = () => require('../accounting/posting.utils');
+    const existing = {
+      id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT',
+      amount: 200, discount_amount: 0, payment_number: 'CPY-00001', notes: null,
+      created_at: new Date('2026-08-15T04:00:00Z'),
+      customer: { id: 'c1', name: 'Alice' }, creator: null,
+    };
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-x', payment_number: 'CPY-00001' });
+    });
+
+    it('records a backdated payment at the picked time, read in the tenant zone, and dates its voucher to match', async () => {
+      await service.recordCreditPayment(
+        'tenant-1', 'c1', 'user-1', { amount: 100, date: '2026-10-01T09:30' }, undefined, null, 'Asia/Dhaka',
+      );
+
+      const picked = new Date('2026-10-01T03:30:00Z');
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ created_at: picked }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toEqual(picked);
+    });
+
+    it('stamps the row and the voucher with the same instant when no date is given', async () => {
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100 });
+
+      const stamped = db.customerCreditTransaction.create.mock.calls[0][0].data.created_at;
+      expect(stamped).toBeInstanceOf(Date);
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toBe(stamped);
+    });
+
+    it('refuses a payment dated in the future', async () => {
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, date: tomorrow }))
+        .rejects.toThrow('Payment date cannot be in the future');
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('update keeps the payment on its own date when reposting', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue(existing);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 300 });
+
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ created_at: existing.created_at }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toEqual(existing.created_at);
+    });
+
+    it('update moves the payment and its voucher to a new date', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue(existing);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment(
+        'tenant-1', 'pay-1', { date: '2026-08-10T18:00:00+06:00' }, undefined, null, 'Asia/Dhaka',
+      );
+
+      const moved = new Date('2026-08-10T12:00:00Z');
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ created_at: moved }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toEqual(moved);
+    });
+  });
+
   describe('payment discount', () => {
     const posting = () => require('../accounting/posting.utils');
 

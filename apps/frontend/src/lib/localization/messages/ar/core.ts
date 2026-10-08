@@ -1312,6 +1312,8 @@ export const coreMessages = {
         advanceBalance: 'رصيد الدفعة المقدمة',
         receiveHint: 'يقلّل الرصيد المستحق؛ والزائد يصبح دفعة مقدمة للزبون.',
         payHint: 'يزيد الرصيد المستحق أو يستخدم الدفعة المقدمة للزبون.',
+        paymentDate: 'التاريخ والوقت',
+        dateInFuture: 'لا يمكن أن يكون التاريخ والوقت في المستقبل.',
         amount: 'المبلغ',
         amountPlaceholder: 'أدخل المبلغ',
         notes: 'ملاحظات',
