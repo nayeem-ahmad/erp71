@@ -1716,6 +1716,12 @@ export interface PlatformFeatures {
    * the operator's accounting, not the accounting module a shop buys.
    */
   platformAccounting: boolean;
+  /**
+   * The rail-of-apps shell: one icon per app with that app's own menu beside
+   * it, app tiles with live counts on Home, and the owner's Apps settings
+   * page. Off by default; pilot it per tenant through an override.
+   */
+  appShell: boolean;
 }
 
 export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
@@ -1729,6 +1735,7 @@ export const DEFAULT_PLATFORM_FEATURES: PlatformFeatures = {
   projects: false,
   platformProjects: false,
   platformAccounting: false,
+  appShell: false,
 };
 
 export type PlatformFeatureKey = keyof PlatformFeatures;
@@ -1744,6 +1751,7 @@ export const PLATFORM_FEATURE_KEYS: PlatformFeatureKey[] = [
   'projects',
   'platformProjects',
   'platformAccounting',
+  'appShell',
 ];
 
 /**
@@ -1797,6 +1805,7 @@ const PLATFORM_FEATURE_SETTING_KEYS: Record<keyof PlatformFeatures, string> = {
   projects: 'projects_enabled',
   platformProjects: 'platform_projects_enabled',
   platformAccounting: 'platform_accounting_enabled',
+  appShell: 'app_shell_enabled',
 };
 
 /** Parses general-group platform settings into feature booleans (`'true'` only). */
@@ -1814,6 +1823,7 @@ export function parsePlatformFeatures(
     projects: settings[PLATFORM_FEATURE_SETTING_KEYS.projects] === 'true',
     platformProjects: settings[PLATFORM_FEATURE_SETTING_KEYS.platformProjects] === 'true',
     platformAccounting: settings[PLATFORM_FEATURE_SETTING_KEYS.platformAccounting] === 'true',
+    appShell: settings[PLATFORM_FEATURE_SETTING_KEYS.appShell] === 'true',
   };
 }
 
@@ -1961,6 +1971,7 @@ export interface SystemHealthReport {
 }
 
 export * from './navigation';
+export * from './apps';
 export * from './subscription-plans';
 export * from './phone';
 export * from './lead-identity';

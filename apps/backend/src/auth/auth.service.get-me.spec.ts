@@ -139,6 +139,7 @@ const PLATFORM_FEATURES = {
     projects: false,
     platformProjects: true,
     platformAccounting: false,
+    appShell: false,
 };
 
 /** Columns every tenant row has that the response must never carry. */
