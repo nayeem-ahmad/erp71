@@ -43,6 +43,7 @@ jest.mock('@/lib/api', () => ({
         createQuotation: jest.fn(),
         shareQuotation: jest.fn(),
         revokeQuotationShare: jest.fn(),
+        createSalesFromQuotations: jest.fn(),
     },
 }));
 
@@ -54,12 +55,18 @@ jest.mock('@/lib/format', () => ({
 jest.mock('@/components/data-table', () => ({
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
     CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
-    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions }: any) => {
+    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions, enableRowSelection, bulkActions }: any) => {
         // The row actions are a column definition, so render that cell too —
         // otherwise the per-row buttons are invisible to every assertion.
         const actions = columns?.find((column: any) => column.id === 'actions');
         return (
-            <div data-testid="data-table">
+            <div data-testid="data-table" data-selectable={String(!!enableRowSelection)}>
+                {/* Each bulk action as if every loaded row were selected. */}
+                {bulkActions?.map((action: any) => (
+                    <button key={action.label} type="button" onClick={() => action.onClick(data)}>
+                        {action.label}
+                    </button>
+                ))}
                 {isLoading && <span>Loading...</span>}
                 {!isLoading && data.length === 0 && <span>{emptyMessage || 'No data'}</span>}
                 {!isLoading && data.map((row: any) => (
@@ -211,6 +218,38 @@ describe('QuotesPage', () => {
         const row = await screen.findByTestId('row-q-1');
         const link = within(row).getByRole('link', { name: 'Convert to Sale' });
         expect(link).toHaveAttribute('href', '/sales/new?quotationId=q-1');
+    });
+
+    describe('converting selected quotations to sales', () => {
+        it('lets rows be selected and confirms the selection before converting', async () => {
+            render(<QuotesPage />);
+            await screen.findByTestId('row-q-1');
+
+            expect(screen.getByTestId('data-table')).toHaveAttribute('data-selectable', 'true');
+            fireEvent.click(screen.getByRole('button', { name: 'Convert to sales' }));
+
+            // QUO-00002 is a walk-in quotation with no lines.
+            expect(screen.getByText('1 of 2 selected can be converted')).toBeInTheDocument();
+            expect(require('@/lib/api').api.createSalesFromQuotations).not.toHaveBeenCalled();
+        });
+
+        it('reloads the list once the sales exist', async () => {
+            const { api } = require('@/lib/api');
+            api.createSalesFromQuotations.mockResolvedValue({
+                converted: [{ quotationId: 'q-1', quoteNumber: 'QUO-00001', saleId: 's-1', serialNumber: 'INV-1', totalAmount: 1500 }],
+                skipped: [{ quotationId: 'q-2', quoteNumber: 'QUO-00002', reason: 'NO_CUSTOMER', status: 'SENT' }],
+                failed: [],
+            });
+            render(<QuotesPage />);
+            await screen.findByTestId('row-q-1');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Convert to sales' }));
+            fireEvent.click(screen.getByRole('button', { name: /Convert 1/ }));
+
+            await waitFor(() => expect(api.getQuotations).toHaveBeenCalledTimes(2));
+            expect(api.createSalesFromQuotations).toHaveBeenCalledWith(['q-1', 'q-2']);
+            expect(screen.getByRole('link', { name: 'INV-1' })).toHaveAttribute('href', '/sales/s-1');
+        });
     });
 
     describe('the short-link row action', () => {

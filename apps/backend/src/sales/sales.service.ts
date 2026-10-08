@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, HttpException, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
+import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
+import {
+    BULK_CONVERTIBLE_QUOTATION_STATUSES,
+    priceQuotationForSale,
+    quotationSkipReason,
+    totalChangedSinceQuoted,
+    type QuotationConversionResult,
+    type QuotationSkipReason,
+} from './quotation-to-sale.util';
 import {
     applyInventoryMovement,
     resolveEntryWarehouses,
@@ -54,6 +62,16 @@ export function draftPlaceholderNumber(): string {
 
 /** One list page — the largest a server-paged table shows — not the tenant's whole history. */
 const PRINT_BATCH_LIMIT = 100;
+
+/** Rules a server-side caller adds to one sale. The HTTP route passes none. */
+interface CreateSaleOptions {
+    /**
+     * The quotation must still be open, and is converted before the sale is
+     * written rather than after — see `claimQuotation`.
+     */
+    claimQuotation?: boolean;
+}
+
 /**
  * Previous due reads the ledger once per sale. Capped so a full batch does not
  * take every connection in the pool at once.
@@ -126,7 +144,7 @@ export class SalesService {
         private crmCampaigns: CrmCampaignsService,
     ) { }
 
-    async create(tenantId: string, userId: string, dto: CreateSaleDto) {
+    async create(tenantId: string, userId: string, dto: CreateSaleDto, options: CreateSaleOptions = {}) {
         if (dto.isDraft) {
             return this.createDraft(tenantId, userId, dto);
         }
@@ -140,6 +158,9 @@ export class SalesService {
 
             const prep = await this.prepareSale(tx, tenantId, dto);
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
+            if (options.claimQuotation) {
+                await this.claimQuotation(tx, tenantId, source.quotationId);
+            }
             const session = await this.resolveCashierSession(tx, tenantId, userId, dto);
             // Credited to the customer's own rep unless the screen names one.
             const salesRepId = await salesRepForSale(tx, tenantId, dto.salesRepId, dto.customerId);
@@ -197,6 +218,140 @@ export class SalesService {
             this.sendReceiptEmail(tenantId, dto.customerId, Number(result.total_amount), result.serial_number);
             void this.crmCampaigns.attributeSale(tenantId, dto.customerId, Number(result.total_amount))
                 .catch((err) => this.logger.warn(`CRM attribution failed for customer ${dto.customerId}: ${err}`));
+        }
+
+        return result;
+    }
+
+    /**
+     * "Convert to sales" on the quotations list: invoices each quotation as a
+     * credit sale, its whole total kept as the customer's due.
+     *
+     * Every sale goes through `create()` in its own transaction, one after
+     * another. One quotation refused — short of stock, over the customer's
+     * credit limit — must not undo the ones before it, and running them side
+     * by side would only have them queue on the same invoice counter and stock
+     * rows. Whatever was not converted comes back with its reason instead of
+     * failing the request, so the screen can say which and why.
+     *
+     * `canSellIn` answers whether the caller may create sales in a branch. The
+     * route guard checks the header branch only, and a list showing every
+     * branch can hand over quotations from several.
+     */
+    async createFromQuotations(
+        tenantId: string,
+        userId: string,
+        dto: CreateSalesFromQuotationsDto,
+        canSellIn: (storeId: string) => Promise<boolean>,
+    ): Promise<QuotationConversionResult> {
+        const ids = [...new Set(dto.quotationIds)];
+        const [quotes, invoiced, tenant] = await Promise.all([
+            this.db.quotation.findMany({
+                where: { tenant_id: tenantId, id: { in: ids } },
+                select: {
+                    id: true,
+                    quote_number: true,
+                    status: true,
+                    store_id: true,
+                    customer_id: true,
+                    currency: true,
+                    exchange_rate: true,
+                    prices_include_vat: true,
+                    total_amount: true,
+                    notes: true,
+                    items: {
+                        // QuotationItem has no sort column; `id` keeps the sale's
+                        // lines in one stable order.
+                        orderBy: { id: 'asc' },
+                        select: {
+                            product_id: true,
+                            quantity: true,
+                            unit_price: true,
+                            product: { select: { vat_rate: true, sd_rate: true } },
+                        },
+                    },
+                },
+                // Oldest first, so the invoice numbers run in the order the
+                // offers were made.
+                orderBy: { created_at: 'asc' },
+            }),
+            this.db.sale.findMany({
+                where: { tenant_id: tenantId, quotation_id: { in: ids }, status: { not: 'CANCELLED' } },
+                select: { quotation_id: true },
+            }),
+            this.db.tenant.findUnique({ where: { id: tenantId }, select: { default_vat_rate: true } }),
+        ]);
+
+        const result: QuotationConversionResult = { converted: [], skipped: [], failed: [] };
+
+        // Anything not returned belongs to another workspace, or does not exist.
+        const found = new Set(quotes.map((quote) => quote.id));
+        for (const id of ids) {
+            if (!found.has(id)) result.skipped.push({ quotationId: id, quoteNumber: null, reason: 'NOT_FOUND' });
+        }
+
+        const invoicedIds = new Set(invoiced.map((sale) => sale.quotation_id));
+        const defaultVatRate = Number(tenant?.default_vat_rate ?? 0) || 0;
+        const branchAccess = new Map<string, Promise<boolean>>();
+        const mayInvoiceIn = (storeId: string) => {
+            if (!branchAccess.has(storeId)) branchAccess.set(storeId, canSellIn(storeId));
+            return branchAccess.get(storeId) as Promise<boolean>;
+        };
+
+        for (const quote of quotes) {
+            const ref = { quotationId: quote.id, quoteNumber: quote.quote_number };
+            const pricing = priceQuotationForSale(quote, defaultVatRate);
+            const reason: QuotationSkipReason | null =
+                quotationSkipReason(quote, invoicedIds.has(quote.id))
+                ?? (!(await mayInvoiceIn(quote.store_id)) ? 'BRANCH_FORBIDDEN' : null)
+                ?? (totalChangedSinceQuoted(pricing) ? 'TOTAL_CHANGED' : null);
+
+            if (reason) {
+                result.skipped.push({ ...ref, reason, status: quote.status });
+                continue;
+            }
+
+            try {
+                const sale = await this.create(
+                    tenantId,
+                    userId,
+                    {
+                        storeId: quote.store_id,
+                        customerId: quote.customer_id ?? undefined,
+                        quotationId: quote.id,
+                        items: pricing.items,
+                        totalAmount: pricing.totalAmount,
+                        // Nothing taken now: the whole total stays on the
+                        // customer's account, and the credit limit applies.
+                        amountPaid: 0,
+                        pricesIncludeVat: pricing.pricesIncludeVat,
+                        note: quote.notes ?? undefined,
+                    },
+                    { claimQuotation: true },
+                );
+                result.converted.push({
+                    ...ref,
+                    saleId: sale.id,
+                    serialNumber: sale.serial_number,
+                    totalAmount: Number(sale.total_amount),
+                });
+            } catch (error) {
+                // A refusal the sale meant to make says why in words a shop
+                // owner can act on. Anything else is ours, and its text is a
+                // stack of database detail nobody at the counter should read.
+                if (!(error instanceof HttpException)) {
+                    this.logger.error(
+                        `Converting quotation ${quote.id} to a sale failed: ${error}`,
+                        (error as Error)?.stack,
+                    );
+                }
+                result.failed.push({
+                    ...ref,
+                    message: error instanceof HttpException
+                        ? error.message
+                        : 'Something went wrong converting this quotation. Try converting it on its own.',
+                });
+            }
         }
 
         return result;
@@ -292,6 +447,32 @@ export class SalesService {
             where: { id: quotationId, tenant_id: tenantId, status: { not: 'CONVERTED' } },
             data: { status: 'CONVERTED' },
         });
+    }
+
+    /**
+     * The batch path's strict form of `markQuotationConverted`: the quotation
+     * must still be open, and it is converted before its sale is written.
+     *
+     * Two runs over the same selection — a double click, a second tab — both
+     * reach this update. Postgres makes the second wait on the row until the
+     * first commits, then finds nothing left to match, so the second sale rolls
+     * back instead of billing the customer twice. Once claimed, the later
+     * `markQuotationConverted` call in `create()` matches nothing and is harmless.
+     */
+    private async claimQuotation(tx: any, tenantId: string, quotationId: string | null) {
+        if (!quotationId) return;
+
+        const claimed = await tx.quotation.updateMany({
+            where: {
+                id: quotationId,
+                tenant_id: tenantId,
+                status: { in: [...BULK_CONVERTIBLE_QUOTATION_STATUSES] },
+            },
+            data: { status: 'CONVERTED' },
+        });
+        if (claimed.count !== 1) {
+            throw new ConflictException('This quotation was converted while the batch was running.');
+        }
     }
 
     /**
