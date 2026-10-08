@@ -24,6 +24,7 @@ import {
     DEFAULT_TENANT_NAV_LAYOUT,
     hasPlanEntitlement,
     normalizePlanFeatures,
+    resolveAppStates,
     type NavLayoutNode,
     type PlatformFeatures,
 } from '@erp71/shared-types';
@@ -421,6 +422,25 @@ function AppShell({ children }: DashboardLayoutProps) {
     const canAccessProjects = inPlatformAdminMode
         ? canAccessPlatformProjects
         : Boolean(platformFeatures.projects) && (owner || hasPermission(perms, 'VIEW_PROJECTS'));
+    // The rail-of-apps shell: a shop's own workspace only — the admin console,
+    // the referral partner portal and the employee portal keep their sidebars.
+    const appShellOn = Boolean(platformFeatures.appShell)
+        && !inPlatformAdminMode
+        && !inRefereeMode
+        && !inEmployeeMode;
+    // Hidden apps belong to the new shell. With it off the workspace sees the
+    // old sidebar exactly as before, whatever an owner hid while it was on.
+    const hiddenApps: readonly string[] = appShellOn ? (activeTenant?.hidden_apps ?? []) : [];
+    // The module gate for the tenant sidebar, the app rail and the Home tiles.
+    const appStates = resolveAppStates({
+        planFeatures,
+        planCode: activePlanCode,
+        platformFeatures,
+        hiddenApps,
+        isOwner: owner,
+        permissions: perms,
+        isPlatformAdmin: inPlatformAdminMode,
+    });
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
@@ -705,6 +725,7 @@ function AppShell({ children }: DashboardLayoutProps) {
                 planFeatures={planFeatures}
                 memberPermissions={perms}
                 memberIsOwner={owner}
+                appStates={appStates}
                 compactNav={useCompactChrome}
                 isOpen={mobileNavOpen}
                 onClose={() => setMobileNavOpen(false)}

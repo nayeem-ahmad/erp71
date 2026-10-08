@@ -19,13 +19,16 @@ import {
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
+import { useDrawerFocusTrap } from '@/hooks/useDrawerFocusTrap';
 import { BRAND_NAME } from '@/lib/brand';
 import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
-import { isItemVisible } from '@/lib/nav-visibility';
-import { filterNavByPermissions } from '@/lib/nav-permission-filter';
-import { buildNavModulesFromLayout, type ResolvedNavChild, type ResolvedNavModule } from '@/lib/nav-resolver';
+import type { AppState } from '@erp71/shared-types';
+import type { ResolvedNavChild, ResolvedNavModule } from '@/lib/nav-resolver';
+import { isNavSubgroup, resolveSidebarModules } from '@/lib/sidebar-modules';
+import NavCountBadge from '@/components/sidebar/NavCountBadge';
+import NavModuleChildren from '@/components/sidebar/NavModuleChildren';
 import {
     accordionCloseState,
     accordionOpenState,
@@ -41,107 +44,8 @@ import { usePendingVoucherCount } from '@/hooks/usePendingVoucherCount';
 /*  Navigation structure                                               */
 /* ------------------------------------------------------------------ */
 
-/**
- * Count pill on a nav link. Renders nothing at zero so links stay quiet.
- * Amber is work waiting on you (the approval queue); blue is something new to
- * read (team chat), and stays legible on the active link's blue fill.
- */
-function NavCountBadge({ count, title, tone = 'amber' }: { count: number; title: string; tone?: 'amber' | 'blue' }) {
-    if (count <= 0) return null;
-
-    return (
-        <span
-            title={title}
-            className={`ms-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                tone === 'blue' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-800'
-            }`}
-        >
-            {count > 99 ? '99+' : count}
-        </span>
-    );
-}
-
-/**
- * Account-settings ("Admin") links that stay relevant to an accounting-only
- * subscription. Everything else in the module is retail/POS/marketing and is
- * hidden in `accountingOnlyMode`. Keep this in sync with the accounting-only
- * settings route allow-list in `@/lib/accounting-only-paths`.
- */
-const ACCOUNTING_ONLY_ADMIN_LINK_HREFS: ReadonlySet<string> = new Set([
-    routes.settings.root, // My Account
-    routes.profile, // My Profile
-    routes.team, // Team & Permissions
-    routes.settings.auditLogs, // Audit Logs
-    routes.settings.localization, // Localization
-    routes.settings.tax, // Tax / VAT
-    routes.settings.data, // Data Management
-    routes.billing, // Billing
-]);
-
 type NavChild = ResolvedNavChild;
 type NavModule = ResolvedNavModule;
-
-function isNavSubgroup(child: NavChild): child is Extract<NavChild, { type: 'subgroup' }> {
-    return 'type' in child && child.type === 'subgroup';
-}
-
-function canAccessModuleAdvancedReports(
-    moduleKey: string,
-    canAccessInventoryReports: boolean,
-    canAccessAccountingAdvanced: boolean,
-): boolean {
-    if (moduleKey === 'accounting') {
-        return canAccessAccountingAdvanced;
-    }
-    return canAccessInventoryReports;
-}
-
-function stripPosNavLink(children: NavChild[], posEnabled: boolean): NavChild[] {
-    if (posEnabled) return children;
-    return children
-        .map((child) => {
-            if (!isNavSubgroup(child)) {
-                return child.href === routes.sales.pos ? null : child;
-            }
-            const filteredLinks = child.children.filter((link) => link.href !== routes.sales.pos);
-            if (filteredLinks.length === 0) return null;
-            return { ...child, children: filteredLinks };
-        })
-        .filter((child): child is NavChild => child !== null);
-}
-
-function filterModuleNavChildren(
-    children: NavChild[],
-    moduleKey: string,
-    canAccessInventoryReports: boolean,
-    canAccessAccountingAdvanced: boolean,
-    canAccessPremiumCrm = false,
-    planFeatures: Record<string, unknown> = {},
-): NavChild[] {
-    const canAccessAdvanced = canAccessModuleAdvancedReports(
-        moduleKey,
-        canAccessInventoryReports,
-        canAccessAccountingAdvanced,
-    );
-    return children
-        .map((child) => {
-            if (!isNavSubgroup(child)) {
-                if (child.premiumOnly && !canAccessPremiumCrm) return null;
-                if (child.entitlement && !isItemVisible(child, planFeatures)) return null;
-                return !child.advancedOnly || canAccessAdvanced ? child : null;
-            }
-            if (child.advancedOnly && !canAccessAdvanced) return null;
-            if (child.entitlement && !isItemVisible(child, planFeatures)) return null;
-            const filteredLinks = child.children.filter((link) => {
-                if (link.premiumOnly && !canAccessPremiumCrm) return false;
-                if (link.entitlement && !isItemVisible(link, planFeatures)) return false;
-                return !link.advancedOnly || canAccessAdvanced;
-            });
-            if (filteredLinks.length === 0) return null;
-            return { ...child, children: filteredLinks };
-        })
-        .filter((child): child is NavChild => child !== null);
-}
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -183,6 +87,7 @@ export default function Sidebar({
     planFeatures = {},
     memberPermissions,
     memberIsOwner = false,
+    appStates,
 }: {
     canAccessAccounting?: boolean;
     canAccessInventoryReports?: boolean;
@@ -230,6 +135,11 @@ export default function Sidebar({
     memberPermissions?: readonly string[];
     /** The workspace owner is never filtered. */
     memberIsOwner?: boolean;
+    /**
+     * The tenant shell's module gate, from `resolveAppStates`. The shell always
+     * passes it; the per-module `canAccess*` props only decide when it is absent.
+     */
+    appStates?: Readonly<Record<string, AppState>>;
 }) {
     const pathname = usePathname();
     const isMdUp = useIsMdUp();
@@ -248,10 +158,6 @@ export default function Sidebar({
     );
     const [searchQuery, setSearchQuery] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const permissionViewer = useMemo(
-        () => (memberPermissions ? { isOwner: memberIsOwner, permissions: memberPermissions } : null),
-        [memberPermissions, memberIsOwner],
-    );
     const modules = useMemo(() => {
         // The employee portal is a single page. It still gets a nav entry so the
         // shell does not render an empty sidebar, and so "where am I" is
@@ -309,118 +215,35 @@ export default function Sidebar({
             }] as NavModule[];
         }
 
-        const sourceLayout = platformAdminMode ? platformAdminLayout : tenantLayout;
-        const resolved = buildNavModulesFromLayout(sourceLayout, t as Record<string, unknown>)
-            .filter((module) => {
-                if (platformAdminMode) {
-                    if (module.key === 'help') return helpEnabled;
-                    // The platform team's own project workspace, the one shop
-                    // module the admin console carries. Its own switch decides,
-                    // which the shell has already resolved into this prop.
-                    if (module.key === 'projects') return canAccessProjects;
-                    return module.key === 'admin';
-                }
-                if (accountingOnlyMode) {
-                    if (module.key === 'help') return helpEnabled;
-                    if (module.key === 'support') return supportEnabled;
-                    // Expenses split out of Accounting but its pages still live
-                    // under /accounting/expenses — same gate, same plan.
-                    if (module.key === 'accounting' || module.key === 'expenses') return canAccessAccounting;
-                    return ['dashboard', 'account-settings'].includes(module.key);
-                }
-                if (module.key === 'accounting' || module.key === 'expenses') return canAccessAccounting;
-                if (module.key === 'admin') return canAccessAdmin;
-                if (module.key === 'help') return helpEnabled;
-                if (module.key === 'support') return supportEnabled;
-                if (module.key === 'manufacturing') return canAccessManufacturing;
-                if (module.key === 'projects') return canAccessProjects;
-                // Module-level entitlement from NAV_REGISTRY. Declared for `chat`
-                // since team chat shipped, but silently dropped in resolution until
-                // now, so the module rendered on every plan and 403'd on entry.
-                return isItemVisible(module, planFeatures);
-            })
-            .map((module) => {
-                if (!module.children) return module;
-
-                if (module.key === 'account-settings') {
-                    return {
-                        ...module,
-                        children: module.children.filter((child) => {
-                            if (isNavSubgroup(child)) return true;
-                            if (accountingOnlyMode && !ACCOUNTING_ONLY_ADMIN_LINK_HREFS.has(child.href)) {
-                                return false;
-                            }
-                            // Plan entitlements from NAV_REGISTRY. This branch never ran the
-                            // generic filter the retail modules use, so without this an
-                            // entitlement on an Admin link (the URL shortener's) was dead config.
-                            if (child.entitlement && !isItemVisible(child, planFeatures)) return false;
-                            if (child.href === routes.billing) return canManageBilling;
-                            if (child.href === routes.team || child.href === routes.settings.auditLogs) {
-                                return canManageTeam;
-                            }
-                            if (child.href === routes.settings.urlShortener) return canManageShortLinks;
-                            return true;
-                        }),
-                    };
-                }
-
-                // The admin console carries one subgroup behind a platform
-                // switch. Filtered here rather than by the generic entitlement
-                // path, which reads a tenant's plan — the platform has none.
-                if (module.key === 'admin' && !canAccessPlatformAccounting) {
-                    return {
-                        ...module,
-                        children: module.children.filter(
-                            // `key` is the registry id's last segment — see
-                            // buildNavModulesFromLayout — so this matches the
-                            // `admin.platform-accounting` subgroup.
-                            (child) => !(isNavSubgroup(child) && child.key === 'platform-accounting'),
-                        ),
-                    };
-                }
-
-                if (['sales', 'purchase', 'imports', 'inventory', 'accounting'].includes(module.key)) {
-                    const filteredChildren = filterModuleNavChildren(
-                        module.children,
-                        module.key,
-                        canAccessInventoryReports,
-                        canAccessAccountingAdvanced,
-                        canAccessPremiumCrm,
-                        planFeatures,
-                    );
-                    return {
-                        ...module,
-                        children: module.key === 'sales'
-                            ? stripPosNavLink(filteredChildren, posEnabled)
-                            : filteredChildren,
-                    };
-                }
-
-                if (module.key === 'crm') {
-                    return {
-                        ...module,
-                        children: filterModuleNavChildren(
-                            module.children,
-                            module.key,
-                            true,
-                            true,
-                            canAccessPremiumCrm,
-                            planFeatures,
-                        ),
-                    };
-                }
-
-                return module;
-            })
-            .filter((module) => !module.children || module.children.length > 0);
-
-        // Last, so the plan and feature gates above have already run and this only
-        // has to remove what the member holds no permission for.
-        return permissionViewer && !platformAdminMode
-            ? filterNavByPermissions(resolved, permissionViewer)
-            : resolved;
+        return resolveSidebarModules({
+            tenantLayout,
+            platformAdminLayout,
+            messages: t as Record<string, unknown>,
+            appStates,
+            canAccessAccounting,
+            canAccessInventoryReports,
+            canAccessAccountingAdvanced,
+            canAccessPremiumCrm,
+            canAccessManufacturing,
+            canAccessProjects,
+            canAccessPlatformAccounting,
+            canAccessAdmin,
+            canManageBilling,
+            canManageTeam,
+            canManageShortLinks,
+            platformAdminMode,
+            helpEnabled,
+            supportEnabled,
+            accountingOnlyMode,
+            posEnabled,
+            planFeatures,
+            memberPermissions,
+            memberIsOwner,
+        });
     }, [
-        permissionViewer,
+        appStates,
+        memberPermissions,
+        memberIsOwner,
         refereeMode,
         employeeMode,
         platformAdminMode,
@@ -552,47 +375,7 @@ export default function Sidebar({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
 
-    useEffect(() => {
-        if (!isOpen || !onClose) return;
-
-        const aside = asideRef.current;
-        if (!aside) return;
-
-        const focusableSelector = 'a[href], button:not([disabled]), select, textarea, input:not([disabled])';
-        const getFocusable = () =>
-            Array.from(aside.querySelectorAll<HTMLElement>(focusableSelector)).filter(
-                (element) => !element.hasAttribute('disabled') && element.tabIndex !== -1,
-            );
-
-        const focusable = getFocusable();
-        focusable[0]?.focus();
-
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                onClose();
-                return;
-            }
-
-            if (event.key !== 'Tab') return;
-
-            const items = getFocusable();
-            if (items.length === 0) return;
-
-            const first = items[0];
-            const last = items[items.length - 1];
-
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-            }
-        };
-
-        document.addEventListener('keydown', onKeyDown);
-        return () => document.removeEventListener('keydown', onKeyDown);
-    }, [isOpen, onClose]);
+    useDrawerFocusTrap(asideRef, isOpen, onClose);
 
     const toggleSidebar = () => {
         setCollapsed((prev) => {
@@ -696,22 +479,6 @@ export default function Sidebar({
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
                     : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-        }`;
-
-    const childLinkCls = (active: boolean, nested = false) =>
-        `flex items-center rounded-lg transition-all duration-150 group space-x-2.5 rtl:space-x-reverse px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ${navText} ${
-            nested ? 'ms-8' : 'ms-4'
-        } ${
-            active
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-        }`;
-
-    const subgroupBtnCls = (active: boolean) =>
-        `flex items-center w-full rounded-lg transition-all duration-150 space-x-2.5 rtl:space-x-reverse px-2.5 ${compactNav ? 'py-1' : 'py-1.5'} ms-4 ${navText} ${
-            active
-                ? 'text-blue-700 bg-blue-50/70'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
         }`;
 
     return (
@@ -955,74 +722,17 @@ export default function Sidebar({
 
                                 {/* Children */}
                                 {!collapsed && groupOpen && hasChildren && (
-                                    <div className="mt-0.5 space-y-0.5">
-                                        {mod.children!.map((child) => {
-                                            if (isNavSubgroup(child)) {
-                                                const subgroupKey = `${mod.key}:${child.key}`;
-                                                const subgroupOpen = isSearching || (openGroups[subgroupKey] ?? false);
-                                                const SubgroupIcon = child.icon;
-                                                const subgroupActive = child.children.some((link) => isActive(link.href, link.exact));
-
-                                                return (
-                                                    <div key={subgroupKey}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleGroup(subgroupKey)}
-                                                            disabled={isSearching}
-                                                            aria-expanded={subgroupOpen}
-                                                            className={`${subgroupBtnCls(subgroupActive)}${isSearching ? ' cursor-default' : ''}`}
-                                                        >
-                                                            <SubgroupIcon className={`flex-shrink-0 w-4 h-4 ${subgroupActive ? 'text-blue-600' : ''}`} />
-                                                            <span className={navLabelCls}>{child.label}</span>
-                                                            <ChevronDown
-                                                                className={`ms-auto w-3.5 h-3.5 transition-transform duration-200 ${
-                                                                    subgroupOpen ? 'rotate-180' : ''
-                                                                } ${subgroupActive ? 'text-blue-400' : 'text-gray-300'}`}
-                                                            />
-                                                        </button>
-                                                        {subgroupOpen && (
-                                                            <div className="mt-0.5 space-y-0.5">
-                                                                {child.children.map(({ href, icon: LinkIcon, label, exact }) => {
-                                                                    const active = isActive(href, exact);
-                                                                    return (
-                                                                        <Link key={href} href={href} className={childLinkCls(active, true)}>
-                                                                            <LinkIcon className={`flex-shrink-0 w-3.5 h-3.5 ${active ? 'text-blue-600' : ''}`} />
-                                                                            <span className={navLabelCls}>{label}</span>
-                                                                            <NavCountBadge
-                                                                                count={pendingBadgeFor(href)}
-                                                                                title={t.vouchers.approval.queueBadge}
-                                                                            />
-                                                                        </Link>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            }
-
-                                            const { href, icon: ChildIcon, label, section, exact } = child;
-                                            if (section) {
-                                                return (
-                                                    <div key={href} className="flex items-center ms-4 px-3 pt-3 pb-1">
-                                                        <ChildIcon className="flex-shrink-0 w-3.5 h-3.5 text-gray-300" />
-                                                        <span className="ms-2 text-[10px] font-black uppercase tracking-widest text-gray-300">{label}</span>
-                                                    </div>
-                                                );
-                                            }
-                                            const active = isActive(href, exact);
-                                            return (
-                                                <Link key={href} href={href} className={childLinkCls(active)}>
-                                                    <ChildIcon className={`flex-shrink-0 w-4 h-4 ${active ? 'text-blue-600' : ''}`} />
-                                                    <span className={navLabelCls}>{label}</span>
-                                                    <NavCountBadge
-                                                        count={pendingBadgeFor(href)}
-                                                        title={t.vouchers.approval.queueBadge}
-                                                    />
-                                                </Link>
-                                            );
-                                        })}
-                                    </div>
+                                    <NavModuleChildren
+                                        moduleKey={mod.key}
+                                        items={mod.children!}
+                                        openGroups={openGroups}
+                                        onToggleGroup={toggleGroup}
+                                        isActive={isActive}
+                                        isSearching={isSearching}
+                                        compactNav={compactNav}
+                                        badgeFor={pendingBadgeFor}
+                                        badgeTitle={t.vouchers.approval.queueBadge}
+                                    />
                                 )}
                             </div>
                         );
