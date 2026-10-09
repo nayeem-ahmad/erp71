@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomersService } from './customers.service';
 import { DatabaseService } from '../database/database.service';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EncryptionService } from '../common/encryption.service';
 import { CustomerPaymentDirectionDto } from './customer.dto';
 import { customerInBranchesWhere } from './customer-visibility';
@@ -67,6 +67,8 @@ describe('CustomersService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
+      // The serial series: one past the highest number under the prefix.
+      $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
       $transaction: jest.fn(),
     };
 
@@ -543,7 +545,7 @@ describe('CustomersService', () => {
   describe('recordCreditPayment()', () => {
     it('generates payment_number and records payment in a transaction', async () => {
       db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
-      db.customerCreditTransaction.findFirst.mockResolvedValue({ payment_number: 'CPY-00002' });
+      db.$queryRaw.mockResolvedValue([{ next: '3' }]);
       db.customerCreditTransaction.create.mockResolvedValue({
         id: 'pay-3',
         payment_number: 'CPY-00003',
@@ -558,14 +560,7 @@ describe('CustomersService', () => {
         notes: 'Partial payment',
       });
 
-      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            tenant_id: 'tenant-1',
-            type: 'PAYMENT',
-          }),
-        }),
-      );
+      expect(db.$queryRaw.mock.calls[0][0].values).toEqual(expect.arrayContaining(['tenant-1', 'CPY-%']));
       expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -795,6 +790,101 @@ describe('CustomersService', () => {
         expect.objectContaining({ data: expect.objectContaining({ created_at: moved }) }),
       );
       expect(posting().autoPostFromRules.mock.calls[0][0].date).toEqual(moved);
+    });
+  });
+
+  describe('payment serial', () => {
+    const posting = () => require('../accounting/posting.utils');
+    const existing = {
+      id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT',
+      amount: 200, discount_amount: 0, payment_number: 'CPY-00001', notes: null,
+      created_at: new Date('2026-08-15T04:00:00Z'),
+      customer: { id: 'c1', name: 'Alice' }, creator: null,
+    };
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-x' });
+    });
+
+    it('records a typed serial as given, and does not draw from the series', async () => {
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: '  MR-0457 ' });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'MR-0457' }) }),
+      );
+      expect(db.$queryRaw).not.toHaveBeenCalled();
+      expect(posting().autoPostFromRules.mock.calls[0][0].referenceNumber).toBe('MR-0457');
+    });
+
+    it('numbers a payment left blank from the series', async () => {
+      db.$queryRaw.mockResolvedValue([{ next: '8' }]);
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: '' });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'CPY-00008' }) }),
+      );
+    });
+
+    it('refuses a typed serial another payment already carries', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue({ id: 'pay-other' });
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'CPY-00004' }))
+        .rejects.toThrow(new ConflictException('Serial CPY-00004 is already used by another payment.'));
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('turns a unique-index race into the same plain conflict', async () => {
+      db.customerCreditTransaction.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002', meta: { target: ['tenant_id', 'payment_number'] } }),
+      );
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'MR-1' }))
+        .rejects.toThrow(ConflictException);
+    });
+
+    it('update renames the serial, checking it against every other row, and reposts under it', async () => {
+      db.customerCreditTransaction.findFirst
+        .mockResolvedValueOnce(existing) // the payment itself
+        .mockResolvedValueOnce(null); // nobody else holds the new serial
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { paymentNumber: 'MR-0457' });
+
+      expect(db.customerCreditTransaction.findFirst).toHaveBeenLastCalledWith({
+        where: { tenant_id: 'tenant-1', payment_number: 'MR-0457', id: { not: 'pay-1' } },
+        select: { id: true },
+      });
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'MR-0457' }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].referenceNumber).toBe('MR-0457');
+    });
+
+    it('update keeps the serial when none is sent', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValueOnce(existing);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 300 });
+
+      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledTimes(1);
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'CPY-00001' }) }),
+      );
+    });
+
+    it('previews the next serial in the series the direction draws from', async () => {
+      db.$queryRaw.mockResolvedValue([{ next: '3' }]);
+
+      await expect(service.getNextPaymentNumber('tenant-1', CustomerPaymentDirectionDto.PAY))
+        .resolves.toEqual({ payment_number: 'CPO-00003' });
+      expect(db.$queryRaw.mock.calls[0][0].values).toEqual(expect.arrayContaining(['tenant-1', 'CPO-%']));
     });
   });
 
@@ -1276,14 +1366,7 @@ describe('CustomersService', () => {
 
       await service.writeOffDebt('tenant-1', 'c1', 'user-1', dto);
 
-      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            type: 'WRITE_OFF',
-            payment_number: { startsWith: 'CWO-' },
-          }),
-        }),
-      );
+      expect(db.$queryRaw.mock.calls[0][0].values).toEqual(expect.arrayContaining(['tenant-1', 'CWO-%']));
     });
 
     // Writing a debt off drops due_balance, and assertCustomerCreditForSale

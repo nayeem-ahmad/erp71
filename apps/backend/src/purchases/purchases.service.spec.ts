@@ -61,6 +61,9 @@ describe('PurchasesService', () => {
         jest.clearAllMocks();
 
         tx = {
+            // `nextSupplierPaymentNumber` reads the highest SPY- number; '1'
+            // means "none yet", so the first counter payment is SPY-00001.
+            $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
             supplier: {
                 findUnique: jest.fn(),
                 create: jest.fn(),
@@ -69,8 +72,6 @@ describe('PurchasesService', () => {
             },
             supplierCreditTransaction: {
                 create: jest.fn(),
-                // `nextSupplierPaymentNumber` reads the last SPY- row; null
-                // means "none yet", so the first counter payment is SPY-00001.
                 findFirst: jest.fn().mockResolvedValue(null),
             },
             supplierPaymentAllocation: {

@@ -2045,7 +2045,7 @@ export const api = {
             },
         );
     },
-    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -2064,7 +2064,10 @@ export const api = {
         return fetchAllPages(`/customers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerCreditPayment: (paymentId: string) => fetchWithAuth(`/customers/credit/payments/${paymentId}`),
-    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string }) =>
+    /** The serial a new payment would get; a preview, not a reservation. */
+    getNextCustomerPaymentNumber: (direction: 'receive' | 'pay'): Promise<{ payment_number: string }> =>
+        fetchWithAuth(`/customers/credit/payments/next-number?direction=${direction}`),
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string }) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -2902,6 +2905,8 @@ export const api = {
         discount?: number;
         direction?: 'pay' | 'receive';
         notes?: string;
+        date?: string;
+        paymentNumber?: string;
         allocations?: { purchaseId: string; amount: number }[];
     }) =>
         fetchWithAuth(`/suppliers/${id}/credit/payment`, {
@@ -2932,7 +2937,10 @@ export const api = {
         return fetchAllPages(`/suppliers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSupplierCreditPayment: (paymentId: string) => fetchWithAuth(`/suppliers/credit/payments/${paymentId}`),
-    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
+    /** The serial a new payment would get; a preview, not a reservation. */
+    getNextSupplierPaymentNumber: (direction: 'pay' | 'receive'): Promise<{ payment_number: string }> =>
+        fetchWithAuth(`/suppliers/credit/payments/next-number?direction=${direction}`),
+    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string; date?: string; paymentNumber?: string }) =>
         fetchWithAuth(`/suppliers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),

@@ -13,7 +13,7 @@ jest.mock('@/lib/i18n', () => {
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CustomerPaymentsPage from './page';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 
 jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: () => null }),
@@ -24,6 +24,12 @@ jest.mock('@/lib/branding', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
+    ApiError: class ApiError extends Error {
+        constructor(message: string, public readonly status: number) {
+            super(message);
+            this.name = 'ApiError';
+        }
+    },
     // The print-header hook resolves the tenant's print template on mount.
     fetchWithAuth: jest.fn().mockResolvedValue(null),
     api: {
@@ -31,6 +37,7 @@ jest.mock('@/lib/api', () => ({
         getCustomers: jest.fn(),
         recordCreditPayment: jest.fn(),
         updateCustomerCreditPayment: jest.fn(),
+        getNextCustomerPaymentNumber: jest.fn().mockResolvedValue({ payment_number: 'CPY-00008' }),
         deleteCustomerCreditPayment: jest.fn(),
     },
 }));
@@ -294,5 +301,113 @@ describe('CustomerPaymentsPage — date and time', () => {
 
         await waitFor(() => expect(api.updateCustomerCreditPayment).toHaveBeenCalled());
         expect((api.updateCustomerCreditPayment as jest.Mock).mock.calls[0][1].date).toBeUndefined();
+    });
+});
+
+describe('CustomerPaymentsPage — serial', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (api.getCustomerCreditPayments as jest.Mock).mockResolvedValue([payment]);
+        (api.getCustomers as jest.Mock).mockResolvedValue([
+            { id: 'cust-1', name: 'Alice Corp', phone: '01700000001', due_balance: 1000 },
+        ]);
+        (api.recordCreditPayment as jest.Mock).mockResolvedValue({ id: 'pay-2' });
+        (api.updateCustomerCreditPayment as jest.Mock).mockResolvedValue({ id: 'pay-1' });
+    });
+
+    const openNewPayment = async () => {
+        render(<CustomerPaymentsPage />);
+        await screen.findByText('CP-00007');
+        fireEvent.click(screen.getByRole('button', { name: /new customer payment/i }));
+        fireEvent.change(await screen.findByLabelText('Amount'), { target: { value: '100' } });
+    };
+
+    it('opens with the next serial at the top, the date and time beside it', async () => {
+        await openNewPayment();
+
+        const serial = await screen.findByDisplayValue('CPY-00008');
+        expect(serial).toBe(screen.getByLabelText('Serial'));
+        expect(api.getNextCustomerPaymentNumber).toHaveBeenCalledWith('receive');
+
+        // One row: serial first, then the date.
+        const row = serial.closest('.grid') as HTMLElement;
+        const inputs = Array.from(row.querySelectorAll('input'));
+        expect(inputs).toEqual([serial, screen.getByLabelText('Date & time')]);
+        // And it is the first field of the form.
+        const form = serial.closest('form') as HTMLFormElement;
+        expect(form.querySelector('input, select, textarea')).toBe(serial);
+    });
+
+    it('previews the payout series when the direction changes', async () => {
+        await openNewPayment();
+        await screen.findByDisplayValue('CPY-00008');
+        (api.getNextCustomerPaymentNumber as jest.Mock).mockResolvedValueOnce({ payment_number: 'CPO-00003' });
+
+        fireEvent.change(screen.getByDisplayValue('Receive from customer'), { target: { value: 'pay' } });
+
+        expect(await screen.findByDisplayValue('CPO-00003')).toBeInTheDocument();
+        expect(api.getNextCustomerPaymentNumber).toHaveBeenLastCalledWith('pay');
+    });
+
+    it('leaves numbering to the server when the serial is not touched', async () => {
+        await openNewPayment();
+        await screen.findByDisplayValue('CPY-00008');
+
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        await waitFor(() => expect(api.recordCreditPayment).toHaveBeenCalled());
+        expect((api.recordCreditPayment as jest.Mock).mock.calls[0][1].paymentNumber).toBeUndefined();
+    });
+
+    it('sends a serial the operator typed', async () => {
+        await openNewPayment();
+
+        fireEvent.change(await screen.findByLabelText('Serial'), { target: { value: ' MR-0457 ' } });
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        await waitFor(() => {
+            expect(api.recordCreditPayment).toHaveBeenCalledWith('cust-1', expect.objectContaining({ paymentNumber: 'MR-0457' }));
+        });
+    });
+
+    it('shows a taken serial under the field instead of closing the form', async () => {
+        (api.recordCreditPayment as jest.Mock).mockRejectedValue(new ApiError('Serial CPY-00002 is already used', 409));
+        await openNewPayment();
+
+        fireEvent.change(await screen.findByLabelText('Serial'), { target: { value: 'CPY-00002' } });
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Serial CPY-00002 is already used by another payment.');
+        expect(screen.getByLabelText('Serial')).toBeInTheDocument();
+
+        // Editing the serial clears the complaint.
+        fireEvent.change(screen.getByLabelText('Serial'), { target: { value: 'CPY-00099' } });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('edits open on the payment\'s own serial and send it only when renamed', async () => {
+        render(<CustomerPaymentsPage />);
+        fireEvent.click(await screen.findByTitle('Edit'));
+
+        const serial = await screen.findByLabelText('Serial');
+        expect(serial).toHaveValue('CP-00007');
+
+        fireEvent.change(serial, { target: { value: 'MR-0458' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => {
+            expect(api.updateCustomerCreditPayment).toHaveBeenCalledWith('pay-1', expect.objectContaining({ paymentNumber: 'MR-0458' }));
+        });
+    });
+
+    it('edits leave the serial alone when it is not touched', async () => {
+        render(<CustomerPaymentsPage />);
+        fireEvent.click(await screen.findByTitle('Edit'));
+        await screen.findByLabelText('Serial');
+
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.updateCustomerCreditPayment).toHaveBeenCalled());
+        expect((api.updateCustomerCreditPayment as jest.Mock).mock.calls[0][1].paymentNumber).toBeUndefined();
     });
 });
