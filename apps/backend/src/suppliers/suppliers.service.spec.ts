@@ -4,7 +4,7 @@ jest.mock('../accounting/posting.utils', () => ({
 }));
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { DatabaseService } from '../database/database.service';
 import { SupplierPaymentDirectionDto } from './supplier.dto';
@@ -170,6 +170,7 @@ describe('SuppliersService', () => {
         db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 500, name: 'ACME' });
         db.$transaction.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => {
             const tx = {
+                $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
                 supplierCreditTransaction: {
                     findFirst: jest.fn().mockResolvedValue(null),
                     create: jest.fn().mockResolvedValue({ id: 'tx-1', type: 'PAYMENT', payment_number: 'SPY-00001' }),
@@ -188,6 +189,7 @@ describe('SuppliersService', () => {
         db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 100, name: 'ACME' });
         db.$transaction.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => {
             const tx = {
+                $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
                 supplierCreditTransaction: {
                     findFirst: jest.fn().mockResolvedValue(null),
                     create: jest.fn().mockResolvedValue({ id: 'tx-1', type: 'PAYMENT', payment_number: 'SPY-00001' }),
@@ -209,6 +211,7 @@ describe('SuppliersService', () => {
         const mockTx = (type: 'PAYMENT' | 'PAYOUT') => {
             db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 500, name: 'ACME' });
             db.$transaction.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => fn({
+                $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
                 supplierCreditTransaction: {
                     findFirst: jest.fn().mockResolvedValue(null),
                     create: jest.fn().mockResolvedValue({
@@ -290,6 +293,7 @@ describe('SuppliersService', () => {
     describe('bill allocations', () => {
         function mockTxForPayment() {
             const tx = {
+                $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
                 supplierCreditTransaction: {
                     create: jest.fn().mockResolvedValue({ id: 'tx-1', type: 'PAYMENT', payment_number: 'SPY-00001' }),
                     findFirst: jest.fn().mockResolvedValue(null),
@@ -471,9 +475,133 @@ describe('SuppliersService', () => {
         });
     });
 
+    describe('payment date and serial', () => {
+        const existing = {
+            id: 'tx-1', tenant_id: 'tenant-1', supplier_id: 'sup-1', type: 'PAYMENT',
+            amount: 200, discount_amount: 0, payment_number: 'SPY-00001', notes: null,
+            created_at: new Date('2026-08-15T04:00:00Z'),
+            supplier: { id: 'sup-1', name: 'ACME' }, creator: null,
+        };
+
+        function mockTx() {
+            const tx = {
+                $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
+                supplierCreditTransaction: {
+                    create: jest.fn().mockResolvedValue({ id: 'tx-new' }),
+                    findFirst: jest.fn().mockResolvedValue(null),
+                    update: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 'tx-1', ...data })),
+                },
+                supplier: {
+                    findFirst: jest.fn().mockResolvedValue({ id: 'sup-1', name: 'ACME', due_balance: 800 }),
+                    update: jest.fn().mockResolvedValue({}),
+                },
+            };
+            db.$transaction.mockImplementation((fn: (t: any) => Promise<unknown>) => fn(tx));
+            return tx;
+        }
+
+        const postedCalls = () => (autoPostFromRules as jest.Mock).mock.calls.map((c: any[]) => c[0]);
+
+        beforeEach(() => {
+            (autoPostFromRules as jest.Mock).mockClear();
+            (autoPostFromRules as jest.Mock).mockResolvedValue({ postingStatus: 'skipped' });
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 1000, name: 'ACME' });
+            db.supplierPaymentAllocation.aggregate.mockResolvedValue({ _sum: { amount: null } });
+        });
+
+        it('records a backdated payment at the picked time, read in the tenant zone, and dates its voucher to match', async () => {
+            const tx = mockTx();
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, date: '2026-10-01T09:30' }, 'Asia/Dhaka');
+
+            const picked = new Date('2026-10-01T03:30:00Z');
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ created_at: picked }) }),
+            );
+            expect(postedCalls()[0].date).toEqual(picked);
+        });
+
+        it('refuses a payment dated in the future', async () => {
+            const tx = mockTx();
+            const tomorrow = new Date(Date.now() + 24 * 3600e3).toISOString();
+
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, date: tomorrow }))
+                .rejects.toThrow('Payment date cannot be in the future');
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+        });
+
+        it('records a typed serial as given, and refuses one already taken', async () => {
+            const tx = mockTx();
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, paymentNumber: 'BILL-77' });
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith(
+                expect.objectContaining({ data: expect.objectContaining({ payment_number: 'BILL-77' }) }),
+            );
+            expect(tx.$queryRaw).not.toHaveBeenCalled();
+            expect(postedCalls()[0].referenceNumber).toBe('BILL-77');
+
+            tx.supplierCreditTransaction.findFirst.mockResolvedValue({ id: 'tx-other' });
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, paymentNumber: 'SPY-00002' }))
+                .rejects.toThrow(new ConflictException('Serial SPY-00002 is already used by another payment.'));
+        });
+
+        it('writes a typed serial in the series the way the series does, and refuses one ahead of it', async () => {
+            const tx = mockTx();
+            tx.supplierCreditTransaction.findFirst.mockImplementation(async ({ where }: any) =>
+                (where.payment_number === 'SPY-00002' ? { id: 'tx-other' } : null));
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, paymentNumber: 'spy-2' }))
+                .rejects.toThrow(new ConflictException('Serial SPY-00002 is already used by another payment.'));
+
+            tx.supplierCreditTransaction.findFirst.mockResolvedValue(null);
+            tx.$queryRaw.mockResolvedValue([{ next: '12' }]);
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, paymentNumber: 'SPY-000125' }))
+                .rejects.toThrow(BadRequestException);
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+        });
+
+        it('update moves the date and renames the serial, reposting under both', async () => {
+            db.supplierCreditTransaction.findFirst.mockResolvedValue(existing);
+            const tx = mockTx();
+
+            await service.updateCreditPayment(
+                'tenant-1', 'tx-1', { date: '2026-08-10T18:00:00+06:00', paymentNumber: 'BILL-900' }, 'Asia/Dhaka',
+            );
+
+            const moved = new Date('2026-08-10T12:00:00Z');
+            expect(tx.supplierCreditTransaction.findFirst).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', payment_number: 'BILL-900', id: { not: 'tx-1' } },
+                select: { id: true },
+            });
+            expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ created_at: moved, payment_number: 'BILL-900' }),
+            }));
+            expect(postedCalls()[0]).toMatchObject({ date: moved, referenceNumber: 'BILL-900' });
+        });
+
+        it('update keeps the date and serial when neither is sent', async () => {
+            db.supplierCreditTransaction.findFirst.mockResolvedValue(existing);
+            const tx = mockTx();
+
+            await service.updateCreditPayment('tenant-1', 'tx-1', { amount: 300 });
+
+            expect(tx.supplierCreditTransaction.findFirst).not.toHaveBeenCalled();
+            expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ created_at: existing.created_at, payment_number: 'SPY-00001' }),
+            }));
+        });
+
+        it('previews the next serial in the series the direction draws from', async () => {
+            db.$queryRaw = jest.fn().mockResolvedValue([{ next: '5' }]);
+
+            await expect(service.getNextPaymentNumber('tenant-1', SupplierPaymentDirectionDto.RECEIVE))
+                .resolves.toEqual({ payment_number: 'SPO-00005' });
+        });
+    });
+
     describe('payment discount', () => {
         function mockTx(opts: { bills?: any[] } = {}) {
             const tx = {
+                $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
                 supplierCreditTransaction: {
                     create: jest.fn().mockResolvedValue({
                         id: 'tx-1', type: 'PAYMENT', payment_number: 'SPY-00001',

@@ -35,6 +35,7 @@ import {
     normalizeMobileToE164,
     resolveMobileToE164,
     resolveTenantFeatures,
+    sanitizeHiddenApps,
     CURRENT_TERMS_VERSION,
     isCurrentTermsVersion,
     DEFAULT_PASSWORD_POLICY,
@@ -122,6 +123,7 @@ const ME_USER_SELECT = {
                     secondary_locale: true,
                     timezone: true,
                     dashboard_preference: true,
+                    hidden_apps: true,
                     // Every branch of the shop, not only the member's: the
                     // branch filter hides itself in a one-branch shop but shows
                     // disabled for a member limited to one of several.
@@ -1617,6 +1619,8 @@ export class AuthService {
             // Feeds `resolveDashboardVariant` on the client, so the dashboard picks
             // its variant from this response rather than a second round-trip.
             dashboard_preference: membership.tenant.dashboard_preference ?? 'AUTO',
+            // Apps the owner hid; the shell drops them from the rail and Home.
+            hidden_apps: sanitizeHiddenApps(membership.tenant.hidden_apps),
             role: membership.role,
             tenant_role:
                 membership.role === 'OWNER'

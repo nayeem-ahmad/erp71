@@ -6,6 +6,7 @@ import {
     CreateCustomerDto,
     UpdateCustomerDto,
     RecordCreditPaymentDto,
+    NextCustomerPaymentNumberQueryDto,
     UpdateCreditPaymentDto,
     ListCustomerCreditPaymentsQueryDto,
     WriteOffCustomerDebtDto,
@@ -103,6 +104,16 @@ export class CustomersController {
             timezone: tenant.timezone,
             scope: await this.scope(tenant),
         });
+    }
+
+    /** The serial a new payment would get. Declared before `:paymentId` so it is not captured as one. */
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
+    @Get('credit/payments/next-number')
+    async getNextPaymentNumber(
+        @Tenant() tenant: TenantContext,
+        @Query() query: NextCustomerPaymentNumberQueryDto,
+    ) {
+        return this.customersService.getNextPaymentNumber(tenant.tenantId, query.direction);
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)

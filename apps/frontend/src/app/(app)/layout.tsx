@@ -8,6 +8,7 @@ import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
+import AppShellSidebar from '@/components/app-shell/AppShellSidebar';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import ActivationPendingBanner from '@/components/ActivationPendingBanner';
 // Fetched on their own after the page is up, and only when rendered; see the file.
@@ -17,6 +18,7 @@ import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
 import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
+import { AppShellProvider } from '@/contexts/AppShellContext';
 import { TenantLocaleProvider } from '@/contexts/TenantLocaleContext';
 import {
     DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
@@ -24,6 +26,7 @@ import {
     DEFAULT_TENANT_NAV_LAYOUT,
     hasPlanEntitlement,
     normalizePlanFeatures,
+    resolveAppStates,
     type NavLayoutNode,
     type PlatformFeatures,
 } from '@erp71/shared-types';
@@ -100,6 +103,9 @@ function AppShell({ children }: DashboardLayoutProps) {
     const [emailVerificationDismissed, setEmailVerificationDismissed] = useState(false);
     const [resendingVerification, setResendingVerification] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    // Stable, so the drawer's focus trap does not re-run (and re-focus its first
+    // control) every time the shell re-renders behind it.
+    const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
     const [supportOpen, setSupportOpen] = useState(false);
     const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
     const accountPlatformFeatures: PlatformFeatures = user?.platform_features ?? DEFAULT_PLATFORM_FEATURES;
@@ -421,7 +427,30 @@ function AppShell({ children }: DashboardLayoutProps) {
     const canAccessProjects = inPlatformAdminMode
         ? canAccessPlatformProjects
         : Boolean(platformFeatures.projects) && (owner || hasPermission(perms, 'VIEW_PROJECTS'));
+    // The rail-of-apps shell: a shop's own workspace only — the admin console,
+    // the referral partner portal and the employee portal keep their sidebars.
+    const appShellOn = Boolean(platformFeatures.appShell)
+        && !inPlatformAdminMode
+        && !inRefereeMode
+        && !inEmployeeMode;
+    // Hidden apps belong to the new shell. With it off the workspace sees the
+    // old sidebar exactly as before, whatever an owner hid while it was on.
+    const hiddenApps: readonly string[] = appShellOn ? (activeTenant?.hidden_apps ?? []) : [];
+    // The module gate for the tenant sidebar, the app rail and the Home tiles.
+    const appStates = resolveAppStates({
+        planFeatures,
+        planCode: activePlanCode,
+        platformFeatures,
+        hiddenApps,
+        isOwner: owner,
+        permissions: perms,
+        isPlatformAdmin: inPlatformAdminMode,
+    });
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
+    // Who may hide apps: the backend's rule for workspace-wide display settings.
+    // Not on an accounting-only plan, where there is nothing worth hiding and
+    // the settings page sits outside the workspace's allowed paths.
+    const canManageApps = (owner || activeTenant?.role === 'MANAGER') && !accountingOnlyMode;
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
     // The permission half of the /short-links guards; the Sidebar applies the
@@ -658,6 +687,31 @@ function AppShell({ children }: DashboardLayoutProps) {
 
     const tenantLocaleConfig = (inPlatformAdminMode || inRefereeMode) ? null : activeTenant;
 
+    // What the nav gates on. The classic sidebar, the app rail and the Home
+    // tiles all resolve their menu from this, so they cannot disagree.
+    const navGates = {
+        appStates,
+        canAccessAccounting,
+        canAccessInventoryReports,
+        canAccessAccountingAdvanced,
+        canAccessPremiumCrm: hasPremiumCrm,
+        canAccessManufacturing,
+        canAccessProjects,
+        canAccessPlatformAccounting,
+        canAccessAdmin: isPlatformAdmin,
+        canManageBilling,
+        canManageTeam,
+        canManageShortLinks,
+        platformAdminMode: inPlatformAdminMode,
+        helpEnabled: platformFeatures.help,
+        supportEnabled: platformFeatures.support || platformFeatures.feedback,
+        accountingOnlyMode,
+        posEnabled,
+        planFeatures,
+        memberPermissions: perms,
+        memberIsOwner: owner,
+    };
+
     // Somebody still on a password an admin chose for them — today that means an
     // employee whose login HR just created. `JwtAuthGuard` refuses every endpoint
     // but the four the gate needs, so rendering the shell here would paint a
@@ -678,37 +732,30 @@ function AppShell({ children }: DashboardLayoutProps) {
             platformAdminLayout={platformAdminNavLayout}
         >
         <PlatformFeaturesProvider features={effectivePlatformFeatures}>
+        <AppShellProvider value={{ enabled: appShellOn, navGates, canManageBilling, canManageApps }}>
         <TenantLocaleProvider tenant={tenantLocaleConfig}>
         <TenantLocaleSync tenant={tenantLocaleConfig} />
         <div className="flex h-dvh min-h-dvh bg-canvas font-sans text-gray-900">
-            <Sidebar
-                chatUnreadCount={chatUnreadCount}
-                canAccessAccounting={canAccessAccounting}
-                canAccessInventoryReports={canAccessInventoryReports}
-                canAccessAccountingAdvanced={canAccessAccountingAdvanced}
-                canAccessPremiumCrm={hasPremiumCrm}
-                canAccessManufacturing={canAccessManufacturing}
-                canAccessProjects={canAccessProjects}
-                canAccessPlatformAccounting={canAccessPlatformAccounting}
-                canAccessAdmin={isPlatformAdmin}
-                canManageBilling={canManageBilling}
-                canManageTeam={canManageTeam}
-                canManageShortLinks={canManageShortLinks}
-                platformAdminMode={inPlatformAdminMode}
-                refereeMode={inRefereeMode}
-                employeeMode={inEmployeeMode}
-                helpEnabled={platformFeatures.help}
-                supportEnabled={platformFeatures.support || platformFeatures.feedback}
-                activePlanCode={activePlanCode}
-                accountingOnlyMode={accountingOnlyMode}
-                posEnabled={posEnabled}
-                planFeatures={planFeatures}
-                memberPermissions={perms}
-                memberIsOwner={owner}
-                compactNav={useCompactChrome}
-                isOpen={mobileNavOpen}
-                onClose={() => setMobileNavOpen(false)}
-            />
+            {appShellOn ? (
+                <AppShellSidebar
+                    {...navGates}
+                    chatUnreadCount={chatUnreadCount}
+                    compactNav={useCompactChrome}
+                    isOpen={mobileNavOpen}
+                    onClose={closeMobileNav}
+                />
+            ) : (
+                <Sidebar
+                    {...navGates}
+                    chatUnreadCount={chatUnreadCount}
+                    refereeMode={inRefereeMode}
+                    employeeMode={inEmployeeMode}
+                    activePlanCode={activePlanCode}
+                    compactNav={useCompactChrome}
+                    isOpen={mobileNavOpen}
+                    onClose={closeMobileNav}
+                />
+            )}
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top header */}
@@ -898,6 +945,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             <ServiceWorkerRegistrar />
         </div>
         </TenantLocaleProvider>
+        </AppShellProvider>
         </PlatformFeaturesProvider>
         </NavLayoutProvider>
         </BrandingProvider>

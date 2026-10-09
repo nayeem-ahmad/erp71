@@ -7,6 +7,7 @@ import {
     AllocateSupplierPaymentDto,
     CreateSupplierDto,
     ListSupplierCreditPaymentsQueryDto,
+    NextSupplierPaymentNumberQueryDto,
     RecordSupplierCreditPaymentDto,
     SupplierCreditLedgerQueryDto,
     UpdateSupplierCreditPaymentDto,
@@ -57,6 +58,16 @@ export class SuppliersController {
         return this.suppliersService.listCreditPayments(tenant.tenantId, { ...query, timezone: tenant.timezone });
     }
 
+    /** The serial a new payment would get. Declared before `:paymentId` so it is not captured as one. */
+    @RequireAnyStorePermission(...SUPPLIER_CREDIT_WRITE)
+    @Get('credit/payments/next-number')
+    getNextPaymentNumber(
+        @Tenant() tenant: TenantContext,
+        @Query() query: NextSupplierPaymentNumberQueryDto,
+    ) {
+        return this.suppliersService.getNextPaymentNumber(tenant.tenantId, query.direction);
+    }
+
     @RequireAnyStorePermission(...SUPPLIER_CREDIT_READ)
     @Get('credit/payments/:paymentId')
     getCreditPayment(
@@ -73,7 +84,7 @@ export class SuppliersController {
         @Param('paymentId') paymentId: string,
         @Body() dto: UpdateSupplierCreditPaymentDto,
     ) {
-        return this.suppliersService.updateCreditPayment(tenant.tenantId, paymentId, dto);
+        return this.suppliersService.updateCreditPayment(tenant.tenantId, paymentId, dto, tenant.timezone);
     }
 
     @RequireAnyStorePermission(...SUPPLIER_CREDIT_WRITE)
@@ -145,7 +156,7 @@ export class SuppliersController {
         @Param('id') id: string,
         @Body() dto: RecordSupplierCreditPaymentDto,
     ) {
-        return this.suppliersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto);
+        return this.suppliersService.recordCreditPayment(tenant.tenantId, id, tenant.userId, dto, tenant.timezone);
     }
 
     @RequireAnyStorePermission(...SUPPLIER_READ)

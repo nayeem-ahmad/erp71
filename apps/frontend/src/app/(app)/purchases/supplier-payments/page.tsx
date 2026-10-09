@@ -6,12 +6,13 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Copy, Eye, Link2, Loader2, Pencil, Plus, Printer, Trash2 } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printSupplierPaymentReceipt } from '@/lib/supplier-payment-receipt';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
+import { isoToTenantLocal, tenantLocalToIso } from '@/lib/schedule-time';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
@@ -19,6 +20,12 @@ import { Button } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import { PaymentDiscountField, paymentDiscountError } from '@/components/payments/PaymentDiscountField';
+import {
+    PaymentSerialDateFields,
+    isFutureLocal,
+    nowLocal,
+    useNextPaymentNumber,
+} from '@/components/payments/PaymentSerialDateFields';
 
 interface SupplierOption {
     id: string;
@@ -107,6 +114,15 @@ function SupplierPaymentsContent() {
     const [formAmount, setFormAmount] = useState('');
     const [formDiscount, setFormDiscount] = useState('');
     const [formNotes, setFormNotes] = useState('');
+    // Empty means "now": the picker shows the current time and nothing is
+    // sent, so the server stamps the moment of saving rather than the minute
+    // the form was opened. Only a time the operator picked goes over the wire.
+    const [formDate, setFormDate] = useState('');
+    // null until the operator types: the field then shows the next number in
+    // the series, and the server allocates it at save time. Typed (even
+    // blank), it is theirs; blank still means "number it for me".
+    const [formSerial, setFormSerial] = useState<string | null>(null);
+    const [formSerialError, setFormSerialError] = useState<string | null>(null);
     const [openBills, setOpenBills] = useState<OpenBill[]>([]);
     const [billAllocations, setBillAllocations] = useState<Record<string, string>>({});
     // Set when the create form was opened as a copy of an existing payment;
@@ -125,6 +141,10 @@ function SupplierPaymentsContent() {
     const [editAmount, setEditAmount] = useState('');
     const [editDiscount, setEditDiscount] = useState('');
     const [editNotes, setEditNotes] = useState('');
+    // Empty / null mean "unchanged", as with the create form.
+    const [editDate, setEditDate] = useState('');
+    const [editSerial, setEditSerial] = useState<string | null>(null);
+    const [editSerialError, setEditSerialError] = useState<string | null>(null);
 
     const loadData = async () => {
         setLoading(true);
@@ -172,6 +192,9 @@ function SupplierPaymentsContent() {
         setFormAmount('');
         setFormDiscount('');
         setFormNotes('');
+        setFormDate('');
+        setFormSerial(null);
+        setFormSerialError(null);
         setBillAllocations({});
         setDuplicatedFrom('');
     };
@@ -191,10 +214,20 @@ function SupplierPaymentsContent() {
         // settles one particular remainder.
         setFormDiscount('');
         setFormNotes(payment.notes ?? '');
+        // Nor these: the copy is a new payment, taken now, under the next serial.
+        setFormDate('');
+        setFormSerial(null);
+        setFormSerialError(null);
         setBillAllocations({});
         setDuplicatedFrom(payment.payment_number ?? '');
         setShowForm(true);
     };
+
+    const { preview: serialPreview, refresh: refreshSerialPreview } = useNextPaymentNumber(
+        showForm,
+        formDirection,
+        api.getNextSupplierPaymentNumber,
+    );
 
     const selectedFormSupplier = suppliers.find((s) => s.id === formSupplierId) ?? null;
     const dueBalance = selectedFormSupplier ? Number(selectedFormSupplier.due_balance ?? 0) : 0;
@@ -216,6 +249,7 @@ function SupplierPaymentsContent() {
     const formDiscountError = formDiscountApplies && selectedFormSupplier
         ? paymentDiscountError(dueBalance, formAmount, formDiscount, copy.discount.tooLarge)
         : null;
+    const formDateError = isFutureLocal(formDate) ? copy.dateInFuture : null;
     // A discount settles bills exactly as money does.
     const formSettles = (Number(formAmount) || 0) + (formDiscountApplies ? Number(formDiscount) || 0 : 0);
 
@@ -235,7 +269,7 @@ function SupplierPaymentsContent() {
             setToast({ type: 'error', message: formDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
             return;
         }
-        if (formDiscountError) return;
+        if (formDiscountError || formDateError) return;
         if (totalBillAllocated - (amt + discount) > 0.005) {
             setToast({ type: 'error', message: copy.allocation.exceedsAmount });
             return;
@@ -250,6 +284,8 @@ function SupplierPaymentsContent() {
                 discount: discount > 0 ? discount : undefined,
                 direction: formDirection,
                 notes: formNotes.trim() || undefined,
+                date: tenantLocalToIso(formDate) ?? undefined,
+                paymentNumber: formSerial?.trim() || undefined,
                 allocations: allocations.length > 0 ? allocations : undefined,
             });
             setToast({ type: 'success', message: copy.paymentSaved });
@@ -257,6 +293,17 @@ function SupplierPaymentsContent() {
             resetForm();
             await loadData();
         } catch (error: unknown) {
+            // A serial past the series' next number would skip every number between;
+            // the server refuses it, and it belongs under the field like a taken one.
+            if (error instanceof ApiError && error.code === 'SERIAL_AHEAD_OF_SERIES') {
+                setFormSerialError(formatMessage(copy.serialAhead, { serial: formSerial?.trim() || serialPreview }));
+                return;
+            }
+            if (error instanceof ApiError && error.status === 409) {
+                setFormSerialError(formatMessage(copy.serialTaken, { serial: formSerial?.trim() || serialPreview }));
+                refreshSerialPreview();
+                return;
+            }
             setToast({
                 type: 'error',
                 message: error instanceof Error ? error.message : copy.saveFailed,
@@ -272,6 +319,9 @@ function SupplierPaymentsContent() {
         setEditAmount(String(payment.amount));
         setEditDiscount(discountOf(payment) > 0 ? String(discountOf(payment)) : '');
         setEditNotes(payment.notes ?? '');
+        setEditDate('');
+        setEditSerial(null);
+        setEditSerialError(null);
     };
 
     const editDiscountApplies = editDirection === 'pay';
@@ -287,6 +337,7 @@ function SupplierPaymentsContent() {
     const editDiscountError = editDiscountApplies
         ? paymentDiscountError(editDueBefore, editAmount, editDiscount, copy.discount.tooLarge)
         : null;
+    const editDateError = isFutureLocal(editDate) ? copy.dateInFuture : null;
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -301,7 +352,7 @@ function SupplierPaymentsContent() {
             setToast({ type: 'error', message: editDiscountApplies ? copy.discount.amountOrDiscount : copy.invalidAmount });
             return;
         }
-        if (editDiscountError) return;
+        if (editDiscountError || editDateError) return;
         setSaving(true);
         try {
             await api.updateSupplierCreditPayment(editPayment.id, {
@@ -309,11 +360,23 @@ function SupplierPaymentsContent() {
                 discount,
                 direction: editDirection,
                 notes: editNotes.trim() || undefined,
+                date: tenantLocalToIso(editDate) ?? undefined,
+                paymentNumber: editSerial?.trim() || undefined,
             });
             setToast({ type: 'success', message: copy.paymentUpdated });
             setEditPayment(null);
             await loadData();
         } catch (error: unknown) {
+            // A serial past the series' next number would skip every number between;
+            // the server refuses it, and it belongs under the field like a taken one.
+            if (error instanceof ApiError && error.code === 'SERIAL_AHEAD_OF_SERIES') {
+                setEditSerialError(formatMessage(copy.serialAhead, { serial: editSerial?.trim() ?? '' }));
+                return;
+            }
+            if (error instanceof ApiError && error.status === 409) {
+                setEditSerialError(formatMessage(copy.serialTaken, { serial: editSerial?.trim() ?? '' }));
+                return;
+            }
             setToast({
                 type: 'error',
                 message: error instanceof Error ? error.message : copy.saveFailed,
@@ -428,7 +491,9 @@ function SupplierPaymentsContent() {
                 },
                 size: 110,
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            // A payment can be backdated, so this is when the money changed
+            // hands rather than when the row was keyed in.
+            createdAtColumn(columnHelper, { header: copy.columns.dateTime, locale }),
             columnHelper.accessor((row) => row.supplier?.name ?? '—', {
                 id: 'supplier',
                 header: copy.columns.supplier,
@@ -587,7 +652,7 @@ function SupplierPaymentsContent() {
                     <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4 sm:col-span-2">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="space-y-1 sm:col-span-2">
-                                <span className="text-xs font-medium text-gray-500">{t.common.createdAt}</span>
+                                <span className="text-xs font-medium text-gray-500">{copy.columns.dateTime}</span>
                                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                             </div>
                             <div className="space-y-1">
@@ -630,6 +695,17 @@ function SupplierPaymentsContent() {
                             onClose={() => setShowForm(false)}
                         />
                         <div className="p-6 space-y-4 overflow-y-auto">
+                            <PaymentSerialDateFields
+                                idPrefix="supplier-payment"
+                                serial={formSerial ?? serialPreview}
+                                serialPlaceholder={serialPreview}
+                                onSerialChange={(value) => { setFormSerial(value); setFormSerialError(null); }}
+                                serialError={formSerialError}
+                                date={formDate || nowLocal()}
+                                onDateChange={setFormDate}
+                                dateError={formDateError}
+                                labels={{ serial: copy.columns.serial, date: copy.paymentDate }}
+                            />
                             {duplicatedFrom ? (
                                 <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                                     {copy.duplicateNotice.replace('{paymentNumber}', duplicatedFrom)}
@@ -915,6 +991,17 @@ function SupplierPaymentsContent() {
                             onClose={() => setEditPayment(null)}
                         />
                         <div className="p-6 space-y-4 overflow-y-auto">
+                            <PaymentSerialDateFields
+                                idPrefix="supplier-payment-edit"
+                                serial={editSerial ?? editPayment.payment_number ?? ''}
+                                serialPlaceholder={editPayment.payment_number ?? undefined}
+                                onSerialChange={(value) => { setEditSerial(value); setEditSerialError(null); }}
+                                serialError={editSerialError}
+                                date={editDate || isoToTenantLocal(editPayment.created_at)}
+                                onDateChange={setEditDate}
+                                dateError={editDateError}
+                                labels={{ serial: copy.columns.serial, date: copy.paymentDate }}
+                            />
                             <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-sm">
                                 <span className="text-gray-500">{copy.columns.supplier}: </span>
                                 <span className="font-bold">{editPayment.supplier?.name}</span>

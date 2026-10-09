@@ -107,9 +107,9 @@ export default function CustomersPage() {
     }, []);
 
     const segmentCardStyle: Record<string, { bg: string; text: string; bar: string; icon: React.ReactNode }> = useMemo(() => ({
-        VIP: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-500', icon: <Crown className="w-5 h-5 text-emerald-500" /> },
-        'At-Risk': { bg: 'bg-danger-light border-red-200', text: 'text-danger-text', bar: 'bg-danger', icon: <AlertTriangle className="w-5 h-5 text-danger" /> },
-        Regular: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', bar: 'bg-gray-400', icon: <UserCheck className="w-5 h-5 text-gray-400" /> },
+        VIP: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-500', icon: <Crown className="w-4 h-4 text-emerald-500" /> },
+        'At-Risk': { bg: 'bg-danger-light border-red-200', text: 'text-danger-text', bar: 'bg-danger', icon: <AlertTriangle className="w-4 h-4 text-danger" /> },
+        Regular: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', bar: 'bg-gray-400', icon: <UserCheck className="w-4 h-4 text-gray-400" /> },
     }), []);
 
     const [search, setSearch] = useState('');
@@ -424,26 +424,28 @@ export default function CustomersPage() {
                 />
 
                 {segmentStats && segmentStats.total > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm">
-                            <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.totalCustomers}</p>
-                            <p className="text-3xl font-bold text-gray-900">{segmentStats.total}</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                        <div className="bg-white border border-gray-100 rounded-lg px-3 py-2.5 shadow-sm">
+                            <p className="text-xs font-medium text-gray-500 truncate">{t.customers.totalCustomers}</p>
+                            <p className="text-xl font-bold text-gray-900 mt-0.5">{segmentStats.total}</p>
                         </div>
                         {segmentStats.breakdown.map((seg) => {
                             const style = segmentCardStyle[seg.segment] ?? segmentCardStyle['Regular'];
                             return (
-                                <div key={seg.segment} className={`border rounded-lg p-5 shadow-sm ${style.bg}`}>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <p className={`text-[10px] font-semibold ${style.text}`}>{seg.segment}</p>
+                                <div key={seg.segment} className={`border rounded-lg px-3 py-2.5 shadow-sm ${style.bg}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className={`text-xs font-semibold truncate ${style.text}`}>{seg.segment}</p>
                                         {style.icon}
                                     </div>
-                                    <p className={`text-3xl font-bold ${style.text}`}>{seg.count}</p>
-                                    <div className="mt-3 bg-white/60 rounded-full h-1.5 overflow-hidden">
+                                    <div className="flex flex-wrap items-baseline gap-x-2 mt-0.5">
+                                        <p className={`text-xl font-bold ${style.text}`}>{seg.count}</p>
+                                        <p className={`text-xs font-semibold ${style.text} opacity-70`}>
+                                            {formatMessage(t.customers.percentOfTotal, { percent: String(seg.percentage) })}
+                                        </p>
+                                    </div>
+                                    <div className="mt-1.5 bg-white/60 rounded-full h-1 overflow-hidden">
                                         <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${seg.percentage}%` }} />
                                     </div>
-                                    <p className={`text-xs font-bold mt-1 ${style.text} opacity-70`}>
-                                        {formatMessage(t.customers.percentOfTotal, { percent: String(seg.percentage) })}
-                                    </p>
                                 </div>
                             );
                         })}

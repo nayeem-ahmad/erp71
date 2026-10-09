@@ -19,10 +19,21 @@ import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
-import { DEFAULT_TENANT_TIMEZONE, parseTenantDateTime } from '../common/tenant-time.util';
+import {
+    assertNotAheadOfSeries,
+    assertSerialFree,
+    canonicalSerial,
+    isSerialConflict,
+    resolvePaymentDate,
+    serialTaken,
+    typedSerial,
+} from '../common/credit-payment-entry.util';
 import { customerLedgerDueDelta } from './customer-credit.utils';
-import { CUSTOMER_PAYMENT_DISCOUNT_LEG, nextCustomerCreditNumber } from './customer-payment-number.util';
+import { CREDIT_TRANSACTION_PREFIXES, CUSTOMER_PAYMENT_DISCOUNT_LEG, nextCustomerCreditNumber } from './customer-payment-number.util';
 import { type CustomerScope, customerInBranchesWhere, customerScopeWhere, saleScopeWhere } from './customer-visibility';
+
+/** The numbered series a typed payment serial may fall in (receipts, payouts, write-offs). */
+const SERIAL_SERIES = Object.values(CREDIT_TRANSACTION_PREFIXES);
 
 const CUSTOMER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -42,13 +53,6 @@ const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
 const AMOUNT_EPSILON = 0.005;
 
 const DISCOUNT_LEG = CUSTOMER_PAYMENT_DISCOUNT_LEG;
-
-/**
- * How far past the server's clock a payment date may sit. The picker works in
- * whole minutes and the browser's clock drifts, so "now" can arrive a little
- * ahead; anything further out is a typo, not a payment.
- */
-const PAYMENT_DATE_SKEW_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class CustomersService {
@@ -126,21 +130,6 @@ export class CustomersService {
             }
         }
         throw new BadRequestException('Could not allocate a unique customer code. Please try again.');
-    }
-
-    /**
-     * A payment's date as the operator picked it, or undefined when they did
-     * not pick one. Backdating is the point — money taken yesterday and entered
-     * today — but a date in the future is refused.
-     */
-    private paymentDate(value: string | undefined, timeZone?: string): Date | undefined {
-        if (!value) return undefined;
-        const date = parseTenantDateTime(value, timeZone ?? DEFAULT_TENANT_TIMEZONE);
-        if (!date) throw new BadRequestException('Invalid payment date');
-        if (date.getTime() > Date.now() + PAYMENT_DATE_SKEW_MS) {
-            throw new BadRequestException('Payment date cannot be in the future');
-        }
-        return date;
     }
 
     private dueDelta(type: 'PAYMENT' | 'PAYOUT', amount: number, discount = 0): number {
@@ -527,7 +516,9 @@ export class CustomersService {
 
     async getSegmentStats(tenantId: string, scope: CustomerScope = null) {
         const customers = await this.db.customer.findMany({
-            where: { tenant_id: tenantId, ...customerScopeWhere(scope) },
+            // Deleted customers left out, as the list these cards sit above
+            // leaves them out — otherwise Total disagrees with the list.
+            where: { tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
             select: { segment_category: true },
         });
 
@@ -848,6 +839,16 @@ export class CustomersService {
         return enriched;
     }
 
+    /**
+     * The serial a new payment would get if saved now, for the entry form to
+     * show. Not reserved: a form left blank is numbered at save time, so two
+     * operators previewing at once cannot collide.
+     */
+    async getNextPaymentNumber(tenantId: string, direction?: CustomerPaymentDirectionDto) {
+        const txType = this.typeFromDirection(direction ?? CustomerPaymentDirectionDto.RECEIVE);
+        return { payment_number: await this.generatePaymentNumber(tenantId, this.db, txType) };
+    }
+
     async updateCreditPayment(
         tenantId: string,
         paymentId: string,
@@ -869,7 +870,10 @@ export class CustomersService {
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
         // Kept when not changed: the vouchers are voided and reposted below,
         // and a repost left undated would move an old payment into today.
-        const newDate = this.paymentDate(dto.date, timeZone) ?? payment.created_at;
+        const newDate = resolvePaymentDate(dto.date, timeZone) ?? payment.created_at;
+        const typedRename = typedSerial(dto.paymentNumber);
+        const renamedTo = typedRename && canonicalSerial(typedRename, SERIAL_SERIES);
+        const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
 
         return this.db.$transaction(async (tx) => {
             const customer = await tx.customer.findFirst({
@@ -877,6 +881,10 @@ export class CustomersService {
                 select: { id: true, name: true, due_balance: true },
             });
             if (!customer) throw new NotFoundException('Customer not found');
+            if (newNumber && newNumber !== payment.payment_number) {
+                await assertSerialFree(tx, 'customerCreditTransaction', tenantId, newNumber, paymentId);
+                await assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', tenantId, newNumber, SERIAL_SERIES);
+            }
 
             const dueWithoutPayment = Number(customer.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
             this.assertPaymentSplit(newType, newAmount, newDiscount, dueWithoutPayment);
@@ -894,6 +902,7 @@ export class CustomersService {
                     balance_after: balanceAfter,
                     notes: newNotes,
                     created_at: newDate,
+                    payment_number: newNumber,
                 },
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
@@ -911,7 +920,7 @@ export class CustomersService {
                 customerId,
                 customerName: customer.name,
                 paymentId,
-                paymentNumber: payment.payment_number ?? paymentId,
+                paymentNumber: newNumber ?? paymentId,
                 type: newType,
                 amount: newAmount,
                 discount: newDiscount,
@@ -927,6 +936,9 @@ export class CustomersService {
                 discount_voucher_id: posting.discount_voucher_id,
                 discount_voucher_number: posting.discount_voucher_number,
             };
+        }).catch((err) => {
+            if (newNumber && isSerialConflict(err)) throw serialTaken(newNumber);
+            throw err;
         });
     }
 
@@ -980,10 +992,19 @@ export class CustomersService {
         const currentDue = Number(customer.due_balance);
         this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
-        const paymentDate = this.paymentDate(dto.date, timeZone) ?? new Date();
+        const paymentDate = resolvePaymentDate(dto.date, timeZone) ?? new Date();
+        const typedRaw = typedSerial(dto.paymentNumber);
+        const typed = typedRaw && canonicalSerial(typedRaw, SERIAL_SERIES);
+        // Kept outside the transaction so a unique-index race can name it.
+        let serial = typed;
 
         return this.db.$transaction(async (tx) => {
-            const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
+            if (typed) {
+                await assertSerialFree(tx, 'customerCreditTransaction', tenantId, typed);
+                await assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', tenantId, typed, SERIAL_SERIES);
+            }
+            const payment_number = typed ?? await this.generatePaymentNumber(tenantId, tx, txType);
+            serial = payment_number;
 
             const payment = await tx.customerCreditTransaction.create({
                 data: {
@@ -1023,6 +1044,9 @@ export class CustomersService {
             });
 
             return { ...payment, ...posting };
+        }).catch((err) => {
+            if (serial && isSerialConflict(err)) throw serialTaken(serial);
+            throw err;
         });
     }
 

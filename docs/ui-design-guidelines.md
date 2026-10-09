@@ -217,6 +217,19 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 - No `⋯` overflow menu in the header. If the header does not fit at 360px, the fix is to take a control out (into the avatar menu or the sidebar), not to fold it away.
 - Adding a header control is a design decision, not a feature's default: say which live state it shows, and what leaves to make room.
 
+
+### 2.13 App shell (rail of apps)
+
+Behind the `appShell` platform switch (default off; pilot per tenant through its override), a shop's sidebar is a **rail of apps** beside **the menu of the app you are in**. Spec: `docs/superpowers/specs/2026-10-08-app-shell-rail-design.md`.
+
+- **An app is a top-level module of the nav layout.** Its subgroups and links are its menu; nothing about the layout changes. Every top-level module must have an `APP_REGISTRY` entry in `packages/shared-types/apps.ts` (a test fails otherwise) — that entry, through `resolveAppStates`, is the module's one gate: plan entitlement, platform switch, accounting-only, owner-hidden, and the module-level permission where the shell holds it.
+- **The rail** (56px): brand mark and Home at the top, business apps in layout order, then Chat, Help (Help, Support and What's New share one entry) and Settings, then the collapse toggle. Icons only, 44px targets, the app's name as tooltip and accessible name. The active app is `bg-blue-50 text-blue-600` with a `blue-600` bar at the inline start. A dot is the only decoration: blue for unread chat, amber for work waiting in a link (the voucher approval queue).
+- **The panel** holds the business name, a search that spans **every** app (`Ctrl/⌘+K` reaches it from anywhere), and the open app's menu drawn by `NavModuleChildren` — the same markup the classic sidebar uses. On Home, or before any app is opened, it lists the apps. A page no app owns keeps the last app's menu.
+- **On a phone** the drawer holds rail and panel together; tapping an app switches the menu without navigating, and a back arrow returns to the app list.
+- **Home** leads, under the greeting, with one tile per app carrying the single count from `GET /home/pulse` that says what is waiting in it, then — for owners and billing managers — the apps the plan lacks, each opening a sheet that points at Billing. A member who can open exactly one app lands in it instead of on Home; the owner never does.
+- **Hiding an app** (Settings › Apps, owner or manager) tidies the rail and Home for everyone. It is presentation only: no page or endpoint closes. Say so wherever hiding is offered.
+- **Nothing goes in the header** for this (§2.12). A new module gets a rail icon by being a top-level layout module with a registry entry — not a header control, not a floating button.
+
 ---
 
 ## Part 3 — Proposed migration order (only on instruction)

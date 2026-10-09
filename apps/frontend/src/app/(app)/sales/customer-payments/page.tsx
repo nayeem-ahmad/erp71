@@ -6,7 +6,7 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Copy, Eye, Loader2, Pencil, Plus, Printer, Trash2, Wallet } from 'lucide-react';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printCustomerPaymentReceipt } from '@/lib/customer-payment-receipt';
@@ -15,10 +15,16 @@ import { formatBDT } from '@/lib/format';
 import { isoToTenantLocal, tenantLocalToIso } from '@/lib/schedule-time';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button, Alert, Field, Input } from '@/components/ui';
+import { PageShell, Button, Alert } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
 import { PaymentDiscountField, paymentDiscountError } from '@/components/payments/PaymentDiscountField';
+import {
+    PaymentSerialDateFields,
+    isFutureLocal,
+    nowLocal,
+    useNextPaymentNumber,
+} from '@/components/payments/PaymentSerialDateFields';
 
 interface CustomerOption {
     id: string;
@@ -70,17 +76,6 @@ function discountOf(payment: CustomerCreditPayment): number {
     return Number(payment.discount_amount ?? 0);
 }
 
-/** The current minute as a `datetime-local` value, in workspace time. */
-function nowLocal(): string {
-    return isoToTenantLocal(new Date().toISOString());
-}
-
-/** Whether a `datetime-local` value, read in workspace time, is still to come. */
-function isFutureLocal(value: string): boolean {
-    const iso = tenantLocalToIso(value);
-    return !!iso && new Date(iso).getTime() > Date.now();
-}
-
 /** A form value as a non-negative number, or NaN when it is not one. */
 function parseNonNegative(value: string): number {
     if (value.trim() === '') return 0;
@@ -118,6 +113,11 @@ function CustomerPaymentsContent() {
     // sent, so the server stamps the moment of saving rather than the minute
     // the form was opened. Only a time the operator picked goes over the wire.
     const [formDate, setFormDate] = useState('');
+    // null until the operator types: the field then shows the next number in
+    // the series, and the server allocates it at save time. Typed (even
+    // blank), it is theirs; blank still means "number it for me".
+    const [formSerial, setFormSerial] = useState<string | null>(null);
+    const [formSerialError, setFormSerialError] = useState<string | null>(null);
     // Set when the create form was opened as a copy of an existing payment;
     // names the source in the modal so a duplicate is never mistaken for it.
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
@@ -130,6 +130,9 @@ function CustomerPaymentsContent() {
     const [editNotes, setEditNotes] = useState('');
     // Empty means "unchanged", as with the create form's date.
     const [editDate, setEditDate] = useState('');
+    // null means "unchanged", as with the create form's serial.
+    const [editSerial, setEditSerial] = useState<string | null>(null);
+    const [editSerialError, setEditSerialError] = useState<string | null>(null);
 
     const loadData = async () => {
         setLoading(true);
@@ -192,6 +195,8 @@ function CustomerPaymentsContent() {
         setFormDiscount('');
         setFormNotes('');
         setFormDate('');
+        setFormSerial(null);
+        setFormSerialError(null);
         setDuplicatedFrom('');
     };
 
@@ -210,11 +215,20 @@ function CustomerPaymentsContent() {
         // copy will be settling a different one.
         setFormDiscount('');
         setFormNotes(payment.notes ?? '');
-        // Not copied either: the copy is a new payment, taken now.
+        // Not copied either: the copy is a new payment, taken now, under the
+        // next serial.
         setFormDate('');
+        setFormSerial(null);
+        setFormSerialError(null);
         setDuplicatedFrom(payment.payment_number ?? '');
         setShowForm(true);
     };
+
+    const { preview: serialPreview, refresh: refreshSerialPreview } = useNextPaymentNumber(
+        showForm,
+        formDirection,
+        api.getNextCustomerPaymentNumber,
+    );
 
     const selectedFormCustomer = customers.find((c) => c.id === formCustomerId) ?? null;
     const dueBalance = selectedFormCustomer ? Number(selectedFormCustomer.due_balance ?? 0) : 0;
@@ -250,6 +264,7 @@ function CustomerPaymentsContent() {
                 direction: formDirection,
                 notes: formNotes.trim() || undefined,
                 date: tenantLocalToIso(formDate) ?? undefined,
+                paymentNumber: formSerial?.trim() || undefined,
             });
             setToast({ type: 'success', message: copy.paymentSaved });
             setShowForm(false);
@@ -258,6 +273,17 @@ function CustomerPaymentsContent() {
             // rather than keeping Save busy until every page has been re-fetched.
             void loadData();
         } catch (error: unknown) {
+            // A serial past the series' next number would skip every number between;
+            // the server refuses it, and it belongs under the field like a taken one.
+            if (error instanceof ApiError && error.code === 'SERIAL_AHEAD_OF_SERIES') {
+                setFormSerialError(formatMessage(copy.serialAhead, { serial: formSerial?.trim() || serialPreview }));
+                return;
+            }
+            if (error instanceof ApiError && error.status === 409) {
+                setFormSerialError(formatMessage(copy.serialTaken, { serial: formSerial?.trim() || serialPreview }));
+                refreshSerialPreview();
+                return;
+            }
             setToast({
                 type: 'error',
                 message: error instanceof Error ? error.message : copy.saveFailed,
@@ -274,6 +300,8 @@ function CustomerPaymentsContent() {
         setEditDiscount(discountOf(payment) > 0 ? String(discountOf(payment)) : '');
         setEditNotes(payment.notes ?? '');
         setEditDate('');
+        setEditSerial(null);
+        setEditSerialError(null);
     };
 
     const editDiscountApplies = editDirection === 'receive';
@@ -313,11 +341,22 @@ function CustomerPaymentsContent() {
                 direction: editDirection,
                 notes: editNotes.trim() || undefined,
                 date: tenantLocalToIso(editDate) ?? undefined,
+                paymentNumber: editSerial?.trim() || undefined,
             });
             setToast({ type: 'success', message: copy.paymentUpdated });
             setEditPayment(null);
             void loadData();
         } catch (error: unknown) {
+            // A serial past the series' next number would skip every number between;
+            // the server refuses it, and it belongs under the field like a taken one.
+            if (error instanceof ApiError && error.code === 'SERIAL_AHEAD_OF_SERIES') {
+                setEditSerialError(formatMessage(copy.serialAhead, { serial: editSerial?.trim() ?? '' }));
+                return;
+            }
+            if (error instanceof ApiError && error.status === 409) {
+                setEditSerialError(formatMessage(copy.serialTaken, { serial: editSerial?.trim() ?? '' }));
+                return;
+            }
             setToast({
                 type: 'error',
                 message: error instanceof Error ? error.message : copy.saveFailed,
@@ -600,6 +639,17 @@ function CustomerPaymentsContent() {
                             onClose={() => setShowForm(false)}
                         />
                         <div className="p-6 space-y-4 overflow-y-auto">
+                            <PaymentSerialDateFields
+                                idPrefix="customer-payment"
+                                serial={formSerial ?? serialPreview}
+                                serialPlaceholder={serialPreview}
+                                onSerialChange={(value) => { setFormSerial(value); setFormSerialError(null); }}
+                                serialError={formSerialError}
+                                date={formDate || nowLocal()}
+                                onDateChange={setFormDate}
+                                dateError={formDateError}
+                                labels={{ serial: copy.columns.serial, date: copy.paymentDate }}
+                            />
                             {duplicatedFrom ? (
                                 <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                                     {copy.duplicateNotice.replace('{paymentNumber}', duplicatedFrom)}
@@ -681,16 +731,6 @@ function CustomerPaymentsContent() {
                                             labels={copy.discount}
                                         />
                                     ) : null}
-                                    <Field label={copy.paymentDate} htmlFor="customer-payment-date" error={formDateError ?? undefined}>
-                                        <Input
-                                            id="customer-payment-date"
-                                            type="datetime-local"
-                                            value={formDate || nowLocal()}
-                                            onChange={(e) => setFormDate(e.target.value)}
-                                            error={!!formDateError}
-                                            className="w-full"
-                                        />
-                                    </Field>
                                     <label className="block space-y-1">
                                         <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                         <textarea
@@ -841,6 +881,17 @@ function CustomerPaymentsContent() {
                             onClose={() => setEditPayment(null)}
                         />
                         <div className="p-6 space-y-4 overflow-y-auto">
+                            <PaymentSerialDateFields
+                                idPrefix="customer-payment-edit"
+                                serial={editSerial ?? editPayment.payment_number ?? ''}
+                                serialPlaceholder={editPayment.payment_number ?? undefined}
+                                onSerialChange={(value) => { setEditSerial(value); setEditSerialError(null); }}
+                                serialError={editSerialError}
+                                date={editDate || isoToTenantLocal(editPayment.created_at)}
+                                onDateChange={setEditDate}
+                                dateError={editDateError}
+                                labels={{ serial: copy.columns.serial, date: copy.paymentDate }}
+                            />
                             <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-sm">
                                 <span className="text-gray-500">{copy.columns.customer}: </span>
                                 <span className="font-bold">{editPayment.customer?.name}</span>
@@ -879,16 +930,6 @@ function CustomerPaymentsContent() {
                                     labels={copy.discount}
                                 />
                             ) : null}
-                            <Field label={copy.paymentDate} htmlFor="customer-payment-edit-date" error={editDateError ?? undefined}>
-                                <Input
-                                    id="customer-payment-edit-date"
-                                    type="datetime-local"
-                                    value={editDate || isoToTenantLocal(editPayment.created_at)}
-                                    onChange={(e) => setEditDate(e.target.value)}
-                                    error={!!editDateError}
-                                    className="w-full"
-                                />
-                            </Field>
                             <label className="block space-y-1">
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{copy.notes}</span>
                                 <textarea
