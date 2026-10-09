@@ -879,6 +879,10 @@ export const adminMessages = {
                 label: "Contabilidad de la plataforma",
                 hint: "Los libros de la propia ERP71 en la consola de administración: ingresos por suscripción, gastos de plataforma y los estados financieros. No es una función para tiendas. Activada por defecto.",
             },
+            appShell: {
+                label: "Barra de aplicaciones",
+                hint: "Sustituye la barra lateral larga por una barra de aplicaciones, cada una con su propio menú, y añade a Inicio mosaicos con recuentos en vivo. Desactivado por defecto: pruébalo cliente por cliente.",
+            },
             saved: "Ajustes de las funciones de los espacios guardados.",
         },
         sms: {

@@ -5,6 +5,7 @@ import { StorefrontMediaService } from './storefront-media.service';
 import { StorefrontSettingsDto, UploadStorefrontImageDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
+import { UpdateAppSettingsDto } from './app-settings.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 import { UpdatePasswordPolicyDto } from './password-policy.dto';
 import { UpdateTaxSettingsDto } from './tax-settings.dto';
@@ -133,6 +134,19 @@ export class TenantsController {
         @Body() dto: UpdateDashboardSettingsDto,
     ) {
         return this.tenantsService.updateDashboardSettings(tenant.tenantId, dto, tenant.userRole);
+    }
+
+    @Get('app-settings')
+    async getAppSettings(@Tenant() tenant: TenantContext) {
+        return this.tenantsService.getAppSettings(tenant.tenantId);
+    }
+
+    @Patch('app-settings')
+    async updateAppSettings(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpdateAppSettingsDto,
+    ) {
+        return this.tenantsService.updateAppSettings(tenant.tenantId, dto, tenant.userRole);
     }
 
     /**

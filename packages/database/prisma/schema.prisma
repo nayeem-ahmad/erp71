@@ -806,6 +806,11 @@ model Tenant {
   /// preference, not a capability, which is why it is a column and not a key in
   /// the plan's features_json — see `resolveDashboardVariant` in shared-types.
   dashboard_preference       String    @default("AUTO")
+  /// Business apps (top-level sidebar modules) the owner hid from everyone's
+  /// rail and Home tiles — see `APP_REGISTRY` in shared-types. Presentation
+  /// only: a hidden app's pages and API stay open to whoever holds the
+  /// permission.
+  hidden_apps                String[]  @default([])
   /// When the setup wizard was finished or skipped for this workspace. Set once
   /// by whoever dismisses it; every member on every device then skips onboarding.
   onboarding_dismissed_at    DateTime?

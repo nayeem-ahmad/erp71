@@ -136,6 +136,7 @@ function initials(name: string): string {
 export default function CrmDashboard({
     greeting,
     tenantName,
+    homeSlot,
     variant = 'page',
 }: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
@@ -396,6 +397,7 @@ export default function CrmDashboard({
 
     return (
         <ModuleDashboard
+            slot={homeSlot}
             mount={variant}
             greeting={greeting}
             tenantName={tenantName}

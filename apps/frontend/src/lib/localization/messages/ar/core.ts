@@ -737,6 +737,7 @@ export const coreMessages = {
                 auditLogs: 'سجلات التدقيق',
                 passwordPolicy: "سياسة كلمات المرور",
                 data: 'إدارة البيانات',
+                apps: "التطبيقات",
             },
         },
         tabs: {

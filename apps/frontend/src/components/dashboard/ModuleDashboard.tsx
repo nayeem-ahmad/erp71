@@ -149,6 +149,7 @@ export default function ModuleDashboard({
     toolbar,
     error,
     refreshing = false,
+    slot,
     children,
 }: Readonly<{
     mount: DashboardMount;
@@ -170,6 +171,8 @@ export default function ModuleDashboard({
      * knows their click landed, and nothing on the page jumps.
      */
     refreshing?: boolean;
+    /** Drawn under the page header — Home's app tiles. Page mount only. */
+    slot?: ReactNode;
     children: ReactNode;
 }>) {
     const { t } = useI18n();
@@ -195,6 +198,8 @@ export default function ModuleDashboard({
                     <RangeTabs range={range} onRangeChange={onRangeChange} labels={rangeLabels} />
                 </div>
             )}
+
+            {mount === 'page' ? slot : null}
 
             {error ? (
                 <div className="rounded-lg border border-amber-200 bg-warning-light px-3 py-2 text-xs font-semibold text-warning-text">

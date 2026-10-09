@@ -92,6 +92,7 @@ export default function AccountingDashboard({
     greeting,
     tenantName,
     renewalEnd,
+    homeSlot,
     variant = 'page',
 }: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
@@ -307,6 +308,7 @@ export default function AccountingDashboard({
 
     return (
         <ModuleDashboard
+            slot={homeSlot}
             mount={variant}
             greeting={greeting}
             tenantName={tenantName}

@@ -112,6 +112,7 @@ import { InventoryDashboardModule } from './inventory-dashboard/inventory-dashbo
 import { PurchaseDashboardModule } from './purchase-dashboard/purchase-dashboard.module';
 import { SalesDashboardModule } from './sales-dashboard/sales-dashboard.module';
 import { MobileModule } from './mobile/mobile.module';
+import { HomePulseModule } from './home-pulse/home-pulse.module';
 import { PushModule } from './push/push.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { ApprovalNotifyModule } from './approvals/approval-notify.module';
@@ -254,6 +255,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         PurchaseDashboardModule,
         SalesDashboardModule,
         MobileModule,
+        HomePulseModule,
         PushModule,
         ApprovalsModule,
         ApprovalNotifyModule,

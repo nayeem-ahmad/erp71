@@ -879,6 +879,10 @@ export const adminMessages = {
                 label: "Comptabilité de la plateforme",
                 hint: "Les livres d’ERP71 elle-même dans la console d’administration : revenus d’abonnement, dépenses de la plateforme et états financiers. Ce n’est pas une fonction pour les boutiques. Activée par défaut.",
             },
+            appShell: {
+                label: "Barre d’applications",
+                hint: "Remplace la longue barre latérale par une barre d’applications, chacune avec son propre menu, et ajoute à l’accueil des tuiles avec des compteurs en direct. Désactivé par défaut — à tester client par client.",
+            },
             saved: "Paramètres des fonctionnalités des espaces enregistrés.",
         },
         sms: {
