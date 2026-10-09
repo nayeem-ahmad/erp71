@@ -221,7 +221,7 @@ Metrics (one per app; an app without one shows no pulse line):
 | App | Count | Links to |
 |---|---|---|
 | Sales | sales orders to fulfil | sales orders |
-| Inventory | low-stock products | reorder report |
+| Inventory | low-stock products | inventory overview |
 | Accounting | vouchers awaiting approval | vouchers |
 | CRM | activities due today or overdue | activities |
 | Projects | my open tasks | tasks (assignee: me) |

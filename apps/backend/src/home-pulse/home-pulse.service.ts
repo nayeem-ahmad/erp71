@@ -156,7 +156,10 @@ export class HomePulseService {
             },
             {
                 app: 'inventory',
-                href: '/inventory/reports/reorder',
+                // The inventory overview, as the retail dashboard's low-stock
+                // tile does: the reorder report is a premium report most of
+                // the members counted here cannot open.
+                href: '/inventory',
                 permissions: CATALOG_READ,
                 branchScoped: true,
                 count: async (tenant, storeId) => (await this.products.countLowStock(tenant.tenantId, storeId)).count,

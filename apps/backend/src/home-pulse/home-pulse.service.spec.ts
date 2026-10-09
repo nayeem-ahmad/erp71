@@ -92,7 +92,7 @@ describe('HomePulseService', () => {
             manufacturing: { count: 6, href: '/manufacturing/jobs' },
             imports: { count: 7, href: '/purchases/imports' },
             projects: { count: 8, href: '/projects/tasks' },
-            inventory: { count: 9, href: '/inventory/reports/reorder' },
+            inventory: { count: 9, href: '/inventory' },
             accounting: { count: 10, href: '/accounting/vouchers?approvalStatus=PENDING' },
             crm: { count: 11, href: '/crm/activities' },
         });

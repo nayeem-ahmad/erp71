@@ -187,7 +187,7 @@ Metric table (from a read of each module, 2026-10-08):
 | App | Count | Query | Permission any-of | Plan / platform gate | Branch | href |
 |---|---|---|---|---|---|---|
 | sales | sales orders to fulfil | `salesOrder.count({ tenant_id, store_id?, status: { in: ['CONFIRMED','PROCESSING'] } })` | `SALES_READ` | — | `resolveStoreId(…, { permissions: SALES_READ })` | `/sales/orders` |
-| inventory | low-stock products | `ProductsService.countLowStock(tenantId, storeId)` | `CATALOG_READ` | — | `resolveStoreId(…, { permissions: CATALOG_READ })` | `/inventory/reports/reorder` |
+| inventory | low-stock products | `ProductsService.countLowStock(tenantId, storeId)` | `CATALOG_READ` | — | `resolveStoreId(…, { permissions: CATALOG_READ })` | `/inventory` (not the reorder report: premium, most counted members cannot open it — found in review) |
 | accounting | vouchers awaiting approval | `AccountingService.getPendingVoucherCount(tenantId).count` | `VIEW_LEDGER` | `premiumAccounting` | tenant-wide | `/accounting/vouchers?approval=PENDING` |
 | crm | activities due today or overdue (team, as the page defaults) | `CrmActivitiesService.summary(tenantId, timezone)` → `dueToday + overdue` | `VIEW_CRM_INTERACTIONS` | `premiumCrm` | tenant-wide | `/crm/activities` |
 | projects | my open tasks | `projectTask.count({ where: { AND: [{ tenant_id, deleted_at: null, assignee_id: userId, status: { category: { not: 'DONE' } } }, ProjectAccessService.taskFilter(viewer)] } })` | `VIEW_PROJECTS` | platform `projects` | tenant-wide | `/projects/tasks` |
