@@ -1,4 +1,4 @@
-import { ArrayMinSize, IsArray, IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationDto } from '../common/pagination.dto';
 
@@ -78,6 +78,26 @@ export class RecordSupplierCreditPaymentDto {
     @IsString()
     notes?: string;
 
+    /**
+     * When the money changed hands. Defaults to now. Backdating is allowed so a
+     * payment entered late lands in the period it belongs to, and is refused by
+     * the fiscal-period lock if that period is closed. An offsetless value is
+     * read as the tenant's wall clock.
+     */
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+
+    /**
+     * The payment's serial. Omitted (or blank) takes the next number in the
+     * SPY-/SPO- series; a typed one must not be used by any other supplier
+     * credit row in the tenant.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    paymentNumber?: string;
+
     // Optional: match part or all of this payment to specific bill(s) immediately.
     // Leaving this empty (or partial) records the rest as an unapplied advance
     // that can be allocated to a bill later via the allocate endpoint.
@@ -115,6 +135,23 @@ export class UpdateSupplierCreditPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /** Omitted keeps the payment's current date. */
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+
+    /** Omitted (or blank) keeps the payment's current serial. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    paymentNumber?: string;
+}
+
+export class NextSupplierPaymentNumberQueryDto {
+    @IsOptional()
+    @IsEnum(SupplierPaymentDirectionDto)
+    direction?: SupplierPaymentDirectionDto;
 }
 
 export class ListSupplierCreditPaymentsQueryDto extends PaginationDto {

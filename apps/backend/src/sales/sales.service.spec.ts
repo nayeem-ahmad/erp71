@@ -67,6 +67,7 @@ describe('SalesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     tx = {
+      $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
       product: {
         findMany: jest.fn(),
       },

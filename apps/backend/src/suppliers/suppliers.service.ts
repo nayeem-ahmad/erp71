@@ -19,6 +19,7 @@ import {
 } from './supplier.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { nextSupplierPaymentNumber } from './supplier-payment-number.util';
+import { assertSerialFree, isSerialConflict, resolvePaymentDate, serialTaken, typedSerial } from '../common/credit-payment-entry.util';
 import { ACTIVE_PURCHASE, purchasePaymentStatus } from '../purchases/purchase-status';
 
 const SUPPLIER_SORTABLE: SortableMap = {
@@ -696,7 +697,22 @@ export class SuppliersService {
         return { ...payment, allocated_amount: allocated, unapplied_amount: this.settledBy(payment) - allocated };
     }
 
-    async updateCreditPayment(tenantId: string, paymentId: string, dto: UpdateSupplierCreditPaymentDto) {
+    /**
+     * The serial a new payment would get if saved now, for the entry form to
+     * show. Not reserved: a form left blank is numbered at save time, so two
+     * operators previewing at once cannot collide.
+     */
+    async getNextPaymentNumber(tenantId: string, direction?: SupplierPaymentDirectionDto) {
+        const txType = this.typeFromDirection(direction ?? SupplierPaymentDirectionDto.PAY);
+        return { payment_number: await nextSupplierPaymentNumber(tenantId, this.db, txType) };
+    }
+
+    async updateCreditPayment(
+        tenantId: string,
+        paymentId: string,
+        dto: UpdateSupplierCreditPaymentDto,
+        timeZone?: string,
+    ) {
         const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
@@ -708,6 +724,9 @@ export class SuppliersService {
         const newAmount = dto.amount ?? oldAmount;
         const newDiscount = dto.discount ?? oldDiscount;
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
+        const newDate = resolvePaymentDate(dto.date, timeZone) ?? payment.created_at;
+        const renamedTo = typedSerial(dto.paymentNumber);
+        const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
 
         const allocatedSum = await this.db.supplierPaymentAllocation.aggregate({
             where: { tenant_id: tenantId, transaction_id: paymentId },
@@ -731,6 +750,9 @@ export class SuppliersService {
                 select: { id: true, name: true, due_balance: true },
             });
             if (!supplier) throw new NotFoundException('Supplier not found');
+            if (newNumber && newNumber !== payment.payment_number) {
+                await assertSerialFree(tx, 'supplierCreditTransaction', tenantId, newNumber, paymentId);
+            }
 
             const dueWithoutPayment = Number(supplier.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
             this.assertPaymentSplit(newType, newAmount, newDiscount, dueWithoutPayment);
@@ -748,6 +770,8 @@ export class SuppliersService {
                     discount_amount: newDiscount,
                     balance_after: balanceAfter,
                     notes: newNotes,
+                    created_at: newDate,
+                    payment_number: newNumber,
                 },
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
@@ -765,14 +789,17 @@ export class SuppliersService {
                 supplierId,
                 supplierName: supplier.name,
                 paymentId,
-                paymentNumber: payment.payment_number ?? paymentId,
+                paymentNumber: newNumber ?? paymentId,
                 type: newType,
                 amount: newAmount,
                 discount: newDiscount,
-                date: payment.created_at,
+                date: newDate,
             });
 
             return { ...updated, ...posting };
+        }).catch((err) => {
+            if (newNumber && isSerialConflict(err)) throw serialTaken(newNumber);
+            throw err;
         });
     }
 
@@ -816,6 +843,7 @@ export class SuppliersService {
         id: string,
         userId: string,
         dto: RecordSupplierCreditPaymentDto,
+        timeZone?: string,
     ) {
         const supplier = await this.db.supplier.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null },
@@ -834,9 +862,15 @@ export class SuppliersService {
         const currentDue = Number(supplier.due_balance);
         this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
+        const paymentDate = resolvePaymentDate(dto.date, timeZone) ?? new Date();
+        const typed = typedSerial(dto.paymentNumber);
+        // Kept outside the transaction so a unique-index race can name it.
+        let serial = typed;
 
         return this.db.$transaction(async (tx) => {
-            const payment_number = await nextSupplierPaymentNumber(tenantId, tx, txType);
+            if (typed) await assertSerialFree(tx, 'supplierCreditTransaction', tenantId, typed);
+            const payment_number = typed ?? await nextSupplierPaymentNumber(tenantId, tx, txType);
+            serial = payment_number;
 
             const payment = await tx.supplierCreditTransaction.create({
                 data: {
@@ -849,6 +883,7 @@ export class SuppliersService {
                     payment_number,
                     notes: dto.notes,
                     created_by: userId,
+                    created_at: paymentDate,
                 },
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
@@ -876,10 +911,13 @@ export class SuppliersService {
                 type: txType,
                 amount: dto.amount,
                 discount,
-                date: payment.created_at,
+                date: paymentDate,
             });
 
             return { ...payment, ...posting };
+        }).catch((err) => {
+            if (serial && isSerialConflict(err)) throw serialTaken(serial);
+            throw err;
         });
     }
 

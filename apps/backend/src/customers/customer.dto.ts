@@ -260,6 +260,16 @@ export class RecordCreditPaymentDto {
     @IsOptional()
     @IsDateString()
     date?: string;
+
+    /**
+     * The payment's serial. Omitted (or blank) takes the next number in the
+     * CPY-/CPO- series; a typed one must not be used by any other customer
+     * credit row in the tenant.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    paymentNumber?: string;
 }
 
 /**
@@ -364,6 +374,18 @@ export class UpdateCreditPaymentDto {
     @IsOptional()
     @IsDateString()
     date?: string;
+
+    /** Omitted (or blank) keeps the payment's current serial. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    paymentNumber?: string;
+}
+
+export class NextCustomerPaymentNumberQueryDto {
+    @IsOptional()
+    @IsEnum(CustomerPaymentDirectionDto)
+    direction?: CustomerPaymentDirectionDto;
 }
 
 export class ListCustomerCreditPaymentsQueryDto extends PaginationDto {
