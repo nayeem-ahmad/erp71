@@ -25,7 +25,7 @@ jest.mock('@/lib/branding', () => ({
 
 jest.mock('@/lib/api', () => ({
     ApiError: class ApiError extends Error {
-        constructor(message: string, public readonly status: number) {
+        constructor(message: string, public readonly status: number, public readonly code?: string) {
             super(message);
             this.name = 'ApiError';
         }
@@ -368,6 +368,21 @@ describe('CustomerPaymentsPage — serial', () => {
         await waitFor(() => {
             expect(api.recordCreditPayment).toHaveBeenCalledWith('cust-1', expect.objectContaining({ paymentNumber: 'MR-0457' }));
         });
+    });
+
+    it('shows a serial ahead of the series under the field instead of closing the form', async () => {
+        (api.recordCreditPayment as jest.Mock).mockRejectedValue(
+            new ApiError('CPY-000125 is ahead of the next number in this series', 400, 'SERIAL_AHEAD_OF_SERIES'),
+        );
+        await openNewPayment();
+
+        fireEvent.change(await screen.findByLabelText('Serial'), { target: { value: 'CPY-000125' } });
+        fireEvent.click(screen.getByRole('button', { name: /record receipt/i }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+            'CPY-000125 is ahead of the next number in this series. Leave the serial blank to take the next one, or use a serial outside the series.',
+        );
+        expect(screen.getByLabelText('Serial')).toBeInTheDocument();
     });
 
     it('shows a taken serial under the field instead of closing the form', async () => {

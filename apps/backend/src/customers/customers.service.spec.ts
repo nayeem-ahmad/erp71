@@ -416,6 +416,26 @@ describe('CustomersService', () => {
     });
   });
 
+  describe('getSegmentStats()', () => {
+    it('counts only customers that have not been deleted, as the list beside it does', async () => {
+      db.customer.findMany.mockResolvedValue([
+        { segment_category: 'VIP' },
+        { segment_category: null },
+      ]);
+
+      const stats = await service.getSegmentStats('tenant-1');
+
+      expect(db.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ tenant_id: 'tenant-1', deleted_at: null }) }),
+      );
+      expect(stats.total).toBe(2);
+      expect(stats.breakdown).toEqual(expect.arrayContaining([
+        { segment: 'VIP', count: 1, percentage: 50 },
+        { segment: 'Regular', count: 1, percentage: 50 },
+      ]));
+    });
+  });
+
   describe('getAnalytics()', () => {
     it('computes last purchase date and days-since from sale_date, not created_at', async () => {
       db.customer.findFirst.mockResolvedValue({
@@ -836,6 +856,34 @@ describe('CustomersService', () => {
       await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'CPY-00004' }))
         .rejects.toThrow(new ConflictException('Serial CPY-00004 is already used by another payment.'));
       expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('catches a re-spelling of a taken serial by writing it the way the series does', async () => {
+      db.customerCreditTransaction.findFirst.mockImplementation(async ({ where }: any) =>
+        (where.payment_number === 'CPY-00004' ? { id: 'pay-other' } : null));
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'cpy-4' }))
+        .rejects.toThrow(new ConflictException('Serial CPY-00004 is already used by another payment.'));
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a typed serial ahead of the series, which would skip numbers for good', async () => {
+      db.$queryRaw.mockResolvedValue([{ next: '12' }]);
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'CPY-000125' }))
+        .rejects.toThrow(BadRequestException);
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('update refuses a rename ahead of the series', async () => {
+      db.customerCreditTransaction.findFirst
+        .mockResolvedValueOnce(existing) // the payment itself
+        .mockResolvedValueOnce(null); // nobody else holds the new serial
+      db.$queryRaw.mockResolvedValue([{ next: '2' }]);
+
+      await expect(service.updateCreditPayment('tenant-1', 'pay-1', { paymentNumber: 'CPY-00090' }))
+        .rejects.toThrow(BadRequestException);
+      expect(db.customerCreditTransaction.update).not.toHaveBeenCalled();
     });
 
     it('turns a unique-index race into the same plain conflict', async () => {

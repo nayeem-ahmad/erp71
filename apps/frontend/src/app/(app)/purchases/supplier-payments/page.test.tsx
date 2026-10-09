@@ -25,7 +25,7 @@ jest.mock('@/lib/branding', () => ({
 
 jest.mock('@/lib/api', () => ({
     ApiError: class ApiError extends Error {
-        constructor(message: string, public readonly status: number) {
+        constructor(message: string, public readonly status: number, public readonly code?: string) {
             super(message);
             this.name = 'ApiError';
         }
@@ -214,6 +214,19 @@ describe('SupplierPaymentsPage — serial and date', () => {
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Date and time cannot be in the future.');
         expect(api.recordSupplierCreditPayment).not.toHaveBeenCalled();
+    });
+
+    it('shows a serial ahead of the series under the field instead of closing the form', async () => {
+        (api.recordSupplierCreditPayment as jest.Mock).mockRejectedValue(new ApiError('ahead', 400, 'SERIAL_AHEAD_OF_SERIES'));
+        await openNewPayment();
+
+        fireEvent.change(await screen.findByLabelText('Serial'), { target: { value: 'SPY-000125' } });
+        fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+            'SPY-000125 is ahead of the next number in this series. Leave the serial blank to take the next one, or use a serial outside the series.',
+        );
+        expect(screen.getByLabelText('Serial')).toBeInTheDocument();
     });
 
     it('shows a taken serial under the field instead of closing the form', async () => {

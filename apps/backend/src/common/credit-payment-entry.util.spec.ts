@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
+    assertNotAheadOfSeries,
     assertSerialFree,
+    canonicalSerial,
     isSerialConflict,
     nextSerialInSeries,
     resolvePaymentDate,
@@ -45,6 +47,46 @@ describe('credit-payment-entry.util', () => {
             expect(typedSerial('  MR-0457 ')).toBe('MR-0457');
             expect(typedSerial('   ')).toBeUndefined();
             expect(typedSerial(undefined)).toBeUndefined();
+        });
+    });
+
+    describe('canonicalSerial()', () => {
+        const PREFIXES = ['CPY-', 'CPO-', 'CWO-'];
+
+        it('writes a serial in a series the way the series does, whatever its case or padding', () => {
+            expect(canonicalSerial('cpy-12', PREFIXES)).toBe('CPY-00012');
+            expect(canonicalSerial('CPY-012', PREFIXES)).toBe('CPY-00012');
+            expect(canonicalSerial('Cwo-7', PREFIXES)).toBe('CWO-00007');
+        });
+
+        it('leaves a long number long, and anything outside the series as typed', () => {
+            expect(canonicalSerial('CPY-123456', PREFIXES)).toBe('CPY-123456');
+            expect(canonicalSerial('MR-0457', PREFIXES)).toBe('MR-0457');
+            expect(canonicalSerial('CPY-12a', PREFIXES)).toBe('CPY-12a');
+            expect(canonicalSerial('XCPY-99', PREFIXES)).toBe('XCPY-99');
+        });
+    });
+
+    describe('assertNotAheadOfSeries()', () => {
+        const PREFIXES = ['CPY-', 'CPO-'];
+        const txWithNext = (next: string) => ({ $queryRaw: jest.fn().mockResolvedValue([{ next }]) });
+
+        it('accepts the next number, and a free number below it', async () => {
+            await expect(assertNotAheadOfSeries(txWithNext('13'), 'CustomerCreditTransaction', 't1', 'CPY-00013', PREFIXES)).resolves.toBeUndefined();
+            await expect(assertNotAheadOfSeries(txWithNext('13'), 'CustomerCreditTransaction', 't1', 'CPY-00009', PREFIXES)).resolves.toBeUndefined();
+        });
+
+        it('refuses a number ahead of the series, which would skip every number between for good', async () => {
+            await expect(assertNotAheadOfSeries(txWithNext('13'), 'CustomerCreditTransaction', 't1', 'CPY-000125', PREFIXES))
+                .rejects.toThrow(new BadRequestException(
+                    'CPY-000125 is ahead of the next number in this series, CPY-00013. Use CPY-00013, leave the serial blank, or use a serial of your own outside the series.',
+                ));
+        });
+
+        it('does not look at a serial outside every series', async () => {
+            const tx = txWithNext('13');
+            await expect(assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', 't1', 'MR-99999', PREFIXES)).resolves.toBeUndefined();
+            expect(tx.$queryRaw).not.toHaveBeenCalled();
         });
     });
 

@@ -424,7 +424,7 @@ export default function CustomersPage() {
                 />
 
                 {segmentStats && segmentStats.total > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                         <div className="bg-white border border-gray-100 rounded-lg px-3 py-2.5 shadow-sm">
                             <p className="text-xs font-medium text-gray-500 truncate">{t.customers.totalCustomers}</p>
                             <p className="text-xl font-bold text-gray-900 mt-0.5">{segmentStats.total}</p>
