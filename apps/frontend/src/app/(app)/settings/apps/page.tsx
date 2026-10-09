@@ -39,15 +39,16 @@ export default function AppsSettingsPage() {
         [tenantLayout, t, states],
     );
 
-    // Start from the session's answer so the list draws at once; the saved
-    // list then replaces it unless the owner has already started editing.
+    // Drawn from the session's answer at once, but nothing is editable until
+    // the saved list arrives: the session leaves out apps this member cannot
+    // open, and saving a list built from it would un-hide the owner's choice.
     const sessionHidden = useMemo(
         () => Object.entries(states).filter(([, state]) => state === 'hidden').map(([id]) => id),
         [states],
     );
     const [saved, setSaved] = useState<string[]>(sessionHidden);
     const [hidden, setHidden] = useState<string[]>(sessionHidden);
-    const [edited, setEdited] = useState(false);
+    const [loaded, setLoaded] = useState(false);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -57,22 +58,21 @@ export default function AppsSettingsPage() {
                 if (!active) return;
                 const list = settings?.hidden_apps ?? [];
                 setSaved(list);
-                setHidden((current) => (edited ? current : list));
+                setHidden(list);
+                setLoaded(true);
             })
             .catch(() => {
+                // Stays read-only: there is no list to save against.
                 if (active) toast.error(copy.settings.loadFailed);
             });
         return () => {
             active = false;
         };
-        // Loaded once; `edited` is read at resolve time on purpose.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [copy.settings.loadFailed]);
 
     const dirty = hidden.length !== saved.length || hidden.some((id) => !saved.includes(id));
 
     const toggle = (id: string, show: boolean) => {
-        setEdited(true);
         setHidden((current) => (show ? current.filter((item) => item !== id) : [...current, id]));
     };
 
@@ -83,7 +83,6 @@ export default function AppsSettingsPage() {
             const next = result?.hidden_apps ?? hidden;
             setSaved(next);
             setHidden(next);
-            setEdited(false);
             // The rail and Home read the hidden list off the session.
             await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
             toast.success(copy.settings.saved);
@@ -106,7 +105,7 @@ export default function AppsSettingsPage() {
                     'settings',
                 )}
                 actions={canManageApps ? (
-                    <Button onClick={save} disabled={!dirty || saving}>
+                    <Button onClick={save} disabled={!loaded || !dirty || saving}>
                         {copy.settings.save}
                     </Button>
                 ) : undefined}
@@ -144,7 +143,7 @@ export default function AppsSettingsPage() {
                                 <Switch
                                     checked={shown}
                                     onCheckedChange={(next) => toggle(app.key, next)}
-                                    disabled={!canManageApps || saving}
+                                    disabled={!canManageApps || !loaded || saving}
                                     aria-label={fmt(copy.settings.toggleLabel, { app: app.label })}
                                 />
                             )}

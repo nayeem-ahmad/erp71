@@ -126,4 +126,25 @@ describe('Apps settings', () => {
         await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Network down'));
         expect(inventory).toHaveAttribute('aria-checked', 'false');
     });
+
+    it('changes nothing until the saved list has loaded, so a stale list cannot overwrite it', async () => {
+        let resolveLoad: (value: { hidden_apps: string[] }) => void = () => undefined;
+        mockGetSettings.mockReturnValue(new Promise((resolve) => { resolveLoad = resolve; }));
+        renderPage(shell());
+
+        expect(screen.getByRole('switch', { name: 'Show Sales' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+        resolveLoad({ hidden_apps: ['crm'] });
+        await waitFor(() => expect(screen.getByRole('switch', { name: 'Show Sales' })).toBeEnabled());
+    });
+
+    it('stays read-only when the saved list cannot be loaded', async () => {
+        mockGetSettings.mockRejectedValue(new Error('offline'));
+        renderPage(shell());
+
+        await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Could not load the app list.'));
+        expect(screen.getByRole('switch', { name: 'Show Sales' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
 });
