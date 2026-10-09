@@ -737,6 +737,7 @@ export const coreMessages = {
                 auditLogs: "Journaux d'audit",
                 passwordPolicy: "Politique de mot de passe",
                 data: "Gestion des données",
+                apps: "Applications",
             },
         },
         tabs: {

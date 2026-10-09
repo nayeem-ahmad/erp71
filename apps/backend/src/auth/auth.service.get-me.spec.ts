@@ -139,6 +139,7 @@ const PLATFORM_FEATURES = {
     projects: false,
     platformProjects: true,
     platformAccounting: false,
+    appShell: false,
 };
 
 /** Columns every tenant row has that the response must never carry. */
@@ -217,6 +218,7 @@ const tenantRow = (id: string, overrides: Record<string, unknown>): any => ({
     secondary_locale: null,
     storefront_slug: null,
     dashboard_preference: 'AUTO',
+    hidden_apps: [],
     onboarding_dismissed_at: null,
     deleted_at: null,
     platform_workspace_key: null,
@@ -258,6 +260,8 @@ function karim() {
         secondary_locale: 'bn',
         storefront_slug: 'karim',
         dashboard_preference: 'SALES',
+        // `retired-module` is no longer an app; the response drops it.
+        hidden_apps: ['manufacturing', 'retired-module'],
         onboarding_dismissed_at: day(-30),
         // `help` is turned off for this shop, `manufacturing` on; the junk key
         // is ignored by the override parser.
@@ -473,6 +477,7 @@ function expectedKarim() {
                 secondary_locale: 'bn',
                 timezone: 'Asia/Dhaka',
                 dashboard_preference: 'SALES',
+                hidden_apps: ['manufacturing'],
                 role: 'OWNER',
                 tenant_role: null,
                 record_scope: TenantRecordScope.ALL,
@@ -509,6 +514,7 @@ function expectedKarim() {
                 secondary_locale: null,
                 timezone: 'Asia/Kolkata',
                 dashboard_preference: 'AUTO',
+                hidden_apps: [],
                 role: 'CASHIER',
                 tenant_role: { id: 'role-cashier', name: 'Cashier' },
                 record_scope: TenantRecordScope.OWN,
@@ -545,6 +551,7 @@ function expectedKarim() {
                 secondary_locale: null,
                 timezone: platform.timezone,
                 dashboard_preference: 'AUTO',
+                hidden_apps: [],
                 role: 'CASHIER',
                 tenant_role: { id: 'role-projects', name: 'Project User' },
                 record_scope: TenantRecordScope.OWN,

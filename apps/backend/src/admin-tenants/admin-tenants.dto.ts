@@ -70,6 +70,7 @@ export class UpdateAdminTenantFeaturesDto {
     @IsOptional() @IsBoolean() aiChat?: boolean | null;
     @IsOptional() @IsBoolean() externalImport?: boolean | null;
     @IsOptional() @IsBoolean() projects?: boolean | null;
+    @IsOptional() @IsBoolean() appShell?: boolean | null;
 }
 
 export class SuspendTenantDto {

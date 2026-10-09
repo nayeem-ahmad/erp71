@@ -300,6 +300,7 @@ export const routes = {
         localization: '/settings/localization',
         passwordPolicy: '/settings/password-policy',
         dashboard: '/settings/dashboard',
+        apps: '/settings/apps',
         data: '/settings/data',
         stores: '/settings/stores',
     },

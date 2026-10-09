@@ -149,7 +149,7 @@ function dimWhile(refreshing: boolean): string {
  * and day, so coming back to the dashboard paints from memory and refreshes
  * behind the figures.
  */
-export default function RetailDashboard({ greeting, tenantName, renewalEnd }: DashboardIdentity) {
+export default function RetailDashboard({ greeting, tenantName, renewalEnd, homeSlot }: DashboardIdentity) {
     const { t, locale } = useI18n();
     const copy = t.dashboardHome;
 
@@ -385,6 +385,7 @@ export default function RetailDashboard({ greeting, tenantName, renewalEnd }: Da
                         </>
                     }
                 />
+                {homeSlot}
 
                 <FrequentQuickLinks />
 

@@ -69,7 +69,7 @@ function openTasksFrom(page: { items?: OpenTask[] } | null | undefined) {
  * third request before any tile can start. Each tile then owns its request and
  * fills in on its own: one slow endpoint holds back one tile, not four.
  */
-export default function ProjectsDashboard({ greeting, tenantName }: Readonly<DashboardIdentity>) {
+export default function ProjectsDashboard({ greeting, tenantName, homeSlot }: Readonly<DashboardIdentity>) {
     const { t } = useI18n();
     const copy = t.dashboardHome.projects;
 
@@ -155,6 +155,8 @@ export default function ProjectsDashboard({ greeting, tenantName }: Readonly<Das
                     <h1 className="text-lg font-semibold text-gray-900">{greeting}</h1>
                     <p className="text-xs text-gray-500">{tenantName} • {copy.subtitle}</p>
                 </div>
+
+                {homeSlot}
 
                 {timerRunning && (
                     <p className="text-xs font-medium text-emerald-600">{copy.timerRunning}</p>
