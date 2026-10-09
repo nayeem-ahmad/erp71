@@ -73,8 +73,8 @@ export function PaymentSerialDateFields({
     labels,
 }: PaymentSerialDateFieldsProps) {
     return (
-        <div className="grid grid-cols-5 gap-3">
-            <Field label={labels.serial} htmlFor={`${idPrefix}-serial`} error={serialError ?? undefined} className="col-span-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+            <Field label={labels.serial} htmlFor={`${idPrefix}-serial`} error={serialError ?? undefined} className="sm:col-span-2">
                 <Input
                     id={`${idPrefix}-serial`}
                     value={serial}
@@ -86,7 +86,7 @@ export function PaymentSerialDateFields({
                     className="w-full font-mono"
                 />
             </Field>
-            <Field label={labels.date} htmlFor={`${idPrefix}-date`} error={dateError ?? undefined} className="col-span-3">
+            <Field label={labels.date} htmlFor={`${idPrefix}-date`} error={dateError ?? undefined} className="sm:col-span-3">
                 <Input
                     id={`${idPrefix}-date`}
                     type="datetime-local"

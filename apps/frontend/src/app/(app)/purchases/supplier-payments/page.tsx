@@ -293,6 +293,12 @@ function SupplierPaymentsContent() {
             resetForm();
             await loadData();
         } catch (error: unknown) {
+            // A serial past the series' next number would skip every number between;
+            // the server refuses it, and it belongs under the field like a taken one.
+            if (error instanceof ApiError && error.code === 'SERIAL_AHEAD_OF_SERIES') {
+                setFormSerialError(formatMessage(copy.serialAhead, { serial: formSerial?.trim() || serialPreview }));
+                return;
+            }
             if (error instanceof ApiError && error.status === 409) {
                 setFormSerialError(formatMessage(copy.serialTaken, { serial: formSerial?.trim() || serialPreview }));
                 refreshSerialPreview();
@@ -361,6 +367,12 @@ function SupplierPaymentsContent() {
             setEditPayment(null);
             await loadData();
         } catch (error: unknown) {
+            // A serial past the series' next number would skip every number between;
+            // the server refuses it, and it belongs under the field like a taken one.
+            if (error instanceof ApiError && error.code === 'SERIAL_AHEAD_OF_SERIES') {
+                setEditSerialError(formatMessage(copy.serialAhead, { serial: editSerial?.trim() ?? '' }));
+                return;
+            }
             if (error instanceof ApiError && error.status === 409) {
                 setEditSerialError(formatMessage(copy.serialTaken, { serial: editSerial?.trim() ?? '' }));
                 return;

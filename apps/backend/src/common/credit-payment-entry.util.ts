@@ -65,6 +65,62 @@ export async function nextSerialInSeries(
     return `${prefix}${next.padStart(5, '0')}`;
 }
 
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+}
+
+/** The prefix and number of a serial in one of the numbered series, if it is in one. */
+function seriesPart(serial: string, prefixes: readonly string[]): { prefix: string; digits: string } | null {
+    for (const prefix of prefixes) {
+        const match = new RegExp(`^${escapeRegExp(prefix)}([0-9]+)$`, 'i').exec(serial);
+        if (match) return { prefix, digits: match[1] };
+    }
+    return null;
+}
+
+/**
+ * A typed serial in one of the numbered series, written the one way the series
+ * writes it: prefix in capitals, number padded to five. Uniqueness compares text,
+ * so without this `CPY-12` or `cpy-00012` would sit beside the `CPY-00012` that
+ * already exists — two receipts both reading as #12. A serial outside every
+ * series (`MR-0457`) is kept exactly as typed.
+ */
+export function canonicalSerial(serial: string, prefixes: readonly string[]): string {
+    const part = seriesPart(serial, prefixes);
+    if (!part) return serial;
+    const number = part.digits.replace(/^0+(?=\d)/, '');
+    return `${part.prefix}${number.padStart(5, '0')}`;
+}
+
+/**
+ * Refuses a typed serial ahead of its series' next number. The serial field is
+ * prefilled with that next number, so one stray keystroke — `CPY-000125` for
+ * `CPY-00012` — would otherwise move the shared series (POS receipts included)
+ * to 126 and skip every number between for good. The next number itself, a
+ * free gap below it, and any serial outside the series are all fine.
+ */
+export async function assertNotAheadOfSeries(
+    tx: any,
+    table: CreditTable,
+    tenantId: string,
+    serial: string,
+    prefixes: readonly string[],
+): Promise<void> {
+    const part = seriesPart(serial, prefixes);
+    if (!part) return;
+    const next = await nextSerialInSeries(tx, table, tenantId, part.prefix);
+    const nextNumber = BigInt(next.slice(part.prefix.length));
+    if (BigInt(part.digits) > nextNumber) {
+        throw new BadRequestException({
+            message: `${serial} is ahead of the next number in this series, ${next}. `
+                + `Use ${next}, leave the serial blank, or use a serial of your own outside the series.`,
+            // So the payment forms can show it under the serial field, in the
+            // operator's language, rather than as a generic failure.
+            code: 'SERIAL_AHEAD_OF_SERIES',
+        });
+    }
+}
+
 /**
  * Refuses a typed serial another row of the same table already carries.
  * Checked up front so the operator gets a plain message; the unique index

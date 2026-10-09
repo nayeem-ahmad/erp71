@@ -19,10 +19,21 @@ import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
-import { assertSerialFree, isSerialConflict, resolvePaymentDate, serialTaken, typedSerial } from '../common/credit-payment-entry.util';
+import {
+    assertNotAheadOfSeries,
+    assertSerialFree,
+    canonicalSerial,
+    isSerialConflict,
+    resolvePaymentDate,
+    serialTaken,
+    typedSerial,
+} from '../common/credit-payment-entry.util';
 import { customerLedgerDueDelta } from './customer-credit.utils';
-import { CUSTOMER_PAYMENT_DISCOUNT_LEG, nextCustomerCreditNumber } from './customer-payment-number.util';
+import { CREDIT_TRANSACTION_PREFIXES, CUSTOMER_PAYMENT_DISCOUNT_LEG, nextCustomerCreditNumber } from './customer-payment-number.util';
 import { type CustomerScope, customerInBranchesWhere, customerScopeWhere, saleScopeWhere } from './customer-visibility';
+
+/** The numbered series a typed payment serial may fall in (receipts, payouts, write-offs). */
+const SERIAL_SERIES = Object.values(CREDIT_TRANSACTION_PREFIXES);
 
 const CUSTOMER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -505,7 +516,9 @@ export class CustomersService {
 
     async getSegmentStats(tenantId: string, scope: CustomerScope = null) {
         const customers = await this.db.customer.findMany({
-            where: { tenant_id: tenantId, ...customerScopeWhere(scope) },
+            // Deleted customers left out, as the list these cards sit above
+            // leaves them out — otherwise Total disagrees with the list.
+            where: { tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
             select: { segment_category: true },
         });
 
@@ -858,7 +871,8 @@ export class CustomersService {
         // Kept when not changed: the vouchers are voided and reposted below,
         // and a repost left undated would move an old payment into today.
         const newDate = resolvePaymentDate(dto.date, timeZone) ?? payment.created_at;
-        const renamedTo = typedSerial(dto.paymentNumber);
+        const typedRename = typedSerial(dto.paymentNumber);
+        const renamedTo = typedRename && canonicalSerial(typedRename, SERIAL_SERIES);
         const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
 
         return this.db.$transaction(async (tx) => {
@@ -869,6 +883,7 @@ export class CustomersService {
             if (!customer) throw new NotFoundException('Customer not found');
             if (newNumber && newNumber !== payment.payment_number) {
                 await assertSerialFree(tx, 'customerCreditTransaction', tenantId, newNumber, paymentId);
+                await assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', tenantId, newNumber, SERIAL_SERIES);
             }
 
             const dueWithoutPayment = Number(customer.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
@@ -978,12 +993,16 @@ export class CustomersService {
         this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
         const paymentDate = resolvePaymentDate(dto.date, timeZone) ?? new Date();
-        const typed = typedSerial(dto.paymentNumber);
+        const typedRaw = typedSerial(dto.paymentNumber);
+        const typed = typedRaw && canonicalSerial(typedRaw, SERIAL_SERIES);
         // Kept outside the transaction so a unique-index race can name it.
         let serial = typed;
 
         return this.db.$transaction(async (tx) => {
-            if (typed) await assertSerialFree(tx, 'customerCreditTransaction', tenantId, typed);
+            if (typed) {
+                await assertSerialFree(tx, 'customerCreditTransaction', tenantId, typed);
+                await assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', tenantId, typed, SERIAL_SERIES);
+            }
             const payment_number = typed ?? await this.generatePaymentNumber(tenantId, tx, txType);
             serial = payment_number;
 

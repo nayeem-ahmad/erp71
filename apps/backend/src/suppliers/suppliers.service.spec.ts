@@ -545,23 +545,37 @@ describe('SuppliersService', () => {
                 .rejects.toThrow(new ConflictException('Serial SPY-00002 is already used by another payment.'));
         });
 
+        it('writes a typed serial in the series the way the series does, and refuses one ahead of it', async () => {
+            const tx = mockTx();
+            tx.supplierCreditTransaction.findFirst.mockImplementation(async ({ where }: any) =>
+                (where.payment_number === 'SPY-00002' ? { id: 'tx-other' } : null));
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, paymentNumber: 'spy-2' }))
+                .rejects.toThrow(new ConflictException('Serial SPY-00002 is already used by another payment.'));
+
+            tx.supplierCreditTransaction.findFirst.mockResolvedValue(null);
+            tx.$queryRaw.mockResolvedValue([{ next: '12' }]);
+            await expect(service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 100, paymentNumber: 'SPY-000125' }))
+                .rejects.toThrow(BadRequestException);
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+        });
+
         it('update moves the date and renames the serial, reposting under both', async () => {
             db.supplierCreditTransaction.findFirst.mockResolvedValue(existing);
             const tx = mockTx();
 
             await service.updateCreditPayment(
-                'tenant-1', 'tx-1', { date: '2026-08-10T18:00:00+06:00', paymentNumber: 'SPY-00900' }, 'Asia/Dhaka',
+                'tenant-1', 'tx-1', { date: '2026-08-10T18:00:00+06:00', paymentNumber: 'BILL-900' }, 'Asia/Dhaka',
             );
 
             const moved = new Date('2026-08-10T12:00:00Z');
             expect(tx.supplierCreditTransaction.findFirst).toHaveBeenCalledWith({
-                where: { tenant_id: 'tenant-1', payment_number: 'SPY-00900', id: { not: 'tx-1' } },
+                where: { tenant_id: 'tenant-1', payment_number: 'BILL-900', id: { not: 'tx-1' } },
                 select: { id: true },
             });
             expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
-                data: expect.objectContaining({ created_at: moved, payment_number: 'SPY-00900' }),
+                data: expect.objectContaining({ created_at: moved, payment_number: 'BILL-900' }),
             }));
-            expect(postedCalls()[0]).toMatchObject({ date: moved, referenceNumber: 'SPY-00900' });
+            expect(postedCalls()[0]).toMatchObject({ date: moved, referenceNumber: 'BILL-900' });
         });
 
         it('update keeps the date and serial when neither is sent', async () => {
