@@ -91,8 +91,16 @@ export function buildRail(modules: ResolvedNavModule[], groupLabel: string): { b
     }
 
     const registryOrder = Object.keys(APP_REGISTRY);
+    // A utility the fixed order does not name still gets a place — after the
+    // named ones and before Settings — rather than silently missing the rail.
+    const unnamed = [...singles.keys(), ...groups.keys()]
+        .filter((key) => !UTILITY_ORDER.includes(key))
+        .sort((a, b) => registryOrder.indexOf(a) - registryOrder.indexOf(b));
+    const settingsAt = UTILITY_ORDER.indexOf('account-settings');
+    const order = [...UTILITY_ORDER.slice(0, settingsAt), ...unnamed, ...UTILITY_ORDER.slice(settingsAt)];
+
     const utility: RailEntry[] = [];
-    for (const key of UTILITY_ORDER) {
+    for (const key of order) {
         const single = singles.get(key);
         if (single) {
             utility.push({ key, label: single.label, icon: single.icon, modules: [single] });

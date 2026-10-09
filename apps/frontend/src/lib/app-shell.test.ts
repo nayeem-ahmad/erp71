@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_NAV_LAYOUT } from '@erp71/shared-types';
+import { APP_REGISTRY, DEFAULT_TENANT_NAV_LAYOUT } from '@erp71/shared-types';
 import { enMessages } from './localization/messages/en/index';
 import { buildNavModulesFromLayout } from './nav-resolver';
 import { appHomeHref, buildRail, findActiveAppKey } from './app-shell';
@@ -76,6 +76,19 @@ describe('buildRail', () => {
 
         expect([...rail.business, ...rail.utility].map((entry) => entry.key)).not.toContain('dashboard');
         expect(rail.utility.map((entry) => entry.key)).not.toContain('help');
+    });
+
+    it('still shows a utility app the fixed order does not name, ahead of Settings', () => {
+        // A utility added to the registry later, with no place in the rail's
+        // fixed order and no group, must not silently vanish from the rail.
+        APP_REGISTRY.inbox = { id: 'inbox', kind: 'utility' };
+        try {
+            const inbox = { ...byKey('chat'), key: 'inbox', label: 'Inbox', href: '/inbox' };
+            const rail = buildRail([...modules, inbox], 'Help');
+            expect(rail.utility.map((entry) => entry.key)).toEqual(['chat', 'help', 'inbox', 'account-settings']);
+        } finally {
+            delete APP_REGISTRY.inbox;
+        }
     });
 
     it('gives a lone help module its own name rather than the group label', () => {

@@ -130,6 +130,18 @@ describe('HomePulseService', () => {
         expect(accounting.getPendingVoucherCount).not.toHaveBeenCalled();
     });
 
+    it('counts shipments only for a member who can open the shipments page', async () => {
+        everythingHasWork();
+        // MANAGE_IMPORTS alone: the imports controller needs VIEW_IMPORTS.
+        db.userStorePermission.findMany.mockResolvedValue([
+            { store_id: 'store-1', permission: 'MANAGE_IMPORTS' },
+        ]);
+
+        const pulse = await service.getPulse(PROJECT_USER, undefined);
+
+        expect(pulse).not.toHaveProperty('imports');
+    });
+
     it('leaves out a metric whose query fails and still answers with the rest', async () => {
         everythingHasWork();
         db.leaveRequest.count.mockRejectedValue(new Error('relation does not exist'));

@@ -152,6 +152,20 @@ describe('AppShellSidebar', () => {
         expect(panel().querySelector('a[href="/crm/leads"]')).toBeInTheDocument();
     });
 
+    it('on a phone, takes the menu back to the app list when Home is tapped on Home', () => {
+        mockIsMdUp = false;
+        mockPathname = '/dashboard';
+        renderShell({ isOpen: true, onClose: jest.fn() });
+
+        fireEvent.click(within(rail()).getByRole('button', { name: 'CRM' }));
+        expect(within(panel()).getByRole('heading', { name: 'CRM' })).toBeInTheDocument();
+
+        // Already on Home, so the tap does not navigate — it must still reset.
+        fireEvent.click(within(rail()).getByRole('link', { name: 'Home' }));
+
+        expect(within(panel()).getByRole('heading', { name: 'Apps' })).toBeInTheDocument();
+    });
+
     it('folds Help, Support and What’s New into one Help entry', () => {
         mockPathname = '/support';
         renderShell();

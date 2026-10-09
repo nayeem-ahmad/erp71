@@ -246,7 +246,9 @@ export class HomePulseService {
             {
                 app: 'imports',
                 href: '/purchases/imports',
-                permissions: [P.VIEW_IMPORTS, P.MANAGE_IMPORTS],
+                // VIEW_IMPORTS alone: the imports controller requires it at
+                // class level, so MANAGE_IMPORTS without it opens nothing.
+                permissions: [P.VIEW_IMPORTS],
                 branchScoped: true,
                 count: (tenant, storeId) => this.db.importShipment.count({
                     where: {

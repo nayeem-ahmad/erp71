@@ -463,6 +463,9 @@ export default function AppShellSidebar({
                         aria-label={copy.home}
                         aria-current={onHome ? 'true' : undefined}
                         title={copy.home}
+                        // Already on Home the tap does not navigate, so the
+                        // pathname effect never clears a picked app — do it here.
+                        onClick={() => setPickedKey(null)}
                         className={`mt-1 ${railItemCls(onHome && !pickedKey)}`}
                     >
                         <LayoutGrid className="h-5 w-5" aria-hidden />
