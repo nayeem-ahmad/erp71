@@ -114,6 +114,7 @@ export default function PlatformTenantFeaturesPage() {
                     projects_enabled: d.projects_enabled ?? DEFAULTS.projects_enabled,
                     platform_projects_enabled: d.platform_projects_enabled ?? DEFAULTS.platform_projects_enabled,
                     platform_accounting_enabled: d.platform_accounting_enabled ?? DEFAULTS.platform_accounting_enabled,
+                    app_shell_enabled: d.app_shell_enabled ?? DEFAULTS.app_shell_enabled,
                 });
             })
             .catch(() => toast.error(c.loadFailed))
