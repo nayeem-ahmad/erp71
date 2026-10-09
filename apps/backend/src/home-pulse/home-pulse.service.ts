@@ -74,8 +74,10 @@ export class HomePulseService {
 
     async getPulse(tenant: TenantContext, requestedStoreId: string | undefined): Promise<HomePulse> {
         // Per member: the result depends on what they hold, and the projects
-        // count is their own tasks.
-        const cacheKey = `home:pulse:${tenant.tenantId}:${tenant.userId}:${requestedStoreId ?? 'default'}`;
+        // count is their own tasks. Per branch too — with none asked for, the
+        // header branch decides, so it has to be in the key.
+        const branchKey = requestedStoreId ?? `header-${tenant.storeId ?? 'none'}`;
+        const cacheKey = `home:pulse:${tenant.tenantId}:${tenant.userId}:${branchKey}`;
         const cached = await this.redis.get<HomePulse>(cacheKey);
         if (cached) return cached;
 

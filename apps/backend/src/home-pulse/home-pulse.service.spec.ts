@@ -184,4 +184,13 @@ describe('HomePulseService', () => {
         expect(redis.get).toHaveBeenCalledWith('home:pulse:tenant-1:owner-1:store-1');
         expect(db.salesOrder.count).not.toHaveBeenCalled();
     });
+
+    it('keeps each header branch\u2019s counts apart when no branch is asked for', async () => {
+        everythingHasWork();
+
+        await service.getPulse({ ...PROJECT_USER, userRole: 'OWNER', storeId: 'store-2' }, undefined);
+
+        // The same member on another branch must not be answered from this entry.
+        expect(redis.get).toHaveBeenCalledWith('home:pulse:tenant-1:user-2:header-store-2');
+    });
 });

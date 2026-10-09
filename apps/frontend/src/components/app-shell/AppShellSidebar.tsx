@@ -275,7 +275,7 @@ export default function AppShellSidebar({
         const highlighted = entry.key === shownKey;
         const body = (
             <>
-                {highlighted ? <span aria-hidden className="absolute inset-y-2 -start-2 w-0.5 rounded-e bg-blue-600" /> : null}
+                {highlighted ? <span aria-hidden className="absolute inset-y-2 -start-1.5 w-0.5 rounded-e bg-blue-600" /> : null}
                 <Icon className="h-5 w-5" aria-hidden />
                 {unread > 0 ? (
                     <span aria-hidden className="absolute end-1.5 top-1.5 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white" />
@@ -468,7 +468,7 @@ export default function AppShellSidebar({
                         <LayoutGrid className="h-5 w-5" aria-hidden />
                     </Link>
 
-                    <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto">
+                    <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden">
                         {rail.business.map(renderRailEntry)}
                     </div>
 
