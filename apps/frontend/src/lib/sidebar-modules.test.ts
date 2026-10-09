@@ -86,3 +86,65 @@ describe('resolveSidebarModules — tenant shell gated on app states', () => {
         expect(shown.sort()).toEqual(['account-settings', 'accounting', 'dashboard', 'expenses', 'help', 'support'].sort());
     });
 });
+
+/**
+ * `appShell` off must leave the classic sidebar exactly as it was. Production
+ * now gates it on app states, while the old Sidebar tests drive the legacy
+ * booleans — so this pins the two to each other: for every plan, switch set
+ * and viewer below, the registry and the booleans the layout derives agree.
+ */
+describe('resolveSidebarModules — app states match the legacy gates', () => {
+    const PLANS: Record<string, { code: string; features: Record<string, boolean> }> = {
+        free: { code: 'FREE', features: {} },
+        standard: { code: 'STANDARD', features: { premiumAccounting: true } },
+        pro: { code: 'PRO', features: { premiumAccounting: true, premiumManufacturing: true, premiumCrm: true, teamChat: true } },
+        accountingOnly: { code: 'ACCOUNTING', features: { premiumAccounting: true, accountingOnly: true } },
+        freeWithChat: { code: 'FREE', features: { teamChat: true, premiumAccounting: true } },
+    };
+    const SWITCH_SETS = {
+        allOn: { ...DEFAULT_PLATFORM_FEATURES, help: true, support: true, feedback: true, manufacturing: true, projects: true },
+        allOff: { ...DEFAULT_PLATFORM_FEATURES },
+        mixed: { ...DEFAULT_PLATFORM_FEATURES, help: true, feedback: true, manufacturing: true },
+    };
+    const VIEWERS = {
+        owner: { isOwner: true, permissions: [] as string[] },
+        bookkeeper: { isOwner: false, permissions: ['VIEW_LEDGER', 'VIEW_PROJECTS', 'CREATE_SALE', 'VIEW_SALES'] },
+        cashier: { isOwner: false, permissions: ['CREATE_SALE'] },
+    };
+
+    for (const [planName, plan] of Object.entries(PLANS)) {
+        for (const [switchName, switches] of Object.entries(SWITCH_SETS)) {
+            for (const [viewerName, viewer] of Object.entries(VIEWERS)) {
+                it(`${planName} × ${switchName} × ${viewerName}`, () => {
+                    const paid = plan.code !== 'FREE';
+                    // The booleans exactly as (app)/layout.tsx derives them.
+                    const legacy: SidebarModulesInput = input({
+                        appStates: undefined,
+                        planFeatures: plan.features,
+                        accountingOnlyMode: Boolean(plan.features.accountingOnly),
+                        canAccessAccounting: (viewer.isOwner || viewer.permissions.includes('VIEW_LEDGER'))
+                            && paid && Boolean(plan.features.premiumAccounting),
+                        canAccessManufacturing: switches.manufacturing && Boolean(plan.features.premiumManufacturing),
+                        canAccessProjects: switches.projects && (viewer.isOwner || viewer.permissions.includes('VIEW_PROJECTS')),
+                        helpEnabled: switches.help,
+                        supportEnabled: switches.support || switches.feedback,
+                        canAccessAdmin: false,
+                        memberIsOwner: viewer.isOwner,
+                        memberPermissions: viewer.permissions,
+                    });
+                    const states = resolveAppStates({
+                        planFeatures: plan.features,
+                        planCode: plan.code,
+                        platformFeatures: switches,
+                        hiddenApps: [],
+                        isOwner: viewer.isOwner,
+                        permissions: viewer.permissions,
+                    });
+
+                    expect(keys(resolveSidebarModules({ ...legacy, appStates: states })))
+                        .toEqual(keys(resolveSidebarModules(legacy)));
+                });
+            }
+        }
+    }
+});
