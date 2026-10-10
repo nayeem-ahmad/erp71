@@ -182,7 +182,22 @@ balance lives on the party. Existing credit rows keep their branch.
 - Write-off vouchers, and every other customer and supplier posting, are
   unchanged.
 
-## 5. Frontend
+## 5. Home screen counts follow the header branch
+
+- The storefront-orders metric in `home-pulse.service.ts` becomes
+  `branchScoped` and counts pending orders `WHERE store_id = <branch>`, like
+  the purchase-orders metric beside it.
+- The home tiles (`components/app-shell/AppTiles.tsx`) send the header branch
+  as `storeId`, and the query key includes it so a header change refetches.
+  Every branch-aware tile then counts the header branch for everyone, owners
+  included. Today an owner's tiles count the whole company because nothing is
+  sent. On a shop's branch the online-orders tile shows 0; on the Online Store
+  branch it shows the pending web orders.
+- The server's existing rule still applies: a requested branch must be one the
+  member may read. A tile that is refused hides, as it does today.
+- The mobile app's pulse (`mobile-pulse.service.ts`) is unchanged.
+
+## 6. Frontend
 
 - **Customer form** (`sales/customers/CustomerFormModal.tsx`): the existing
   Branch select is required on create, defaults to the header branch, and is
@@ -210,7 +225,7 @@ balance lives on the party. Existing credit rows keep their branch.
   renamed, and the mark stays.
 - **Locales:** new strings in all nine locales.
 
-## 6. Testing
+## 7. Testing
 
 - **Sync script.** Unit tests for the placement rules (most sales or
   purchases, tie, none → main, existing branch kept, credit rows follow party,
@@ -231,6 +246,8 @@ balance lives on the party. Existing credit rows keep their branch.
   - storefront checkout stores the online branch; the orders list filters by
     `storeId`; a status change on an order outside the caller's branches is
     refused
+  - home pulse: the storefront metric counts the requested branch only;
+    `AppTiles` sends the header branch and refetches when it changes
 - **Frontend:**
   - supplier form branch field
   - supplier list filter
@@ -243,7 +260,7 @@ balance lives on the party. Existing credit rows keep their branch.
   (counts per branch) using an SSH script the user runs. The script must not
   write.
 
-## 7. Out of scope (TODO.md)
+## 8. Out of scope (TODO.md)
 
 - Customer reads outside `/customers` that are already listed: CRM campaign
   recipients, AI chat party tools, loyalty screens.
@@ -255,4 +272,4 @@ balance lives on the party. Existing credit rows keep their branch.
 - A bulk "move to branch" action.
 - Turning a storefront order into a sale, or moving stock for it. Both are
   unchanged.
-- The home pulse's storefront-orders count stays tenant-wide.
+- The mobile app's pulse counts stay as they are.
