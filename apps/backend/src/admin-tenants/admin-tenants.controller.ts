@@ -11,6 +11,8 @@ import {
     UpdateAdminTenantFeaturesDto,
     SuspendTenantDto,
     DeleteTenantDto,
+    ClearTenantDataQueryDto,
+    ClearTenantDataDto,
     CreateAdminTenantDto,
     RecordTenantPaymentDto,
     RecordTenantRefundDto,
@@ -161,6 +163,16 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.deleteTenant(tenantId, dto, req.user.userId);
+    }
+
+    @Delete(':tenantId/data')
+    clearData(
+        @Param('tenantId') tenantId: string,
+        @Query() query: ClearTenantDataQueryDto,
+        @Body() dto: ClearTenantDataDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.clearData(tenantId, query.mode, query.storeId || undefined, dto, req.user.userId);
     }
 
     @Get(':tenantId/ledger')

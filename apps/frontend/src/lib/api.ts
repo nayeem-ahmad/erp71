@@ -3933,6 +3933,20 @@ export const api = {
         body: JSON.stringify({ reason }),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /** Only `transactions` can be cleared for one branch — master data is shared by every branch. */
+    clearAdminTenantData: (
+        tenantId: string,
+        mode: 'transactions' | 'all',
+        storeId?: string,
+    ): Promise<{ cleared: 'transactions' | 'all'; storeId?: string; storeName?: string }> => {
+        const params = new URLSearchParams({ mode });
+        if (storeId) params.set('storeId', storeId);
+        return fetchWithAuth(`/admin/tenants/${tenantId}/data?${params}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ reason: 'Cleared by platform admin' }),
+            headers: { 'Content-Type': 'application/json' },
+        });
+    },
     createAdminTenant: (data: {
         ownerMode: 'new' | 'existing';
         ownerEmail?: string;

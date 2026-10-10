@@ -13,6 +13,10 @@ jest.mock('bcrypt', () => ({
     hash: jest.fn().mockResolvedValue('hashed-throwaway-password'),
 }));
 
+jest.mock('../tenants/clear-tenant-data', () => ({
+    clearTenantData: jest.fn(),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -30,6 +34,7 @@ import { PlatformSettingsService } from '../platform-settings/platform-settings.
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { AuthCacheService } from '../database/auth-cache.service';
+import { clearTenantData } from '../tenants/clear-tenant-data';
 
 describe('AdminTenantsService', () => {
   let service: AdminTenantsService;
@@ -122,6 +127,7 @@ describe('AdminTenantsService', () => {
         update: jest.fn(),
         delete: jest.fn().mockResolvedValue({}),
       },
+      demoDataBatch: { findFirst: jest.fn().mockResolvedValue(null) },
       aiUsageLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { credits_used: 0 } }) },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
     };
@@ -683,6 +689,88 @@ describe('AdminTenantsService', () => {
       expect(authCache.invalidateTenant.mock.invocationCallOrder[0]).toBeGreaterThan(
         db.tenant.update.mock.invocationCallOrder[0],
       );
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  clearData                                                           */
+  /* ------------------------------------------------------------------ */
+
+  describe('clearData', () => {
+    const wipe = clearTenantData as jest.Mock;
+
+    beforeEach(() => {
+      db.tenant.findFirst.mockResolvedValue({ id: 't-1', name: 'Test Store' });
+    });
+
+    it('wipes the tenant and records who did it and why', async () => {
+      wipe.mockResolvedValue({ cleared: 'all' });
+
+      const result = await service.clearData('t-1', 'all', undefined, { reason: 'Fresh start' }, 'admin-1');
+
+      expect(wipe).toHaveBeenCalledWith(db, 't-1', 'all', undefined);
+      expect(result).toEqual({ cleared: 'all' });
+      expect(auditService.log).toHaveBeenCalledWith(
+        'tenant.data.clear',
+        'Tenant',
+        { userId: 'admin-1', tenantId: 't-1' },
+        't-1',
+        expect.objectContaining({ mode: 'all', store_id: null, reason: 'Fresh start', tenant_name: 'Test Store' }),
+      );
+    });
+
+    it('wipes one branch and names it in the audit entry', async () => {
+      wipe.mockResolvedValue({ cleared: 'transactions', storeId: 's-2', storeName: 'Uttara' });
+
+      await service.clearData('t-1', 'transactions', 's-2', {}, 'admin-1');
+
+      expect(wipe).toHaveBeenCalledWith(db, 't-1', 'transactions', 's-2');
+      expect(auditService.log).toHaveBeenCalledWith(
+        'tenant.data.clear',
+        'Tenant',
+        { userId: 'admin-1', tenantId: 't-1' },
+        't-1',
+        expect.objectContaining({ mode: 'transactions', store_id: 's-2', store_name: 'Uttara', reason: null }),
+      );
+    });
+
+    // A suspended tenant is still a tenant — clearing it before re-activation
+    // is a likely use. Only a deleted one is gone.
+    it('looks the tenant up by the active filter, not by subscription status', async () => {
+      wipe.mockResolvedValue({ cleared: 'transactions' });
+
+      await service.clearData('t-1', 'transactions', undefined, {}, 'admin-1');
+
+      expect(db.tenant.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 't-1', deleted_at: null, platform_workspace_key: null },
+      }));
+    });
+
+    it('404s a deleted or unknown tenant without touching its data', async () => {
+      db.tenant.findFirst.mockResolvedValue(null);
+
+      await expect(service.clearData('missing', 'all', undefined, {}, 'admin-1')).rejects.toThrow(NotFoundException);
+      expect(wipe).not.toHaveBeenCalled();
+      expect(auditService.log).not.toHaveBeenCalled();
+    });
+
+    // The loader would go on inserting into a half-wiped store, and the
+    // wipe deletes the batch row it reports progress to.
+    it('refuses while a demo-data load is running', async () => {
+      db.demoDataBatch.findFirst.mockResolvedValue({ id: 'batch-1' });
+
+      await expect(service.clearData('t-1', 'transactions', undefined, {}, 'admin-1')).rejects.toThrow(ConflictException);
+      expect(db.demoDataBatch.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: { tenant_id: 't-1', status: { in: ['RUNNING', 'PENDING'] } },
+      }));
+      expect(wipe).not.toHaveBeenCalled();
+    });
+
+    it('records nothing when the wipe is refused', async () => {
+      wipe.mockRejectedValue(new BadRequestException('Only transactions can be cleared for a single branch.'));
+
+      await expect(service.clearData('t-1', 'all', 's-2', {}, 'admin-1')).rejects.toThrow(BadRequestException);
+      expect(auditService.log).not.toHaveBeenCalled();
     });
   });
 

@@ -1,11 +1,15 @@
 'use client';
 
-import { AlertTriangle, Database, Trash2, UserX } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Database, Eraser, Trash2, UserX } from 'lucide-react';
 import CompactSection from '@/components/ui/compact/CompactSection';
-import { Button } from '@/components/ui';
+import { Button, Field, Select } from '@/components/ui';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import type { TenantRecord } from '../types';
 import type { DemoBatch } from '../use-tenant-detail';
+
+export type ClearDataMode = 'transactions' | 'all';
+export type ClearDataBranch = { id: string; name: string };
 
 type Props = {
     tenant: TenantRecord;
@@ -14,6 +18,10 @@ type Props = {
     onStartDemoData: () => void;
     isSuspending: boolean;
     onSuspend: () => void;
+    /** Which clear is in flight, if any. */
+    clearing: ClearDataMode | null;
+    /** `branch` is null for the whole tenant; a branch only ever clears transactions. */
+    onClearData: (mode: ClearDataMode, branch: ClearDataBranch | null) => void;
     isDeleting: boolean;
     onDelete: () => void;
 };
@@ -25,6 +33,8 @@ export default function DangerZonePanel({
     onStartDemoData,
     isSuspending,
     onSuspend,
+    clearing,
+    onClearData,
     isDeleting,
     onDelete,
 }: Props) {
@@ -32,6 +42,10 @@ export default function DangerZonePanel({
     const m = t.admin.tenants;
     const dd = m.demoData;
     const dp = m.detailPage;
+    const cd = m.clearData;
+
+    const [branchId, setBranchId] = useState('');
+    const branch = tenant.stores.find((s) => s.id === branchId) ?? null;
 
     const demoRunning = (demoBatch && (demoBatch.status === 'RUNNING' || demoBatch.status === 'PENDING'))
         || isStartingDemo;
@@ -104,6 +118,52 @@ export default function DangerZonePanel({
                     >
                         {alreadySuspended ? m.alreadySuspended : m.suspendTenant}
                     </Button>
+                </div>
+
+                <div className="space-y-3 border-b border-gray-100 p-3 md:p-4">
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{cd.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">{cd.description}</p>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                        {tenant.stores.length > 1 && (
+                            <Field label={cd.branchLabel} htmlFor="admin-clear-data-branch" className="w-full sm:w-56">
+                                <Select
+                                    id="admin-clear-data-branch"
+                                    value={branchId}
+                                    onChange={(e) => setBranchId(e.target.value)}
+                                    disabled={!!clearing}
+                                    className="w-full"
+                                >
+                                    <option value="">{cd.allBranches}</option>
+                                    {tenant.stores.map((s) => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                </Select>
+                            </Field>
+                        )}
+                        <Button
+                            variant="secondary"
+                            onClick={() => onClearData('transactions', branch)}
+                            disabled={!!clearing}
+                            loading={clearing === 'transactions'}
+                            icon={<Eraser className="w-4 h-4" />}
+                            className="!text-danger-text !border-red-200 hover:!bg-danger-light"
+                        >
+                            {cd.transactionsButton}
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            onClick={() => onClearData('all', null)}
+                            disabled={!!clearing || !!branch}
+                            loading={clearing === 'all'}
+                            icon={<Eraser className="w-4 h-4" />}
+                            className="!text-danger-text !border-red-200 hover:!bg-danger-light"
+                        >
+                            {cd.allButton}
+                        </Button>
+                    </div>
+                    {branch && <p className="text-xs text-gray-500">{cd.branchOnlyTransactions}</p>}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-3 p-3 md:p-4">

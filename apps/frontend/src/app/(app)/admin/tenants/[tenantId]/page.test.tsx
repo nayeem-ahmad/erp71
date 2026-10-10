@@ -22,6 +22,7 @@ jest.mock('@/lib/api', () => ({
         loadAdminTenantDemoData: jest.fn(),
         suspendTenant: jest.fn(),
         deleteAdminTenant: jest.fn(),
+        clearAdminTenantData: jest.fn(),
         impersonateTenant: jest.fn(),
         getAdminTenantMessagingIdentity: jest.fn(),
         updateAdminTenantMessagingIdentity: jest.fn(),
@@ -240,6 +241,74 @@ describe('AdminTenantDetailPage', () => {
 
         await waitFor(() => {
             expect(api.deleteAdminTenant).toHaveBeenCalledWith('tenant1', 'Deleted by platform admin');
+        });
+    });
+
+    describe('clearing data', () => {
+        const typeNameAndConfirm = (label: RegExp) => {
+            const confirm = screen.getAllByRole('button', { name: label }).pop()!;
+            expect(confirm).toBeDisabled();
+            fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Acme Corp' } });
+            fireEvent.click(screen.getAllByRole('button', { name: label }).pop()!);
+        };
+
+        beforeEach(() => {
+            tabParam = 'danger';
+            require('@/lib/api').api.clearAdminTenantData.mockResolvedValue({ cleared: 'transactions' });
+        });
+
+        it('clears every transaction of a one-branch tenant once its name is typed', async () => {
+            const { api } = require('@/lib/api');
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            // Nothing to choose between with a single branch.
+            expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: /clear transactions/i }));
+            expect(api.clearAdminTenantData).not.toHaveBeenCalled();
+            typeNameAndConfirm(/clear transactions/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'transactions', undefined);
+            });
+        });
+
+        it('clears all data of the tenant', async () => {
+            const { api } = require('@/lib/api');
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            fireEvent.click(screen.getByRole('button', { name: /clear all data/i }));
+            typeNameAndConfirm(/clear all data/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'all', undefined);
+            });
+        });
+
+        it('clears one branch, and only its transactions', async () => {
+            const { api } = require('@/lib/api');
+            api.getAdminTenant.mockResolvedValue({
+                ...mockTenant,
+                stores: [...mockTenant.stores, { id: 'store2', name: 'Uttara', address: null }],
+                store_count: 2,
+            });
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'store2' } });
+
+            // Master data is shared by every branch — there is no "all" of one.
+            expect(screen.getByRole('button', { name: /clear all data/i })).toBeDisabled();
+
+            fireEvent.click(screen.getByRole('button', { name: /clear transactions/i }));
+            expect(within(screen.getByRole('dialog')).getByText(/Uttara/)).toBeInTheDocument();
+            typeNameAndConfirm(/clear transactions/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'transactions', 'store2');
+            });
         });
     });
 });

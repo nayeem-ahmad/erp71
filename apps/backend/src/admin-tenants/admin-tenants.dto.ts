@@ -81,6 +81,15 @@ export class DeleteTenantDto {
     @IsOptional() @IsString() reason?: string;
 }
 
+export class ClearTenantDataQueryDto {
+    @IsIn(['transactions', 'all']) mode: 'transactions' | 'all';
+    @IsOptional() @IsString() storeId?: string;
+}
+
+export class ClearTenantDataDto {
+    @IsOptional() @IsString() reason?: string;
+}
+
 export class ListAdminUsersQueryDto {
     @IsOptional() @IsString() search?: string;
     @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
