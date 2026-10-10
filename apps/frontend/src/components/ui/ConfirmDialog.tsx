@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import ModalShell, { ModalFooter, ModalHeader } from '../ModalShell';
 import { Button } from './compact';
@@ -25,6 +25,8 @@ export interface ConfirmDialogProps {
     workingLabel?: string;
     loading?: boolean;
     danger?: boolean;
+    /** Extra content between the prompt and the type-to-confirm input, e.g. options the action takes. */
+    children?: ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -45,6 +47,7 @@ export function ConfirmDialog({
     workingLabel,
     loading = false,
     danger,
+    children,
     onConfirm,
     onCancel,
 }: ConfirmDialogProps) {
@@ -75,6 +78,7 @@ export function ConfirmDialog({
                     <div className="space-y-2 flex-1">
                         {body && <p className="text-sm text-gray-700 whitespace-pre-line">{body}</p>}
                         <p className="text-sm font-semibold text-gray-800">{emphasis}</p>
+                        {children}
                         {requiresInput && (
                             <Input
                                 type="text"

@@ -22,6 +22,7 @@ import DangerZonePanel, {
     type ClearDataBranch,
     type ClearDataMode,
 } from '@/components/admin/tenants/panels/DangerZonePanel';
+import ClearDataGroups, { allGroups, keptGroups, type DataGroup } from '@/components/data-clear/ClearDataGroups';
 import type { DiscountType, SecondaryLocale } from '@/components/admin/tenants/types';
 
 const TAB_IDS = ['overview', 'subscription', 'configuration', 'integrations', 'danger'] as const;
@@ -75,6 +76,8 @@ export default function AdminTenantDetailPage() {
     const [isSuspending, setIsSuspending] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [clearing, setClearing] = useState<ClearDataMode | null>(null);
+    // What "Clear all data" will delete — every group, until the admin unticks one.
+    const [clearGroups, setClearGroups] = useState<Set<DataGroup>>(() => allGroups('tenant'));
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [isResettingNav, setIsResettingNav] = useState(false);
     const [isImportingCatalog, setIsImportingCatalog] = useState(false);
@@ -295,13 +298,22 @@ export default function AdminTenantDetailPage() {
         }
     };
 
-    const clearData = async (mode: ClearDataMode, branch: ClearDataBranch | null) => {
+    const clearData = async (mode: ClearDataMode, branch: ClearDataBranch | null, keep: DataGroup[]) => {
         if (!tenant) return;
         setClearing(mode);
         setError('');
         try {
-            await api.clearAdminTenantData(tenant.id, mode, branch?.id);
-            if (branch) {
+            const result = await api.clearAdminTenantData(tenant.id, mode, branch?.id, keep);
+            if (branch && mode === 'all') {
+                const kept = result?.kept;
+                const keptNote = kept && (kept.customers > 0 || kept.suppliers > 0)
+                    ? ` ${formatMessage(t.settingsExtras.dataManagement.clearData.groups.keptParties, {
+                        customers: String(kept.customers),
+                        suppliers: String(kept.suppliers),
+                    })}`
+                    : '';
+                toast.success(formatMessage(cd.clearedBranchAll, { branch: branch.name }) + keptNote);
+            } else if (branch) {
                 toast.success(formatMessage(cd.clearedBranch, { branch: branch.name }));
             } else {
                 toast.success(formatMessage(mode === 'all' ? cd.clearedAll : cd.clearedTransactions, { name: tenant.name }));
@@ -342,7 +354,11 @@ export default function AdminTenantDetailPage() {
         switch (action.kind) {
             case 'suspend': return void suspendTenant();
             case 'delete': return void deleteTenant();
-            case 'clearData': return void clearData(action.mode, action.branch);
+            case 'clearData': return void clearData(
+                action.mode,
+                action.branch,
+                action.mode === 'all' ? keptGroups(action.branch ? 'branch' : 'tenant', clearGroups) : [],
+            );
             case 'importCatalog': return void importCatalog();
             case 'resetNav': return void resetNav();
             case 'demoData': return void startDemoData();
@@ -374,12 +390,16 @@ export default function AdminTenantDetailPage() {
                     typePromptTemplate: dp.typeToConfirm,
                 };
             case 'clearData': {
-                const label = pending.mode === 'all' ? cd.allButton : cd.transactionsButton;
+                const all = pending.mode === 'all';
+                const label = all ? cd.allButton : cd.transactionsButton;
                 let prompt: string;
                 if (pending.branch) {
-                    prompt = formatMessage(cd.branchTransactionsConfirm, { branch: pending.branch.name, name: tenant.name });
+                    prompt = formatMessage(all ? cd.branchAllConfirm : cd.branchTransactionsConfirm, {
+                        branch: pending.branch.name,
+                        name: tenant.name,
+                    });
                 } else {
-                    prompt = formatMessage(pending.mode === 'all' ? cd.allConfirm : cd.transactionsConfirm, { name: tenant.name });
+                    prompt = formatMessage(all ? cd.allConfirm : cd.transactionsConfirm, { name: tenant.name });
                 }
                 return {
                     title: label,
@@ -390,6 +410,14 @@ export default function AdminTenantDetailPage() {
                     // As irreversible as deleting the tenant, so the same bar.
                     expected: tenant.name.toLowerCase(),
                     typePromptTemplate: dp.typeToConfirm,
+                    children: all ? (
+                        <ClearDataGroups
+                            scope={pending.branch ? 'branch' : 'tenant'}
+                            deleting={clearGroups}
+                            onChange={setClearGroups}
+                            disabled={!!clearing}
+                        />
+                    ) : undefined,
                 };
             }
             case 'importCatalog':
@@ -422,7 +450,7 @@ export default function AdminTenantDetailPage() {
                     loading: revokingAddonCode === pending.code,
                 };
         }
-    }, [pending, tenant, m, bt, nc, dd, ac, cd, dp.typeToConfirm, isSuspending, isDeleting, clearing,
+    }, [pending, tenant, m, bt, nc, dd, ac, cd, dp.typeToConfirm, isSuspending, isDeleting, clearing, clearGroups,
         isImportingCatalog, isResettingNav, isStartingDemo, revokingAddonCode]);
 
     const tabs: Array<{ id: TabId; label: string; danger?: boolean }> = [
@@ -571,7 +599,10 @@ export default function AdminTenantDetailPage() {
                     isSuspending={isSuspending}
                     onSuspend={() => setPending({ kind: 'suspend' })}
                     clearing={clearing}
-                    onClearData={(mode, branch) => setPending({ kind: 'clearData', mode, branch })}
+                    onClearData={(mode, branch) => {
+                        setClearGroups(allGroups(branch ? 'branch' : 'tenant'));
+                        setPending({ kind: 'clearData', mode, branch });
+                    }}
                     isDeleting={isDeleting}
                     onDelete={() => setPending({ kind: 'delete' })}
                 />
@@ -608,7 +639,9 @@ export default function AdminTenantDetailPage() {
                     typePromptTemplate={'typePromptTemplate' in confirmProps ? confirmProps.typePromptTemplate : undefined}
                     onConfirm={runPending}
                     onCancel={() => setPending(null)}
-                />
+                >
+                    {'children' in confirmProps ? confirmProps.children : null}
+                </ConfirmDialog>
             )}
         </PageShell>
     );

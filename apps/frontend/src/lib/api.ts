@@ -3933,14 +3933,24 @@ export const api = {
         body: JSON.stringify({ reason }),
         headers: { 'Content-Type': 'application/json' },
     }),
-    /** Only `transactions` can be cleared for one branch — master data is shared by every branch. */
+    /**
+     * `keep`: for `all`, the master data groups to leave alone (see `ClearDataGroups`).
+     * `kept` comes back for a branch's `all`: its customers and suppliers a record elsewhere still names.
+     */
     clearAdminTenantData: (
         tenantId: string,
         mode: 'transactions' | 'all',
         storeId?: string,
-    ): Promise<{ cleared: 'transactions' | 'all'; storeId?: string; storeName?: string }> => {
+        keep: string[] = [],
+    ): Promise<{
+        cleared: 'transactions' | 'all';
+        storeId?: string;
+        storeName?: string;
+        kept?: { customers: number; suppliers: number };
+    }> => {
         const params = new URLSearchParams({ mode });
         if (storeId) params.set('storeId', storeId);
+        if (keep.length) params.set('keep', keep.join(','));
         return fetchWithAuth(`/admin/tenants/${tenantId}/data?${params}`, {
             method: 'DELETE',
             body: JSON.stringify({ reason: 'Cleared by platform admin' }),
