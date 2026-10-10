@@ -23,9 +23,16 @@ specific branch and also their payments."
    `Supplier`, `CustomerCreditTransaction` and `SupplierCreditTransaction`.
    With the column required, the compiler finds every writer that does not
    set it.
+5. **The online storefront has its own branch**, "Online Store", and every
+   customer the storefront creates belongs to it.
+6. **External import:** everything an import brings in belongs to the branch
+   chosen for that import.
+7. **CSV import** (customers and suppliers): each row may name its branch;
+   rows that don't take the one branch chosen for the whole file.
 
-The **main branch** is the tenant's oldest `Store`, by `created_at` then `id`.
-`Store` has no "default" or "main" flag, and stores cannot be deleted.
+The **main branch** is the tenant's oldest physical `Store` (never the online
+branch), by `created_at` then `id`. `Store` has no "default" or "main" flag,
+and stores cannot be deleted.
 
 ## What changes for users
 
@@ -42,8 +49,15 @@ The **main branch** is the tenant's oldest `Store`, by `created_at` then `id`.
   vouchers post to whichever header branch the recorder had, and supplier
   payment vouchers post company-wide. Afterwards a branch's receivable and
   payable clear against its own sales and purchases.
-- Single-branch tenants, which is most of them, see no difference. The filter
-  hides itself and everything lands on their one branch.
+- Single-branch tenants without a storefront, which is most of them, see no
+  difference. The filter hides itself and everything lands on their one
+  branch.
+- A tenant whose storefront has customers gains an "Online Store" branch. A
+  one-shop tenant therefore becomes two-branch: the header switcher and the
+  branch filters appear. Staff see web customers only once an owner gives
+  them access to the online branch. Owners get that access automatically.
+- Importing a CSV of customers or suppliers asks which branch the file goes
+  to, unless every row names its own.
 
 ## 1. Data model
 
@@ -54,9 +68,28 @@ The **main branch** is the tenant's oldest `Store`, by `created_at` then `id`.
 | `CustomerCreditTransaction` | `store_id String` (new) | every row: payment, payout, credit sale, adjustment, write-off |
 | `SupplierCreditTransaction` | `store_id String` (new) | every row: payment, payout, credit purchase, adjustment |
 
+| `Tenant` | `online_store_id String? @unique` (new) | the tenant's online branch; null until the storefront first needs it |
+
 A credit row's branch is its party's branch at the moment the row is written.
 That covers the ledger as well as payments, so a party's history never splits
 across branches unless the party is moved.
+
+### The online branch
+
+- **Created on first need**, by `ensureOnlineBranch(tenantId)`: when the
+  storefront creates its first customer, and in the sync below for tenants
+  that already have storefront customers.
+- **Created like any other branch.** It reuses the stores service's row
+  creation: name "Online Store" (or the next free name), the next store code,
+  and access rows for every owner. `Tenant.online_store_id` points at it, and
+  its unique constraint keeps one per tenant.
+- **Not counted against `maxStores`** in `plan-entitlements.service.ts`. It is
+  not a physical location, and a one-store plan must still be able to run a
+  storefront.
+- **Labelled as online.** The branch list in `/auth/me` and the store settings
+  page mark it, so it can be told apart from a shop.
+- **Storefront orders stay branchless** (`StorefrontOrder` has no store). Only
+  the customer is placed on the online branch.
 
 ### Rollout: pre-`db push` sync
 
@@ -69,8 +102,10 @@ refuses to make a column `NOT NULL` while it still holds nulls. A new step,
 1. `ALTER TABLE … ADD COLUMN IF NOT EXISTS "store_id" TEXT` on `Supplier`,
    `CustomerCreditTransaction` and `SupplierCreditTransaction`.
 2. Customers with a null branch get the branch with the most non-cancelled
-   sales. Ties go to the branch of the latest such sale. Customers with no
-   such sale get the main branch.
+   sales. Ties go to the branch of the latest such sale. A customer with no
+   such sale and a storefront account (`user_id` set) goes to the online
+   branch, which the step creates if needed. Every other customer gets the
+   main branch.
 3. Suppliers with a null branch get the branch with the most active purchases,
    using the same `ACTIVE_PURCHASE` filter the services use. Ties go to the
    latest purchase; suppliers with none get the main branch.
@@ -93,12 +128,12 @@ required. The rule for each:
 | Writer | Branch |
 |---|---|
 | Customer create (`POST /customers`) | `store_id` from the form; defaults to the header branch. Must be a branch the caller may use. |
-| Customer import (CSV) | optional `branch` column (name or code); else the header branch |
+| Customer import (CSV) | the row's `branch` column (name or code) if set, else the branch picked for the file. The import dialog requires that pick, defaulting to the header branch. A row naming an unknown branch, or one the caller may not use, fails on its own. |
 | Inline customer (sale, quote, order, POS quick-add) | the document's branch |
-| Storefront sign-up / checkout customer | the main branch |
-| External-sync import customer / supplier | the main branch |
+| Storefront sign-up / checkout customer | the online branch (`ensureOnlineBranch`) |
+| External-sync import customer / supplier | the import's branch: `ExternalSyncConnection.store_id`, already required when a connection is set up and already used for the imported sales and purchases. A party matched to an existing record keeps its branch. |
 | Demo data, seed | the tenant's first store |
-| Supplier create / update / import / inline quick-add | same rules as customers |
+| Supplier create / update / CSV import / inline quick-add | same rules as customers |
 | Customer and supplier credit rows (payments, credit sale/purchase, returns, write-offs, imports) | the party's current branch |
 
 Party edits: changing `store_id` requires owner or `VIEW_CONSOLIDATED_REPORTS`.
@@ -151,6 +186,13 @@ balance lives on the party. Existing credit rows keep their branch.
   `apiStoreId` goes to `listPayments`, and the page starts on the header
   branch. A 403 goes through `useBranchForbiddenReset`. The KPI strip follows
   the filtered rows.
+- **CSV import dialogs**, for customers and suppliers: a required Branch select
+  ("for rows without a branch"), defaulting to the header branch. The template
+  gains a `branch` column. Row errors name the branch that was not found.
+- **External import:** the connection form already requires a branch. Its help
+  text now says that customers and suppliers land there too.
+- **Settings › Stores:** the online branch is marked "Online" and cannot be
+  renamed to a physical-looking name. (A rename is allowed; the mark stays.)
 - **Locales:** new strings in all nine locales.
 
 ## 6. Testing
@@ -167,6 +209,10 @@ balance lives on the party. Existing credit rows keep their branch.
   - payment vouchers post to the payment's branch
   - supplier branch change gated
   - each writer sets a branch (inline, import, storefront, external sync)
+  - `ensureOnlineBranch` creates one branch only, under concurrent sign-ups,
+    gives owners access, and is excluded from the `maxStores` count
+  - CSV import: a row's branch wins over the file's, and an unknown or
+    forbidden branch fails that row only
 - **Frontend:**
   - supplier form branch field
   - supplier list filter
@@ -189,3 +235,5 @@ balance lives on the party. Existing credit rows keep their branch.
   party is in the caller's scope. The pickers enforce it in the UI only, as
   with the open "write paths trust body store ids" item.
 - A bulk "move to branch" action.
+- Storefront orders carrying a branch, and moving an online order into a
+  shop's sales.
