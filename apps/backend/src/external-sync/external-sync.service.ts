@@ -470,8 +470,8 @@ export class ExternalSyncService {
             });
             const session = await client.login();
 
-            // Not every provider offers quotations (Express does not), and a
-            // step that can do nothing should not count toward progress.
+            // A provider may offer no quotations, and a step that can do
+            // nothing should not count toward progress.
             const supportsQuotations = Boolean(client.fetchQuotationDocuments && mappers.quotation);
             if (!supportsQuotations) steps = steps.filter((step) => step !== 'QUOTATIONS');
 

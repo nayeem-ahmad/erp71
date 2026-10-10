@@ -5,6 +5,8 @@ import {
     ExpressRetailSaleLine,
     ExpressRetailPurchase,
     ExpressRetailPurchaseLine,
+    ExpressRetailQuotation,
+    ExpressRetailQuotationLine,
 } from './express-retail.client';
 import {
     DIZI_CASHIER_PROVIDER,
@@ -30,6 +32,7 @@ import {
     mapPayment,
     mapProduct,
     mapPurchase,
+    mapQuotation,
     mapSale,
     mapSaleReturn,
     mapSupplier,
@@ -147,6 +150,8 @@ const EXPRESS_MAPPERS: ProviderMappers = {
         mapPurchase(doc.header, doc.lines, prefix, warnings),
     payment: mapPayment,
     saleReturn: (doc, prefix, warnings) => mapSaleReturn(doc, prefix, warnings),
+    quotation: (doc: { header: ExpressRetailQuotation; lines: ExpressRetailQuotationLine[] }, prefix, warnings) =>
+        mapQuotation(doc.header, doc.lines, prefix, warnings),
 };
 
 class ExpressProviderClient implements ProviderClient {
@@ -190,6 +195,15 @@ class ExpressProviderClient implements ProviderClient {
 
     fetchSaleReturnDocuments(window: DateWindow) {
         return this.inner.fetchSaleReturns(window);
+    }
+
+    async fetchQuotationDocuments(window: DateWindow) {
+        const [headers, lines] = await Promise.all([
+            this.inner.fetchQuotations(window),
+            this.inner.fetchQuotationLines(window),
+        ]);
+        const byId = groupBy(lines, (line) => String(line.quotation_id));
+        return headers.map((header) => ({ header, lines: byId.get(String(header.id)) ?? [] }));
     }
 }
 
