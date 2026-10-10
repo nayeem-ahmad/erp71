@@ -1036,7 +1036,7 @@ export class ImportsService {
             if (shipment.supplier_id) {
                 const supplier = await tx.supplier.findFirst({
                     where: { id: shipment.supplier_id, tenant_id: tenantId },
-                    select: { due_balance: true },
+                    select: { due_balance: true, store_id: true },
                 });
                 const balanceAfter = num(supplier?.due_balance) + sheet.goods_value_bdt;
 
@@ -1044,6 +1044,8 @@ export class ImportsService {
                     data: {
                         tenant_id: tenantId,
                         supplier_id: shipment.supplier_id,
+                        // A credit row belongs to its supplier's branch.
+                        store_id: supplier!.store_id,
                         type: 'CREDIT_PURCHASE',
                         amount: new Prisma.Decimal(sheet.goods_value_bdt),
                         balance_after: new Prisma.Decimal(balanceAfter),
@@ -1190,7 +1192,7 @@ export class ImportsService {
         if (shipment.supplier_id) {
             const supplier = await tx.supplier.findFirst({
                 where: { id: shipment.supplier_id, tenant_id: tenantId },
-                select: { due_balance: true },
+                select: { due_balance: true, store_id: true },
             });
             const balanceAfter = Math.round((num(supplier?.due_balance) - bookedBdt) * 100) / 100;
 
@@ -1198,6 +1200,8 @@ export class ImportsService {
                 data: {
                     tenant_id: tenantId,
                     supplier_id: shipment.supplier_id,
+                    // A credit row belongs to its supplier's branch.
+                    store_id: supplier!.store_id,
                     type: 'PAYMENT',
                     amount: new Prisma.Decimal(bookedBdt),
                     balance_after: new Prisma.Decimal(balanceAfter),

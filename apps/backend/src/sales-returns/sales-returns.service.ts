@@ -205,7 +205,7 @@ export class SalesReturnsService {
                 if (returnPaymentMode === 'credit') {
                     const customer = await tx.customer.findUnique({
                         where: { id: sale.customer_id },
-                        select: { due_balance: true },
+                        select: { due_balance: true, store_id: true },
                     });
                     const currentDue = Number(customer?.due_balance ?? 0);
                     const creditReduction = Math.min(totalRefund, currentDue);
@@ -215,6 +215,7 @@ export class SalesReturnsService {
                             data: {
                                 tenant_id: tenantId,
                                 customer_id: sale.customer_id,
+                                store_id: customer!.store_id,
                                 type: 'ADJUSTMENT',
                                 amount: -creditReduction,
                                 balance_after: balanceAfter,

@@ -77,7 +77,7 @@ export class PurchasesService {
             let supplierId = dto.supplierId;
 
             if (dto.newSupplier) {
-                supplierId = await resolveInlineSupplier(tx, tenantId, dto.newSupplier);
+                supplierId = await resolveInlineSupplier(tx, tenantId, dto.newSupplier, dto.storeId);
             } else if (supplierId) {
                 const supplier = await tx.supplier.findFirst({
                     where: { id: supplierId, tenant_id: tenantId },
@@ -186,7 +186,7 @@ export class PurchasesService {
             if (supplierId) {
                 const supplier = await tx.supplier.findFirst({
                     where: { id: supplierId, tenant_id: tenantId },
-                    select: { due_balance: true },
+                    select: { due_balance: true, store_id: true },
                 });
                 let balanceAfter = Number(supplier!.due_balance) + totalAmount;
 
@@ -194,6 +194,8 @@ export class PurchasesService {
                     data: {
                         tenant_id: tenantId,
                         supplier_id: supplierId,
+                        // A credit row belongs to its supplier's branch.
+                        store_id: supplier!.store_id,
                         type: 'CREDIT_PURCHASE',
                         amount: totalAmount,
                         balance_after: balanceAfter,
@@ -216,6 +218,8 @@ export class PurchasesService {
                         data: {
                             tenant_id: tenantId,
                             supplier_id: supplierId,
+                            // A credit row belongs to its supplier's branch.
+                            store_id: supplier!.store_id,
                             type: 'PAYMENT',
                             amount: paidAmount,
                             balance_after: balanceAfter,
@@ -517,7 +521,7 @@ export class PurchasesService {
             if (purchase.supplier_id) {
                 const supplier = await tx.supplier.findFirst({
                     where: { id: purchase.supplier_id, tenant_id: tenantId },
-                    select: { due_balance: true },
+                    select: { due_balance: true, store_id: true },
                 });
                 const currentDue = Number(supplier?.due_balance ?? 0);
                 let runningDue = currentDue;
@@ -529,6 +533,8 @@ export class PurchasesService {
                         data: {
                             tenant_id: tenantId,
                             supplier_id: purchase.supplier_id,
+                            // A credit row belongs to its supplier's branch.
+                            store_id: supplier!.store_id,
                             type: 'ADJUSTMENT',
                             amount: -reversal,
                             balance_after: runningDue,
@@ -552,6 +558,8 @@ export class PurchasesService {
                         data: {
                             tenant_id: tenantId,
                             supplier_id: purchase.supplier_id,
+                            // A credit row belongs to its supplier's branch.
+                            store_id: supplier!.store_id,
                             type: 'ADJUSTMENT',
                             amount: refund,
                             balance_after: runningDue,

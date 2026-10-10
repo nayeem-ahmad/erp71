@@ -65,6 +65,14 @@ describe('CustomersService', () => {
       paymentMethod: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      store: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'store-1' }),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'store-1', name: 'Main', code: 'S1' },
+          { id: 'branch-a', name: 'Branch A', code: 'A' },
+          { id: 'branch-b', name: 'Branch B', code: 'B' },
+        ]),
+      },
       sale: {
         count: jest.fn(),
         findMany: jest.fn(),
@@ -93,7 +101,7 @@ describe('CustomersService', () => {
 
       const res = await service.create('tenant-1', {
           name: 'Nayeem', phone: '+123', email: '', address: ''
-      });
+      }, { storeId: 'store-1' });
       expect(res.id).toEqual('cust-1');
   });
 
@@ -104,7 +112,7 @@ describe('CustomersService', () => {
     const inScope = { AND: [customerInBranchesWhere(SCOPE)] };
 
     beforeEach(() => {
-      db.store = { findFirst: jest.fn() };
+      db.store.findFirst = jest.fn().mockResolvedValue({ id: 'branch-a' });
     });
 
     it('lists only the scoped customers, keeping the search OR intact', async () => {
@@ -219,8 +227,8 @@ describe('CustomersService', () => {
       expect(db.customer.update).toHaveBeenCalled();
     });
 
-    it('moves a customer to another branch of the tenant, or clears it', async () => {
-      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: null, phone: null });
+    it('moves a customer to another branch of the tenant, but never to no branch', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: 'branch-a', phone: null });
       db.store.findFirst.mockResolvedValue({ id: 'branch-b' });
       db.customer.update.mockResolvedValue({ id: 'cust-1', nid: null });
 
@@ -228,8 +236,48 @@ describe('CustomersService', () => {
       expect(db.store.findFirst).toHaveBeenCalledWith({ where: { id: 'branch-b', tenant_id: 'tenant-1' }, select: { id: true } });
       expect(db.customer.update.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-b' });
 
-      await service.update('tenant-1', 'cust-1', { store_id: null }, { canSetBranch: true });
-      expect(db.customer.update.mock.calls[1][0].data).toMatchObject({ store_id: null });
+      await expect(service.update('tenant-1', 'cust-1', { store_id: null }, { canSetBranch: true }))
+        .rejects.toThrow('A customer must belong to a branch.');
+    });
+
+    it('adds a customer to the branch the form names, if it is one of the caller\'s', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({ id: 'cust-1' });
+
+      await service.create('tenant-1', { name: 'Rahim', store_id: 'branch-a' } as any, { storeId: 'branch-b', scope: SCOPE });
+      expect(db.customer.create.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-a' });
+
+      db.store.findFirst.mockResolvedValue({ id: 'branch-b' });
+      await expect(service.create('tenant-1', { name: 'Karim', store_id: 'branch-b' } as any, { scope: SCOPE }))
+        .rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('will not add a customer with no branch at all', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+
+      await expect(service.create('tenant-1', { name: 'Rahim' } as any, {}))
+        .rejects.toThrow('Choose the branch this customer belongs to.');
+      expect(db.customer.create).not.toHaveBeenCalled();
+    });
+
+    it('imports a row to the branch its own column names, else to the file\'s', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customerGroup.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({});
+
+      const result = await service.importRows(
+        'tenant-1',
+        [{ name: 'Own', branch: 'a' }, { name: 'File' }, { name: 'Nowhere', branch: 'Sylhet' }],
+        'skip',
+        'store-1',
+        null,
+      );
+
+      expect(db.customer.create.mock.calls.map(([args]: any[]) => args.data.store_id)).toEqual(['branch-a', 'store-1']);
+      expect(result.created).toBe(2);
+      expect(result.errors).toEqual([expect.stringMatching(/unknown branch "Sylhet"/)]);
     });
 
     it('rejects a branch from another tenant', async () => {
@@ -270,7 +318,7 @@ describe('CustomersService', () => {
       db.employee.findFirst.mockResolvedValue({ id: 'emp-rafiq' });
       db.customer.create.mockResolvedValue({ id: 'cust-1', sales_rep_id: 'emp-rafiq' });
 
-      await service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-rafiq' } as any);
+      await service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-rafiq' } as any, { storeId: 'store-1' });
 
       expect(db.customer.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -285,7 +333,7 @@ describe('CustomersService', () => {
       db.employee.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-elsewhere' } as any),
+        service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-elsewhere' } as any, { storeId: 'store-1' }),
       ).rejects.toThrow(BadRequestException);
       expect(db.customer.create).not.toHaveBeenCalled();
     });
@@ -305,7 +353,7 @@ describe('CustomersService', () => {
   it('should throw Error when phone matches existing customer', async () => {
       db.customer.findUnique.mockResolvedValue({ id: 'existing-cust' });
       
-      await expect(service.create('tenant-1', { name: 'Oops', phone: '+123' } as any)).rejects.toThrow(BadRequestException);
+      await expect(service.create('tenant-1', { name: 'Oops', phone: '+123' } as any, { storeId: 'store-1' })).rejects.toThrow(BadRequestException);
   });
 
   it('findAll() should return all customers', async () => {
@@ -827,6 +875,49 @@ describe('CustomersService', () => {
     });
   });
 
+  // A payment belongs to its customer's branch, whichever header branch the
+  // person recording it is on; its voucher posts there too.
+  describe('payment branch', () => {
+    const posting = () => require('../accounting/posting.utils');
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+    });
+
+    it('records the payment and posts its voucher under the customer\'s branch, not the header', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000, store_id: 'branch-a' });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-1', payment_number: 'CPY-00001' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100 }, 'header-branch');
+
+      expect(db.customerCreditTransaction.create.mock.calls[0][0].data.store_id).toBe('branch-a');
+      expect(posting().autoPostFromRules.mock.calls[0][0].storeId).toBe('branch-a');
+    });
+
+    it('reposts an edited payment under the branch it was recorded at', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue({
+        id: 'pay-1', customer_id: 'c1', type: 'PAYMENT', amount: 200, discount_amount: 0, store_id: 'branch-a',
+        payment_number: 'CPY-00001', notes: null, created_at: new Date('2026-10-01T05:00:00Z'),
+      });
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue({ id: 'pay-1' });
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 250 }, 'header-branch');
+
+      expect(posting().autoPostFromRules.mock.calls[0][0].storeId).toBe('branch-a');
+    });
+
+    it('lists only the payments of the branch the page shows', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([]);
+      db.customerCreditTransaction.count.mockResolvedValue(0);
+
+      await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka', branch: 'branch-a' } as any);
+
+      expect(db.customerCreditTransaction.findMany.mock.calls[0][0].where.store_id).toBe('branch-a');
+    });
+  });
+
   describe('deleteCreditPayment()', () => {
     const existingPayment = {
       id: 'pay-2',
@@ -1221,7 +1312,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice', phone: '01711000001' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
@@ -1243,7 +1334,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice', phone: '01711000001' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 0, updated: 0, skipped: 1, errors: [] });
@@ -1258,7 +1349,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice Updated', phone: '01711000001' }],
-        'upsert',
+        'upsert', 'store-1',
       );
 
       expect(result).toEqual({ created: 0, updated: 1, skipped: 0, errors: [] });
@@ -1271,7 +1362,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ phone: '01711000002' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.errors).toHaveLength(1);
@@ -1293,7 +1384,7 @@ describe('CustomersService', () => {
           { name: 'Alice', phone: '01711000001' },
           { name: 'Bob', phone: '01711000002' },
         ],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.created).toBe(1);
@@ -1310,7 +1401,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice', phone: '01711000001', customer_group_name: 'NonExistentGroup' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
@@ -1335,7 +1426,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Corner Shop', owner_name: 'Rahim Mia' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
@@ -1366,7 +1457,7 @@ describe('CustomersService', () => {
           { name: 'Bob', phone: '01711000002' },
           { name: 'Carol', phone: '01711000003' },
         ],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.created).toBe(2);
@@ -1381,7 +1472,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ customer_code: 'SHOP-42', name: 'Corner Shop' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.created).toBe(1);
@@ -1408,7 +1499,7 @@ describe('CustomersService', () => {
       db.customer.findFirst.mockResolvedValue({ customer_code: 'CUST-00007' });
       db.customer.create.mockResolvedValue({ nid: null });
 
-      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any);
+      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any, { storeId: 'store-1' });
 
       expect(db.customer.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1428,7 +1519,7 @@ describe('CustomersService', () => {
       );
 
       await expect(
-        service.create(tenantId, { name: 'Alice', customer_code: 'SHOP-42' } as any),
+        service.create(tenantId, { name: 'Alice', customer_code: 'SHOP-42' } as any, { storeId: 'store-1' }),
       ).rejects.toThrow(BadRequestException);
       expect(db.customer.create).not.toHaveBeenCalled();
     });
@@ -1442,7 +1533,7 @@ describe('CustomersService', () => {
         .mockRejectedValueOnce(Object.assign(new Error('conflict'), { code: 'P2002', meta: { target: ['tenant_id', 'customer_code'] } }))
         .mockResolvedValueOnce({ nid: null });
 
-      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any);
+      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any, { storeId: 'store-1' });
 
       expect(db.customer.create).toHaveBeenCalledTimes(2);
       expect(db.customer.create).toHaveBeenLastCalledWith(
@@ -1457,7 +1548,7 @@ describe('CustomersService', () => {
       db.customer.findFirst.mockResolvedValue(null);
       db.customer.create.mockResolvedValue({ nid: null });
 
-      await service.create(tenantId, { name: 'Corner Shop', owner_name: 'Rahim Mia' } as any);
+      await service.create(tenantId, { name: 'Corner Shop', owner_name: 'Rahim Mia' } as any, { storeId: 'store-1' });
 
       expect(db.customer.findUnique).not.toHaveBeenCalled();
       expect(db.customer.create).toHaveBeenCalledWith(

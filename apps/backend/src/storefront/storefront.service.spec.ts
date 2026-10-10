@@ -8,6 +8,7 @@ import { TotpService } from '../auth/totp.service';
 import { StorefrontPagesService } from '../storefront-pages/storefront-pages.service';
 import { GoogleTokenService } from '../auth/google-token.service';
 import { FirebaseTokenService } from '../auth/firebase-token.service';
+import { OnlineBranchService } from '../stores/online-branch.service';
 import { JwtService } from '@nestjs/jwt';
 import {
     BadRequestException,
@@ -34,6 +35,7 @@ const mockTenant = {
 };
 
 describe('StorefrontService', () => {
+    let onlineBranch: { ensure: jest.Mock };
     let service: StorefrontService;
     let authCache: AuthCacheService;
     let db: any;
@@ -157,6 +159,7 @@ describe('StorefrontService', () => {
             verifyPhoneIdToken: jest.fn(),
         };
 
+        onlineBranch = { ensure: jest.fn().mockResolvedValue('online-store') };
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 StorefrontService,
@@ -169,6 +172,7 @@ describe('StorefrontService', () => {
                 { provide: StorefrontPagesService, useValue: storefrontPagesService },
                 { provide: GoogleTokenService, useValue: googleTokenService },
                 { provide: FirebaseTokenService, useValue: firebaseTokenService },
+                { provide: OnlineBranchService, useValue: onlineBranch },
             ],
         }).compile();
 
@@ -636,6 +640,9 @@ describe('StorefrontService', () => {
             const result = await service.placeOrder(slug, dto as any);
 
             expect(result).toEqual(mockCreatedOrder);
+            // A guest order still belongs to the online branch.
+            expect(onlineBranch.ensure).toHaveBeenCalledWith(mockTenant.id);
+            expect(db.storefrontOrder.create.mock.calls[0][0].data.store_id).toBe('online-store');
             expect(db.storefrontOrder.create).toHaveBeenCalled();
         });
 
@@ -808,6 +815,24 @@ describe('StorefrontService', () => {
             expect(result.items).toHaveLength(0);
             expect(result.total).toBe(0);
         });
+
+        // Web orders belong to the online branch; the panel follows the page's
+        // branch filter, so a shop's branch lists none of them.
+        it('lists only the requested branch\'s orders', async () => {
+            db.storefrontOrder.findMany.mockResolvedValue([]);
+            db.storefrontOrder.count.mockResolvedValue(0);
+
+            await service.getOrders('tenant-1', 1, 20, 'online-store');
+
+            expect(db.storefrontOrder.findMany.mock.calls[0][0].where).toEqual({ tenantId: 'tenant-1', store_id: 'online-store' });
+            expect(db.storefrontOrder.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', store_id: 'online-store' } });
+        });
+
+        it('names the branch an order belongs to, for the controller\'s access check', async () => {
+            db.storefrontOrder.findFirst.mockResolvedValue({ store_id: 'online-store' });
+
+            await expect(service.orderStoreId('tenant-1', 'order-1')).resolves.toBe('online-store');
+        });
     });
 
     // ── updateOrderStatus ─────────────────────────────────────────────────────
@@ -891,6 +916,8 @@ describe('StorefrontService', () => {
             expect((result as any).customer.email).toBe(signupDto.email);
             expect(db.user.create).toHaveBeenCalled();
             expect(db.customer.create).toHaveBeenCalled();
+            // Storefront customers belong to the online branch.
+            expect(db.customer.create.mock.calls[0][0].data.store_id).toBe('online-store');
         });
 
         it('links existing user to new customer record when password matches', async () => {

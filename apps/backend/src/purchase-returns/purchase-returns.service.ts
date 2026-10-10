@@ -123,6 +123,8 @@ export class PurchaseReturnsService {
                         data: {
                             tenant_id: tenantId,
                             supplier_id: purchase.supplier_id,
+                            // A credit row belongs to its supplier's branch.
+                            store_id: purchase.supplier!.store_id,
                             type: 'ADJUSTMENT',
                             amount: -creditReduction,
                             balance_after: balanceAfter,

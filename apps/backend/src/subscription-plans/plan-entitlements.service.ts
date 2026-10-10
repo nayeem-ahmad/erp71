@@ -178,8 +178,14 @@ export class PlanEntitlementsService {
             return;
         }
 
+        // The storefront's online branch is not a shop and never counts against
+        // the plan — see OnlineBranchService.
+        const tenant = await this.db.tenant.findUnique({ where: { id: tenantId }, select: { online_store_id: true } });
         const currentCount = await this.db.store.count({
-            where: { tenant_id: tenantId },
+            where: {
+                tenant_id: tenantId,
+                ...(tenant?.online_store_id ? { id: { not: tenant.online_store_id } } : {}),
+            },
         });
 
         if (currentCount + additionalCount > maxStores) {

@@ -3,6 +3,8 @@ import { applyInventoryMovement, resolveWarehouseId } from '../database/inventor
 import { autoPostFromRules, postingIdempotencyKey } from '../accounting/posting.utils';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { PaymentParty } from './external-sync.mapper';
+import { customerBranchId } from '../customers/customer-branch.util';
+import { supplierBranchId } from '../suppliers/supplier-branch.util';
 
 /**
  * Makes an imported document produce the same effects a natively entered one
@@ -67,7 +69,7 @@ export async function applySaleImpacts(input: SaleImpactInput): Promise<void> {
     if (balanceDue > EPSILON && input.customerId) {
         const customer = await tx.customer.findUnique({
             where: { id: input.customerId },
-            select: { due_balance: true },
+            select: { due_balance: true, store_id: true },
         });
         const balanceAfter = Number(customer?.due_balance ?? 0) + balanceDue;
 
@@ -75,6 +77,8 @@ export async function applySaleImpacts(input: SaleImpactInput): Promise<void> {
             data: {
                 tenant_id: tenantId,
                 customer_id: input.customerId,
+                // A credit row belongs to its customer's branch.
+                store_id: customer!.store_id,
                 type: 'CREDIT_SALE',
                 amount: balanceDue,
                 balance_after: balanceAfter,
@@ -188,7 +192,7 @@ export async function applyPurchaseImpacts(input: PurchaseImpactInput): Promise<
     if (balanceDue > EPSILON && input.supplierId) {
         const supplier = await tx.supplier.findUnique({
             where: { id: input.supplierId },
-            select: { due_balance: true },
+            select: { due_balance: true, store_id: true },
         });
         const balanceAfter = Number(supplier?.due_balance ?? 0) + balanceDue;
 
@@ -196,6 +200,8 @@ export async function applyPurchaseImpacts(input: PurchaseImpactInput): Promise<
             data: {
                 tenant_id: tenantId,
                 supplier_id: input.supplierId,
+                // A credit row belongs to its supplier's branch.
+                store_id: supplier!.store_id,
                 type: 'CREDIT_PURCHASE',
                 amount: balanceDue,
                 balance_after: balanceAfter,
@@ -407,11 +413,14 @@ export async function applyOpeningBalance(input: OpeningBalanceInput): Promise<v
         created_at: asOf,
     };
 
+    // An opening balance belongs to its party's branch, like every credit row.
     if (isCustomer) {
-        await tx.customerCreditTransaction.create({ data: { ...data, customer_id: partyId } });
+        const store_id = await customerBranchId(tx, partyId);
+        await tx.customerCreditTransaction.create({ data: { ...data, customer_id: partyId, store_id } });
         await tx.customer.update({ where: { id: partyId }, data: { due_balance: amount } });
     } else {
-        await tx.supplierCreditTransaction.create({ data: { ...data, supplier_id: partyId } });
+        const store_id = await supplierBranchId(tx, partyId);
+        await tx.supplierCreditTransaction.create({ data: { ...data, supplier_id: partyId, store_id } });
         await tx.supplier.update({ where: { id: partyId }, data: { due_balance: amount } });
     }
 }
