@@ -504,6 +504,11 @@ export const settingsExtrasMessages = {
             clearing: "Effacement…",
             clearedTransactions: "Tous les enregistrements de transactions ont été effacés.",
             clearedAll: "Toutes les données ont été effacées.",
+            branchLabel: "Succursale",
+            allBranches: "Toutes les succursales",
+            branchTransactionsDesc: "Supprimer les ventes, achats, retours, mouvements de stock, transferts, dépenses, prêts, sessions de caisse de cette succursale et les écritures comptables qu'ils ont générées. Les produits, clients, fournisseurs, employés et autres succursales sont conservés.",
+            branchTransactionsConfirm: "Cela supprimera définitivement toutes les transactions enregistrées à {branch} et les écritures comptables qu'elles ont générées. Les transferts entre {branch} et d'autres succursales sont supprimés des deux côtés. Les produits, clients et autres succursales sont conservés. Cette action est irréversible.\n\nTapez \"effacer\" pour confirmer :",
+            clearedBranch: "Les transactions de {branch} ont été effacées.",
             failed: "Impossible d'effacer les données.",
         },
         dialog: {

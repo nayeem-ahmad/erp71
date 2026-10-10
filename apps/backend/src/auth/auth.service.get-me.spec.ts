@@ -482,7 +482,8 @@ function expectedKarim() {
                 tenant_role: null,
                 record_scope: TenantRecordScope.ALL,
                 permissions: ALL_PERMISSIONS,
-                stores: [storeRow('store-1', 'tenant-1', 'Gulshan')],
+                // `is_online`: none of these is the storefront's branch.
+                stores: [{ ...storeRow('store-1', 'tenant-1', 'Gulshan'), is_online: false }],
                 store_count: 1,
                 pending_activation: false,
                 is_platform_workspace: false,
@@ -519,7 +520,7 @@ function expectedKarim() {
                 tenant_role: { id: 'role-cashier', name: 'Cashier' },
                 record_scope: TenantRecordScope.OWN,
                 permissions: [StorePermission.CREATE_SALE, StorePermission.VIEW_LEDGER],
-                stores: [storeRow('store-2', 'tenant-2', 'Banani')],
+                stores: [{ ...storeRow('store-2', 'tenant-2', 'Banani'), is_online: false }],
                 store_count: 3,
                 pending_activation: true,
                 is_platform_workspace: false,

@@ -7,11 +7,12 @@ import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { Alert, Button, Field, Input, PageShell } from '@/components/ui';
+import { Alert, Button, Field, Input, PageShell, StatusBadge } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
-type StoreRow = { id: string; name: string };
+/** `is_online`: the storefront's own branch (web customers and orders). */
+type StoreRow = { id: string; name: string; is_online?: boolean };
 
 export default function StoreSettingsPage() {
     const { t } = useI18n();
@@ -135,7 +136,13 @@ export default function StoreSettingsPage() {
                 {stores.map((store) => (
                     <div key={store.id} className="flex items-end gap-3">
                         <Field
-                            label={copy.nameLabel}
+                            label={store.is_online ? (
+                                <span className="inline-flex items-center gap-1.5">
+                                    {copy.nameLabel}
+                                    {/* The storefront's branch: its web customers and orders. */}
+                                    <StatusBadge tone="info">{t.branchParties.onlineBadge}</StatusBadge>
+                                </span>
+                            ) : copy.nameLabel}
                             htmlFor={`store-${store.id}`}
                             className="flex-1"
                             error={rowErrors[store.id] || undefined}

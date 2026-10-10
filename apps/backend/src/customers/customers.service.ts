@@ -55,6 +55,7 @@ const AMOUNT_EPSILON = 0.005;
 
 const DISCOUNT_LEG = CUSTOMER_PAYMENT_DISCOUNT_LEG;
 
+import { makeImportBranchResolver } from '../common/import-branch.util';
 @Injectable()
 export class CustomersService {
     constructor(
@@ -314,6 +315,19 @@ export class CustomersService {
         return scope ? { customer: customerInBranchesWhere(scope) } : {};
     }
 
+    /**
+     * The branch a new customer is added at: named, a branch of this tenant,
+     * and — for a member limited to some branches — one of theirs.
+     */
+    private async branchForNewCustomer(tenantId: string, storeId: string | null | undefined, scope: CustomerScope) {
+        if (!storeId) throw new BadRequestException('Choose the branch this customer belongs to.');
+        await this.checkedStoreId(tenantId, storeId);
+        if (scope && !scope.includes(storeId)) {
+            throw new ForbiddenException('You can only add customers to your own branches.');
+        }
+        return storeId;
+    }
+
     /** `store_id` as an edit names it: a branch of this tenant, or null. */
     private async checkedStoreId(tenantId: string, storeId: string | null | undefined) {
         if (storeId === undefined || storeId === null) return storeId;
@@ -334,10 +348,12 @@ export class CustomersService {
     }
 
     /**
-     * `opts.storeId` is the branch the customer is added at — the request's
-     * header branch. `opts.scope` is the caller's customer scope: a phone
-     * number held by a customer outside it gets its own message, since the
-     * caller cannot find that customer to pick them.
+     * The customer belongs to `dto.store_id`, or to `opts.storeId` — the
+     * request's header branch — when the form names none. Either way it must
+     * be a branch of this tenant the caller may use (`opts.scope`; null is
+     * every branch). `opts.scope` also decides the message for a phone number
+     * held by a customer outside it, since the caller cannot find that
+     * customer to pick them.
      */
     async create(
         tenantId: string,
@@ -361,11 +377,12 @@ export class CustomersService {
                     })) > 0;
                 throw new BadRequestException(seen
                     ? 'A customer with this phone number already exists.'
-                    : 'This phone number belongs to a customer of another branch. To sell to them, enter the number in the sale screen\'s quick add — the sale makes them a customer of your branch too.');
+                    : 'This phone number belongs to a customer of another branch. An owner can move them to your branch.');
             }
         }
 
-        const { nid, customer_code: requestedCode, sales_rep_id, ...rest } = dto;
+        const { nid, customer_code: requestedCode, sales_rep_id, store_id: requestedStoreId, ...rest } = dto;
+        const storeId = await this.branchForNewCustomer(tenantId, requestedStoreId ?? opts.storeId, opts.scope ?? null);
         const salesRepId = await checkedSalesRepId(this.db, tenantId, sales_rep_id);
         const record = await this.withCustomerCode(tenantId, requestedCode, (customer_code) =>
             this.db.customer.create({
@@ -373,7 +390,7 @@ export class CustomersService {
                     tenant_id: tenantId,
                     customer_code,
                     ...rest,
-                    ...(opts.storeId ? { store_id: opts.storeId } : {}),
+                    store_id: storeId,
                     ...(salesRepId !== undefined ? { sales_rep_id: salesRepId } : {}),
                     ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
                 },
@@ -595,6 +612,7 @@ export class CustomersService {
             throw new ForbiddenException('Only a member who sees every branch can change a customer\'s branch.');
         }
         const salesRepId = await checkedSalesRepId(this.db, tenantId, sales_rep_id);
+        if (store_id === null) throw new BadRequestException('A customer must belong to a branch.');
         const storeId = await this.checkedStoreId(tenantId, store_id);
         const record = await this.db.customer.update({
             where: { id },
@@ -789,9 +807,13 @@ export class CustomersService {
         };
     }
 
+    /**
+     * `query.branch` is the branch the payments page shows, already checked by
+     * the controller (undefined: every branch the scope allows).
+     */
     async listCreditPayments(
         tenantId: string,
-        query: ListCustomerCreditPaymentsQueryDto & { timezone: string; scope?: CustomerScope },
+        query: Omit<ListCustomerCreditPaymentsQueryDto, 'storeId'> & { timezone: string; scope?: CustomerScope; branch?: string },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
@@ -801,6 +823,7 @@ export class CustomersService {
             tenant_id: tenantId,
             type: { in: ['PAYMENT', 'PAYOUT'] },
             ...this.creditRowScopeWhere(query.scope ?? null),
+            ...(query.branch ? { store_id: query.branch } : {}),
         };
 
         if (query.customerId) {
@@ -938,7 +961,8 @@ export class CustomersService {
                 amount: newAmount,
                 discount: newDiscount,
                 date: newDate,
-                storeId,
+                // The payment's own branch (its customer's), not the editor's header.
+                storeId: payment.store_id,
                 cashAccountId,
             });
 
@@ -995,7 +1019,7 @@ export class CustomersService {
     ) {
         const customer = await this.db.customer.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
-            select: { id: true, name: true, due_balance: true },
+            select: { id: true, name: true, due_balance: true, store_id: true },
         });
         if (!customer) throw new NotFoundException('Customer not found');
 
@@ -1027,6 +1051,8 @@ export class CustomersService {
                 data: {
                     tenant_id: tenantId,
                     customer_id: id,
+                    // A payment belongs to its customer's branch.
+                    store_id: customer.store_id,
                     type: txType,
                     amount: dto.amount,
                     discount_amount: discount,
@@ -1059,7 +1085,9 @@ export class CustomersService {
                 amount: dto.amount,
                 discount,
                 date: paymentDate,
-                storeId,
+                // The payment's branch — its customer's — so the branch's
+                // receivable clears against its own sales.
+                storeId: customer.store_id,
                 cashAccountId: method?.account_id ?? undefined,
             });
 
@@ -1094,7 +1122,7 @@ export class CustomersService {
     ) {
         const customer = await this.db.customer.findFirst({
             where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
-            select: { id: true, name: true, due_balance: true, credit_enabled: true },
+            select: { id: true, name: true, due_balance: true, credit_enabled: true, store_id: true },
         });
         if (!customer) throw new NotFoundException('Customer not found');
 
@@ -1131,6 +1159,7 @@ export class CustomersService {
                 data: {
                     tenant_id: tenantId,
                     customer_id: id,
+                    store_id: customer.store_id,
                     type: 'WRITE_OFF',
                     amount: dto.amount,
                     balance_after: balanceAfter,
@@ -1342,11 +1371,12 @@ export class CustomersService {
         tenantId: string,
         rows: Record<string, unknown>[],
         mode: 'skip' | 'upsert',
-        /** The branch new rows are added at — the request's header branch. */
+        /** The branch rows without their own go to: the one picked for the file, else the header branch. */
         storeId?: string,
-        /** An upsert may not overwrite a customer outside the importer's scope. */
+        /** An upsert may not overwrite a customer outside the importer's scope, nor add one to a branch outside it. */
         scope: CustomerScope = null,
     ): Promise<ImportResult> {
+        const branchOf = await makeImportBranchResolver(this.db, tenantId, scope);
         const text = (value: unknown): string | null => {
             if (value === undefined || value === null) return null;
             return String(value).trim() || null;
@@ -1371,6 +1401,7 @@ export class CustomersService {
                 email: text(raw.email),
                 address: text(raw.address),
                 customer_group_name: text(raw.customer_group_name),
+                branch: text(raw.branch),
             }),
             findDuplicate: async (row) => {
                 if (row.customer_code) {
@@ -1399,6 +1430,8 @@ export class CustomersService {
                 return null;
             },
             create: async (row) => {
+                const rowStoreId = branchOf(row.branch) ?? storeId;
+                if (!rowStoreId) throw new BadRequestException('no branch — pick one for the file or fill the branch column');
                 const customer_group_id = await resolveGroupId(row.customer_group_name);
                 await this.withCustomerCode(tenantId, row.customer_code, (customer_code) =>
                     this.db.customer.create({
@@ -1411,7 +1444,7 @@ export class CustomersService {
                             email: row.email,
                             address: row.address,
                             customer_group_id,
-                            ...(storeId ? { store_id: storeId } : {}),
+                            store_id: rowStoreId,
                         },
                     }),
                 );

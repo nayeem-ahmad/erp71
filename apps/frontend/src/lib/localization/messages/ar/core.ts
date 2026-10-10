@@ -1284,6 +1284,12 @@ export const coreMessages = {
         markClosed: 'تعليم كمغلق',
         markActive: 'إعادة الفتح',
     },
+    branchParties: {
+        importBranchLabel: "الفرع للصفوف التي بلا فرع",
+        importBranchHint: "الصفوف التي فيها عمود فرع (رمز أو اسم) تذهب إلى ذلك الفرع.",
+        onlineOrdersElsewhere: "طلبات الويب تتبع فرع المتجر الإلكتروني. اختره، أو كل الفروع، في عامل التصفية لرؤيتها.",
+        onlineBadge: "إلكتروني",
+    },
     partyPayments: {
         directionAll: "الكل",
         directionIn: "وارد",

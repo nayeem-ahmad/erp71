@@ -65,6 +65,7 @@ export function generateWebCustomerCode(): string {
     return `WEB${Date.now().toString(36).toUpperCase().slice(-6)}`;
 }
 
+import { OnlineBranchService } from '../stores/online-branch.service';
 @Injectable()
 export class StorefrontService {
     constructor(
@@ -77,6 +78,7 @@ export class StorefrontService {
         private readonly google: GoogleTokenService,
         private readonly firebase: FirebaseTokenService,
         private readonly authCache: AuthCacheService,
+        private readonly onlineBranch: OnlineBranchService,
     ) {}
 
     async getStorefront(slug: string, userId?: string) {
@@ -437,10 +439,13 @@ export class StorefrontService {
             totalAmount = Math.max(0, totalAmount - pointsDiscount);
         }
 
+        // Every web order belongs to the online branch (created on the first one).
+        const onlineStoreId = await this.onlineBranch.ensure(tenant.id);
         const order = await this.db.$transaction(async (tx) => {
             const created = await tx.storefrontOrder.create({
                 data: {
                     tenantId: tenant.id,
+                    store_id: onlineStoreId,
                     customerName: dto.customerName,
                     customerEmail: dto.customerEmail,
                     customerPhone: dto.customerPhone ?? null,
@@ -515,11 +520,17 @@ export class StorefrontService {
         return order;
     }
 
-    async getOrders(tenantId: string, page: number, limit: number) {
+    /**
+     * Web orders for the Storefront Orders panel. `storeId` is the branch the
+     * page shows, already checked by the controller; undefined is every branch.
+     * Every web order sits on the online branch, so a shop's branch lists none.
+     */
+    async getOrders(tenantId: string, page: number, limit: number, storeId?: string) {
         const skip = (page - 1) * limit;
+        const where = { tenantId, ...(storeId ? { store_id: storeId } : {}) };
         const [items, total] = await Promise.all([
             this.db.storefrontOrder.findMany({
-                where: { tenantId },
+                where,
                 include: {
                     items: {
                         include: {
@@ -531,10 +542,20 @@ export class StorefrontService {
                 skip,
                 take: limit,
             }),
-            this.db.storefrontOrder.count({ where: { tenantId } }),
+            this.db.storefrontOrder.count({ where }),
         ]);
 
         return paginate(items, total, page, limit);
+    }
+
+    /** The branch an order belongs to — the controller checks the caller may use it. */
+    async orderStoreId(tenantId: string, orderId: string): Promise<string> {
+        const order = await this.db.storefrontOrder.findFirst({
+            where: { id: orderId, tenantId },
+            select: { store_id: true },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+        return order.store_id;
     }
 
     async updateOrderStatus(tenantId: string, orderId: string, status: string) {
@@ -609,6 +630,8 @@ export class StorefrontService {
             customer = await this.db.customer.create({
                 data: {
                     tenant_id: tenant.id,
+                    // Storefront customers belong to the online branch.
+                    store_id: await this.onlineBranch.ensure(tenant.id),
                     customer_code: generateWebCustomerCode(),
                     name: dto.name,
                     phone: dto.phone,
@@ -1095,6 +1118,8 @@ export class StorefrontService {
         const customer = await this.db.customer.create({
             data: {
                 tenant_id: tenantId,
+                // Storefront customers belong to the online branch.
+                store_id: await this.onlineBranch.ensure(tenantId),
                 customer_code: generateWebCustomerCode(),
                 name: identity.name,
                 phone: identity.phone,

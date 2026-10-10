@@ -40,6 +40,8 @@ export async function resolveInlineSupplier(
     tx: DbLike,
     tenantId: string,
     draft: InlineSupplierDraft,
+    /** The document's branch: a new supplier belongs to it; a reused one keeps theirs. */
+    storeId: string,
 ): Promise<string> {
     const name = draft.name?.trim();
     if (!name) {
@@ -62,7 +64,7 @@ export async function resolveInlineSupplier(
     }
 
     const created = await tx.supplier.create({
-        data: { tenant_id: tenantId, name, ...detailsOf(draft) },
+        data: { tenant_id: tenantId, name, store_id: storeId, ...detailsOf(draft) },
         select: { id: true },
     });
     return created.id;

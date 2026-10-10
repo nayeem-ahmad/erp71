@@ -504,6 +504,11 @@ export const settingsExtrasMessages = {
                 clearing: 'Memadam…',
                 clearedTransactions: 'Semua rekod transaksi telah dipadamkan.',
                 clearedAll: 'Semua data telah dipadamkan.',
+                branchLabel: "Cawangan",
+                allBranches: "Semua cawangan",
+                branchTransactionsDesc: "Padam jualan, pembelian, pemulangan, pergerakan stok, pindahan, perbelanjaan, pinjaman, sesi juruwang cawangan ini dan catatan jurnal yang dihasilkannya. Produk, pelanggan, pembekal, pekerja dan cawangan lain dikekalkan.",
+                branchTransactionsConfirm: "Ini akan memadam secara kekal semua transaksi yang direkodkan di {branch} dan catatan jurnal yang dihasilkannya. Pindahan antara {branch} dan cawangan lain dipadam di kedua-dua belah. Produk, pelanggan dan cawangan lain dikekalkan. Tindakan ini tidak boleh dibuat asal.\n\nTaip \"clear\" untuk mengesahkan:",
+                clearedBranch: "Transaksi {branch} telah dipadamkan.",
                 failed: 'Gagal memadam data.',
             },
             dialog: {

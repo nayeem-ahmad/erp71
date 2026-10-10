@@ -13,7 +13,7 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { BranchFilter, PageShell, Button, Input } from '@/components/ui';
+import { BranchFilter, PageShell, Button, Input, Field, Select } from '@/components/ui';
 import { useServerList } from '@/hooks/useServerList';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 
@@ -25,6 +25,8 @@ const IMPORT_FIELDS: ImportField[] = [
     { key: 'email', label: 'Email', required: false },
     { key: 'address', label: 'Address', required: false },
     { key: 'customer_group_name', label: 'Customer Group', required: false },
+    // A branch's code or name; empty rows go to the branch picked for the file.
+    { key: 'branch', label: 'Branch', required: false },
 ];
 
 interface Customer {
@@ -79,6 +81,7 @@ export default function CustomersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Customer | null>(null);
     const [importOpen, setImportOpen] = useState(false);
+    const [importBranch, setImportBranch] = useState('');
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
     const [runningSegmentation, setRunningSegmentation] = useState(false);
     const [evaluating, setEvaluating] = useState(false);
@@ -410,7 +413,7 @@ export default function CustomersPage() {
                                 {runningSegmentation ? t.customers.running : t.customers.runSegmentation}
                             </button>
                             <button
-                                onClick={() => setImportOpen(true)}
+                                onClick={() => { setImportBranch(branch.headerBranchId ?? ''); setImportOpen(true); }}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
                                 <Upload className="w-4 h-4 me-1.5" />
@@ -457,7 +460,9 @@ export default function CustomersPage() {
                     onClose={closeModal}
                     onSave={handleSaveCustomer}
                     customer={editTarget}
-                    branches={branch.canSeeAll && !branch.hidden ? branch.branches : undefined}
+                    branches={branch.hidden ? undefined : branch.branches}
+                    canSetBranch={branch.canSeeAll}
+                    defaultBranchId={branch.headerBranchId}
                 />
 
                 <ImportDialog
@@ -465,7 +470,14 @@ export default function CustomersPage() {
                     onClose={() => setImportOpen(false)}
                     entityLabel="Customers"
                     fields={IMPORT_FIELDS}
-                    importFn={(rows, mode) => api.importCustomers(rows, mode)}
+                    importFn={(rows, mode) => api.importCustomers(rows, mode, importBranch || undefined)}
+                    options={branch.hidden ? undefined : (
+                        <Field label={t.branchParties.importBranchLabel} hint={t.branchParties.importBranchHint} htmlFor="customer-import-branch">
+                            <Select id="customer-import-branch" value={importBranch} onChange={(e) => setImportBranch(e.target.value)} className="w-full">
+                                {branch.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </Select>
+                        </Field>
+                    )}
                     onSuccess={() => void loadCustomers()}
                 />
                 {evalMessage && (

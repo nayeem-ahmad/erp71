@@ -7,13 +7,9 @@ import type { TenantContext } from '../database/tenant.decorator';
 const ctx: TenantContext = { tenantId: 'tenant-1', storeId: 'branch-a', userId: 'user-1', timezone: 'Asia/Dhaka' };
 
 describe('customer-visibility', () => {
-    it('a customer belongs to a branch they were added at or bought at, cancelled sales aside', () => {
-        expect(customerInBranchesWhere(['branch-a', 'branch-b'])).toEqual({
-            OR: [
-                { store_id: { in: ['branch-a', 'branch-b'] } },
-                { sales: { some: { store_id: { in: ['branch-a', 'branch-b'] }, status: { not: 'CANCELLED' } } } },
-            ],
-        });
+    // Strict: buying at another branch does not make a customer theirs.
+    it('a customer belongs to their own branch only', () => {
+        expect(customerInBranchesWhere(['branch-a', 'branch-b'])).toEqual({ store_id: { in: ['branch-a', 'branch-b'] } });
     });
 
     it('a null scope filters nothing', () => {

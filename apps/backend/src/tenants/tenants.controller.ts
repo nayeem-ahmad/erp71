@@ -170,7 +170,13 @@ export class TenantsController {
     async clearData(
         @Tenant() tenant: TenantContext,
         @Query('mode') mode: string,
+        @Query('storeId') storeId?: string,
     ) {
-        return this.tenantsService.clearData(tenant.tenantId, mode as 'transactions' | 'all', tenant.userRole);
+        return this.tenantsService.clearData(
+            tenant.tenantId,
+            mode as 'transactions' | 'all',
+            tenant.userRole,
+            storeId || undefined,
+        );
     }
 }

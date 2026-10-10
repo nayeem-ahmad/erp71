@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, ArrayMaxSize } from 'class-validator';
+import { IsOptional, IsString, IsArray, IsEnum, ArrayMaxSize } from 'class-validator';
 
 export class ImportRowsDto {
   @IsArray()
@@ -7,4 +7,12 @@ export class ImportRowsDto {
 
   @IsEnum(['skip', 'upsert'])
   mode: 'skip' | 'upsert';
+
+  /**
+   * Customer and supplier imports: the branch rows without a `branch` column
+   * go to. Omitted: the request's header branch. Other importers ignore it.
+   */
+  @IsOptional()
+  @IsString()
+  storeId?: string;
 }

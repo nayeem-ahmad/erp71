@@ -124,6 +124,7 @@ const ME_USER_SELECT = {
                     timezone: true,
                     dashboard_preference: true,
                     hidden_apps: true,
+                    online_store_id: true,
                     // Every branch of the shop, not only the member's: the
                     // branch filter hides itself in a one-branch shop but shows
                     // disabled for a member limited to one of several.
@@ -1572,9 +1573,12 @@ export class AuthService {
         const subscription = membership.tenant.subscription;
         const plan = subscription?.plan;
         // Only return stores the user has explicit UserStoreAccess for in this tenant
+        // `is_online` marks the storefront's branch (OnlineBranchService) so
+        // the switcher and settings can tell it from a shop.
+        const onlineStoreId = (membership.tenant as { online_store_id?: string | null }).online_store_id ?? null;
         const accessibleStores = allStoreAccess
             .filter((a) => a.tenant_id === membership.tenant_id)
-            .map((a) => a.store);
+            .map((a) => ({ ...a.store, is_online: a.store.id === onlineStoreId }));
 
         const [mergedFeatures, tenantFeatures] = await Promise.all([
             // Merge in any active add-on entitlements so the frontend's plan-gating

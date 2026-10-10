@@ -189,6 +189,19 @@ describe('HomePulseService', () => {
         expect(products.countLowStock).toHaveBeenCalledWith('tenant-1', 'store-9');
     });
 
+    // Web orders belong to the online branch: an owner on a shop's header sees
+    // none, on the Online Store header the pending ones.
+    it('counts pending web orders on the branch the tile is for', async () => {
+        everythingHasWork();
+        branchScope.resolveStoreId.mockResolvedValue('online-store');
+
+        await service.getPulse(OWNER, 'online-store');
+
+        expect(db.storefrontOrder.count).toHaveBeenCalledWith({
+            where: { tenantId: 'tenant-1', status: 'PENDING', store_id: 'online-store' },
+        });
+    });
+
     it('answers from the cache, keyed by member and branch, for a minute', async () => {
         redis.get.mockResolvedValue({ sales: { count: 1, href: '/sales/orders' } });
 

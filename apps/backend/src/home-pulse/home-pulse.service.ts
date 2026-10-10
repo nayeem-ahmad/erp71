@@ -229,8 +229,11 @@ export class HomePulseService {
                 app: 'storefront',
                 href: '/storefront',
                 permissions: STOREFRONT_STAFF,
-                count: (tenant) => this.db.storefrontOrder.count({
-                    where: { tenantId: tenant.tenantId, status: 'PENDING' },
+                // Web orders belong to the online branch: the tile counts them
+                // there, and shows none on a shop's branch.
+                branchScoped: true,
+                count: (tenant, storeId) => this.db.storefrontOrder.count({
+                    where: { tenantId: tenant.tenantId, status: 'PENDING', ...(storeId ? { store_id: storeId } : {}) },
                 }),
             },
             {

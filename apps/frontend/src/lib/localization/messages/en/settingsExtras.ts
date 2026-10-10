@@ -504,6 +504,11 @@ export const settingsExtrasMessages = {
             clearing: 'Clearing…',
             clearedTransactions: 'All transaction records have been cleared.',
             clearedAll: 'All data has been cleared.',
+            branchLabel: "Branch",
+            allBranches: "All branches",
+            branchTransactionsDesc: "Delete this branch's sales, purchases, returns, stock movements, transfers, expenses, loans, cashier sessions and the journal entries they posted. Products, customers, suppliers, employees and other branches are kept.",
+            branchTransactionsConfirm: "This will permanently delete every transaction recorded at {branch}, and the journal entries they posted. Transfers between {branch} and other branches are deleted on both sides. Products, customers and other branches are kept. This cannot be undone.\n\nType \"clear\" to confirm:",
+            clearedBranch: "{branch}'s transactions have been cleared.",
             failed: 'Failed to clear data.',
         },
         dialog: {

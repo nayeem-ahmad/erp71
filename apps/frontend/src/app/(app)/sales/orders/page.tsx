@@ -326,7 +326,11 @@ export default function OrdersPage() {
 
 
                 {activeTab === 'online' ? (
-                    <StorefrontOrdersPanel />
+                    <StorefrontOrdersPanel
+                        storeId={branch.apiStoreId}
+                        // Web orders belong to the online branch; on a shop's branch say so.
+                        onShopBranch={Boolean(branch.branches.find((b) => b.id === branch.apiStoreId && !b.is_online))}
+                    />
                 ) : (
                     <>
                         <div className="flex flex-wrap items-center gap-2">

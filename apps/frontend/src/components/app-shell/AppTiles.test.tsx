@@ -143,4 +143,18 @@ describe('AppTiles', () => {
         expect(container).toBeEmptyDOMElement();
         await waitFor(() => expect(mockGetHomePulse).not.toHaveBeenCalled());
     });
+
+    // The header branch decides every branch-aware count, owners included: a
+    // shop's header shows that shop's work, the Online Store's its web orders.
+    it('asks for the counts of the header branch', async () => {
+        sessionStorage.setItem('store_id', 'store-9');
+        mockGetHomePulse.mockResolvedValue({});
+        try {
+            renderTiles(shell());
+            await waitFor(() => expect(mockGetHomePulse).toHaveBeenCalledWith({ storeId: 'store-9' }));
+        } finally {
+            sessionStorage.removeItem('store_id');
+        }
+    });
 });
+

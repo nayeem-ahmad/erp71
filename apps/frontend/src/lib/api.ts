@@ -2003,10 +2003,11 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    importCustomers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+    /** `storeId`: the branch rows without a `branch` column go to; omitted, the header branch. */
+    importCustomers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert', storeId?: string) =>
         fetchWithAuth('/customers/import', {
             method: 'POST',
-            body: JSON.stringify({ rows, mode }),
+            body: JSON.stringify({ rows, mode, ...(storeId ? { storeId } : {}) }),
             headers: { 'Content-Type': 'application/json' },
         }),
     updateCustomer: (id: string, data: any) => fetchWithAuth(`/customers/${id}`, {
@@ -2055,8 +2056,11 @@ export const api = {
         to?: string;
         customerId?: string;
         search?: string;
+        /** The page's branch filter: a branch id or `all`. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.customerId) query.set('customerId', params.customerId);
@@ -2861,8 +2865,11 @@ export const api = {
         search?: string;
         sortBy?: string;
         sortDir?: string;
+        /** The list's branch filter: a branch id or `all`. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.search) query.set('search', params.search);
@@ -2929,8 +2936,11 @@ export const api = {
         to?: string;
         supplierId?: string;
         search?: string;
+        /** The page's branch filter: a branch id or `all`. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.supplierId) query.set('supplierId', params.supplierId);
@@ -2954,10 +2964,11 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    importSuppliers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+    /** `storeId`: the branch rows without a `branch` column go to; omitted, the header branch. */
+    importSuppliers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert', storeId?: string) =>
         fetchWithAuth('/suppliers/import', {
             method: 'POST',
-            body: JSON.stringify({ rows, mode }),
+            body: JSON.stringify({ rows, mode, ...(storeId ? { storeId } : {}) }),
             headers: { 'Content-Type': 'application/json' },
         }),
     getPurchaseSummary: (params?: { storeId?: string; from?: string; to?: string }) => {
@@ -3922,6 +3933,20 @@ export const api = {
         body: JSON.stringify({ reason }),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /** Only `transactions` can be cleared for one branch — master data is shared by every branch. */
+    clearAdminTenantData: (
+        tenantId: string,
+        mode: 'transactions' | 'all',
+        storeId?: string,
+    ): Promise<{ cleared: 'transactions' | 'all'; storeId?: string; storeName?: string }> => {
+        const params = new URLSearchParams({ mode });
+        if (storeId) params.set('storeId', storeId);
+        return fetchWithAuth(`/admin/tenants/${tenantId}/data?${params}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ reason: 'Cleared by platform admin' }),
+            headers: { 'Content-Type': 'application/json' },
+        });
+    },
     createAdminTenant: (data: {
         ownerMode: 'new' | 'existing';
         ownerEmail?: string;

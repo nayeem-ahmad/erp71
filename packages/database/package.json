@@ -20,6 +20,7 @@
     "sync:user-mobile-unique": "tsx prisma/sync-user-mobile-unique.ts",
     "sync:store-name-unique": "tsx prisma/sync-store-name-unique.ts",
     "sync:board-slug": "tsx prisma/sync-board-slug.ts",
+    "sync:party-branch": "tsx prisma/sync-party-branch.ts",
     "sync:task-reference": "tsx prisma/sync-task-reference.ts",
     "sync:story-code": "tsx prisma/sync-story-code.ts",
     "sync:store-code": "tsx prisma/sync-store-code.ts",

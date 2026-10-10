@@ -43,6 +43,13 @@ describe('SuppliersService', () => {
             paymentMethod: {
                 findFirst: jest.fn().mockResolvedValue(null),
             },
+            store: {
+                findFirst: jest.fn().mockResolvedValue({ id: 'store-1' }),
+                findMany: jest.fn().mockResolvedValue([
+                    { id: 'store-1', name: 'Main', code: 'S1' },
+                    { id: 'branch-a', name: 'Branch A', code: 'A' },
+                ]),
+            },
             $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
         };
 
@@ -60,7 +67,7 @@ describe('SuppliersService', () => {
         db.supplier.findUnique.mockResolvedValue(null);
         db.supplier.create.mockResolvedValue({ id: 'sup-1', name: 'ACME Supply' });
 
-        const result = await service.create('tenant-1', { name: 'ACME Supply' });
+        const result = await service.create('tenant-1', { name: 'ACME Supply' }, { storeId: 'store-1' });
 
         expect(db.supplier.create).toHaveBeenCalledWith({
             data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'ACME Supply' }),
@@ -71,7 +78,7 @@ describe('SuppliersService', () => {
     it('rejects duplicate supplier names per tenant', async () => {
         db.supplier.findUnique.mockResolvedValue({ id: 'sup-existing', deleted_at: null });
 
-        await expect(service.create('tenant-1', { name: 'ACME Supply' })).rejects.toThrow(BadRequestException);
+        await expect(service.create('tenant-1', { name: 'ACME Supply' }, { storeId: 'store-1' })).rejects.toThrow(BadRequestException);
     });
 
     // The unique index spans soft-deleted rows, so a deleted supplier keeps its
@@ -82,7 +89,7 @@ describe('SuppliersService', () => {
         db.supplier.findUnique.mockResolvedValue({ id: 'sup-deleted', deleted_at: new Date() });
         db.supplier.update.mockResolvedValue({ id: 'sup-deleted', name: 'ACME Supply' });
 
-        const result = await service.create('tenant-1', { name: 'ACME Supply', phone: '01700000000' });
+        const result = await service.create('tenant-1', { name: 'ACME Supply', phone: '01700000000' }, { storeId: 'store-1' });
 
         expect(db.supplier.create).not.toHaveBeenCalled();
         expect(db.supplier.update).toHaveBeenCalledWith({
@@ -96,7 +103,7 @@ describe('SuppliersService', () => {
         db.supplier.findUnique.mockResolvedValue(null);
         db.supplier.create.mockResolvedValue({ id: 'sup-1' });
 
-        await service.create('tenant-1', { name: '  ACME Supply  ' });
+        await service.create('tenant-1', { name: '  ACME Supply  ' }, { storeId: 'store-1' });
 
         expect(db.supplier.findUnique).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -109,7 +116,7 @@ describe('SuppliersService', () => {
     });
 
     it('refuses a blank name rather than listing a supplier nobody can read', async () => {
-        await expect(service.create('tenant-1', { name: '   ' })).rejects.toThrow(BadRequestException);
+        await expect(service.create('tenant-1', { name: '   ' }, { storeId: 'store-1' })).rejects.toThrow(BadRequestException);
         expect(db.supplier.create).not.toHaveBeenCalled();
     });
 
@@ -125,7 +132,7 @@ describe('SuppliersService', () => {
         it('counts a live supplier of the same name as a duplicate', async () => {
             db.supplier.findUnique.mockResolvedValue({ id: 'sup-1', deleted_at: null });
 
-            const result = await service.importRows('tenant-1', [{ name: 'ACME Supply' }], 'skip');
+            const result = await service.importRows('tenant-1', [{ name: 'ACME Supply' }], 'skip', 'store-1');
 
             expect(result).toMatchObject({ created: 0, skipped: 1 });
             expect(db.supplier.upsert).not.toHaveBeenCalled();
@@ -140,7 +147,7 @@ describe('SuppliersService', () => {
             const result = await service.importRows(
                 'tenant-1',
                 [{ name: 'ACME Supply', phone: '01700000000' }],
-                'skip',
+                'skip', 'store-1',
             );
 
             expect(result).toMatchObject({ created: 1, skipped: 0 });
@@ -394,6 +401,103 @@ describe('SuppliersService', () => {
                 expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({ id: 'pm-cash', tenant_id: 'tenant-1' });
                 expect(tx.supplierCreditTransaction.update.mock.calls[0][0].data.payment_method_id).toBeUndefined();
                 expect(cashLeg()).toEqual(expect.objectContaining({ overrideCreditAccountId: 'acc-drawer' }));
+            });
+        });
+    });
+
+    // Every supplier belongs to one branch; a member limited to some branches
+    // reaches only theirs — see supplier-visibility.ts.
+    describe('branch scope', () => {
+        const SCOPE = ['branch-a'];
+
+        it('lists only the scoped suppliers', async () => {
+            db.supplier.findMany.mockResolvedValue([]);
+            db.supplier.count.mockResolvedValue(0);
+
+            await service.findAll('tenant-1', 1, 20, { scope: SCOPE });
+
+            expect(db.supplier.findMany.mock.calls[0][0].where).toMatchObject({ store_id: { in: SCOPE } });
+        });
+
+        it('answers 404 for a supplier of another branch', async () => {
+            db.supplier.findFirst.mockResolvedValue(null);
+
+            await expect(service.findOne('tenant-1', 'sup-other', SCOPE)).rejects.toBeInstanceOf(NotFoundException);
+            expect(db.supplier.findFirst.mock.calls[0][0].where).toMatchObject({ id: 'sup-other', store_id: { in: SCOPE } });
+        });
+
+        it('adds a supplier to the header branch, or the one named if the caller may use it', async () => {
+            db.supplier.findUnique.mockResolvedValue(null);
+            db.supplier.create.mockResolvedValue({ id: 'sup-1' });
+
+            await service.create('tenant-1', { name: 'Fresh Farms' }, { storeId: 'branch-a', scope: SCOPE });
+            expect(db.supplier.create.mock.calls[0][0].data.store_id).toBe('branch-a');
+
+            await expect(service.create('tenant-1', { name: 'Elsewhere', store_id: 'store-1' }, { scope: SCOPE }))
+                .rejects.toThrow('You can only add suppliers to your own branches.');
+        });
+
+        it('refuses a move to another branch from a member who cannot see every branch', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Fresh Farms', store_id: 'branch-a' });
+
+            await expect(service.update('tenant-1', 'sup-1', { store_id: 'store-1' }, { scope: SCOPE, canSetBranch: false }))
+                .rejects.toThrow('Only an owner can move a supplier to another branch.');
+            expect(db.supplier.update).not.toHaveBeenCalled();
+        });
+
+        it('lets an owner move a supplier to another branch of the tenant', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Fresh Farms', store_id: 'branch-a' });
+            db.supplier.update.mockResolvedValue({ id: 'sup-1' });
+
+            await service.update('tenant-1', 'sup-1', { store_id: 'store-1' }, { canSetBranch: true });
+
+            expect(db.supplier.update.mock.calls[0][0].data.store_id).toBe('store-1');
+        });
+
+        it('imports a row to its own branch column, else the file\'s, and fails an unknown branch alone', async () => {
+            db.supplier.findUnique.mockResolvedValue(null);
+            db.supplier.upsert = jest.fn().mockResolvedValue({});
+
+            const result = await service.importRows(
+                'tenant-1',
+                [{ name: 'Own', branch: 'A' }, { name: 'File' }, { name: 'Nowhere', branch: 'Sylhet' }],
+                'skip',
+                'store-1',
+            );
+
+            expect(db.supplier.upsert.mock.calls.map(([args]: any[]) => args.create.store_id)).toEqual(['branch-a', 'store-1']);
+            expect(result.errors).toEqual([expect.stringMatching(/unknown branch "Sylhet"/)]);
+        });
+
+        it('records a payment under the supplier\'s branch and posts its voucher there', async () => {
+            (autoPostFromRules as jest.Mock).mockClear();
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', due_balance: 500, name: 'ACME', store_id: 'branch-a' });
+            const tx = {
+                $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
+                supplierCreditTransaction: {
+                    findFirst: jest.fn().mockResolvedValue(null),
+                    create: jest.fn().mockResolvedValue({ id: 'tx-1', payment_number: 'SPY-00001' }),
+                },
+                supplier: { update: jest.fn() },
+            };
+            db.$transaction.mockImplementation(async (fn: (t: any) => Promise<unknown>) => fn(tx));
+
+            await service.recordCreditPayment('tenant-1', 'sup-1', 'user-1', { amount: 200 }, undefined, SCOPE);
+
+            expect(db.supplier.findFirst.mock.calls[0][0].where).toMatchObject({ store_id: { in: SCOPE } });
+            expect(tx.supplierCreditTransaction.create.mock.calls[0][0].data.store_id).toBe('branch-a');
+            expect((autoPostFromRules as jest.Mock).mock.calls[0][0].storeId).toBe('branch-a');
+        });
+
+        it('lists the payments of the page\'s branch, within the caller\'s suppliers', async () => {
+            db.supplierCreditTransaction.findMany.mockResolvedValue([]);
+            db.supplierCreditTransaction.count.mockResolvedValue(0);
+
+            await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka', branch: 'branch-a', scope: SCOPE } as any);
+
+            expect(db.supplierCreditTransaction.findMany.mock.calls[0][0].where).toMatchObject({
+                store_id: 'branch-a',
+                supplier: { store_id: { in: SCOPE } },
             });
         });
     });

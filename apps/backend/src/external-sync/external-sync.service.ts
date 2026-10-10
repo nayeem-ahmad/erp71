@@ -810,7 +810,7 @@ export class ExternalSyncService {
     }
 
     private async syncCustomers(
-        connection: { id: string; tenant_id: string; provider: string; post_impacts: boolean },
+        connection: { id: string; tenant_id: string; store_id: string; provider: string; post_impacts: boolean },
         client: ProviderClient,
         stats: SyncStats,
         warnings: SyncWarning[],
@@ -876,6 +876,9 @@ export class ExternalSyncService {
                         await this.db.customer.create({
                             data: {
                                 tenant_id: connection.tenant_id,
+                                // Everything an import brings in belongs to the
+                                // import's branch; an adopted customer keeps theirs.
+                                store_id: connection.store_id,
                                 customer_code: mapped.customerCode,
                                 name: mapped.name,
                                 owner_name: mapped.ownerName,
@@ -933,7 +936,7 @@ export class ExternalSyncService {
     }
 
     private async syncSuppliers(
-        connection: { id: string; tenant_id: string; provider: string; post_impacts: boolean },
+        connection: { id: string; tenant_id: string; store_id: string; provider: string; post_impacts: boolean },
         client: ProviderClient,
         stats: SyncStats,
         warnings: SyncWarning[],
@@ -980,6 +983,8 @@ export class ExternalSyncService {
                         await this.db.supplier.create({
                             data: {
                                 tenant_id: connection.tenant_id,
+                                // The import's branch; an adopted supplier keeps theirs.
+                                store_id: connection.store_id,
                                 name: mapped.name,
                                 phone: mapped.phone,
                                 email: mapped.email,

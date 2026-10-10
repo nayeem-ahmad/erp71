@@ -33,6 +33,7 @@ import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
 import type { DemoDataOptionsInput } from '../demo-data/generator/options';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
+import { clearTenantData } from '../tenants/clear-tenant-data';
 import {
     isEditableLedgerEvent,
     ledgerEventDelta,
@@ -46,6 +47,7 @@ import {
     ListAdminUsersQueryDto,
     SuspendTenantDto,
     DeleteTenantDto,
+    ClearTenantDataDto,
     UpdateAdminTenantSubscriptionDto,
     UpdateAdminTenantLocalizationDto,
     UpdateAdminTenantFeaturesDto,
@@ -749,6 +751,50 @@ export class AdminTenantsService {
         });
 
         return { success: true, deleted_at: deletedAt };
+    }
+
+    /**
+     * The shop owner's Settings > Data clear, run by a platform admin: every
+     * transaction of the tenant, everything but its settings and users (`all`),
+     * or one branch's transactions. A suspended tenant can be cleared — that is
+     * the usual state to tidy one up in before it comes back.
+     */
+    async clearData(
+        tenantId: string,
+        mode: 'transactions' | 'all',
+        storeId: string | undefined,
+        dto: ClearTenantDataDto,
+        adminUserId: string,
+    ) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true, name: true },
+        });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        // A running load would go on inserting into the half-wiped store, and
+        // the wipe deletes the batch row it reports its progress to.
+        const loading = await this.db.demoDataBatch.findFirst({
+            where: { tenant_id: tenantId, status: { in: ['RUNNING', 'PENDING'] } },
+            select: { id: true },
+        });
+        if (loading) {
+            throw new ConflictException('A demo-data load is running for this tenant. Wait for it to finish, then clear.');
+        }
+
+        const result = await clearTenantData(this.db, tenantId, mode, storeId);
+
+        await this.auditService.log('tenant.data.clear', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
+            mode,
+            store_id: result.storeId ?? null,
+            store_name: result.storeName ?? null,
+            reason: dto.reason ?? null,
+            tenant_name: tenant.name,
+        });
+
+        return result;
     }
 
     async lookupUserByEmail(email: string) {
