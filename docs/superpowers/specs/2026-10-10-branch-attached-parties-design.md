@@ -191,8 +191,8 @@ balance lives on the party. Existing credit rows keep their branch.
   gains a `branch` column. Row errors name the branch that was not found.
 - **External import:** the connection form already requires a branch. Its help
   text now says that customers and suppliers land there too.
-- **Settings › Stores:** the online branch is marked "Online" and cannot be
-  renamed to a physical-looking name. (A rename is allowed; the mark stays.)
+- **Settings › Stores:** the online branch is marked "Online". It can be
+  renamed, and the mark stays.
 - **Locales:** new strings in all nine locales.
 
 ## 6. Testing
