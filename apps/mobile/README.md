@@ -222,9 +222,49 @@ The look follows `docs/ui-design-guidelines.md`: one blue-600 accent, emerald,
 amber and red for status, a gray-100 canvas, 44 px touch targets, and money
 always through `formatBDT`.
 
+## Distributing to testers
+
+Android builds reach a chosen few through **Firebase App Distribution** in
+project `erp71-709cf` (Android app `1:31523003932:android:c94a1a719dab04d3dd09d9`).
+Testers get an email, install the Firebase App Tester app or open the link, and
+are told when a new build arrives. They need "install unknown apps" allowed once.
+
+```bash
+scripts/distribute-android.sh                 # build, upload, send to the `pilot` group
+scripts/distribute-android.sh pilot "notes"   # same, with your own release notes
+```
+
+The script sets the build number to the commit count, so each upload is a newer
+version and phones offer it as an update; `pubspec.yaml`'s version name is left
+alone. It refuses to run without the upload key:
+
+- **The upload key** is `~/.config/erp71/android/erp71-upload.jks`, alias
+  `erp71-upload`, named by `android/key.properties` (gitignored):
+
+  ```properties
+  storeFile=/Users/<you>/.config/erp71/android/erp71-upload.jks
+  storePassword=…
+  keyAlias=erp71-upload
+  keyPassword=…
+  ```
+
+  **Back up both the keystore and its password.** A phone only updates an app
+  signed by the same key, so a lost key means every tester uninstalls and
+  reinstalls. It will become the Play upload key later.
+- **Testers:** `firebase appdistribution:testers:add --project erp71-709cf --group-alias pilot a@example.com b@example.com`
+  (or the console's App Distribution › Testers & Groups). Removing someone:
+  `firebase appdistribution:testers:remove --project erp71-709cf a@example.com`.
+- **Google sign-in** in these builds needs the upload key's SHA-1 on the Firebase
+  Android app (`firebase apps:android:sha:list <app-id> --project erp71-709cf`);
+  it is the same Cloud project as the backend's web client, so nothing else
+  needs registering.
+
+Without `android/key.properties` a release build signs with the debug key —
+fine for checks, never for testers.
+
 ## Not done yet
 
 Tracked in `TODO.md` under *Mobile App* and *Mobile app for tenant admins*:
-release signing and store listings, turning push on in production, iOS push,
+store listings, turning push on in production, iOS push,
 business-card scanning, custom lead fields, customers' activity timelines,
 Bangla strings for the app itself, the home-screen widget, and offline use.
