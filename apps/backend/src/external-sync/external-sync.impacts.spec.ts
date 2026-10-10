@@ -251,6 +251,7 @@ describe('external-sync impacts', () => {
                 tenantId: 't1',
                 party: 'CUSTOMER',
                 partyId: 'cust-1',
+                storeId: 'store-1',
                 transactionId: 'ct-1',
                 paymentNumber: 'XR-TR02071',
                 type: 'PAYMENT',
@@ -271,6 +272,8 @@ describe('external-sync impacts', () => {
             });
             expect(autoPostFromRules.mock.calls[0][0].eventType).toBe('customer_payment');
             expect(autoPostFromRules.mock.calls[0][0].conditionValue).toBe('receive');
+            // The voucher sits at the party's branch, like a payment taken on the payments screen.
+            expect(autoPostFromRules.mock.calls[0][0].storeId).toBe('store-1');
         });
 
         it('moves the balance the other way for a refund', async () => {
@@ -280,6 +283,7 @@ describe('external-sync impacts', () => {
                 tenantId: 't1',
                 party: 'CUSTOMER',
                 partyId: 'cust-1',
+                storeId: 'store-1',
                 transactionId: 'ct-1',
                 paymentNumber: 'XR-TR1',
                 type: 'PAYOUT',
@@ -302,6 +306,7 @@ describe('external-sync impacts', () => {
                 tenantId: 't1',
                 party: 'SUPPLIER',
                 partyId: 'sup-1',
+                storeId: 'store-1',
                 transactionId: 'st-1',
                 paymentNumber: 'XR-TR00186',
                 type: 'PAYMENT',
@@ -335,6 +340,7 @@ describe('external-sync impacts', () => {
                     tenantId: 't1',
                     party,
                     partyId: 'p-1',
+                    storeId: 'store-1',
                     transactionId: 'tx-1',
                     paymentNumber: 'XR-1',
                     type,

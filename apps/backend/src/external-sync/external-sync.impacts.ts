@@ -239,6 +239,8 @@ export interface PaymentImpactInput {
     tenantId: string;
     party: PaymentParty;
     partyId: string;
+    /** The party's branch: where its credit row was written, and where the voucher posts. */
+    storeId: string;
     transactionId: string;
     paymentNumber: string;
     /** PAYMENT settles the party's due; PAYOUT moves it the other way. */
@@ -298,6 +300,7 @@ export async function applyPaymentImpacts(input: PaymentImpactInput): Promise<vo
         sourceModule: 'external-sync',
         sourceType: isCustomer ? 'customer_payment' : 'supplier_payment',
         sourceId: input.transactionId,
+        storeId: input.storeId,
         amount,
         description: `Imported ${input.party.toLowerCase()} payment ${input.paymentNumber}`,
         referenceNumber: input.paymentNumber,
