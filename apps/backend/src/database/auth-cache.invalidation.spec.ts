@@ -29,6 +29,7 @@ const REVIEWED: Record<string, string> = {
     'platform-workspace/platform-workspace.service.ts': INVALIDATES, // admin roster sync, invited-member access
     'storefront/storefront.service.ts': INVALIDATES, // customer logout (stv); the rest create or patch uncached columns
     'stores/stores.service.ts': INVALIDATES, // new branch: owners' access lists change
+    'stores/online-branch.service.ts': INVALIDATES, // the storefront's branch: owners' access lists change
     'team/team.service.ts': INVALIDATES, // roles, role templates, branch access, permissions, removal
     // Writes only the tenant row, so the scan below does not find it; listed so
     // the check that it calls the cache still runs. The timezone rides on the
