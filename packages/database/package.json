@@ -12,6 +12,7 @@
     "db:seed:blog": "tsx prisma/blog-updates.seed.ts",
     "db:studio": "prisma studio",
     "repair:vouchers": "tsx prisma/repair-fabricated-vouchers.ts",
+    "fix:imported-codes": "tsx prisma/fix-imported-codes.ts",
     "sync:accounting": "tsx prisma/sync-accounting.ts",
     "sync:lead-taxonomy": "tsx prisma/sync-lead-taxonomy.ts",
     "sync:crm-activities": "tsx prisma/sync-crm-activities.ts",
