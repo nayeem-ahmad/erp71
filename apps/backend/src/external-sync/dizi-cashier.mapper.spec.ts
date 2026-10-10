@@ -91,6 +91,12 @@ describe('mapDiziCustomer / mapDiziSupplier', () => {
         expect(a.name).toBe('ACME');
         expect(b.name).toBe('ACME (2)');
     });
+
+    it("takes a trader's readable code as the supplier code", () => {
+        const codes = new Set<string>();
+        expect(mapDiziSupplier({ Id: 's1', Name: 'A', Code: 'SUP-7' } as any, new Set(), codes).supplierCode).toBe('SUP-7');
+        expect(mapDiziSupplier({ Id: 's2', Name: 'B', Code: null } as any, new Set(), codes).supplierCode).toBeNull();
+    });
 });
 
 describe('mapDiziSale', () => {

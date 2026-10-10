@@ -17,6 +17,15 @@ jest.mock('next/link', () => {
     return ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>;
 });
 
+// DataTable hides `hideOnMobile` columns (the code, the branch) on a narrow
+// viewport, which is all the global matchMedia mock ever reports. A test that
+// asserts on one turns this on.
+let mockMdUp = false;
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => mockMdUp,
+    useIsMdUp: () => mockMdUp,
+}));
+
 // Every list follows the branch filter; two branches, header = store-1.
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
@@ -81,6 +90,70 @@ describe('SuppliersPage', () => {
         render(<SuppliersPage />);
         await waitFor(() => {
             expect(screen.getByText('New Supplier')).toBeInTheDocument();
+        });
+    });
+
+    describe('supplier code', () => {
+        const { mockBranchScope } = require('@/test-utils/branch-scope');
+        beforeEach(() => mockBranchScope());
+
+        const supplier = {
+            id: 'sup-1', name: 'Fresh Farms', supplier_code: 'SUP-00042', phone: null, email: null, address: null,
+            created_at: '2026-01-01T00:00:00Z', store_id: 'store-1',
+        };
+
+        it("shows each supplier's code", async () => {
+            mockMdUp = true;
+            try {
+                const { api } = require('@/lib/api');
+                api.getSuppliersPaged.mockResolvedValue({ items: [supplier], total: 1, page: 1, limit: 20, pages: 1 });
+
+                render(<SuppliersPage />);
+
+                expect(await screen.findByText('SUP-00042')).toBeInTheDocument();
+            } finally {
+                mockMdUp = false;
+            }
+        });
+
+        it('sends a typed code with a new supplier, and none when left blank for the next one to be given', async () => {
+            const { api } = require('@/lib/api');
+            api.getSuppliersPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });
+            api.createSupplier.mockResolvedValue({ id: 'sup-9' });
+            render(<SuppliersPage />);
+
+            fireEvent.click(await screen.findByText('New Supplier'));
+            let dialog = screen.getByRole('dialog');
+            expect(within(dialog).getByText('Leave blank to generate the next code automatically.')).toBeInTheDocument();
+            fireEvent.change(within(dialog).getByLabelText(/Name/), { target: { value: 'Padma Traders' } });
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+            await waitFor(() => expect(api.createSupplier).toHaveBeenCalledTimes(1));
+            expect(api.createSupplier.mock.calls[0][0]).not.toHaveProperty('supplier_code');
+
+            fireEvent.click(await screen.findByText('New Supplier'));
+            dialog = screen.getByRole('dialog');
+            fireEvent.change(within(dialog).getByLabelText(/Name/), { target: { value: 'Meghna Traders' } });
+            fireEvent.change(within(dialog).getByLabelText('Supplier Code'), { target: { value: ' MT-1 ' } });
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+            await waitFor(() => expect(api.createSupplier).toHaveBeenCalledTimes(2));
+            expect(api.createSupplier.mock.calls[1][0]).toMatchObject({ name: 'Meghna Traders', supplier_code: 'MT-1' });
+        });
+
+        it("opens an edit on the supplier's code and sends a renamed one", async () => {
+            const { api } = require('@/lib/api');
+            api.getSuppliersPaged.mockResolvedValue({ items: [supplier], total: 1, page: 1, limit: 20, pages: 1 });
+            api.updateSupplier.mockResolvedValue({});
+            render(<SuppliersPage />);
+
+            fireEvent.click(await screen.findByTitle('Edit'));
+            const dialog = screen.getByRole('dialog');
+            const code = within(dialog).getByLabelText('Supplier Code');
+            expect(code).toHaveValue('SUP-00042');
+            expect(within(dialog).getByText('Leave blank to keep the current code.')).toBeInTheDocument();
+
+            fireEvent.change(code, { target: { value: 'FF-1' } });
+            fireEvent.click(within(dialog).getByRole('button', { name: /save changes/i }));
+            await waitFor(() => expect(api.updateSupplier).toHaveBeenCalledWith('sup-1', expect.objectContaining({ supplier_code: 'FF-1' })));
         });
     });
 

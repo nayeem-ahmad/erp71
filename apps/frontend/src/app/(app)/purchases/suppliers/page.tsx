@@ -18,6 +18,8 @@ import { ImportDialog, type ImportField } from '@/components/import-dialog';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
+    // Blank numbers the supplier SUP-#####.
+    { key: 'supplier_code', label: 'Supplier Code', required: false },
     { key: 'phone', label: 'Phone', required: false },
     { key: 'email', label: 'Email', required: false },
     { key: 'address', label: 'Address', required: false },
@@ -29,6 +31,7 @@ const IMPORT_FIELDS: ImportField[] = [
 interface Supplier {
     id: string;
     name: string;
+    supplier_code: string | null;
     phone: string | null;
     email: string | null;
     address: string | null;
@@ -36,7 +39,7 @@ interface Supplier {
     store_id: string;
 }
 
-const emptyForm = { name: '', phone: '', email: '', address: '', store_id: '' };
+const emptyForm = { name: '', supplier_code: '', phone: '', email: '', address: '', store_id: '' };
 
 const columnHelper = createColumnHelper<Supplier>();
 
@@ -93,6 +96,7 @@ export default function SuppliersPage() {
         setEditTarget(supplier);
         setForm({
             name: supplier.name,
+            supplier_code: supplier.supplier_code ?? '',
             phone: supplier.phone ?? '',
             email: supplier.email ?? '',
             address: supplier.address ?? '',
@@ -115,10 +119,13 @@ export default function SuppliersPage() {
         }
         setSaving(true);
         setError('');
+        // Blank: a new supplier gets the next code, an edited one keeps its own.
+        const code = form.supplier_code.trim();
         try {
             if (editTarget) {
                 await api.updateSupplier(editTarget.id, {
                     name: form.name.trim(),
+                    ...(code ? { supplier_code: code } : {}),
                     phone: form.phone.trim() || undefined,
                     email: form.email.trim() || undefined,
                     address: form.address.trim() || undefined,
@@ -130,6 +137,7 @@ export default function SuppliersPage() {
             } else {
                 await api.createSupplier({
                     name: form.name.trim(),
+                    ...(code ? { supplier_code: code } : {}),
                     phone: form.phone.trim() || undefined,
                     email: form.email.trim() || undefined,
                     address: form.address.trim() || undefined,
@@ -158,6 +166,14 @@ export default function SuppliersPage() {
 
     const columns: ColumnDef<Supplier, any>[] = useMemo(
         () => [
+            columnHelper.accessor('supplier_code', {
+                header: t.suppliers.columns.code,
+                cell: (info) => (
+                    <span className="text-sm font-mono text-gray-500">{info.getValue() || '-'}</span>
+                ),
+                size: 120,
+                meta: { hideOnMobile: true },
+            }),
             columnHelper.accessor('name', {
                 header: t.suppliers.columns.supplier,
                 cell: (info) => (
@@ -295,6 +311,20 @@ export default function SuppliersPage() {
                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                                 placeholder={t.purchaseShared.supplierNamePlaceholder}
                                 className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
+                        <Field
+                            label={t.suppliers.codeLabel}
+                            hint={editTarget ? t.suppliers.codeEditHint : t.suppliers.codeHint}
+                            htmlFor="supplier-code"
+                        >
+                            <input
+                                id="supplier-code"
+                                type="text"
+                                value={form.supplier_code}
+                                onChange={(e) => setForm({ ...form, supplier_code: e.target.value })}
+                                placeholder={t.suppliers.codePlaceholder}
+                                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 font-mono text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
                             />
                         </Field>
                         <Field label={t.common.phone} htmlFor="supplier-phone">

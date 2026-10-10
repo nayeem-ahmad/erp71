@@ -91,7 +91,7 @@ export interface ProviderClient {
 export interface ProviderMappers {
     product(row: any, claimedSkus: Set<string>): MappedProduct;
     customer(row: any, claimedCodes: Set<string>): MappedCustomer;
-    supplier(row: any, claimedNames: Set<string>): MappedSupplier;
+    supplier(row: any, claimedNames: Set<string>, claimedCodes?: Set<string>): MappedSupplier;
     sale(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedSale;
     purchase(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedPurchase;
     payment(row: any, party: PaymentParty, documentPrefix: string, warnings: SyncWarning[]): MappedPayment | null;

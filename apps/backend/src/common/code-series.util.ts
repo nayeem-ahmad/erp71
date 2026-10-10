@@ -26,6 +26,11 @@ const ATTEMPTS = 5;
  * and a hand-typed `CUST-9` does not send the series back onto a taken code.
  */
 export async function nextSeriesCode(db: DbLike, table: SeriesTable, tenantId: string): Promise<string> {
+    return seriesCode(table, await nextSeriesNumber(db, table, tenantId));
+}
+
+/** The number `nextSeriesCode` would use, for a caller numbering a batch of new rows in one go. */
+export async function nextSeriesNumber(db: DbLike, table: SeriesTable, tenantId: string): Promise<number> {
     const { column, prefix } = SERIES[table];
     const pattern = `^${prefix.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}([0-9]+)$`;
     const rows: Array<{ last: string }> = await db.$queryRaw(Prisma.sql`
@@ -33,8 +38,12 @@ export async function nextSeriesCode(db: DbLike, table: SeriesTable, tenantId: s
         FROM ${Prisma.raw(`"${table}"`)}
         WHERE tenant_id = ${tenantId} AND ${Prisma.raw(`"${column}"`)} LIKE ${`${prefix}%`}
     `);
-    const next = BigInt(rows[0]?.last ?? '0') + 1n;
-    return `${prefix}${next.toString().padStart(5, '0')}`;
+    return Number(rows[0]?.last ?? '0') + 1;
+}
+
+/** The table's code for `n`: `SUP-00042`, growing past five digits rather than truncating. */
+export function seriesCode(table: SeriesTable, n: number): string {
+    return `${SERIES[table].prefix}${String(n).padStart(5, '0')}`;
 }
 
 /** A unique-index clash on the table's code column (Prisma names the target by columns or by index). */

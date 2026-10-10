@@ -8,6 +8,8 @@ function makeTx() {
             create: jest.fn().mockResolvedValue({ id: 'sup-new' }),
             update: jest.fn().mockResolvedValue({}),
         },
+        // The tenant's suppliers already run to SUP-00006.
+        $queryRaw: jest.fn().mockResolvedValue([{ last: '6' }]),
     };
 }
 
@@ -25,6 +27,7 @@ describe('resolveInlineSupplier', () => {
             data: {
                 tenant_id: 'tenant-1',
                 name: 'Fresh Farms',
+                supplier_code: 'SUP-00007',
                 // A new supplier belongs to the document's branch.
                 store_id: 'store-1',
                 phone: '01700000000',

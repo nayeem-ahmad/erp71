@@ -63,7 +63,7 @@ describe('external-sync codes for new records', () => {
             code && held.has(code) && where.deleted_at === undefined ? { id: `holder-${code}` } : null;
         const track = (code: string) => {
             created.push(code);
-            const n = /^(?:PRD|CUST)-(\d+)$/.exec(code);
+            const n = /^(?:PRD|CUST|SUP)-(\d+)$/.exec(code);
             if (n) last = Math.max(last, Number(n[1]));
         };
         return {
@@ -84,6 +84,14 @@ describe('external-sync codes for new records', () => {
                 create: jest.fn(async ({ data }: any) => {
                     track(data.customer_code);
                     return { id: `customer-${data.customer_code}` };
+                }),
+            },
+            supplier: {
+                // Adoption is by name, and no supplier of this tenant shares one.
+                findFirst: jest.fn(async ({ where }: any) => (where.name ? null : holder(where.supplier_code, where))),
+                create: jest.fn(async ({ data }: any) => {
+                    track(data.supplier_code);
+                    return { id: `supplier-${data.supplier_code}` };
                 }),
             },
             productCost: { findMany: jest.fn(async () => []) },
@@ -126,5 +134,18 @@ describe('external-sync codes for new records', () => {
 
         expect(db.created).toEqual(['C00564', 'CUST-00042', 'CUST-00043', 'CUST-00044']);
         expect(warnings).toEqual([]);
+    });
+
+    it("keeps a supplier's readable code and numbers a GUID, blank or repeated-elsewhere one", async () => {
+        const db = makeDb({ held: ['S9'] });
+        const service = new ExternalSyncService(db, {} as any, {} as any);
+        const supplierRow = (id: number, code: string) => ({
+            id, code, name: `Supplier ${id}`, phone: null, email: null, address: null, previous_due: '0', organization_id: '262', updated_at: null,
+        });
+        const client = { fetchSuppliers: jest.fn(async () => [supplierRow(1, 'S1'), supplierRow(2, GUID), supplierRow(3, 'S9'), supplierRow(4, 'S1')]) } as any;
+
+        await (service as any).syncSuppliers(connection, client, emptyStats(), [], false, new Date('2026-01-01'));
+
+        expect(db.created).toEqual(['S1', 'SUP-00001', 'SUP-00002', 'S1-2']);
     });
 });

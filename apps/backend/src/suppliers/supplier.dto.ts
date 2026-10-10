@@ -16,6 +16,12 @@ export class CreateSupplierDto {
     @IsString()
     name: string;
 
+    /** Left blank, the service generates the next SUP-##### code. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(50)
+    supplier_code?: string;
+
     /**
      * The branch the supplier belongs to. Omitted: the request's header branch.
      * A member limited to some branches may name only one of theirs.
@@ -41,6 +47,12 @@ export class UpdateSupplierDto {
     @IsOptional()
     @IsString()
     name?: string;
+
+    /** Blank keeps the supplier's current code. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(50)
+    supplier_code?: string;
 
     /** Moves the supplier to another branch — owners and consolidated-report holders only. */
     @IsOptional()

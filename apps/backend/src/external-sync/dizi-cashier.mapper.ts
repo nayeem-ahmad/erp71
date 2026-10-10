@@ -101,7 +101,11 @@ export function mapDiziCustomer(row: DiziTrader, claimedCodes: Set<string>): Map
     };
 }
 
-export function mapDiziSupplier(row: DiziTrader, claimedNames: Set<string>): MappedSupplier {
+export function mapDiziSupplier(
+    row: DiziTrader,
+    claimedNames: Set<string>,
+    claimedCodes: Set<string> = new Set(),
+): MappedSupplier {
     const externalId = String(row.Id);
     // Supplier is unique on [tenant_id, name] in our schema, so the name is the
     // value that has to be disambiguated.
@@ -110,6 +114,7 @@ export function mapDiziSupplier(row: DiziTrader, claimedNames: Set<string>): Map
     return {
         externalId,
         name,
+        supplierCode: dedupeCode(readableCode(row.Code), claimedCodes),
         phone: emptyToNull(row.ContactNo),
         email: emptyToNull(row.Email),
         address: emptyToNull(row.Location),

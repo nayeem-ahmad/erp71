@@ -24,6 +24,7 @@
     "sync:task-reference": "tsx prisma/sync-task-reference.ts",
     "sync:story-code": "tsx prisma/sync-story-code.ts",
     "sync:store-code": "tsx prisma/sync-store-code.ts",
+    "sync:supplier-code": "tsx prisma/sync-supplier-code.ts",
     "sync:warehouse-name-unique": "tsx prisma/sync-warehouse-name-unique.ts",
     "sync:role-permissions": "tsx prisma/sync-role-permissions.ts",
     "sync:tenant-role-templates": "tsx prisma/sync-tenant-role-templates.ts",

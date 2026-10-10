@@ -960,10 +960,11 @@ export class ExternalSyncService {
     ): Promise<Map<string, string>> {
         const rows = await client.fetchSuppliers();
         const claimedNames = new Set<string>();
+        const claimedCodes = new Set<string>();
         const map = await this.loadMappings(connection.id, 'SUPPLIER');
 
         for (const row of rows) {
-            const mapped = mappers.supplier(row, claimedNames);
+            const mapped = mappers.supplier(row, claimedNames, claimedCodes);
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
             try {
@@ -991,21 +992,26 @@ export class ExternalSyncService {
                     ? await this.db.supplier.findFirst({ where: supplierWhere, select: { id: true } })
                     : null;
 
+                // The provider's code when it has a readable one no other
+                // supplier holds; else the next in the tenant's SUP- series.
                 const supplierId =
                     adopted?.id ??
                     (
-                        await this.db.supplier.create({
-                            data: {
-                                tenant_id: connection.tenant_id,
-                                // The import's branch; an adopted supplier keeps theirs.
-                                store_id: connection.store_id,
-                                name: mapped.name,
-                                phone: mapped.phone,
-                                email: mapped.email,
-                                address: mapped.address,
-                            },
-                            select: { id: true },
-                        })
+                        await codeForNewRecord(this.db, 'Supplier', connection.tenant_id, mapped.supplierCode, (supplierCode) =>
+                            this.db.supplier.create({
+                                data: {
+                                    tenant_id: connection.tenant_id,
+                                    // The import's branch; an adopted supplier keeps theirs.
+                                    store_id: connection.store_id,
+                                    supplier_code: supplierCode,
+                                    name: mapped.name,
+                                    phone: mapped.phone,
+                                    email: mapped.email,
+                                    address: mapped.address,
+                                },
+                                select: { id: true },
+                            }),
+                        )
                     ).id;
 
                 if (!adopted && connection.post_impacts && mapped.previousDue !== 0) {

@@ -1475,6 +1475,8 @@ export interface Supplier {
   id: string;
   tenant_id: string;
   name: string;
+  /** `SUP-00001`, or one the shop typed; unique per tenant. */
+  supplier_code?: string | null;
   phone?: string | null;
   email?: string | null;
   address?: string | null;

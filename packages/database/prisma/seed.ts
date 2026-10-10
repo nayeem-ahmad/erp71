@@ -838,11 +838,11 @@ async function main() {
     ];
 
     const suppliers: any[] = [];
-    for (const def of supplierDefs) {
+    for (const [i, def] of supplierDefs.entries()) {
         const s = await prisma.supplier.upsert({
             where: { tenant_id_name: { tenant_id: tenant.id, name: def.name } },
             update: {},
-            create: { tenant_id: tenant.id, store_id: store.id, ...def },
+            create: { tenant_id: tenant.id, store_id: store.id, supplier_code: `SUP-${String(i + 1).padStart(5, '0')}`, ...def },
         });
         suppliers.push(s);
     }

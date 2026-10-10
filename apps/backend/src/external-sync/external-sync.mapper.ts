@@ -216,6 +216,8 @@ export function mapCustomer(row: ExpressRetailCustomer, claimedCodes: Set<string
 export interface MappedSupplier {
     externalId: string;
     name: string;
+    /** The provider's code, or null for the import to give the next in the tenant's series. */
+    supplierCode: string | null;
     phone: string | null;
     email: string | null;
     address: string | null;
@@ -224,7 +226,11 @@ export interface MappedSupplier {
     externalUpdatedAt: Date | null;
 }
 
-export function mapSupplier(row: ExpressRetailSupplier, claimedNames: Set<string>): MappedSupplier {
+export function mapSupplier(
+    row: ExpressRetailSupplier,
+    claimedNames: Set<string>,
+    claimedCodes: Set<string> = new Set(),
+): MappedSupplier {
     const externalId = String(row.id);
     // Supplier is unique on [tenant_id, name] in our schema, so the name is the
     // value that has to be disambiguated rather than the code.
@@ -233,6 +239,7 @@ export function mapSupplier(row: ExpressRetailSupplier, claimedNames: Set<string
     return {
         externalId,
         name,
+        supplierCode: dedupeCode(readableCode(row.code), claimedCodes),
         previousDue: toMoney(row.previous_due),
         phone: emptyToNull(row.phone),
         email: emptyToNull(row.email),

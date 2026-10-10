@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { codeForNewRecord } from '../common/code-series.util';
 
 /** Prisma client or transaction client — both expose the model delegates used here. */
 type DbLike = any;
@@ -63,9 +64,11 @@ export async function resolveInlineSupplier(
         return existing.id;
     }
 
-    const created = await tx.supplier.create({
-        data: { tenant_id: tenantId, name, store_id: storeId, ...detailsOf(draft) },
-        select: { id: true },
-    });
+    const created = await codeForNewRecord<{ id: string }>(tx, 'Supplier', tenantId, null, (supplierCode) =>
+        tx.supplier.create({
+            data: { tenant_id: tenantId, name, supplier_code: supplierCode, store_id: storeId, ...detailsOf(draft) },
+            select: { id: true },
+        }),
+    );
     return created.id;
 }
