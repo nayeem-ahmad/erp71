@@ -1284,6 +1284,12 @@ export const coreMessages = {
         markClosed: "Marcar como cerrado",
         markActive: "Reabrir",
     },
+    branchParties: {
+        importBranchLabel: "Sucursal para filas sin sucursal",
+        importBranchHint: "Las filas con columna de sucursal (código o nombre) van a esa sucursal.",
+        onlineOrdersElsewhere: "Los pedidos web pertenecen a la sucursal Tienda en línea. Elíjala, o Todas las sucursales, en el filtro para verlos.",
+        onlineBadge: "En línea",
+    },
     partyPayments: {
         directionAll: "Todos",
         directionIn: "Entradas",

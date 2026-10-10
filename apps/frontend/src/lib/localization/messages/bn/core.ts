@@ -1284,6 +1284,12 @@ export const coreMessages = {
             markClosed: "বন্ধ হিসাবে চিহ্নিত করুন",
             markActive: "পুনরায় খুলুন",
         },
+        branchParties: {
+            importBranchLabel: "শাখা নেই এমন সারির জন্য শাখা",
+            importBranchHint: "যে সারিতে শাখা কলাম (কোড বা নাম) আছে সেটি সেই শাখায় যাবে।",
+            onlineOrdersElsewhere: "ওয়েব অর্ডার অনলাইন স্টোর শাখার। দেখতে শাখা ফিল্টারে সেটি বা সব শাখা বেছে নিন।",
+            onlineBadge: "অনলাইন",
+        },
         partyPayments: {
             directionAll: "সব",
             directionIn: "প্রাপ্তি",

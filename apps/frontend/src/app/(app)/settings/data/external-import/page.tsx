@@ -369,7 +369,7 @@ export default function TenantExternalImportPage() {
                             placeholder="https://…"
                         />
                     </Field>
-                    <Field label="Branch for imported documents" required error={fieldErrors.storeId}>
+                    <Field label="Branch for imported documents" required error={fieldErrors.storeId} hint="Customers and suppliers this import brings in belong to it too; ones that already exist keep their own.">
                         <Select value={form.storeId} onChange={(e) => setForm({ ...form, storeId: e.target.value })}>
                             <option value="">Select a branch</option>
                             {stores.map((store) => (

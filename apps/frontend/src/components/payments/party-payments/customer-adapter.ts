@@ -73,8 +73,8 @@ export const customerPaymentsAdapter: PartyPaymentsAdapter = {
     partyOf: (payment) => payment.customer ?? null,
     ledgerHref: (partyId) => `/sales/customer-ledger?customerId=${encodeURIComponent(partyId)}`,
     listParties: async () => ((await api.getCustomers()) ?? []) as PartyOption[],
-    listPayments: async ({ from, to, partyId }) => {
-        const rows = await api.getCustomerCreditPayments({ from, to, customerId: partyId });
+    listPayments: async ({ from, to, partyId, storeId }) => {
+        const rows = await api.getCustomerCreditPayments({ from, to, customerId: partyId, storeId });
         return (Array.isArray(rows) ? rows : []) as PartyPayment[];
     },
     nextNumber: (direction) => api.getNextCustomerPaymentNumber(direction),

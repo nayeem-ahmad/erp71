@@ -12,8 +12,9 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Button, ConfirmDialog, PageShell, StatusBadge } from '@/components/ui';
+import { BranchFilter, Button, ConfirmDialog, PageShell, StatusBadge } from '@/components/ui';
 import { AllocateAdvance } from './AllocateAdvance';
 import { PaymentDetails } from './PaymentDetails';
 import { PaymentEntryForm, type PartiesStatus } from './PaymentEntryForm';
@@ -52,6 +53,9 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
     const presetPartyId = searchParams.get(adapter.partyParam) ?? '';
     const docked = useMediaQuery('(min-width: 1280px)');
     const { methods } = usePaymentMethods();
+    // Payments belong to their party's branch; the page follows the header
+    // branch, or the one picked here.
+    const branch = useBranchScope();
 
     const [payments, setPayments] = useState<PartyPayment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -69,7 +73,10 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
     const [deleteTarget, setDeleteTarget] = useState<PartyPayment | null>(null);
     const [deleting, setDeleting] = useState(false);
 
+    const branchReady = branch.ready;
+    const branchStoreId = branch.apiStoreId;
     const loadPayments = useCallback(async () => {
+        if (!branchReady) return;
         setLoading(true);
         try {
             const range = applyCreatedRangeQuery(filters.range);
@@ -77,14 +84,19 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                 from: range.createdFrom,
                 to: range.createdTo,
                 partyId: filters.partyId || undefined,
+                storeId: branchStoreId,
             }));
         } catch (error) {
+            // The server refused the picked branch: say so and go back to the header's.
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load payments', error);
             toast.error(labels.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [adapter, filters.range, filters.partyId, labels.loadFailed]);
+        // `branch` is read for its reset only; its fields that matter are deps.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [adapter, filters.range, filters.partyId, labels.loadFailed, branchReady, branchStoreId, t]);
 
     // The party list does not depend on the filters, so it loads on its own —
     // a failed payments fetch can never empty the picker.
@@ -307,9 +319,12 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                 subtitle={labels.subtitle}
                 breadcrumbs={adapter.breadcrumbs(t, labels.title)}
                 actions={(
-                    <Button variant="primary" size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => openCreate()}>
-                        {labels.newPayment}
-                    </Button>
+                    <>
+                        <BranchFilter scope={branch} />
+                        <Button variant="primary" size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => openCreate()}>
+                            {labels.newPayment}
+                        </Button>
+                    </>
                 )}
             />
 

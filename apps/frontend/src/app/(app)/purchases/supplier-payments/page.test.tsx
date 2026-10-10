@@ -15,6 +15,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import SupplierPaymentsPage from './page';
 import { api, ApiError } from '@/lib/api';
 
+// Every list follows the branch filter; two branches, header = store-1.
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: () => null }),
 }));

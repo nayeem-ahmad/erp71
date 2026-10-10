@@ -1284,6 +1284,12 @@ export const coreMessages = {
         markClosed: "Marquer comme clôturé",
         markActive: "Rouvrir",
     },
+    branchParties: {
+        importBranchLabel: "Agence pour les lignes sans agence",
+        importBranchHint: "Les lignes avec une colonne agence (code ou nom) vont dans cette agence.",
+        onlineOrdersElsewhere: "Les commandes web appartiennent à l'agence Boutique en ligne. Choisissez-la, ou Toutes les agences, dans le filtre pour les voir.",
+        onlineBadge: "En ligne",
+    },
     partyPayments: {
         directionAll: "Tous",
         directionIn: "Entrées",

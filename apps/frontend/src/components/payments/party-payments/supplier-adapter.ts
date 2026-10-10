@@ -77,8 +77,8 @@ export const supplierPaymentsAdapter: PartyPaymentsAdapter = {
         const rows = await api.getSuppliers();
         return (Array.isArray(rows) ? rows : []) as PartyOption[];
     },
-    listPayments: async ({ from, to, partyId }) => {
-        const rows = await api.getSupplierCreditPayments({ from, to, supplierId: partyId });
+    listPayments: async ({ from, to, partyId, storeId }) => {
+        const rows = await api.getSupplierCreditPayments({ from, to, supplierId: partyId, storeId });
         return (Array.isArray(rows) ? rows : []) as PartyPayment[];
     },
     nextNumber: (direction) => api.getNextSupplierPaymentNumber(direction),
