@@ -69,6 +69,8 @@ export class PaymentMethodResponseDto {
   show_on_entry: boolean;
   created_at: Date;
   updated_at: Date;
+  /** The linked ledger account; only the list endpoint fills it in. */
+  account?: { id: string; name: string; code: string | null } | null;
 }
 
 /**

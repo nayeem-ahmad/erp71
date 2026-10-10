@@ -1284,6 +1284,9 @@ model PaymentMethod {
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
+  customer_credit_transactions CustomerCreditTransaction[]
+  supplier_credit_transactions SupplierCreditTransaction[]
+
   @@unique([tenant_id, name])
   @@index([tenant_id, type, is_active])
 }
@@ -2271,13 +2274,19 @@ model SupplierCreditTransaction {
   reference_id   String?
   payment_number String?
   notes          String?
+  /// PAYMENT/PAYOUT only: the tender it was paid by. Null on rows saved
+  /// before methods were recorded, and once the method is deleted.
+  payment_method_id   String?
+  /// The method's name when the payment was saved, for receipts and history.
+  payment_method_name String?
   created_by     String?
   created_at     DateTime @default(now())
 
-  tenant      Tenant                      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  supplier    Supplier                    @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
-  creator     User?                       @relation("SupplierCreditTransactionCreator", fields: [created_by], references: [id])
-  allocations SupplierPaymentAllocation[]
+  tenant         Tenant                      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  supplier       Supplier                    @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
+  creator        User?                       @relation("SupplierCreditTransactionCreator", fields: [created_by], references: [id])
+  payment_method PaymentMethod?              @relation(fields: [payment_method_id], references: [id], onDelete: SetNull)
+  allocations    SupplierPaymentAllocation[]
 
   @@unique([tenant_id, payment_number])
   @@index([tenant_id, supplier_id])
@@ -3677,12 +3686,18 @@ model CustomerCreditTransaction {
   reference_id   String?
   payment_number String?
   notes          String?
+  /// PAYMENT/PAYOUT only: the tender it was paid by. Null on rows saved
+  /// before methods were recorded, and once the method is deleted.
+  payment_method_id   String?
+  /// The method's name when the payment was saved, for receipts and history.
+  payment_method_name String?
   created_by     String?
   created_at     DateTime @default(now())
 
-  tenant   Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  creator  User?    @relation("CreditTransactionCreator", fields: [created_by], references: [id])
+  tenant         Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  customer       Customer       @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  creator        User?          @relation("CreditTransactionCreator", fields: [created_by], references: [id])
+  payment_method PaymentMethod? @relation(fields: [payment_method_id], references: [id], onDelete: SetNull)
 
   @@unique([tenant_id, payment_number])
   @@index([tenant_id, customer_id])

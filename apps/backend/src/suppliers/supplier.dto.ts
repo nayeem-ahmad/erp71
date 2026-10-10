@@ -98,6 +98,16 @@ export class RecordSupplierCreditPaymentDto {
     @MaxLength(40)
     paymentNumber?: string;
 
+    /**
+     * The tender: a PaymentMethod of this tenant, active. Its name is kept on
+     * the payment, and its linked ledger account (when set) takes the cash
+     * leg instead of Cash in Hand. Omitted: no method recorded on a new
+     * payment; the stored one kept on an edit.
+     */
+    @IsOptional()
+    @IsUUID()
+    paymentMethodId?: string;
+
     // Optional: match part or all of this payment to specific bill(s) immediately.
     // Leaving this empty (or partial) records the rest as an unapplied advance
     // that can be allocated to a bill later via the allocate endpoint.
@@ -146,6 +156,16 @@ export class UpdateSupplierCreditPaymentDto {
     @IsString()
     @MaxLength(40)
     paymentNumber?: string;
+
+    /**
+     * The tender: a PaymentMethod of this tenant, active. Its name is kept on
+     * the payment, and its linked ledger account (when set) takes the cash
+     * leg instead of Cash in Hand. Omitted: no method recorded on a new
+     * payment; the stored one kept on an edit.
+     */
+    @IsOptional()
+    @IsUUID()
+    paymentMethodId?: string;
 }
 
 export class NextSupplierPaymentNumberQueryDto {
