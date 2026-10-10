@@ -232,6 +232,19 @@ step sync:task-reference \
 step sync:story-code \
     env DIRECT_URL="$DATABASE_URL" npm run sync:story-code --workspace=@erp71/database
 
+# sync:party-branch runs BEFORE db push for the same reason as sync:board-slug,
+# and is REQUIRED for the branch-attached-parties release to deploy at all. It
+# gives every Customer, Supplier, customer/supplier credit row and storefront
+# order a branch (creating each storefront tenant's "Online Store" branch on the
+# way) and sets those store_id columns NOT NULL inside its own transaction, so a
+# row the old backend writes between this step and the push cannot slip in
+# without one. Idempotent (fills NULLs only); tolerates a fresh database; fails
+# — and rolls back — on a tenant that has rows but no branch. Preview it on
+# production first: scripts/ops/party-branch-report.sh. See
+# prisma/sync-party-branch.ts.
+step sync:party-branch \
+    env DIRECT_URL="$DATABASE_URL" npm run sync:party-branch --workspace=@erp71/database
+
 # ---- The schema itself -----------------------------------------------------
 
 # --accept-data-loss: see "Running while the old code serves" above.
