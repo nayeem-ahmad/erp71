@@ -23,8 +23,9 @@ specific branch and also their payments."
    `Supplier`, `CustomerCreditTransaction` and `SupplierCreditTransaction`.
    With the column required, the compiler finds every writer that does not
    set it.
-5. **The online storefront has its own branch**, "Online Store", and every
-   customer the storefront creates belongs to it.
+5. **The online storefront has its own branch**, "Online Store". Every
+   customer the storefront creates, and every storefront order, belongs to
+   it.
 6. **External import:** everything an import brings in belongs to the branch
    chosen for that import.
 7. **CSV import** (customers and suppliers): each row may name its branch;
@@ -68,6 +69,7 @@ and stores cannot be deleted.
 | `CustomerCreditTransaction` | `store_id String` (new) | every row: payment, payout, credit sale, adjustment, write-off |
 | `SupplierCreditTransaction` | `store_id String` (new) | every row: payment, payout, credit purchase, adjustment |
 
+| `StorefrontOrder` | `store_id String` (new) | always the online branch |
 | `Tenant` | `online_store_id String? @unique` (new) | the tenant's online branch; null until the storefront first needs it |
 
 A credit row's branch is its party's branch at the moment the row is written.
@@ -77,8 +79,9 @@ across branches unless the party is moved.
 ### The online branch
 
 - **Created on first need**, by `ensureOnlineBranch(tenantId)`: when the
-  storefront creates its first customer, and in the sync below for tenants
-  that already have storefront customers.
+  storefront creates its first customer or takes its first order (a guest
+  checkout has no customer). The sync below also creates it for tenants that
+  already have storefront customers or orders.
 - **Created like any other branch.** It reuses the stores service's row
   creation: name "Online Store" (or the next free name), the next store code,
   and access rows for every owner. `Tenant.online_store_id` points at it, and
@@ -88,8 +91,14 @@ across branches unless the party is moved.
   storefront.
 - **Labelled as online.** The branch list in `/auth/me` and the store settings
   page mark it, so it can be told apart from a shop.
-- **Storefront orders stay branchless** (`StorefrontOrder` has no store). Only
-  the customer is placed on the online branch.
+- **Storefront orders belong to it.** `StorefrontOrder.store_id` is set at
+  checkout. `GET /storefront/orders` takes `storeId`, resolved through
+  `BranchScopeService.resolveStoreId` with that route's permissions, so the
+  Storefront Orders panel on Sales › Orders follows the page's branch filter.
+  It shows the online orders on the Online Store branch or All branches, and
+  nothing on a shop's branch. Changing an order's status checks that the
+  caller may use the online branch. Orders still move no stock and do not
+  become sales; that is unchanged.
 
 ### Rollout: pre-`db push` sync
 
@@ -110,9 +119,11 @@ refuses to make a column `NOT NULL` while it still holds nulls. A new step,
    using the same `ACTIVE_PURCHASE` filter the services use. Ties go to the
    latest purchase; suppliers with none get the main branch.
 4. Credit rows with a null branch get their party's branch.
-5. The step is idempotent: it fills nulls only and never moves an assigned
+5. Storefront orders get the online branch (`ADD COLUMN IF NOT EXISTS` first),
+   which is created for any tenant that has orders.
+6. The step is idempotent: it fills nulls only and never moves an assigned
    party. It is a no-op on a fresh database.
-6. If a tenant has no `Store` at all, its rows stay null and `db push` fails
+7. If a tenant has no `Store` at all, its rows stay null and `db push` fails
    loudly. The plan must confirm that tenant provisioning (signup, admin
    creation, demo) always creates a store, and must say what to do otherwise.
 
@@ -131,6 +142,7 @@ required. The rule for each:
 | Customer import (CSV) | the row's `branch` column (name or code) if set, else the branch picked for the file. The import dialog requires that pick, defaulting to the header branch. A row naming an unknown branch, or one the caller may not use, fails on its own. |
 | Inline customer (sale, quote, order, POS quick-add) | the document's branch |
 | Storefront sign-up / checkout customer | the online branch (`ensureOnlineBranch`) |
+| Storefront order (checkout), demo-data storefront orders | the online branch |
 | External-sync import customer / supplier | the import's branch: `ExternalSyncConnection.store_id`, already required when a connection is set up and already used for the imported sales and purchases. A party matched to an existing record keeps its branch. |
 | Demo data, seed | the tenant's first store |
 | Supplier create / update / CSV import / inline quick-add | same rules as customers |
@@ -186,6 +198,9 @@ balance lives on the party. Existing credit rows keep their branch.
   `apiStoreId` goes to `listPayments`, and the page starts on the header
   branch. A 403 goes through `useBranchForbiddenReset`. The KPI strip follows
   the filtered rows.
+- **Storefront Orders panel** (`sales/orders/StorefrontOrdersPanel.tsx`): sends
+  the page's `branch.apiStoreId`. On a shop branch it shows a one-line note
+  pointing to the Online Store branch instead of an empty table.
 - **CSV import dialogs**, for customers and suppliers: a required Branch select
   ("for rows without a branch"), defaulting to the header branch. The template
   gains a `branch` column. Row errors name the branch that was not found.
@@ -213,6 +228,9 @@ balance lives on the party. Existing credit rows keep their branch.
     gives owners access, and is excluded from the `maxStores` count
   - CSV import: a row's branch wins over the file's, and an unknown or
     forbidden branch fails that row only
+  - storefront checkout stores the online branch; the orders list filters by
+    `storeId`; a status change on an order outside the caller's branches is
+    refused
 - **Frontend:**
   - supplier form branch field
   - supplier list filter
@@ -235,5 +253,6 @@ balance lives on the party. Existing credit rows keep their branch.
   party is in the caller's scope. The pickers enforce it in the UI only, as
   with the open "write paths trust body store ids" item.
 - A bulk "move to branch" action.
-- Storefront orders carrying a branch, and moving an online order into a
-  shop's sales.
+- Turning a storefront order into a sale, or moving stock for it. Both are
+  unchanged.
+- The home pulse's storefront-orders count stays tenant-wide.
