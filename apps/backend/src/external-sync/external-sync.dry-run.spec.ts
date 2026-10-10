@@ -152,3 +152,81 @@ describe('external-sync dry run', () => {
         expect(warnings.filter((w) => w.code === 'PARTY_UNRESOLVED')).toHaveLength(1);
     });
 });
+
+/**
+ * A real run writes the payment as a credit row, and since branch-attached
+ * parties a credit row cannot exist without `store_id` — the party's branch.
+ * The create went through an `any`-typed table, so nothing caught its absence
+ * and every imported payment failed with WRITE_FAILED.
+ */
+describe('external-sync payment write', () => {
+    const connection = {
+        id: 'conn-1',
+        tenant_id: 'tenant-1',
+        provider: 'DIZI_CASHIER',
+        document_prefix: 'DZ-',
+        post_impacts: false,
+    };
+
+    const PAYMENT_ROW = {
+        Id: 'pay-1',
+        TraderId: 'trader-1',
+        Amount: 250,
+        Date: '2026-09-02T00:00:00',
+        SlipNo: 'PS-1',
+        TransactionNo: null,
+        MethodName: 'Cash',
+        Narration: null,
+        IsDeleted: false,
+    };
+
+    function makeService() {
+        const db: any = {
+            externalSyncMapping: {
+                findMany: jest.fn(async () => []),
+                upsert: jest.fn(async () => ({})),
+                deleteMany: jest.fn(async () => ({ count: 0 })),
+            },
+            customer: { findUnique: jest.fn(async () => ({ store_id: 'store-babu-bazar' })) },
+            supplier: { findUnique: jest.fn(async () => ({ store_id: 'store-main' })) },
+            customerCreditTransaction: { create: jest.fn(async () => ({ id: 'ct-1' })) },
+            supplierCreditTransaction: { create: jest.fn(async () => ({ id: 'st-1' })) },
+        };
+        db.$transaction = jest.fn(async (run: (tx: any) => Promise<unknown>) => run(db));
+        return { service: new ExternalSyncService(db, {} as any, {} as any), db };
+    }
+
+    function stats() {
+        const tally = () => ({ created: 0, updated: 0, skipped: 0 });
+        return { customerPayments: tally(), supplierPayments: tally() } as any;
+    }
+
+    it.each([
+        ['CUSTOMER', 'customerCreditTransaction', 'store-babu-bazar'],
+        ['SUPPLIER', 'supplierCreditTransaction', 'store-main'],
+    ])('writes a %s payment under the party\'s branch', async (party, table, storeId) => {
+        const { service, db } = makeService();
+        const warnings: any[] = [];
+        const tally = stats();
+        const client = { fetchPayments: jest.fn(async () => [PAYMENT_ROW]) } as any;
+
+        await (service as any).syncPaymentsWindow(
+            connection,
+            client,
+            { from: '2026-06-16', to: '2026-09-14' },
+            party,
+            new Map([['trader-1', 'party-1']]),
+            tally,
+            warnings,
+            false,
+            DIZI_MAPPERS,
+        );
+
+        expect(warnings.filter((w) => w.code === 'WRITE_FAILED')).toEqual([]);
+        expect(db[table].create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ store_id: storeId }),
+        }));
+        const counts = party === 'CUSTOMER' ? tally.customerPayments : tally.supplierPayments;
+        expect(counts.created).toBe(1);
+    });
+});

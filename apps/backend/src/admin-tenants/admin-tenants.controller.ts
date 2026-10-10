@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AdminTenantsService } from './admin-tenants.service';
 import { LoadDemoDataDto } from '../demo-data/demo-data.dto';
+import { parseDataGroups } from '../tenants/clear-tenant-data';
 import {
     ListAdminTenantsQueryDto,
     ListAdminTenantLedgerQueryDto,
@@ -172,7 +173,14 @@ export class AdminTenantsController {
         @Body() dto: ClearTenantDataDto,
         @Request() req: any,
     ) {
-        return this.adminTenantsService.clearData(tenantId, query.mode, query.storeId || undefined, dto, req.user.userId);
+        return this.adminTenantsService.clearData(
+            tenantId,
+            query.mode,
+            query.storeId || undefined,
+            parseDataGroups(query.keep),
+            dto,
+            req.user.userId,
+        );
     }
 
     @Get(':tenantId/ledger')

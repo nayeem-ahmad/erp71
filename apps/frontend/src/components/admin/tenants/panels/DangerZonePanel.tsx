@@ -20,7 +20,7 @@ type Props = {
     onSuspend: () => void;
     /** Which clear is in flight, if any. */
     clearing: ClearDataMode | null;
-    /** `branch` is null for the whole tenant; a branch only ever clears transactions. */
+    /** `branch` is null for the whole tenant. */
     onClearData: (mode: ClearDataMode, branch: ClearDataBranch | null) => void;
     isDeleting: boolean;
     onDelete: () => void;
@@ -154,8 +154,8 @@ export default function DangerZonePanel({
                         </Button>
                         <Button
                             variant="secondary"
-                            onClick={() => onClearData('all', null)}
-                            disabled={!!clearing || !!branch}
+                            onClick={() => onClearData('all', branch)}
+                            disabled={!!clearing}
                             loading={clearing === 'all'}
                             icon={<Eraser className="w-4 h-4" />}
                             className="!text-danger-text !border-red-200 hover:!bg-danger-light"
@@ -163,7 +163,6 @@ export default function DangerZonePanel({
                             {cd.allButton}
                         </Button>
                     </div>
-                    {branch && <p className="text-xs text-gray-500">{cd.branchOnlyTransactions}</p>}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-3 p-3 md:p-4">

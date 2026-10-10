@@ -434,9 +434,10 @@ export class TenantsService {
         mode: 'transactions' | 'all',
         userRole: string | undefined,
         storeId?: string,
+        keep: string[] = [],
     ) {
         if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can clear data');
-        return clearTenantData(this.db, tenantId, mode, storeId);
+        return clearTenantData(this.db, tenantId, mode, storeId, keep);
     }
 
     async updateLocalizationSettings(tenantId: string, dto: UpdateLocalizationSettingsDto) {

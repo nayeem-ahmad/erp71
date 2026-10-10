@@ -47,6 +47,8 @@ import {
 import { resolveSyncWindow } from './snapshot/window';
 import { ExternalSyncSnapshotService } from './snapshot/snapshot.service';
 import { clientForRun } from './snapshot/client-for-run';
+import { customerBranchId } from '../customers/customer-branch.util';
+import { supplierBranchId } from '../suppliers/supplier-branch.util';
 
 type EntityType =
     | 'PRODUCT'
@@ -1575,11 +1577,18 @@ export class ExternalSyncService {
         }
 
         const created = await this.db.$transaction(async (tx) => {
+            // A credit row lives under its party's branch, like every other
+            // ledger row since branch-attached parties. The table is `any`
+            // (two models, one path), so the compiler cannot say when a
+            // required column is missing — this one was, and every imported
+            // payment failed on it.
+            const storeId = isCustomer ? await customerBranchId(tx, partyId) : await supplierBranchId(tx, partyId);
             const table: any = isCustomer ? tx.customerCreditTransaction : tx.supplierCreditTransaction;
             const row = await table.create({
                 data: {
                     ...data,
                     tenant_id: connection.tenant_id,
+                    store_id: storeId,
                     ...(isCustomer ? { customer_id: partyId } : { supplier_id: partyId }),
                 },
                 select: { id: true },
@@ -1591,6 +1600,7 @@ export class ExternalSyncService {
                     tenantId: connection.tenant_id,
                     party,
                     partyId,
+                    storeId,
                     transactionId: row.id,
                     paymentNumber: mapped.paymentNumber,
                     type,
