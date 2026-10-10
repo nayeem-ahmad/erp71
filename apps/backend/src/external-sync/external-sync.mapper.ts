@@ -104,25 +104,54 @@ export function buildDocumentNumber(prefix: string, invoice: string): string {
     return `${prefix}${invoice}`.slice(0, 191);
 }
 
+/** The longest provider code kept as it is: anything longer is an internal id, not a code anyone types. */
+const READABLE_CODE_MAX = 20;
+/** Sixteen or more hex digits with a letter among them: a GUID or hash, dashes or not. An all-digit run is a barcode. */
+const HEX_ID = /^(?=.*[a-f])[0-9a-f]{16,}$/i;
+
+/**
+ * The provider's code for a product, customer or supplier when it reads like
+ * one — `P01212`, `C00564` — or null when it is blank or an internal id such
+ * as a GUID, which the import then replaces with the next in the tenant's own
+ * series (`PRD-00001`, `CUST-00001`, `SUP-00001`).
+ */
+export function readableCode(raw: string | null | undefined): string | null {
+    const code = (raw ?? '').trim();
+    if (!code || code.length > READABLE_CODE_MAX || HEX_ID.test(code.replaceAll('-', ''))) return null;
+    return code;
+}
+
+/** `base`, or the first of `variant(2)`, `variant(3)`, … not yet claimed in this run; claims it. */
+function claimFirstFree(base: string, claimed: Set<string>, variant: (n: number) => string): string {
+    let candidate = base;
+    let n = 1;
+    while (claimed.has(candidate)) {
+        n += 1;
+        candidate = variant(n);
+    }
+    claimed.add(candidate);
+    return candidate;
+}
+
 /**
  * Provider product/customer codes are *almost* unique — the live data has a
- * handful of duplicates, and our schema enforces uniqueness per tenant. Append
- * the provider row id to any code we have already claimed.
+ * handful of duplicates, and our schema enforces uniqueness per tenant. A code
+ * already claimed in this run becomes `P01139-2`, `P01139-3`, …; no code stays
+ * null for the import to number.
  */
-export function dedupeCode(code: string, externalId: string, claimed: Set<string>): string {
-    const base = (code || '').trim() || `EXT-${externalId}`;
-    if (!claimed.has(base)) {
-        claimed.add(base);
-        return base;
-    }
-    const disambiguated = `${base}-${externalId}`;
-    claimed.add(disambiguated);
-    return disambiguated;
+export function dedupeCode(code: string | null, claimed: Set<string>): string | null {
+    return code ? claimFirstFree(code, claimed, (n) => `${code}-${n}`) : null;
+}
+
+/** A supplier name already claimed in this run becomes `Acme (2)`, `Acme (3)`, …: names are unique per tenant. */
+export function dedupeName(name: string, claimed: Set<string>): string {
+    return claimFirstFree(name, claimed, (n) => `${name} (${n})`);
 }
 
 export interface MappedProduct {
     externalId: string;
-    sku: string;
+    /** The provider's SKU, or null for the import to give the next in the tenant's series. */
+    sku: string | null;
     name: string;
     price: number;
     purchaseRate: number;
@@ -139,7 +168,7 @@ export function mapProduct(row: ExpressRetailProduct, claimedSkus: Set<string>):
 
     return {
         externalId,
-        sku: dedupeCode(row.code, externalId, claimedSkus),
+        sku: dedupeCode(readableCode(row.code), claimedSkus),
         name: (row.name || '').trim() || `Unnamed product ${externalId}`,
         price: toMoney(row.sale_rate),
         purchaseRate: toMoney(row.purchase_rate),
@@ -152,7 +181,8 @@ export function mapProduct(row: ExpressRetailProduct, claimedSkus: Set<string>):
 
 export interface MappedCustomer {
     externalId: string;
-    customerCode: string;
+    /** The provider's code, or null for the import to give the next in the tenant's series. */
+    customerCode: string | null;
     name: string;
     ownerName: string | null;
     phone: string | null;
@@ -170,7 +200,7 @@ export function mapCustomer(row: ExpressRetailCustomer, claimedCodes: Set<string
 
     return {
         externalId,
-        customerCode: dedupeCode(row.code, externalId, claimedCodes),
+        customerCode: dedupeCode(readableCode(row.code), claimedCodes),
         name: (row.name || '').trim() || `Unnamed customer ${externalId}`,
         ownerName: emptyToNull(row.owner_name),
         phone: emptyToNull(row.phone),
@@ -186,6 +216,8 @@ export function mapCustomer(row: ExpressRetailCustomer, claimedCodes: Set<string
 export interface MappedSupplier {
     externalId: string;
     name: string;
+    /** The provider's code, or null for the import to give the next in the tenant's series. */
+    supplierCode: string | null;
     phone: string | null;
     email: string | null;
     address: string | null;
@@ -194,15 +226,20 @@ export interface MappedSupplier {
     externalUpdatedAt: Date | null;
 }
 
-export function mapSupplier(row: ExpressRetailSupplier, claimedNames: Set<string>): MappedSupplier {
+export function mapSupplier(
+    row: ExpressRetailSupplier,
+    claimedNames: Set<string>,
+    claimedCodes: Set<string> = new Set(),
+): MappedSupplier {
     const externalId = String(row.id);
     // Supplier is unique on [tenant_id, name] in our schema, so the name is the
     // value that has to be disambiguated rather than the code.
-    const name = dedupeCode((row.name || '').trim() || `Unnamed supplier ${externalId}`, externalId, claimedNames);
+    const name = dedupeName((row.name || '').trim() || `Unnamed supplier ${externalId}`, claimedNames);
 
     return {
         externalId,
         name,
+        supplierCode: dedupeCode(readableCode(row.code), claimedCodes),
         previousDue: toMoney(row.previous_due),
         phone: emptyToNull(row.phone),
         email: emptyToNull(row.email),

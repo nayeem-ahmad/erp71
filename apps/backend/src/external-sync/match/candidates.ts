@@ -80,8 +80,8 @@ export function buildProductCandidates(
 
 /**
  * Phone is a customer's only real identity. A provider-generated customer code
- * is not identity and is deliberately never matched on — `dedupeCode` builds it
- * from the provider's row id, so two unrelated parties can carry the same one.
+ * is not identity and is deliberately never matched on — a repeat gets `-2`
+ * added and a GUID none at all, so two unrelated parties can carry the same one.
  */
 export function buildCustomerCandidates(
     sources: SourceRecord[],

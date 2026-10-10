@@ -2,6 +2,7 @@ import {
     buildDocumentNumber,
     creditTransactionType,
     dedupeCode,
+    dedupeName,
     groupBy,
     mapCustomer,
     mapPayment,
@@ -10,6 +11,7 @@ import {
     mapSale,
     mapSaleReturn,
     mapSupplier,
+    readableCode,
     parseProviderDate,
     resolvePaymentDirection,
     resolvePaymentStatus,
@@ -102,15 +104,50 @@ describe('external-sync mapper', () => {
         });
     });
 
-    describe('dedupeCode', () => {
-        it('keeps the first claim on a code and disambiguates later collisions', () => {
-            const claimed = new Set<string>();
-            expect(dedupeCode('P01139', '900', claimed)).toBe('P01139');
-            expect(dedupeCode('P01139', '901', claimed)).toBe('P01139-901');
+    describe('readableCode', () => {
+        it('keeps a code a person would type, trimmed', () => {
+            expect(readableCode(' P01212 ')).toBe('P01212');
+            expect(readableCode('C00564')).toBe('C00564');
+            expect(readableCode('A/114')).toBe('A/114');
+            // A long all-digit code is a barcode, not an internal id.
+            expect(readableCode('8901234567890123')).toBe('8901234567890123');
         });
 
-        it('synthesises a code when the provider supplies none', () => {
-            expect(dedupeCode('', '4242', new Set())).toBe('EXT-4242');
+        it('drops a blank code, a GUID and a long hex id', () => {
+            expect(readableCode('')).toBeNull();
+            expect(readableCode('   ')).toBeNull();
+            expect(readableCode(null)).toBeNull();
+            expect(readableCode('3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b')).toBeNull();
+            expect(readableCode('3f2a9c1e5b7d4e8f')).toBeNull();
+        });
+
+        it('drops anything longer than twenty characters', () => {
+            expect(readableCode('ABCDEFGHIJKLMNOPQRST')).toBe('ABCDEFGHIJKLMNOPQRST');
+            expect(readableCode('ABCDEFGHIJKLMNOPQRSTU')).toBeNull();
+        });
+    });
+
+    describe('dedupeCode', () => {
+        it('keeps the first claim on a code and numbers later collisions', () => {
+            const claimed = new Set<string>();
+            expect(dedupeCode('P01139', claimed)).toBe('P01139');
+            expect(dedupeCode('P01139', claimed)).toBe('P01139-2');
+            expect(dedupeCode('P01139', claimed)).toBe('P01139-3');
+        });
+
+        it('leaves no code for the import to number from its series', () => {
+            const claimed = new Set<string>();
+            expect(dedupeCode(null, claimed)).toBeNull();
+            expect(claimed.size).toBe(0);
+        });
+    });
+
+    describe('dedupeName', () => {
+        it('numbers a repeated name in brackets', () => {
+            const claimed = new Set<string>();
+            expect(dedupeName('Acme', claimed)).toBe('Acme');
+            expect(dedupeName('Acme', claimed)).toBe('Acme (2)');
+            expect(dedupeName('Acme', claimed)).toBe('Acme (3)');
         });
     });
 
@@ -277,6 +314,25 @@ describe('external-sync mapper', () => {
             expect(mapped).toMatchObject({ sku: 'P01212', name: 'Widget', price: 15, vatRate: null, reorderLevel: 5, isService: false });
         });
 
+        it('leaves a GUID product code for the import to replace with its own SKU', () => {
+            const mapped = mapProduct(
+                { id: 3, code: '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b', name: 'Gauze', purchase_rate: null, sale_rate: null, vat: null, reorder: null, is_service: 'false', status: 'a', organization_id: '262', updated_at: null } as any,
+                new Set(),
+            );
+            expect(mapped.sku).toBeNull();
+        });
+
+        it('keeps a readable customer code and leaves a GUID one for the import to number', () => {
+            const claimed = new Set<string>();
+            const readable = mapCustomer({ id: 7, code: 'C00564', name: 'A', credit_limit: null } as any, claimed);
+            const repeated = mapCustomer({ id: 8, code: 'C00564', name: 'B', credit_limit: null } as any, claimed);
+            const guid = mapCustomer({ id: 9, code: '9a0b1c2d-3e4f-4a6b-8c7d-5e6f7a8b9c0d', name: 'C', credit_limit: null } as any, claimed);
+
+            expect(readable.customerCode).toBe('C00564');
+            expect(repeated.customerCode).toBe('C00564-2');
+            expect(guid.customerCode).toBeNull();
+        });
+
         it('discards the provider sentinel credit limit', () => {
             const mapped = mapCustomer(
                 { id: 7, code: 'C00564', name: 'Fatiha Surgical', owner_name: null, phone: '01725210121', email: null, address: null, credit_limit: '1000000000.000', organization_id: '262', updated_at: null } as any,
@@ -299,7 +355,7 @@ describe('external-sync mapper', () => {
             const second = mapSupplier({ id: 2, code: 'S2', name: 'Acme', phone: null, email: null, address: null, organization_id: '262', updated_at: null } as any, claimed);
 
             expect(first.name).toBe('Acme');
-            expect(second.name).toBe('Acme-2');
+            expect(second.name).toBe('Acme (2)');
         });
 
         it('parses both provider timestamp formats', () => {

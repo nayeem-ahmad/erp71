@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { applyInventoryMovement } from '../../database/inventory.utils';
 import { autoPostFromRules } from '../../accounting/posting.utils';
 import { classifyPaymentMode } from '../../sales/classify-payment-mode';
+import { nextSeriesNumber, seriesCode } from '../../common/code-series.util';
 import { type AnomalyKind, anomalyNote } from './anomalies';
 import type { DemoWorld, ProductRuntime, StoreRuntime } from './context';
 import { businessName, personName, phoneNumber } from './people';
@@ -226,11 +227,14 @@ export class DemoWriter {
         }
         this.counts.customers = this.world.customers.length;
 
+        // Numbered in one read: the batch's own transaction holds every insert.
+        const firstSupplierNumber = await nextSeriesNumber(tx, 'Supplier', tenantId);
         for (let i = 0; i < supplierCount; i++) {
             const supplier = await tx.supplier.create({
                 data: {
                     tenant_id: tenantId,
                     store_id: this.world.mainStore.storeId,
+                    supplier_code: seriesCode('Supplier', firstSupplierNumber + i),
                     name: `${businessName(rng)} #${batchNumber}-${i + 1}`,
                     phone: phoneNumber(rng, batchNumber * 100000 + 90000 + i),
                 },

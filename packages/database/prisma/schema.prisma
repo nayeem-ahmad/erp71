@@ -2233,6 +2233,11 @@ model Supplier {
   id          String  @id @default(uuid())
   tenant_id   String
   name        String
+  /// The supplier's code (`SUP-00001`, or one the shop typed), unique per
+  /// tenant like a customer's code. Every create path sets one; nullable only
+  /// so `db push` can add the column to existing rows, which
+  /// prisma/sync-supplier-code.ts then numbers.
+  supplier_code String?
   phone       String?
   email       String?
   address     String?
@@ -2269,6 +2274,7 @@ model Supplier {
   store              Store                       @relation(fields: [store_id], references: [id], onDelete: Restrict)
 
   @@unique([tenant_id, name])
+  @@unique([tenant_id, supplier_code])
   @@index([tenant_id, is_foreign])
   @@index([tenant_id, store_id])
 }

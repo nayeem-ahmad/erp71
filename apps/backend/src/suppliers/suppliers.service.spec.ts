@@ -51,6 +51,8 @@ describe('SuppliersService', () => {
                 ]),
             },
             $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+            // The tenant's suppliers already run to SUP-00004.
+            $queryRaw: jest.fn().mockResolvedValue([{ last: '4' }]),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -70,9 +72,104 @@ describe('SuppliersService', () => {
         const result = await service.create('tenant-1', { name: 'ACME Supply' }, { storeId: 'store-1' });
 
         expect(db.supplier.create).toHaveBeenCalledWith({
-            data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'ACME Supply' }),
+            data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'ACME Supply', supplier_code: 'SUP-00005' }),
         });
         expect(result.id).toBe('sup-1');
+    });
+
+    describe('supplier code', () => {
+        it('creates with a typed code, trimmed', async () => {
+            db.supplier.findUnique.mockResolvedValue(null);
+            db.supplier.findFirst.mockResolvedValue(null);
+            db.supplier.create.mockResolvedValue({ id: 'sup-1' });
+
+            await service.create('tenant-1', { name: 'ACME', supplier_code: ' ACM-1 ' }, { storeId: 'store-1' });
+
+            expect(db.supplier.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ supplier_code: 'ACM-1' }),
+            });
+            expect(db.$queryRaw).not.toHaveBeenCalled();
+        });
+
+        it("refuses a typed code another supplier holds, a deleted one's included", async () => {
+            db.supplier.findUnique.mockResolvedValue(null);
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-other' });
+
+            await expect(service.create('tenant-1', { name: 'ACME', supplier_code: 'SUP-00002' }, { storeId: 'store-1' }))
+                .rejects.toThrow('Supplier code "SUP-00002" is already in use.');
+            expect(db.supplier.findFirst).toHaveBeenCalledWith({
+                where: { tenant_id: 'tenant-1', supplier_code: 'SUP-00002' },
+                select: { id: true },
+            });
+            expect(db.supplier.create).not.toHaveBeenCalled();
+        });
+
+        it('moves on to the next number when another create took the one it read', async () => {
+            db.supplier.findUnique.mockResolvedValue(null);
+            db.$queryRaw
+                .mockResolvedValueOnce([{ last: '4' }])
+                .mockResolvedValueOnce([{ last: '5' }]);
+            db.supplier.create
+                .mockRejectedValueOnce({ code: 'P2002', meta: { target: ['tenant_id', 'supplier_code'] } })
+                .mockResolvedValueOnce({ id: 'sup-1' });
+
+            await service.create('tenant-1', { name: 'ACME' }, { storeId: 'store-1' });
+
+            expect(db.supplier.create.mock.calls.map(([args]: any[]) => args.data.supplier_code)).toEqual(['SUP-00005', 'SUP-00006']);
+        });
+
+        it('brings back a deleted supplier with the code it had', async () => {
+            db.supplier.findUnique.mockResolvedValue({ id: 'sup-deleted', deleted_at: new Date(), supplier_code: 'SUP-00002' });
+            db.supplier.update.mockResolvedValue({ id: 'sup-deleted' });
+
+            await service.create('tenant-1', { name: 'ACME' }, { storeId: 'store-1' });
+
+            expect(db.supplier.update).toHaveBeenCalledWith({
+                where: { id: 'sup-deleted' },
+                data: expect.objectContaining({ supplier_code: 'SUP-00002' }),
+            });
+        });
+
+        it('renames the code on an edit, refusing one another supplier holds', async () => {
+            db.supplier.findFirst
+                .mockResolvedValueOnce({ id: 'sup-1', name: 'ACME', supplier_code: 'SUP-00001' })
+                .mockResolvedValueOnce(null);
+            db.supplier.update.mockResolvedValue({ id: 'sup-1' });
+
+            await service.update('tenant-1', 'sup-1', { supplier_code: 'ACM-1' });
+            expect(db.supplier.update).toHaveBeenCalledWith({
+                where: { id: 'sup-1' },
+                data: expect.objectContaining({ supplier_code: 'ACM-1' }),
+            });
+
+            db.supplier.findFirst
+                .mockResolvedValueOnce({ id: 'sup-1', name: 'ACME', supplier_code: 'SUP-00001' })
+                .mockResolvedValueOnce({ id: 'sup-2' });
+            await expect(service.update('tenant-1', 'sup-1', { supplier_code: 'SUP-00002' })).rejects.toThrow(BadRequestException);
+        });
+
+        it('keeps the code on an edit that sends it blank, and on one that sends its own', async () => {
+            db.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'ACME', supplier_code: 'SUP-00001' });
+            db.supplier.update.mockResolvedValue({ id: 'sup-1' });
+
+            await service.update('tenant-1', 'sup-1', { supplier_code: '  ' });
+            expect(db.supplier.update.mock.calls[0][0].data).not.toHaveProperty('supplier_code');
+
+            await service.update('tenant-1', 'sup-1', { supplier_code: 'SUP-00001' });
+            // Its own code: no lookup beyond the supplier itself.
+            expect(db.supplier.findFirst).toHaveBeenCalledTimes(2);
+        });
+
+        it('finds a supplier by code', async () => {
+            db.supplier.findMany.mockResolvedValue([]);
+            db.supplier.count.mockResolvedValue(0);
+
+            await service.findAll('tenant-1', 1, 20, { search: 'sup-0004' });
+
+            expect(db.supplier.findMany.mock.calls[0][0].where.OR).toContainEqual({
+                supplier_code: { contains: 'sup-0004', mode: 'insensitive' },
+            });
+        });
     });
 
     it('rejects duplicate supplier names per tenant', async () => {
@@ -129,6 +226,23 @@ describe('SuppliersService', () => {
     });
 
     describe('importRows', () => {
+        it("numbers a new row, takes a row's own code, and refuses one another supplier holds", async () => {
+            db.supplier.findUnique.mockResolvedValue(null);
+            db.supplier.findFirst.mockImplementation(async ({ where }: any) =>
+                where.supplier_code === 'TAKEN' ? { name: 'Someone Else' } : null);
+            db.supplier.upsert.mockResolvedValue({});
+
+            const result = await service.importRows(
+                'tenant-1',
+                [{ name: 'Plain' }, { name: 'Coded', supplier_code: ' C-9 ' }, { name: 'Clash', supplier_code: 'TAKEN' }],
+                'skip',
+                'store-1',
+            );
+
+            expect(db.supplier.upsert.mock.calls.map(([args]: any[]) => args.create.supplier_code)).toEqual(['SUP-00005', 'C-9']);
+            expect(result.errors).toEqual([expect.stringMatching(/supplier code "TAKEN" is already Someone Else's/)]);
+        });
+
         it('counts a live supplier of the same name as a duplicate', async () => {
             db.supplier.findUnique.mockResolvedValue({ id: 'sup-1', deleted_at: null });
 
@@ -157,6 +271,8 @@ describe('SuppliersService', () => {
                     update: expect.objectContaining({ deleted_at: null, phone: '01700000000' }),
                 }),
             );
+            // A row without a code leaves the code the supplier had.
+            expect(db.supplier.upsert.mock.calls[0][0].update).not.toHaveProperty('supplier_code');
         });
     });
 

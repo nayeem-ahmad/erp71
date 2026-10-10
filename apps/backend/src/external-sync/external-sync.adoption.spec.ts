@@ -44,8 +44,8 @@ describe('adoption query shape', () => {
         });
 
         it('declines to match when there is no phone', () => {
-            // `dedupeCode` builds customer_code from the provider's row id, so
-            // it is not identity and cannot stand in for a missing phone.
+            // customer_code is the provider's code with `-2` added on a repeat,
+            // so it is not identity and cannot stand in for a missing phone.
             expect(customerAdoptionWhere('tenant-1', null, 'C-101')).toBeNull();
         });
 

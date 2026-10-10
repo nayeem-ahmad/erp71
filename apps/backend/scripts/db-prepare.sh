@@ -281,6 +281,16 @@ step sync:accounting \
 step sync:store-code \
     npm run sync:store-code --workspace=@erp71/database
 
+# sync:supplier-code gives every supplier without one a code (SUP-00001, ...),
+# as every customer has a CUST- code. Supplier.supplier_code is nullable, so db
+# push adds it without help; this fills what the migration's backfill would
+# have, and on later prepares any supplier the old backend created during a
+# deploy's swap. Idempotent (fills NULLs only, never a typed code), and not
+# load-bearing: a supplier without one just shows a blank code. See
+# prisma/sync-supplier-code.ts.
+step sync:supplier-code \
+    npm run sync:supplier-code --workspace=@erp71/database
+
 # sync:lead-taxonomy plays the same role for CRM lead sources/categories, and
 # additionally backfills Lead.source_id / Lead.category_id from the legacy enum
 # columns. It is idempotent and additive-only, and it degrades to "seed defaults

@@ -32,12 +32,14 @@ import {
 import { ACTIVE_PURCHASE, purchasePaymentStatus } from '../purchases/purchase-status';
 import { SupplierScope, supplierRowScopeWhere, supplierScopeWhere } from './supplier-visibility';
 import { makeImportBranchResolver } from '../common/import-branch.util';
+import { codeForNewRecord, nextSeriesCode } from '../common/code-series.util';
 
 /** The numbered series a typed payment serial may fall in (payments, payouts). */
 const SERIAL_SERIES = Object.values(SUPPLIER_PAYMENT_PREFIXES);
 
 const SUPPLIER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
+    supplier_code: (dir) => ({ supplier_code: dir }),
     phone: (dir) => ({ phone: dir }),
     email: (dir) => ({ email: dir }),
     due_balance: (dir) => ({ due_balance: dir }),
@@ -73,12 +75,15 @@ export class SuppliersService {
 
         const existing = await this.db.supplier.findUnique({
             where: { tenant_id_name: { tenant_id: tenantId, name } },
-            select: { id: true, deleted_at: true },
+            select: { id: true, deleted_at: true, supplier_code: true },
         });
 
         if (existing && !existing.deleted_at) {
             throw new BadRequestException('A supplier with this name already exists.');
         }
+
+        const typedCode = dto.supplier_code?.trim() || null;
+        if (typedCode) await this.assertCodeFree(tenantId, typedCode, existing?.id);
 
         const storeId = await this.branchForNewSupplier(tenantId, dto.store_id ?? opts.storeId, opts.scope ?? null);
         const details = { phone: dto.phone, email: dto.email, address: dto.address, store_id: storeId };
@@ -89,15 +94,46 @@ export class SuppliersService {
         // taken and can never find what took it. Bring that row back instead:
         // its purchases, payable and ledger are still the same supplier's.
         if (existing) {
+            const supplierCode = typedCode ?? existing.supplier_code ?? (await nextSeriesCode(this.db, 'Supplier', tenantId));
             return this.db.supplier.update({
                 where: { id: existing.id },
-                data: { deleted_at: null, name, ...details },
+                data: { deleted_at: null, name, supplier_code: supplierCode, ...details },
             });
         }
 
-        return this.db.supplier.create({
-            data: { tenant_id: tenantId, name, ...details },
+        if (typedCode) {
+            return this.db.supplier.create({
+                data: { tenant_id: tenantId, name, supplier_code: typedCode, ...details },
+            });
+        }
+        // Left blank: the next SUP-##### code.
+        return codeForNewRecord(this.db, 'Supplier', tenantId, null, (supplierCode) =>
+            this.db.supplier.create({
+                data: { tenant_id: tenantId, name, supplier_code: supplierCode, ...details },
+            }),
+        );
+    }
+
+    /** A file's code must not be another supplier's; the supplier the row names may hold it already. */
+    private async assertImportCodeFree(tenantId: string, code: string, name: string) {
+        const holder = await this.db.supplier.findFirst({
+            where: { tenant_id: tenantId, supplier_code: code },
+            select: { name: true },
         });
+        if (holder && holder.name !== name) {
+            throw new BadRequestException(`supplier code "${code}" is already ${holder.name}'s`);
+        }
+    }
+
+    /** A typed code must not be another supplier's, deleted ones included: the unique index spans them. */
+    private async assertCodeFree(tenantId: string, code: string, ownId?: string) {
+        const holder = await this.db.supplier.findFirst({
+            where: { tenant_id: tenantId, supplier_code: code },
+            select: { id: true },
+        });
+        if (holder && holder.id !== ownId) {
+            throw new BadRequestException(`Supplier code "${code}" is already in use.`);
+        }
     }
 
     /** A branch of this tenant, and — for a member limited to some branches — one of theirs. */
@@ -126,6 +162,7 @@ export class SuppliersService {
         if (opts?.search) {
             where.OR = [
                 { name: { contains: opts.search, mode: 'insensitive' } },
+                { supplier_code: { contains: opts.search, mode: 'insensitive' } },
                 { phone: { contains: opts.search } },
                 { email: { contains: opts.search, mode: 'insensitive' } },
                 { address: { contains: opts.search, mode: 'insensitive' } },
@@ -201,10 +238,15 @@ export class SuppliersService {
             await this.checkedStoreId(tenantId, dto.store_id);
         }
 
+        // Blank keeps the code it has: every supplier carries one.
+        const code = dto.supplier_code?.trim() || undefined;
+        if (code && code !== supplier.supplier_code) await this.assertCodeFree(tenantId, code, id);
+
         return this.db.supplier.update({
             where: { id },
             data: {
                 ...(name !== undefined ? { name } : {}),
+                ...(code !== undefined ? { supplier_code: code } : {}),
                 ...(dto.store_id !== undefined ? { store_id: dto.store_id } : {}),
                 ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
                 ...(dto.email !== undefined ? { email: dto.email } : {}),
@@ -244,6 +286,7 @@ export class SuppliersService {
             requiredFields: ['name'],
             castRow: (raw) => ({
                 name: String(raw.name ?? '').trim(),
+                supplier_code: raw.supplier_code ? String(raw.supplier_code).trim() || null : null,
                 phone: raw.phone ? String(raw.phone).trim() || null : null,
                 email: raw.email ? String(raw.email).trim() || null : null,
                 address: raw.address ? String(raw.address).trim() || null : null,
@@ -264,20 +307,35 @@ export class SuppliersService {
                 if (!rowStoreId) throw new BadRequestException('no branch — pick one for the file or fill the branch column');
                 // Upsert rather than insert: the name may still be held by a
                 // deleted supplier, whom the file is asking for back — on the
-                // branch the file puts them.
-                await this.db.supplier.upsert({
+                // branch the file puts them, keeping their code unless the file
+                // gives another.
+                const details = { phone: row.phone, email: row.email, address: row.address, store_id: rowStoreId };
+                const upsert = (supplierCode: string) => this.db.supplier.upsert({
                     where: { tenant_id_name: { tenant_id: tenantId, name: row.name } },
-                    create: { tenant_id: tenantId, name: row.name, phone: row.phone, email: row.email, address: row.address, store_id: rowStoreId },
-                    update: { deleted_at: null, phone: row.phone, email: row.email, address: row.address, store_id: rowStoreId },
+                    create: { tenant_id: tenantId, name: row.name, supplier_code: supplierCode, ...details },
+                    update: { deleted_at: null, ...(row.supplier_code ? { supplier_code: supplierCode } : {}), ...details },
                 });
+                if (row.supplier_code) {
+                    await this.assertImportCodeFree(tenantId, row.supplier_code, row.name);
+                    await upsert(row.supplier_code);
+                } else {
+                    await codeForNewRecord(this.db, 'Supplier', tenantId, null, upsert);
+                }
             },
             update: async (id, row) => {
                 if (scope && !(await this.db.supplier.count({ where: { id, ...supplierScopeWhere(scope) } }))) {
                     throw new BadRequestException('matches a supplier of another branch — not updated');
                 }
+                if (row.supplier_code) await this.assertImportCodeFree(tenantId, row.supplier_code, row.name);
                 await this.db.supplier.update({
                     where: { id },
-                    data: { name: row.name, phone: row.phone, email: row.email, address: row.address },
+                    data: {
+                        name: row.name,
+                        ...(row.supplier_code ? { supplier_code: row.supplier_code } : {}),
+                        phone: row.phone,
+                        email: row.email,
+                        address: row.address,
+                    },
                 });
             },
         });
