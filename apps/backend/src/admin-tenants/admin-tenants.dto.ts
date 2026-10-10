@@ -84,6 +84,8 @@ export class DeleteTenantDto {
 export class ClearTenantDataQueryDto {
     @IsIn(['transactions', 'all']) mode: 'transactions' | 'all';
     @IsOptional() @IsString() storeId?: string;
+    /** `all` only: comma-separated master data groups to keep, e.g. `customers,stock`. */
+    @IsOptional() @IsString() keep?: string;
 }
 
 export class ClearTenantDataDto {

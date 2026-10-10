@@ -754,15 +754,16 @@ export class AdminTenantsService {
     }
 
     /**
-     * The shop owner's Settings > Data clear, run by a platform admin: every
-     * transaction of the tenant, everything but its settings and users (`all`),
-     * or one branch's transactions. A suspended tenant can be cleared — that is
-     * the usual state to tidy one up in before it comes back.
+     * The shop owner's Settings > Data clear, run by a platform admin: the
+     * tenant's or one branch's transactions, or (`all`) those and its master
+     * data less the groups in `keep`. A suspended tenant can be cleared — that
+     * is the usual state to tidy one up in before it comes back.
      */
     async clearData(
         tenantId: string,
         mode: 'transactions' | 'all',
         storeId: string | undefined,
+        keep: string[],
         dto: ClearTenantDataDto,
         adminUserId: string,
     ) {
@@ -784,12 +785,14 @@ export class AdminTenantsService {
             throw new ConflictException('A demo-data load is running for this tenant. Wait for it to finish, then clear.');
         }
 
-        const result = await clearTenantData(this.db, tenantId, mode, storeId);
+        const result = await clearTenantData(this.db, tenantId, mode, storeId, keep);
 
         await this.auditService.log('tenant.data.clear', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             mode,
             store_id: result.storeId ?? null,
             store_name: result.storeName ?? null,
+            kept_groups: mode === 'all' ? keep : [],
+            kept_parties: result.kept ?? null,
             reason: dto.reason ?? null,
             tenant_name: tenant.name,
         });

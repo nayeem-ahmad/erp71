@@ -3,12 +3,13 @@ jest.mock('@erp71/database', () => ({
 }));
 jest.mock('./clear-branch-data', () => ({
     clearBranchTransactions: jest.fn().mockResolvedValue(undefined),
+    clearBranchMasterData: jest.fn().mockResolvedValue({ keptCustomers: 2, keptSuppliers: 1 }),
 }));
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
 import { clearTenantData } from './clear-tenant-data';
-import { clearBranchTransactions } from './clear-branch-data';
+import { clearBranchMasterData, clearBranchTransactions } from './clear-branch-data';
 
 /** A transaction client that grows a mock delegate for whichever model is asked for. */
 function makeTx() {
@@ -42,10 +43,28 @@ describe('clearTenantData', () => {
         expect(db.$transaction).not.toHaveBeenCalled();
     });
 
-    it('refuses to clear all data of one branch — master data is shared', async () => {
+    it('refuses a data group it does not know, or one a branch does not have', async () => {
         const { db } = makeDb();
-        await expect(clearTenantData(db as any, 't1', 'all', 's1')).rejects.toBeInstanceOf(BadRequestException);
+        await expect(clearTenantData(db as any, 't1', 'all', undefined, ['everything'])).rejects.toBeInstanceOf(BadRequestException);
+        // Products are shared by every branch.
+        await expect(clearTenantData(db as any, 't1', 'all', 's1', ['products'])).rejects.toBeInstanceOf(BadRequestException);
         expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    it("clears all of one branch's data in one transaction, keeping what was asked", async () => {
+        const { db, tx } = makeDb();
+
+        const result = await clearTenantData(db as any, 't1', 'all', 's1', ['stock']);
+
+        expect((clearBranchTransactions as jest.Mock).mock.calls[0][0]).toBe(tx);
+        const [txArg, tenantArg, storeArg, groups] = (clearBranchMasterData as jest.Mock).mock.calls[0];
+        expect(txArg).toBe(tx);
+        expect([tenantArg, storeArg]).toEqual(['t1', 's1']);
+        expect([...groups].sort()).toEqual(['customers', 'suppliers']);
+        expect(db.$transaction).toHaveBeenCalledTimes(1);
+        expect(result).toEqual({
+            cleared: 'all', storeId: 's1', storeName: 'Uttara', kept: { customers: 2, suppliers: 1 },
+        });
     });
 
     it('404s a branch of another tenant', async () => {
@@ -91,5 +110,60 @@ describe('clearTenantData', () => {
         const [txArg, tenantArg] = (seedDefaultLeadTaxonomy as jest.Mock).mock.calls[0];
         expect(txArg).toBe(tx);
         expect(tenantArg).toBe('t1');
+    });
+
+    it('sets every customer and supplier balance back to zero when the shop-wide transactions go', async () => {
+        const { db, tx } = makeDb();
+
+        await clearTenantData(db as any, 't1', 'transactions');
+
+        expect(tx.customer.updateMany).toHaveBeenCalledWith({
+            where: { tenant_id: 't1' },
+            data: { due_balance: 0, total_spent: 0, loyalty_points: 0, last_contacted_at: null, next_activity_date: null },
+        });
+        expect(tx.supplier.updateMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' }, data: { due_balance: 0 } });
+    });
+
+    it('clears import shipments with the transactions — their lines would block deleting products', async () => {
+        const { db, tx } = makeDb();
+
+        await clearTenantData(db as any, 't1', 'transactions');
+
+        expect(tx.importShipment.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
+    });
+
+    it('keeps the master data groups asked for', async () => {
+        const { db, tx } = makeDb();
+
+        await clearTenantData(db as any, 't1', 'all', undefined, ['customers', 'employees', 'products', 'stock']);
+
+        expect(tx.customer.deleteMany).not.toHaveBeenCalled();
+        expect(tx.employee.deleteMany).not.toHaveBeenCalled();
+        expect(tx.product.deleteMany).not.toHaveBeenCalled();
+        expect(tx.productStock.deleteMany).not.toHaveBeenCalled();
+        // The CRM's lead options go with customers, so they stay too.
+        expect(seedDefaultLeadTaxonomy).not.toHaveBeenCalled();
+        expect(tx.supplier.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
+        expect(tx.fixedAsset.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
+        // Transactions always go.
+        expect(tx.sale.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
+    });
+
+    it('can keep the products and still clear their stock', async () => {
+        const { db, tx } = makeDb();
+
+        await clearTenantData(db as any, 't1', 'all', undefined, ['products']);
+
+        expect(tx.product.deleteMany).not.toHaveBeenCalled();
+        expect(tx.productStock.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
+    });
+
+    it('takes the stock with the products even when asked to keep the stock', async () => {
+        const { db, tx } = makeDb();
+
+        await clearTenantData(db as any, 't1', 'all', undefined, ['stock']);
+
+        expect(tx.product.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
+        expect(tx.productStock.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
     });
 });

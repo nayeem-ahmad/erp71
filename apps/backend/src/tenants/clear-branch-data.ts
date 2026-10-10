@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { customerLedgerDueDelta } from '../customers/customer-credit.utils';
+import { purchasePaymentStatus } from '../purchases/purchase-status';
 
 type Tx = Prisma.TransactionClient;
 
@@ -64,16 +65,22 @@ function sumBy<T>(rows: T[], key: (row: T) => string, value: (row: T) => number)
  * one leaves the other branch's books unbalanced: a fund transfer or warehouse
  * transfer with this branch on either end.
  *
- * What stays: shop-wide records with no branch of their own — customer and
- * supplier payments taken on the payments screens, payroll, depreciation,
- * investor capital, import shipments, storefront orders — and their vouchers.
- * Stock levels stay as they are, exactly as the shop-wide clear leaves them.
+ * Customer and supplier ledger rows go two ways. One a deleted sale, purchase
+ * or return wrote goes with it. One no document stands behind — a payment or
+ * payout taken on the payments screens, a write-off, an opening balance — goes
+ * when it was recorded at the branch (`store_id`, the party's branch when it
+ * was written). A row tied to a document that survives at another branch
+ * stays with that document. Either way the party's running due moves back by
+ * what the deleted rows had moved it, so a customer is not left owing for a
+ * sale that no longer exists, nor in credit for a payment against one. A
+ * deleted supplier payment that had paid a bill at another branch hands that
+ * bill its paid amount back. Loyalty points earned or redeemed on a deleted
+ * sale come off the same way.
  *
- * The customer and supplier ledger rows a deleted sale, purchase or return
- * wrote are deleted with it, and the party's running due moves back by what
- * those rows had moved it, so a customer is not left owing for a sale that no
- * longer exists. Loyalty points earned or redeemed on a deleted sale come off
- * the same way.
+ * What stays: shop-wide records with no branch of their own — payroll,
+ * depreciation, investor capital, import shipments (and the LC payments
+ * against them), storefront orders — and their vouchers. Stock levels stay as
+ * they are, exactly as the shop-wide clear leaves them.
  */
 export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId: string): Promise<void> {
     const inBranch = { tenant_id: tenantId, store_id: storeId };
@@ -133,8 +140,7 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
     );
 
     // Ledger rows the deleted documents wrote on a customer's or supplier's
-    // account. A payment taken on the payments screen points at no document
-    // and is not in here.
+    // account.
     const customerRows = [
         ...(await findChunked(saleIds, (chunk) =>
             tx.customerCreditTransaction.findMany({
@@ -163,6 +169,34 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
             }),
         )),
     ];
+    // And the branch's rows no document stands behind (see above). A write-off
+    // names its reason in `reference_id`, not a document, so it counts too.
+    const unattached = {
+        tenant_id: tenantId,
+        store_id: storeId,
+        OR: [{ reference_type: null }, { reference_type: 'BAD_DEBT' }],
+    };
+    customerRows.push(...(await tx.customerCreditTransaction.findMany({
+        where: unattached,
+        select: { id: true, customer_id: true, type: true, amount: true, discount_amount: true },
+    })));
+    supplierRows.push(...(await tx.supplierCreditTransaction.findMany({
+        where: unattached,
+        select: { id: true, supplier_id: true, type: true, amount: true, discount_amount: true },
+    })));
+    // What those supplier payments had paid on bills. Deleting the payment
+    // cascades the allocation away, but the bill's `paid_amount` is a running
+    // total that has to be handed back by hand — for a bill that survives.
+    const deletedPurchases = new Set(purchaseIds);
+    const allocations = (
+        await findChunked(supplierRows.map((r) => r.id), (chunk) =>
+            tx.supplierPaymentAllocation.findMany({
+                where: { transaction_id: { in: chunk } },
+                select: { purchase_id: true, amount: true },
+            }),
+        )
+    ).filter((a) => !deletedPurchases.has(a.purchase_id));
+
     const loyaltyRows = await findChunked(saleIds, (chunk) =>
         tx.loyaltyTransaction.findMany({
             where: { tenantId, saleId: { in: chunk } },
@@ -282,9 +316,112 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
         await tx.supplier.update({ where: { id: supplierId }, data: { due_balance: { decrement: delta } } });
     }
 
+    const paidBack = sumBy(allocations, (a) => a.purchase_id, (a) => Number(a.amount));
+    for (const [purchaseId, amount] of paidBack) {
+        const bill = await tx.purchase.findUnique({
+            where: { id: purchaseId },
+            select: { total_amount: true, paid_amount: true },
+        });
+        if (!bill) continue;
+        const paid = Number(bill.paid_amount) - amount;
+        await tx.purchase.update({
+            where: { id: purchaseId },
+            data: { paid_amount: paid, payment_status: purchasePaymentStatus(paid, Number(bill.total_amount)) },
+        });
+    }
+
     const loyalty = sumBy(loyaltyRows, (r) => r.customerId, (r) => r.points);
     for (const [customerId, points] of loyalty) {
         if (points === 0) continue;
         await tx.customer.update({ where: { id: customerId }, data: { loyalty_points: { decrement: points } } });
     }
+}
+
+/** The master data one branch has of its own. Products are shared by every branch. */
+export type BranchDataGroup = 'customers' | 'suppliers' | 'stock';
+
+/** The ids in `partyIds` that some row found by any of `lookups` still points at. */
+async function stillReferenced(
+    partyIds: string[],
+    lookups: Array<(chunk: string[]) => Promise<Array<string | null>>>,
+): Promise<Set<string>> {
+    const used = new Set<string>();
+    for (const lookup of lookups) {
+        await chunked(partyIds, async (chunk) => {
+            for (const id of await lookup(chunk)) if (id) used.add(id);
+        });
+    }
+    return used;
+}
+
+/**
+ * Clear Data's "all" mode for one branch, run after `clearBranchTransactions`
+ * in the same transaction: the master data that belongs to the branch, in the
+ * groups asked for.
+ *
+ * A customer or supplier of the branch that something still points at once
+ * the branch's transactions are gone — a sale or purchase at another branch, a
+ * payment recorded there before they moved, a project — is kept and counted:
+ * deleting them would leave that record with no party. Stock goes by warehouse,
+ * and every warehouse belongs to one branch.
+ */
+export async function clearBranchMasterData(
+    tx: Tx,
+    tenantId: string,
+    storeId: string,
+    groups: ReadonlySet<BranchDataGroup>,
+): Promise<{ keptCustomers: number; keptSuppliers: number }> {
+    const inBranch = { tenant_id: tenantId, store_id: storeId };
+    let keptCustomers = 0;
+    let keptSuppliers = 0;
+
+    if (groups.has('customers')) {
+        const customerIds = ids(await tx.customer.findMany({ where: inBranch, select: { id: true } }));
+        const byCustomer = (chunk: string[]) => ({ customer_id: { in: chunk } });
+        const pick = (rows: { customer_id: string | null }[]) => rows.map((r) => r.customer_id);
+        const used = await stillReferenced(customerIds, [
+            async (c) => pick(await tx.sale.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.salesOrder.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.quotation.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.warrantyClaim.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.project.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.customerCreditTransaction.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.crmActivity.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.crmFollowUp.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => pick(await tx.customerInteraction.findMany({ where: byCustomer(c), select: { customer_id: true }, distinct: ['customer_id'] })),
+            async (c) => (await tx.lead.findMany({
+                where: { converted_customer_id: { in: c } },
+                select: { converted_customer_id: true },
+                distinct: ['converted_customer_id'],
+            })).map((r) => r.converted_customer_id),
+        ]);
+        const deletable = customerIds.filter((id) => !used.has(id));
+        // Cascades whatever loyalty and campaign rows are left.
+        await chunked(deletable, (chunk) => tx.customer.deleteMany({ where: { id: { in: chunk } } }));
+        keptCustomers = customerIds.length - deletable.length;
+    }
+
+    if (groups.has('suppliers')) {
+        const supplierIds = ids(await tx.supplier.findMany({ where: inBranch, select: { id: true } }));
+        const bySupplier = (chunk: string[]) => ({ supplier_id: { in: chunk } });
+        const pick = (rows: { supplier_id: string | null }[]) => rows.map((r) => r.supplier_id);
+        const used = await stillReferenced(supplierIds, [
+            async (c) => pick(await tx.purchase.findMany({ where: bySupplier(c), select: { supplier_id: true }, distinct: ['supplier_id'] })),
+            async (c) => pick(await tx.purchaseReturn.findMany({ where: bySupplier(c), select: { supplier_id: true }, distinct: ['supplier_id'] })),
+            async (c) => pick(await tx.purchaseOrder.findMany({ where: bySupplier(c), select: { supplier_id: true }, distinct: ['supplier_id'] })),
+            async (c) => pick(await tx.purchaseQuotation.findMany({ where: bySupplier(c), select: { supplier_id: true }, distinct: ['supplier_id'] })),
+            async (c) => pick(await tx.importShipment.findMany({ where: bySupplier(c), select: { supplier_id: true }, distinct: ['supplier_id'] })),
+            async (c) => pick(await tx.supplierCreditTransaction.findMany({ where: bySupplier(c), select: { supplier_id: true }, distinct: ['supplier_id'] })),
+        ]);
+        const deletable = supplierIds.filter((id) => !used.has(id));
+        await chunked(deletable, (chunk) => tx.supplier.deleteMany({ where: { id: { in: chunk } } }));
+        keptSuppliers = supplierIds.length - deletable.length;
+    }
+
+    if (groups.has('stock')) {
+        const warehouseIds = ids(await tx.warehouse.findMany({ where: inBranch, select: { id: true } }));
+        await tx.productStock.deleteMany({ where: { tenant_id: tenantId, warehouse_id: { in: warehouseIds } } });
+    }
+
+    return { keptCustomers, keptSuppliers };
 }

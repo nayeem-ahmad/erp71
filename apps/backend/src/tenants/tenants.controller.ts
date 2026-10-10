@@ -16,6 +16,7 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { SETTINGS_ADMIN } from '../auth/permission-sets';
+import { parseDataGroups } from './clear-tenant-data';
 @Controller('tenants')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -171,12 +172,14 @@ export class TenantsController {
         @Tenant() tenant: TenantContext,
         @Query('mode') mode: string,
         @Query('storeId') storeId?: string,
+        @Query('keep') keep?: string,
     ) {
         return this.tenantsService.clearData(
             tenant.tenantId,
             mode as 'transactions' | 'all',
             tenant.userRole,
             storeId || undefined,
+            parseDataGroups(keep),
         );
     }
 }

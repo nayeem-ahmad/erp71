@@ -706,25 +706,27 @@ describe('AdminTenantsService', () => {
     it('wipes the tenant and records who did it and why', async () => {
       wipe.mockResolvedValue({ cleared: 'all' });
 
-      const result = await service.clearData('t-1', 'all', undefined, { reason: 'Fresh start' }, 'admin-1');
+      const result = await service.clearData('t-1', 'all', undefined, ['employees'], { reason: 'Fresh start' }, 'admin-1');
 
-      expect(wipe).toHaveBeenCalledWith(db, 't-1', 'all', undefined);
+      expect(wipe).toHaveBeenCalledWith(db, 't-1', 'all', undefined, ['employees']);
       expect(result).toEqual({ cleared: 'all' });
       expect(auditService.log).toHaveBeenCalledWith(
         'tenant.data.clear',
         'Tenant',
         { userId: 'admin-1', tenantId: 't-1' },
         't-1',
-        expect.objectContaining({ mode: 'all', store_id: null, reason: 'Fresh start', tenant_name: 'Test Store' }),
+        expect.objectContaining({
+          mode: 'all', store_id: null, kept_groups: ['employees'], reason: 'Fresh start', tenant_name: 'Test Store',
+        }),
       );
     });
 
     it('wipes one branch and names it in the audit entry', async () => {
       wipe.mockResolvedValue({ cleared: 'transactions', storeId: 's-2', storeName: 'Uttara' });
 
-      await service.clearData('t-1', 'transactions', 's-2', {}, 'admin-1');
+      await service.clearData('t-1', 'transactions', 's-2', [], {}, 'admin-1');
 
-      expect(wipe).toHaveBeenCalledWith(db, 't-1', 'transactions', 's-2');
+      expect(wipe).toHaveBeenCalledWith(db, 't-1', 'transactions', 's-2', []);
       expect(auditService.log).toHaveBeenCalledWith(
         'tenant.data.clear',
         'Tenant',
@@ -739,7 +741,7 @@ describe('AdminTenantsService', () => {
     it('looks the tenant up by the active filter, not by subscription status', async () => {
       wipe.mockResolvedValue({ cleared: 'transactions' });
 
-      await service.clearData('t-1', 'transactions', undefined, {}, 'admin-1');
+      await service.clearData('t-1', 'transactions', undefined, [], {}, 'admin-1');
 
       expect(db.tenant.findFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 't-1', deleted_at: null, platform_workspace_key: null },
@@ -749,7 +751,7 @@ describe('AdminTenantsService', () => {
     it('404s a deleted or unknown tenant without touching its data', async () => {
       db.tenant.findFirst.mockResolvedValue(null);
 
-      await expect(service.clearData('missing', 'all', undefined, {}, 'admin-1')).rejects.toThrow(NotFoundException);
+      await expect(service.clearData('missing', 'all', undefined, [], {}, 'admin-1')).rejects.toThrow(NotFoundException);
       expect(wipe).not.toHaveBeenCalled();
       expect(auditService.log).not.toHaveBeenCalled();
     });
@@ -759,7 +761,7 @@ describe('AdminTenantsService', () => {
     it('refuses while a demo-data load is running', async () => {
       db.demoDataBatch.findFirst.mockResolvedValue({ id: 'batch-1' });
 
-      await expect(service.clearData('t-1', 'transactions', undefined, {}, 'admin-1')).rejects.toThrow(ConflictException);
+      await expect(service.clearData('t-1', 'transactions', undefined, [], {}, 'admin-1')).rejects.toThrow(ConflictException);
       expect(db.demoDataBatch.findFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: { tenant_id: 't-1', status: { in: ['RUNNING', 'PENDING'] } },
       }));
@@ -769,7 +771,7 @@ describe('AdminTenantsService', () => {
     it('records nothing when the wipe is refused', async () => {
       wipe.mockRejectedValue(new BadRequestException('Only transactions can be cleared for a single branch.'));
 
-      await expect(service.clearData('t-1', 'all', 's-2', {}, 'admin-1')).rejects.toThrow(BadRequestException);
+      await expect(service.clearData('t-1', 'all', 's-2', [], {}, 'admin-1')).rejects.toThrow(BadRequestException);
       expect(auditService.log).not.toHaveBeenCalled();
     });
   });
