@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
@@ -298,6 +299,8 @@ export class SuppliersService {
             amount: number;
             discount: number;
             date: Date;
+            /** The payment method's ledger account; the rule's Cash in Hand when unset. */
+            cashAccountId?: string;
         },
     ) {
         const common = {
@@ -324,6 +327,7 @@ export class SuppliersService {
                 conditionValue: input.type === 'PAYMENT' ? 'pay' : 'receive',
                 sourceType: 'supplier_payment',
                 amount: input.amount,
+                ...cashLegOverride(input.type === 'PAYMENT' ? 'out' : 'in', input.cashAccountId),
                 description: `Auto-posted supplier ${input.type === 'PAYMENT' ? 'payment' : 'receipt'} — ${input.supplierName}`,
             })
             : null;
@@ -739,6 +743,9 @@ export class SuppliersService {
         const typedRename = typedSerial(dto.paymentNumber);
         const renamedTo = typedRename && canonicalSerial(typedRename, SERIAL_SERIES);
         const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
+        const newMethod = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         const allocatedSum = await this.db.supplierPaymentAllocation.aggregate({
             where: { tenant_id: tenantId, transaction_id: paymentId },
@@ -785,6 +792,7 @@ export class SuppliersService {
                     notes: newNotes,
                     created_at: newDate,
                     payment_number: newNumber,
+                    ...(newMethod ? { payment_method_id: newMethod.id, payment_method_name: newMethod.name } : {}),
                 },
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
@@ -797,6 +805,11 @@ export class SuppliersService {
                 data: { due_balance: balanceAfter },
             });
 
+            // A method left alone reposts to wherever it is linked today.
+            const cashAccountId = newMethod
+                ? newMethod.account_id ?? undefined
+                : await storedPaymentMethodAccountId(tx, tenantId, payment.payment_method_id);
+
             const posting = await this.postPaymentLegs(tx, {
                 tenantId,
                 supplierId,
@@ -807,6 +820,7 @@ export class SuppliersService {
                 amount: newAmount,
                 discount: newDiscount,
                 date: newDate,
+                cashAccountId,
             });
 
             return { ...updated, ...posting };
@@ -880,6 +894,9 @@ export class SuppliersService {
         const typed = typedRaw && canonicalSerial(typedRaw, SERIAL_SERIES);
         // Kept outside the transaction so a unique-index race can name it.
         let serial = typed;
+        const method = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         return this.db.$transaction(async (tx) => {
             if (typed) {
@@ -899,6 +916,8 @@ export class SuppliersService {
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
+                    payment_method_id: method?.id,
+                    payment_method_name: method?.name,
                     created_by: userId,
                     created_at: paymentDate,
                 },
@@ -929,6 +948,7 @@ export class SuppliersService {
                 amount: dto.amount,
                 discount,
                 date: paymentDate,
+                cashAccountId: method?.account_id ?? undefined,
             });
 
             return { ...payment, ...posting };

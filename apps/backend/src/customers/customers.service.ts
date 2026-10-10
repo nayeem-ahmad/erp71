@@ -3,6 +3,7 @@ import { checkedSalesRepId, listSalesReps, SALES_REP_SELECT } from './sales-rep.
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { ageBalance, type AgingEntry } from '../accounting/aging.utils';
 import {
@@ -183,6 +184,8 @@ export class CustomersService {
             /** The payment's own date; the vouchers are dated to match it. */
             date?: Date;
             storeId?: string;
+            /** The payment method's ledger account; the rule's Cash in Hand when unset. */
+            cashAccountId?: string;
         },
     ) {
         const isPayout = input.type === 'PAYOUT';
@@ -206,6 +209,7 @@ export class CustomersService {
                 conditionValue: this.directionFromType(input.type),
                 sourceType: isPayout ? 'customer_payout' : 'customer_payment',
                 amount: input.amount,
+                ...cashLegOverride(isPayout ? 'out' : 'in', input.cashAccountId),
                 description: isPayout
                     ? `Customer payout — ${input.customerName}`
                     : `Customer payment — ${input.customerName}`,
@@ -874,6 +878,9 @@ export class CustomersService {
         const typedRename = typedSerial(dto.paymentNumber);
         const renamedTo = typedRename && canonicalSerial(typedRename, SERIAL_SERIES);
         const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
+        const newMethod = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         return this.db.$transaction(async (tx) => {
             const customer = await tx.customer.findFirst({
@@ -903,6 +910,7 @@ export class CustomersService {
                     notes: newNotes,
                     created_at: newDate,
                     payment_number: newNumber,
+                    ...(newMethod ? { payment_method_id: newMethod.id, payment_method_name: newMethod.name } : {}),
                 },
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
@@ -915,6 +923,11 @@ export class CustomersService {
                 data: { due_balance: balanceAfter },
             });
 
+            // A method left alone reposts to wherever it is linked today.
+            const cashAccountId = newMethod
+                ? newMethod.account_id ?? undefined
+                : await storedPaymentMethodAccountId(tx, tenantId, payment.payment_method_id);
+
             const posting = await this.postPaymentLegs(tx, {
                 tenantId,
                 customerId,
@@ -926,6 +939,7 @@ export class CustomersService {
                 discount: newDiscount,
                 date: newDate,
                 storeId,
+                cashAccountId,
             });
 
             return {
@@ -997,6 +1011,9 @@ export class CustomersService {
         const typed = typedRaw && canonicalSerial(typedRaw, SERIAL_SERIES);
         // Kept outside the transaction so a unique-index race can name it.
         let serial = typed;
+        const method = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         return this.db.$transaction(async (tx) => {
             if (typed) {
@@ -1016,6 +1033,8 @@ export class CustomersService {
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
+                    payment_method_id: method?.id,
+                    payment_method_name: method?.name,
                     created_by: userId,
                     created_at: paymentDate,
                 },
@@ -1041,6 +1060,7 @@ export class CustomersService {
                 discount,
                 date: paymentDate,
                 storeId,
+                cashAccountId: method?.account_id ?? undefined,
             });
 
             return { ...payment, ...posting };
