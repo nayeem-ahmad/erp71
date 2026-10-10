@@ -1292,6 +1292,7 @@ export const coreMessages = {
             method: "Kaedah",
             allMethods: "Semua kaedah",
             moreMethods: "Lagi",
+            otherMethods: "Lain-lain",
             methodNotRecorded: "Tidak direkod",
             postsTo: "Dipos ke {account}",
             noAccountLinked: "{method} tiada akaun lejar dipautkan, jadi ini dipos ke Tunai di Tangan.",

@@ -1291,6 +1291,7 @@ export const coreMessages = {
         method: "माध्यम",
         allMethods: "सभी माध्यम",
         moreMethods: "और",
+        otherMethods: "अन्य",
         methodNotRecorded: "दर्ज नहीं",
         postsTo: "{account} में पोस्ट होगा",
         noAccountLinked: "{method} से कोई लेजर खाता जुड़ा नहीं है, इसलिए यह कैश इन हैंड में पोस्ट होगा।",

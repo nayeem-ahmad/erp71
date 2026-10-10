@@ -42,7 +42,7 @@ export function PaymentFilters({ value, onChange, parties, partiesLoading, metho
 
     return (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-3">
-            <div className="min-w-[220px] flex-[2]">
+            <div>
                 <CreatedRangeFilter value={value.range} onChange={(range) => set({ range })} label={labels.columns.dateTime} />
             </div>
             <div>
@@ -84,7 +84,7 @@ export function PaymentFilters({ value, onChange, parties, partiesLoading, metho
                     </Select>
                 </div>
             ) : null}
-            <div className="min-w-[200px] flex-1">
+            <div className="min-w-[200px] flex-1 md:max-w-xs">
                 <IdSearchSelect
                     id="payment-party-filter"
                     items={parties}

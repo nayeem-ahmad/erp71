@@ -45,28 +45,37 @@ function Tile({ label, value, tone, note, children }: {
  * netted into one green figure — plus discounts and the net, with the primary
  * direction split by payment method.
  */
+/** The legend's longest list before the tail folds into "Other"; more wraps the tile to three lines. */
+const LEGEND_MAX = 3;
+
 export function PaymentKpiStrip({ kpis, primary, labels, ui }: PaymentKpiStripProps) {
     const primaryTotal = primary === 'receive' ? kpis.inTotal : kpis.outTotal;
     const entries = (count: number) => formatMessage(ui.entries, { count });
+    const legend = kpis.byMethod.length > LEGEND_MAX
+        ? [
+            ...kpis.byMethod.slice(0, LEGEND_MAX - 1),
+            { name: ui.otherMethods, amount: kpis.byMethod.slice(LEGEND_MAX - 1).reduce((sum, entry) => sum + entry.amount, 0), other: true },
+        ]
+        : kpis.byMethod;
+    const colorOf = (entry: { name: string | null; other?: boolean }, index: number) => (
+        entry.name === null ? UNRECORDED_COLOR : entry.other ? 'bg-gray-400' : METHOD_COLORS[index % METHOD_COLORS.length]
+    );
 
     const methodBar = kpis.byMethod.length > 0 && primaryTotal > 0 ? (
         <div className="mt-2">
             <div className="flex h-1.5 overflow-hidden rounded-full bg-gray-100" aria-hidden>
-                {kpis.byMethod.map((entry, index) => (
+                {legend.map((entry, index) => (
                     <span
                         key={entry.name ?? '__none'}
-                        className={entry.name === null ? UNRECORDED_COLOR : METHOD_COLORS[index % METHOD_COLORS.length]}
+                        className={colorOf(entry, index)}
                         style={{ width: `${(entry.amount / primaryTotal) * 100}%` }}
                     />
                 ))}
             </div>
             <ul className="mt-1.5 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[11px] text-gray-500">
-                {kpis.byMethod.map((entry, index) => (
+                {legend.map((entry, index) => (
                     <li key={entry.name ?? '__none'} className="inline-flex items-center gap-1">
-                        <span
-                            className={`inline-block h-2 w-2 rounded-sm ${entry.name === null ? UNRECORDED_COLOR : METHOD_COLORS[index % METHOD_COLORS.length]}`}
-                            aria-hidden
-                        />
+                        <span className={`inline-block h-2 w-2 rounded-sm ${colorOf(entry, index)}`} aria-hidden />
                         {entry.name ?? ui.methodNotRecorded}{' '}
                         <span className="tabular-nums text-gray-700">{formatBDT(entry.amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                     </li>
@@ -76,12 +85,13 @@ export function PaymentKpiStrip({ kpis, primary, labels, ui }: PaymentKpiStripPr
     ) : null;
 
     const inTile = (
-        <Tile key="in" label={labels.kpiIn} value={formatBDT(kpis.inTotal)} tone="in" note={entries(kpis.inCount)}>
+        <Tile key="in" label={labels.kpiIn} value={formatBDT(kpis.inTotal)} tone={primary === 'receive' ? 'in' : undefined} note={entries(kpis.inCount)}>
             {primary === 'receive' ? methodBar : null}
         </Tile>
     );
     const outTile = (
-        <Tile key="out" label={labels.kpiOut} value={formatBDT(kpis.outTotal)} tone="out" note={entries(kpis.outCount)}>
+        // Paying a supplier is the page's ordinary business, not a warning.
+        <Tile key="out" label={labels.kpiOut} value={formatBDT(kpis.outTotal)} tone={primary === 'pay' ? undefined : 'out'} note={entries(kpis.outCount)}>
             {primary === 'pay' ? methodBar : null}
         </Tile>
     );

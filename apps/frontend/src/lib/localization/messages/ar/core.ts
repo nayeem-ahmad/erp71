@@ -1291,6 +1291,7 @@ export const coreMessages = {
         method: "طريقة الدفع",
         allMethods: "كل الطرق",
         moreMethods: "المزيد",
+        otherMethods: "أخرى",
         methodNotRecorded: "غير مسجّلة",
         postsTo: "يُرحّل إلى {account}",
         noAccountLinked: "لا يوجد حساب مرتبط بـ{method}، لذا يُرحّل إلى النقدية في الصندوق.",

@@ -26,7 +26,7 @@ export function PaymentPanel({ docked, title, subtitle, onClose, closeLabel, chi
         return (
             <aside
                 aria-label={typeof title === 'string' ? title : undefined}
-                className="sticky top-0 flex max-h-[calc(100dvh-7rem)] w-[360px] shrink-0 flex-col self-start overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+                className="sticky top-0 flex max-h-[calc(100dvh-7rem)] w-96 shrink-0 flex-col self-start overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
             >
                 {header}
                 {children}

@@ -121,31 +121,31 @@ export function PaymentDetails({
                 </dl>
             </div>
 
-            <ModalFooter className="flex-wrap bg-gray-50/80">
+            <ModalFooter className="flex-col items-stretch bg-gray-50/80">
                 <Button type="button" variant="primary" size="md" className="w-full justify-center" icon={<Printer className="h-4 w-4" />} onClick={onPrint}>
                     {flow === 'pay' ? labels.printVoucher : labels.printReceipt}
                 </Button>
                 {onAllocate && unapplied > 0.005 ? (
-                    <Button type="button" variant="tinted" size="sm" icon={<Link2 className="h-4 w-4" />} onClick={onAllocate}>
+                    <Button type="button" variant="tinted" size="md" className="w-full justify-center" icon={<Link2 className="h-4 w-4" />} onClick={onAllocate}>
                         {ui.allocateAdvance}
                     </Button>
                 ) : null}
-                <Button type="button" variant="secondary" size="sm" icon={<Pencil className="h-4 w-4" />} onClick={onEdit}>
-                    {common.edit}
-                </Button>
-                <Button type="button" variant="secondary" size="sm" icon={<Copy className="h-4 w-4" />} onClick={onDuplicate}>
-                    {common.duplicate}
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="ms-auto text-danger hover:bg-red-50"
-                    icon={<Trash2 className="h-4 w-4" />}
-                    onClick={onDelete}
-                >
-                    {common.delete}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" size="sm" icon={<Pencil className="h-4 w-4" />} onClick={onEdit}>
+                        {common.edit}
+                    </Button>
+                    <Button type="button" variant="secondary" size="sm" icon={<Copy className="h-4 w-4" />} onClick={onDuplicate}>
+                        {common.duplicate}
+                    </Button>
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="ms-auto inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-danger hover:bg-red-50 max-md:min-h-touch"
+                    >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                        {common.delete}
+                    </button>
+                </div>
             </ModalFooter>
         </div>
     );

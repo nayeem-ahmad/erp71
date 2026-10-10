@@ -73,7 +73,7 @@ const bill = (id: string, number: string, due: number) => ({
 const dialog = () => screen.getByRole('dialog');
 const save = () => fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
 
-function setUp({ payments = [payment], bills = [] as unknown[], due = 5000 } = {}) {
+function setUp({ payments = [payment] as unknown[], bills = [] as unknown[], due = 5000 } = {}) {
     jest.clearAllMocks();
     (api.getSupplierCreditPayments as jest.Mock).mockResolvedValue(payments);
     (api.getSuppliers as jest.Mock).mockResolvedValue([

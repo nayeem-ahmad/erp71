@@ -1291,6 +1291,7 @@ export const coreMessages = {
             method: "মাধ্যম",
             allMethods: "সব মাধ্যম",
             moreMethods: "আরও",
+            otherMethods: "অন্যান্য",
             methodNotRecorded: "উল্লেখ নেই",
             postsTo: "{account}-এ পোস্ট হবে",
             noAccountLinked: "{method}-এর সাথে কোনো লেজার অ্যাকাউন্ট যুক্ত নেই, তাই এটি ক্যাশ ইন হ্যান্ডে পোস্ট হবে।",

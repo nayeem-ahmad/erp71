@@ -1291,6 +1291,7 @@ export const coreMessages = {
         method: "طریقہ",
         allMethods: "تمام طریقے",
         moreMethods: "مزید",
+        otherMethods: "دیگر",
         methodNotRecorded: "درج نہیں",
         postsTo: "{account} میں پوسٹ ہوگا",
         noAccountLinked: "{method} سے کوئی لیجر اکاؤنٹ منسلک نہیں، اس لیے یہ کیش ان ہینڈ میں پوسٹ ہوگا۔",
