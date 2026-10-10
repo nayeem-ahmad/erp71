@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { E2E_BASE_URL, applyE2ESession, fetchE2ESession, sessionHasAccountingAccess } from './helpers/auth';
+import { SETTLED_NAV_BUDGET_MS, gotoSettled } from './helpers/navigation';
 
 const HUB_PAGES = [
     { path: '/sales', label: 'Sales Hub' },
@@ -50,8 +51,13 @@ async function assertHubLinks(page: Page, hubPath: string) {
 
     expect(hrefs.length, `Expected hub cards on ${hubPath}`).toBeGreaterThan(0);
 
+    // One test walks every card, so the default 30s budget is spent after ~10
+    // links (Sales and Accounting hubs have more) and the test dies mid-walk on
+    // whichever page it happened to reach. Budget each link instead.
+    test.setTimeout(30_000 + hrefs.length * SETTLED_NAV_BUDGET_MS);
+
     for (const href of hrefs) {
-        await page.goto(`${E2E_BASE_URL}${href}`, { waitUntil: 'networkidle', timeout: 15000 });
+        await gotoSettled(page, `${E2E_BASE_URL}${href}`);
 
         const finalUrl = page.url();
         expect(finalUrl, `Redirected to login from ${href}`).not.toMatch(/\/login|\/auth/);

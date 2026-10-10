@@ -1,6 +1,7 @@
 import { test, expect, Page, ConsoleMessage } from '@playwright/test';
 import { E2E_BASE_URL, applyE2ESession, fetchE2ESession, type E2ESession } from './helpers/auth';
 import { NAV_ROUTES } from './helpers/nav-routes';
+import { gotoSettled } from './helpers/navigation';
 
 const BASE = E2E_BASE_URL;
 const ROUTES = NAV_ROUTES;
@@ -74,7 +75,7 @@ test.describe('Sidebar navigation — all routes load without errors', { tag: '@
             await applyE2ESession(page, session);
 
             // Navigate to the route
-            await page.goto(`${BASE}${route.path}`, { waitUntil: 'networkidle', timeout: 15000 });
+            await gotoSettled(page, `${BASE}${route.path}`);
 
             // Check we weren't redirected to login (unauthenticated)
             const finalUrl = page.url();

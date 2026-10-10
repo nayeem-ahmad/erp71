@@ -76,9 +76,15 @@ export async function fetchE2ESession(force = false): Promise<E2ESession> {
  *
  * Split the way the app stores it: the token follows "Remember me" into
  * localStorage, the workspace belongs to this tab.
+ *
+ * Seeded from /robots.txt, not `/`: on the app host `/` is the app-entry page,
+ * whose client effect `router.replace`s to /dashboard or /login. That redirect
+ * lands after this returns and interrupts the caller's next `page.goto`
+ * ("interrupted by another navigation to /dashboard"). robots.txt is
+ * same-origin, skips the middleware and runs no script.
  */
 export async function applyE2ESession(page: Page, session: E2ESession) {
-    await page.goto(E2E_BASE_URL, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${E2E_BASE_URL}/robots.txt`, { waitUntil: 'domcontentloaded' });
     await page.evaluate(
         ({ accessToken, tenantId, storeId, planCode }) => {
             localStorage.setItem('access_token', accessToken);
