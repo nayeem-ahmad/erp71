@@ -27,7 +27,7 @@ function makeTx(rows: Record<string, any[]> = {}) {
         'crmActivity', 'crmFollowUp', 'customerInteraction', 'lead', 'warrantyClaim', 'deliveryOrder',
         'quotation', 'salesOrder', 'purchaseQuotation', 'productDemand', 'inventoryMovement',
         'productSerial', 'voucher', 'attendanceRecord', 'customer', 'supplier', 'supplierPaymentAllocation',
-        'project', 'importShipment', 'productStock',
+        'project', 'importShipment', 'importCost', 'productStock',
     ];
     const tx: Record<string, any> = {};
     for (const model of models) {
@@ -36,6 +36,7 @@ function makeTx(rows: Record<string, any[]> = {}) {
             findUnique: jest.fn(async ({ where }: any) => (rows[model] ?? []).find((r) => r.id === where.id) ?? null),
             deleteMany: jest.fn(async () => ({ count: 0 })),
             update: jest.fn(async () => ({})),
+            updateMany: jest.fn(async () => ({ count: 0 })),
         };
     }
     return tx;
@@ -191,6 +192,58 @@ describe('clearBranchTransactions', () => {
             where: { id: 'pur-elsewhere' },
             data: { paid_amount: 200, payment_status: 'PARTIAL' },
         });
+    });
+
+    it('takes the deleted sales, returns and delivered orders off what each customer has spent', async () => {
+        const tx = makeTx({
+            sale: [
+                { id: 'sale-1', customer_id: 'c1', total_amount: 1000, status: 'COMPLETED' },
+                // A draft never counted and a cancelled sale was taken off already.
+                { id: 'sale-2', customer_id: 'c1', total_amount: 300, status: 'DRAFT' },
+                { id: 'sale-3', customer_id: 'c1', total_amount: 200, status: 'CANCELLED' },
+            ],
+            salesReturn: [
+                { id: 'ret-1', total_refund: 150, sale: { customer_id: 'c1' } },
+                // Filed here against another branch's sale: the refund it took off goes back.
+                { id: 'ret-2', total_refund: 50, sale: { customer_id: 'c2' } },
+            ],
+            salesOrder: [
+                { id: 'so-1', customer_id: 'c1', total_amount: 400, status: 'DELIVERED' },
+                { id: 'so-2', customer_id: 'c1', total_amount: 999, status: 'CONFIRMED' },
+            ],
+        });
+
+        await clearBranchTransactions(tx as any, 't1', 's1');
+
+        // 1000 sold, 150 refunded, 400 delivered on order.
+        expect(tx.customer.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { total_spent: { decrement: 1250 } } });
+        expect(tx.customer.update).toHaveBeenCalledWith({ where: { id: 'c2' }, data: { total_spent: { decrement: -50 } } });
+        // A figure that had already drifted cannot go below nothing.
+        expect(tx.customer.updateMany).toHaveBeenCalledWith({
+            where: { id: { in: ['c1', 'c2'] }, total_spent: { lt: 0 } },
+            data: { total_spent: 0 },
+        });
+    });
+
+    it("takes the branch's import shipments with their costs, vouchers and the LC payment", async () => {
+        const tx = makeTx({
+            importShipment: [{ id: 'imp-1' }],
+            importCost: [{ id: 'cost-1', shipment_id: 'imp-1' }],
+            supplierCreditTransaction: [
+                // Written when the bank accepted the documents, at the supplier's branch.
+                { id: 'sc-lc', supplier_id: 'p1', type: 'PAYMENT', amount: 5000, discount_amount: 0, reference_type: 'IMPORT_SHIPMENT', reference_id: 'imp-1', store_id: 's2' },
+                { id: 'sc-other', supplier_id: 'p1', type: 'PAYMENT', amount: 70, discount_amount: 0, reference_type: 'IMPORT_SHIPMENT', reference_id: 'imp-elsewhere', store_id: 's2' },
+            ],
+        });
+
+        await clearBranchTransactions(tx as any, 't1', 's1');
+
+        expect(tx.importShipment.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1', store_id: 's1' } });
+        const bySource = tx.voucher.deleteMany.mock.calls.find(([arg]: any) => arg.where.source_id);
+        expect(bySource[0].where.source_id.in).toEqual(expect.arrayContaining(['imp-1', 'cost-1', 'sc-lc']));
+        const deletedSupplierRows = tx.supplierCreditTransaction.deleteMany.mock.calls.flatMap(([a]: any) => a.where.id.in);
+        expect(deletedSupplierRows).toEqual(['sc-lc']);
+        expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { due_balance: { decrement: -5000 } } });
     });
 });
 

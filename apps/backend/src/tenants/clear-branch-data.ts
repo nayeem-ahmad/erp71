@@ -57,8 +57,9 @@ function sumBy<T>(rows: T[], key: (row: T) => string, value: (row: T) => number)
  *
  * What goes: every sale, return, quotation, order, purchase, RFQ, demand,
  * stock movement, shrinkage, stock take, warehouse transfer, fund transfer,
- * expense, loan, investor profit run, cashier session, attendance record and
- * CRM lead/activity/follow-up/interaction recorded at the branch, the vouchers
+ * expense, loan, investor profit run, cashier session, attendance record,
+ * import shipment (with its costs and documents) and CRM
+ * lead/activity/follow-up/interaction recorded at the branch, the vouchers
  * those documents posted, and the branch's manual vouchers.
  *
  * Two kinds of record cross branches and go whole, both legs, because half of
@@ -75,12 +76,12 @@ function sumBy<T>(rows: T[], key: (row: T) => string, value: (row: T) => number)
  * sale that no longer exists, nor in credit for a payment against one. A
  * deleted supplier payment that had paid a bill at another branch hands that
  * bill its paid amount back. Loyalty points earned or redeemed on a deleted
- * sale come off the same way.
+ * sale come off the same way, and so does what the customer has spent: the
+ * deleted sales and delivered orders, less the deleted returns' refunds.
  *
  * What stays: shop-wide records with no branch of their own — payroll,
- * depreciation, investor capital, import shipments (and the LC payments
- * against them), storefront orders — and their vouchers. Stock levels stay as
- * they are, exactly as the shop-wide clear leaves them.
+ * depreciation, investor capital, storefront orders — and their vouchers.
+ * Stock levels stay as they are, exactly as the shop-wide clear leaves them.
  */
 export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId: string): Promise<void> {
     const inBranch = { tenant_id: tenantId, store_id: storeId };
@@ -90,12 +91,25 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
     const warehouseIds = ids(await tx.warehouse.findMany({ where: inBranch, select: { id: true } }));
     const inBranchWarehouse = { tenant_id: tenantId, warehouse_id: { in: warehouseIds } };
 
-    const saleIds = ids(await tx.sale.findMany({ where: inBranch, select: { id: true } }));
+    const sales = await tx.sale.findMany({
+        where: inBranch,
+        select: { id: true, customer_id: true, total_amount: true, status: true },
+    });
+    const saleIds = ids(sales);
     // A return or claim is filed at the branch that sold the item, but one
     // pointing at this branch's sale goes with the sale wherever it was filed:
     // the sale it refers to is about to disappear.
     const fromBranchSale = { tenant_id: tenantId, OR: [{ store_id: storeId }, { sale: { store_id: storeId } }] };
-    const salesReturnIds = ids(await tx.salesReturn.findMany({ where: fromBranchSale, select: { id: true } }));
+    const salesReturns = await tx.salesReturn.findMany({
+        where: fromBranchSale,
+        select: { id: true, total_refund: true, sale: { select: { customer_id: true } } },
+    });
+    const salesReturnIds = ids(salesReturns);
+    // Delivering an order adds its total to what the customer has spent.
+    const deliveredOrders = await tx.salesOrder.findMany({
+        where: { ...inBranch, status: 'DELIVERED' },
+        select: { customer_id: true, total_amount: true },
+    });
 
     const purchaseIds = ids(await tx.purchase.findMany({ where: inBranch, select: { id: true } }));
     const fromBranchPurchase = {
@@ -104,6 +118,15 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
     };
     const purchaseReturnIds = ids(await tx.purchaseReturn.findMany({ where: fromBranchPurchase, select: { id: true } }));
     const purchaseOrderIds = ids(await tx.purchaseOrder.findMany({ where: inBranch, select: { id: true } }));
+    // An import file lands at a branch. Its receipt, acceptance, settlement and
+    // write-off vouchers are keyed on the shipment, each charge's on the cost;
+    // the purchase it was received as is at the same branch and goes above.
+    const shipmentIds = ids(await tx.importShipment.findMany({ where: inBranch, select: { id: true } }));
+    const importCostIds = ids(
+        await findChunked(shipmentIds, (chunk) =>
+            tx.importCost.findMany({ where: { shipment_id: { in: chunk } }, select: { id: true } }),
+        ),
+    );
 
     const shrinkageIds = ids(await tx.inventoryShrinkage.findMany({ where: inBranchWarehouse, select: { id: true } }));
     const stockTakeIds = ids(await tx.stockTakeSession.findMany({ where: inBranchWarehouse, select: { id: true } }));
@@ -168,6 +191,13 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
                 select: { id: true, supplier_id: true, type: true, amount: true, discount_amount: true },
             }),
         )),
+        // The bank paying the supplier when it accepted the LC documents.
+        ...(await findChunked(shipmentIds, (chunk) =>
+            tx.supplierCreditTransaction.findMany({
+                where: { tenant_id: tenantId, reference_type: 'IMPORT_SHIPMENT', reference_id: { in: chunk } },
+                select: { id: true, supplier_id: true, type: true, amount: true, discount_amount: true },
+            }),
+        )),
     ];
     // And the branch's rows no document stands behind (see above). A write-off
     // names its reason in `reference_id`, not a document, so it counts too.
@@ -212,6 +242,8 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
         ...purchaseIds,
         ...purchaseReturnIds,
         ...purchaseOrderIds,
+        ...shipmentIds,
+        ...importCostIds,
         ...shrinkageIds,
         ...stockTakeIds,
         ...warehouseTransferIds,
@@ -259,6 +291,7 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
     await tx.productDemand.deleteMany({
         where: { tenant_id: tenantId, OR: [{ store_id: storeId }, { warehouse_id: { in: warehouseIds } }] },
     }); // cascades ProductDemandItem
+    await tx.importShipment.deleteMany({ where: inBranch }); // cascades items, costs, documents
 
     // Inventory. A cross-branch transfer's movements in the other branch's
     // warehouse go with the transfer.
@@ -327,6 +360,32 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
         await tx.purchase.update({
             where: { id: purchaseId },
             data: { paid_amount: paid, payment_status: purchasePaymentStatus(paid, Number(bill.total_amount)) },
+        });
+    }
+
+    // What the customer has spent, as the sales, returns and orders services
+    // keep it: a sale adds its total and a cancel takes it off again (so a
+    // draft or cancelled one has nothing to undo), a return takes its refund
+    // off, delivering an order adds its total.
+    const spent = new Map<string, number>();
+    const addSpent = (customerId: string | null | undefined, amount: number) => {
+        if (customerId) spent.set(customerId, (spent.get(customerId) ?? 0) + amount);
+    };
+    for (const sale of sales) {
+        if (sale.status !== 'DRAFT' && sale.status !== 'CANCELLED') addSpent(sale.customer_id, Number(sale.total_amount));
+    }
+    for (const ret of salesReturns) addSpent(ret.sale?.customer_id, -Number(ret.total_refund));
+    for (const order of deliveredOrders) addSpent(order.customer_id, Number(order.total_amount));
+    for (const [customerId, amount] of spent) {
+        if (Math.abs(amount) < 0.005) continue;
+        await tx.customer.update({ where: { id: customerId }, data: { total_spent: { decrement: amount } } });
+    }
+    if (spent.size) {
+        // A figure that had already drifted (deleting a return never restored
+        // it) must not come out of this below nothing.
+        await tx.customer.updateMany({
+            where: { id: { in: [...spent.keys()] }, total_spent: { lt: 0 } },
+            data: { total_spent: 0 },
         });
     }
 
