@@ -504,6 +504,11 @@ export const settingsExtrasMessages = {
             clearing: "Wird gelöscht…",
             clearedTransactions: "Alle Transaktionsdaten wurden gelöscht.",
             clearedAll: "Alle Daten wurden gelöscht.",
+            branchLabel: "Filiale",
+            allBranches: "Alle Filialen",
+            branchTransactionsDesc: "Verkäufe, Einkäufe, Retouren, Lagerbewegungen, Umbuchungen, Ausgaben, Darlehen, Kassensitzungen dieser Filiale und die daraus gebuchten Journaleinträge löschen. Produkte, Kunden, Lieferanten, Mitarbeiter und andere Filialen bleiben erhalten.",
+            branchTransactionsConfirm: "Dadurch werden alle in {branch} erfassten Transaktionen und die daraus gebuchten Journaleinträge dauerhaft gelöscht. Umbuchungen zwischen {branch} und anderen Filialen werden auf beiden Seiten gelöscht. Produkte, Kunden und andere Filialen bleiben erhalten. Dies kann nicht rückgängig gemacht werden.\n\nGeben Sie \"löschen\" zur Bestätigung ein:",
+            clearedBranch: "Die Transaktionen von {branch} wurden gelöscht.",
             failed: "Daten konnten nicht gelöscht werden.",
         },
         dialog: {

@@ -11,7 +11,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isOwner } from '@/lib/permissions';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import { toast } from '@/lib/toast';
-import { Alert, Button, ConfirmDialog, PageShell } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, Field, PageShell, Select } from '@/components/ui';
 import { getWorkspaceItem } from '@/lib/session-store';
 import DemoDataCard from './DemoDataCard';
 
@@ -22,6 +22,10 @@ export default function DataManagementPage() {
     const [role, setRole] = useState<string | null>(null);
     const [clearingMode, setClearingMode] = useState<'transactions' | 'all' | null>(null);
     const [clearDialog, setClearDialog] = useState<{ mode: 'transactions' | 'all' } | null>(null);
+    // The branches Clear Transactions can be narrowed to; `''` is the whole shop.
+    const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+    const [branchId, setBranchId] = useState('');
+    const branch = branches.find((b) => b.id === branchId) ?? null;
 
     // Bumped after a clear so the demo card remounts and refetches: clearing
     // wipes the batch history the card is showing.
@@ -37,15 +41,27 @@ export default function DataManagementPage() {
             const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
             const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) ?? me?.tenants?.[0];
             setRole(tenant?.role ?? null);
+            setBranches(Array.isArray(tenant?.stores) ? tenant.stores : []);
         }).catch(() => null);
     }, []);
 
     const handleClear = async () => {
         if (!clearDialog) return;
         setClearingMode(clearDialog.mode);
+        // Only transactions can be narrowed to a branch: master data is shared
+        // by every branch.
+        const scoped = clearDialog.mode === 'transactions' ? branch : null;
         try {
-            await fetchWithAuth(`/tenants/data?mode=${clearDialog.mode}`, { method: 'DELETE' });
-            toast.success(clearDialog.mode === 'all' ? dm.clearData.clearedAll : dm.clearData.clearedTransactions);
+            const query = new URLSearchParams({ mode: clearDialog.mode });
+            if (scoped) query.set('storeId', scoped.id);
+            await fetchWithAuth(`/tenants/data?${query}`, { method: 'DELETE' });
+            toast.success(
+                clearDialog.mode === 'all'
+                    ? dm.clearData.clearedAll
+                    : scoped
+                        ? dm.clearData.clearedBranch.replace('{branch}', scoped.name)
+                        : dm.clearData.clearedTransactions,
+            );
             setClearDialog(null);
             setDemoCardKey((key) => key + 1); // Clear Data also resets the demo-batch history.
         } catch (err: any) {
@@ -116,8 +132,26 @@ export default function DataManagementPage() {
                                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
                                     <div>
                                         <p className="text-sm font-bold text-amber-900">{dm.clearData.transactionsTitle}</p>
-                                        <p className="text-xs text-amber-700 mt-1">{dm.clearData.transactionsDesc}</p>
+                                        <p className="text-xs text-amber-700 mt-1">
+                                            {branch ? dm.clearData.branchTransactionsDesc : dm.clearData.transactionsDesc}
+                                        </p>
                                     </div>
+                                    {branches.length > 1 ? (
+                                        <Field label={dm.clearData.branchLabel} htmlFor="clear-data-branch">
+                                            <Select
+                                                id="clear-data-branch"
+                                                value={branchId}
+                                                onChange={(e) => setBranchId(e.target.value)}
+                                                disabled={!!clearingMode}
+                                                className="w-full bg-white"
+                                            >
+                                                <option value="">{dm.clearData.allBranches}</option>
+                                                {branches.map((b) => (
+                                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                                ))}
+                                            </Select>
+                                        </Field>
+                                    ) : null}
                                     <Button
                                         variant="secondary"
                                         onClick={() => setClearDialog({ mode: 'transactions' })}
@@ -157,7 +191,13 @@ export default function DataManagementPage() {
             <ConfirmDialog
                 open={!!clearDialog}
                 title={dm.dialog.title}
-                prompt={clearDialog?.mode === 'all' ? dm.clearData.allConfirm : dm.clearData.transactionsConfirm}
+                prompt={
+                    clearDialog?.mode === 'all'
+                        ? dm.clearData.allConfirm
+                        : branch
+                            ? dm.clearData.branchTransactionsConfirm.replace('{branch}', branch.name)
+                            : dm.clearData.transactionsConfirm
+                }
                 expected={clearDialog?.mode === 'all' ? dm.clearData.confirmAll : dm.clearData.confirmTransactions}
                 typePromptTemplate={dm.dialog.typePrompt}
                 confirmLabel={dm.dialog.confirm}

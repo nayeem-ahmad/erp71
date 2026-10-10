@@ -504,6 +504,11 @@ export const settingsExtrasMessages = {
             clearing: "Borrando…",
             clearedTransactions: "Se han borrado todos los registros de transacciones.",
             clearedAll: "Se han borrado todos los datos.",
+            branchLabel: "Sucursal",
+            allBranches: "Todas las sucursales",
+            branchTransactionsDesc: "Eliminar las ventas, compras, devoluciones, movimientos de inventario, transferencias, gastos, préstamos, sesiones de caja de esta sucursal y los asientos contables que generaron. Se conservan los productos, clientes, proveedores, empleados y las demás sucursales.",
+            branchTransactionsConfirm: "Esto eliminará permanentemente todas las transacciones registradas en {branch} y los asientos contables que generaron. Las transferencias entre {branch} y otras sucursales se eliminan en ambos lados. Se conservan los productos, clientes y las demás sucursales. Esto no se puede deshacer.\n\nEscriba \"borrar\" para confirmar:",
+            clearedBranch: "Se han borrado las transacciones de {branch}.",
             failed: "No se pudieron borrar los datos.",
         },
         dialog: {

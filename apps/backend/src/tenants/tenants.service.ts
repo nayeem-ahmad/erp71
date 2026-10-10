@@ -25,6 +25,7 @@ import {
 } from '../password-policy/password-policy.columns';
 import { UpdatePasswordPolicyDto } from './password-policy.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
+import { clearBranchTransactions } from './clear-branch-data';
 
 @Injectable()
 export class TenantsService {
@@ -429,10 +430,36 @@ export class TenantsService {
         return policyFromColumns(tenant);
     }
 
-    async clearData(tenantId: string, mode: 'transactions' | 'all', userRole: string | undefined) {
+    async clearData(
+        tenantId: string,
+        mode: 'transactions' | 'all',
+        userRole: string | undefined,
+        storeId?: string,
+    ) {
         if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can clear data');
         if (mode !== 'transactions' && mode !== 'all') {
             throw new BadRequestException('mode must be "transactions" or "all"');
+        }
+
+        if (storeId) {
+            // Products, customers, suppliers and the rest of the master data are
+            // shared by every branch, so there is no "all data" of one branch to
+            // clear — only its transactions.
+            if (mode !== 'transactions') {
+                throw new BadRequestException('Only transactions can be cleared for a single branch.');
+            }
+            const store = await this.db.store.findFirst({
+                where: { id: storeId, tenant_id: tenantId },
+                select: { id: true },
+            });
+            if (!store) throw new NotFoundException('Branch not found.');
+
+            // One transaction for the same reason as the shop-wide clear below.
+            await this.db.$transaction(
+                (tx) => clearBranchTransactions(tx, tenantId, storeId),
+                { timeout: 300_000, maxWait: 300_000 },
+            );
+            return { cleared: mode, storeId };
         }
 
         // The whole wipe is one transaction so a half-cleared store is not a
