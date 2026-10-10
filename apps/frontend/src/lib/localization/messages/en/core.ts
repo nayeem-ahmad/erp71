@@ -1284,6 +1284,12 @@ export const coreMessages = {
         markClosed: 'Mark as closed',
         markActive: 'Re-open',
     },
+    branchParties: {
+        importBranchLabel: "Branch for rows without one",
+        importBranchHint: "Rows with a branch column (its code or name) go to that branch instead.",
+        onlineOrdersElsewhere: "Web orders belong to the Online Store branch. Pick it, or All branches, in the branch filter to see them.",
+        onlineBadge: "Online",
+    },
     partyPayments: {
         directionAll: "All",
         directionIn: "In",

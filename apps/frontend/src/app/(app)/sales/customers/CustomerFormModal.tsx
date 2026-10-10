@@ -39,11 +39,18 @@ interface CustomerFormModalProps {
     /** Customer being edited; leave unset for the create flow. */
     customer?: CustomerFormValues | null;
     /**
-     * Branches an edited customer can be moved to. Pass them only to a member
-     * who sees every branch — the server refuses a branch change from anyone
-     * else. Unset, the field is not shown and the branch is left as it is.
+     * The member's branches — where a new customer can be added, and (with
+     * `canSetBranch`) where an edited one can be moved. Unset (a one-branch
+     * shop), the field is not shown and the server uses the header branch.
      */
     branches?: { id: string; name: string }[];
+    /**
+     * Whether this member may move a customer to another branch (owner or
+     * consolidated). Without it the branch is shown, read-only, on an edit.
+     */
+    canSetBranch?: boolean;
+    /** Where a new customer goes unless another branch is picked: the header branch. */
+    defaultBranchId?: string | null;
 }
 
 const emptyForm = {
@@ -72,7 +79,7 @@ const toForm = (customer: CustomerFormValues): typeof emptyForm => ({
     birthday: customer.birthday ? String(customer.birthday).slice(0, 10) : '',
 });
 
-export default function CustomerFormModal({ isOpen, onClose, onSave, customer, branches }: CustomerFormModalProps) {
+export default function CustomerFormModal({ isOpen, onClose, onSave, customer, branches, canSetBranch = false, defaultBranchId }: CustomerFormModalProps) {
     const { t } = useI18n();
     const isEdit = Boolean(customer);
     const [formData, setFormData] = useState({ ...emptyForm });
@@ -86,8 +93,11 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer, b
     const repOptions = customer?.sales_rep_id && !salesReps.some((rep) => rep.id === customer.sales_rep_id)
         ? [...salesReps, { id: customer.sales_rep_id, name: (customer as any).salesRep?.name ?? customer.sales_rep_id }]
         : salesReps;
-    // Never let a branch missing from the options read as "none" and clear it on save.
-    const showBranch = Boolean(customer && branches);
+    // Every customer belongs to a branch. The field shows whenever there is a
+    // choice to make or to see; a branch missing from the options is added so
+    // it never reads as blank.
+    const showBranch = Boolean(branches && branches.length > 0);
+    const branchEditable = !customer || canSetBranch;
     const branchOptions = customer?.store_id && branches && !branches.some((b) => b.id === customer.store_id)
         ? [...branches, { id: customer.store_id, name: customer.store?.name ?? customer.store_id }]
         : branches ?? [];
@@ -103,7 +113,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer, b
     // previous target's values (nor a half-typed create).
     useEffect(() => {
         if (!isOpen) return;
-        setFormData(customer ? toForm(customer) : { ...emptyForm });
+        setFormData(customer ? toForm(customer) : { ...emptyForm, store_id: defaultBranchId ?? branches?.[0]?.id ?? '' });
         setError('');
     }, [isOpen, customer]);
 
@@ -128,6 +138,8 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer, b
         if (formData.credit_limit) payload.credit_limit = parseFloat(formData.credit_limit);
         if (formData.default_discount_pct) payload.default_discount_pct = parseFloat(formData.default_discount_pct);
         if (formData.birthday) payload.birthday = formData.birthday;
+        // Omitted, the server takes the header branch.
+        if (formData.store_id) payload.store_id = formData.store_id;
         return payload;
     };
 
@@ -149,7 +161,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer, b
             default_discount_pct: formData.default_discount_pct === '' ? null : parseFloat(formData.default_discount_pct),
             birthday: formData.birthday || null,
         };
-        if (showBranch) payload.store_id = formData.store_id || null;
+        if (showBranch && canSetBranch && formData.store_id) payload.store_id = formData.store_id;
         // The column is NOT NULL, so a cleared code keeps whatever the customer already has.
         if (formData.customer_code.trim()) payload.customer_code = formData.customer_code.trim();
         return payload;
@@ -260,9 +272,15 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, customer, b
 
                         {showBranch && (
                             <div className="space-y-2">
-                                <label htmlFor="customer-branch" className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.branch} <span className="text-gray-300">({t.common.optional})</span></label>
-                                <select id="customer-branch" value={formData.store_id} onChange={set('store_id')} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all">
-                                    <option value="">{t.common.none}</option>
+                                <label htmlFor="customer-branch" className="text-xs font-bold text-gray-500 uppercase tracking-widest block">{t.common.branch}</label>
+                                <select
+                                    id="customer-branch"
+                                    value={formData.store_id}
+                                    onChange={set('store_id')}
+                                    disabled={!branchEditable}
+                                    required
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-600 text-sm focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all disabled:opacity-70"
+                                >
                                     {branchOptions.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                                 </select>
                             </div>

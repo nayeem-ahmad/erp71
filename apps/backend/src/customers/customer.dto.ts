@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, MaxLength, Matches, ValidateIf } from 'class-validator';
 import { PaginationDto } from '../common/pagination.dto';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export enum CustomerPaymentDirectionDto {
     RECEIVE = 'receive',
@@ -58,6 +59,14 @@ export class CreateCustomerDto {
     @ValidateIf((_, value) => value !== null)
     @IsUUID()
     sales_rep_id?: string | null;
+
+    /**
+     * The branch the customer belongs to. Omitted: the request's header branch.
+     * A member limited to some branches may name only one of theirs.
+     */
+    @IsOptional()
+    @IsUUID()
+    store_id?: string;
 
     @IsOptional()
     @IsNumber()
@@ -173,9 +182,9 @@ export class UpdateCustomerDto {
     sales_rep_id?: string | null;
 
     /**
-     * The branch the customer belongs to besides those they bought at — see
-     * `customer-visibility.ts`. Null clears it. Only a member who sees every
-     * branch may change it.
+     * Moves the customer to another branch — see `customer-visibility.ts`. Only
+     * a member who sees every branch may change it, and a customer always has
+     * one: null is refused.
      */
     @IsOptional()
     @ValidateIf((_, value) => value !== null)
@@ -412,6 +421,11 @@ export class ListCustomerCreditPaymentsQueryDto extends PaginationDto {
     @IsOptional()
     @IsUUID()
     customerId?: string;
+
+    /** The branch the payments page shows: a branch id, or `all`. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 
     @IsOptional()
     @IsDateString()

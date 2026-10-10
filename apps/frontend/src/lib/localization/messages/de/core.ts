@@ -1284,6 +1284,12 @@ export const coreMessages = {
         markClosed: "Als abgeschlossen markieren",
         markActive: "Wieder öffnen",
     },
+    branchParties: {
+        importBranchLabel: "Filiale für Zeilen ohne Filiale",
+        importBranchHint: "Zeilen mit einer Filialspalte (Kürzel oder Name) gehen in diese Filiale.",
+        onlineOrdersElsewhere: "Web-Bestellungen gehören zur Filiale „Online Store“. Wählen Sie sie oder „Alle Filialen“ im Filialfilter, um sie zu sehen.",
+        onlineBadge: "Online",
+    },
     partyPayments: {
         directionAll: "Alle",
         directionIn: "Ein",

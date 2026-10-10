@@ -17,6 +17,9 @@ import { api, ApiError } from '@/lib/api';
 import { printCustomerPaymentReceipt } from '@/lib/customer-payment-receipt';
 import { useToastStore } from '@/lib/toast';
 
+// Every list follows the branch filter; two branches, header = store-1.
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: () => null }),
 }));
@@ -150,6 +153,22 @@ describe('CustomerPaymentsPage — summary', () => {
 
         expect(screen.getByText('CP-00007')).toBeInTheDocument();
         expect(screen.queryByText('CPY-00005')).not.toBeInTheDocument();
+    });
+});
+
+describe('CustomerPaymentsPage — branch', () => {
+    beforeEach(() => setUp());
+
+    it('lists the header branch\'s payments, and another branch\'s when one is picked', async () => {
+        render(<CustomerPaymentsPage />);
+        await screen.findByText('CP-00007');
+        expect(api.getCustomerCreditPayments).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' }));
+
+        fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'store-2' } });
+
+        await waitFor(() => {
+            expect(api.getCustomerCreditPayments).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-2' }));
+        });
     });
 });
 

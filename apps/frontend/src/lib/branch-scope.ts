@@ -36,7 +36,8 @@ export const BRANCH_PARAM = 'branch';
 /** Older deep links (line-item reports) used `?storeId=`; read as an alias. */
 const LEGACY_BRANCH_PARAM = 'storeId';
 
-export type BranchOption = { id: string; name: string };
+/** `is_online`: the storefront's branch (web customers and orders), not a shop. */
+export type BranchOption = { id: string; name: string; is_online?: boolean };
 
 export type BranchScopeState = {
     /** The branches the member may use. */
@@ -100,7 +101,7 @@ export function resolveBranchScope(input: {
         };
     }
 
-    const branches = (tenant.stores ?? []).map((store) => ({ id: store.id, name: store.name }));
+    const branches = (tenant.stores ?? []).map((store) => ({ id: store.id, name: store.name, is_online: Boolean(store.is_online) }));
     const storeCount = tenant.store_count ?? branches.length;
     const canSeeAll = allowAll && canViewConsolidatedReports(tenant.role, tenant.permissions);
     const isBranch = (id: string | null | undefined): id is string =>

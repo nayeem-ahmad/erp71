@@ -444,7 +444,9 @@ describe('CustomersPage — Customer Management', () => {
             );
         });
 
-        it('shows a limited member no branch field and sends no branch', async () => {
+        // Every customer belongs to a branch; a limited member sees which, but
+        // only an owner moves them.
+        it('shows a limited member the branch read-only and sends no branch', async () => {
             mockBranchScope({ canSeeAll: false });
             const { api } = require('@/lib/api');
             render(<CustomersPage />);
@@ -452,10 +454,27 @@ describe('CustomersPage — Customer Management', () => {
             fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
             await waitFor(() => screen.getByPlaceholderText('John Doe'));
 
-            expect(document.querySelector('select#customer-branch')).toBeNull();
+            expect(document.querySelector('select#customer-branch')).toBeDisabled();
             fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
             await waitFor(() => expect(api.updateCustomer).toHaveBeenCalled());
             expect(api.updateCustomer.mock.calls[0][1]).not.toHaveProperty('store_id');
+        });
+
+        it('adds a new customer to the header branch unless another is picked', async () => {
+            const { api } = require('@/lib/api');
+            render(<CustomersPage />);
+            fireEvent.click(screen.getByRole('button', { name: /new customer/i }));
+            await waitFor(() => screen.getByPlaceholderText('John Doe'));
+
+            const branchSelect = document.querySelector('select#customer-branch') as HTMLSelectElement;
+            expect(branchSelect).toHaveValue('store-1');
+            fireEvent.change(branchSelect, { target: { value: 'store-2' } });
+            fireEvent.change(screen.getByPlaceholderText('John Doe'), { target: { value: 'Bob Jones' } });
+            fireEvent.click(screen.getByRole('button', { name: /add customer/i }));
+
+            await waitFor(() => {
+                expect(api.createCustomer).toHaveBeenCalledWith(expect.objectContaining({ name: 'Bob Jones', store_id: 'store-2' }));
+            });
         });
     });
 

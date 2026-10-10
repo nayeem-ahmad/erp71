@@ -21,6 +21,7 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ImportRowsDto } from '../common/import.dto';
 
 import { CUSTOMER_CREDIT_READ, CUSTOMER_CREDIT_WRITE, CUSTOMER_READ, CUSTOMER_WRITE } from '../auth/permission-sets';
+import { BranchScopeService } from '../database/branch-scope.service';
 // `StorePermissionGuard` is class-wide but only the write-off routes name a
 // permission, so every other route behaves exactly as before — the guard is a
 // no-op without `@RequireStorePermission`. Same arrangement as
@@ -37,6 +38,7 @@ export class CustomersController {
         private readonly customersService: CustomersService,
         private readonly segmentsService: SegmentsService,
         private readonly customerScope: CustomerScopeService,
+        private readonly branchScope: BranchScopeService,
     ) {}
 
     private scope(tenant: TenantContext, requested?: string) {
@@ -99,9 +101,12 @@ export class CustomersController {
         @Tenant() tenant: TenantContext,
         @Query() query: ListCustomerCreditPaymentsQueryDto,
     ) {
+        const { storeId, ...rest } = query;
         return this.customersService.listCreditPayments(tenant.tenantId, {
-            ...query,
+            ...rest,
             timezone: tenant.timezone,
+            // The page's branch filter, under the same rule as every branch-aware list.
+            branch: await this.branchScope.resolveStoreId(tenant, storeId, { permissions: CUSTOMER_CREDIT_READ }),
             scope: await this.scope(tenant),
         });
     }
@@ -160,11 +165,16 @@ export class CustomersController {
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @Post('import')
     async importRows(@Tenant() tenant: TenantContext, @Body() body: ImportRowsDto) {
+        // The file's branch: the one picked in the import dialog — checked like
+        // any requested branch — else the header branch.
+        const fileBranch = body.storeId
+            ? await this.branchScope.resolveStoreId(tenant, body.storeId, { permissions: CUSTOMER_WRITE, allowAll: false })
+            : tenant.storeId;
         return this.customersService.importRows(
             tenant.tenantId,
             body.rows,
             body.mode,
-            tenant.storeId,
+            fileBranch,
             await this.scope(tenant),
         );
     }

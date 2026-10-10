@@ -50,6 +50,7 @@ import {
     findOpenSessionForUser,
     requiresCashierSession,
 } from '../cashier-sessions/active-session.util';
+import { customerBranchId } from '../customers/customer-branch.util';
 
 /**
  * What a parked draft carries in `serial_number` until it is finalised. Random
@@ -783,6 +784,7 @@ export class SalesService {
                 data: {
                     tenant_id: tenantId,
                     customer_id: dto.customerId,
+                    store_id: await customerBranchId(tx, dto.customerId),
                     type: 'CREDIT_SALE',
                     amount: balanceDue,
                     balance_after: balanceAfter,
@@ -812,6 +814,7 @@ export class SalesService {
                 data: {
                     tenant_id: tenantId,
                     customer_id: dto.customerId,
+                    store_id: await customerBranchId(tx, dto.customerId),
                     type: 'PAYMENT',
                     amount: accountPayment,
                     balance_after: balanceAfter,

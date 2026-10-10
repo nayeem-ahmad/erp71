@@ -30,10 +30,14 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { STOREFRONT_STAFF } from '../auth/permission-sets';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 @Controller('storefront')
 export class StorefrontController {
-    constructor(private readonly storefrontService: StorefrontService) {}
+    constructor(
+        private readonly storefrontService: StorefrontService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     /**
      * Protected: tenant views their storefront orders.
@@ -47,11 +51,16 @@ export class StorefrontController {
         @Tenant() tenant: TenantContext,
         @Query('page') page = '1',
         @Query('limit') limit = '20',
+        @Query('storeId') storeId?: string,
     ) {
+        // Web orders belong to the online branch; the panel follows the page's
+        // branch filter, under the same access rule as every branch-aware list.
+        const branch = await this.branchScope.resolveStoreId(tenant, storeId, { permissions: STOREFRONT_STAFF });
         return this.storefrontService.getOrders(
             tenant.tenantId,
             parseInt(page, 10),
             Math.min(parseInt(limit, 10), 100),
+            branch,
         );
     }
 
@@ -65,6 +74,12 @@ export class StorefrontController {
         @Param('id') id: string,
         @Body() dto: UpdateOrderStatusDto,
     ) {
+        // Only someone who may use the order's (online) branch changes it.
+        await this.branchScope.resolveStoreId(
+            tenant,
+            await this.storefrontService.orderStoreId(tenant.tenantId, id),
+            { permissions: STOREFRONT_STAFF },
+        );
         return this.storefrontService.updateOrderStatus(tenant.tenantId, id, dto.status);
     }
 

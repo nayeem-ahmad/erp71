@@ -1284,6 +1284,12 @@ export const coreMessages = {
         markClosed: 'بند نشان زد کریں',
         markActive: 'دوبارہ کھولیں',
     },
+    branchParties: {
+        importBranchLabel: "بغیر شاخ والی قطاروں کے لیے شاخ",
+        importBranchHint: "جن قطاروں میں شاخ کا کالم (کوڈ یا نام) ہے وہ اسی شاخ میں جائیں گی۔",
+        onlineOrdersElsewhere: "ویب آرڈرز آن لائن اسٹور شاخ کے ہیں۔ انہیں دیکھنے کے لیے شاخ فلٹر میں وہ شاخ یا تمام شاخیں منتخب کریں۔",
+        onlineBadge: "آن لائن",
+    },
     partyPayments: {
         directionAll: "تمام",
         directionIn: "آمد",

@@ -1,6 +1,7 @@
 import { ArrayMinSize, IsArray, IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationDto } from '../common/pagination.dto';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export class PaymentAllocationInputDto {
     @IsString()
@@ -14,6 +15,14 @@ export class PaymentAllocationInputDto {
 export class CreateSupplierDto {
     @IsString()
     name: string;
+
+    /**
+     * The branch the supplier belongs to. Omitted: the request's header branch.
+     * A member limited to some branches may name only one of theirs.
+     */
+    @IsOptional()
+    @IsUUID()
+    store_id?: string;
 
     @IsOptional()
     @IsString()
@@ -32,6 +41,11 @@ export class UpdateSupplierDto {
     @IsOptional()
     @IsString()
     name?: string;
+
+    /** Moves the supplier to another branch — owners and consolidated-report holders only. */
+    @IsOptional()
+    @IsUUID()
+    store_id?: string;
 
     @IsOptional()
     @IsString()
@@ -174,10 +188,35 @@ export class NextSupplierPaymentNumberQueryDto {
     direction?: SupplierPaymentDirectionDto;
 }
 
+/** `GET /suppliers`: the list, its search and sort, and the branch filter. */
+export class ListSuppliersQueryDto extends PaginationDto {
+    @IsOptional()
+    @IsString()
+    search?: string;
+
+    @IsOptional()
+    @IsString()
+    sortBy?: string;
+
+    @IsOptional()
+    @IsString()
+    sortDir?: string;
+
+    /** A branch id, or `all`; omitted is every branch the caller may see. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+}
+
 export class ListSupplierCreditPaymentsQueryDto extends PaginationDto {
     @IsOptional()
     @IsUUID()
     supplierId?: string;
+
+    /** The branch the payments page shows: a branch id, or `all`. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 
     @IsOptional()
     @IsDateString()

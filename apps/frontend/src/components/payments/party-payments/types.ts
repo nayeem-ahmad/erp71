@@ -174,7 +174,8 @@ export interface PartyPaymentsAdapter {
     ledgerHref: (partyId: string) => string;
     /** Server-side party lists take several requests on a big shop; loaded once, on their own. */
     listParties: () => Promise<PartyOption[]>;
-    listPayments: (query: { from?: string; to?: string; partyId?: string }) => Promise<PartyPayment[]>;
+    /** `storeId`: the page's branch filter (a branch id or `all`). */
+    listPayments: (query: { from?: string; to?: string; partyId?: string; storeId?: string }) => Promise<PartyPayment[]>;
     nextNumber: (direction: MoneyFlow) => Promise<{ payment_number?: string } | null | undefined>;
     record: (partyId: string, input: RecordPaymentInput) => Promise<PartyPayment>;
     update: (paymentId: string, input: UpdatePaymentInput) => Promise<PartyPayment>;

@@ -403,7 +403,7 @@ export default function TenantExternalSyncPage() {
                             placeholder="https://…"
                         />
                     </Field>
-                    <Field label="Store for imported documents" required error={fieldErrors.storeId}>
+                    <Field label="Store for imported documents" required error={fieldErrors.storeId} hint="Customers and suppliers this import brings in belong to it too; ones that already exist keep their own.">
                         <Select value={form.storeId} onChange={(e) => setForm({ ...form, storeId: e.target.value })}>
                             <option value="">Select a store…</option>
                             {stores.map((store) => (

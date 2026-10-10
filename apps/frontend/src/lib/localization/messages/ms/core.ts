@@ -1285,6 +1285,12 @@ export const coreMessages = {
             markClosed: "Tanda sebagai ditutup",
             markActive: "Buka semula",
         },
+        branchParties: {
+            importBranchLabel: "Cawangan untuk baris tanpa cawangan",
+            importBranchHint: "Baris dengan lajur cawangan (kod atau nama) pergi ke cawangan itu.",
+            onlineOrdersElsewhere: "Pesanan web milik cawangan Kedai Dalam Talian. Pilih cawangan itu, atau Semua cawangan, dalam penapis untuk melihatnya.",
+            onlineBadge: "Dalam talian",
+        },
         partyPayments: {
             directionAll: "Semua",
             directionIn: "Masuk",

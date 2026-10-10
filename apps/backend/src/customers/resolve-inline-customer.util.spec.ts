@@ -20,7 +20,7 @@ describe('resolveInlineCustomer', () => {
         const id = await resolveInlineCustomer(tx, 'tenant-1', {
             name: '  Rahim Uddin  ',
             phone: ' 01711111111 ',
-        });
+        }, 'store-1');
 
         expect(id).toBe('cust-new');
         expect(tx.customer.create).toHaveBeenCalledWith({
@@ -57,7 +57,7 @@ describe('resolveInlineCustomer', () => {
     it('starts the series at CUST-00001 for a tenant with no generated codes', async () => {
         const tx = makeTx();
 
-        await resolveInlineCustomer(tx, 'tenant-1', { name: 'First Customer' });
+        await resolveInlineCustomer(tx, 'tenant-1', { name: 'First Customer' }, 'store-1');
 
         expect(tx.customer.create).toHaveBeenCalledWith({
             data: expect.objectContaining({ customer_code: 'CUST-00001' }),
@@ -72,7 +72,7 @@ describe('resolveInlineCustomer', () => {
         const id = await resolveInlineCustomer(tx, 'tenant-1', {
             name: 'Rahim',
             phone: '01711111111',
-        });
+        }, 'store-1');
 
         expect(id).toBe('cust-7');
         expect(tx.customer.create).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe('resolveInlineCustomer', () => {
         const id = await resolveInlineCustomer(tx, 'tenant-1', {
             name: 'Karim',
             phone: '01722222222',
-        });
+        }, 'store-1');
 
         expect(id).toBe('cust-9');
         expect(tx.customer.update).toHaveBeenCalledWith({
@@ -98,8 +98,8 @@ describe('resolveInlineCustomer', () => {
     it('creates separate customers for the same name when no phone is given', async () => {
         const tx = makeTx();
 
-        await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' });
-        await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' });
+        await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' }, 'store-1');
+        await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' }, 'store-1');
 
         // Names are not unique for customers, so neither call may dedupe.
         expect(tx.customer.findUnique).not.toHaveBeenCalled();
@@ -116,7 +116,7 @@ describe('resolveInlineCustomer', () => {
             .mockRejectedValueOnce(conflict)
             .mockResolvedValueOnce({ id: 'cust-after-retry' });
 
-        const id = await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' });
+        const id = await resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' }, 'store-1');
 
         expect(id).toBe('cust-after-retry');
         expect(tx.customer.create).toHaveBeenCalledTimes(2);
@@ -131,7 +131,7 @@ describe('resolveInlineCustomer', () => {
         tx.customer.create.mockRejectedValue(phoneConflict);
 
         await expect(
-            resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' }),
+            resolveInlineCustomer(tx, 'tenant-1', { name: 'Rahim' }, 'store-1'),
         ).rejects.toBe(phoneConflict);
         expect(tx.customer.create).toHaveBeenCalledTimes(1);
     });
@@ -140,7 +140,7 @@ describe('resolveInlineCustomer', () => {
         const tx = makeTx();
 
         await expect(
-            resolveInlineCustomer(tx, 'tenant-1', { name: '   ' }),
+            resolveInlineCustomer(tx, 'tenant-1', { name: '   ' }, 'store-1'),
         ).rejects.toThrow(BadRequestException);
         expect(tx.customer.create).not.toHaveBeenCalled();
     });

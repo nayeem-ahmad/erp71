@@ -112,7 +112,8 @@ describe('SalesService', () => {
       customer: {
         update: jest.fn(),
         findFirst: jest.fn(),
-        findUnique: jest.fn().mockResolvedValue(null),
+        // The branch a credit row is written under (customer-branch.util).
+        findUnique: jest.fn().mockResolvedValue({ store_id: 'store-1' }),
         create: jest.fn().mockResolvedValue({ id: 'cust-inline' }),
       },
       customerCreditTransaction: {
@@ -582,6 +583,8 @@ describe('SalesService', () => {
       tx.saleItem.create.mockResolvedValue({});
       tx.productStock.updateMany.mockResolvedValue({ count: 1 });
       tx.customer.update.mockResolvedValue({});
+      // No customer holds this phone yet.
+      tx.customer.findUnique.mockResolvedValueOnce(null);
 
       await service.create('tenant-1', 'user-1', {
         storeId: 'store-1',
@@ -591,8 +594,9 @@ describe('SalesService', () => {
         items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 50 }],
       });
 
+      // A new customer belongs to the sale's branch.
       expect(tx.customer.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'Walk-in Rahim' }),
+        data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'Walk-in Rahim', store_id: 'store-1' }),
         select: { id: true },
       });
       // The sale, and everything keyed off the customer, use the new id.

@@ -1284,6 +1284,12 @@ export const coreMessages = {
         markClosed: "बंद चिह्नित करें",
         markActive: "फिर से खोलें",
     },
+    branchParties: {
+        importBranchLabel: "बिना शाखा वाली पंक्तियों के लिए शाखा",
+        importBranchHint: "जिन पंक्तियों में शाखा कॉलम (कोड या नाम) है, वे उसी शाखा में जाएँगी।",
+        onlineOrdersElsewhere: "वेब ऑर्डर ऑनलाइन स्टोर शाखा के हैं। उन्हें देखने के लिए शाखा फ़िल्टर में वह शाखा या सभी शाखाएँ चुनें।",
+        onlineBadge: "ऑनलाइन",
+    },
     partyPayments: {
         directionAll: "सभी",
         directionIn: "आवक",

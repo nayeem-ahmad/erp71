@@ -24,9 +24,14 @@ export default function AppTiles() {
     const home = useHomeApps();
     const [openLocked, setOpenLocked] = useState<LockedApp | null>(null);
 
+    // The header branch, sent explicitly: every branch-aware tile counts that
+    // branch, for owners as for staff. The key carries it, so switching the
+    // header branch refetches.
+    const scope = workspaceScope();
+    const headerBranchId = scope[1];
     const pulseQuery = useQuery({
-        queryKey: ['home-pulse', ...workspaceScope()],
-        queryFn: () => api.getHomePulse(),
+        queryKey: ['home-pulse', ...scope],
+        queryFn: () => api.getHomePulse(headerBranchId ? { storeId: headerBranchId } : undefined),
         enabled: home.enabled,
         staleTime: 60_000,
     });

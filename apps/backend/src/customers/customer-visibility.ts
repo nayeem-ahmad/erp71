@@ -1,10 +1,10 @@
 /**
  * Which customers a member may see.
  *
- * Customers are company-level records, but a member limited to some branches
- * sees only the customers that belong to those branches: the ones added there
- * (`Customer.store_id`) and the ones with a sale there that was not cancelled.
- * Owners and `VIEW_CONSOLIDATED_REPORTS` holders see every customer.
+ * Every customer belongs to one branch (`Customer.store_id`), and a member
+ * limited to some branches sees only the customers of those branches — not
+ * customers of another branch who happen to have bought here. Owners and
+ * `VIEW_CONSOLIDATED_REPORTS` holders see every customer.
  *
  * A scope is either `null` — the whole tenant, no filter — or the branch ids a
  * customer must belong to one of. `CustomerScopeService` decides it per request;
@@ -14,13 +14,7 @@ export type CustomerScope = readonly string[] | null;
 
 /** Prisma `where` fragment: the customer belongs to one of `storeIds`. */
 export function customerInBranchesWhere(storeIds: readonly string[]) {
-    const ids = [...storeIds];
-    return {
-        OR: [
-            { store_id: { in: ids } },
-            { sales: { some: { store_id: { in: ids }, status: { not: 'CANCELLED' } } } },
-        ],
-    };
+    return { store_id: { in: [...storeIds] } };
 }
 
 /**
