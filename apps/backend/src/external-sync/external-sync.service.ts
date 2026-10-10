@@ -8,6 +8,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { recordCostAdjustment } from '../database/product-cost.utils';
 import { EncryptionService } from '../common/encryption.service';
+import { codeForNewRecord } from '../common/code-series.util';
 import { assertValidBaseUrl } from './express-retail.client';
 import {
     DateWindow,
@@ -84,7 +85,8 @@ type SyncStats = Record<
 interface OpeningCostCandidate {
     productId: string;
     rate: number;
-    sku: string;
+    /** How a warning names the product: its provider SKU, else its name. */
+    label: string;
     externalId: string;
 }
 
@@ -179,9 +181,9 @@ export function customerAdoptionWhere(
     // compares in memory with both sides normalized.
     phone: string | null,
     // Accepted so call sites read naturally, and to document that the code is
-    // deliberately unused: `dedupeCode` derives customer_code from the
-    // provider's own row id, so two unrelated parties can carry the same one.
-    _customerCode: string,
+    // deliberately unused: it is the provider's code with a `-2` added on a
+    // repeat, or none at all, so it says nothing about who the party is.
+    _customerCode: string | null,
 ) {
     if (!phone) return null;
     return { tenant_id: tenantId, phone, deleted_at: null };
@@ -666,9 +668,10 @@ export class ExternalSyncService {
 
         for (const row of rows) {
             const mapped = mappers.product(row, claimedSkus);
+            const productLabel = mapped.sku ?? mapped.name;
             const noteCost = (productId: string) => {
                 if (!mapped.isService && mapped.purchaseRate > 0) {
-                    costCandidates.push({ productId, rate: mapped.purchaseRate, sku: mapped.sku, externalId: mapped.externalId });
+                    costCandidates.push({ productId, rate: mapped.purchaseRate, label: productLabel, externalId: mapped.externalId });
                 }
             };
             // One unimportable row must not abandon the rest of the batch;
@@ -694,7 +697,7 @@ export class ExternalSyncService {
                         noteCost(existingId);
                         continue;
                     }
-                    await this.forgetStaleMapping(connection.id, 'PRODUCT', mapped.externalId, map, warnings, `Product ${mapped.sku}`);
+                    await this.forgetStaleMapping(connection.id, 'PRODUCT', mapped.externalId, map, warnings, `Product ${productLabel}`);
                 }
 
                 // Adopt a product the tenant already has under the same SKU rather
@@ -704,21 +707,25 @@ export class ExternalSyncService {
                     ? await this.db.product.findFirst({ where: productWhere, select: { id: true } })
                     : null;
 
+                // The provider's SKU when it has a readable one no other product
+                // holds; else the next in the tenant's PRD- series.
                 const productId =
                     adopted?.id ??
                     (
-                        await this.db.product.create({
-                            data: {
-                                tenant_id: connection.tenant_id,
-                                name: mapped.name,
-                                sku: mapped.sku,
-                                type: mapped.isService ? 'SERVICE' : 'GOODS',
-                                price: mapped.price,
-                                vat_rate: mapped.vatRate,
-                                reorder_level: mapped.reorderLevel,
-                            },
-                            select: { id: true },
-                        })
+                        await codeForNewRecord(this.db, 'Product', connection.tenant_id, mapped.sku, (sku) =>
+                            this.db.product.create({
+                                data: {
+                                    tenant_id: connection.tenant_id,
+                                    name: mapped.name,
+                                    sku,
+                                    type: mapped.isService ? 'SERVICE' : 'GOODS',
+                                    price: mapped.price,
+                                    vat_rate: mapped.vatRate,
+                                    reorder_level: mapped.reorderLevel,
+                                },
+                                select: { id: true },
+                            }),
+                        )
                     ).id;
 
                 if (adopted) {
@@ -726,7 +733,7 @@ export class ExternalSyncService {
                         entity: 'PRODUCT',
                         externalId: mapped.externalId,
                         code: 'ADOPTED_EXISTING',
-                        message: `Linked provider product ${mapped.sku} to the tenant's existing product with the same SKU instead of creating a duplicate`,
+                        message: `Linked provider product ${productLabel} to the tenant's existing product with the same SKU instead of creating a duplicate`,
                     });
                     stats.products.skipped++;
                 } else {
@@ -742,7 +749,7 @@ export class ExternalSyncService {
                     entity: 'PRODUCT',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Product ${mapped.sku} could not be imported: ${error?.message ?? error}`,
+                    message: `Product ${productLabel} could not be imported: ${error?.message ?? error}`,
                 });
             }
         }
@@ -805,7 +812,7 @@ export class ExternalSyncService {
                     entity: 'PRODUCT',
                     externalId: candidate.externalId,
                     code: 'COST_NOT_SET',
-                    message: `Product ${candidate.sku} has no cost on file, and its buying rate ${candidate.rate} could not be set as one: ${error?.message ?? error}`,
+                    message: `Product ${candidate.label} has no cost on file, and its buying rate ${candidate.rate} could not be set as one: ${error?.message ?? error}`,
                 });
             }
         }
@@ -826,6 +833,7 @@ export class ExternalSyncService {
 
         for (const row of rows) {
             const mapped = mappers.customer(row, claimedCodes);
+            const customerLabel = mapped.customerCode ?? mapped.name;
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
             try {
@@ -851,7 +859,7 @@ export class ExternalSyncService {
                         stats.customers.updated++;
                         continue;
                     }
-                    await this.forgetStaleMapping(connection.id, 'CUSTOMER', mapped.externalId, map, warnings, `Customer ${mapped.customerCode}`);
+                    await this.forgetStaleMapping(connection.id, 'CUSTOMER', mapped.externalId, map, warnings, `Customer ${customerLabel}`);
                 }
 
                 // Phone is the only identity a customer carries. `customer_code`
@@ -872,25 +880,29 @@ export class ExternalSyncService {
                     ? await this.db.customer.findFirst({ where: customerWhere, select: { id: true } })
                     : null;
 
+                // The provider's code when it has a readable one no other
+                // customer holds; else the next in the tenant's CUST- series.
                 const customerId =
                     adopted?.id ??
                     (
-                        await this.db.customer.create({
-                            data: {
-                                tenant_id: connection.tenant_id,
-                                // Everything an import brings in belongs to the
-                                // import's branch; an adopted customer keeps theirs.
-                                store_id: connection.store_id,
-                                customer_code: mapped.customerCode,
-                                name: mapped.name,
-                                owner_name: mapped.ownerName,
-                                phone: mapped.phone,
-                                email: mapped.email,
-                                address: mapped.address,
-                                credit_limit: mapped.creditLimit,
-                            },
-                            select: { id: true },
-                        })
+                        await codeForNewRecord(this.db, 'Customer', connection.tenant_id, mapped.customerCode, (customerCode) =>
+                            this.db.customer.create({
+                                data: {
+                                    tenant_id: connection.tenant_id,
+                                    // Everything an import brings in belongs to the
+                                    // import's branch; an adopted customer keeps theirs.
+                                    store_id: connection.store_id,
+                                    customer_code: customerCode,
+                                    name: mapped.name,
+                                    owner_name: mapped.ownerName,
+                                    phone: mapped.phone,
+                                    email: mapped.email,
+                                    address: mapped.address,
+                                    credit_limit: mapped.creditLimit,
+                                },
+                                select: { id: true },
+                            }),
+                        )
                     ).id;
 
                 // Only on a party we created: adopting an existing customer
@@ -914,7 +926,7 @@ export class ExternalSyncService {
                         entity: 'CUSTOMER',
                         externalId: mapped.externalId,
                         code: 'ADOPTED_EXISTING',
-                        message: `Linked provider customer ${mapped.customerCode} to an existing tenant customer with the same phone or code`,
+                        message: `Linked provider customer ${customerLabel} to an existing tenant customer with the same phone or code`,
                     });
                     stats.customers.skipped++;
                 } else {
@@ -929,7 +941,7 @@ export class ExternalSyncService {
                     entity: 'CUSTOMER',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Customer ${mapped.customerCode} could not be imported: ${error?.message ?? error}`,
+                    message: `Customer ${customerLabel} could not be imported: ${error?.message ?? error}`,
                 });
             }
         }

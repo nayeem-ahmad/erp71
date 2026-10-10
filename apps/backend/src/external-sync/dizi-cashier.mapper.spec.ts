@@ -42,12 +42,12 @@ describe('mapDiziProduct', () => {
         expect(mapped.externalUpdatedAt).toEqual(new Date('2026-07-08T07:55:15.537'));
     });
 
-    it('falls back to an EXT- code when both SKU and barcode are missing', () => {
+    it('leaves the SKU for the import to number when both SKU and barcode are missing', () => {
         const mapped = mapDiziProduct(
-            { Id: 'item-2', Name: 'X', SKU: null, Barcode: null } as any,
+            { Id: '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b', Name: 'X', SKU: null, Barcode: null } as any,
             new Set<string>(),
         );
-        expect(mapped.sku).toBe('EXT-item-2');
+        expect(mapped.sku).toBeNull();
     });
 
     it('uses the weighted average cost when no buying price is set', () => {
@@ -74,7 +74,7 @@ describe('mapDiziCustomer / mapDiziSupplier', () => {
             } as any,
             new Set<string>(),
         );
-        expect(mapped.customerCode).toBe('EXT-c1');
+        expect(mapped.customerCode).toBeNull();
         expect(mapped.phone).toBe('5252');
         expect(mapped.ownerName).toBe('Mr Z');
         expect(mapped.address).toBe('Dhaka');
@@ -84,12 +84,12 @@ describe('mapDiziCustomer / mapDiziSupplier', () => {
         expect(mapped.creditLimit).toBeNull();
     });
 
-    it('disambiguates a duplicate supplier name with the external id', () => {
+    it('numbers a duplicate supplier name rather than adding the GUID', () => {
         const claimed = new Set<string>();
-        const a = mapDiziSupplier({ Id: 's1', Name: 'ACME', Balance: 0 } as any, claimed);
-        const b = mapDiziSupplier({ Id: 's2', Name: 'ACME', Balance: 0 } as any, claimed);
+        const a = mapDiziSupplier({ Id: '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b', Name: 'ACME', Balance: 0 } as any, claimed);
+        const b = mapDiziSupplier({ Id: '9a0b1c2d-3e4f-4a6b-8c7d-5e6f7a8b9c0d', Name: 'ACME', Balance: 0 } as any, claimed);
         expect(a.name).toBe('ACME');
-        expect(b.name).toBe('ACME-s2');
+        expect(b.name).toBe('ACME (2)');
     });
 });
 

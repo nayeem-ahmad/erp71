@@ -27,9 +27,11 @@ import {
     SyncWarning,
     buildDocumentNumber,
     dedupeCode,
+    dedupeName,
     emptyToNull,
     parseProviderDate,
     parseTimestamp,
+    readableCode,
     resolvePaymentStatus,
     resolveQuantity,
     toMoney,
@@ -44,8 +46,8 @@ import {
  * Dizi differs from Express in ways that shape the code here:
  *  - ids are GUIDs, so `externalId` is `row.Id` verbatim;
  *  - amounts arrive as JSON numbers, not strings, but `toMoney` handles both;
- *  - product/customer codes are frequently null, so `dedupeCode` leans on its
- *    `EXT-<id>` fallback more than it does for Express;
+ *  - product/customer codes are frequently null, so more of its products and
+ *    customers take the next code in the tenant's own series than Express's do;
  *  - line items live on a per-document detail call, so the sale/purchase/return
  *    mappers take the fetched detail rather than a separate lines array.
  */
@@ -59,7 +61,7 @@ export function mapDiziProduct(row: DiziItem, claimedSkus: Set<string>): MappedP
 
     return {
         externalId,
-        sku: dedupeCode((row.SKU || row.Barcode || '').trim(), externalId, claimedSkus),
+        sku: dedupeCode(readableCode(row.SKU) ?? readableCode(row.Barcode), claimedSkus),
         name: (row.Name || '').trim() || `Unnamed product ${externalId}`,
         price: toMoney(row.PriceIncludingTax),
         purchaseRate,
@@ -75,7 +77,7 @@ export function mapDiziCustomer(row: DiziTrader, claimedCodes: Set<string>): Map
 
     return {
         externalId,
-        customerCode: dedupeCode((row.Code || '').trim(), externalId, claimedCodes),
+        customerCode: dedupeCode(readableCode(row.Code), claimedCodes),
         name: (row.Name || '').trim() || `Unnamed customer ${externalId}`,
         ownerName: emptyToNull(row.ContactPerson),
         phone: emptyToNull(row.ContactNo),
@@ -103,7 +105,7 @@ export function mapDiziSupplier(row: DiziTrader, claimedNames: Set<string>): Map
     const externalId = String(row.Id);
     // Supplier is unique on [tenant_id, name] in our schema, so the name is the
     // value that has to be disambiguated.
-    const name = dedupeCode((row.Name || '').trim() || `Unnamed supplier ${externalId}`, externalId, claimedNames);
+    const name = dedupeName((row.Name || '').trim() || `Unnamed supplier ${externalId}`, claimedNames);
 
     return {
         externalId,
