@@ -2045,7 +2045,7 @@ export const api = {
             },
         );
     },
-    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string; paymentMethodId?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -2067,7 +2067,7 @@ export const api = {
     /** The serial a new payment would get; a preview, not a reservation. */
     getNextCustomerPaymentNumber: (direction: 'receive' | 'pay'): Promise<{ payment_number: string }> =>
         fetchWithAuth(`/customers/credit/payments/next-number?direction=${direction}`),
-    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string }) =>
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string; paymentMethodId?: string }) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -2907,6 +2907,7 @@ export const api = {
         notes?: string;
         date?: string;
         paymentNumber?: string;
+        paymentMethodId?: string;
         allocations?: { purchaseId: string; amount: number }[];
     }) =>
         fetchWithAuth(`/suppliers/${id}/credit/payment`, {
@@ -2940,7 +2941,7 @@ export const api = {
     /** The serial a new payment would get; a preview, not a reservation. */
     getNextSupplierPaymentNumber: (direction: 'pay' | 'receive'): Promise<{ payment_number: string }> =>
         fetchWithAuth(`/suppliers/credit/payments/next-number?direction=${direction}`),
-    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string; date?: string; paymentNumber?: string }) =>
+    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string; date?: string; paymentNumber?: string; paymentMethodId?: string }) =>
         fetchWithAuth(`/suppliers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),

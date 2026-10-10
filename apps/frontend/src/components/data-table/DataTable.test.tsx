@@ -822,4 +822,44 @@ describe('DataTable — default page size', () => {
 
         jest.restoreAllMocks();
     });
+
+    describe('row click', () => {
+        const withButton: ColumnDef<Row, any>[] = [
+            ...columns,
+            { id: 'act', header: '', cell: () => <button type="button">Print</button> },
+        ];
+
+        it('opens the row clicked, but not when the click was on a control inside it', () => {
+            const onRowClick = jest.fn();
+            render(<DataTable {...defaultProps} columns={withButton} onRowClick={onRowClick} />);
+
+            fireEvent.click(screen.getByText('Beta Product'));
+            expect(onRowClick).toHaveBeenCalledWith(mockData[1]);
+
+            onRowClick.mockClear();
+            fireEvent.click(screen.getAllByRole('button', { name: 'Print' })[0]);
+            expect(onRowClick).not.toHaveBeenCalled();
+        });
+
+        it('opens the focused row on Enter', () => {
+            const onRowClick = jest.fn();
+            render(<DataTable {...defaultProps} onRowClick={onRowClick} />);
+
+            const row = screen.getByText('Gamma Product').closest('tr')!;
+            expect(row).toHaveAttribute('tabindex', '0');
+            fireEvent.keyDown(row, { key: 'Enter' });
+
+            expect(onRowClick).toHaveBeenCalledWith(mockData[2]);
+        });
+
+        it('leaves rows inert without a handler, and styles the ones asked for', () => {
+            render(<DataTable {...defaultProps} rowClassName={(row) => (row.id === '1' ? 'bg-blue-50' : undefined)} />);
+
+            const first = screen.getByText('Alpha Product').closest('tr')!;
+            expect(first).not.toHaveAttribute('tabindex');
+            expect(first.className).toContain('bg-blue-50');
+            expect(screen.getByText('Beta Product').closest('tr')!.className).not.toContain('bg-blue-50');
+        });
+    });
 });
+

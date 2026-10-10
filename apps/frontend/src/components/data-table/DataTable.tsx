@@ -118,6 +118,14 @@ export interface DataTableProps<T> {
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
     /** Table density — defaults to CompactUiContext when inside accounting module */
     density?: UiDensity;
+    /**
+     * Opens a row: clicking anywhere on it that is not itself a control, or
+     * Enter on the focused row. Buttons, links and inputs inside keep their own
+     * clicks.
+     */
+    onRowClick?: (row: T) => void;
+    /** Extra classes per row — a selected row, one just added. */
+    rowClassName?: (row: T) => string | undefined;
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
      *  client row count. Pages using this must also set `showSearch={false}` and render
@@ -140,6 +148,12 @@ export interface DataTableProps<T> {
             total: number;
         }>;
     };
+}
+
+/** Whether a click started on something with a click of its own inside a row. */
+function isFromControl(target: EventTarget | null): boolean {
+    return target instanceof Element
+        && !!target.closest('button, a, input, select, textarea, label, [role="button"], [role="menuitem"]');
 }
 
 /** The label around a selection checkbox — see the injected `select` column. */
@@ -294,6 +308,8 @@ export default function DataTable<T>({
     filterPresets,
     density,
     serverPagination,
+    onRowClick,
+    rowClassName,
 }: DataTableProps<T>) {
     const { t } = useI18n();
     // Lazy: every list page renders this table, but printing is a rare click.
@@ -988,7 +1004,20 @@ export default function DataTable<T>({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {table.getRowModel().rows.map((row) => (
-                                    <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <tr
+                                        key={row.id}
+                                        className={`hover:bg-gray-50/50 transition-colors ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${rowClassName?.(row.original) ?? ''}`}
+                                        onClick={onRowClick ? (event) => {
+                                            if (isFromControl(event.target)) return;
+                                            onRowClick(row.original);
+                                        } : undefined}
+                                        onKeyDown={onRowClick ? (event) => {
+                                            if (event.key !== 'Enter' || event.target !== event.currentTarget) return;
+                                            event.preventDefault();
+                                            onRowClick(row.original);
+                                        } : undefined}
+                                        tabIndex={onRowClick ? 0 : undefined}
+                                    >
                                         {row.getVisibleCells().map((cell) => (
                                             <td
                                                 key={cell.id}

@@ -270,6 +270,16 @@ export class RecordCreditPaymentDto {
     @IsString()
     @MaxLength(40)
     paymentNumber?: string;
+
+    /**
+     * The tender: a PaymentMethod of this tenant, active. Its name is kept on
+     * the payment, and its linked ledger account (when set) takes the cash
+     * leg instead of Cash in Hand. Omitted: no method recorded on a new
+     * payment; the stored one kept on an edit.
+     */
+    @IsOptional()
+    @IsUUID()
+    paymentMethodId?: string;
 }
 
 /**
@@ -380,6 +390,16 @@ export class UpdateCreditPaymentDto {
     @IsString()
     @MaxLength(40)
     paymentNumber?: string;
+
+    /**
+     * The tender: a PaymentMethod of this tenant, active. Its name is kept on
+     * the payment, and its linked ledger account (when set) takes the cash
+     * leg instead of Cash in Hand. Omitted: no method recorded on a new
+     * payment; the stored one kept on an edit.
+     */
+    @IsOptional()
+    @IsUUID()
+    paymentMethodId?: string;
 }
 
 export class NextCustomerPaymentNumberQueryDto {
