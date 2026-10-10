@@ -216,6 +216,29 @@ describe('ExpressRetailClient', () => {
         expect(JSON.parse(calls[2].init.body).searchType).toBe('quantity');
     });
 
+    it('reads quotations and their line items from the quotation endpoints', async () => {
+        const calls = stubFetch([
+            { setCookie: [] },
+            LOGIN_OK,
+            { body: { status: true, message: 'Quotation List', data: { quotations: [{ id: 2704, invoice: '2600628' }] } } },
+            { body: { status: true, message: 'Quotations Details', data: { quotations: [{ id: '34099', quotation_id: '2704' }] } } },
+        ]);
+
+        const client = new ExpressRetailClient(credentials);
+        await client.login();
+
+        const quotations = await client.fetchQuotations({ from: '2026-10-01', to: '2026-10-31' });
+        const lines = await client.fetchQuotationLines({ from: '2026-10-01', to: '2026-10-31' });
+
+        expect(quotations).toHaveLength(1);
+        expect(lines).toHaveLength(1);
+        expect(calls[2].url).toBe('https://erp.example.com/get-quotation');
+        expect(calls[3].url).toBe('https://erp.example.com/get-quotation-details');
+        expect(JSON.parse(calls[2].init.body)).toMatchObject({ dateFrom: '2026-10-01', dateTo: '2026-10-31' });
+        // Like the sale details, the line list comes back only in a line-level mode.
+        expect(JSON.parse(calls[3].init.body)).toMatchObject({ searchType: 'quantity', dateFrom: '2026-10-01', dateTo: '2026-10-31' });
+    });
+
     describe('payment endpoints', () => {
         function page(rows: number[], lastPage: number, currentPage: number) {
             return {

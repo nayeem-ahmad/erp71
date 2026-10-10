@@ -4,6 +4,8 @@ import {
     ExpressRetailProduct,
     ExpressRetailPurchase,
     ExpressRetailPurchaseLine,
+    ExpressRetailQuotation,
+    ExpressRetailQuotationLine,
     ExpressRetailSale,
     ExpressRetailSaleLine,
     ExpressRetailSaleReturn,
@@ -485,6 +487,60 @@ export interface MappedQuotation {
     notes: string | null;
     externalUpdatedAt: Date | null;
     items: MappedQuotationItem[];
+}
+
+/**
+ * Express keeps no validity date or accepted/converted state on a quotation,
+ * and leaves deleted ones out of the list, so every one it returns is an open
+ * offer: SENT. The total is the header's, which carries transport, VAT and the
+ * header discount that no line does.
+ */
+export function mapQuotation(
+    row: ExpressRetailQuotation,
+    lines: ExpressRetailQuotationLine[],
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedQuotation {
+    const externalId = String(row.id);
+    if (lines.length === 0) {
+        warnings.push({
+            entity: 'QUOTATION',
+            externalId,
+            code: 'QUOTATION_LINES_MISSING',
+            message: `Quotation ${row.invoice}: no line items came back from Express Retail — imported with its total only`,
+        });
+    }
+
+    const items: MappedQuotationItem[] = lines.map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'QUOTATION',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Quotation ${row.invoice}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        // The offered price after the line's own discount: the line total over
+        // the quantity, or the list price less the discount when no total came.
+        const net = toMoney(line.total) || toMoney(line.unit_price) * originalQuantity - toMoney(line.discountAmount);
+        const unitPrice = originalQuantity > 0 ? Math.round((net / originalQuantity) * 100) / 100 : toMoney(line.unit_price);
+        return { externalProductId: String(line.product_id), quantity, unitPrice };
+    });
+
+    return {
+        externalId,
+        quoteNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalCustomerId: emptyToNull(row.customer_id),
+        totalAmount: toMoney(row.total),
+        quoteDate: parseProviderDate(row.date),
+        validUntil: null,
+        status: 'SENT',
+        notes: emptyToNull(row.description),
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+        items,
+    };
 }
 
 /** Which way the cash moved, from our side. */

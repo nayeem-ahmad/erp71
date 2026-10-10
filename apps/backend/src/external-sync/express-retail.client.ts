@@ -192,6 +192,40 @@ export interface ExpressRetailPayment {
     updated_at: string | null;
 }
 
+/**
+ * A row from `/get-quotation`. Same columns as a sale header bar the payment
+ * ones; soft-deleted quotations are left out like every other list.
+ */
+export interface ExpressRetailQuotation {
+    id: number | string;
+    invoice: string;
+    customer_id: string | null;
+    date: string;
+    subtotal: string;
+    discountAmount: string;
+    vatAmount: string;
+    transport_cost: string;
+    total: string;
+    description: string | null;
+    status: string;
+    organization_id: string;
+    created_at: string;
+    updated_at: string | null;
+}
+
+/** A row from `/get-quotation-details`; `total` is the line net of its own discount. */
+export interface ExpressRetailQuotationLine {
+    id: string;
+    quotation_id: string;
+    product_id: string;
+    quantity: string;
+    unit_price: string;
+    discountAmount: string | null;
+    total: string | null;
+    note: string | null;
+    organization_id: string;
+}
+
 export interface ExpressRetailCredentials {
     baseUrl: string;
     username: string;
@@ -324,6 +358,22 @@ export class ExpressRetailClient {
             ...this.windowBody(window),
         });
         return this.expectArray<ExpressRetailSaleReturn>(data, 'salereturns', '/get-sale-return');
+    }
+
+    async fetchQuotations(window: DateWindow): Promise<ExpressRetailQuotation[]> {
+        const data = await this.postJson('/get-quotation', { searchType: '', recordType: 'without', ...this.windowBody(window) });
+        return this.expectArray<ExpressRetailQuotation>(data, 'quotations', '/get-quotation');
+    }
+
+    async fetchQuotationLines(window: DateWindow): Promise<ExpressRetailQuotationLine[]> {
+        const data = await this.postJson('/get-quotation-details', {
+            searchType: 'quantity',
+            recordType: 'without',
+            productId: '',
+            categoryId: '',
+            ...this.windowBody(window),
+        });
+        return this.expectArray<ExpressRetailQuotationLine>(data, 'quotations', '/get-quotation-details');
     }
 
     async fetchCustomerPayments(window: DateWindow): Promise<ExpressRetailPayment[]> {

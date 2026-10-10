@@ -222,12 +222,18 @@ describe('external-sync quotations in a run', () => {
         expect(final.stats.quotations).toEqual({ created: 0, updated: 0, skipped: 0 });
     });
 
-    it('drops the step for a provider without quotations instead of counting it', async () => {
+    it('runs the step for Express Retail', async () => {
         const client = liveClient();
         const db = await execute('EXPRESS_RETAIL_PRO', client);
 
-        // Express has no quotation mapper, so even a client that could fetch is not asked.
-        expect(client.fetchQuotationDocuments).not.toHaveBeenCalled();
+        expect(client.fetchQuotationDocuments).toHaveBeenCalled();
+        expect(db.externalSyncRun.update.mock.calls.at(-1)[0].data.status).toBe('SUCCESS');
+    });
+
+    it('drops the step for a client that cannot fetch quotations instead of counting it', async () => {
+        const { fetchQuotationDocuments: _unused, ...client } = liveClient();
+        const db = await execute('EXPRESS_RETAIL_PRO', client);
+
         const progress = db.externalSyncRun.update.mock.calls.map((c: any) => c[0].data.progress).filter(Boolean);
         expect(progress).toEqual([]);
         expect(db.externalSyncRun.update.mock.calls.at(-1)[0].data.status).toBe('SUCCESS');
