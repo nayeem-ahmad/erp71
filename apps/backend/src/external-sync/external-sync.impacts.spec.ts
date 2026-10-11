@@ -2,6 +2,7 @@ import {
     applyOpeningBalance,
     applyPaymentImpacts,
     applyPurchaseImpacts,
+    applyPurchaseReturnImpacts,
     applySaleImpacts,
     applySaleReturnImpacts,
     isAlreadyPosted,
@@ -380,6 +381,44 @@ describe('external-sync impacts', () => {
             expect(params.movementType).toBe('SALES_RETURN');
             expect(autoPostFromRules.mock.calls[0][0].eventType).toBe('sale_return');
             expect(autoPostFromRules.mock.calls[0][0].amount).toBe(440);
+        });
+    });
+
+    describe('purchase returns', () => {
+        const input = (tx: any, supplierId: string | null = 'sup-1') => ({
+            tx,
+            tenantId: 't1',
+            storeId: 's1',
+            returnId: 'ret-1',
+            returnNumber: 'XR-2601323',
+            supplierId,
+            totalAmount: 900,
+            returnDate: SALE_DATE,
+            items: [{ product_id: 'p1', quantity: 2, unit_cost: 450 }],
+        });
+
+        it('takes the goods out of stock, lowers what is owed the supplier and posts the return', async () => {
+            const tx = makeTx({ supplier: { findUnique: jest.fn(async () => ({ due_balance: 500, store_id: 's9' })), update: jest.fn() } });
+            await applyPurchaseReturnImpacts(input(tx));
+
+            const [, movement] = applyInventoryMovement.mock.calls[0];
+            expect(movement).toMatchObject({ quantityDelta: -2, movementType: 'PURCHASE_RETURN', referenceId: 'ret-1', unitCost: 450, allowNegative: true });
+
+            // Like a return entered by hand: the due comes down, never below 0.
+            const credit = tx.supplierCreditTransaction.create.mock.calls[0][0].data;
+            expect(credit).toMatchObject({ type: 'ADJUSTMENT', amount: -500, balance_after: 0, store_id: 's9', reference_type: 'PURCHASE_RETURN' });
+            expect(tx.supplier.update.mock.calls[0][0].data).toEqual({ due_balance: 0 });
+
+            const posted = autoPostFromRules.mock.calls[0][0];
+            expect(posted).toMatchObject({ eventType: 'purchase_return', conditionKey: 'none', amount: 900, partyType: 'SUPPLIER', partyId: 'sup-1' });
+        });
+
+        it("leaves a cash supplier's return off the supplier ledger", async () => {
+            const tx = makeTx();
+            await applyPurchaseReturnImpacts(input(tx, null));
+
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+            expect(autoPostFromRules.mock.calls[0][0].partyType).toBeUndefined();
         });
     });
 

@@ -4,6 +4,7 @@ import {
     ExpressRetailProduct,
     ExpressRetailPurchase,
     ExpressRetailPurchaseLine,
+    ExpressRetailPurchaseReturn,
     ExpressRetailQuotation,
     ExpressRetailQuotationLine,
     ExpressRetailSale,
@@ -491,6 +492,70 @@ export function mapSaleReturn(
         externalSaleId: row.sale ? String(row.sale.id) : null,
         totalRefund: toMoney(row.amount),
         reason: emptyToNull(row.description),
+        returnDate: parseProviderDate(row.date),
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+        items,
+    };
+}
+
+export interface MappedPurchaseReturnItem {
+    externalProductId: string;
+    quantity: number;
+    unitCost: number;
+    lineTotal: number;
+}
+
+export interface MappedPurchaseReturn {
+    externalId: string;
+    returnNumber: string;
+    /** The provider's own number, unprefixed — Express reuses the purchase's. */
+    referenceNumber: string | null;
+    externalPurchaseId: string | null;
+    externalSupplierId: string | null;
+    /** The supplier as embedded on the parent purchase. */
+    embeddedSupplier?: unknown;
+    totalAmount: number;
+    notes: string | null;
+    returnDate: Date;
+    externalUpdatedAt: Date | null;
+    items: MappedPurchaseReturnItem[];
+}
+
+/** Goods sent back to a supplier. A cash-supplier ('G') purchase has no supplier to credit. */
+export function mapPurchaseReturn(row: ExpressRetailPurchaseReturn, documentPrefix: string, warnings: SyncWarning[]): MappedPurchaseReturn {
+    const externalId = String(row.id);
+    const purchase = row.purchase;
+    const cashSupplier = (purchase?.supplier_type ?? '').toUpperCase() === 'G';
+
+    const items: MappedPurchaseReturnItem[] = (row.purchase_return_details ?? []).map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'PURCHASE_RETURN',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Purchase return ${row.invoice}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        const unitCost = toMoney(line.unit_price);
+        const lineTotal = toMoney(line.amount);
+        return {
+            externalProductId: String(line.product_id),
+            quantity,
+            unitCost,
+            lineTotal: lineTotal > 0 ? lineTotal : Math.round(unitCost * quantity * 100) / 100,
+        };
+    });
+
+    return {
+        externalId,
+        returnNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalPurchaseId: purchase ? String(purchase.id) : null,
+        externalSupplierId: cashSupplier ? null : emptyToNull(row.supplier_id ?? purchase?.supplier_id ?? null),
+        embeddedSupplier: cashSupplier ? null : purchase?.supplier ?? null,
+        totalAmount: toMoney(row.amount),
+        notes: emptyToNull(row.description),
         returnDate: parseProviderDate(row.date),
         externalUpdatedAt: parseTimestamp(row.updated_at),
         items,

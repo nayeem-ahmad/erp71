@@ -235,6 +235,41 @@ export interface ExpressRetailQuotationLine {
     organization_id: string;
 }
 
+export interface ExpressRetailPurchaseReturnLine {
+    id: number | string;
+    purchase_return_id: string;
+    product_id: string;
+    quantity: string | number | null;
+    unit_price: string | number | null;
+    amount: string | number | null;
+}
+
+/**
+ * A row from `/get-purchase-return` asked for with recordType 'with', which
+ * embeds the lines; 'without' leaves them out. The parent purchase comes
+ * nested, with its supplier, and a return keeps its purchase's invoice number.
+ * `supplier_type` 'G' is Express's walk-in "Cash Supplier", who has no record.
+ */
+export interface ExpressRetailPurchaseReturn {
+    id: number | string;
+    invoice: string;
+    supplier_id: string | null;
+    date: string;
+    amount: string | null;
+    description: string | null;
+    status: string;
+    organization_id: string;
+    updated_at: string | null;
+    purchase: {
+        id: number | string;
+        invoice: string;
+        supplier_id: string | null;
+        supplier_type: string | null;
+        supplier?: Record<string, unknown> | null;
+    } | null;
+    purchase_return_details: ExpressRetailPurchaseReturnLine[] | null;
+}
+
 export interface ExpressRetailCredentials {
     baseUrl: string;
     username: string;
@@ -383,6 +418,15 @@ export class ExpressRetailClient {
             ...this.windowBody(window),
         });
         return this.expectArray<ExpressRetailQuotationLine>(data, 'quotations', '/get-quotation-details');
+    }
+
+    async fetchPurchaseReturns(window: DateWindow): Promise<ExpressRetailPurchaseReturn[]> {
+        const data = await this.postJson('/get-purchase-return', {
+            searchType: '',
+            recordType: 'with',
+            ...this.windowBody(window),
+        });
+        return this.expectArray<ExpressRetailPurchaseReturn>(data, 'purchasereturns', '/get-purchase-return');
     }
 
     async fetchCustomerPayments(window: DateWindow): Promise<ExpressRetailPayment[]> {

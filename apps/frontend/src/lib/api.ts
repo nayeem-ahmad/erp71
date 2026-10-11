@@ -1154,7 +1154,8 @@ export type ExternalSyncStep =
     | 'PURCHASES'
     | 'CUSTOMER_PAYMENTS'
     | 'SUPPLIER_PAYMENTS'
-    | 'SALE_RETURNS';
+    | 'SALE_RETURNS'
+    | 'PURCHASE_RETURNS';
 
 export type ExternalSyncSnapshot = {
     id: string;
@@ -1198,6 +1199,8 @@ export type ExternalSyncRun = {
     > & {
         /** Absent on runs from before quotations were imported. */
         quotations?: ExternalSyncTally;
+        /** Absent on runs from before purchase returns were imported. */
+        purchaseReturns?: ExternalSyncTally;
     } | null;
     warnings: ExternalSyncWarning[] | null;
     error_message: string | null;

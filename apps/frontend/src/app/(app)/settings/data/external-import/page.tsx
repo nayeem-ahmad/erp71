@@ -42,6 +42,7 @@ const STEPS: Array<{ key: ExternalSyncStep; label: string; hint: string }> = [
     { key: 'CUSTOMER_PAYMENTS', label: 'Customer payments', hint: 'Needs customers' },
     { key: 'SUPPLIER_PAYMENTS', label: 'Supplier payments', hint: 'Needs suppliers' },
     { key: 'SALE_RETURNS', label: 'Sale returns', hint: 'Needs the parent sales already imported' },
+    { key: 'PURCHASE_RETURNS', label: 'Purchase returns', hint: 'Needs the parent purchases already imported' },
 ];
 
 type StoreOption = { id: string; name: string };

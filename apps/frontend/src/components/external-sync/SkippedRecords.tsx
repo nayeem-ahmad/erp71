@@ -23,6 +23,7 @@ const GROUPS: Array<[entity: string, label: string]> = [
     ['CUSTOMER_PAYMENT', 'Customer payments'],
     ['SUPPLIER_PAYMENT', 'Supplier payments'],
     ['SALE_RETURN', 'Sale returns'],
+    ['PURCHASE_RETURN', 'Purchase returns'],
 ];
 
 export function skippedRecordsOf(run: ExternalSyncRun): ExternalSyncWarning[] {

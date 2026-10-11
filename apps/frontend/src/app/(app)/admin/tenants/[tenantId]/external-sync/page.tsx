@@ -45,6 +45,7 @@ const STEPS: Array<{ key: ExternalSyncStep; label: string; hint: string }> = [
     { key: 'CUSTOMER_PAYMENTS', label: 'Customer payments', hint: 'Needs customers' },
     { key: 'SUPPLIER_PAYMENTS', label: 'Supplier payments', hint: 'Needs suppliers' },
     { key: 'SALE_RETURNS', label: 'Sale returns', hint: 'Needs the parent sales already imported' },
+    { key: 'PURCHASE_RETURNS', label: 'Purchase returns', hint: 'Needs the parent purchases already imported' },
 ];
 
 /**
@@ -654,7 +655,8 @@ export default function TenantExternalSyncPage() {
                                     <th className="py-2 pe-3 font-medium">Sales</th>
                                     <th className="py-2 pe-3 font-medium">Quotations</th>
                                     <th className="py-2 pe-3 font-medium">Purchases</th>
-                                    <th className="py-2 pe-3 font-medium">Returns</th>
+                                    <th className="py-2 pe-3 font-medium">Sale returns</th>
+                                    <th className="py-2 pe-3 font-medium">Purchase returns</th>
                                     <th className="py-2 pe-3 font-medium">Payments</th>
                                     <th className="py-2 pe-3 font-medium">Masters</th>
                                     <th className="py-2 font-medium">Notes</th>
@@ -713,6 +715,7 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                 <td className="py-2 pe-3">{formatTally(run, 'quotations')}</td>
                 <td className="py-2 pe-3">{formatTally(run, 'purchases')}</td>
                 <td className="py-2 pe-3">{formatTally(run, 'saleReturns')}</td>
+                <td className="py-2 pe-3">{formatTally(run, 'purchaseReturns')}</td>
                 <td className="py-2 pe-3 text-gray-500">{formatPaymentTally(run)}</td>
                 <td className="py-2 pe-3 text-gray-500">
                     {run.stats
@@ -734,14 +737,14 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
             </tr>
             {open === 'skipped' ? (
                 <tr>
-                    <td colSpan={10} className="py-2">
+                    <td colSpan={11} className="py-2">
                         <SkippedRecordsPanel run={run} />
                     </td>
                 </tr>
             ) : null}
             {open === 'warnings' ? (
                 <tr>
-                    <td colSpan={10} className="py-2">
+                    <td colSpan={11} className="py-2">
                         {warningCount > warnings.length ? (
                             <p className="mb-1 text-xs text-gray-500">
                                 Showing the first {warnings.length} of {warningCount} warnings.
@@ -830,7 +833,8 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
                             ['Suppliers', 'suppliers'],
                             ['Sales', 'sales'],
                             ['Purchases', 'purchases'],
-                            ['Returns', 'saleReturns'],
+                            ['Sale returns', 'saleReturns'],
+                            ['Purchase returns', 'purchaseReturns'],
                             ['Quotations', 'quotations'],
                             ['Cust. payments', 'customerPayments'],
                             ['Supp. payments', 'supplierPayments'],
@@ -853,7 +857,7 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
     );
 }
 
-function formatTally(run: ExternalSyncRun, key: 'sales' | 'quotations' | 'purchases' | 'saleReturns') {
+function formatTally(run: ExternalSyncRun, key: 'sales' | 'quotations' | 'purchases' | 'saleReturns' | 'purchaseReturns') {
     const tally = run.stats?.[key];
     if (!tally) return '—';
     const parts = [`${tally.created} new`, `${tally.updated} updated`];
