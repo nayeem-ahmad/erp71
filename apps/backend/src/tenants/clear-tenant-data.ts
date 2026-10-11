@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { seedDefaultLeadTaxonomy } from '@erp71/database';
 import type { DatabaseService } from '../database/database.service';
 import { clearBranchMasterData, clearBranchTransactions, type BranchDataGroup } from './clear-branch-data';
+import { deleteMovementsAndUnwindStock } from './unwind-stock';
 
 type Tx = Prisma.TransactionClient;
 
@@ -145,7 +146,9 @@ async function wipeTenantTransactions(tx: Tx, tenantId: string): Promise<void> {
 
     // Inventory operational
     await tx.productionJob.deleteMany({ where: { tenantId } });
-    await tx.inventoryMovement.deleteMany({ where: { tenant_id: tenantId } });
+    // Stock and the cost pool lose what the movements had put in, or a
+    // re-import would count everything twice.
+    await deleteMovementsAndUnwindStock(tx, tenantId, { tenant_id: tenantId });
     await tx.inventoryShrinkage.deleteMany({ where: { tenant_id: tenantId } }); // cascades InventoryShrinkageItem
     await tx.warehouseTransfer.deleteMany({ where: { tenant_id: tenantId } }); // cascades WarehouseTransferItem
     await tx.stockTakeSession.deleteMany({ where: { tenant_id: tenantId } }); // cascades StockTakeCountLine

@@ -19,6 +19,7 @@ function makeTx() {
             target[model] ??= {
                 deleteMany: jest.fn(async () => ({ count: 0 })),
                 updateMany: jest.fn(async () => ({ count: 0 })),
+                groupBy: jest.fn(async () => []),
             };
             return target[model];
         },
@@ -122,6 +123,23 @@ describe('clearTenantData', () => {
             data: { due_balance: 0, total_spent: 0, loyalty_points: 0, last_contacted_at: null, next_activity_date: null },
         });
         expect(tx.supplier.updateMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' }, data: { due_balance: 0 } });
+    });
+
+    it('takes the deleted movements back out of stock, so a re-import cannot count them twice', async () => {
+        const { db, tx } = makeDb();
+        tx.inventoryMovement.groupBy.mockResolvedValueOnce([{ product_id: 'p1', warehouse_id: 'w1', _sum: { quantity_delta: 60 } }]);
+
+        await clearTenantData(db as any, 't1', 'transactions');
+
+        expect(tx.productStock.updateMany).toHaveBeenCalledWith({
+            where: { tenant_id: 't1', product_id: 'p1', warehouse_id: 'w1' },
+            data: { quantity: { decrement: 60 } },
+        });
+        expect(tx.productCost.updateMany).toHaveBeenCalledWith({
+            where: { tenant_id: 't1', product_id: 'p1' },
+            data: { qty_on_hand: { decrement: 60 } },
+        });
+        expect(tx.inventoryMovement.deleteMany).toHaveBeenCalledWith({ where: { tenant_id: 't1' } });
     });
 
     it('clears import shipments with the transactions — their lines would block deleting products', async () => {
