@@ -17,6 +17,9 @@ jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: (...args: any[]) => applyInventoryMovement(...args),
     resolveWarehouseId: async () => 'wh-1',
 }));
+jest.mock('../accounting/payment-account.util', () => ({
+    resolvePaymentMethodAccountId: async () => 'acct-cash',
+}));
 jest.mock('../accounting/posting.utils', () => ({
     ...jest.requireActual('../accounting/posting.utils'),
     autoPostFromRules: (...args: any[]) => autoPostFromRules(...args),
@@ -246,7 +249,16 @@ describe('opening dues for parties the tenant already has', () => {
         const warnings = await syncCustomers(db, new Map([['c1', 90250]]));
 
         const blockedBy = db.customerCreditTransaction.findFirst.mock.calls[0][0].where;
-        expect(blockedBy.OR).toEqual([{ notes: 'Opening balance imported from DIZI_CASHIER' }, { created_at: { lt: OPENING } }]);
+        expect(blockedBy.OR).toEqual([
+            { notes: 'Opening balance imported from DIZI_CASHIER' },
+            { created_at: { lt: OPENING } },
+            // A balance typed in by hand: the tenant already has what they owe.
+            {
+                type: 'ADJUSTMENT',
+                reference_type: null,
+                OR: [{ notes: null }, { NOT: { notes: { startsWith: 'Opening balance imported from ' } } }],
+            },
+        ]);
         expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
         expect(warnings).toEqual([]);
     });
@@ -298,5 +310,72 @@ describe('opening stock', () => {
             OR: [{ reference_type: 'EXTERNAL_SYNC_OPENING', reference_id: 'conn-1' }, { created_at: { lt: OPENING } }],
         });
         expect(applyInventoryMovement).not.toHaveBeenCalled();
+    });
+});
+
+describe('Express parties and sales kept through a clear', () => {
+    const EXPRESS = { ...CONNECTION, provider: 'EXPRESS_RETAIL_PRO', document_prefix: 'XR-' };
+    const XR = require('./provider-adapter').EXPRESS_RETAIL_DEFINITION.mappers;
+
+    it("gives an existing customer back their Express opening due", async () => {
+        const db = makeDb({ CUSTOMER: [['45448', 'cust-1']] });
+
+        await service(db).syncCustomers(
+            EXPRESS,
+            { fetchCustomers: jest.fn(async () => [{ id: 45448, code: 'C00061', name: 'FENI. JAHAN SURGICAL', phone: '01838598820', previous_due: '126000.000' }]) },
+            emptyStats(),
+            [],
+            false,
+            OPENING,
+            XR,
+        );
+
+        expect(db.customerCreditTransaction.create.mock.calls[0][0].data).toMatchObject({
+            customer_id: 'cust-1',
+            type: 'ADJUSTMENT',
+            amount: 126000,
+            notes: 'Opening balance imported from EXPRESS_RETAIL_PRO',
+        });
+    });
+
+    it('books what an already-imported, posted sale was paid above its total', async () => {
+        const db = makeDb({ SALE: [['292091', 'sale-1']] });
+        db.sale = {
+            // Only the imported sale itself is found; its provider number is free.
+            findFirst: jest.fn(async ({ where }: any) =>
+                where.reference_number ? null : { id: 'sale-1', customer_id: 'cust-1', total_amount: 54850, serial_number: 'XR-2500778' },
+            ),
+        };
+        db.saleItem.findMany = jest.fn(async () => []);
+        const stats = emptyStats();
+        const warnings: any[] = [];
+
+        await service(db).syncSalesWindow(
+            EXPRESS,
+            {
+                fetchSaleDocuments: jest.fn(async () => [
+                    { header: { id: 292091, invoice: '2500778', customer_id: '47252', date: '2025-10-29', total: '54850.000', paid: '113065.000', cashPaid: '113065.000', bankPaid: '0.000' }, lines: [] },
+                ]),
+            },
+            { from: '2021-10-12', to: '2026-10-11' },
+            new Map(),
+            new Map([['47252', 'cust-1']]),
+            stats,
+            warnings,
+            false,
+            XR,
+            OPENING,
+        );
+
+        expect(db.customerCreditTransaction.create.mock.calls[0][0].data).toMatchObject({
+            customer_id: 'cust-1',
+            type: 'PAYMENT',
+            amount: 58215,
+            reference_type: 'SALE',
+            reference_id: 'sale-1',
+        });
+        expect(warnings).toEqual([]);
+        expect(stats.sales.updated).toBe(1);
+        expect(warnings.filter((w) => w.code === 'POSTED_IMMUTABLE')).toEqual([]);
     });
 });

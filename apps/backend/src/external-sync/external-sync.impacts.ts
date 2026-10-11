@@ -19,8 +19,9 @@ import { supplierBranchId } from '../suppliers/supplier-branch.util';
  * on (tenant, eventType, sourceId, legKey), so a second run over the same
  * document is a no-op rather than a double post. And the caller only invokes
  * these on documents it has just created — a document that already posted is
- * treated as immutable and never rewritten. The one exception,
- * `applySaleReturnCredit`, checks for its own ledger row before writing one.
+ * treated as immutable and never rewritten. The exceptions,
+ * `applySaleReturnCredit` and `applySaleOverpayment`, check for their own
+ * ledger row before writing one.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -91,6 +92,20 @@ export async function applySaleImpacts(input: SaleImpactInput): Promise<void> {
         await tx.customer.update({
             where: { id: input.customerId },
             data: { due_balance: balanceAfter },
+        });
+    }
+
+    if (input.customerId && input.amountPaid - input.totalAmount > EPSILON) {
+        await applySaleOverpayment({
+            tx,
+            tenantId,
+            storeId,
+            saleId,
+            serialNumber: input.serialNumber,
+            customerId: input.customerId,
+            excess: input.amountPaid - input.totalAmount,
+            paymentMode: input.paymentMode,
+            saleDate,
         });
     }
 
@@ -396,6 +411,84 @@ export async function applyPaymentImpacts(input: PaymentImpactInput): Promise<vo
             ? { overrideDebitAccountId: methodAccountId }
             : { overrideCreditAccountId: methodAccountId }),
     });
+}
+
+export interface SaleOverpaymentInput {
+    tx: Tx;
+    tenantId: string;
+    storeId: string;
+    saleId: string;
+    serialNumber: string;
+    customerId: string;
+    /** What was paid above the invoice total. */
+    excess: number;
+    paymentMode: SaleImpactInput['paymentMode'];
+    saleDate: Date;
+}
+
+/**
+ * What a customer paid at the counter above the invoice total. The provider
+ * (Express) takes it off what they already owed, as its running balance on
+ * their next document shows, so it is a payment of its own: a PAYMENT row
+ * tied to the sale and a customer receipt in the ledger. The sale itself
+ * posts its total.
+ *
+ * Once per sale, so it is safe on a sale imported before this existed.
+ * Returns whether a row was written.
+ */
+export async function applySaleOverpayment(input: SaleOverpaymentInput): Promise<boolean> {
+    const { tx, tenantId, saleId, customerId, excess } = input;
+
+    const existing = await tx.customerCreditTransaction.findFirst({
+        where: { tenant_id: tenantId, customer_id: customerId, type: 'PAYMENT', reference_type: 'SALE', reference_id: saleId },
+        select: { id: true },
+    });
+    if (!existing) {
+        const customer = await tx.customer.findUnique({
+            where: { id: customerId },
+            select: { due_balance: true, store_id: true },
+        });
+        const balanceAfter = Number(customer?.due_balance ?? 0) - excess;
+        await tx.customerCreditTransaction.create({
+            data: {
+                tenant_id: tenantId,
+                customer_id: customerId,
+                // A credit row belongs to its customer's branch.
+                store_id: customer!.store_id,
+                type: 'PAYMENT',
+                amount: excess,
+                balance_after: balanceAfter,
+                reference_type: 'SALE',
+                reference_id: saleId,
+                notes: `Paid above the total of imported sale ${input.serialNumber}`,
+                created_at: input.saleDate,
+            },
+        });
+        await tx.customer.update({ where: { id: customerId }, data: { due_balance: balanceAfter } });
+    }
+
+    const methodAccountId = await resolvePaymentMethodAccountId(tx, tenantId, input.paymentMode);
+    await autoPostFromRules({
+        tx,
+        tenantId,
+        eventType: 'customer_payment',
+        conditionKey: 'payment_direction',
+        conditionValue: 'receive',
+        sourceModule: 'external-sync',
+        sourceType: 'sale',
+        sourceId: saleId,
+        legKey: 'overpaid',
+        amount: excess,
+        description: `Imported sale ${input.serialNumber} — paid above its total`,
+        referenceNumber: input.serialNumber,
+        date: input.saleDate,
+        storeId: input.storeId,
+        partyType: 'CUSTOMER',
+        partyId: customerId,
+        overrideDebitAccountId: methodAccountId,
+    });
+
+    return !existing;
 }
 
 export interface SaleReturnImpactInput {

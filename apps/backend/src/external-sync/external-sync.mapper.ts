@@ -516,7 +516,12 @@ export function mapSaleReturn(
         returnNumber: buildDocumentNumber(documentPrefix, row.invoice),
         referenceNumber: emptyToNull(row.invoice),
         externalSaleId: row.sale ? String(row.sale.id) : null,
+        externalCustomerId: emptyToNull(row.customer_id),
         totalRefund: toMoney(row.amount),
+        // Express takes the whole return off the customer's due: the running
+        // balance (`previous_due`) on their next sale or payment shows it.
+        // Cash handed back is a CP payment of its own.
+        dueCredit: toMoney(row.amount),
         reason: emptyToNull(row.description),
         returnDate: parseProviderDate(row.date),
         externalUpdatedAt: parseTimestamp(row.updated_at),

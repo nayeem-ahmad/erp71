@@ -5,6 +5,7 @@ import {
     applyPurchaseImpacts,
     applyPurchaseReturnImpacts,
     applySaleImpacts,
+    applySaleOverpayment,
     applySaleReturnCredit,
     applySaleReturnImpacts,
     isAlreadyPosted,
@@ -107,6 +108,40 @@ describe('external-sync impacts', () => {
             // idempotency key and is silently swallowed.
             expect(paid.legKey).toBe('paid');
             expect(paid.amount).toBe(40);
+        });
+
+        it("books what was paid above the total as a payment off the customer's due", async () => {
+            // Express sale 2500778: total 54,850, paid 113,065 — the rest settled older dues.
+            const tx = makeTx();
+            await applySaleImpacts({ tx, ...base, totalAmount: 54850, amountPaid: 113065 });
+
+            const row = tx.customerCreditTransaction.create.mock.calls[0][0].data;
+            expect(row).toMatchObject({
+                customer_id: 'cust-1',
+                type: 'PAYMENT',
+                amount: 58215,
+                balance_after: 1000 - 58215,
+                reference_type: 'SALE',
+                reference_id: 'sale-1',
+                created_at: SALE_DATE,
+            });
+            const receipt = autoPostFromRules.mock.calls.find(([input]) => input.eventType === 'customer_payment')[0];
+            expect(receipt).toMatchObject({ conditionValue: 'receive', amount: 58215, legKey: 'overpaid', partyId: 'cust-1' });
+            // The sale itself still posts its own total.
+            expect(autoPostFromRules.mock.calls.find(([input]) => input.eventType === 'sale')[0].amount).toBe(54850);
+        });
+
+        it('books an overpayment once, however often the sale is imported', async () => {
+            const tx = makeTx();
+            tx.customerCreditTransaction.findFirst.mockResolvedValue({ id: 'row-1' });
+
+            const wrote = await applySaleOverpayment({
+                tx, tenantId: 't1', storeId: 's1', saleId: 'sale-1', serialNumber: 'XR-2500778',
+                customerId: 'cust-1', excess: 58215, paymentMode: 'cash', saleDate: SALE_DATE,
+            });
+
+            expect(wrote).toBe(false);
+            expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
         });
 
         it('does not touch customer balances for a walk-in credit sale', async () => {

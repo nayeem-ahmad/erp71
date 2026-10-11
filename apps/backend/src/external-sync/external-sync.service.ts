@@ -43,6 +43,7 @@ import {
     applyPurchaseImpacts,
     applyPurchaseReturnImpacts,
     applySaleImpacts,
+    applySaleOverpayment,
     applySaleReturnCredit,
     applySaleReturnImpacts,
     applyOpeningBalance,
@@ -1018,7 +1019,7 @@ export class ExternalSyncService {
                     });
                     if (count > 0) {
                         stats.customers.updated++;
-                        if (openings && (await this.openExistingParty(connection, 'CUSTOMER', existingId, mapped.previousDue, openingAsOf))) {
+                        if (await this.openExistingParty(connection, 'CUSTOMER', existingId, mapped.previousDue, openingAsOf)) {
                             opened.parties++;
                             opened.amount += mapped.previousDue;
                         }
@@ -1039,7 +1040,7 @@ export class ExternalSyncService {
                     stats.customers.skipped++;
                 } else {
                     stats.customers.created++;
-                    if (openings && connection.post_impacts && mapped.previousDue !== 0) {
+                    if (connection.post_impacts && mapped.previousDue !== 0) {
                         opened.parties++;
                         opened.amount += mapped.previousDue;
                     }
@@ -1099,7 +1100,7 @@ export class ExternalSyncService {
                     });
                     if (count > 0) {
                         stats.suppliers.updated++;
-                        if (openings && (await this.openExistingParty(connection, 'SUPPLIER', existingId, mapped.previousDue, openingAsOf))) {
+                        if (await this.openExistingParty(connection, 'SUPPLIER', existingId, mapped.previousDue, openingAsOf)) {
                             opened.parties++;
                             opened.amount += mapped.previousDue;
                         }
@@ -1120,7 +1121,7 @@ export class ExternalSyncService {
                     stats.suppliers.skipped++;
                 } else {
                     stats.suppliers.created++;
-                    if (openings && connection.post_impacts && mapped.previousDue !== 0) {
+                    if (connection.post_impacts && mapped.previousDue !== 0) {
                         opened.parties++;
                         opened.amount += mapped.previousDue;
                     }
@@ -1145,11 +1146,17 @@ export class ExternalSyncService {
     }
 
     /**
-     * A worked-out opening due (see OpeningPositions) for a party the tenant
-     * already has. Only when they have no opening from this provider yet and
-     * nothing on their account from before the range: then the range covers
-     * their whole history and the opening is exactly what it leaves out. A run
-     * from a newer, shorter snapshot finds earlier rows and leaves them alone.
+     * The opening due of a party the tenant already has: Express's
+     * `previous_due`, or one worked out from a snapshot (see OpeningPositions).
+     * A re-import used to write it only for a party it created, so a party
+     * kept through a clear lost theirs for good.
+     *
+     * Only when the party has no opening from this provider yet, nothing on
+     * their account from before the range, and no balance typed in by hand:
+     * then the range covers their whole history and the opening is exactly
+     * what it leaves out. A run from a newer, shorter snapshot finds earlier
+     * rows and leaves them alone, and a party set up here with their balance
+     * keeps it, as one adopted on creation always has.
      */
     private async openExistingParty(
         connection: { tenant_id: string; provider: string; post_impacts: boolean },
@@ -1163,7 +1170,15 @@ export class ExternalSyncService {
         const isCustomer = party === 'CUSTOMER';
         const where = {
             tenant_id: connection.tenant_id,
-            OR: [{ notes: openingBalanceNote(connection.provider) }, { created_at: { lt: asOf } }],
+            OR: [
+                { notes: openingBalanceNote(connection.provider) },
+                { created_at: { lt: asOf } },
+                {
+                    type: 'ADJUSTMENT',
+                    reference_type: null,
+                    OR: [{ notes: null }, { NOT: { notes: { startsWith: openingBalanceNote('') } } }],
+                },
+            ],
         };
         const blocked = isCustomer
             ? await this.db.customerCreditTransaction.findFirst({ where: { ...where, customer_id: partyId }, select: { id: true } })
@@ -1190,8 +1205,7 @@ export class ExternalSyncService {
             externalId: '',
             code: 'OPENING_FROM_PROVIDER',
             message:
-                `${opened.parties} ${noun}${opened.parties === 1 ? '' : 's'} start with an opening due (net ${Math.round(opened.amount * 100) / 100}): ` +
-                `what ${provider}'s balances hold beyond the documents imported — opening dues entered there, and records the import cannot read`,
+                `${opened.parties} ${noun}${opened.parties === 1 ? '' : 's'} start with an opening due from ${provider} (net ${Math.round(opened.amount * 100) / 100})`,
         });
     }
 
@@ -2192,6 +2206,7 @@ export class ExternalSyncService {
 
         if (existingId) {
             if (await this.isImmutablyPosted(connection, 'sale', existingId)) {
+                if (await this.settleSaleOverpayment(connection, existingId, mapped)) return false;
                 warnings.push({
                     entity: 'SALE',
                     externalId: mapped.externalId,
@@ -2235,6 +2250,7 @@ export class ExternalSyncService {
                     await tx.saleItem.createMany({ data: items.map((item) => ({ ...item, sale_id: existingId })) });
                 }
             });
+            await this.settleSaleOverpayment(connection, existingId, mapped);
             return false;
         }
 
@@ -2285,6 +2301,41 @@ export class ExternalSyncService {
         await this.writeMapping(connection, 'SALE', mapped.externalId, sale.id, mapped.externalUpdatedAt);
         saleMap.set(mapped.externalId, sale.id);
         return true;
+    }
+
+    /**
+     * Books what was paid above an imported sale's total (see
+     * applySaleOverpayment) for a sale imported before that was booked. Only
+     * a payment is added, so a posted sale gets it too; its own figures and
+     * voucher are left alone. Returns whether anything was written.
+     */
+    private async settleSaleOverpayment(
+        connection: { tenant_id: string; store_id: string; post_impacts: boolean },
+        saleId: string,
+        mapped: MappedSale,
+    ): Promise<boolean> {
+        const excess = mapped.amountPaid - mapped.totalAmount;
+        if (!connection.post_impacts || excess <= 0.005) return false;
+
+        const sale = await this.db.sale.findFirst({
+            where: { id: saleId, tenant_id: connection.tenant_id },
+            select: { customer_id: true, total_amount: true, serial_number: true },
+        });
+        if (!sale?.customer_id || Math.abs(Number(sale.total_amount) - mapped.totalAmount) > 0.005) return false;
+
+        return this.db.$transaction((tx) =>
+            applySaleOverpayment({
+                tx,
+                tenantId: connection.tenant_id,
+                storeId: connection.store_id,
+                saleId,
+                serialNumber: sale.serial_number,
+                customerId: sale.customer_id!,
+                excess,
+                paymentMode: mapped.paymentMode,
+                saleDate: mapped.saleDate,
+            }),
+        );
     }
 
     /**
