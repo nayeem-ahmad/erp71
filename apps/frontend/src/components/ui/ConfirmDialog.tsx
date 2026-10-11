@@ -24,6 +24,8 @@ export interface ConfirmDialogProps {
     /** Confirm button label while the action is running. */
     workingLabel?: string;
     loading?: boolean;
+    /** Holds the confirm button off until the caller's own input is complete — a reason in `children`, say. */
+    confirmDisabled?: boolean;
     danger?: boolean;
     /** Extra content between the prompt and the type-to-confirm input, e.g. options the action takes. */
     children?: ReactNode;
@@ -46,6 +48,7 @@ export function ConfirmDialog({
     cancelLabel,
     workingLabel,
     loading = false,
+    confirmDisabled: confirmHeld = false,
     danger,
     children,
     onConfirm,
@@ -65,7 +68,7 @@ export function ConfirmDialog({
 
     const close = () => { setValue(''); onCancel(); };
     const requiresInput = expected !== undefined;
-    const confirmDisabled = loading || (requiresInput && value.trim().toLowerCase() !== expected);
+    const confirmDisabled = loading || confirmHeld || (requiresInput && value.trim().toLowerCase() !== expected);
 
     return (
         <ModalShell size="sm" onBackdropClick={close}>
