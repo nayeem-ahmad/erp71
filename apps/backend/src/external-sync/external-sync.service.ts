@@ -66,6 +66,7 @@ import { resolveSyncWindow } from './snapshot/window';
 import { ExternalSyncSnapshotService } from './snapshot/snapshot.service';
 import { clientForRun } from './snapshot/client-for-run';
 import { SnapshotClient } from './snapshot/snapshot-client';
+import { normalizePhone } from './match/normalize';
 import { customerBranchId } from '../customers/customer-branch.util';
 import { supplierBranchId } from '../suppliers/supplier-branch.util';
 
@@ -216,7 +217,10 @@ export function customerAdoptionWhere(
     // repeat, or none at all, so it says nothing about who the party is.
     _customerCode: string | null,
 ) {
-    if (!phone) return null;
+    // A number that is not a phone ("01", "32", "415" — what shops type when
+    // they have none) is not identity either: matching on it welded unrelated
+    // customers who happened to share the same junk.
+    if (!phone || !normalizePhone(phone)) return null;
     return { tenant_id: tenantId, phone, deleted_at: null };
 }
 
