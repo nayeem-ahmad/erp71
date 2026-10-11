@@ -21,6 +21,7 @@ import {
     MappedPayment,
     MappedProduct,
     MappedPurchase,
+    MappedPurchaseReturn,
     MappedQuotation,
     MappedSale,
     MappedSaleReturn,
@@ -32,6 +33,7 @@ import {
     mapPayment,
     mapProduct,
     mapPurchase,
+    mapPurchaseReturn,
     mapQuotation,
     mapSale,
     mapSaleReturn,
@@ -89,6 +91,8 @@ export interface ProviderClient {
      * does not expose quotations leaves it out and the step is skipped.
      */
     fetchQuotationDocuments?(window: DateWindow): Promise<unknown[]>;
+    /** Purchase returns with their lines. Optional, as quotations are. */
+    fetchPurchaseReturnDocuments?(window: DateWindow): Promise<unknown[]>;
 }
 
 export interface ProviderMappers {
@@ -101,6 +105,8 @@ export interface ProviderMappers {
     saleReturn(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedSaleReturn;
     /** Present exactly when the provider's client has `fetchQuotationDocuments`. */
     quotation?(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedQuotation;
+    /** Present exactly when the provider's client has `fetchPurchaseReturnDocuments`. */
+    purchaseReturn?(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedPurchaseReturn;
 }
 
 export interface ProviderDefinition {
@@ -152,6 +158,7 @@ const EXPRESS_MAPPERS: ProviderMappers = {
     saleReturn: (doc, prefix, warnings) => mapSaleReturn(doc, prefix, warnings),
     quotation: (doc: { header: ExpressRetailQuotation; lines: ExpressRetailQuotationLine[] }, prefix, warnings) =>
         mapQuotation(doc.header, doc.lines, prefix, warnings),
+    purchaseReturn: (doc, prefix, warnings) => mapPurchaseReturn(doc, prefix, warnings),
 };
 
 class ExpressProviderClient implements ProviderClient {
@@ -195,6 +202,10 @@ class ExpressProviderClient implements ProviderClient {
 
     fetchSaleReturnDocuments(window: DateWindow) {
         return this.inner.fetchSaleReturns(window);
+    }
+
+    fetchPurchaseReturnDocuments(window: DateWindow) {
+        return this.inner.fetchPurchaseReturns(window);
     }
 
     async fetchQuotationDocuments(window: DateWindow) {

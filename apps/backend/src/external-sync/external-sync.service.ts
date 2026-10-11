@@ -15,6 +15,7 @@ import {
     MappedCustomer,
     MappedPayment,
     MappedPurchase,
+    MappedPurchaseReturn,
     MappedQuotation,
     MappedSale,
     MappedSaleReturn,
@@ -38,6 +39,7 @@ import {
 import {
     applyPaymentImpacts,
     applyPurchaseImpacts,
+    applyPurchaseReturnImpacts,
     applySaleImpacts,
     applySaleReturnImpacts,
     applyOpeningBalance,
@@ -64,7 +66,8 @@ type EntityType =
     | 'CUSTOMER_PAYMENT'
     | 'SUPPLIER_PAYMENT'
     | 'SALE_RETURN'
-    | 'QUOTATION';
+    | 'QUOTATION'
+    | 'PURCHASE_RETURN';
 
 interface EntityTally {
     created: number;
@@ -81,7 +84,8 @@ type SyncStats = Record<
     | 'customerPayments'
     | 'supplierPayments'
     | 'saleReturns'
-    | 'quotations',
+    | 'quotations'
+    | 'purchaseReturns',
     EntityTally
 >;
 
@@ -128,6 +132,9 @@ export const SYNC_STEPS = [
     'CUSTOMER_PAYMENTS',
     'SUPPLIER_PAYMENTS',
     'SALE_RETURNS',
+    // Last for the same reason as sale returns: a return's purchase may sit in
+    // any earlier chunk of the run.
+    'PURCHASE_RETURNS',
 ] as const;
 
 export type SyncStep = (typeof SYNC_STEPS)[number];
@@ -479,6 +486,7 @@ export class ExternalSyncService {
             supplierPayments: emptyTally(),
             saleReturns: emptyTally(),
             quotations: emptyTally(),
+            purchaseReturns: emptyTally(),
         };
         const warnings: SyncWarning[] = [];
 
@@ -506,6 +514,8 @@ export class ExternalSyncService {
             // nothing should not count toward progress.
             const supportsQuotations = Boolean(client.fetchQuotationDocuments && mappers.quotation);
             if (!supportsQuotations) steps = steps.filter((step) => step !== 'QUOTATIONS');
+            const supportsPurchaseReturns = Boolean(client.fetchPurchaseReturnDocuments && mappers.purchaseReturn);
+            if (!supportsPurchaseReturns) steps = steps.filter((step) => step !== 'PURCHASE_RETURNS');
 
             // Guard against a mis-typed credential pointing at another
             // company's data landing in this tenant.
@@ -595,6 +605,15 @@ export class ExternalSyncService {
                     await this.assertNotCancelled(runId);
                     await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun, mappers);
                     await tick(`Sale returns ${chunk.from.slice(0, 7)}`);
+                }
+            }
+
+            if (steps.includes('PURCHASE_RETURNS')) {
+                const purchaseMap = await this.loadMappings(connection.id, 'PURCHASE');
+                for (const chunk of chunks) {
+                    await this.assertNotCancelled(runId);
+                    await this.syncPurchaseReturnsWindow(connection, client, chunk, productMap, purchaseMap, supplierMap, stats, warnings, dryRun, mappers, window.from);
+                    await tick(`Purchase returns ${chunk.from.slice(0, 7)}`);
                 }
             }
 
@@ -1402,6 +1421,193 @@ export class ExternalSyncService {
                 });
             }
         }
+    }
+
+    /**
+     * Goods sent back to a supplier. Like sale returns these run after every
+     * chunk, since a return's purchase may be months older. A return whose
+     * purchase was not imported still comes across, unlinked, as one entered
+     * by hand without a purchase would.
+     */
+    private async syncPurchaseReturnsWindow(
+        connection: DocumentConnection,
+        client: ProviderClient,
+        window: DateWindow,
+        productMap: Map<string, string>,
+        purchaseMap: Map<string, string>,
+        supplierMap: Map<string, string>,
+        stats: SyncStats,
+        warnings: SyncWarning[],
+        dryRun: boolean,
+        mappers: ProviderMappers,
+        openingAsOf?: Date,
+    ) {
+        if (!client.fetchPurchaseReturnDocuments || !mappers.purchaseReturn) return;
+        const docs = await client.fetchPurchaseReturnDocuments(window);
+        const returnMap = await this.loadMappings(connection.id, 'PURCHASE_RETURN');
+
+        for (const doc of docs) {
+            const mapped = mappers.purchaseReturn(doc, connection.document_prefix, warnings);
+            if (dryRun) {
+                returnMap.has(mapped.externalId) ? stats.purchaseReturns.updated++ : stats.purchaseReturns.created++;
+                continue;
+            }
+
+            const supplierId = await this.resolveDocumentParty(connection, 'SUPPLIER', mapped.externalSupplierId, mapped.embeddedSupplier, supplierMap, {
+                mappers, stats, warnings, openingAsOf, documentLabel: `purchase return ${mapped.referenceNumber ?? mapped.returnNumber}`,
+            });
+            const purchaseId = mapped.externalPurchaseId ? purchaseMap.get(mapped.externalPurchaseId) ?? null : null;
+            if (!purchaseId) {
+                warnings.push({
+                    entity: 'PURCHASE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'PARENT_PURCHASE_UNRESOLVED',
+                    message:
+                        `Purchase return ${mapped.referenceNumber ?? mapped.returnNumber} belongs to purchase ${mapped.externalPurchaseId ?? '(none)'}, ` +
+                        'which has not been imported — imported without a linked purchase',
+                });
+            }
+
+            try {
+                const created = await this.writePurchaseReturn(connection, mapped, purchaseId, supplierId, productMap, returnMap, warnings);
+                if (created === null) {
+                    stats.purchaseReturns.skipped++;
+                } else {
+                    created ? stats.purchaseReturns.created++ : stats.purchaseReturns.updated++;
+                }
+            } catch (error: any) {
+                stats.purchaseReturns.skipped++;
+                warnings.push({
+                    entity: 'PURCHASE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'WRITE_FAILED',
+                    message: `Purchase return ${mapped.referenceNumber ?? mapped.returnNumber} could not be imported: ${describeWriteError(error)}`,
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.returnNumber, mapped.returnDate, mapped.externalSupplierId, mapped.embeddedSupplier, mapped.totalAmount, mapped.items.length, error),
+                });
+            }
+        }
+    }
+
+    /** Returns null when the return was skipped, or left as it is because it has posted. */
+    private async writePurchaseReturn(
+        connection: DocumentConnection,
+        mapped: MappedPurchaseReturn,
+        purchaseId: string | null,
+        supplierId: string | null,
+        productMap: Map<string, string>,
+        returnMap: Map<string, string>,
+        warnings: SyncWarning[],
+    ): Promise<boolean | null> {
+        // Each line names a line of the purchase where there is one, matched on
+        // product and consumed once, as sale returns do.
+        const purchaseItems = purchaseId
+            ? await this.db.purchaseItem.findMany({ where: { purchase_id: purchaseId }, select: { id: true, product_id: true } })
+            : [];
+        const available = new Map<string, string[]>();
+        for (const item of purchaseItems) available.set(item.product_id, [...(available.get(item.product_id) ?? []), item.id]);
+
+        const items: Array<{ purchase_item_id: string | null; product_id: string; quantity: number; unit_cost: number; line_total: number }> = [];
+        for (const line of mapped.items) {
+            const productId = productMap.get(line.externalProductId);
+            if (!productId) {
+                warnings.push({
+                    entity: 'PURCHASE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'RETURN_LINE_UNMATCHED',
+                    message:
+                        `Purchase return ${mapped.referenceNumber ?? mapped.returnNumber}: provider product ${line.externalProductId} has not been imported ` +
+                        '— the whole return was skipped rather than import one whose lines do not add up',
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.returnNumber, mapped.returnDate, mapped.externalSupplierId, mapped.embeddedSupplier, mapped.totalAmount, mapped.items.length),
+                });
+                return null;
+            }
+            items.push({
+                purchase_item_id: available.get(productId)?.shift() ?? null,
+                product_id: productId,
+                quantity: line.quantity,
+                unit_cost: line.unitCost,
+                line_total: line.lineTotal,
+            });
+        }
+
+        const header = {
+            purchase_id: purchaseId,
+            supplier_id: supplierId,
+            reference_number: mapped.referenceNumber,
+            total_amount: mapped.totalAmount,
+            notes: mapped.notes,
+        };
+        const existingId = returnMap.get(mapped.externalId);
+
+        if (existingId && !(await this.mappedRowExists(this.db.purchaseReturn, connection.tenant_id, existingId))) {
+            await this.forgetStaleMapping(connection.id, 'PURCHASE_RETURN', mapped.externalId, returnMap, warnings, `Purchase return ${mapped.returnNumber}`);
+            return this.writePurchaseReturn(connection, mapped, purchaseId, supplierId, productMap, returnMap, warnings);
+        }
+
+        if (existingId) {
+            if (await this.isImmutablyPosted(connection, 'purchase_return', existingId)) {
+                warnings.push({
+                    entity: 'PURCHASE_RETURN',
+                    externalId: mapped.externalId,
+                    code: 'POSTED_IMMUTABLE',
+                    message:
+                        `Purchase return ${mapped.returnNumber} has already posted to the ledger — upstream changes were not applied. ` +
+                        'Rewriting it would leave its voucher and stock movement describing different figures.',
+                });
+                return null;
+            }
+            await this.db.$transaction(async (tx) => {
+                await tx.purchaseReturn.update({ where: { id: existingId }, data: header });
+                await tx.purchaseReturnItem.deleteMany({ where: { return_id: existingId } });
+                if (items.length > 0) {
+                    await tx.purchaseReturnItem.createMany({ data: items.map((item) => ({ ...item, return_id: existingId })) });
+                }
+            });
+            return false;
+        }
+
+        // Express gives a return its purchase's number, so a purchase returned
+        // to twice repeats it.
+        const returnNumber = await this.claimDocumentNumber(
+            mapped.returnNumber,
+            (candidate) => this.isTaken(this.db.purchaseReturn, { tenant_id: connection.tenant_id, return_number: candidate }),
+            'PURCHASE_RETURN',
+            mapped.externalId,
+            warnings,
+        );
+        const created = await this.db.$transaction(async (tx) => {
+            const row = await tx.purchaseReturn.create({
+                data: {
+                    tenant_id: connection.tenant_id,
+                    store_id: connection.store_id,
+                    ...header,
+                    return_number: returnNumber,
+                    status: 'RECORDED',
+                    created_at: mapped.returnDate,
+                    items: { create: items },
+                },
+                select: { id: true },
+            });
+
+            if (connection.post_impacts) {
+                await applyPurchaseReturnImpacts({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    storeId: connection.store_id,
+                    returnId: row.id,
+                    returnNumber,
+                    supplierId,
+                    totalAmount: mapped.totalAmount,
+                    returnDate: mapped.returnDate,
+                    items,
+                });
+            }
+            return row;
+        });
+
+        await this.writeMapping(connection, 'PURCHASE_RETURN', mapped.externalId, created.id, mapped.externalUpdatedAt);
+        returnMap.set(mapped.externalId, created.id);
+        return true;
     }
 
     /** Returns null when the return had to be skipped for integrity reasons. */

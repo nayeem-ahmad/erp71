@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { customerLedgerDueDelta } from '../customers/customer-credit.utils';
 import { purchasePaymentStatus } from '../purchases/purchase-status';
+import { deleteMovementsAndUnwindStock } from './unwind-stock';
 
 type Tx = Prisma.TransactionClient;
 
@@ -294,10 +295,11 @@ export async function clearBranchTransactions(tx: Tx, tenantId: string, storeId:
     await tx.importShipment.deleteMany({ where: inBranch }); // cascades items, costs, documents
 
     // Inventory. A cross-branch transfer's movements in the other branch's
-    // warehouse go with the transfer.
-    await tx.inventoryMovement.deleteMany({ where: inBranchWarehouse });
+    // warehouse go with the transfer. Each takes back out of stock what it put
+    // in, so the branch's stock does not outlive its movements.
+    await deleteMovementsAndUnwindStock(tx, tenantId, inBranchWarehouse);
     await chunked(warehouseTransferIds, (chunk) =>
-        tx.inventoryMovement.deleteMany({ where: { tenant_id: tenantId, reference_id: { in: chunk } } }),
+        deleteMovementsAndUnwindStock(tx, tenantId, { tenant_id: tenantId, reference_id: { in: chunk } }),
     );
     await tx.inventoryShrinkage.deleteMany({ where: inBranchWarehouse }); // cascades InventoryShrinkageItem
     await tx.warehouseTransfer.deleteMany({ where: transferWhere }); // cascades WarehouseTransferItem

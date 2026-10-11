@@ -9,6 +9,7 @@ const COUNT_LABELS: Array<[key: string, label: string]> = [
     ['customerPayments', 'customer payments'],
     ['supplierPayments', 'supplier payments'],
     ['saleReturns', 'sale returns'],
+    ['purchaseReturns', 'purchase returns'],
 ];
 
 export type SnapshotCountEntry = { key: string; label: string; count: number };

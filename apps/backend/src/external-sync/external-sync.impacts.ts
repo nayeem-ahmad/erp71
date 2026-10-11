@@ -234,6 +234,90 @@ export async function applyPurchaseImpacts(input: PurchaseImpactInput): Promise<
     });
 }
 
+export interface PurchaseReturnImpactInput {
+    tx: Tx;
+    tenantId: string;
+    storeId: string;
+    returnId: string;
+    returnNumber: string;
+    supplierId: string | null;
+    totalAmount: number;
+    returnDate: Date;
+    items: Array<{ product_id: string; quantity: number; unit_cost: number }>;
+}
+
+/**
+ * What a purchase return entered by hand does (purchase-returns.service.ts):
+ * the goods leave stock, the supplier's due comes down by the return — never
+ * below zero — with an ADJUSTMENT row, and the purchase-return rule posts it.
+ */
+export async function applyPurchaseReturnImpacts(input: PurchaseReturnImpactInput): Promise<void> {
+    const { tx, tenantId, storeId, returnId, returnDate } = input;
+
+    const warehouseId = await resolveWarehouseId(tx, tenantId, storeId);
+    for (const item of input.items) {
+        await applyInventoryMovement(tx, {
+            tenantId,
+            productId: item.product_id,
+            warehouseId,
+            quantityDelta: -item.quantity,
+            movementType: 'PURCHASE_RETURN',
+            referenceType: 'PURCHASE_RETURN',
+            referenceId: returnId,
+            unitCost: item.unit_cost,
+            occurredAt: returnDate,
+            // History replays in order of type, not date: a return can land
+            // before stock it was taken from has been rebuilt.
+            allowNegative: true,
+        });
+    }
+
+    if (input.supplierId) {
+        const supplier = await tx.supplier.findUnique({
+            where: { id: input.supplierId },
+            select: { due_balance: true, store_id: true },
+        });
+        const currentDue = Number(supplier?.due_balance ?? 0);
+        const reduction = Math.min(input.totalAmount, currentDue);
+        if (reduction > EPSILON) {
+            const balanceAfter = currentDue - reduction;
+            await tx.supplierCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    supplier_id: input.supplierId,
+                    // A credit row belongs to its supplier's branch.
+                    store_id: supplier!.store_id,
+                    type: 'ADJUSTMENT',
+                    amount: -reduction,
+                    balance_after: balanceAfter,
+                    reference_type: 'PURCHASE_RETURN',
+                    reference_id: returnId,
+                    notes: `Imported purchase return ${input.returnNumber}`,
+                    created_at: returnDate,
+                },
+            });
+            await tx.supplier.update({ where: { id: input.supplierId }, data: { due_balance: balanceAfter } });
+        }
+    }
+
+    await autoPostFromRules({
+        tx,
+        tenantId,
+        eventType: 'purchase_return',
+        conditionKey: 'none',
+        conditionValue: null,
+        sourceModule: 'external-sync',
+        sourceType: 'purchase_return',
+        sourceId: returnId,
+        amount: input.totalAmount,
+        description: `Imported purchase return ${input.returnNumber}`,
+        referenceNumber: input.returnNumber,
+        date: returnDate,
+        storeId,
+        ...(input.supplierId ? { partyType: 'SUPPLIER' as const, partyId: input.supplierId } : {}),
+    });
+}
+
 export interface PaymentImpactInput {
     tx: Tx;
     tenantId: string;

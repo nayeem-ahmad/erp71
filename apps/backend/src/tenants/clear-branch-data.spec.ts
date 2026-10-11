@@ -27,7 +27,7 @@ function makeTx(rows: Record<string, any[]> = {}) {
         'crmActivity', 'crmFollowUp', 'customerInteraction', 'lead', 'warrantyClaim', 'deliveryOrder',
         'quotation', 'salesOrder', 'purchaseQuotation', 'productDemand', 'inventoryMovement',
         'productSerial', 'voucher', 'attendanceRecord', 'customer', 'supplier', 'supplierPaymentAllocation',
-        'project', 'importShipment', 'importCost', 'productStock',
+        'project', 'importShipment', 'importCost', 'productStock', 'productCost',
     ];
     const tx: Record<string, any> = {};
     for (const model of models) {
@@ -37,12 +37,34 @@ function makeTx(rows: Record<string, any[]> = {}) {
             deleteMany: jest.fn(async () => ({ count: 0 })),
             update: jest.fn(async () => ({})),
             updateMany: jest.fn(async () => ({ count: 0 })),
+            groupBy: jest.fn(async () => rows[`${model}:sums`] ?? []),
         };
     }
     return tx;
 }
 
 describe('clearBranchTransactions', () => {
+    it("takes the branch's movements back out of its stock, so a re-import cannot count them twice", async () => {
+        const tx = makeTx({
+            warehouse: [{ id: 'w1', tenant_id: 't1', store_id: 's1' }],
+            'inventoryMovement:sums': [{ product_id: 'p1', warehouse_id: 'w1', _sum: { quantity_delta: 60 } }],
+        });
+
+        await clearBranchTransactions(tx as any, 't1', 's1');
+
+        expect(tx.inventoryMovement.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+            where: { tenant_id: 't1', warehouse_id: { in: ['w1'] } },
+        }));
+        expect(tx.productStock.updateMany).toHaveBeenCalledWith({
+            where: { tenant_id: 't1', product_id: 'p1', warehouse_id: 'w1' },
+            data: { quantity: { decrement: 60 } },
+        });
+        expect(tx.productCost.updateMany).toHaveBeenCalledWith({
+            where: { tenant_id: 't1', product_id: 'p1' },
+            data: { qty_on_hand: { decrement: 60 } },
+        });
+    });
+
     it('scopes every branch-owned delete to the branch and the tenant', async () => {
         const tx = makeTx();
 

@@ -58,6 +58,7 @@ export function countsOf(
         | 'supplierPayments'
         | 'saleReturns'
         | 'quotations'
+        | 'purchaseReturns'
     >,
 ): SnapshotCounts {
     return {
@@ -70,6 +71,7 @@ export function countsOf(
         supplierPayments: doc.supplierPayments.length,
         saleReturns: doc.saleReturns.length,
         quotations: doc.quotations?.length ?? 0,
+        purchaseReturns: doc.purchaseReturns?.length ?? 0,
     };
 }
 
@@ -97,8 +99,9 @@ export function assertCounts(doc: SnapshotDocument): void {
     const expected = doc.manifest.counts;
     const keys = Object.keys(actual) as (keyof SnapshotCounts)[];
     for (const key of keys) {
-        // A snapshot from before quotations has neither the rows nor the count.
-        const want = key === 'quotations' ? expected[key] ?? 0 : expected[key];
+        // A snapshot from before quotations or purchase returns has neither the
+        // rows nor the count.
+        const want = key === 'quotations' || key === 'purchaseReturns' ? expected[key] ?? 0 : expected[key];
         if (actual[key] !== want) {
             throw new Error(`Snapshot count mismatch for ${key}: expected ${expected[key]}, got ${actual[key]}`);
         }

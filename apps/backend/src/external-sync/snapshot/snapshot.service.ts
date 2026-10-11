@@ -132,7 +132,8 @@ export class ExternalSyncSnapshotService {
 
             const chunks = def.planWindows(snapshot.window_from, snapshot.window_to);
             const withQuotations = typeof client.fetchQuotationDocuments === 'function';
-            const total = 3 + chunks.length * (withQuotations ? 6 : 5);
+            const withPurchaseReturns = typeof client.fetchPurchaseReturnDocuments === 'function';
+            const total = 3 + chunks.length * (5 + (withQuotations ? 1 : 0) + (withPurchaseReturns ? 1 : 0));
             let done = 0;
             const mark = async (phase: string) => {
                 done += 1;
@@ -161,6 +162,7 @@ export class ExternalSyncSnapshotService {
             const saleReturns: unknown[] = [];
             const quotations: unknown[] = [];
             let quotationsError: string | undefined;
+            const purchaseReturns: unknown[] = [];
 
             for (const chunk of chunks) {
                 sales.push(...(await client.fetchSaleDocuments(chunk)));
@@ -178,6 +180,11 @@ export class ExternalSyncSnapshotService {
                 saleReturns.push(...(await client.fetchSaleReturnDocuments(chunk)));
                 await mark('Sale returns');
                 await this.throwIfCancelled(snapshotId);
+                if (withPurchaseReturns) {
+                    purchaseReturns.push(...(await client.fetchPurchaseReturnDocuments!(chunk)));
+                    await mark('Purchase returns');
+                    await this.throwIfCancelled(snapshotId);
+                }
                 if (withQuotations && !quotationsError) {
                     try {
                         quotations.push(...(await client.fetchQuotationDocuments!(chunk)));
@@ -212,6 +219,7 @@ export class ExternalSyncSnapshotService {
                         supplierPayments,
                         saleReturns,
                         quotations,
+                        purchaseReturns,
                     }),
                     sha256: '',
                 },
@@ -224,6 +232,7 @@ export class ExternalSyncSnapshotService {
                 supplierPayments,
                 saleReturns,
                 quotations,
+                ...(withPurchaseReturns ? { purchaseReturns } : {}),
                 ...(quotationsError ? { quotationsError } : {}),
             };
 
