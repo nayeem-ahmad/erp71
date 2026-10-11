@@ -401,6 +401,14 @@ describe('external-sync mapper', () => {
             expect(warnings).toHaveLength(0);
         });
 
+        it("takes the whole return off the customer's due, as Express's own running balance does", () => {
+            // Cash handed back is a CP payment of its own, which raises the due again.
+            const mapped = mapSaleReturn(returnRow, 'XR-', []);
+
+            expect(mapped.dueCredit).toBe(5270);
+            expect(mapped.externalCustomerId).toBe(String(returnRow.customer_id));
+        });
+
         it('records no parent when the nested sale is absent, so the caller can skip it', () => {
             const mapped = mapSaleReturn({ ...returnRow, sale: null }, 'XR-', []);
             expect(mapped.externalSaleId).toBeNull();

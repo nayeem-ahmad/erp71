@@ -451,11 +451,37 @@ export interface MappedSaleReturn {
     referenceNumber: string | null;
     /** From the nested `sale` object — the return has no sale_id column. */
     externalSaleId: string | null;
+    /**
+     * The customer the provider files the return under. Used only when the
+     * return's sale is not imported; otherwise the sale's customer is the one.
+     */
+    externalCustomerId?: string | null;
     totalRefund: number;
+    /**
+     * What the return takes off the customer's due. Left out by a provider
+     * whose returns are not credited to the customer's account (Express), so
+     * those import as before.
+     */
+    dueCredit?: number;
     reason: string | null;
     returnDate: Date;
     externalUpdatedAt: Date | null;
     items: MappedSaleReturnItem[];
+}
+
+/**
+ * Where each party and product stood when the imported range begins, keyed by
+ * provider id: the provider's own current figure less what the range's
+ * documents will add up to once imported. Zero entries are left out.
+ *
+ * It catches whatever the provider holds that no imported document explains:
+ * opening dues and opening stock typed into the provider when it was set up,
+ * history before the range, and records the import cannot read.
+ */
+export interface OpeningPositions {
+    customers: Map<string, number>;
+    suppliers: Map<string, number>;
+    stock: Map<string, number>;
 }
 
 export function mapSaleReturn(
@@ -490,7 +516,12 @@ export function mapSaleReturn(
         returnNumber: buildDocumentNumber(documentPrefix, row.invoice),
         referenceNumber: emptyToNull(row.invoice),
         externalSaleId: row.sale ? String(row.sale.id) : null,
+        externalCustomerId: emptyToNull(row.customer_id),
         totalRefund: toMoney(row.amount),
+        // Express takes the whole return off the customer's due: the running
+        // balance (`previous_due`) on their next sale or payment shows it.
+        // Cash handed back is a CP payment of its own.
+        dueCredit: toMoney(row.amount),
         reason: emptyToNull(row.description),
         returnDate: parseProviderDate(row.date),
         externalUpdatedAt: parseTimestamp(row.updated_at),

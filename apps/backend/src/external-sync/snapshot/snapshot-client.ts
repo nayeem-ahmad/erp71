@@ -14,6 +14,11 @@ export class SnapshotClient implements ProviderClient {
         return this.doc.manifest;
     }
 
+    /** Every record the snapshot holds, for arithmetic across all of them. */
+    getDocument(): SnapshotDocument {
+        return this.doc;
+    }
+
     async login(): Promise<ProviderSession> {
         return {
             organizationId: this.doc.manifest.externalOrgId,

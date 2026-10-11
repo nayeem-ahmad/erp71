@@ -40,6 +40,8 @@ export interface DiziItem {
     BuyingPriceIncludingTax: number | string | null;
     WeightedAvgCost: number | string | null;
     MinimumStock: number | string | null;
+    /** Units on hand now, across Dizi's warehouses. */
+    StockInHand?: number | string | null;
     IsService: boolean | null;
     IsActive: boolean | null;
     IsDeleted: boolean | null;

@@ -111,7 +111,9 @@ function makeDb() {
         },
         externalSyncMapping: {
             upsert: jest.fn().mockResolvedValue({}),
+            findMany: jest.fn().mockResolvedValue([]),
         },
+        sale: { findMany: jest.fn().mockResolvedValue([]) },
         product: { findMany: jest.fn().mockResolvedValue([{ id: 'p1', name: 'Napa 500mg', sku: 'NAPA' }]) },
         customer: { findMany: jest.fn().mockResolvedValue([]) },
         supplier: { findMany: jest.fn().mockResolvedValue([]) },
@@ -206,6 +208,35 @@ describe('ExternalSyncMatchService', () => {
             expect(result.rows).toHaveLength(1);
             expect(result.rows[0].externalId).toBe('1');
             expect(result.rows[0].sourceName).toBe('Napa 500mg');
+        });
+
+        it("keeps a customer on the customer holding their imported sales, though a review relinked them", async () => {
+            // Babu Bazar: FENI. JAHAN SURGICAL's sales sit on their own customer,
+            // but a review had pointed them at COX. RAYHAN SURGICAL, who shares the phone.
+            const customer = (id: number, name: string, phone: string) => ({ id, code: `C${id}`, name, phone, previous_due: '0' });
+            mockedReadSnapshot.mockResolvedValue(
+                snapshotDoc({
+                    products: [],
+                    customers: [customer(45448, 'FENI. JAHAN SURGICAL', '01838598820'), customer(49179, 'COX. RAYHAN SURGICAL', '01838-598820')] as any,
+                    sales: [{ header: { id: 292091, invoice: '2500520', customer_id: '45448', date: '2025-09-25', total: '29500', paid: '0' }, lines: [] }] as any,
+                }),
+            );
+            db.product.findMany.mockResolvedValue([]);
+            db.customer.findMany.mockResolvedValue([
+                { id: 'c61', name: 'FENI. JAHAN SURGICAL', phone: '01838598820' },
+                { id: 'c270', name: 'COX. RAYHAN SURGICAL', phone: '01838-598820' },
+            ]);
+            db.externalSyncMapping.findMany.mockResolvedValue([
+                { entity_type: 'CUSTOMER', external_id: '45448', internal_id: 'c270' },
+                { entity_type: 'CUSTOMER', external_id: '49179', internal_id: 'c270' },
+                { entity_type: 'SALE', external_id: '292091', internal_id: 'sale-1' },
+            ]);
+            db.sale.findMany.mockResolvedValue([{ id: 'sale-1', customer_id: 'c61' }]);
+
+            const { rows } = await service.getCandidates('tenant-1', 'snap-1');
+
+            expect(rows.find((r) => r.externalId === '45448')).toMatchObject({ matchId: 'c61', decision: 'accept' });
+            expect(rows.find((r) => r.externalId === '49179')).toMatchObject({ matchId: 'c270', decision: 'accept' });
         });
     });
 

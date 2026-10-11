@@ -26,6 +26,7 @@ import {
     MappedSale,
     MappedSaleReturn,
     MappedSupplier,
+    OpeningPositions,
     PaymentParty,
     SyncWarning,
     groupBy,
@@ -47,6 +48,7 @@ import {
     mapDiziProduct,
     mapDiziPurchase,
     mapDiziQuotation,
+    diziOpeningPositions,
     mapDiziSale,
     mapDiziSaleReturn,
     mapDiziSupplier,
@@ -107,6 +109,12 @@ export interface ProviderMappers {
     quotation?(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedQuotation;
     /** Present exactly when the provider's client has `fetchPurchaseReturnDocuments`. */
     purchaseReturn?(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedPurchaseReturn;
+    /**
+     * Opening dues and stock worked out from everything a snapshot holds, for
+     * a provider that sends no opening figures of its own. Express carries a
+     * party's opening due on the row (`previous_due`) and leaves this out.
+     */
+    openingPositions?(records: any): OpeningPositions;
 }
 
 export interface ProviderDefinition {
@@ -242,6 +250,7 @@ const DIZI_MAPPERS: ProviderMappers = {
     payment: mapDiziPayment,
     saleReturn: (doc, prefix, warnings) => mapDiziSaleReturn(doc, prefix, warnings),
     quotation: (doc, prefix, warnings) => mapDiziQuotation(doc.header, doc.detail, prefix, warnings),
+    openingPositions: diziOpeningPositions,
 };
 
 class DiziProviderClient implements ProviderClient {
