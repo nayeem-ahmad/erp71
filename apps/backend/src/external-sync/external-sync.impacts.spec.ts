@@ -3,6 +3,7 @@ import {
     applyOpeningStock,
     applyPaymentImpacts,
     applyPurchaseImpacts,
+    applyPurchaseReturnCredit,
     applyPurchaseReturnImpacts,
     applySaleImpacts,
     applySaleOverpayment,
@@ -34,7 +35,7 @@ function makeTx(overrides: any = {}) {
         customer: { findUnique: jest.fn(async () => ({ due_balance: 1000 })), update: jest.fn() },
         supplier: { findUnique: jest.fn(async () => ({ due_balance: 500 })), update: jest.fn() },
         customerCreditTransaction: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn(async () => null) },
-        supplierCreditTransaction: { create: jest.fn(), update: jest.fn() },
+        supplierCreditTransaction: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn(async () => null) },
         ...overrides,
     } as any;
 }
@@ -552,6 +553,77 @@ describe('external-sync impacts', () => {
 
             expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
             expect(autoPostFromRules.mock.calls[0][0].partyType).toBeUndefined();
+        });
+    });
+
+    describe('what was paid with the goods', () => {
+        const purchase = {
+            tenantId: 't1', storeId: 's1', purchaseId: 'pur-1', purchaseNumber: 'XR-2600183',
+            supplierId: 'sup-1', totalAmount: 254160, purchaseDate: SALE_DATE, items: [],
+        };
+
+        it('posts as a payment to the supplier, after the purchase posts its whole total', async () => {
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, paidAmount: 254160 });
+
+            const [credit, paid] = autoPostFromRules.mock.calls.map(([input]) => input);
+            expect(credit).toMatchObject({ eventType: 'purchase', conditionValue: 'credit', amount: 254160 });
+            expect(paid).toMatchObject({
+                eventType: 'supplier_payment',
+                conditionValue: 'pay',
+                legKey: 'paid',
+                amount: 254160,
+                partyId: 'sup-1',
+                overrideCreditAccountId: 'acct-cash',
+            });
+        });
+
+        it('posts no more than the total when more was paid', async () => {
+            // China supplier: 9,361,240 paid on a 5,460,000 purchase; Express ignores the rest.
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, totalAmount: 5460000, paidAmount: 9361240 });
+
+            expect(autoPostFromRules.mock.calls[1][0].amount).toBe(5460000);
+        });
+
+        it('posts nothing for an unpaid purchase, or one whose own posting was skipped', async () => {
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, paidAmount: 0 });
+            autoPostFromRules.mockResolvedValueOnce({ postingStatus: 'skipped' });
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, paidAmount: 254160 });
+
+            expect(autoPostFromRules.mock.calls.map(([input]) => input.eventType)).toEqual(['purchase', 'purchase']);
+        });
+    });
+
+    describe('a purchase return credited in full', () => {
+        const ret = {
+            tenantId: 't1', storeId: 's1', returnId: 'pr-1', returnNumber: 'XR-2600628',
+            supplierId: 'sup-1', totalAmount: 13000, returnDate: SALE_DATE, items: [],
+        };
+
+        it("takes the whole return off, leaving a supplier owed nothing owing the shop", async () => {
+            const tx = makeTx({ supplier: { findUnique: jest.fn(async () => ({ due_balance: 0 })), update: jest.fn() } });
+            await applyPurchaseReturnImpacts({ tx, ...ret, dueCredit: 13000 });
+
+            expect(tx.supplierCreditTransaction.create.mock.calls[0][0].data).toMatchObject({ type: 'ADJUSTMENT', amount: -13000, balance_after: -13000, reference_id: 'pr-1' });
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: -13000 } });
+        });
+
+        it('gives a return imported under the old cap the rest of its credit', async () => {
+            const tx = makeTx({ supplier: { findUnique: jest.fn(async () => ({ due_balance: 0 })), update: jest.fn() } });
+            tx.supplierCreditTransaction.findFirst.mockResolvedValue({ id: 'row-1', amount: -3000 });
+
+            const changed = await applyPurchaseReturnCredit({ tx, tenantId: 't1', supplierId: 'sup-1', returnId: 'pr-1', returnNumber: 'XR-2600628', returnDate: SALE_DATE, dueCredit: 13000 });
+
+            expect(changed).toBe(true);
+            expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith({ where: { id: 'row-1' }, data: { amount: -13000 } });
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: -10000 } });
+        });
+
+        it('changes nothing once the credit is in full', async () => {
+            const tx = makeTx();
+            tx.supplierCreditTransaction.findFirst.mockResolvedValue({ id: 'row-1', amount: -13000 });
+
+            expect(await applyPurchaseReturnCredit({ tx, tenantId: 't1', supplierId: 'sup-1', returnId: 'pr-1', returnNumber: 'XR-2600628', returnDate: SALE_DATE, dueCredit: 13000 })).toBe(false);
+            expect(tx.supplier.update).not.toHaveBeenCalled();
         });
     });
 

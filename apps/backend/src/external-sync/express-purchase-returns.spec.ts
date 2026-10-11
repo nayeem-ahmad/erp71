@@ -79,6 +79,8 @@ describe('mapPurchaseReturn (Express Retail)', () => {
             externalSupplierId: '5658',
             embeddedSupplier: RETURN.purchase.supplier,
             totalAmount: 900,
+            // Taken off the supplier's due in full, as Express does.
+            dueCredit: 900,
             notes: 'damaged in transit',
             returnDate: new Date('2026-09-01T00:00:00.000Z'),
             externalUpdatedAt: new Date('2026-09-01T13:14:25.000Z'),

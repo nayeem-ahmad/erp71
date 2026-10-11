@@ -41,7 +41,9 @@ import {
 import {
     applyPaymentImpacts,
     applyPurchaseImpacts,
+    applyPurchaseReturnCredit,
     applyPurchaseReturnImpacts,
+    postPurchasePaid,
     applySaleImpacts,
     applySaleOverpayment,
     applySaleReturnCredit,
@@ -53,6 +55,7 @@ import {
     OPENING_STOCK_REFERENCE,
 } from './external-sync.impacts';
 import { resolveWarehouseId } from '../database/inventory.utils';
+import { postingIdempotencyKey } from '../accounting/posting.utils';
 import {
     ListExternalSyncRunsQueryDto,
     RunExternalSyncDto,
@@ -1746,8 +1749,26 @@ export class ExternalSyncService {
             return this.writePurchaseReturn(connection, mapped, purchaseId, supplierId, productMap, returnMap, warnings);
         }
 
+        // A return imported under the old cap gets the rest of its credit; its
+        // voucher already carries the whole return.
+        const settleCredit = (existingId: string) =>
+            connection.post_impacts && supplierId && mapped.dueCredit !== undefined
+                ? this.db.$transaction((tx) =>
+                      applyPurchaseReturnCredit({
+                          tx,
+                          tenantId: connection.tenant_id,
+                          supplierId,
+                          returnId: existingId,
+                          returnNumber: mapped.returnNumber,
+                          returnDate: mapped.returnDate,
+                          dueCredit: mapped.dueCredit!,
+                      }),
+                  )
+                : Promise.resolve(false);
+
         if (existingId) {
             if (await this.isImmutablyPosted(connection, 'purchase_return', existingId)) {
+                if (await settleCredit(existingId)) return false;
                 warnings.push({
                     entity: 'PURCHASE_RETURN',
                     externalId: mapped.externalId,
@@ -1765,6 +1786,7 @@ export class ExternalSyncService {
                     await tx.purchaseReturnItem.createMany({ data: items.map((item) => ({ ...item, return_id: existingId })) });
                 }
             });
+            await settleCredit(existingId);
             return false;
         }
 
@@ -1802,6 +1824,7 @@ export class ExternalSyncService {
                     totalAmount: mapped.totalAmount,
                     returnDate: mapped.returnDate,
                     items,
+                    dueCredit: mapped.dueCredit,
                 });
             }
             return row;
@@ -2480,9 +2503,9 @@ export class ExternalSyncService {
                 // The voucher books the whole total as a credit purchase
                 // whatever was paid, so what was paid is the one figure a
                 // posted purchase can still take from upstream.
-                if (await this.db.$transaction((tx) => this.settlePurchasePaid(tx, connection, existingId, mapped, true))) {
-                    return false;
-                }
+                const settled = await this.db.$transaction((tx) => this.settlePurchasePaid(tx, connection, existingId, mapped, true));
+                const paidPosted = await this.postExistingPurchasePaid(connection, existingId, mapped, warnings);
+                if (settled || paidPosted) return false;
                 warnings.push({
                     entity: 'PURCHASE',
                     externalId: mapped.externalId,
@@ -2562,6 +2585,62 @@ export class ExternalSyncService {
         await this.writeMapping(connection, 'PURCHASE', mapped.externalId, purchase.id, mapped.externalUpdatedAt);
         purchaseMap.set(mapped.externalId, purchase.id);
         return true;
+    }
+
+    /**
+     * Posts what was paid with the goods (see postPurchasePaid) for a posted
+     * purchase imported before that was posted. Reads the purchase as saved,
+     * so a paid amount just corrected is the one posted. Returns whether it
+     * posted; a refusal (a locked period) is a note, not a failed purchase.
+     */
+    private async postExistingPurchasePaid(
+        connection: { tenant_id: string; store_id: string; post_impacts: boolean },
+        purchaseId: string,
+        mapped: MappedPurchase,
+        warnings: SyncWarning[],
+    ): Promise<boolean> {
+        if (!connection.post_impacts) return false;
+        const purchase = await this.db.purchase.findFirst({
+            where: { id: purchaseId, tenant_id: connection.tenant_id },
+            select: { total_amount: true, paid_amount: true, supplier_id: true, purchase_number: true, created_at: true },
+        });
+        const paid = purchase ? Math.min(Number(purchase.paid_amount), Number(purchase.total_amount)) : 0;
+        if (!purchase || paid <= 0.005) return false;
+
+        const event = await this.db.postingEvent.findUnique({
+            where: {
+                tenant_id_idempotency_key: {
+                    tenant_id: connection.tenant_id,
+                    idempotency_key: postingIdempotencyKey(connection.tenant_id, 'supplier_payment', purchaseId, 'paid'),
+                },
+            },
+            select: { status: true },
+        });
+        if (event?.status === 'posted') return false;
+
+        try {
+            const posting = await this.db.$transaction((tx) =>
+                postPurchasePaid({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    storeId: connection.store_id,
+                    purchaseId,
+                    purchaseNumber: purchase.purchase_number,
+                    supplierId: purchase.supplier_id,
+                    paid,
+                    purchaseDate: purchase.created_at,
+                }),
+            );
+            return posting.postingStatus === 'posted';
+        } catch (error: any) {
+            warnings.push({
+                entity: 'PURCHASE',
+                externalId: mapped.externalId,
+                code: 'PAID_NOT_POSTED',
+                message: `Purchase ${mapped.purchaseNumber}: what was paid with the goods could not be posted — ${describeWriteError(error)}`,
+            });
+            return false;
+        }
     }
 
     /**

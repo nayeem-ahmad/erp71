@@ -379,3 +379,55 @@ describe('Express parties and sales kept through a clear', () => {
         expect(warnings.filter((w) => w.code === 'POSTED_IMMUTABLE')).toEqual([]);
     });
 });
+
+describe('Express purchases and purchase returns already imported', () => {
+    const EXPRESS = { ...CONNECTION, provider: 'EXPRESS_RETAIL_PRO', document_prefix: 'XR-' };
+    const XR = require('./provider-adapter').EXPRESS_RETAIL_DEFINITION.mappers;
+    // The purchase itself has posted; its paid-with-the-goods leg has not.
+    const postedButNotPaid = jest.fn(async ({ where }: any) =>
+        where.tenant_id_idempotency_key.idempotency_key.endsWith(':paid') ? null : { status: 'posted' },
+    );
+
+    it('posts what a posted purchase was paid with the goods', async () => {
+        const db = makeDb({ PURCHASE: [['74956', 'pur-1']] });
+        db.postingEvent.findUnique = postedButNotPaid;
+        db.purchase.findFirst.mockResolvedValue({ id: 'pur-1', total_amount: 161280, paid_amount: 161280, supplier_id: 'sup-1', purchase_number: 'XR-2500030', created_at: OPENING });
+        const stats = emptyStats();
+        const warnings: any[] = [];
+
+        await service(db).syncPurchasesWindow(
+            EXPRESS,
+            { fetchPurchaseDocuments: jest.fn(async () => [{ header: { id: 74956, invoice: '2500030', supplier_id: '4232', date: '2025-07-21', subtotal: '161280', total: '161280', paid: '161280' }, lines: [] }]) },
+            { from: '2021-10-12', to: '2026-10-11' },
+            new Map(),
+            new Map([['4232', 'sup-1']]),
+            stats,
+            warnings,
+            false,
+            XR,
+            OPENING,
+        );
+
+        expect(autoPostFromRules.mock.calls[0][0]).toMatchObject({ eventType: 'supplier_payment', legKey: 'paid', amount: 161280, partyId: 'sup-1' });
+        expect(stats.purchases.updated).toBe(1);
+        expect(warnings).toEqual([]);
+    });
+
+    it("gives a posted return imported under the old cap the rest of its credit", async () => {
+        const db = makeDb();
+        db.purchaseReturn = { findFirst: jest.fn(async () => ({ id: 'pr-1' })) };
+
+        const result = await service(db).writePurchaseReturn(
+            EXPRESS,
+            { externalId: '1704', returnNumber: 'XR-2600628', referenceNumber: '2600628', externalPurchaseId: null, externalSupplierId: '4300', totalAmount: 13000, dueCredit: 13000, notes: null, returnDate: OPENING, externalUpdatedAt: null, items: [] },
+            null,
+            'sup-1',
+            new Map(),
+            new Map([['1704', 'pr-1']]),
+            [],
+        );
+
+        expect(result).toBe(false);
+        expect(db.supplierCreditTransaction.create.mock.calls[0][0].data).toMatchObject({ supplier_id: 'sup-1', type: 'ADJUSTMENT', amount: -13000, reference_id: 'pr-1' });
+    });
+});
