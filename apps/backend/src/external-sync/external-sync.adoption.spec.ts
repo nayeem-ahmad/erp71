@@ -49,6 +49,15 @@ describe('adoption query shape', () => {
             expect(customerAdoptionWhere('tenant-1', null, 'C-101')).toBeNull();
         });
 
+        it('declines to match on a number that is not a phone', () => {
+            // Press Club's Dizi customers "M.R Surgical" (32), "LS Trade
+            // International" (415) and "Easy Health Care" (01) would otherwise
+            // have been welded to Babu Bazar customers with the same junk.
+            for (const junk of ['32', '415', '01', '017', '77777']) {
+                expect(customerAdoptionWhere('tenant-1', junk, null)).toBeNull();
+            }
+        });
+
         it('queries the phone exactly as given, without normalizing it', () => {
             // Customer.phone stores raw input, so normalizing here would look
             // for "+8801712345678" and miss the row saved as "01712345678",
