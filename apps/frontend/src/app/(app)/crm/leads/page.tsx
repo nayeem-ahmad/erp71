@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink } from 'lucide-react';
+import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink, LayoutList, Kanban } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
@@ -26,6 +26,15 @@ import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
+import { leadPriorityColor, leadScoreColor } from '@/lib/lead-badges';
+import LeadsBoard from '@/components/crm/leads-board/LeadsBoard';
+import { useLeadsView } from '@/components/crm/leads-board/use-leads-view';
+import {
+    LEAD_BOARD_GROUPS,
+    buildBoardColumns,
+    columnsMatchingFilter,
+    isLeadBoardGroup,
+} from '@/components/crm/leads-board/board-columns';
 
 type TaxonomyRef = { id: string; name: string } | null;
 
@@ -62,19 +71,6 @@ interface Lead {
 }
 
 const columnHelper = createColumnHelper<Lead>();
-
-const priorityColors: Record<string, string> = {
-    LOW: 'bg-gray-50 text-gray-600',
-    MEDIUM: 'bg-blue-50 text-blue-700',
-    HIGH: 'bg-amber-50 text-amber-700',
-    URGENT: 'bg-danger-light text-danger-text',
-};
-
-function scoreBadgeColor(score: number): string {
-    if (score >= 70) return 'bg-emerald-50 text-emerald-700';
-    if (score >= 40) return 'bg-amber-50 text-amber-700';
-    return 'bg-gray-100 text-gray-600';
-}
 
 /**
  * A free-text column's cell. The table lays out with a fixed width per column,
@@ -301,8 +297,12 @@ function LeadsPage() {
     const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([]);
     const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
-    const { options: sourceOptions } = useLeadTaxonomy('sources');
-    const { options: categoryOptions } = useLeadTaxonomy('categories');
+    // Retired ones too, for the board: leads can still carry one, and a column
+    // for it keeps them visible. The filters offer the active ones only.
+    const { options: allSourceOptions } = useLeadTaxonomy('sources', true);
+    const { options: allCategoryOptions } = useLeadTaxonomy('categories', true);
+    const sourceOptions = useMemo(() => allSourceOptions.filter((o) => o.is_active), [allSourceOptions]);
+    const categoryOptions = useMemo(() => allCategoryOptions.filter((o) => o.is_active), [allCategoryOptions]);
     // Hidden stages too: a funnel bar or a remembered filter can point at one
     // that still holds leads, and the filter must be able to show it. Forms and
     // the bulk action offer only the active ones.
@@ -318,6 +318,27 @@ function LeadsPage() {
     // stale-page fetch, then the reset-to-page-1 effect fires a second fetch. Only the latest
     // in-flight request may commit its result.
     const loadSeq = useRef(0);
+
+    const { view, groupBy, setView, setGroupBy, ready: viewReady } = useLeadsView();
+    // Bumped to make the board fetch every column again.
+    const [boardReload, setBoardReload] = useState(0);
+
+    /** Every filter on the page, as the list endpoint takes them — shared by the table, its export and the board. */
+    const baseQuery = useMemo(
+        () => ({
+            search: effectiveSearch || undefined,
+            ...statusQuery(statusFilter),
+            category: categoryFilter || undefined,
+            source: sourceFilter || undefined,
+            priority: priorityFilter || undefined,
+            assignedTo: ownerFilter || undefined,
+            mine: mineOnly || undefined,
+            emailPresence: emailFilter || undefined,
+            staleDays: staleOnly ? staleDays : undefined,
+            ...applyCreatedRangeQuery(createdRange),
+        }),
+        [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange],
+    );
 
     useEffect(() => {
         api.getCustomFields('LEAD').then((d: any[]) => setCustomFieldDefs(Array.isArray(d) ? d : [])).catch(() => setCustomFieldDefs([]));
@@ -340,50 +361,27 @@ function LeadsPage() {
         (onProgress?: (loaded: number, total: number) => void) =>
             fetchAllPages(
                 ({ page: p, limit, sortBy, sortDir }) =>
-                    api.getLeads({
-                        search: effectiveSearch || undefined,
-                        ...statusQuery(statusFilter),
-                        category: categoryFilter || undefined,
-                        source: sourceFilter || undefined,
-                        priority: priorityFilter || undefined,
-                        assignedTo: ownerFilter || undefined,
-                        mine: mineOnly || undefined,
-                        emailPresence: emailFilter || undefined,
-                        staleDays: staleOnly ? staleDays : undefined,
-                        page: p,
-                        limit,
-                        sortBy,
-                        sortDir,
-                        ...applyCreatedRangeQuery(createdRange),
-                    }),
+                    api.getLeads({ ...baseQuery, page: p, limit, sortBy, sortDir }),
                 { sort, onProgress },
             ),
-        [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, sort],
+        [baseQuery, sort],
     );
 
     const loadLeads = useCallback(async () => {
         // Held until the remembered filters and the scope are in, so a return
         // visit does not fetch the unfiltered list first and flash it before the
         // real slice.
-        if (!filtersReady || !scopeReady) return;
+        // The board fetches its own columns; the table's page is not needed then.
+        if (!filtersReady || !scopeReady || !viewReady || view !== 'list') return;
         const seq = ++loadSeq.current;
         setLoading(true);
         try {
             const data = await api.getLeads({
-                search: effectiveSearch || undefined,
-                ...statusQuery(statusFilter),
-                category: categoryFilter || undefined,
-                source: sourceFilter || undefined,
-                priority: priorityFilter || undefined,
-                assignedTo: ownerFilter || undefined,
-                mine: mineOnly || undefined,
-                emailPresence: emailFilter || undefined,
-                staleDays: staleOnly ? staleDays : undefined,
+                ...baseQuery,
                 page,
                 limit: pageSize,
                 sortBy: sort?.id,
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
-                ...applyCreatedRangeQuery(createdRange),
             });
             if (seq !== loadSeq.current) return;
             setLeads(data?.items ?? []);
@@ -397,7 +395,7 @@ function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, page, pageSize, sort, filtersReady, scopeReady]);
+    }, [baseQuery, page, pageSize, sort, filtersReady, scopeReady, viewReady, view]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
@@ -464,6 +462,43 @@ function LeadsPage() {
         [teamMembers],
     );
 
+    // "Only mine" pins every lead to the caller, which leaves an owner board one
+    // column wide. The choice is kept, and comes back when the scope is off.
+    const boardGroup = mineOnly && groupBy === 'owner' ? 'status' : groupBy;
+
+    const boardColumns = useMemo(
+        () =>
+            columnsMatchingFilter(
+                boardGroup,
+                buildBoardColumns(boardGroup, {
+                    statuses: allStatusOptions,
+                    categories: allCategoryOptions,
+                    sources: allSourceOptions,
+                    members: memberOptions,
+                    labels: {
+                        statuses: m.statuses,
+                        priorities: m.priorities,
+                        unassigned: m.fields.unassigned,
+                        uncategorised: m.uncategorised,
+                        noSource: m.board.noSource,
+                    },
+                }),
+                {
+                    status: statusFilter,
+                    priority: priorityFilter,
+                    owner: mineOnly ? '' : ownerFilter,
+                    category: categoryFilter,
+                    source: sourceFilter,
+                },
+            ),
+        [boardGroup, allStatusOptions, allCategoryOptions, allSourceOptions, memberOptions, m, statusFilter, priorityFilter, mineOnly, ownerFilter, categoryFilter, sourceFilter],
+    );
+
+    const refresh = useCallback(() => {
+        if (view === 'board') setBoardReload((n) => n + 1);
+        else void loadLeads();
+    }, [view, loadLeads]);
+
     const columns: ColumnDef<Lead, any>[] = useMemo(() => [
         columnHelper.accessor('name', {
             header: m.columns.name,
@@ -515,7 +550,7 @@ function LeadsPage() {
         columnHelper.accessor('priority', {
             header: m.fields.priority,
             cell: (info) => (
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${priorityColors[info.getValue()] ?? 'bg-gray-100 text-gray-700'}`}>
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${leadPriorityColor(info.getValue())}`}>
                     {priorityLabel(info.getValue())}
                 </span>
             ),
@@ -543,7 +578,7 @@ function LeadsPage() {
         columnHelper.accessor('score', {
             header: m.fields.score,
             cell: (info) => (
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${scoreBadgeColor(info.getValue() ?? 0)}`}>
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${leadScoreColor(info.getValue() ?? 0)}`}>
                     {info.getValue() ?? 0}
                 </span>
             ),
@@ -661,7 +696,27 @@ function LeadsPage() {
                 )}
                 actions={
                     <>
-                        <Button variant="secondary" onClick={loadLeads} leftIcon={<RefreshCw className="w-4 h-4" />} />
+                        <div role="group" aria-label={m.board.view} className="inline-flex rounded-md border border-gray-200 bg-white p-0.5">
+                            {([
+                                ['list', m.board.listView, <LayoutList key="list" className="w-4 h-4" />],
+                                ['board', m.board.boardView, <Kanban key="board" className="w-4 h-4" />],
+                            ] as const).map(([value, label, icon]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => setView(value)}
+                                    aria-pressed={view === value}
+                                    title={label}
+                                    className={`inline-flex min-h-touch items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold transition-colors md:min-h-0 ${
+                                        view === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    {icon}
+                                    <span className="max-sm:sr-only">{label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <Button variant="secondary" onClick={refresh} icon={<RefreshCw className="w-4 h-4" />} aria-label={c.refresh} title={c.refresh} />
                         <Button variant="secondary" onClick={() => setImportOpen(true)} leftIcon={<Upload className="w-4 h-4" />}>
                             Import
                         </Button>
@@ -773,6 +828,23 @@ function LeadsPage() {
                     <option value="empty">{m.noEmail}</option>
                 </Select>
                 <CreatedRangeFilter value={createdRange} onChange={(next) => setFilter('createdRange', next)} />
+                {view === 'board' && (
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                        {m.board.groupBy}
+                        <Select
+                            value={boardGroup}
+                            onChange={(e) => { if (isLeadBoardGroup(e.target.value)) setGroupBy(e.target.value); }}
+                            title={mineOnly ? m.board.ownerLockedHint : undefined}
+                            className="w-auto max-w-[180px]"
+                        >
+                            {LEAD_BOARD_GROUPS.map((g) => (
+                                <option key={g} value={g} disabled={g === 'owner' && mineOnly}>
+                                    {m.board.groups[g]}
+                                </option>
+                            ))}
+                        </Select>
+                    </label>
+                )}
             </div>
 
             {accessDenied && (
@@ -781,73 +853,83 @@ function LeadsPage() {
                 </div>
             )}
 
-            <DataTable<Lead>
-                tableId="crm-leads"
-                title={m.title}
-                data={leads}
-                columns={columns}
-                isLoading={loading}
-                showSearch={false}
-                serverPagination={{
-                    total,
-                    page,
-                    pageSize,
-                    onPageChange: setPage,
-                    onPageSizeChange: (size) => { setPageSize(size); setPage(1); },
-                    sort,
-                    onSortChange: setSort,
-                    fetchAllRows,
-                }}
-                enableRowSelection
-                onRowSelectionChange={setSelectedLeads}
-                getRowId={(l) => l.id}
-                emptyMessage={
-                    // The table has its own empty text, so leaving it at the default
-                    // would print "No leads yet" directly under the notice that says
-                    // the list could not be read — the exact claim being corrected.
-                    accessDenied
-                        ? m.accessDenied
-                        : staleOnly
-                            ? fmt(m.noActivityEmpty, { days: staleDays })
-                            : m.emptyMessage
-                }
-                clearSelectionSignal={selectionEpoch}
-                bulkActions={bulkActions}
-                bulkActionsDisabled={bulkBusy}
-                renderBulkExtra={() => (
-                    <>
-                        <select
-                            value=""
-                            disabled={bulkBusy}
-                            onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
-                            className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                        >
-                            <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
-                            {/* Open stages only: closing a lead needs a lost reason or a
-                                customer record, which a bulk action cannot supply. */}
-                            {statusOptions.length > 0
-                                ? statusOptions
-                                    .filter((o) => isOpenLifecycle(o.lifecycle))
-                                    .map((o) => (
-                                        <option key={o.id} value={o.id}>{stageOptionLabel(o, m.statuses)}</option>
-                                    ))
-                                : (['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
-                                    <option key={s} value={s}>{statusLabel(s)}</option>
-                                ))}
-                        </select>
-                        <select
-                            value=""
-                            disabled={bulkBusy}
-                            onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
-                            className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                        >
-                            <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
-                            <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
-                            {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
-                        </select>
-                    </>
-                )}
-            />
+            {view === 'board' ? (
+                <LeadsBoard
+                    group={boardGroup}
+                    columns={boardColumns}
+                    baseQuery={baseQuery}
+                    enabled={filtersReady && scopeReady && viewReady}
+                    reloadSignal={boardReload}
+                />
+            ) : (
+                <DataTable<Lead>
+                    tableId="crm-leads"
+                    title={m.title}
+                    data={leads}
+                    columns={columns}
+                    isLoading={loading}
+                    showSearch={false}
+                    serverPagination={{
+                        total,
+                        page,
+                        pageSize,
+                        onPageChange: setPage,
+                        onPageSizeChange: (size) => { setPageSize(size); setPage(1); },
+                        sort,
+                        onSortChange: setSort,
+                        fetchAllRows,
+                    }}
+                    enableRowSelection
+                    onRowSelectionChange={setSelectedLeads}
+                    getRowId={(l) => l.id}
+                    emptyMessage={
+                        // The table has its own empty text, so leaving it at the default
+                        // would print "No leads yet" directly under the notice that says
+                        // the list could not be read — the exact claim being corrected.
+                        accessDenied
+                            ? m.accessDenied
+                            : staleOnly
+                                ? fmt(m.noActivityEmpty, { days: staleDays })
+                                : m.emptyMessage
+                    }
+                    clearSelectionSignal={selectionEpoch}
+                    bulkActions={bulkActions}
+                    bulkActionsDisabled={bulkBusy}
+                    renderBulkExtra={() => (
+                        <>
+                            <select
+                                value=""
+                                disabled={bulkBusy}
+                                onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
+                                className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                            >
+                                <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
+                                {/* Open stages only: closing a lead needs a lost reason or a
+                                    customer record, which a bulk action cannot supply. */}
+                                {statusOptions.length > 0
+                                    ? statusOptions
+                                        .filter((o) => isOpenLifecycle(o.lifecycle))
+                                        .map((o) => (
+                                            <option key={o.id} value={o.id}>{stageOptionLabel(o, m.statuses)}</option>
+                                        ))
+                                    : (['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
+                                        <option key={s} value={s}>{statusLabel(s)}</option>
+                                    ))}
+                            </select>
+                            <select
+                                value=""
+                                disabled={bulkBusy}
+                                onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
+                                className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
+                            >
+                                <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
+                                <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
+                                {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
+                            </select>
+                        </>
+                    )}
+                />
+            )}
 
             <ImportDialog
                 open={importOpen}
@@ -855,7 +937,7 @@ function LeadsPage() {
                 entityLabel="Leads"
                 fields={importFields}
                 importFn={(rows, mode) => api.importLeads(rows, mode)}
-                onSuccess={() => void loadLeads()}
+                onSuccess={refresh}
             />
         </PageShell>
     );
