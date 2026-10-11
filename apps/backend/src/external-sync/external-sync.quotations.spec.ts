@@ -234,8 +234,9 @@ describe('external-sync quotations in a run', () => {
         const { fetchQuotationDocuments: _unused, ...client } = liveClient();
         const db = await execute('EXPRESS_RETAIL_PRO', client);
 
+        // No step ever ticks; the closing write records a run of no work.
         const progress = db.externalSyncRun.update.mock.calls.map((c: any) => c[0].data.progress).filter(Boolean);
-        expect(progress).toEqual([]);
+        expect(progress).toEqual([{ done: 0, total: 0, warnings: 0, codes: {} }]);
         expect(db.externalSyncRun.update.mock.calls.at(-1)[0].data.status).toBe('SUCCESS');
     });
 });

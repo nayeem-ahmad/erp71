@@ -250,6 +250,7 @@ export function mapDiziPayment(
             externalId,
             code: 'PAYMENT_AMOUNT_INVALID',
             message: `Payment ${slip}: amount ${row.Amount ?? 'null'} is not a usable number — skipped`,
+            skipped: { number: slip, date: emptyToNull(row.Date ?? null)?.slice(0, 10) ?? null, party: null, amount: 0, lines: null },
         });
         return null;
     }
