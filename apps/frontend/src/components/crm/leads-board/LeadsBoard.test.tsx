@@ -3,7 +3,8 @@ import LeadsBoard from './LeadsBoard';
 import { buildBoardColumns, type BoardColumnSources, type BoardLead } from './board-columns';
 
 jest.mock('next/link', () => {
-    const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
+    // Passes the rest through like the real one: the card's name hangs an onClick on it.
+    const MockLink = ({ children, href, ...rest }: any) => <a href={href} {...rest}>{children}</a>;
     MockLink.displayName = 'Link';
     return MockLink;
 });
@@ -32,6 +33,20 @@ jest.mock('@dnd-kit/core', () => {
         },
     };
 });
+
+/** The lead itself is LeadWorkspace's business (covered by the lead page tests); here it only reports back. */
+jest.mock('@/components/crm/LeadWorkspace', () => ({
+    __esModule: true,
+    default: ({ leadId, onChanged, onConvertResult, onDeleted }: any) => (
+        <div data-testid="lead-workspace">
+            <span>workspace for {leadId}</span>
+            <button type="button" onClick={() => onChanged?.()}>fake edit</button>
+            <button type="button" onClick={() => onConvertResult({ customerId: 'cust-1', existing: false })}>fake convert</button>
+            <button type="button" onClick={() => onConvertResult({ customerId: 'cust-2', existing: true })}>fake convert existing</button>
+            <button type="button" onClick={() => onDeleted()}>fake delete</button>
+        </div>
+    ),
+}));
 
 jest.mock('@/lib/api', () => ({
     ApiError: class ApiError extends Error {
@@ -251,5 +266,98 @@ describe('LeadsBoard', () => {
 
         expect(await screen.findByText(/does not include the CRM module/)).toBeInTheDocument();
         expect(screen.queryByTestId('leads-board')).not.toBeInTheDocument();
+    });
+});
+
+describe('LeadsBoard — opening a lead', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        serve({ new: { items: [karim, rahim] } });
+    });
+
+    async function openKarim() {
+        renderBoard();
+        const card = (await within(column('New')).findByText('Karim Traders')).closest('[data-testid="lead-card"]')!;
+        fireEvent.click(card);
+        return screen.getByTestId('lead-workspace');
+    }
+
+    const columnFetches = () => api.getLeads.mock.calls.filter(([q]: any[]) => q.statusId).length;
+
+    it('opens the lead over the board when its card is clicked, with a way to the full page', async () => {
+        await openKarim();
+
+        expect(screen.getByText('workspace for lead-1')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Open full record/ })).toHaveAttribute('href', '/crm/leads/lead-1');
+        // The board is still there behind it.
+        expect(screen.getByTestId('leads-board')).toBeInTheDocument();
+    });
+
+    it('opens the drawer from the name too, instead of following the link', async () => {
+        renderBoard();
+        const name = await within(column('New')).findByRole('link', { name: 'Rahim Stores' });
+
+        const followed = fireEvent.click(name);
+
+        expect(followed).toBe(false);
+        expect(screen.getByText('workspace for lead-2')).toBeInTheDocument();
+    });
+
+    it('leaves a ctrl/cmd-click on the name to the browser, for a new tab', async () => {
+        renderBoard();
+        const name = await within(column('New')).findByRole('link', { name: 'Rahim Stores' });
+
+        const followed = fireEvent.click(name, { ctrlKey: true });
+
+        expect(followed).toBe(true);
+        expect(screen.queryByTestId('lead-workspace')).not.toBeInTheDocument();
+    });
+
+    it('reloads the columns on close after a change, and not after just looking', async () => {
+        await openKarim();
+        const before = columnFetches();
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        expect(screen.queryByTestId('lead-workspace')).not.toBeInTheDocument();
+        expect(columnFetches()).toBe(before);
+
+        const card = within(column('New')).getByText('Karim Traders').closest('[data-testid="lead-card"]')!;
+        fireEvent.click(card);
+        fireEvent.click(screen.getByRole('button', { name: 'fake edit' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+        await waitFor(() => expect(columnFetches()).toBeGreaterThan(before));
+    });
+
+    it('closes and reloads once the lead is converted, offering the customer', async () => {
+        await openKarim();
+        const before = columnFetches();
+
+        fireEvent.click(screen.getByRole('button', { name: 'fake convert' }));
+
+        expect(screen.queryByTestId('lead-workspace')).not.toBeInTheDocument();
+        await waitFor(() => expect(columnFetches()).toBeGreaterThan(before));
+        const [message, options] = toast.success.mock.calls[0];
+        expect(message).toBe('Lead converted successfully');
+        options.action.onClick();
+        expect(push).toHaveBeenCalledWith(expect.stringContaining('cust-1'));
+    });
+
+    it('stays open and points at the existing customer when one already has this phone', async () => {
+        await openKarim();
+
+        fireEvent.click(screen.getByRole('button', { name: 'fake convert existing' }));
+
+        expect(screen.getByTestId('lead-workspace')).toBeInTheDocument();
+        expect(toast.error).toHaveBeenCalledWith('A customer with this phone already exists.', expect.anything());
+    });
+
+    it('closes and reloads once the lead is deleted', async () => {
+        await openKarim();
+        const before = columnFetches();
+
+        fireEvent.click(screen.getByRole('button', { name: 'fake delete' }));
+
+        expect(screen.queryByTestId('lead-workspace')).not.toBeInTheDocument();
+        await waitFor(() => expect(columnFetches()).toBeGreaterThan(before));
     });
 });

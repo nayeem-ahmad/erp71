@@ -17,7 +17,7 @@ import {
     setLeadOwner,
     validateLeadFormErrors,
     type LeadFormErrors,
-} from '../lead-form-fields';
+} from '@/components/crm/lead-form-fields';
 import { defaultTaxonomyId, useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 
 export default function NewLeadPage() {

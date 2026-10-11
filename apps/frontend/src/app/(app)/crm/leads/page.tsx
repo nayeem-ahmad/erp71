@@ -19,7 +19,7 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import {
     LEAD_PRIORITIES,
     LEAD_STATUSES,
-} from './lead-form-fields';
+} from '@/components/crm/lead-form-fields';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { isOpenLifecycle, leadStatusLabel, leadStatusTone, stageOptionLabel, type LeadStage } from '@/lib/lead-status';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';

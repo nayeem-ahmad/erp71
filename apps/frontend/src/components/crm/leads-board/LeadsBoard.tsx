@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     DndContext,
@@ -25,6 +25,7 @@ import { toast } from '@/lib/toast';
 import { leadStatusTone } from '@/lib/lead-status';
 import { Alert, Button, ConfirmDialog, Textarea } from '@/components/ui';
 import { LeadCard } from './LeadCard';
+import LeadModal from './LeadModal';
 import {
     canDragLead,
     dropAction,
@@ -62,7 +63,8 @@ function DraggableCard({
     columnKey,
     group,
     labels,
-}: Readonly<{ lead: BoardLead; columnKey: string; group: LeadBoardGroup; labels: CardLabels }>) {
+    onOpen,
+}: Readonly<{ lead: BoardLead; columnKey: string; group: LeadBoardGroup; labels: CardLabels; onOpen: (lead: BoardLead) => void }>) {
     const disabled = !canDragLead(lead);
     const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
         id: lead.id,
@@ -76,6 +78,7 @@ function DraggableCard({
             group={group}
             labels={labels}
             dragging={isDragging}
+            onOpen={() => onOpen(lead)}
             className={disabled ? '' : 'md:cursor-grab'}
             {...attributes}
             {...listeners}
@@ -91,6 +94,7 @@ function Column({
     draggingFrom,
     onRetry,
     onLoadMore,
+    onOpen,
 }: Readonly<{
     column: BoardColumn;
     state: ColumnState | undefined;
@@ -99,6 +103,7 @@ function Column({
     draggingFrom: string | null;
     onRetry: (key: string) => void;
     onLoadMore: (key: string) => void;
+    onOpen: (lead: BoardLead) => void;
 }>) {
     const { t } = useI18n();
     const b = t.crm.leads.board;
@@ -142,7 +147,7 @@ function Column({
                     </>
                 ) : (
                     items.map((lead) => (
-                        <DraggableCard key={lead.id} lead={lead} columnKey={column.key} group={group} labels={labels} />
+                        <DraggableCard key={lead.id} lead={lead} columnKey={column.key} group={group} labels={labels} onOpen={onOpen} />
                     ))
                 )}
                 {!firstLoad && !state?.error && items.length === 0 && (
@@ -199,7 +204,13 @@ export default function LeadsBoard({
     const b = m.board;
     const c = t.common;
     const router = useRouter();
-    const board = useBoardData(group, columns, baseQuery, enabled, reloadSignal);
+    // Bumped when the lead drawer closes after a change, so the card lands in
+    // the column its new values put it in.
+    const [localReload, setLocalReload] = useState(0);
+    const board = useBoardData(group, columns, baseQuery, enabled, reloadSignal + localReload);
+
+    const [opened, setOpened] = useState<{ id: string; name: string } | null>(null);
+    const openedChanged = useRef(false);
 
     const labels: CardLabels = useMemo(
         () => ({ statuses: m.statuses, priorities: m.priorities, score: m.fields.score }),
@@ -246,6 +257,16 @@ export default function LeadsBoard({
         },
         [board, b.moveFailed, fmt],
     );
+
+    const openLead = useCallback((lead: BoardLead) => {
+        openedChanged.current = false;
+        setOpened({ id: lead.id, name: lead.name });
+    }, []);
+
+    const closeLead = useCallback(() => {
+        setOpened(null);
+        if (openedChanged.current) setLocalReload((n) => n + 1);
+    }, []);
 
     const onDragStart = ({ active }: DragStartEvent) => {
         const data = active.data.current as { lead: BoardLead; from: string } | undefined;
@@ -338,6 +359,7 @@ export default function LeadsBoard({
                                 draggingFrom={dragging?.from ?? null}
                                 onRetry={board.retry}
                                 onLoadMore={(key) => void board.loadMore(key)}
+                                onOpen={openLead}
                             />
                         ))}
                     </div>
@@ -346,6 +368,29 @@ export default function LeadsBoard({
                     {dragging ? <LeadCard lead={dragging.lead} group={group} labels={labels} overlay /> : null}
                 </DragOverlay>
             </DndContext>
+
+            {opened && (
+                <LeadModal
+                    leadId={opened.id}
+                    name={opened.name}
+                    onClose={closeLead}
+                    onChanged={() => { openedChanged.current = true; }}
+                    onConvertResult={({ customerId, existing }) => {
+                        if (existing) {
+                            // Nothing changed; the drawer stays open on the lead.
+                            toast.error(m.customerExists, { action: viewCustomer(customerId) });
+                            return;
+                        }
+                        toast.success(m.converted, { action: viewCustomer(customerId) });
+                        openedChanged.current = true;
+                        closeLead();
+                    }}
+                    onDeleted={() => {
+                        openedChanged.current = true;
+                        closeLead();
+                    }}
+                />
+            )}
 
             <ConfirmDialog
                 open={pending?.kind === 'lost'}
