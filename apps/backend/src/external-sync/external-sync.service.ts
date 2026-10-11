@@ -5,6 +5,7 @@ import {
     Logger,
     NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { recordCostAdjustment } from '../database/product-cost.utils';
 import { EncryptionService } from '../common/encryption.service';
@@ -20,6 +21,7 @@ import {
     MappedSale,
     MappedSaleReturn,
     MappedSupplier,
+    OpeningPositions,
     PaymentParty,
     SkippedRecord,
     SyncWarning,
@@ -41,10 +43,15 @@ import {
     applyPurchaseImpacts,
     applyPurchaseReturnImpacts,
     applySaleImpacts,
+    applySaleReturnCredit,
     applySaleReturnImpacts,
     applyOpeningBalance,
+    applyOpeningStock,
     isAlreadyPosted,
+    openingBalanceNote,
+    OPENING_STOCK_REFERENCE,
 } from './external-sync.impacts';
+import { resolveWarehouseId } from '../database/inventory.utils';
 import {
     ListExternalSyncRunsQueryDto,
     RunExternalSyncDto,
@@ -54,6 +61,7 @@ import {
 import { resolveSyncWindow } from './snapshot/window';
 import { ExternalSyncSnapshotService } from './snapshot/snapshot.service';
 import { clientForRun } from './snapshot/client-for-run';
+import { SnapshotClient } from './snapshot/snapshot-client';
 import { customerBranchId } from '../customers/customer-branch.util';
 import { supplierBranchId } from '../suppliers/supplier-branch.util';
 
@@ -510,6 +518,14 @@ export class ExternalSyncService {
             });
             const session = await client.login();
 
+            // A snapshot holds the provider's current balances and stock beside
+            // every document it covers, so a provider with no opening figures
+            // of its own (Dizi) can have them worked out from it.
+            const openings: OpeningPositions | null =
+                client instanceof SnapshotClient && mappers.openingPositions
+                    ? mappers.openingPositions(client.getDocument())
+                    : null;
+
             // A provider may offer no quotations, and a step that can do
             // nothing should not count toward progress.
             const supportsQuotations = Boolean(client.fetchQuotationDocuments && mappers.quotation);
@@ -548,11 +564,11 @@ export class ExternalSyncService {
 
             if (steps.includes('MASTERS')) {
                 await this.writeProgress(runId, 'Products, customers and suppliers', stats, warnings, doneUnits, totalUnits);
-                await this.syncProducts(connection, client, stats, warnings, dryRun, mappers);
-                // Opening balances are stamped at the start of the imported
-                // range so they sit before every document that follows.
-                await this.syncCustomers(connection, client, stats, warnings, dryRun, window.from, mappers);
-                await this.syncSuppliers(connection, client, stats, warnings, dryRun, window.from, mappers);
+                // Opening balances and stock are stamped at the start of the
+                // imported range so they sit before every document that follows.
+                await this.syncProducts(connection, client, stats, warnings, dryRun, mappers, openings?.stock, window.from);
+                await this.syncCustomers(connection, client, stats, warnings, dryRun, window.from, mappers, openings?.customers);
+                await this.syncSuppliers(connection, client, stats, warnings, dryRun, window.from, mappers, openings?.suppliers);
                 await tick('Products, customers and suppliers');
             }
 
@@ -603,7 +619,7 @@ export class ExternalSyncService {
                 const saleMap = await this.loadMappings(connection.id, 'SALE');
                 for (const chunk of chunks) {
                     await this.assertNotCancelled(runId);
-                    await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, stats, warnings, dryRun, mappers);
+                    await this.syncSaleReturnsWindow(connection, client, chunk, productMap, saleMap, customerMap, stats, warnings, dryRun, mappers);
                     await tick(`Sale returns ${chunk.from.slice(0, 7)}`);
                 }
             }
@@ -706,20 +722,24 @@ export class ExternalSyncService {
     // --------------------------------------------------------- master data
 
     private async syncProducts(
-        connection: { id: string; tenant_id: string },
+        connection: { id: string; tenant_id: string; store_id: string; provider: string; post_impacts: boolean },
         client: ProviderClient,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
         mappers: ProviderMappers = EXPRESS_MAPPERS,
+        stockOpenings?: Map<string, number>,
+        openingAsOf?: Date,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchProducts();
         const claimedSkus = new Set<string>();
         const map = await this.loadMappings(connection.id, 'PRODUCT');
         const costCandidates: OpeningCostCandidate[] = [];
+        const buyingRates = new Map<string, number>();
 
         for (const row of rows) {
             const mapped = mappers.product(row, claimedSkus);
+            buyingRates.set(mapped.externalId, mapped.purchaseRate);
             const productLabel = mapped.sku ?? mapped.name;
             const noteCost = (productId: string) => {
                 if (!mapped.isService && mapped.purchaseRate > 0) {
@@ -810,8 +830,91 @@ export class ExternalSyncService {
         if (!dryRun) {
             await this.seedOpeningCosts(connection.tenant_id, costCandidates, warnings);
         }
+        if (!dryRun && stockOpenings && openingAsOf && connection.post_impacts) {
+            await this.seedOpeningStock(connection, stockOpenings, map, buyingRates, warnings, openingAsOf);
+        }
 
         return map;
+    }
+
+    /**
+     * Each product's opening stock (see OpeningPositions), as a backdated
+     * movement into the branch's warehouse.
+     *
+     * Only for a product with nothing in that warehouse from before the range
+     * and no opening from this connection yet. That is every product on a
+     * first import or after the branch was cleared, and a product whose
+     * history the range covers whole, so a run from a newer snapshot never
+     * adds a second opening or counts history the warehouse already holds.
+     */
+    private async seedOpeningStock(
+        connection: { id: string; tenant_id: string; store_id: string; provider: string },
+        openings: Map<string, number>,
+        productMap: Map<string, string>,
+        buyingRates: Map<string, number>,
+        warnings: SyncWarning[],
+        asOf: Date,
+    ) {
+        const warehouseId = await resolveWarehouseId(this.db, connection.tenant_id, connection.store_id);
+        const tally = { products: 0, units: 0, negative: 0, kept: 0 };
+
+        for (const [externalId, quantity] of openings) {
+            const productId = productMap.get(externalId);
+            if (!productId) continue;
+            try {
+                const blocked = await this.db.inventoryMovement.findFirst({
+                    where: {
+                        tenant_id: connection.tenant_id,
+                        product_id: productId,
+                        warehouse_id: warehouseId,
+                        OR: [
+                            { reference_type: OPENING_STOCK_REFERENCE, reference_id: connection.id },
+                            { created_at: { lt: asOf } },
+                        ],
+                    },
+                    select: { id: true },
+                });
+                if (blocked) {
+                    tally.kept++;
+                    continue;
+                }
+                await this.db.$transaction((tx) =>
+                    applyOpeningStock({
+                        tx,
+                        tenantId: connection.tenant_id,
+                        storeId: connection.store_id,
+                        connectionId: connection.id,
+                        productId,
+                        quantity,
+                        unitCost: buyingRates.get(externalId) ?? 0,
+                        asOf,
+                        label: connection.provider,
+                    }),
+                );
+                tally.products++;
+                tally.units += quantity;
+                if (quantity < 0) tally.negative++;
+            } catch (error: any) {
+                warnings.push({
+                    entity: 'PRODUCT',
+                    externalId,
+                    code: 'OPENING_STOCK_FAILED',
+                    message: `Opening stock of ${quantity} for provider product ${externalId} could not be recorded: ${describeWriteError(error)}`,
+                });
+            }
+        }
+
+        if (tally.products > 0) {
+            warnings.push({
+                entity: 'PRODUCT',
+                externalId: '',
+                code: 'OPENING_FROM_PROVIDER',
+                message:
+                    `${tally.products} product${tally.products === 1 ? '' : 's'} start with opening stock (${tally.units} units in all): ` +
+                    `what ${connection.provider} holds beyond the movements of the documents imported` +
+                    (tally.negative > 0 ? `. ${tally.negative} of them open below zero, mostly goods returned to suppliers that the import cannot read yet` : ''),
+            });
+        }
     }
 
     /**
@@ -879,13 +982,18 @@ export class ExternalSyncService {
         dryRun: boolean,
         openingAsOf: Date,
         mappers: ProviderMappers = EXPRESS_MAPPERS,
+        openings?: Map<string, number>,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchCustomers();
         const claimedCodes = new Set<string>();
         const map = await this.loadMappings(connection.id, 'CUSTOMER');
+        const opened = { parties: 0, amount: 0 };
 
         for (const row of rows) {
             const mapped = mappers.customer(row, claimedCodes);
+            // A provider with no opening figure of its own gets the one worked
+            // out from the snapshot.
+            if (openings) mapped.previousDue = openings.get(mapped.externalId) ?? 0;
             const customerLabel = mapped.customerCode ?? mapped.name;
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
@@ -910,6 +1018,10 @@ export class ExternalSyncService {
                     });
                     if (count > 0) {
                         stats.customers.updated++;
+                        if (openings && (await this.openExistingParty(connection, 'CUSTOMER', existingId, mapped.previousDue, openingAsOf))) {
+                            opened.parties++;
+                            opened.amount += mapped.previousDue;
+                        }
                         continue;
                     }
                     await this.forgetStaleMapping(connection.id, 'CUSTOMER', mapped.externalId, map, warnings, `Customer ${customerLabel}`);
@@ -927,6 +1039,10 @@ export class ExternalSyncService {
                     stats.customers.skipped++;
                 } else {
                     stats.customers.created++;
+                    if (openings && connection.post_impacts && mapped.previousDue !== 0) {
+                        opened.parties++;
+                        opened.amount += mapped.previousDue;
+                    }
                 }
 
                 await this.writeMapping(connection, 'CUSTOMER', mapped.externalId, customerId, mapped.externalUpdatedAt);
@@ -943,6 +1059,7 @@ export class ExternalSyncService {
             }
         }
 
+        this.noteOpenings(warnings, 'CUSTOMER', connection.provider, opened);
         return map;
     }
 
@@ -954,14 +1071,17 @@ export class ExternalSyncService {
         dryRun: boolean,
         openingAsOf: Date,
         mappers: ProviderMappers = EXPRESS_MAPPERS,
+        openings?: Map<string, number>,
     ): Promise<Map<string, string>> {
         const rows = await client.fetchSuppliers();
         const claimedNames = new Set<string>();
         const claimedCodes = new Set<string>();
         const map = await this.loadMappings(connection.id, 'SUPPLIER');
+        const opened = { parties: 0, amount: 0 };
 
         for (const row of rows) {
             const mapped = mappers.supplier(row, claimedNames, claimedCodes);
+            if (openings) mapped.previousDue = openings.get(mapped.externalId) ?? 0;
             // One unimportable row must not abandon the rest of the batch;
             // the document loops already behave this way.
             try {
@@ -979,6 +1099,10 @@ export class ExternalSyncService {
                     });
                     if (count > 0) {
                         stats.suppliers.updated++;
+                        if (openings && (await this.openExistingParty(connection, 'SUPPLIER', existingId, mapped.previousDue, openingAsOf))) {
+                            opened.parties++;
+                            opened.amount += mapped.previousDue;
+                        }
                         continue;
                     }
                     await this.forgetStaleMapping(connection.id, 'SUPPLIER', mapped.externalId, map, warnings, `Supplier ${mapped.name}`);
@@ -996,6 +1120,10 @@ export class ExternalSyncService {
                     stats.suppliers.skipped++;
                 } else {
                     stats.suppliers.created++;
+                    if (openings && connection.post_impacts && mapped.previousDue !== 0) {
+                        opened.parties++;
+                        opened.amount += mapped.previousDue;
+                    }
                 }
 
                 await this.writeMapping(connection, 'SUPPLIER', mapped.externalId, supplierId, mapped.externalUpdatedAt);
@@ -1012,7 +1140,59 @@ export class ExternalSyncService {
             }
         }
 
+        this.noteOpenings(warnings, 'SUPPLIER', connection.provider, opened);
         return map;
+    }
+
+    /**
+     * A worked-out opening due (see OpeningPositions) for a party the tenant
+     * already has. Only when they have no opening from this provider yet and
+     * nothing on their account from before the range: then the range covers
+     * their whole history and the opening is exactly what it leaves out. A run
+     * from a newer, shorter snapshot finds earlier rows and leaves them alone.
+     */
+    private async openExistingParty(
+        connection: { tenant_id: string; provider: string; post_impacts: boolean },
+        party: PaymentParty,
+        partyId: string,
+        amount: number,
+        asOf: Date,
+    ): Promise<boolean> {
+        if (!connection.post_impacts || Math.abs(amount) < 0.005) return false;
+
+        const isCustomer = party === 'CUSTOMER';
+        const where = {
+            tenant_id: connection.tenant_id,
+            OR: [{ notes: openingBalanceNote(connection.provider) }, { created_at: { lt: asOf } }],
+        };
+        const blocked = isCustomer
+            ? await this.db.customerCreditTransaction.findFirst({ where: { ...where, customer_id: partyId }, select: { id: true } })
+            : await this.db.supplierCreditTransaction.findFirst({ where: { ...where, supplier_id: partyId }, select: { id: true } });
+        if (blocked) return false;
+
+        await this.db.$transaction((tx) =>
+            applyOpeningBalance({ tx, tenantId: connection.tenant_id, party, partyId, amount, asOf, label: connection.provider }),
+        );
+        return true;
+    }
+
+    /** One run note for the worked-out opening dues a step recorded. */
+    private noteOpenings(
+        warnings: SyncWarning[],
+        party: PaymentParty,
+        provider: string,
+        opened: { parties: number; amount: number },
+    ) {
+        if (opened.parties === 0) return;
+        const noun = party === 'CUSTOMER' ? 'customer' : 'supplier';
+        warnings.push({
+            entity: party,
+            externalId: '',
+            code: 'OPENING_FROM_PROVIDER',
+            message:
+                `${opened.parties} ${noun}${opened.parties === 1 ? '' : 's'} start with an opening due (net ${Math.round(opened.amount * 100) / 100}): ` +
+                `what ${provider}'s balances hold beyond the documents imported — opening dues entered there, and records the import cannot read`,
+        });
     }
 
     /**
@@ -1371,6 +1551,7 @@ export class ExternalSyncService {
         window: DateWindow,
         productMap: Map<string, string>,
         saleMap: Map<string, string>,
+        customerMap: Map<string, string>,
         stats: SyncStats,
         warnings: SyncWarning[],
         dryRun: boolean,
@@ -1404,7 +1585,14 @@ export class ExternalSyncService {
             }
 
             try {
-                const created = await this.writeSaleReturn(connection, mapped, saleId, productMap, returnMap, warnings);
+                // A credited return lands on its sale's customer, or failing
+                // that on the customer the provider files it under.
+                const customerId = mapped.dueCredit
+                    ? (saleId
+                          ? (await this.db.sale.findUnique({ where: { id: saleId }, select: { customer_id: true } }))?.customer_id
+                          : null) ?? (mapped.externalCustomerId ? customerMap.get(mapped.externalCustomerId) ?? null : null)
+                    : null;
+                const created = await this.writeSaleReturn(connection, mapped, saleId, customerId, productMap, returnMap, warnings);
                 if (created === null) {
                     stats.saleReturns.skipped++;
                 } else {
@@ -1615,6 +1803,7 @@ export class ExternalSyncService {
         connection: { id: string; tenant_id: string; store_id: string; post_impacts: boolean },
         mapped: MappedSaleReturn,
         saleId: string | null,
+        customerId: string | null,
         productMap: Map<string, string>,
         returnMap: Map<string, string>,
         warnings: SyncWarning[],
@@ -1681,7 +1870,7 @@ export class ExternalSyncService {
 
         if (existingId && !(await this.mappedRowExists(this.db.salesReturn, connection.tenant_id, existingId))) {
             await this.forgetStaleMapping(connection.id, 'SALE_RETURN', mapped.externalId, returnMap, warnings, `Return ${mapped.returnNumber}`);
-            return this.writeSaleReturn(connection, mapped, saleId, productMap, returnMap, warnings);
+            return this.writeSaleReturn(connection, mapped, saleId, customerId, productMap, returnMap, warnings);
         }
 
         if (existingId) {
@@ -1703,6 +1892,21 @@ export class ExternalSyncService {
                 if (items.length > 0) {
                     await tx.salesReturnItem.createMany({
                         data: items.map((item) => ({ ...item, return_id: existingId })),
+                    });
+                }
+                // A return imported before credits were booked gets its credit
+                // now; one that has it is left as it is.
+                if (connection.post_impacts && customerId && (mapped.dueCredit ?? 0) > 0.005) {
+                    await applySaleReturnCredit({
+                        tx,
+                        tenantId: connection.tenant_id,
+                        storeId: connection.store_id,
+                        returnId: existingId,
+                        returnNumber: mapped.returnNumber,
+                        totalRefund: mapped.totalRefund,
+                        returnDate: mapped.returnDate,
+                        customerId,
+                        dueCredit: mapped.dueCredit!,
                     });
                 }
             });
@@ -1734,6 +1938,8 @@ export class ExternalSyncService {
                     totalRefund: mapped.totalRefund,
                     returnDate: mapped.returnDate,
                     items,
+                    customerId,
+                    dueCredit: mapped.dueCredit,
                 });
             }
 
@@ -2220,6 +2426,12 @@ export class ExternalSyncService {
 
         if (existingId) {
             if (await this.isImmutablyPosted(connection, 'purchase', existingId)) {
+                // The voucher books the whole total as a credit purchase
+                // whatever was paid, so what was paid is the one figure a
+                // posted purchase can still take from upstream.
+                if (await this.db.$transaction((tx) => this.settlePurchasePaid(tx, connection, existingId, mapped, true))) {
+                    return false;
+                }
                 warnings.push({
                     entity: 'PURCHASE',
                     externalId: mapped.externalId,
@@ -2232,6 +2444,7 @@ export class ExternalSyncService {
             }
 
             await this.db.$transaction(async (tx) => {
+                await this.settlePurchasePaid(tx, connection, existingId, mapped, false);
                 await tx.purchase.update({ where: { id: existingId }, data: header });
 
                 const referenced = await tx.purchaseReturnItem.count({
@@ -2297,6 +2510,74 @@ export class ExternalSyncService {
 
         await this.writeMapping(connection, 'PURCHASE', mapped.externalId, purchase.id, mapped.externalUpdatedAt);
         purchaseMap.set(mapped.externalId, purchase.id);
+        return true;
+    }
+
+    /**
+     * Brings an imported purchase's paid amount, and the due it left on the
+     * supplier's account, to what the provider now says, when the total
+     * itself has not changed. The CREDIT_PURCHASE row the import wrote for the
+     * unpaid part (or writes now, if it was all paid) moves with it, so the
+     * bill, the supplier's due and their ledger keep agreeing.
+     *
+     * With `writePaid` it also saves the new paid amount and status; the
+     * ordinary update path saves them with the rest of the header. Returns
+     * whether anything changed.
+     */
+    private async settlePurchasePaid(
+        tx: Prisma.TransactionClient,
+        connection: { tenant_id: string; post_impacts: boolean },
+        purchaseId: string,
+        mapped: MappedPurchase,
+        writePaid: boolean,
+    ): Promise<boolean> {
+        const current = await tx.purchase.findFirst({
+            where: { id: purchaseId, tenant_id: connection.tenant_id },
+            select: { total_amount: true, paid_amount: true, supplier_id: true, created_at: true },
+        });
+        if (!current) return false;
+        const total = Number(current.total_amount);
+        const paid = Number(current.paid_amount);
+        if (Math.abs(total - mapped.totalAmount) > 0.005 || Math.abs(paid - mapped.paidAmount) <= 0.005) return false;
+
+        if (writePaid) {
+            await tx.purchase.update({
+                where: { id: purchaseId },
+                data: { paid_amount: mapped.paidAmount, payment_status: mapped.paymentStatus },
+            });
+        }
+
+        const dueChange = Math.max(0, total - mapped.paidAmount) - Math.max(0, total - paid);
+        if (!connection.post_impacts || !current.supplier_id || Math.abs(dueChange) <= 0.005) return true;
+
+        const supplier = await tx.supplier.findUnique({
+            where: { id: current.supplier_id },
+            select: { due_balance: true, store_id: true },
+        });
+        const balanceAfter = Number(supplier?.due_balance ?? 0) + dueChange;
+        const row = await tx.supplierCreditTransaction.findFirst({
+            where: { tenant_id: connection.tenant_id, supplier_id: current.supplier_id, type: 'CREDIT_PURCHASE', reference_type: 'PURCHASE', reference_id: purchaseId },
+            select: { id: true },
+        });
+        if (row) {
+            await tx.supplierCreditTransaction.update({ where: { id: row.id }, data: { amount: { increment: dueChange } } });
+        } else {
+            await tx.supplierCreditTransaction.create({
+                data: {
+                    tenant_id: connection.tenant_id,
+                    supplier_id: current.supplier_id,
+                    // A credit row belongs to its supplier's branch.
+                    store_id: supplier!.store_id,
+                    type: 'CREDIT_PURCHASE',
+                    amount: dueChange,
+                    balance_after: balanceAfter,
+                    reference_type: 'PURCHASE',
+                    reference_id: purchaseId,
+                    created_at: current.created_at,
+                },
+            });
+        }
+        await tx.supplier.update({ where: { id: current.supplier_id }, data: { due_balance: balanceAfter } });
         return true;
     }
 

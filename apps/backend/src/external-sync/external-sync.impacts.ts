@@ -19,7 +19,8 @@ import { supplierBranchId } from '../suppliers/supplier-branch.util';
  * on (tenant, eventType, sourceId, legKey), so a second run over the same
  * document is a no-op rather than a double post. And the caller only invokes
  * these on documents it has just created — a document that already posted is
- * treated as immutable and never rewritten.
+ * treated as immutable and never rewritten. The one exception,
+ * `applySaleReturnCredit`, checks for its own ledger row before writing one.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -406,6 +407,10 @@ export interface SaleReturnImpactInput {
     totalRefund: number;
     returnDate: Date;
     items: Array<{ product_id: string; quantity: number }>;
+    /** The customer whose account a credited return lands on. */
+    customerId?: string | null;
+    /** What the return takes off that customer's due (see MappedSaleReturn.dueCredit). */
+    dueCredit?: number;
 }
 
 export async function applySaleReturnImpacts(input: SaleReturnImpactInput): Promise<void> {
@@ -425,6 +430,11 @@ export async function applySaleReturnImpacts(input: SaleReturnImpactInput): Prom
         });
     }
 
+    if (input.customerId && (input.dueCredit ?? 0) > EPSILON) {
+        await applySaleReturnCredit({ ...input, customerId: input.customerId, dueCredit: input.dueCredit! });
+        return;
+    }
+
     await autoPostFromRules({
         tx,
         tenantId,
@@ -438,6 +448,73 @@ export async function applySaleReturnImpacts(input: SaleReturnImpactInput): Prom
         date: returnDate,
         storeId,
     });
+}
+
+/**
+ * Takes a credited return off its customer's due, with an ADJUSTMENT row
+ * tied to the return as a native credit return writes, and posts it as a
+ * credit return.
+ *
+ * Unlike the native path the credit is not capped at what the customer owes:
+ * a provider that credits returns this way (Dizi) books any cash handed back
+ * as a refund payment of its own, which raises the due again, so the two have
+ * to net to zero.
+ *
+ * Safe to run again on a return already imported: one that has its row gets
+ * no second one, and posting is idempotent. Returns whether a row was written.
+ */
+export async function applySaleReturnCredit(
+    input: Omit<SaleReturnImpactInput, 'items'> & { customerId: string; dueCredit: number },
+): Promise<boolean> {
+    const { tx, tenantId, storeId, returnId, returnDate, customerId, dueCredit } = input;
+
+    const existing = await tx.customerCreditTransaction.findFirst({
+        where: { tenant_id: tenantId, customer_id: customerId, reference_type: 'SALES_RETURN', reference_id: returnId },
+        select: { id: true },
+    });
+    if (!existing) {
+        const customer = await tx.customer.findUnique({
+            where: { id: customerId },
+            select: { due_balance: true, store_id: true },
+        });
+        const balanceAfter = Number(customer?.due_balance ?? 0) - dueCredit;
+        await tx.customerCreditTransaction.create({
+            data: {
+                tenant_id: tenantId,
+                customer_id: customerId,
+                // A credit row belongs to its customer's branch.
+                store_id: customer!.store_id,
+                type: 'ADJUSTMENT',
+                amount: -dueCredit,
+                balance_after: balanceAfter,
+                reference_type: 'SALES_RETURN',
+                reference_id: returnId,
+                notes: `Imported sale return ${input.returnNumber}`,
+                created_at: returnDate,
+            },
+        });
+        await tx.customer.update({ where: { id: customerId }, data: { due_balance: balanceAfter } });
+    }
+
+    await autoPostFromRules({
+        tx,
+        tenantId,
+        eventType: 'sale_return',
+        conditionKey: 'payment_mode',
+        conditionValue: 'credit',
+        sourceModule: 'external-sync',
+        sourceType: 'sale_return',
+        sourceId: returnId,
+        amount: input.totalRefund,
+        description: `Imported sale return ${input.returnNumber}`,
+        referenceNumber: input.returnNumber,
+        date: returnDate,
+        storeId,
+        partyType: 'CUSTOMER',
+        partyId: customerId,
+    });
+
+    return !existing;
 }
 
 /**
@@ -495,19 +572,76 @@ export async function applyOpeningBalance(input: OpeningBalanceInput): Promise<v
         tenant_id: tenantId,
         type: 'ADJUSTMENT',
         amount,
-        balance_after: amount,
-        notes: `Opening balance imported from ${input.label}`,
+        notes: openingBalanceNote(input.label),
         created_at: asOf,
     };
 
-    // An opening balance belongs to its party's branch, like every credit row.
+    // An opening balance belongs to its party's branch, like every credit row,
+    // and adds to whatever the party already owes: a party imported earlier
+    // keeps the effect of their documents.
     if (isCustomer) {
         const store_id = await customerBranchId(tx, partyId);
-        await tx.customerCreditTransaction.create({ data: { ...data, customer_id: partyId, store_id } });
-        await tx.customer.update({ where: { id: partyId }, data: { due_balance: amount } });
+        const current = await tx.customer.findUnique({ where: { id: partyId }, select: { due_balance: true } });
+        const balanceAfter = Number(current?.due_balance ?? 0) + amount;
+        await tx.customerCreditTransaction.create({ data: { ...data, balance_after: balanceAfter, customer_id: partyId, store_id } });
+        await tx.customer.update({ where: { id: partyId }, data: { due_balance: balanceAfter } });
     } else {
         const store_id = await supplierBranchId(tx, partyId);
-        await tx.supplierCreditTransaction.create({ data: { ...data, supplier_id: partyId, store_id } });
-        await tx.supplier.update({ where: { id: partyId }, data: { due_balance: amount } });
+        const current = await tx.supplier.findUnique({ where: { id: partyId }, select: { due_balance: true } });
+        const balanceAfter = Number(current?.due_balance ?? 0) + amount;
+        await tx.supplierCreditTransaction.create({ data: { ...data, balance_after: balanceAfter, supplier_id: partyId, store_id } });
+        await tx.supplier.update({ where: { id: partyId }, data: { due_balance: balanceAfter } });
     }
 }
+
+/** The note every imported opening balance carries, so a later run can find it. */
+export function openingBalanceNote(label: string): string {
+    return `Opening balance imported from ${label}`;
+}
+
+export interface OpeningStockInput {
+    tx: Tx;
+    tenantId: string;
+    storeId: string;
+    connectionId: string;
+    productId: string;
+    /** Signed: a negative opening takes out what the provider no longer holds. */
+    quantity: number;
+    /** The provider's buying rate, which costs the stock coming in. */
+    unitCost: number;
+    /** Dated at the start of the imported range, before any document. */
+    asOf: Date;
+    label: string;
+}
+
+/**
+ * Stock a product had before the imported range, as a backdated opening
+ * movement in the branch's warehouse, tagged to the connection so a later
+ * run can tell it is there. Like an opening balance it does not post.
+ *
+ * A positive opening arrives at the buying rate, as opening stock entered by
+ * hand does. A negative one is quantity only, and may take the balance below
+ * zero for a while, as a replayed sale may.
+ */
+export async function applyOpeningStock(input: OpeningStockInput): Promise<void> {
+    const { tx, tenantId, quantity } = input;
+    if (quantity === 0) return;
+
+    const warehouseId = await resolveWarehouseId(tx, tenantId, input.storeId);
+    await applyInventoryMovement(tx, {
+        tenantId,
+        productId: input.productId,
+        warehouseId,
+        quantityDelta: quantity,
+        movementType: 'INITIAL_STOCK',
+        referenceType: OPENING_STOCK_REFERENCE,
+        referenceId: input.connectionId,
+        unitCost: quantity > 0 && input.unitCost > 0 ? input.unitCost : undefined,
+        note: `Opening stock imported from ${input.label}`,
+        occurredAt: input.asOf,
+        allowNegative: true,
+    });
+}
+
+/** `InventoryMovement.reference_type` of an imported opening stock movement. */
+export const OPENING_STOCK_REFERENCE = 'EXTERNAL_SYNC_OPENING';

@@ -23,6 +23,7 @@ import {
     MappedSaleReturn,
     MappedSaleReturnItem,
     MappedSupplier,
+    OpeningPositions,
     PaymentParty,
     SyncWarning,
     buildDocumentNumber,
@@ -202,7 +203,12 @@ export function mapDiziPurchase(
     });
 
     const totalAmount = toMoney(header.TotalAmount);
-    const paidAmount = toMoney(header.ReceivedAmount) || toMoney(detail?.PaidAmount);
+    // Only what the header says changed hands with the goods. The detail's
+    // PaidAmount is what the supplier has been paid so far, and Dizi records
+    // every one of those payments, even cash handed over at the counter, as a
+    // supplier payment of its own; counting it here as well paid each bill
+    // twice and took it off the supplier's due.
+    const paidAmount = toMoney(header.ReceivedAmount);
 
     return {
         externalId,
@@ -316,12 +322,19 @@ export function mapDiziSaleReturn(
         };
     });
 
+    const totalRefund = toMoney(detail.GrossAmount) || toMoney(detail.TotalAmount);
+
     return {
         externalId,
         returnNumber: buildDocumentNumber(documentPrefix, slip),
         referenceNumber: emptyToNull(detail.ReturnSlipNo),
         externalSaleId: emptyToNull(detail.SalesId),
-        totalRefund: toMoney(detail.GrossAmount) || toMoney(detail.TotalAmount),
+        externalCustomerId: emptyToNull(detail.TraderId),
+        totalRefund,
+        // Dizi credits the whole return to the customer's account. Cash handed
+        // back is a negative customer payment of its own, which raises the due
+        // again, so crediting only part here would count that cash twice.
+        dueCredit: totalRefund,
         reason: emptyToNull(detail.Narration),
         returnDate: parseProviderDate(detail.ReturnDate),
         externalUpdatedAt: parseTimestamp(detail.UpdatedOn),
@@ -435,4 +448,94 @@ export function mapDiziQuotation(
         externalUpdatedAt: parseTimestamp(detail?.UpdatedOn),
         items,
     };
+}
+
+/** Everything a Dizi snapshot holds, as the opening arithmetic reads it. */
+export interface DiziRecords {
+    products: DiziItem[];
+    customers: DiziTrader[];
+    suppliers: DiziTrader[];
+    sales: Array<{ header: DiziSaleHeader; detail: DiziSaleDetail | null }>;
+    purchases: Array<{ header: DiziPurchaseHeader; detail: DiziPurchaseDetail | null }>;
+    customerPayments: DiziPayment[];
+    supplierPayments: DiziPayment[];
+    saleReturns: DiziSaleReturnDetail[];
+}
+
+/**
+ * Each party's opening due and each product's opening stock for an import of
+ * these records (see {@link OpeningPositions}).
+ *
+ * Dizi sends no opening figure of its own: a trader's `Balance` and an item's
+ * `StockInHand` are current, and already include every document here. So the
+ * documents' effect is worked out the way the import will book them — through
+ * the same mappers — and taken off. What is left is what Dizi holds beyond its
+ * documents: opening dues and opening stock entered when the shop started on
+ * Dizi, and Dizi purchase returns, which the import cannot read yet.
+ */
+export function diziOpeningPositions(records: DiziRecords): OpeningPositions {
+    const ignored: SyncWarning[] = [];
+    const customerDocs = new Map<string, number>();
+    const supplierDocs = new Map<string, number>();
+    const stockDocs = new Map<string, number>();
+    const add = (map: Map<string, number>, key: string | null | undefined, amount: number) => {
+        if (key) map.set(key, (map.get(key) ?? 0) + amount);
+    };
+
+    // A sale raises its customer's due by what was left unpaid, as the import does.
+    const saleCustomer = new Map<string, string | null>();
+    for (const doc of records.sales) {
+        const sale = mapDiziSale(doc.header, doc.detail, '', ignored);
+        saleCustomer.set(sale.externalId, sale.externalCustomerId);
+        add(customerDocs, sale.externalCustomerId, Math.max(0, sale.totalAmount - sale.amountPaid));
+        for (const line of sale.items) add(stockDocs, line.externalProductId, -line.quantity);
+    }
+    for (const doc of records.purchases) {
+        const purchase = mapDiziPurchase(doc.header, doc.detail, '', ignored);
+        add(supplierDocs, purchase.externalSupplierId, Math.max(0, purchase.totalAmount - purchase.paidAmount));
+        for (const line of purchase.items) add(stockDocs, line.externalProductId, line.quantity);
+    }
+    // Money in settles a customer and money out settles a supplier; a refund
+    // the other way raises the due again.
+    const payments: Array<[DiziPayment[], PaymentParty, Map<string, number>]> = [
+        [records.customerPayments, 'CUSTOMER', customerDocs],
+        [records.supplierPayments, 'SUPPLIER', supplierDocs],
+    ];
+    for (const [rows, party, docs] of payments) {
+        for (const row of rows) {
+            const payment = mapDiziPayment(row, party, '', ignored);
+            if (!payment) continue;
+            const settles = payment.direction === (party === 'CUSTOMER' ? 'IN' : 'OUT');
+            add(docs, payment.externalPartyId, settles ? -payment.amount : payment.amount);
+        }
+    }
+    // The import credits a return to its sale's customer, or failing that to
+    // the customer the return names.
+    for (const detail of records.saleReturns) {
+        const ret = mapDiziSaleReturn(detail, '', ignored);
+        const customer = (ret.externalSaleId ? saleCustomer.get(ret.externalSaleId) : null) ?? ret.externalCustomerId;
+        add(customerDocs, customer, -(ret.dueCredit ?? 0));
+        for (const line of ret.items) add(stockDocs, line.externalProductId, line.quantity);
+    }
+
+    const dues = (rows: DiziTrader[], docs: Map<string, number>) => {
+        const openings = new Map<string, number>();
+        for (const row of rows) {
+            const id = String(row.Id);
+            const opening = Math.round((toMoney(row.Balance) - (docs.get(id) ?? 0)) * 100) / 100;
+            if (Math.abs(opening) >= 0.01) openings.set(id, opening);
+        }
+        return openings;
+    };
+
+    const stock = new Map<string, number>();
+    for (const row of records.products) {
+        if (row.IsService === true) continue;
+        const id = String(row.Id);
+        // Our quantities are whole numbers; the documents' were rounded the same way.
+        const opening = Math.round(toMoney(row.StockInHand) - (stockDocs.get(id) ?? 0));
+        if (opening !== 0) stock.set(id, opening);
+    }
+
+    return { customers: dues(records.customers, customerDocs), suppliers: dues(records.suppliers, supplierDocs), stock };
 }
