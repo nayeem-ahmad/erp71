@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
 import { ImportWizardFrame } from '@/components/external-sync/ImportStepper';
+import { SkippedRecordsPanel, skippedRecordsOf } from '@/components/external-sync/SkippedRecords';
 import {
     SnapshotImportPanel,
     type SnapshotImportAdapter,
@@ -688,8 +689,12 @@ export default function TenantExternalSyncPage() {
 }
 
 function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
-    const [showWarnings, setShowWarnings] = useState(false);
+    const [open, setOpen] = useState<'warnings' | 'skipped' | null>(null);
     const warnings = run.warnings ?? [];
+    const skipped = skippedRecordsOf(run);
+    // The run stores at most 500 notes; progress counts every one raised.
+    const warningCount = Math.max(run.progress?.warnings ?? 0, warnings.length);
+    const toggle = (panel: 'warnings' | 'skipped') => setOpen((current) => (current === panel ? null : panel));
 
     return (
         <>
@@ -717,16 +722,31 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                         : '—'}
                 </td>
                 <td className="py-2">
-                    <RunNote
-                        run={run}
-                        warningCount={warnings.length}
-                        onToggleWarnings={() => setShowWarnings((open) => !open)}
-                    />
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {skipped.length > 0 ? (
+                            <button type="button" className="text-danger hover:underline" onClick={() => toggle('skipped')}>
+                                {skipped.length} skipped
+                            </button>
+                        ) : null}
+                        <RunNote run={run} warningCount={warningCount} onToggleWarnings={() => toggle('warnings')} />
+                    </div>
                 </td>
             </tr>
-            {showWarnings ? (
+            {open === 'skipped' ? (
                 <tr>
                     <td colSpan={10} className="py-2">
+                        <SkippedRecordsPanel run={run} />
+                    </td>
+                </tr>
+            ) : null}
+            {open === 'warnings' ? (
+                <tr>
+                    <td colSpan={10} className="py-2">
+                        {warningCount > warnings.length ? (
+                            <p className="mb-1 text-xs text-gray-500">
+                                Showing the first {warnings.length} of {warningCount} warnings.
+                            </p>
+                        ) : null}
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning: ExternalSyncWarning, index: number) => (
                                 <li key={`${warning.entity}-${warning.externalId}-${index}`}>

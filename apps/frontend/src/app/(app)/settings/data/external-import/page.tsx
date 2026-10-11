@@ -6,6 +6,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
 import { ImportWizardFrame } from '@/components/external-sync/ImportStepper';
+import { SkippedRecordsPanel, skippedRecordsOf } from '@/components/external-sync/SkippedRecords';
 import {
     SnapshotImportPanel,
     type SnapshotImportAdapter,
@@ -648,8 +649,12 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
 }
 
 function RunRow({ run }: { run: ExternalSyncRun }) {
-    const [showWarnings, setShowWarnings] = useState(false);
+    const [open, setOpen] = useState<'warnings' | 'skipped' | null>(null);
     const warnings: ExternalSyncWarning[] = run.warnings ?? [];
+    const skipped = skippedRecordsOf(run);
+    // The run stores at most 500 notes; progress counts every one raised.
+    const noteCount = Math.max(run.progress?.warnings ?? 0, warnings.length);
+    const toggle = (panel: 'warnings' | 'skipped') => setOpen((current) => (current === panel ? null : panel));
 
     const imported = run.stats
         ? Object.values(run.stats).reduce((sum, tally) => sum + tally.created + tally.updated, 0)
@@ -670,24 +675,39 @@ function RunRow({ run }: { run: ExternalSyncRun }) {
                 </td>
                 <td className="py-2 pe-3">{run.stats ? `${imported} records` : '—'}</td>
                 <td className="py-2">
-                    {run.error_message ? (
-                        <span className="text-danger">{run.error_message}</span>
-                    ) : warnings.length > 0 ? (
-                        <button
-                            type="button"
-                            className="text-blue-600 hover:underline"
-                            onClick={() => setShowWarnings((open) => !open)}
-                        >
-                            {warnings.length} notes
-                        </button>
-                    ) : (
-                        <span className="text-gray-400">—</span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {skipped.length > 0 ? (
+                            <button type="button" className="text-danger hover:underline" onClick={() => toggle('skipped')}>
+                                {skipped.length} skipped
+                            </button>
+                        ) : null}
+                        {run.error_message ? <span className="text-danger">{run.error_message}</span> : null}
+                        {!run.error_message && noteCount > 0 ? (
+                            <button type="button" className="text-blue-600 hover:underline" onClick={() => toggle('warnings')}>
+                                {noteCount} notes
+                            </button>
+                        ) : null}
+                        {!run.error_message && noteCount === 0 && skipped.length === 0 ? (
+                            <span className="text-gray-400">—</span>
+                        ) : null}
+                    </div>
                 </td>
             </tr>
-            {showWarnings ? (
+            {open === 'skipped' ? (
                 <tr>
                     <td colSpan={5} className="py-2">
+                        <SkippedRecordsPanel run={run} />
+                    </td>
+                </tr>
+            ) : null}
+            {open === 'warnings' ? (
+                <tr>
+                    <td colSpan={5} className="py-2">
+                        {noteCount > warnings.length ? (
+                            <p className="mb-1 text-xs text-gray-500">
+                                Showing the first {warnings.length} of {noteCount} notes.
+                            </p>
+                        ) : null}
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning, index) => (
                                 <li key={`${warning.externalId}-${index}`}>{warning.message}</li>
