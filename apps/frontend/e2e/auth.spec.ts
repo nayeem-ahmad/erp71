@@ -35,13 +35,14 @@ test.describe('Authentication', () => {
 
         // Submit without filling fields: the form uses native HTML5 `required`
         // validation, so the browser blocks submission (no navigation away) and
-        // the first required field is reported invalid.
+        // the first required field (email — the form is email/password/organization)
+        // is reported invalid.
         await page.getByRole('button', { name: /create workspace|sign up|create account|register/i }).click();
         await expect(page).toHaveURL(/\/signup/);
-        const nameInvalid = await page
-            .getByLabel(/your name/i)
+        const emailInvalid = await page
+            .getByLabel(/email address/i)
             .evaluate((el) => (el as HTMLInputElement).validity.valueMissing);
-        expect(nameInvalid).toBe(true);
+        expect(emailInvalid).toBe(true);
     });
 
     test('login page renders and shows error for wrong credentials', { tag: '@readonly' }, async ({ page }) => {

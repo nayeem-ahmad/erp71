@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { forwardRef, type HTMLAttributes } from 'react';
+import { forwardRef, type HTMLAttributes, type MouseEvent } from 'react';
 import { User } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import { StatusBadge } from '@/components/ui';
@@ -18,11 +18,18 @@ type LeadCardProps = HTMLAttributes<HTMLDivElement> & {
     /** The card under the pointer while dragging, rather than the one in its column. */
     overlay?: boolean;
     dragging?: boolean;
+    /** Opens the lead over the board. Without it the name is a plain link to the lead page. */
+    onOpen?: () => void;
 };
+
+/** Ctrl/Cmd/Shift/middle click asks the browser for a new tab or window — let it have the link. */
+function wantsNewTab(event: MouseEvent): boolean {
+    return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+}
 
 /** One lead on the board: who, how to reach them, and the badges the list shows. */
 export const LeadCard = forwardRef<HTMLDivElement, LeadCardProps>(function LeadCard(
-    { lead, group, labels, overlay = false, dragging = false, className = '', ...rest },
+    { lead, group, labels, overlay = false, dragging = false, onOpen, className = '', ...rest },
     ref,
 ) {
     return (
@@ -31,7 +38,10 @@ export const LeadCard = forwardRef<HTMLDivElement, LeadCardProps>(function LeadC
             data-testid="lead-card"
             className={`rounded-md border bg-white p-2.5 text-sm shadow-sm transition-[border-color,box-shadow,opacity] ${
                 overlay ? 'cursor-grabbing border-blue-300 shadow-md' : 'border-gray-200 hover:border-blue-300'
-            } ${dragging ? 'opacity-40' : ''} ${className}`}
+            } ${dragging ? 'opacity-40' : ''} ${onOpen ? 'cursor-pointer' : ''} ${className}`}
+            // A drag only starts after the pointer has moved, so a press that ends
+            // where it began is a click, and the whole card is the target.
+            onClick={onOpen ? () => onOpen() : undefined}
             {...rest}
         >
             <div className="flex items-center gap-2">
@@ -41,6 +51,15 @@ export const LeadCard = forwardRef<HTMLDivElement, LeadCardProps>(function LeadC
                         href={routes.crm.leadDetail(lead.id)}
                         className="block truncate font-semibold text-gray-900 hover:text-blue-600"
                         title={lead.name}
+                        onClick={(event) => {
+                            // The card's own click opens it; the link is left to
+                            // the browser only when a new tab was asked for.
+                            if (!onOpen) return;
+                            event.stopPropagation();
+                            if (wantsNewTab(event)) return;
+                            event.preventDefault();
+                            onOpen();
+                        }}
                     >
                         {lead.name}
                     </Link>
