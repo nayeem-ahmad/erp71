@@ -69,6 +69,7 @@ describe('mapQuotation (Express Retail)', () => {
             notes: null,
             externalUpdatedAt: new Date('2026-10-08T06:44:03.000Z'),
             items: [{ externalProductId: '123199', quantity: 20, unitPrice: 5800 }],
+            embeddedCustomer: null,
         });
         expect(warnings).toEqual([]);
     });

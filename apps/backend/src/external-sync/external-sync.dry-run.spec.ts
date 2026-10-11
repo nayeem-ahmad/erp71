@@ -189,8 +189,8 @@ describe('external-sync payment write', () => {
             },
             customer: { findUnique: jest.fn(async () => ({ store_id: 'store-babu-bazar' })) },
             supplier: { findUnique: jest.fn(async () => ({ store_id: 'store-main' })) },
-            customerCreditTransaction: { create: jest.fn(async () => ({ id: 'ct-1' })) },
-            supplierCreditTransaction: { create: jest.fn(async () => ({ id: 'st-1' })) },
+            customerCreditTransaction: { create: jest.fn(async () => ({ id: 'ct-1' })), findFirst: jest.fn(async () => null) },
+            supplierCreditTransaction: { create: jest.fn(async () => ({ id: 'st-1' })), findFirst: jest.fn(async () => null) },
         };
         db.$transaction = jest.fn(async (run: (tx: any) => Promise<unknown>) => run(db));
         return { service: new ExternalSyncService(db, {} as any, {} as any), db };

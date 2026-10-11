@@ -11,6 +11,7 @@ import {
     ExpressRetailSaleReturn,
     ExpressRetailSupplier,
 } from './express-retail.client';
+import { partyLabel } from './skipped-records';
 
 /**
  * Pure mapping from Express Retail Pro payloads onto our own shapes. Kept free
@@ -25,7 +26,27 @@ export type SyncWarning = {
     /** Machine-readable reason so the UI can group these. */
     code: string;
     message: string;
+    /**
+     * Set only when the record was not imported at all. A run keeps every one
+     * of these (notes can be trimmed), and they are what the skipped-records
+     * report lists.
+     */
+    skipped?: SkippedRecord;
 };
+
+/** Enough about a record the run could not import to find it in the provider and act on it. */
+export interface SkippedRecord {
+    /** The provider's document number, or a master record's code. */
+    number: string | null;
+    /** `YYYY-MM-DD`, for documents. */
+    date: string | null;
+    /** The customer or supplier as the provider names it, else its provider id. */
+    party: string | null;
+    amount: number | null;
+    lines: number | null;
+    /** The write error, trimmed to the line that says what went wrong. */
+    error?: string;
+}
 
 export interface DateWindow {
     from: string;
@@ -259,6 +280,12 @@ export interface MappedSaleItem {
 
 export interface MappedSale {
     externalId: string;
+    /**
+     * The customer as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedCustomer?: unknown;
     serialNumber: string;
     /** The provider's own transaction number, unprefixed, for `reference_number`. */
     referenceNumber: string | null;
@@ -317,6 +344,7 @@ export function mapSale(
         note: emptyToNull(row.description),
         externalUpdatedAt: parseTimestamp(row.updated_at),
         items,
+        embeddedCustomer: row.customer ?? null,
     };
 }
 
@@ -329,6 +357,12 @@ export interface MappedPurchaseItem {
 
 export interface MappedPurchase {
     externalId: string;
+    /**
+     * The supplier as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedSupplier?: unknown;
     purchaseNumber: string;
     /** The provider's own transaction number, unprefixed, for `reference_number`. */
     referenceNumber: string | null;
@@ -391,6 +425,7 @@ export function mapPurchase(
         purchaseDate: parseProviderDate(row.date),
         externalUpdatedAt: parseTimestamp(row.updated_at),
         items,
+        embeddedSupplier: row.supplier ?? null,
     };
 }
 
@@ -475,6 +510,12 @@ export interface MappedQuotationItem {
  */
 export interface MappedQuotation {
     externalId: string;
+    /**
+     * The customer as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedCustomer?: unknown;
     quoteNumber: string;
     /** The provider's own quotation number, unprefixed, for warnings. */
     referenceNumber: string | null;
@@ -540,6 +581,7 @@ export function mapQuotation(
         notes: emptyToNull(row.description),
         externalUpdatedAt: parseTimestamp(row.updated_at),
         items,
+        embeddedCustomer: row.customer ?? null,
     };
 }
 
@@ -550,6 +592,12 @@ export type PaymentParty = 'CUSTOMER' | 'SUPPLIER';
 
 export interface MappedPayment {
     externalId: string;
+    /**
+     * The customer or supplier as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedParty?: unknown;
     /** Prefixed, so an imported payment cannot collide with our own numbering. */
     paymentNumber: string;
     /** The provider's own transaction number, unprefixed. */
@@ -606,6 +654,7 @@ export function mapPayment(
             externalId,
             code: 'PAYMENT_TYPE_UNKNOWN',
             message: `Payment ${row.invoice}: unrecognised type "${row.type}" — skipped rather than guess whether it was money in or out`,
+            skipped: skippedPayment(row, party),
         });
         return null;
     }
@@ -617,6 +666,7 @@ export function mapPayment(
             externalId,
             code: 'PAYMENT_AMOUNT_INVALID',
             message: `Payment ${row.invoice}: amount ${row.amount ?? 'null'} is not a positive number — skipped`,
+            skipped: skippedPayment(row, party),
         });
         return null;
     }
@@ -644,6 +694,18 @@ export function mapPayment(
         previousDue,
         note: noteParts.length ? noteParts.join(' — ') : null,
         externalUpdatedAt: parseTimestamp(row.updated_at),
+        embeddedParty: (party === 'CUSTOMER' ? row.customer : row.supplier) ?? null,
+    };
+}
+
+function skippedPayment(row: ExpressRetailPayment, party: PaymentParty): SkippedRecord {
+    const partyId = emptyToNull((party === 'CUSTOMER' ? row.customer_id : row.supplier_id) ?? null);
+    return {
+        number: emptyToNull(row.invoice),
+        date: emptyToNull(row.date)?.slice(0, 10) ?? null,
+        party: partyLabel(partyId, party === 'CUSTOMER' ? row.customer : row.supplier),
+        amount: toMoney(row.amount),
+        lines: null,
     };
 }
 

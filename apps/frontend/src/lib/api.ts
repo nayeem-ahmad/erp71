@@ -1109,6 +1109,15 @@ export type ExternalSyncWarning = {
     externalId: string;
     code: string;
     message: string;
+    /** Present only when the record was not imported; the run keeps every one of these. */
+    skipped?: {
+        number: string | null;
+        date: string | null;
+        party: string | null;
+        amount: number | null;
+        lines: number | null;
+        error?: string;
+    };
 };
 
 export type ExternalSyncConnection = {
@@ -1170,7 +1179,8 @@ export type ExternalSyncRun = {
     status: 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     /** What the run is doing right now; null once finished. */
     phase: string | null;
-    progress: { done: number; total: number; warnings: number } | null;
+    /** `warnings` and `codes` count every warning raised, not only the ones stored. */
+    progress: { done: number; total: number; warnings: number; codes?: Record<string, number> } | null;
     steps: ExternalSyncStep[] | null;
     window_from: string;
     window_to: string;

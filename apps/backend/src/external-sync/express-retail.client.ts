@@ -55,6 +55,8 @@ export interface ExpressRetailSale {
     organization_id: string;
     created_at: string;
     updated_at: string | null;
+    /** The customer as Express embeds it — present even when deleted there, unlike `/get-customer`. */
+    customer?: Record<string, unknown> | null;
 }
 
 export interface ExpressRetailSaleLine {
@@ -84,6 +86,8 @@ export interface ExpressRetailPurchase {
     organization_id: string;
     created_at: string;
     updated_at: string | null;
+    /** The supplier as Express embeds it — present even when deleted there, unlike `/get-supplier`. */
+    supplier?: Record<string, unknown> | null;
 }
 
 export interface ExpressRetailPurchaseLine {
@@ -190,6 +194,9 @@ export interface ExpressRetailPayment {
     status: string;
     organization_id: string;
     updated_at: string | null;
+    /** The party as Express embeds it (code, name, phone) — present even when deleted there. */
+    customer?: Record<string, unknown> | null;
+    supplier?: Record<string, unknown> | null;
 }
 
 /**
@@ -211,6 +218,8 @@ export interface ExpressRetailQuotation {
     organization_id: string;
     created_at: string;
     updated_at: string | null;
+    /** The customer as Express embeds it — present even when deleted there, unlike `/get-customer`. */
+    customer?: Record<string, unknown> | null;
 }
 
 /** A row from `/get-quotation-details`; `total` is the line net of its own discount. */

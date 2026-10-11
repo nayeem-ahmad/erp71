@@ -12,16 +12,20 @@ import { codeForNewRecord } from '../common/code-series.util';
 import { assertValidBaseUrl } from './express-retail.client';
 import {
     DateWindow,
+    MappedCustomer,
     MappedPayment,
     MappedPurchase,
     MappedQuotation,
     MappedSale,
     MappedSaleReturn,
+    MappedSupplier,
     PaymentParty,
+    SkippedRecord,
     SyncWarning,
     creditTransactionType,
     toDateString,
 } from './external-sync.mapper';
+import { capWarnings, countWarningCodes, describeWriteError, freeDocumentNumber, partyLabel } from './skipped-records';
 import {
     DEFAULT_PROVIDER,
     EXPRESS_MAPPERS,
@@ -81,6 +85,16 @@ type SyncStats = Record<
     EntityTally
 >;
 
+/** What the document steps read off the connection row. */
+interface DocumentConnection {
+    id: string;
+    tenant_id: string;
+    store_id: string;
+    provider: string;
+    document_prefix: string;
+    post_impacts: boolean;
+}
+
 /** An imported product whose provider row carried a buying rate. */
 interface OpeningCostCandidate {
     productId: string;
@@ -90,8 +104,6 @@ interface OpeningCostCandidate {
     externalId: string;
 }
 
-/** Warnings are stored on the run row; cap them so one bad import cannot bloat it. */
-const MAX_STORED_WARNINGS = 500;
 
 /**
  * The import is divided into steps so it can be run a piece at a time — a
@@ -195,6 +207,26 @@ export function supplierAdoptionWhere(tenantId: string, name: string) {
     // picker and no list will ever show (TODO.md:357).
     if (!name) return null;
     return { tenant_id: tenantId, name, deleted_at: null };
+}
+
+/** What the skipped-records report needs about a document the run could not import. */
+function skippedDocument(
+    number: string,
+    date: Date,
+    externalPartyId: string | null,
+    embeddedParty: unknown,
+    amount: number,
+    lines: number | null,
+    error?: unknown,
+): SkippedRecord {
+    return {
+        number,
+        date: toDateString(date),
+        party: partyLabel(externalPartyId, embeddedParty),
+        amount,
+        lines,
+        ...(error === undefined ? {} : { error: describeWriteError(error) }),
+    };
 }
 
 @Injectable()
@@ -529,27 +561,27 @@ export class ExternalSyncService {
                 // document was dropped while its payments still landed.)
                 if (steps.includes('PURCHASES')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun, mappers);
+                    await this.syncPurchasesWindow(connection, client, chunk, productMap, supplierMap, stats, warnings, dryRun, mappers, window.from);
                     await tick(`Purchases ${label}`);
                 }
                 if (steps.includes('SALES')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun, mappers);
+                    await this.syncSalesWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun, mappers, window.from);
                     await tick(`Sales ${label}`);
                 }
                 if (steps.includes('QUOTATIONS')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncQuotationsWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun, mappers);
+                    await this.syncQuotationsWindow(connection, client, chunk, productMap, customerMap, stats, warnings, dryRun, mappers, window.from);
                     await tick(`Quotations ${label}`);
                 }
                 if (steps.includes('CUSTOMER_PAYMENTS')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun, mappers);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'CUSTOMER', customerMap, stats, warnings, dryRun, mappers, window.from);
                     await tick(`Customer payments ${label}`);
                 }
                 if (steps.includes('SUPPLIER_PAYMENTS')) {
                     await this.assertNotCancelled(runId);
-                    await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun, mappers);
+                    await this.syncPaymentsWindow(connection, client, chunk, 'SUPPLIER', supplierMap, stats, warnings, dryRun, mappers, window.from);
                     await tick(`Supplier payments ${label}`);
                 }
             }
@@ -572,8 +604,9 @@ export class ExternalSyncService {
                 data: {
                     status,
                     phase: null,
+                    progress: { done: totalUnits, total: totalUnits, warnings: warnings.length, codes: countWarningCodes(warnings) } as any,
                     stats: stats as any,
-                    warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
+                    warnings: capWarnings(warnings) as any,
                     finished_at: new Date(),
                 },
             });
@@ -593,7 +626,7 @@ export class ExternalSyncService {
                     // Whatever completed before the stop is real and worth
                     // keeping — the mapping table already holds those rows.
                     stats: stats as any,
-                    warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
+                    warnings: capWarnings(warnings) as any,
                     ...(cancelled ? {} : { error_message: String(error?.message ?? error).slice(0, 2000) }),
                     finished_at: new Date(),
                 },
@@ -618,9 +651,9 @@ export class ExternalSyncService {
             where: { id: runId },
             data: {
                 phase,
-                progress: { done, total, warnings: warnings.length } as any,
+                progress: { done, total, warnings: warnings.length, codes: countWarningCodes(warnings) } as any,
                 stats: stats as any,
-                warnings: warnings.slice(0, MAX_STORED_WARNINGS) as any,
+                warnings: capWarnings(warnings) as any,
             },
         });
     }
@@ -749,7 +782,8 @@ export class ExternalSyncService {
                     entity: 'PRODUCT',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Product ${productLabel} could not be imported: ${error?.message ?? error}`,
+                    message: `Product ${productLabel} could not be imported: ${describeWriteError(error)}`,
+                    skipped: { number: productLabel, date: null, party: null, amount: mapped.price, lines: null, error: describeWriteError(error) },
                 });
             }
         }
@@ -862,64 +896,7 @@ export class ExternalSyncService {
                     await this.forgetStaleMapping(connection.id, 'CUSTOMER', mapped.externalId, map, warnings, `Customer ${customerLabel}`);
                 }
 
-                // Phone is the only identity a customer carries. `customer_code`
-                // is generated per provider row, so it used to adopt unrelated
-                // parties that happened to collide on it.
-                //
-                // The raw phone goes to the database, not the normalized one:
-                // `Customer.phone` stores exactly what was typed, so a lookup
-                // for "+8801712345678" would miss a row saved as "01712345678"
-                // and silently create a duplicate. Normalization is for
-                // in-memory candidate matching, where both sides get it.
-                const customerWhere = customerAdoptionWhere(
-                    connection.tenant_id,
-                    mapped.phone,
-                    mapped.customerCode,
-                );
-                const adopted = customerWhere
-                    ? await this.db.customer.findFirst({ where: customerWhere, select: { id: true } })
-                    : null;
-
-                // The provider's code when it has a readable one no other
-                // customer holds; else the next in the tenant's CUST- series.
-                const customerId =
-                    adopted?.id ??
-                    (
-                        await codeForNewRecord(this.db, 'Customer', connection.tenant_id, mapped.customerCode, (customerCode) =>
-                            this.db.customer.create({
-                                data: {
-                                    tenant_id: connection.tenant_id,
-                                    // Everything an import brings in belongs to the
-                                    // import's branch; an adopted customer keeps theirs.
-                                    store_id: connection.store_id,
-                                    customer_code: customerCode,
-                                    name: mapped.name,
-                                    owner_name: mapped.ownerName,
-                                    phone: mapped.phone,
-                                    email: mapped.email,
-                                    address: mapped.address,
-                                    credit_limit: mapped.creditLimit,
-                                },
-                                select: { id: true },
-                            }),
-                        )
-                    ).id;
-
-                // Only on a party we created: adopting an existing customer
-                // means the tenant already has their balance.
-                if (!adopted && connection.post_impacts && mapped.previousDue !== 0) {
-                    await this.db.$transaction((tx) =>
-                        applyOpeningBalance({
-                            tx,
-                            tenantId: connection.tenant_id,
-                            party: 'CUSTOMER',
-                            partyId: customerId,
-                            amount: mapped.previousDue,
-                            asOf: openingAsOf,
-                            label: connection.provider,
-                        }),
-                    );
-                }
+                const { id: customerId, adopted } = await this.createOrAdoptCustomer(connection, mapped, openingAsOf);
 
                 if (adopted) {
                     warnings.push({
@@ -941,7 +918,8 @@ export class ExternalSyncService {
                     entity: 'CUSTOMER',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Customer ${customerLabel} could not be imported: ${error?.message ?? error}`,
+                    message: `Customer ${customerLabel} could not be imported: ${describeWriteError(error)}`,
+                    skipped: { number: mapped.customerCode, date: null, party: mapped.name, amount: null, lines: null, error: describeWriteError(error) },
                 });
             }
         }
@@ -987,46 +965,7 @@ export class ExternalSyncService {
                     await this.forgetStaleMapping(connection.id, 'SUPPLIER', mapped.externalId, map, warnings, `Supplier ${mapped.name}`);
                 }
 
-                const supplierWhere = supplierAdoptionWhere(connection.tenant_id, mapped.name);
-                const adopted = supplierWhere
-                    ? await this.db.supplier.findFirst({ where: supplierWhere, select: { id: true } })
-                    : null;
-
-                // The provider's code when it has a readable one no other
-                // supplier holds; else the next in the tenant's SUP- series.
-                const supplierId =
-                    adopted?.id ??
-                    (
-                        await codeForNewRecord(this.db, 'Supplier', connection.tenant_id, mapped.supplierCode, (supplierCode) =>
-                            this.db.supplier.create({
-                                data: {
-                                    tenant_id: connection.tenant_id,
-                                    // The import's branch; an adopted supplier keeps theirs.
-                                    store_id: connection.store_id,
-                                    supplier_code: supplierCode,
-                                    name: mapped.name,
-                                    phone: mapped.phone,
-                                    email: mapped.email,
-                                    address: mapped.address,
-                                },
-                                select: { id: true },
-                            }),
-                        )
-                    ).id;
-
-                if (!adopted && connection.post_impacts && mapped.previousDue !== 0) {
-                    await this.db.$transaction((tx) =>
-                        applyOpeningBalance({
-                            tx,
-                            tenantId: connection.tenant_id,
-                            party: 'SUPPLIER',
-                            partyId: supplierId,
-                            amount: mapped.previousDue,
-                            asOf: openingAsOf,
-                            label: connection.provider,
-                        }),
-                    );
-                }
+                const { id: supplierId, adopted } = await this.createOrAdoptSupplier(connection, mapped, openingAsOf);
 
                 if (adopted) {
                     warnings.push({
@@ -1048,7 +987,8 @@ export class ExternalSyncService {
                     entity: 'SUPPLIER',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Supplier ${mapped.name} could not be imported: ${error?.message ?? error}`,
+                    message: `Supplier ${mapped.name} could not be imported: ${describeWriteError(error)}`,
+                    skipped: { number: mapped.supplierCode, date: null, party: mapped.name, amount: null, lines: null, error: describeWriteError(error) },
                 });
             }
         }
@@ -1056,10 +996,130 @@ export class ExternalSyncService {
         return map;
     }
 
+    /**
+     * A new customer for a provider row, or the tenant's existing one with the
+     * same phone or code. Shared by the customer list and by documents naming
+     * a customer the list leaves out.
+     */
+    private async createOrAdoptCustomer(
+        connection: { tenant_id: string; store_id: string; provider: string; post_impacts: boolean },
+        mapped: MappedCustomer,
+        openingAsOf: Date,
+    ): Promise<{ id: string; adopted: boolean }> {
+        // Phone is the only identity a customer carries. `customer_code`
+        // is generated per provider row, so it used to adopt unrelated
+        // parties that happened to collide on it.
+        //
+        // The raw phone goes to the database, not the normalized one:
+        // `Customer.phone` stores exactly what was typed, so a lookup
+        // for "+8801712345678" would miss a row saved as "01712345678"
+        // and silently create a duplicate. Normalization is for
+        // in-memory candidate matching, where both sides get it.
+        const customerWhere = customerAdoptionWhere(
+            connection.tenant_id,
+            mapped.phone,
+            mapped.customerCode,
+        );
+        const adopted = customerWhere
+            ? await this.db.customer.findFirst({ where: customerWhere, select: { id: true } })
+            : null;
+
+        // The provider's code when it has a readable one no other
+        // customer holds; else the next in the tenant's CUST- series.
+        const customerId =
+            adopted?.id ??
+            (
+                await codeForNewRecord(this.db, 'Customer', connection.tenant_id, mapped.customerCode, (customerCode) =>
+                    this.db.customer.create({
+                        data: {
+                            tenant_id: connection.tenant_id,
+                            // Everything an import brings in belongs to the
+                            // import's branch; an adopted customer keeps theirs.
+                            store_id: connection.store_id,
+                            customer_code: customerCode,
+                            name: mapped.name,
+                            owner_name: mapped.ownerName,
+                            phone: mapped.phone,
+                            email: mapped.email,
+                            address: mapped.address,
+                            credit_limit: mapped.creditLimit,
+                        },
+                        select: { id: true },
+                    }),
+                )
+            ).id;
+
+        // Only on a party we created: adopting an existing customer
+        // means the tenant already has their balance.
+        if (!adopted && connection.post_impacts && mapped.previousDue !== 0) {
+            await this.db.$transaction((tx) =>
+                applyOpeningBalance({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    party: 'CUSTOMER',
+                    partyId: customerId,
+                    amount: mapped.previousDue,
+                    asOf: openingAsOf,
+                    label: connection.provider,
+                }),
+            );
+        }
+        return { id: customerId, adopted: Boolean(adopted) };
+    }
+
+    /** As {@link createOrAdoptCustomer}, for suppliers: adopted by name. */
+    private async createOrAdoptSupplier(
+        connection: { tenant_id: string; store_id: string; provider: string; post_impacts: boolean },
+        mapped: MappedSupplier,
+        openingAsOf: Date,
+    ): Promise<{ id: string; adopted: boolean }> {
+        const supplierWhere = supplierAdoptionWhere(connection.tenant_id, mapped.name);
+        const adopted = supplierWhere
+            ? await this.db.supplier.findFirst({ where: supplierWhere, select: { id: true } })
+            : null;
+
+        // The provider's code when it has a readable one no other
+        // supplier holds; else the next in the tenant's SUP- series.
+        const supplierId =
+            adopted?.id ??
+            (
+                await codeForNewRecord(this.db, 'Supplier', connection.tenant_id, mapped.supplierCode, (supplierCode) =>
+                    this.db.supplier.create({
+                        data: {
+                            tenant_id: connection.tenant_id,
+                            // The import's branch; an adopted supplier keeps theirs.
+                            store_id: connection.store_id,
+                            supplier_code: supplierCode,
+                            name: mapped.name,
+                            phone: mapped.phone,
+                            email: mapped.email,
+                            address: mapped.address,
+                        },
+                        select: { id: true },
+                    }),
+                )
+            ).id;
+
+        if (!adopted && connection.post_impacts && mapped.previousDue !== 0) {
+            await this.db.$transaction((tx) =>
+                applyOpeningBalance({
+                    tx,
+                    tenantId: connection.tenant_id,
+                    party: 'SUPPLIER',
+                    partyId: supplierId,
+                    amount: mapped.previousDue,
+                    asOf: openingAsOf,
+                    label: connection.provider,
+                }),
+            );
+        }
+        return { id: supplierId, adopted: Boolean(adopted) };
+    }
+
     // ------------------------------------------------------------ documents
 
     private async syncSalesWindow(
-        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
+        connection: DocumentConnection,
         client: ProviderClient,
         window: DateWindow,
         productMap: Map<string, string>,
@@ -1068,6 +1128,7 @@ export class ExternalSyncService {
         warnings: SyncWarning[],
         dryRun: boolean,
         mappers: ProviderMappers = EXPRESS_MAPPERS,
+        openingAsOf?: Date,
     ) {
         const docs = await client.fetchSaleDocuments(window);
         const saleMap = await this.loadMappings(connection.id, 'SALE');
@@ -1078,6 +1139,10 @@ export class ExternalSyncService {
                 saleMap.has(mapped.externalId) ? stats.sales.updated++ : stats.sales.created++;
                 continue;
             }
+
+            await this.resolveDocumentParty(connection, 'CUSTOMER', mapped.externalCustomerId, mapped.embeddedCustomer, customerMap, {
+                mappers, stats, warnings, openingAsOf, documentLabel: `invoice ${mapped.referenceNumber ?? mapped.serialNumber}`,
+            });
 
             try {
                 const created = await this.writeSale(connection, mapped, productMap, customerMap, saleMap, warnings);
@@ -1092,7 +1157,8 @@ export class ExternalSyncService {
                     entity: 'SALE',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Invoice ${mapped.referenceNumber ?? mapped.serialNumber} could not be imported: ${error?.message ?? error}`,
+                    message: `Invoice ${mapped.referenceNumber ?? mapped.serialNumber} could not be imported: ${describeWriteError(error)}`,
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.serialNumber, mapped.saleDate, mapped.externalCustomerId, mapped.embeddedCustomer, mapped.totalAmount, mapped.items.length, error),
                 });
             }
         }
@@ -1107,7 +1173,7 @@ export class ExternalSyncService {
      * warns and carries on, because nothing downstream depends on them.
      */
     private async syncQuotationsWindow(
-        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string },
+        connection: DocumentConnection,
         client: ProviderClient,
         window: DateWindow,
         productMap: Map<string, string>,
@@ -1116,6 +1182,7 @@ export class ExternalSyncService {
         warnings: SyncWarning[],
         dryRun: boolean,
         mappers: ProviderMappers,
+        openingAsOf?: Date,
     ) {
         if (!client.fetchQuotationDocuments || !mappers.quotation) return;
 
@@ -1140,6 +1207,10 @@ export class ExternalSyncService {
                 continue;
             }
 
+            await this.resolveDocumentParty(connection, 'CUSTOMER', mapped.externalCustomerId, mapped.embeddedCustomer, customerMap, {
+                mappers, stats, warnings, openingAsOf, documentLabel: `quotation ${mapped.referenceNumber ?? mapped.quoteNumber}`,
+            });
+
             try {
                 const created = await this.writeQuotation(connection, mapped, productMap, customerMap, quotationMap, warnings);
                 if (created === null) {
@@ -1153,7 +1224,8 @@ export class ExternalSyncService {
                     entity: 'QUOTATION',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Quotation ${mapped.referenceNumber ?? mapped.quoteNumber} could not be imported: ${error?.message ?? error}`,
+                    message: `Quotation ${mapped.referenceNumber ?? mapped.quoteNumber} could not be imported: ${describeWriteError(error)}`,
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.quoteNumber, mapped.quoteDate, mapped.externalCustomerId, mapped.embeddedCustomer, mapped.totalAmount, mapped.items.length, error),
                 });
             }
         }
@@ -1237,11 +1309,18 @@ export class ExternalSyncService {
             return false;
         }
 
+        const quoteNumber = await this.claimDocumentNumber(
+            mapped.quoteNumber,
+            (candidate) => this.isTaken(this.db.quotation, { tenant_id: connection.tenant_id, quote_number: candidate }),
+            'QUOTATION',
+            mapped.externalId,
+            warnings,
+        );
         const created = await this.db.quotation.create({
             data: {
                 tenant_id: connection.tenant_id,
                 store_id: connection.store_id,
-                quote_number: mapped.quoteNumber,
+                quote_number: quoteNumber,
                 created_at: mapped.quoteDate,
                 ...header,
                 items: { create: items },
@@ -1318,7 +1397,8 @@ export class ExternalSyncService {
                     entity: 'SALE_RETURN',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Return ${mapped.referenceNumber ?? mapped.returnNumber} could not be imported: ${error?.message ?? error}`,
+                    message: `Return ${mapped.referenceNumber ?? mapped.returnNumber} could not be imported: ${describeWriteError(error)}`,
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.returnNumber, mapped.returnDate, null, null, mapped.totalRefund, mapped.items.length, error),
                 });
             }
         }
@@ -1465,7 +1545,7 @@ export class ExternalSyncService {
      * only by which side we are on.
      */
     private async syncPaymentsWindow(
-        connection: { id: string; tenant_id: string; provider: string; document_prefix: string; post_impacts: boolean },
+        connection: DocumentConnection,
         client: ProviderClient,
         window: DateWindow,
         party: PaymentParty,
@@ -1474,6 +1554,7 @@ export class ExternalSyncService {
         warnings: SyncWarning[],
         dryRun: boolean,
         mappers: ProviderMappers = EXPRESS_MAPPERS,
+        openingAsOf?: Date,
     ) {
         const isCustomer = party === 'CUSTOMER';
         const entity: EntityType = isCustomer ? 'CUSTOMER_PAYMENT' : 'SUPPLIER_PAYMENT';
@@ -1497,7 +1578,13 @@ export class ExternalSyncService {
             // bury the run's real findings under thousands of false skips. A
             // row carrying no party id at all is still unresolvable in any
             // run, so that case keeps its warning.
-            const partyId = mapped.externalPartyId ? partyMap.get(mapped.externalPartyId) : undefined;
+            const partyId =
+                (mapped.externalPartyId ? partyMap.get(mapped.externalPartyId) : undefined) ??
+                (dryRun
+                    ? undefined
+                    : (await this.resolveDocumentParty(connection, party, mapped.externalPartyId, mapped.embeddedParty, partyMap, {
+                          mappers, stats, warnings, openingAsOf, documentLabel: `payment ${mapped.referenceNumber ?? mapped.paymentNumber}`,
+                      })) ?? undefined);
             const unresolvable = !mapped.externalPartyId || !dryRun;
             if (!partyId && unresolvable) {
                 tally.skipped++;
@@ -1505,7 +1592,8 @@ export class ExternalSyncService {
                     entity,
                     externalId: mapped.externalId,
                     code: 'PARTY_UNRESOLVED',
-                    message: `Payment ${mapped.referenceNumber ?? mapped.paymentNumber} references ${party.toLowerCase()} ${mapped.externalPartyId ?? '(none)'}, which is not in the imported list — skipped`,
+                    message: `Payment ${mapped.referenceNumber ?? mapped.paymentNumber} references ${party.toLowerCase()} ${partyLabel(mapped.externalPartyId, mapped.embeddedParty) ?? '(none)'}, which is not in the imported list and could not be created from the payment — skipped`,
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.paymentNumber, mapped.date, mapped.externalPartyId, mapped.embeddedParty, mapped.amount, null),
                 });
                 continue;
             }
@@ -1530,7 +1618,8 @@ export class ExternalSyncService {
                     entity,
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Payment ${mapped.referenceNumber ?? mapped.paymentNumber} could not be imported: ${error?.message ?? error}`,
+                    message: `Payment ${mapped.referenceNumber ?? mapped.paymentNumber} could not be imported: ${describeWriteError(error)}`,
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.paymentNumber, mapped.date, mapped.externalPartyId, mapped.embeddedParty, mapped.amount, null, error),
                 });
             }
         }
@@ -1594,6 +1683,13 @@ export class ExternalSyncService {
             return false;
         }
 
+        const paymentNumber = await this.claimDocumentNumber(
+            mapped.paymentNumber,
+            (candidate) => this.isTaken(creditTable, { tenant_id: connection.tenant_id, payment_number: candidate }),
+            entity,
+            mapped.externalId,
+            warnings,
+        );
         const created = await this.db.$transaction(async (tx) => {
             // A credit row lives under its party's branch, like every other
             // ledger row since branch-attached parties. The table is `any`
@@ -1605,6 +1701,7 @@ export class ExternalSyncService {
             const row = await table.create({
                 data: {
                     ...data,
+                    payment_number: paymentNumber,
                     tenant_id: connection.tenant_id,
                     store_id: storeId,
                     ...(isCustomer ? { customer_id: partyId } : { supplier_id: partyId }),
@@ -1620,7 +1717,7 @@ export class ExternalSyncService {
                     partyId,
                     storeId,
                     transactionId: row.id,
-                    paymentNumber: mapped.paymentNumber,
+                    paymentNumber,
                     type,
                     amount: mapped.amount,
                     method: mapped.method ?? 'cash',
@@ -1729,12 +1826,19 @@ export class ExternalSyncService {
             return false;
         }
 
+        const serialNumber = await this.claimDocumentNumber(
+            mapped.serialNumber,
+            (candidate) => this.isTaken(this.db.sale, { tenant_id: connection.tenant_id, serial_number: candidate }),
+            'SALE',
+            mapped.externalId,
+            warnings,
+        );
         const sale = await this.db.$transaction(async (tx) => {
             const created = await tx.sale.create({
                 data: {
                     tenant_id: connection.tenant_id,
                     store_id: connection.store_id,
-                    serial_number: mapped.serialNumber,
+                    serial_number: serialNumber,
                     reference_number: referenceNumber,
                     total_amount: mapped.totalAmount,
                     amount_paid: mapped.amountPaid,
@@ -1753,7 +1857,7 @@ export class ExternalSyncService {
                     tenantId: connection.tenant_id,
                     storeId: connection.store_id,
                     saleId: created.id,
-                    serialNumber: mapped.serialNumber,
+                    serialNumber,
                     customerId,
                     totalAmount: mapped.totalAmount,
                     amountPaid: mapped.amountPaid,
@@ -1811,7 +1915,7 @@ export class ExternalSyncService {
     }
 
     private async syncPurchasesWindow(
-        connection: { id: string; tenant_id: string; store_id: string; document_prefix: string; post_impacts: boolean },
+        connection: DocumentConnection,
         client: ProviderClient,
         window: DateWindow,
         productMap: Map<string, string>,
@@ -1820,6 +1924,7 @@ export class ExternalSyncService {
         warnings: SyncWarning[],
         dryRun: boolean,
         mappers: ProviderMappers = EXPRESS_MAPPERS,
+        openingAsOf?: Date,
     ) {
         const docs = await client.fetchPurchaseDocuments(window);
         const purchaseMap = await this.loadMappings(connection.id, 'PURCHASE');
@@ -1830,6 +1935,10 @@ export class ExternalSyncService {
                 purchaseMap.has(mapped.externalId) ? stats.purchases.updated++ : stats.purchases.created++;
                 continue;
             }
+
+            await this.resolveDocumentParty(connection, 'SUPPLIER', mapped.externalSupplierId, mapped.embeddedSupplier, supplierMap, {
+                mappers, stats, warnings, openingAsOf, documentLabel: `purchase ${mapped.referenceNumber ?? mapped.purchaseNumber}`,
+            });
 
             try {
                 const created = await this.writePurchase(connection, mapped, productMap, supplierMap, purchaseMap, warnings);
@@ -1844,7 +1953,8 @@ export class ExternalSyncService {
                     entity: 'PURCHASE',
                     externalId: mapped.externalId,
                     code: 'WRITE_FAILED',
-                    message: `Purchase ${mapped.referenceNumber ?? mapped.purchaseNumber} could not be imported: ${error?.message ?? error}`,
+                    message: `Purchase ${mapped.referenceNumber ?? mapped.purchaseNumber} could not be imported: ${describeWriteError(error)}`,
+                    skipped: skippedDocument(mapped.referenceNumber ?? mapped.purchaseNumber, mapped.purchaseDate, mapped.externalSupplierId, mapped.embeddedSupplier, mapped.totalAmount, mapped.items.length, error),
                 });
             }
         }
@@ -1941,12 +2051,19 @@ export class ExternalSyncService {
             return false;
         }
 
+        const purchaseNumber = await this.claimDocumentNumber(
+            mapped.purchaseNumber,
+            (candidate) => this.isTaken(this.db.purchase, { tenant_id: connection.tenant_id, purchase_number: candidate }),
+            'PURCHASE',
+            mapped.externalId,
+            warnings,
+        );
         const purchase = await this.db.$transaction(async (tx) => {
             const created = await tx.purchase.create({
                 data: {
                     tenant_id: connection.tenant_id,
                     store_id: connection.store_id,
-                    purchase_number: mapped.purchaseNumber,
+                    purchase_number: purchaseNumber,
                     created_at: mapped.purchaseDate,
                     ...header,
                     items: { create: items },
@@ -1960,7 +2077,7 @@ export class ExternalSyncService {
                     tenantId: connection.tenant_id,
                     storeId: connection.store_id,
                     purchaseId: created.id,
-                    purchaseNumber: mapped.purchaseNumber,
+                    purchaseNumber,
                     supplierId,
                     totalAmount: mapped.totalAmount,
                     paidAmount: mapped.paidAmount,
@@ -1978,13 +2095,108 @@ export class ExternalSyncService {
     }
 
     /**
+     * The tenant's id for the customer or supplier a document names. When the
+     * provider's own list left that party out — Express drops deleted customers
+     * from `/get-customer` but keeps them on their old invoices and payments —
+     * it is created (or linked) from the copy the document embeds, so the
+     * document keeps its party instead of losing it or being skipped. Null when
+     * the party is unknown and cannot be made; the caller decides what that
+     * costs the document. Never called on a dry run, which writes nothing.
+     */
+    private async resolveDocumentParty(
+        connection: DocumentConnection,
+        party: PaymentParty,
+        externalId: string | null,
+        embedded: unknown,
+        map: Map<string, string>,
+        context: {
+            mappers: ProviderMappers;
+            stats: SyncStats;
+            warnings: SyncWarning[];
+            openingAsOf?: Date;
+            documentLabel: string;
+        },
+    ): Promise<string | null> {
+        if (!externalId) return null;
+        const known = map.get(externalId);
+        if (known) return known;
+        if (!embedded || typeof embedded !== 'object' || !context.openingAsOf) return null;
+
+        const isCustomer = party === 'CUSTOMER';
+        const entity: EntityType = isCustomer ? 'CUSTOMER' : 'SUPPLIER';
+        const noun = isCustomer ? 'Customer' : 'Supplier';
+        const label = partyLabel(externalId, embedded);
+        const row = { ...(embedded as Record<string, unknown>), id: externalId };
+
+        try {
+            const mapped = isCustomer ? context.mappers.customer(row, new Set()) : context.mappers.supplier(row, new Set(), new Set());
+            const { id, adopted } = isCustomer
+                ? await this.createOrAdoptCustomer(connection, mapped as MappedCustomer, context.openingAsOf)
+                : await this.createOrAdoptSupplier(connection, mapped as MappedSupplier, context.openingAsOf);
+
+            await this.writeMapping(connection, entity, externalId, id, mapped.externalUpdatedAt);
+            map.set(externalId, id);
+            const tally = isCustomer ? context.stats.customers : context.stats.suppliers;
+            if (adopted) tally.skipped++;
+            else tally.created++;
+
+            const deleted = Boolean((embedded as { deleted_at?: unknown }).deleted_at);
+            context.warnings.push({
+                entity,
+                externalId,
+                code: 'PARTY_FROM_DOCUMENT',
+                message:
+                    `${noun} ${label} is not in the provider's ${isCustomer ? 'customer' : 'supplier'} list${deleted ? ' (deleted there)' : ''} — ` +
+                    `${adopted ? `linked to the existing ${isCustomer ? 'customer with the same phone or code' : 'supplier of the same name'}` : 'created'} from ${context.documentLabel}`,
+            });
+            return id;
+        } catch (error) {
+            context.warnings.push({
+                entity,
+                externalId,
+                code: 'WRITE_FAILED',
+                message: `${noun} ${label}, named on ${context.documentLabel}, could not be created: ${describeWriteError(error)}`,
+            });
+            return null;
+        }
+    }
+
+    /**
+     * The document's number, or the first free suffixed one when the tenant
+     * already holds it. A provider can hand one number out twice — Express did,
+     * to quotations created minutes apart — and the second used to fail whole.
+     */
+    private async claimDocumentNumber(
+        base: string,
+        isTaken: (candidate: string) => Promise<boolean>,
+        entity: EntityType,
+        externalId: string,
+        warnings: SyncWarning[],
+    ): Promise<string> {
+        const number = await freeDocumentNumber(base, isTaken);
+        if (number !== base) {
+            warnings.push({
+                entity,
+                externalId,
+                code: 'NUMBER_TAKEN',
+                message: `${base} is already used by another record here — imported as ${number}`,
+            });
+        }
+        return number;
+    }
+
+    private async isTaken(model: any, where: Record<string, unknown>): Promise<boolean> {
+        return (await model.findFirst({ where, select: { id: true } })) != null;
+    }
+
+    /**
      * Drops lines whose product is unknown to us (the provider omits deleted
      * products from its product list but still references them on old
      * documents) and records why. The document header keeps the provider's own
      * totals, so a dropped line shows up as a header/line mismatch rather than
      * a silently wrong total.
      */
-    private resolveDocumentItems<T extends { externalProductId: string }>(
+    private resolveDocumentItems<T extends { externalProductId: string; quantity: number }>(
         items: T[],
         productMap: Map<string, string>,
         warnings: SyncWarning[],
@@ -1994,7 +2206,21 @@ export class ExternalSyncService {
     ): Array<{ productId: string; source: T }> {
         const resolved: Array<{ productId: string; source: T }> = [];
 
+        // A line of nothing moves no stock, and posting refuses a zero
+        // movement — which used to cost the whole document. The header keeps
+        // the provider's totals, so dropping it changes no figure.
+        const zero = items.filter((item) => item.quantity === 0).length;
+        if (zero > 0) {
+            warnings.push({
+                entity,
+                externalId,
+                code: 'ZERO_QUANTITY_DROPPED',
+                message: `${documentNumber}: ${zero} line${zero === 1 ? '' : 's'} with quantity 0 dropped — nothing was bought or sold on ${zero === 1 ? 'it' : 'them'}`,
+            });
+        }
+
         for (const source of items) {
+            if (source.quantity === 0) continue;
             const productId = productMap.get(source.externalProductId);
             if (!productId) {
                 warnings.push({
