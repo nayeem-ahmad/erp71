@@ -341,6 +341,14 @@ export class UpdateLeadDto {
 export const UNASSIGNED_OWNER_FILTER = 'unassigned';
 
 /**
+ * `category` / `source` sentinel meaning "leads with none set" — the same gap
+ * `UNASSIGNED_OWNER_FILTER` fills for the owner. The leads board needs it for
+ * the None column when grouping by either; a real value is a row id (a UUID),
+ * so this cannot collide with one.
+ */
+export const NO_TAXONOMY_FILTER = 'none';
+
+/**
  * `emailPresence` filter for GET /crm/leads — "does this lead have an email at
  * all", not a match on its value (free-text `search` already covers that).
  *
