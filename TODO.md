@@ -600,6 +600,14 @@ Spec `docs/superpowers/specs/2026-10-08-app-shell-rail-design.md`, plan `docs/su
 - [ ] **Frontend jest reads `@erp71/shared-types` from `dist/`, not source** — `apps/frontend/jest.config.ts` maps the package to its directory and says that resolves "straight to source", but a directory resolves through `package.json` `main` (`dist/index.js`). Found 2026-10-08: a deliberate break in `packages/shared-types/apps.ts` did not fail a frontend test until `npm run build --workspace packages/shared-types`. So a stale build gives stale frontend tests (the CLAUDE.md regenerate note covers it, but the comment misleads). Map to `index.ts` explicitly, or fix the comment.
 - [ ] **Only Accounting, Manufacturing and Team Chat can ever show as locked** — CRM and Storefront have no module-level entitlement (`premiumCrm` gates links, `premiumStorefront` gates nothing), so "Add to your plan" cannot sell them. Worth deciding whether they should become sellable apps.
 
+### Settings → Printing streamline — design approved 2026-10-12, spec awaiting review
+
+Users find letterhead design and print settings too complicated (overwhelming editor, settings scattered over 5+ places, surprising output, staff changing owner decisions). Spec: `docs/superpowers/specs/2026-10-12-printing-settings-design.md`.
+- [ ] **Review the spec**, then write the implementation plan (writing-plans).
+- [ ] **Run the backfill report on the VPS before release** — `scripts/print-settings-backfill.ts` (to be written) reports, per shop, which member's invoice layout becomes the shop's and where members disagree. Confirm every disagreeing shop, and KH Trading regardless, before `--yes`.
+- [ ] **KH Trading before/after render** — export their templates and prefs (`--export`), render invoice / challan / receipt to PDF on `dev` and on the branch, compare page for page. Only expected difference: no duplicate thank-you.
+- [ ] **Later: drop `TenantUser.invoice_print_prefs`** once the release has settled (kept as the rollback source).
+
 ## IMPORTANT — First month after launch
 
 - [ ] **App header: fold voice navigation into the AI assistant?** The assistant already has a mic of its own, so "open sales" could be an assistant tool, and the separate header mic could go. That would leave a member with every feature on at the timer, AI, notifications and the avatar. A product call, not a cleanup: voice navigation is on the premium-voice plan and the assistant on premium-AI, so folding one into the other changes what each plan buys. Rule: `docs/ui-design-guidelines.md` §2.12. Found 2026-10-07.
