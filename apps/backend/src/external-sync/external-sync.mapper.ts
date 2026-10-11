@@ -546,6 +546,12 @@ export interface MappedPurchaseReturn {
     /** The supplier as embedded on the parent purchase. */
     embeddedSupplier?: unknown;
     totalAmount: number;
+    /**
+     * What the return takes off the supplier's due, in full even when nothing
+     * was owed. Left out, the due never goes below zero, as for a return
+     * entered by hand.
+     */
+    dueCredit?: number;
     notes: string | null;
     returnDate: Date;
     externalUpdatedAt: Date | null;
@@ -586,6 +592,10 @@ export function mapPurchaseReturn(row: ExpressRetailPurchaseReturn, documentPref
         externalSupplierId: cashSupplier ? null : emptyToNull(row.supplier_id ?? purchase?.supplier_id ?? null),
         embeddedSupplier: cashSupplier ? null : purchase?.supplier ?? null,
         totalAmount: toMoney(row.amount),
+        // Express takes a return off the supplier's due in full: a supplier
+        // owed nothing then owes the shop, as the running balance on their
+        // next purchase shows (Keranigonj Godaun at −13,000).
+        dueCredit: toMoney(row.amount),
         notes: emptyToNull(row.description),
         returnDate: parseProviderDate(row.date),
         externalUpdatedAt: parseTimestamp(row.updated_at),

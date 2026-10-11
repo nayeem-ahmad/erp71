@@ -19,9 +19,9 @@ import { supplierBranchId } from '../suppliers/supplier-branch.util';
  * on (tenant, eventType, sourceId, legKey), so a second run over the same
  * document is a no-op rather than a double post. And the caller only invokes
  * these on documents it has just created — a document that already posted is
- * treated as immutable and never rewritten. The exceptions,
- * `applySaleReturnCredit` and `applySaleOverpayment`, check for their own
- * ledger row before writing one.
+ * treated as immutable and never rewritten. The exceptions —
+ * `applySaleReturnCredit`, `applySaleOverpayment`, `applyPurchaseReturnCredit`
+ * and `postPurchasePaid` — check for their own ledger row or posting first.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -232,7 +232,7 @@ export async function applyPurchaseImpacts(input: PurchaseImpactInput): Promise<
         });
     }
 
-    await autoPostFromRules({
+    const posting = await autoPostFromRules({
         tx,
         tenantId,
         eventType: 'purchase',
@@ -248,6 +248,23 @@ export async function applyPurchaseImpacts(input: PurchaseImpactInput): Promise<
         storeId,
         ...(input.supplierId ? { partyType: 'SUPPLIER' as const, partyId: input.supplierId } : {}),
     });
+
+    // The whole total went to payables; what was paid with the goods comes
+    // back out — only once the purchase itself has posted, or the payment
+    // would take out of payables what never went in.
+    const paid = Math.min(input.paidAmount, input.totalAmount);
+    if (posting.postingStatus === 'posted' && paid > EPSILON) {
+        await postPurchasePaid({
+            tx,
+            tenantId,
+            storeId,
+            purchaseId,
+            purchaseNumber: input.purchaseNumber,
+            supplierId: input.supplierId,
+            paid,
+            purchaseDate,
+        });
+    }
 }
 
 export interface PurchaseReturnImpactInput {
@@ -260,6 +277,12 @@ export interface PurchaseReturnImpactInput {
     totalAmount: number;
     returnDate: Date;
     items: Array<{ product_id: string; quantity: number; unit_cost: number }>;
+    /**
+     * What the return takes off the supplier's due, in full, below zero if
+     * need be (see MappedPurchaseReturn.dueCredit). Left out, the due comes
+     * down by the return but never below zero, as a return entered by hand.
+     */
+    dueCredit?: number;
 }
 
 /**
@@ -288,7 +311,9 @@ export async function applyPurchaseReturnImpacts(input: PurchaseReturnImpactInpu
         });
     }
 
-    if (input.supplierId) {
+    if (input.supplierId && input.dueCredit !== undefined) {
+        await applyPurchaseReturnCredit({ ...input, supplierId: input.supplierId, dueCredit: input.dueCredit });
+    } else if (input.supplierId) {
         const supplier = await tx.supplier.findUnique({
             where: { id: input.supplierId },
             select: { due_balance: true, store_id: true },
@@ -410,6 +435,98 @@ export async function applyPaymentImpacts(input: PaymentImpactInput): Promise<vo
         ...(moneyIn
             ? { overrideDebitAccountId: methodAccountId }
             : { overrideCreditAccountId: methodAccountId }),
+    });
+}
+
+/**
+ * Brings a purchase return's credit on the supplier's account to `dueCredit`,
+ * whatever the supplier owed at the time: the ADJUSTMENT row tied to the
+ * return is written, or moved, and the due moves with it. Express takes a
+ * return off in full, leaving the supplier owing the shop when nothing was
+ * due; a return imported under the old cap gets the rest on a re-run.
+ * Returns whether anything changed.
+ */
+export async function applyPurchaseReturnCredit(
+    input: Pick<PurchaseReturnImpactInput, 'tx' | 'tenantId' | 'returnId' | 'returnNumber' | 'returnDate'> & {
+        supplierId: string;
+        dueCredit: number;
+    },
+): Promise<boolean> {
+    const { tx, tenantId, supplierId, returnId } = input;
+    const row = await tx.supplierCreditTransaction.findFirst({
+        where: { tenant_id: tenantId, supplier_id: supplierId, type: 'ADJUSTMENT', reference_type: 'PURCHASE_RETURN', reference_id: returnId },
+        select: { id: true, amount: true },
+    });
+    const change = -input.dueCredit - Number(row?.amount ?? 0);
+    if (Math.abs(change) < EPSILON) return false;
+
+    const supplier = await tx.supplier.findUnique({
+        where: { id: supplierId },
+        select: { due_balance: true, store_id: true },
+    });
+    const balanceAfter = Number(supplier?.due_balance ?? 0) + change;
+    if (row) {
+        await tx.supplierCreditTransaction.update({ where: { id: row.id }, data: { amount: -input.dueCredit } });
+    } else {
+        await tx.supplierCreditTransaction.create({
+            data: {
+                tenant_id: tenantId,
+                supplier_id: supplierId,
+                // A credit row belongs to its supplier's branch.
+                store_id: supplier!.store_id,
+                type: 'ADJUSTMENT',
+                amount: -input.dueCredit,
+                balance_after: balanceAfter,
+                reference_type: 'PURCHASE_RETURN',
+                reference_id: returnId,
+                notes: `Imported purchase return ${input.returnNumber}`,
+                created_at: input.returnDate,
+            },
+        });
+    }
+    await tx.supplier.update({ where: { id: supplierId }, data: { due_balance: balanceAfter } });
+    return true;
+}
+
+export interface PurchasePaidInput {
+    tx: Tx;
+    tenantId: string;
+    storeId: string;
+    purchaseId: string;
+    purchaseNumber: string;
+    supplierId: string | null;
+    /** What was paid with the goods, up to the purchase total. */
+    paid: number;
+    purchaseDate: Date;
+}
+
+/**
+ * Posts what was paid with the goods as a payment to the supplier. The
+ * purchase itself posts its whole total as a credit purchase, so without
+ * this every taka paid at the counter stayed in payables, and in cash, for
+ * good: on Babu Bazar, ৳176M of payables the suppliers were never owed.
+ * Idempotent on its own leg, so safe on a purchase imported before it.
+ */
+export async function postPurchasePaid(input: PurchasePaidInput) {
+    const { tx, tenantId } = input;
+    const methodAccountId = await resolvePaymentMethodAccountId(tx, tenantId, 'cash');
+    return autoPostFromRules({
+        tx,
+        tenantId,
+        eventType: 'supplier_payment',
+        conditionKey: 'payment_direction',
+        conditionValue: 'pay',
+        sourceModule: 'external-sync',
+        sourceType: 'purchase',
+        sourceId: input.purchaseId,
+        legKey: 'paid',
+        amount: input.paid,
+        description: `Imported purchase ${input.purchaseNumber} — paid with the goods`,
+        referenceNumber: input.purchaseNumber,
+        date: input.purchaseDate,
+        storeId: input.storeId,
+        ...(input.supplierId ? { partyType: 'SUPPLIER' as const, partyId: input.supplierId } : {}),
+        overrideCreditAccountId: methodAccountId,
     });
 }
 
