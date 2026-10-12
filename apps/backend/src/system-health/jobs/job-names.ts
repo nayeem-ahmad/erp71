@@ -27,6 +27,7 @@ export const JOB_NAMES = {
     HELD_ALERTS: 'notifications.send-held-alerts',
     ALERT_SCAN: 'alerts.scan-recent-activity',
     ANOMALY_DIGEST: 'alerts.daily-anomaly-digest',
+    RECORD_HISTORY_PURGE: 'record-history.purge-expired',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -74,6 +75,7 @@ export interface JobDefinition {
  * |---------------------------------------|--------------------------|--------------------|------------------------|
  * | External sync (untracked)             | 02:00 → 08:00            | 01:00              | batch; first, feeds the rest |
  * | Notifications: purge expired data     | 03:00 → 09:00            | 01:30              | batch                  |
+ * | Record history: purge expired         | — (new 2026-10-12)       | 01:45              | batch; after the purge |
  * | Billing: retry failed payments        | 08:00 → 14:00            | 02:00              | batch; chain step 1    |
  * | Customers: recalculate segments       | 00:00 → 06:00            | 02:30              | batch; after the sync  |
  * | Billing: dunning                      | 09:00 → 15:00            | 03:00              | batch; chain step 2    |
@@ -131,4 +133,5 @@ export const JOB_REGISTRY: JobDefinition[] = [
     { name: JOB_NAMES.HELD_ALERTS, label: 'Notifications: send alerts held for quiet hours', schedule: '*/15 * * * *', maxIntervalMs: 45 * 60 * 1000 },
     { name: JOB_NAMES.ALERT_SCAN, label: 'Alerts: scan recent sales, refunds, tills and enquiries', schedule: '*/5 * * * *', maxIntervalMs: 15 * 60 * 1000 },
     { name: JOB_NAMES.ANOMALY_DIGEST, label: 'Alerts: daily anomaly digest', schedule: '30 20 * * *', maxIntervalMs: DAY + 2 * HOUR },
+    { name: JOB_NAMES.RECORD_HISTORY_PURGE, label: 'Record history: purge rows past retention', schedule: '45 1 * * *', maxIntervalMs: DAY + 2 * HOUR },
 ];

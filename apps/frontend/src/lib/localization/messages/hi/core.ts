@@ -429,6 +429,7 @@ export const coreMessages = {
             adminSupport: "सहायता",
             systemHealth: "सिस्टम स्वास्थ्य",
             adminAuditLogs: "ऑडिट ट्रेल",
+            adminRecordHistory: 'रिकॉर्ड इतिहास',
             platformStatus: "सार्वजनिक स्थिति",
             platformSettingsSms: "SMS गेटवे",
             platformSettingsEmail: "ईमेल / SMTP",

@@ -10,6 +10,7 @@ import { BranchScopeService } from '../database/branch-scope.service';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { SALES_READ, SALES_RETURN_WRITE } from '../auth/permission-sets';
+import { TrackHistory } from '../record-history/track-history.decorator';
 @Controller('sales-returns')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -20,6 +21,7 @@ export class SalesReturnsController {
     ) {}
 
     @RequireAnyStorePermission(...SALES_RETURN_WRITE)
+    @TrackHistory('SALES_RETURN', { action: 'CREATE' })
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateSalesReturnDto) {
         return this.returnsService.create(tenant.tenantId, tenant.userId, dto);
@@ -46,12 +48,14 @@ export class SalesReturnsController {
     }
 
     @RequireAnyStorePermission(...SALES_RETURN_WRITE)
+    @TrackHistory('SALES_RETURN', { action: 'UPDATE' })
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSalesReturnDto) {
         return this.returnsService.update(tenant.tenantId, id, dto);
     }
 
     @RequireAnyStorePermission(...SALES_RETURN_WRITE)
+    @TrackHistory('SALES_RETURN', { action: 'DELETE' })
     @Delete(':id')
     async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.returnsService.remove(tenant.tenantId, id);

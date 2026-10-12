@@ -429,6 +429,7 @@ export const coreMessages = {
             adminSupport: 'الدعم',
             systemHealth: 'صحة النظام',
             adminAuditLogs: 'سجل التدقيق',
+            adminRecordHistory: 'سجل السجلات',
             platformStatus: 'الحالة العامة',
             platformSettingsSms: 'بوابة الرسائل النصية',
             platformSettingsEmail: 'البريد / SMTP',

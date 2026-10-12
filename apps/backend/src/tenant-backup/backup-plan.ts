@@ -32,6 +32,9 @@ export const PLATFORM_OWNED_MODELS: ReadonlySet<string> = new Set([
     'SmsTransaction',
     'AiUsageLog',
     'AuditLog',
+    // Before/after snapshots of the workspace's records — a restore that
+    // rewound them would erase the evidence of what it replaced.
+    'RecordHistory',
     'TermsAcceptance',
     'DemoDataBatch',
     'Feedback',

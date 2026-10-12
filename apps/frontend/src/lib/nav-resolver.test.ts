@@ -310,6 +310,7 @@ describe('nav-resolver', () => {
         expect(hrefsUnder('Platform')).toEqual([
             '/admin/system-health',
             '/admin/audit-logs',
+            '/admin/record-history',
             '/status',
             '/admin/platform-settings/deploy',
             '/admin/users',

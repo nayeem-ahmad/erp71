@@ -22,6 +22,7 @@ import { ImportRowsDto } from '../common/import.dto';
 
 import { CUSTOMER_CREDIT_READ, CUSTOMER_CREDIT_WRITE, CUSTOMER_READ, CUSTOMER_WRITE } from '../auth/permission-sets';
 import { BranchScopeService } from '../database/branch-scope.service';
+import { TrackHistory } from '../record-history/track-history.decorator';
 // `StorePermissionGuard` is class-wide but only the write-off routes name a
 // permission, so every other route behaves exactly as before — the guard is a
 // no-op without `@RequireStorePermission`. Same arrangement as
@@ -46,6 +47,7 @@ export class CustomersController {
     }
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
+    @TrackHistory('CUSTOMER', { action: 'CREATE' })
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateCustomerDto) {
         return this.customersService.create(tenant.tenantId, dto, {
@@ -131,6 +133,7 @@ export class CustomersController {
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
+    @TrackHistory('CUSTOMER_PAYMENT', { action: 'UPDATE', idParam: 'paymentId' })
     @Patch('credit/payments/:paymentId')
     async updateCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -148,6 +151,7 @@ export class CustomersController {
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
+    @TrackHistory('CUSTOMER_PAYMENT', { action: 'DELETE', idParam: 'paymentId' })
     @Delete('credit/payments/:paymentId')
     async deleteCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -250,6 +254,7 @@ export class CustomersController {
     }
 
     @RequireAnyStorePermission(...CUSTOMER_CREDIT_WRITE)
+    @TrackHistory('CUSTOMER_PAYMENT', { action: 'CREATE' })
     @Post(':id/credit/payment')
     async recordCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -317,6 +322,7 @@ export class CustomersController {
     }
 
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
+    @TrackHistory('CUSTOMER', { action: 'UPDATE' })
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCustomerDto) {
         return this.customersService.update(tenant.tenantId, id, dto, {

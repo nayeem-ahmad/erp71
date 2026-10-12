@@ -153,5 +153,6 @@ export const NAV_ROUTES: { path: string; label: string }[] = [
     { path: '/admin/platform-settings/deploy', label: 'Production Deploy' },
     { path: '/admin/system-health', label: 'System Health' },
     { path: '/admin/audit-logs', label: 'Platform Audit Trail' },
+    { path: '/admin/record-history', label: 'Record History' },
     { path: '/status', label: 'Public Status' },
 ];

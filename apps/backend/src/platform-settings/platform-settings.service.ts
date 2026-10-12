@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { parsePlatformFeatures, resolveTenantFeatures, type PlatformFeatures } from '@erp71/shared-types';
+import {
+    parsePlatformFeatures,
+    resolveTenantFeatures,
+    RECORD_HISTORY_DEFAULT_RETENTION_DAYS,
+    type PlatformFeatures,
+} from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { encryptValue, decryptValue } from './crypto.util';
 
@@ -185,6 +190,27 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // Smallest balance a partner may raise a payout request for. Guards against
         // a ৳40 request costing more in admin time and bKash fees than it moves.
         min_payout_amount:          { isSecret: false, default: '1000' },
+    },
+
+    /**
+     * Which business records keep a before/after history for platform admins
+     * (Admin → Record History), and for how long. One switch per type, keyed
+     * as `RECORD_HISTORY_SETTING_KEYS` names them. On by default: a history
+     * that was never written cannot be recovered when a dispute comes up, so
+     * the switch is for turning a noisy type off, not for opting in.
+     */
+    record_history: {
+        customer:         { isSecret: false, default: 'true' },
+        supplier:         { isSecret: false, default: 'true' },
+        product:          { isSecret: false, default: 'true' },
+        sale:             { isSecret: false, default: 'true' },
+        sales_return:     { isSecret: false, default: 'true' },
+        purchase:         { isSecret: false, default: 'true' },
+        purchase_return:  { isSecret: false, default: 'true' },
+        customer_payment: { isSecret: false, default: 'true' },
+        supplier_payment: { isSecret: false, default: 'true' },
+        // `0` keeps every row for as long as the tenant exists.
+        retention_days:   { isSecret: false, default: String(RECORD_HISTORY_DEFAULT_RETENTION_DAYS) },
     },
 
     referral_accounting: {

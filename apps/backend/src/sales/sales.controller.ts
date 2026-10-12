@@ -11,6 +11,8 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { BranchScopeService } from '../database/branch-scope.service';
 
 import { SALES_READ, SALE_DELETE, SALE_WRITE } from '../auth/permission-sets';
+import { TrackHistory } from '../record-history/track-history.decorator';
+import type { QuotationConversionResult } from './quotation-to-sale.util';
 // `StorePermissionGuard` is class-wide but only the cancel route names a
 // permission; the guard is a no-op for a handler that requires none, so every
 // other route keeps the access it had.
@@ -24,6 +26,7 @@ export class SalesController {
     ) {}
 
     @RequireAnyStorePermission(...SALE_WRITE)
+    @TrackHistory('SALE', { action: 'CREATE' })
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateSaleDto) {
         return this.salesService.create(tenant.tenantId, tenant.userId, dto);
@@ -66,6 +69,10 @@ export class SalesController {
      * that quotation rather than refusing the whole batch.
      */
     @RequireAnyStorePermission(...SALE_WRITE)
+    @TrackHistory('SALE', {
+        action: 'CREATE',
+        resultIds: (result: QuotationConversionResult) => result.converted.map((sale) => sale.saleId),
+    })
     @Post('from-quotations')
     async createFromQuotations(@Tenant() tenant: TenantContext, @Body() dto: CreateSalesFromQuotationsDto) {
         return this.salesService.createFromQuotations(tenant.tenantId, tenant.userId, dto, (storeId) =>
@@ -100,6 +107,7 @@ export class SalesController {
     }
 
     @RequireAnyStorePermission(...SALE_WRITE)
+    @TrackHistory('SALE', { action: 'FINALIZE' })
     @Post(':id/finalize')
     async finalize(
         @Tenant() tenant: TenantContext,
@@ -110,6 +118,7 @@ export class SalesController {
     }
 
     @RequireAnyStorePermission(...SALE_WRITE)
+    @TrackHistory('SALE', { action: 'UPDATE' })
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSaleDto) {
         return this.salesService.update(tenant.tenantId, id, dto);
@@ -119,6 +128,7 @@ export class SalesController {
      * Cancel a posted sale and reverse its impacts. Tenant-admin only: only
      * OWNER and the Tenant Admin role hold `CANCEL_ENTRY`.
      */
+    @TrackHistory('SALE', { action: 'CANCEL' })
     @Post(':id/cancel')
     @RequireStorePermission(StorePermission.CANCEL_ENTRY)
     async cancel(
@@ -130,6 +140,7 @@ export class SalesController {
     }
 
     @RequireAnyStorePermission(...SALE_DELETE)
+    @TrackHistory('SALE', { action: 'DELETE' })
     @Delete(':id')
     async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.salesService.remove(tenant.tenantId, id);

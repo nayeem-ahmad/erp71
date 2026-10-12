@@ -4237,6 +4237,32 @@ export const api = {
         const query = q.toString();
         return fetchWithAuth(`/admin/audit-logs${query ? `?${query}` : ''}`);
     },
+    getAdminRecordHistory: (params?: {
+        tenant_id?: string;
+        entity_type?: string;
+        entity_id?: string;
+        action?: string;
+        q?: string;
+        from?: string;
+        to?: string;
+        limit?: number;
+        offset?: number;
+    }) => {
+        const q = new URLSearchParams();
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value !== undefined && value !== '') q.set(key, String(value));
+        }
+        const query = q.toString();
+        return fetchWithAuth(`/admin/record-history${query ? `?${query}` : ''}`);
+    },
+    getAdminRecordHistoryEntry: (id: string) => fetchWithAuth(`/admin/record-history/${id}`),
+    getRecordHistorySettings: () => fetchWithAuth('/admin/platform-settings/record_history'),
+    updateRecordHistorySettings: (settings: Record<string, string>) =>
+        fetchWithAuth('/admin/platform-settings/record_history', {
+            method: 'PATCH',
+            body: JSON.stringify({ settings }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),
     getAdminUsers: (params?: { search?: string; isAdmin?: boolean }) => {
         const query = new URLSearchParams();
