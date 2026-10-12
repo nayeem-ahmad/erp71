@@ -1204,6 +1204,7 @@ export class PurchasesService {
                     include: { product: true, returnItems: true },
                 },
                 payments: true,
+                paymentAllocations: { select: ALLOCATION_SELECT },
             },
         });
 
@@ -1211,8 +1212,22 @@ export class PurchasesService {
             throw new NotFoundException('Purchase not found');
         }
 
+        // `paid_amount` split the way `update` splits it: what was paid with
+        // the bill (what its edit screen's tender strip holds) and what was
+        // paid on it later from the supplier-payments screen.
+        const { paymentAllocations, ...bill } = purchase;
+        const entryAllocation = intactEntryAllocation(paymentAllocations, id);
+        const laterPaid = paymentAllocations
+            .filter((allocation) => allocation.id !== entryAllocation?.id)
+            .reduce((sum, allocation) => sum + Number(allocation.amount), 0);
+        const entryPaid = entryAllocation
+            ? Number(entryAllocation.amount)
+            : Math.max(0, Number(purchase.paid_amount) - laterPaid);
+
         return {
-            ...purchase,
+            ...bill,
+            entry_paid_amount: entryPaid,
+            later_paid_amount: laterPaid,
             ...(await loadPostingSummary(this.db, tenantId, 'purchases', 'purchase', purchase.id)),
         };
     }

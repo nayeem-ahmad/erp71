@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Ban, ClipboardList, Copy, Plus, Printer } from 'lucide-react';
+import { Ban, ClipboardList, Copy, Eye, Pencil, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
@@ -127,7 +127,12 @@ export default function PurchasesPage() {
             columnHelper.accessor('purchase_number', {
                 header: t.purchases.columns.purchaseNumber,
                 cell: (info) => (
-                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
+                    <Link
+                        href={routes.purchases.purchaseDetail(info.row.original.id)}
+                        className="text-sm font-bold text-gray-900 hover:text-blue-600 hover:underline"
+                    >
+                        {info.getValue()}
+                    </Link>
                 ),
                 size: 150,
             }),
@@ -206,6 +211,26 @@ export default function PurchasesPage() {
                 header: '',
                 cell: ({ row }) => (
                     <div className="flex items-center gap-0.5">
+                        <Link
+                            href={routes.purchases.purchaseDetail(row.original.id)}
+                            className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors inline-flex"
+                            title={t.purchases.detail.view}
+                            aria-label={t.purchases.detail.view}
+                        >
+                            <Eye className="w-4 h-4" />
+                        </Link>
+                        {/* A cancelled purchase has had every impact reversed and
+                            the API refuses to edit it, so the door is not offered. */}
+                        {(row.original.status ?? 'RECORDED') !== 'CANCELLED' && (
+                            <Link
+                                href={`${routes.purchases.purchaseDetail(row.original.id)}?edit=true`}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors inline-flex"
+                                title={t.purchases.detail.edit}
+                                aria-label={t.purchases.detail.edit}
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </Link>
+                        )}
                         <button
                             type="button"
                             onClick={() => void printInvoice(row.original.id, paperSize)}
@@ -237,7 +262,7 @@ export default function PurchasesPage() {
                 ),
                 enableSorting: false,
                 enableResizing: false,
-                size: 120,
+                size: 180,
             }),
         ],
         [t, locale, canCancel, paperSize, busyId, printInvoice],

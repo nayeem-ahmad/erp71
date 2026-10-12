@@ -33,6 +33,8 @@ interface SupplierSelectionProps {
     setDraft: (draft: NewSupplierDraft | null) => void;
     /** Highlight the name box when a submit was rejected for missing it. */
     draftNameInvalid?: boolean;
+    /** Show the bill's supplier without letting it be changed. */
+    readOnly?: boolean;
 }
 
 const FIELD_CLASS = 'w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent min-h-touch sm:min-h-0';
@@ -48,6 +50,7 @@ export default function SupplierSelection({
     draft,
     setDraft,
     draftNameInvalid = false,
+    readOnly = false,
 }: SupplierSelectionProps) {
     const { t, locale } = useI18n();
     const [suppliers, setSuppliers] = useState<PartyOption[]>([]);
@@ -67,7 +70,7 @@ export default function SupplierSelection({
     const updateDraft = (patch: Partial<NewSupplierDraft>) =>
         setDraft({ ...(draft ?? emptySupplierDraft), ...patch });
 
-    if (draft) {
+    if (draft && !readOnly) {
         return (
             <div className="rounded border border-blue-200 bg-blue-50 p-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
@@ -131,7 +134,9 @@ export default function SupplierSelection({
             placeholder={t.purchaseShared.searchSuppliers}
             noMatchLabel={t.purchaseShared.noSuppliersFound}
             clearLabel={t.purchaseShared.clearSupplier}
-            action={(
+            readOnly={readOnly}
+            readOnlyFallback={t.purchaseShared.noSupplierShort}
+            action={readOnly ? undefined : (
                 <button
                     type="button"
                     onClick={() => {

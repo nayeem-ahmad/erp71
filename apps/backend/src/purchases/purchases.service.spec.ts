@@ -302,6 +302,26 @@ describe('PurchasesService', () => {
         await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+    it('splits what was paid with the bill from what was paid on it later', async () => {
+        db.postingEvent = { findMany: jest.fn().mockResolvedValue([]) };
+        db.purchase.findFirst.mockResolvedValue({
+            id: 'purchase-1',
+            paid_amount: 1000,
+            items: [],
+            payments: [{ payment_method: 'Cash', amount: 400 }],
+            paymentAllocations: [
+                { id: 'alloc-1', amount: 400, transaction: { id: 'txn-1', type: 'PAYMENT', amount: 400, payment_number: 'SPY-00003', reference_type: 'PURCHASE', reference_id: 'purchase-1' } },
+                { id: 'alloc-2', amount: 600, transaction: { id: 'txn-2', type: 'PAYMENT', amount: 900, payment_number: 'SPY-00007', reference_type: null, reference_id: null } },
+            ],
+        });
+
+        const purchase: any = await service.findOne('tenant-1', 'purchase-1');
+
+        expect(purchase.entry_paid_amount).toBe(400);
+        expect(purchase.later_paid_amount).toBe(600);
+        expect(purchase.paymentAllocations).toBeUndefined();
+    });
+
     it('filters created_at to the inclusive Dhaka day range', async () => {
         db.purchase.findMany.mockResolvedValue([]);
         db.purchase.count = jest.fn().mockResolvedValue(0);

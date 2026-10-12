@@ -3043,6 +3043,15 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /**
+     * Save a corrected purchase — the whole bill again, as the entry screen
+     * holds it. Stock, the supplier's account and the vouchers follow.
+     */
+    updatePurchase: (id: string, data: any) => fetchWithAuth(`/purchases/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
     getPurchaseReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
     getPurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`),
     createPurchaseReturn: (data: any) => fetchWithAuth('/purchase-returns', {
