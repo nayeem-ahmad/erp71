@@ -540,7 +540,7 @@ Found while clearing the open PR list. Each fix below is still missing on `dev`,
 
 ### Mobile app for tenant admins — plan written 2026-10-07, all five phases LANDED 2026-10-07/08, follow-ups below
 
-- [ ] **Add the pilot testers and back up the upload key** — Firebase App Distribution is live (2026-10-10): group `pilot` in `erp71-709cf`, first build 0.1.0 (2504) uploaded with no testers yet. Add them with `firebase appdistribution:testers:add --project erp71-709cf --group-alias pilot <emails>`, then re-send that release from the console (App Distribution › Releases › Distribute) or run `apps/mobile/scripts/distribute-android.sh`. **Back up** `~/.config/erp71/android/erp71-upload.jks` and `erp71-upload.password` (password manager): phones only update across the same key, and it becomes the Play upload key.
+- [ ] **Back up the Android upload key** — `~/.config/erp71/android/erp71-upload.jks` and `erp71-upload.password`, into a password manager. Phones only update an app signed by the same key, and it becomes the Play upload key.
 
 Plan: `docs/mobile-admin-plan.md`. Turns the Flutter app from "CRM app" into an owner's glance-approve-alert tool. Phases in plan §4.
 
@@ -1987,6 +1987,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **Pilot testers invited through Firebase App Distribution** — done 2026-10-12. Group `pilot` in `erp71-709cf`: nayeem.ahmad@gmail.com, towfiqtm@gmail.com, tahsin.apac@gmail.com, riazsorkar709@gmail.com; build 0.1.0 (2549) from `dev` `b0c43cbf` (new icon, sign-in redesign) sent to them. Later builds: `apps/mobile/scripts/distribute-android.sh`.
 
 - [x] **Mobile sign-in screen redesigned (option B, blue brand panel)** — done 2026-10-07, merged to `dev` 2026-10-12. `apps/mobile/lib/features/auth/sign_in_screen.dart`: a blue-600 panel running up behind the status bar (white icons) with a painted dot grid that fades out, the white "71" mark, "ERP71", "Your CRM, on your phone." and Leads / Follow-ups / Contacts chips; a white sheet with 12 px top corners holds "Sign in", the Google button and the notices, with "New to ERP71? Create your workspace at app.erp71.com" pinned to the bottom. The button follows Google's light-button branding and shows "Signing in…" beside the spinner while the picker is open. Laid out with `SliverFillRemaining` so a short phone or a long error scrolls instead of overflowing. Three new widget tests (copy, busy label, 360 × 560 with the no-account error); `pumpApp` gained a `size` parameter and `FakeGoogleAuth` a `hold` completer. Option C was built first by mistake and replaced in a follow-up commit on the same branch. Mockups compared: https://claude.ai/artifact/VaMoJbWyRKTpxss23T2is1
 
