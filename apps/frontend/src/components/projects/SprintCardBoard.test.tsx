@@ -105,6 +105,18 @@ describe('SprintCardBoard', () => {
         expect(toast.info).toHaveBeenCalled();
     });
 
+    it('shows the assignee’s photo, and their initials when there is none', () => {
+        setup([
+            task('a', 'p1', {
+                assignee: { id: 'u1', name: 'Rahim Uddin', email: 'r@x', avatar_url: 'https://cdn.example/rahim.jpg' },
+            }),
+            task('b', 'p1', { assignee: { id: 'u2', name: 'Mim Akter', email: 'm@x', avatar_url: null } }),
+        ]);
+
+        expect(screen.getByRole('img', { name: 'Rahim Uddin' })).toHaveAttribute('src', 'https://cdn.example/rahim.jpg');
+        expect(screen.getByText('MA')).toBeInTheDocument();
+    });
+
     it('treats a press without movement as a click that opens the card', () => {
         const { onOpen, onMove } = setup([task('a', 'p1')]);
         const card = screen.getByRole('button', { name: /Task a/ });

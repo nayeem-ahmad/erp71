@@ -30,6 +30,11 @@ type AvatarProps = {
     src?: string | null;
     name: string;
     size?: keyof typeof SIZES;
+    /**
+     * Width, height and text size, in place of `size`, for a caller that keeps
+     * its own scale — the board cards size theirs by the board's density.
+     */
+    sizeClass?: string;
     className?: string;
 };
 
@@ -41,9 +46,10 @@ export default function Avatar({
     src,
     name,
     size = 'sm',
+    sizeClass,
     className = '',
 }: Readonly<AvatarProps>) {
-    const dimensions = SIZES[size];
+    const dimensions = sizeClass ?? SIZES[size];
 
     if (src) {
         // A plain <img>: Cloudinary URLs are not in next.config's

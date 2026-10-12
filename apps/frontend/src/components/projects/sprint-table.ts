@@ -21,7 +21,7 @@ export interface SprintTask {
     logged_hours?: number | null;
     status?: { id: string; name: string; category: string } | null;
     project?: { id: string; code: string; name: string } | null;
-    assignee?: { id: string; name?: string | null; email: string } | null;
+    assignee?: { id: string; name?: string | null; email: string; avatar_url?: string | null } | null;
     assigneeEmployee?: { id: string; name?: string | null } | null;
     userStory?: { id: string; code: string; title: string } | null;
     /**

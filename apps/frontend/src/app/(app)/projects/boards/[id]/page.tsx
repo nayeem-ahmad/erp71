@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { PageShell, PageHeader, Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
 import type { StatusBadgeTone } from '@/components/ui';
+import Avatar from '@/components/Avatar';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import AddBoardTasksModal from '@/components/projects/AddBoardTasksModal';
 import BulkEditCardsModal from '@/components/projects/BulkEditCardsModal';
@@ -2448,12 +2449,8 @@ function TaskCard({
 
                     {show.assignee &&
                         (assigneeName ? (
-                            <span
-                                title={assigneeName}
-                                aria-label={assigneeName}
-                                className={`ms-auto inline-flex items-center justify-center rounded-full bg-blue-100 font-medium text-blue-700 ${d.avatar}`}
-                            >
-                                {initialsOf(assigneeName)}
+                            <span title={assigneeName} aria-label={assigneeName} className="ms-auto inline-flex">
+                                <Avatar src={task.assignee?.avatar_url} name={assigneeName} sizeClass={d.avatar} />
                             </span>
                         ) : (
                             <span className="ms-auto text-gray-400">{c.unassigned}</span>
