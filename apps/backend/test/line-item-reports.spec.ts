@@ -51,10 +51,10 @@ describe('Line-item reports (integration)', () => {
         ids.banani = banani.id;
 
         const rahim = await db.customer.create({
-            data: { tenant_id: tenantId, customer_code: 'C-1', name: 'Rahim Uddin', phone: '01711000001' },
+            data: { tenant_id: tenantId, store_id: main.id, customer_code: 'C-1', name: 'Rahim Uddin', phone: '01711000001' },
         });
         const karim = await db.customer.create({
-            data: { tenant_id: tenantId, customer_code: 'C-2', name: 'Karim Ahmed', phone: '01711000002' },
+            data: { tenant_id: tenantId, store_id: main.id, customer_code: 'C-2', name: 'Karim Ahmed', phone: '01711000002' },
         });
         ids.rahim = rahim.id;
         ids.karim = karim.id;
@@ -167,9 +167,9 @@ describe('Line-item reports (integration)', () => {
         });
 
         const rahman = await db.supplier.create({
-            data: { tenant_id: tenantId, name: 'Rahman Traders', phone: '01811000001' },
+            data: { tenant_id: tenantId, store_id: main.id, name: 'Rahman Traders', phone: '01811000001' },
         });
-        const ctgOils = await db.supplier.create({ data: { tenant_id: tenantId, name: 'Chittagong Oils' } });
+        const ctgOils = await db.supplier.create({ data: { tenant_id: tenantId, store_id: main.id, name: 'Chittagong Oils' } });
         ids.rahman = rahman.id;
 
         const purchase = (data: {

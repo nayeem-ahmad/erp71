@@ -1,5 +1,5 @@
 name: erp71_mobile
-description: "ERP71 for Android and iOS: Google sign-in and CRM."
+description: "ERP71 for Android and iOS: the business pulse, cashiers and the CRM."
 publish_to: 'none'
 
 version: 0.1.0+1
@@ -8,6 +8,8 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.4.3
@@ -15,7 +17,10 @@ dependencies:
   go_router: ^17.5.0
   google_sign_in: ^7.2.0
   http: ^1.6.0
+  image_picker: ^1.1.2
   intl: ^0.20.2
+  local_auth: ^3.0.2
+  speech_to_text: ^7.5.0
   timezone: ^0.11.1
   url_launcher: ^6.3.2
 
@@ -24,6 +29,26 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   mocktail: ^1.0.5
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+# App icon, from the web logo (apps/frontend/public/logo/icon.svg). The masters
+# and their SVG sources are in assets/launcher/; after changing them, run
+# `dart run flutter_launcher_icons` and commit what it regenerates.
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  # Android 7 and older: the logo's own rounded tile.
+  image_path_android: "assets/launcher/icon_android_legacy.png"
+  # iOS rounds the corners itself and rejects transparency.
+  image_path_ios: "assets/launcher/icon_ios.png"
+  remove_alpha_ios: true
+  # Android 8+: the white glyph over brand blue. foreground.png is already
+  # scaled into the safe zone, so no extra inset.
+  adaptive_icon_background: "#2563EB"
+  adaptive_icon_foreground: "assets/launcher/foreground.png"
+  adaptive_icon_foreground_inset: 0
+  # Android 13+ themed icons.
+  adaptive_icon_monochrome: "assets/launcher/monochrome.png"

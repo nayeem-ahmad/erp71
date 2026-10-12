@@ -6,6 +6,7 @@ import { CloseSessionDto } from './dto/close-session.dto';
 import { CountersService } from '../counters/counters.service';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
+import { startOfZonedToday } from '../common/tenant-time.util';
 
 // CashTransaction.type values that move cash out of the till and must post.
 // DROP (drawer→safe) and OTHER stay unposted — both sides are Cash in Hand.
@@ -201,6 +202,110 @@ export class CashierSessionsService {
         summary: await this.getSessionSummary(tenantId, session.id),
       })),
     );
+  }
+
+  /**
+   * Every till open now and every one closed today, across one branch or the
+   * whole tenant (`storeId` undefined) — the owner's view of the floor from a
+   * phone, which would otherwise be one `store/:storeId/open` call per branch
+   * and nothing at all for the shifts already closed.
+   *
+   * Open tills go through `getSessionSummary`, so their expected cash is the
+   * same figure the close screen will show. Closed ones report what was frozen
+   * at close (`expected_cash`, `variance`) and are never re-derived: a later
+   * backdated sale must not change a count a cashier signed off on.
+   */
+  async getOverview(tenantId: string, storeId: string | undefined, timezone: string, now: Date = new Date()) {
+    const branch = storeId ? { store_id: storeId } : {};
+    const include = {
+      store: { select: { id: true, name: true } },
+      counter: { select: { id: true, name: true, counter_number: true } },
+      user: { select: { id: true, name: true } },
+    } as const;
+
+    const [open, closed] = await Promise.all([
+      this.db.cashierSession.findMany({
+        where: { tenant_id: tenantId, status: 'OPEN', ...branch },
+        include,
+        orderBy: { opened_at: 'asc' },
+      }),
+      this.db.cashierSession.findMany({
+        where: { tenant_id: tenantId, status: 'CLOSED', closed_at: { gte: startOfZonedToday(timezone, now) }, ...branch },
+        include,
+        orderBy: { closed_at: 'desc' },
+      }),
+    ]);
+
+    const [summaries, closedTakings] = await Promise.all([
+      Promise.all(open.map((session) => this.getSessionSummary(tenantId, session.id))),
+      closed.length === 0
+        ? Promise.resolve([])
+        : this.db.sale.groupBy({
+            by: ['session_id'],
+            where: {
+              tenant_id: tenantId,
+              session_id: { in: closed.map((session) => session.id) },
+              status: { notIn: ['DRAFT', 'CANCELLED'] },
+            },
+            _sum: { total_amount: true },
+            _count: { _all: true },
+          }),
+    ]);
+    const takingsBySession = new Map(closedTakings.map((row) => [row.session_id, row]));
+
+    const describe = (session: (typeof open)[number]) => ({
+      id: session.id,
+      status: session.status,
+      store: session.store,
+      counter: session.counter,
+      cashier: session.user,
+      opened_at: session.opened_at,
+      closed_at: session.closed_at,
+      opening_cash: round2(money(session.opening_cash)),
+    });
+
+    const openRows = open.map((session, index) => {
+      const summary = summaries[index];
+      return {
+        ...describe(session),
+        sales_count: summary.salesCount,
+        sales_total: summary.salesTotal,
+        cash_takings: summary.cashTakings,
+        expected_cash: summary.expectedCash,
+        closing_cash: null,
+        variance: null,
+      };
+    });
+
+    const closedRows = closed.map((session) => {
+      const takings = takingsBySession.get(session.id);
+      return {
+        ...describe(session),
+        sales_count: takings?._count._all ?? 0,
+        sales_total: round2(money(takings?._sum.total_amount)),
+        cash_takings: null,
+        // Null on shifts closed before reconciliation existed — never shown
+        // as balanced.
+        expected_cash: session.expected_cash === null ? null : round2(money(session.expected_cash)),
+        closing_cash: round2(money(session.closing_cash)),
+        variance: session.variance === null ? null : round2(money(session.variance)),
+      };
+    });
+
+    const variances = closedRows.map((row) => row.variance).filter((v): v is number => v !== null);
+    return {
+      store_id: storeId ?? null,
+      open: openRows,
+      closed_today: closedRows,
+      totals: {
+        open_count: openRows.length,
+        expected_cash: round2(openRows.reduce((sum, row) => sum + row.expected_cash, 0)),
+        sales_total: round2([...openRows, ...closedRows].reduce((sum, row) => sum + row.sales_total, 0)),
+        closed_count: closedRows.length,
+        short: round2(variances.filter((v) => v < 0).reduce((sum, v) => sum + v, 0)),
+        over: round2(variances.filter((v) => v > 0).reduce((sum, v) => sum + v, 0)),
+      },
+    };
   }
 
   async getSessionById(tenantId: string, sessionId: string) {

@@ -83,7 +83,8 @@ jest.mock('./session-expiry', () => ({
 }));
 
 /** The API module under test (imported after mocks are wired). */
-import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, resetWorkspaceRecoveryForTests, resetSessionRenewalForTests } from './api';
+import { fetchWithAuth, fetchBlobWithAuth, fetchPaginated, fetchAllPages, fetchAllCursorPages, api, ApiError, invalidatesMe, resetWorkspaceRecoveryForTests, resetSessionRenewalForTests } from './api';
+import { getQueryClient, ME_QUERY_KEY } from './query-client';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import { resetWorkspaceBootstrapForTests } from './session-store';
 
@@ -307,7 +308,19 @@ describe('fetchAllPages', () => {
         const rows = await fetchAllPages('/things');
 
         expect(rows).toEqual([{ id: 'a' }]);
-        expect(mockFetch).toHaveBeenCalledTimes(2);
+        // Pages after the first go out in a parallel batch of 5, so a misreported page
+        // count wastes at most one batch — it must not walk all 9 pages.
+        expect(mockFetch).toHaveBeenCalledTimes(6);
+    });
+
+    it('fetches the remaining pages in parallel batches and keeps page order', async () => {
+        const page = (n: number) => okJson({ data: [{ id: `p${n}` }], meta: { total: 7, page: n, limit: 100, pages: 7 } });
+        mockFetch.mockImplementation((url: string) => page(Number(/page=(\d+)/.exec(url)![1])));
+
+        const rows = await fetchAllPages('/things');
+
+        expect(rows.map((r: { id: string }) => r.id)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']);
+        expect(mockFetch).toHaveBeenCalledTimes(7);
     });
 });
 
@@ -1263,6 +1276,13 @@ describe('api.getCustomerSegmentStats', () => {
         mockOk({ data: {} });
         await api.getCustomerSegmentStats();
         expect(lastUrl()).toContain('/customers/segment-stats');
+        expect(lastUrl()).not.toContain('storeId');
+    });
+
+    it('passes the branch filter on', async () => {
+        mockOk({ data: {} });
+        await api.getCustomerSegmentStats('all');
+        expect(lastUrl()).toContain('/customers/segment-stats?storeId=all');
     });
 });
 
@@ -3014,6 +3034,50 @@ describe('api.getStores', () => {
 
         const stores = await api.getStores();
         expect(stores).toEqual([]);
+    });
+
+    it('reads the cached /auth/me instead of asking for it again', async () => {
+        localStorageMock._setAll({ access_token: 'tok', tenant_id: 'tenant-abc' });
+        getQueryClient().setQueryData(ME_QUERY_KEY, {
+            tenants: [{ id: 'tenant-abc', stores: [{ id: 's1', name: 'Cached' }] }],
+        });
+        mockFetch.mockClear();
+
+        await expect(api.getStores()).resolves.toEqual([{ id: 's1', name: 'Cached' }]);
+        await expect(api.getCurrentUser()).resolves.toEqual(expect.objectContaining({ tenants: expect.any(Array) }));
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+});
+
+describe('invalidatesMe', () => {
+    it('matches writes to the endpoints that feed /auth/me, and nothing else', () => {
+        expect(invalidatesMe('/auth/me', 'PATCH')).toBe(true);
+        expect(invalidatesMe('/auth/2fa/enable', 'POST')).toBe(true);
+        expect(invalidatesMe('/team/members/u1/stores/s1/permissions', 'PUT')).toBe(true);
+        expect(invalidatesMe('/tenants/dashboard-settings', 'PATCH')).toBe(true);
+        expect(invalidatesMe('/stores', 'POST')).toBe(true);
+        expect(invalidatesMe('/invitations/accept', 'POST')).toBe(true);
+        expect(invalidatesMe('/billing/confirm?session=1', 'POST')).toBe(true);
+
+        // Reads never invalidate, and neither do look-alike paths.
+        expect(invalidatesMe('/auth/me', undefined)).toBe(false);
+        // A password change kills this session: re-reading `me` on a dead token
+        // would only race the caller's own trip to the login page.
+        expect(invalidatesMe('/auth/change-password', 'POST')).toBe(false);
+        expect(invalidatesMe('/auth/me', 'GET')).toBe(false);
+        expect(invalidatesMe('/storefront-pages', 'POST')).toBe(false);
+        expect(invalidatesMe('/sales', 'POST')).toBe(false);
+    });
+
+    it('marks the cached me out of date after a successful profile edit', async () => {
+        localStorageMock._setAll({ access_token: 'tok' });
+        const client = getQueryClient();
+        client.setQueryData(ME_QUERY_KEY, { id: 'u1', name: 'Before' });
+        mockOk({ data: { id: 'u1', name: 'After' } });
+
+        await api.updateProfile({ name: 'After' });
+
+        expect(client.getQueryState(ME_QUERY_KEY)?.isInvalidated).toBe(true);
     });
 });
 

@@ -9,11 +9,11 @@ import {
     PageHeader,
     Button,
     Input,
-    RichTextEditor,
     Field,
     Select,
     StatusBadge,
 } from '@/components/ui';
+import { RichTextEditor } from '@/components/ui/LazyRichTextEditor';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import type { UserStory } from '@/components/projects/StoryFormModal';

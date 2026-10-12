@@ -1,7 +1,11 @@
 import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { TenantInterceptor } from './tenant.interceptor';
 import { loadTenantMembership } from './tenant-membership.loader';
+import { AuthCacheService } from './auth-cache.service';
 import { of } from 'rxjs';
+
+/** The cross-request cache switched off, so each case sees one request's queries. */
+const noCache = () => new AuthCacheService({ ttlMs: 0 });
 
 const makeContext = (overrides: {
     userId?: string;
@@ -71,7 +75,7 @@ describe('TenantInterceptor', () => {
             userStoreAccess: { findUnique: jest.fn(), findMany: jest.fn() },
             store: { findFirst: jest.fn() },
         };
-        interceptor = new TenantInterceptor(db, timezones as any);
+        interceptor = new TenantInterceptor(db, timezones as any, noCache());
         jest.resetAllMocks();
     });
 
@@ -114,7 +118,7 @@ describe('TenantInterceptor', () => {
         db.$queryRaw.mockResolvedValue(membershipRows({ role: 'MANAGER' }));
         db.userStoreAccess.findMany.mockResolvedValue([]);
 
-        await loadTenantMembership(db, req, 'tenant-1', 'user-1');
+        await loadTenantMembership(db, req, 'tenant-1', 'user-1', noCache());
         await interceptor.intercept(ctx, next);
 
         expect(db.$queryRaw).toHaveBeenCalledTimes(1);
@@ -126,10 +130,12 @@ describe('TenantInterceptor', () => {
         // request inherits it instead of getting its own attempt.
         const { req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
         db.$queryRaw.mockRejectedValueOnce(new Error('connection lost'));
-        await expect(loadTenantMembership(db, req, 'tenant-1', 'user-1')).rejects.toThrow('connection lost');
+        await expect(loadTenantMembership(db, req, 'tenant-1', 'user-1', noCache())).rejects.toThrow(
+            'connection lost',
+        );
 
         db.$queryRaw.mockResolvedValue(membershipRows({ role: 'MANAGER' }));
-        await expect(loadTenantMembership(db, req, 'tenant-1', 'user-1')).resolves.toMatchObject({
+        await expect(loadTenantMembership(db, req, 'tenant-1', 'user-1', noCache())).resolves.toMatchObject({
             role: 'MANAGER',
         });
     });
@@ -154,7 +160,7 @@ describe('TenantInterceptor', () => {
     it('validates store access for non-OWNER', async () => {
         const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1', storeIdHeader: 'store-1' });
         db.$queryRaw.mockResolvedValue(membershipRows({ role: 'CASHIER' }));
-        db.userStoreAccess.findUnique.mockResolvedValue({ store_id: 'store-1', access_level: 'STORE_ONLY' });
+        db.userStoreAccess.findMany.mockResolvedValue([{ store_id: 'store-1', access_level: 'STORE_ONLY' }]);
         await interceptor.intercept(ctx, next);
         expect(req.storeId).toBe('store-1');
     });
@@ -162,7 +168,7 @@ describe('TenantInterceptor', () => {
     it('throws ForbiddenException when non-OWNER accesses unauthorized store', async () => {
         const { ctx } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1', storeIdHeader: 'store-forbidden' });
         db.$queryRaw.mockResolvedValue(membershipRows({ role: 'CASHIER' }));
-        db.userStoreAccess.findUnique.mockResolvedValue(null);
+        db.userStoreAccess.findMany.mockResolvedValue([{ store_id: 'store-1', access_level: 'STORE_ONLY' }]);
         await expect(interceptor.intercept(ctx, next)).rejects.toThrow(ForbiddenException);
     });
 
@@ -172,7 +178,7 @@ describe('TenantInterceptor', () => {
         db.store.findFirst.mockResolvedValue({ id: 'store-a' });
         await interceptor.intercept(ctx, next);
         expect(req.storeId).toBe('store-a');
-        expect(db.userStoreAccess.findUnique).not.toHaveBeenCalled();
+        expect(db.userStoreAccess.findMany).not.toHaveBeenCalled();
         expect(db.store.findFirst).toHaveBeenCalledWith(
             expect.objectContaining({ where: { id: 'store-a', tenant_id: 'tenant-1' } }),
         );
@@ -192,14 +198,13 @@ describe('TenantInterceptor', () => {
     it('looks store access up for the workspace being accessed', async () => {
         const { ctx } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-victim', storeIdHeader: 'store-mine' });
         db.$queryRaw.mockResolvedValue(membershipRows({ role: 'CASHIER' }));
-        db.userStoreAccess.findUnique.mockResolvedValue(null);
+        // What the database answers: their own store is not on their access list
+        // for the victim's workspace.
+        db.userStoreAccess.findMany.mockResolvedValue([]);
         await expect(interceptor.intercept(ctx, next)).rejects.toThrow(ForbiddenException);
-        expect(db.userStoreAccess.findUnique).toHaveBeenCalledWith(
+        expect(db.userStoreAccess.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: expect.objectContaining({
-                    user_id_store_id: { user_id: 'user-1', store_id: 'store-mine' },
-                    tenant_id: 'tenant-victim',
-                }),
+                where: { user_id: 'user-1', tenant_id: 'tenant-victim' },
             }),
         );
     });
@@ -211,6 +216,96 @@ describe('TenantInterceptor', () => {
         await interceptor.intercept(ctx, next);
         expect(req.storeId).toBe('store-1');
     });
+
+    it('leaves the store unresolved when the member can reach several', async () => {
+        const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1' });
+        db.$queryRaw.mockResolvedValue(membershipRows({ role: 'CASHIER' }));
+        db.userStoreAccess.findMany.mockResolvedValue([{ store_id: 'store-1' }, { store_id: 'store-2' }]);
+        await interceptor.intercept(ctx, next);
+        expect(req.storeId).toBeUndefined();
+    });
+
+    /**
+     * Across requests the membership, the access list and the owner's store
+     * check come from `AuthCacheService`. Each case below pairs the cached path
+     * with the write that has to break it: the next request after that write's
+     * invalidation must see the new answer, not the cached one.
+     */
+    describe('with the cross-request cache on', () => {
+        let cache: AuthCacheService;
+        let cached: TenantInterceptor;
+
+        beforeEach(() => {
+            cache = new AuthCacheService({ ttlMs: 30_000 });
+            cached = new TenantInterceptor(db, timezones as any, cache);
+        });
+
+        const run = async (headers: { storeIdHeader?: string } = {}) => {
+            const { ctx, req } = makeContext({ userId: 'user-1', tenantIdHeader: 'tenant-1', ...headers });
+            await cached.intercept(ctx, next);
+            return req;
+        };
+
+        it('answers a second request from memory: no membership, access or store query', async () => {
+            db.$queryRaw.mockResolvedValue(membershipRows({ role: 'CASHIER' }));
+            db.userStoreAccess.findMany.mockResolvedValue([{ store_id: 'store-1', access_level: 'STORE_ONLY' }]);
+
+            await run({ storeIdHeader: 'store-1' });
+            const second = await run({ storeIdHeader: 'store-1' });
+
+            expect(second.storeId).toBe('store-1');
+            expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+            expect(db.userStoreAccess.findMany).toHaveBeenCalledTimes(1);
+        });
+
+        it("caches an owner's store check too", async () => {
+            db.$queryRaw.mockResolvedValue(membershipRows({ role: 'OWNER' }));
+            db.store.findFirst.mockResolvedValue({ id: 'store-a' });
+
+            await run({ storeIdHeader: 'store-a' });
+            await run({ storeIdHeader: 'store-a' });
+
+            expect(db.store.findFirst).toHaveBeenCalledTimes(1);
+        });
+
+        it('refuses a revoked branch on the next request once the revoke invalidates', async () => {
+            db.$queryRaw.mockResolvedValue(membershipRows({ role: 'CASHIER' }));
+            db.userStoreAccess.findMany.mockResolvedValueOnce([{ store_id: 'store-1', access_level: 'STORE_ONLY' }]);
+            await run({ storeIdHeader: 'store-1' });
+
+            db.userStoreAccess.findMany.mockResolvedValueOnce([]);
+            cache.invalidateMember('user-1', 'tenant-1');
+
+            await expect(run({ storeIdHeader: 'store-1' })).rejects.toThrow(ForbiddenException);
+        });
+
+        it('refuses a deleted workspace on the next request once the delete invalidates', async () => {
+            db.$queryRaw.mockResolvedValueOnce(membershipRows({ role: 'OWNER' }));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+            await run();
+
+            db.$queryRaw.mockResolvedValueOnce(membershipRows({ role: 'OWNER', deletedAt: new Date() }));
+            cache.invalidateTenant('tenant-1');
+
+            await expect(run()).rejects.toThrow('Invalid tenant context');
+        });
+
+        // The interceptor primes `TenantTimezoneService` from the membership on
+        // every request, so a cached membership holding the old zone would put it
+        // straight back after `TenantsService` cleared it.
+        it('carries a changed timezone on the next request once the change invalidates', async () => {
+            db.$queryRaw.mockResolvedValueOnce(membershipRows({ role: 'OWNER', timezone: 'Asia/Dhaka' }));
+            db.userStoreAccess.findMany.mockResolvedValue([]);
+            expect((await run()).timezone).toBe('Asia/Dhaka');
+
+            db.$queryRaw.mockResolvedValueOnce(membershipRows({ role: 'OWNER', timezone: 'Asia/Kolkata' }));
+            cache.invalidateTenant('tenant-1');
+
+            expect((await run()).timezone).toBe('Asia/Kolkata');
+            expect(timezones.prime).toHaveBeenLastCalledWith('tenant-1', 'Asia/Kolkata');
+        });
+    });
+
     /**
      * Record scope rides the membership lookup, and is resolved widest-wins:
      * one unrestricted role makes the member wide, so being given a second role

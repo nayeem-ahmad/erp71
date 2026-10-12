@@ -1,7 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { seedDefaultLeadTaxonomy } from '@erp71/database';
-import { checkMushakIssuer, isDashboardPreference, normalizePasswordPolicy, type PasswordPolicy } from '@erp71/shared-types';
+import {
+    BUSINESS_APP_IDS,
+    checkMushakIssuer,
+    isDashboardPreference,
+    normalizePasswordPolicy,
+    sanitizeHiddenApps,
+    type PasswordPolicy,
+} from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { isValidTimeZone } from '../common/tenant-time.util';
@@ -9,6 +16,7 @@ import { StorefrontSettingsDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateTaxSettingsDto } from './tax-settings.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
+import { UpdateAppSettingsDto } from './app-settings.dto';
 import {
     PASSWORD_POLICY_SELECT,
     columnsFromPolicy,
@@ -16,6 +24,7 @@ import {
 } from '../password-policy/password-policy.columns';
 import { UpdatePasswordPolicyDto } from './password-policy.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
+import { clearTenantData } from './clear-tenant-data';
 
 @Injectable()
 export class TenantsService {
@@ -23,6 +32,7 @@ export class TenantsService {
         private readonly db: DatabaseService,
         private readonly timezones: TenantTimezoneService,
         private readonly planEntitlements: PlanEntitlementsService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     async updateStorefrontSettings(tenantId: string, dto: StorefrontSettingsDto) {
@@ -122,6 +132,7 @@ export class TenantsService {
      */
     private static readonly TAX_SETTING_FIELDS = {
         default_vat_rate: true,
+        prices_include_vat: true,
         vat_registration_no: true,
         business_tin: true,
         mushak_enabled: true,
@@ -147,6 +158,7 @@ export class TenantsService {
     async updateTaxSettings(tenantId: string, dto: UpdateTaxSettingsDto) {
         const data: Record<string, number | string | boolean | null> = {};
         if (dto.default_vat_rate !== undefined) data.default_vat_rate = dto.default_vat_rate;
+        if (dto.prices_include_vat !== undefined) data.prices_include_vat = dto.prices_include_vat;
         if (dto.vat_registration_no !== undefined) data.vat_registration_no = dto.vat_registration_no || null;
         if (dto.business_tin !== undefined) data.business_tin = dto.business_tin || null;
         if (dto.mushak_enabled !== undefined) data.mushak_enabled = dto.mushak_enabled;
@@ -311,6 +323,49 @@ export class TenantsService {
         return { dashboard_preference: tenant.dashboard_preference };
     }
 
+    async getAppSettings(tenantId: string) {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { hidden_apps: true },
+        });
+
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        // An id the registry no longer knows (a retired module) is dropped on
+        // read rather than migrated: it hid nothing, and the next save cleans it.
+        return { hidden_apps: sanitizeHiddenApps(tenant.hidden_apps) };
+    }
+
+    /**
+     * Which apps the whole workspace sees, so it is restricted exactly like the
+     * dashboard setting. Hiding is presentation only — nothing here closes an
+     * endpoint — which is why a manager may do it and no audit row is written.
+     */
+    async updateAppSettings(
+        tenantId: string,
+        dto: UpdateAppSettingsDto,
+        userRole: string | undefined,
+    ) {
+        if (userRole !== 'OWNER' && userRole !== 'MANAGER') {
+            throw new ForbiddenException('Only an owner or manager can change which apps the workspace shows.');
+        }
+
+        const unknown = dto.hidden_apps.filter((id) => !BUSINESS_APP_IDS.includes(id));
+        if (unknown.length > 0) {
+            throw new BadRequestException(`Not an app that can be hidden: ${unknown.join(', ')}`);
+        }
+
+        const tenant = await this.db.tenant.update({
+            where: { id: tenantId },
+            data: { hidden_apps: sanitizeHiddenApps(dto.hidden_apps) },
+            select: { hidden_apps: true },
+        });
+
+        return { hidden_apps: tenant.hidden_apps };
+    }
+
     /**
      * The workspace's password rules, readable by any member.
      *
@@ -374,164 +429,15 @@ export class TenantsService {
         return policyFromColumns(tenant);
     }
 
-    async clearData(tenantId: string, mode: 'transactions' | 'all', userRole: string | undefined) {
+    async clearData(
+        tenantId: string,
+        mode: 'transactions' | 'all',
+        userRole: string | undefined,
+        storeId?: string,
+        keep: string[] = [],
+    ) {
         if (userRole !== 'OWNER') throw new ForbiddenException('Only the shop owner can clear data');
-        if (mode !== 'transactions' && mode !== 'all') {
-            throw new BadRequestException('mode must be "transactions" or "all"');
-        }
-
-        // The whole wipe is one transaction so a half-cleared store is not a
-        // reachable state. Prisma's default interactive-transaction timeout is
-        // 5s, which a store carrying a full demo dataset (thousands of sales,
-        // vouchers and movements across ~60 tables) blows straight through — the
-        // clear then fails mid-way and rolls back, every time.
-        await this.db.$transaction(async (tx) => {
-            // --- Transactional / operational records ---
-
-            // Demo-data batch history (metadata; both modes reset the append counter)
-            await tx.demoDataBatch.deleteMany({ where: { tenant_id: tenantId } });
-
-            // CRM operational (before Customer). CrmActivity goes first: it FKs
-            // Lead and Customer with onDelete: Cascade, but an activity attached
-            // to neither would otherwise survive the wipe.
-            await tx.crmActivity.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.lead.deleteMany({ where: { tenant_id: tenantId } }); // cascades LeadConversation
-            await tx.crmFollowUp.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.customerInteraction.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.crmCampaign.deleteMany({ where: { tenant_id: tenantId } }); // cascades CrmCampaignRecipient
-
-            // Credit balances (before Customer / Supplier)
-            await tx.customerCreditTransaction.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.supplierCreditTransaction.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.loyaltyTransaction.deleteMany({ where: { tenantId } });
-
-            // Records referencing Sale (must go before Sale)
-            await tx.warrantyClaim.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.deliveryOrder.deleteMany({ where: { tenantId } });
-            await tx.salesReturn.deleteMany({ where: { tenant_id: tenantId } }); // cascades SalesReturnItem
-
-            // Sales
-            await tx.sale.deleteMany({ where: { tenant_id: tenantId } }); // cascades SaleItem, PaymentRecord
-            await tx.quotation.deleteMany({ where: { tenant_id: tenantId } }); // cascades QuotationItem
-            await tx.salesOrder.deleteMany({ where: { tenant_id: tenantId } }); // cascades SalesOrderItem
-
-            // Purchases
-            await tx.purchaseReturn.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseReturnItem
-            await tx.purchase.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseItem, PurchasePayment
-            await tx.purchaseOrder.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseOrderItem
-            await tx.purchaseQuotation.deleteMany({ where: { tenant_id: tenantId } }); // cascades PurchaseQuotationItem
-            await tx.productDemand.deleteMany({ where: { tenant_id: tenantId } }); // cascades ProductDemandItem
-
-            // Inventory operational
-            await tx.productionJob.deleteMany({ where: { tenantId } });
-            await tx.inventoryMovement.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.inventoryShrinkage.deleteMany({ where: { tenant_id: tenantId } }); // cascades InventoryShrinkageItem
-            await tx.warehouseTransfer.deleteMany({ where: { tenant_id: tenantId } }); // cascades WarehouseTransferItem
-            await tx.stockTakeSession.deleteMany({ where: { tenant_id: tenantId } }); // cascades StockTakeCountLine
-
-            // Records pointing at a Voucher, before the vouchers themselves.
-            await tx.fundTransfer.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.investorProfitRun.deleteMany({ where: { tenant_id: tenantId } }); // cascades InvestorProfitShare
-            await tx.investorCapitalTxn.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.assetDepreciationEntry.deleteMany({ where: { asset: { tenant_id: tenantId } } });
-            await tx.salaryAccrual.deleteMany({ where: { tenant_id: tenantId } });
-            // Depreciation entries are gone, so the running total on the asset is
-            // no longer backed by anything.
-            await tx.fixedAsset.updateMany({ where: { tenant_id: tenantId }, data: { accumulated_depreciation: 0 } });
-
-            // Accounting journals
-            await tx.voucher.deleteMany({ where: { tenant_id: tenantId } }); // cascades VoucherDetail, PostingEvent
-
-            // Financials
-            await tx.expenseEntry.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.loan.deleteMany({ where: { tenant_id: tenantId } }); // cascades LoanPayment
-            await tx.salaryPayment.deleteMany({ where: { tenant_id: tenantId } });
-
-            // HR operational
-            await tx.attendanceRecord.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.leaveRequest.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.leaveBalance.deleteMany({ where: { tenant_id: tenantId } });
-            await tx.payrollRun.deleteMany({ where: { tenant_id: tenantId } }); // cascades PayrollLine
-            await tx.expenseClaim.deleteMany({ where: { tenant_id: tenantId } }); // cascades ExpenseClaimLine
-
-            // In-app notices raised by the records above
-            await tx.notification.deleteMany({ where: { tenant_id: tenantId } });
-
-            // Storefront & sessions
-            await tx.storefrontOrder.deleteMany({ where: { tenantId } }); // cascades StorefrontOrderItem
-            await tx.cashierSession.deleteMany({ where: { tenant_id: tenantId } });
-
-            // Serial inventory
-            await tx.productSerial.deleteMany({ where: { tenant_id: tenantId } });
-
-            if (mode === 'all') {
-                // --- Master / reference data ---
-
-                // Projects before Employee — a task may be assigned to one.
-                await tx.project.deleteMany({ where: { tenant_id: tenantId } }); // cascades tasks, statuses, milestones
-                await tx.supportThread.deleteMany({ where: { tenantId } }); // cascades SupportMessage
-
-                // BOM before Products
-                await tx.bomRecipe.deleteMany({ where: { tenantId } }); // cascades BomComponent, ProductionJob
-
-                // Products and stock (after all transactional refs are gone)
-                await tx.productStock.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.priceList.deleteMany({ where: { tenant_id: tenantId } }); // cascades PriceListItem
-
-                // Customers and related groupings
-                await tx.customer.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.customerGroup.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.territory.deleteMany({ where: { tenant_id: tenantId } });
-
-                // CRM master data — safe here because Lead (which FKs these with
-                // onDelete: Restrict) is already deleted above.
-                await tx.leadSourceOption.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.leadCategoryOption.deleteMany({ where: { tenant_id: tenantId } });
-
-                // Suppliers
-                await tx.supplier.deleteMany({ where: { tenant_id: tenantId } });
-
-                // Products — after stock, serials, BOM, and all sale/purchase items are gone
-                await tx.product.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.brand.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.productSubgroup.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.productGroup.deleteMany({ where: { tenant_id: tenantId } });
-
-                // CRM contacts (no dependents; captured business cards)
-                await tx.crmContact.deleteMany({ where: { tenant_id: tenantId } });
-
-                // HR master data (operational records deleted above). Employee
-                // first: EmployeeSchedule cascades from it and would otherwise
-                // block the work schedules.
-                await tx.employee.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.designation.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.department.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.leaveType.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.workSchedule.deleteMany({ where: { tenant_id: tenantId } }); // cascades WorkScheduleDay
-                await tx.holiday.deleteMany({ where: { tenant_id: tenantId } });
-
-                // Finance master data (all journals and their sources are gone)
-                await tx.investor.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.fixedAsset.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.accountBudget.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.costCenter.deleteMany({ where: { tenant_id: tenantId } });
-                await tx.fiscalPeriod.deleteMany({ where: { tenant_id: tenantId } });
-
-                // Inventory system data
-                await tx.inventoryReason.deleteMany({ where: { tenant_id: tenantId } });
-
-                // Discount codes
-                await tx.discountCode.deleteMany({ where: { tenantId } });
-
-                // Re-seed the CRM lead taxonomy. Unlike the other master data
-                // cleared above, a tenant with no lead sources cannot classify a
-                // new lead at all, so leaving these empty makes the CRM unusable
-                // until the next container restart runs sync:lead-taxonomy.
-                await seedDefaultLeadTaxonomy(tx, tenantId);
-            }
-        }, { timeout: 300_000, maxWait: 300_000 });
-
-        return { cleared: mode };
+        return clearTenantData(this.db, tenantId, mode, storeId, keep);
     }
 
     async updateLocalizationSettings(tenantId: string, dto: UpdateLocalizationSettingsDto) {
@@ -585,8 +491,14 @@ export class TenantsService {
         });
 
         // Otherwise the next few minutes of requests keep measuring the day in
-        // the old zone, which reads as the setting not having saved.
-        if (dto.timezone !== undefined) this.timezones.invalidate(tenantId);
+        // the old zone, which reads as the setting not having saved. Both
+        // caches: `TenantInterceptor` reads the zone off the cached membership
+        // and primes `TenantTimezoneService` with it on every request, so
+        // clearing only the latter would have it re-primed with the old zone.
+        if (dto.timezone !== undefined) {
+            this.authCache.invalidateTenant(tenantId);
+            this.timezones.invalidate(tenantId);
+        }
 
         return updated;
     }

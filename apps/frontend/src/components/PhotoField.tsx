@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { directUpload, withServerFallback } from '@/lib/uploads/direct-upload';
 import { toast } from '@/lib/toast';
 import Avatar from './Avatar';
 import AvatarCropModal from './AvatarCropModal';
@@ -82,13 +83,25 @@ export default function PhotoField({
     const handleCropConfirm = async (file: File) => {
         setUploading(true);
         try {
-            const imageBase64 = await readAsDataUrl(file);
-            const result = await api.uploadCrmPhoto({
-                imageBase64,
-                mimeType: file.type,
-                fileName: file.name,
-            });
-            onChange({ url: result.url, storageKey: result.storageKey });
+            // Straight to Cloudinary, into the tenant's CRM-photo folder — the
+            // same folder the base64 route uses, so the record's save path
+            // checks the key the same way whichever route the file took.
+            const photo = await withServerFallback<PhotoValue>(
+                async () => {
+                    const uploaded = await directUpload(file, 'crm-photo');
+                    return { url: uploaded.secure_url, storageKey: uploaded.public_id };
+                },
+                async () => {
+                    const imageBase64 = await readAsDataUrl(file);
+                    const result = await api.uploadCrmPhoto({
+                        imageBase64,
+                        mimeType: file.type,
+                        fileName: file.name,
+                    });
+                    return { url: result.url, storageKey: result.storageKey };
+                },
+            );
+            onChange(photo);
         } catch (err: unknown) {
             // The rest of the form stays usable: a photo that will not upload
             // is not a reason to lose everything else the user has typed.

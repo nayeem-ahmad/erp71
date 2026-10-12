@@ -1,7 +1,11 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import PurchasesPage from './page';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -54,6 +58,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         searchParams = new URLSearchParams();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getPurchases.mockResolvedValue([
             {
@@ -70,7 +75,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     });
 
     it('renders purchases loaded from the API', async () => {
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         await waitFor(() => {
             expect(screen.getByText('PUR-00001')).toBeInTheDocument();
@@ -78,25 +83,67 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         });
     });
 
+    it('lists the header branch\'s purchases, and re-asks for the branch picked', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<PurchasesPage />);
+        await waitFor(() =>
+            expect(api.getPurchases).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+        expect(api.getPurchases).toHaveBeenCalledTimes(1);
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+        await waitFor(() =>
+            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })),
+        );
+    });
+
+    it('goes back to the header branch when the server refuses the chosen one', async () => {
+        const { api } = require('@/lib/api');
+        const rows = await api.getPurchases();
+        api.getPurchases.mockClear();
+        api.getPurchases.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+            if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
+            return rows;
+        });
+        renderWithQueryClient(<PurchasesPage />);
+        await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
+        await waitFor(() =>
+            expect(api.getPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+    });
+
     it('sends Record Purchase to the entry page', async () => {
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         const action = await screen.findByRole('link', { name: /record purchase/i });
         expect(action).toHaveAttribute('href', '/purchases/new');
     });
 
     it('renders a duplicate action pointing the entry form at the purchase', async () => {
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         const link = await screen.findByTitle('Duplicate purchase');
         expect(link).toHaveAttribute('href', '/purchases/new?duplicate=purchase-1');
+    });
+
+    it('opens a purchase to view it, and straight into editing it', async () => {
+        renderWithQueryClient(<PurchasesPage />);
+
+        expect(await screen.findByTitle('View purchase')).toHaveAttribute('href', '/purchases/purchase-1');
+        expect(screen.getByTitle('Edit purchase')).toHaveAttribute('href', '/purchases/purchase-1?edit=true');
+        expect(screen.getByRole('link', { name: 'PUR-00001' })).toHaveAttribute('href', '/purchases/purchase-1');
     });
 
     it('prints from the row icon without opening an invoice page', async () => {
         const { api } = require('@/lib/api');
         const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');
 
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
         await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
         const hrefs = screen.getAllByRole('link').map((l) => l.getAttribute('href'));
@@ -112,7 +159,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
     it('sets the paper size from the header rather than from a row', async () => {
         const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');
 
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
         await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
         fireEvent.click(screen.getByRole('button', { name: /print settings/i }));
@@ -133,7 +180,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
 
     it('forwards the legacy ?new=1 deep link to the entry page', async () => {
         searchParams = new URLSearchParams('new=1');
-        render(<PurchasesPage />);
+        renderWithQueryClient(<PurchasesPage />);
 
         await waitFor(() => expect(replace).toHaveBeenCalledWith('/purchases/new'));
     });
@@ -147,7 +194,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         };
 
         it('shows a purchase with no status column value as Recorded', async () => {
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
 
             await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
             // Rows written before the column existed come back without it; the
@@ -156,7 +203,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         });
 
         it('hides the Cancel action from someone without CANCEL_ENTRY', async () => {
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
             await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
             expect(screen.queryByRole('button', { name: /cancel entry/i })).toBeNull();
@@ -167,7 +214,7 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
             asTenantAdmin();
             api.cancelPurchase.mockResolvedValue({ id: 'purchase-1', status: 'CANCELLED' });
 
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
             const actions = await screen.findAllByRole('button', { name: /cancel entry/i });
             fireEvent.click(actions[0]);
 
@@ -198,7 +245,11 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
                 },
             ]);
 
-            render(<PurchasesPage />);
+            renderWithQueryClient(<PurchasesPage />);
+
+            // Every impact has been reversed; the API refuses to edit it.
+            expect(await screen.findByTitle('View purchase')).toBeInTheDocument();
+            expect(screen.queryByTitle('Edit purchase')).not.toBeInTheDocument();
             await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
             expect(screen.getByText('Cancelled')).toBeInTheDocument();

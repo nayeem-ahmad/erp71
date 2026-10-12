@@ -136,6 +136,7 @@ function initials(name: string): string {
 export default function CrmDashboard({
     greeting,
     tenantName,
+    homeSlot,
     variant = 'page',
 }: Readonly<DashboardIdentity & { variant?: DashboardMount }>) {
     const { t, locale } = useI18n();
@@ -159,10 +160,12 @@ export default function CrmDashboard({
         previous: prev,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'crm',
         fetchOverview: (window) => api.getCrmDashboardOverview({ ...window, ...scope }),
         fetchTrends: (window) => api.getCrmDashboardTrends({ ...window, ...scope }),
         unavailableMessage: crm.overviewUnavailable,
@@ -394,6 +397,7 @@ export default function CrmDashboard({
 
     return (
         <ModuleDashboard
+            slot={homeSlot}
             mount={variant}
             greeting={greeting}
             tenantName={tenantName}
@@ -410,6 +414,7 @@ export default function CrmDashboard({
                 />
             }
             error={error}
+            refreshing={refreshing}
         >
             <AttentionSection
                 items={attentionItems}

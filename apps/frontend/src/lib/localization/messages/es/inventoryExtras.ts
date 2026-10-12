@@ -395,6 +395,7 @@ export const inventoryExtrasMessages = {
             "warehousesCounted": "Almacenes",
             "valuationBasisNote": "Valorado al coste medio ponderado de compra, neto de devoluciones a proveedores. Los productos nunca comprados a través del libro mayor se valoran a su último coste registrado.",
             "uncostedWarning": "{count} producto(s) con {quantity} unidad(es) no tienen coste de compra registrado y se valoran a cero: el total de abajo está infravalorado.",
+            "setCostsLink": "Registrar costes que faltan",
             "costBasis": {
                 "WEIGHTED_AVERAGE": "Precio medio ponderado",
                 "LATEST_COST": "Último coste registrado",
@@ -586,6 +587,96 @@ export const inventoryExtrasMessages = {
         "variance": "Discrepancia {value}",
         "note": "Nota"
     },
+    "productCosts": {
+        "title": "Costes de productos",
+        "subtitle": "Lo que costaron las existencias de cada producto. Las ventas se costean con estas cifras: un producto sin coste no registra coste de ventas.",
+        "stats": {
+            "products": "Productos con stock",
+            "uncosted": "Sin coste registrado",
+            "uncostedInStock": "Sin coste, con existencias",
+            "costingMethod": "Método de costeo"
+        },
+        "costingMethods": {
+            "WEIGHTED_AVERAGE": "Promedio ponderado",
+            "LATEST_COST": "Último coste"
+        },
+        "uncostedBanner": "{count} producto(s) con existencias no tienen coste registrado. Sus ventas no registran coste de ventas, por lo que su margen bruto no se puede medir, y la valoración de existencias los cuenta a cero. Introduzca un coste abajo o rellene los huecos con el último precio de compra.",
+        "readOnlyNotice": "Puede ver los costes de productos. Para fijarlos necesita el permiso «Fijar y corregir costes de productos».",
+        "loadError": "No se pudieron cargar los costes de productos: {message}",
+        "loadErrorEmpty": "No se pudieron cargar los costes de productos.",
+        "emptyMessage": "Ningún producto coincide con estos filtros.",
+        "invalidCost": "El coste debe ser un número igual o mayor que cero. Corrija las casillas marcadas antes de guardar.",
+        "searchPlaceholder": "Buscar nombre o SKU",
+        "statusLabel": "Estado del coste",
+        "statusFilter": {
+            "ALL": "Todos los productos",
+            "UNCOSTED": "Sin coste registrado",
+            "COSTED": "Con coste"
+        },
+        "inStockOnly": "Solo productos con existencias",
+        "columns": {
+            "product": "Producto",
+            "onHand": "Existencias",
+            "currentCost": "Coste actual",
+            "lastPurchase": "Último precio de compra",
+            "newCost": "Nuevo coste",
+            "stockValue": "Valor de existencias"
+        },
+        "basis": {
+            "WEIGHTED_AVERAGE": "Coste medio",
+            "LATEST_COST": "Lista de precios",
+            "UNCOSTED": "Sin coste registrado"
+        },
+        "useLastPurchase": "Usar",
+        "useLastPurchaseFor": "Usar el último precio de compra de {product}",
+        "newCostFor": "Nuevo coste de {product}",
+        "newCostPlaceholder": "Introducir coste",
+        "fillFromLastPurchase": "Rellenar huecos con la última compra",
+        "saveCosts": "Guardar {count} coste(s)",
+        "saved": "{count} coste(s) de producto guardado(s).",
+        "previousPage": "Anterior",
+        "nextPage": "Siguiente",
+        "pageOf": "Página {page} de {pages}",
+        "reasons": {
+            "OPENING_COST": "Coste inicial",
+            "CORRECTION": "Corrección",
+            "WRITE_DOWN": "Depreciación"
+        },
+        "history": {
+            "title": "Cambios de coste",
+            "subtitle": "Cada coste fijado a mano, con su valor anterior y las existencias a las que se aplicó.",
+            "empty": "Todavía no se ha fijado ningún coste a mano.",
+            "loadMore": "Cargar más",
+            "columns": {
+                "date": "Fecha",
+                "product": "Producto",
+                "reason": "Motivo",
+                "change": "Coste",
+                "quantity": "Cant.",
+                "valueChange": "Cambio de valor",
+                "by": "Por",
+                "note": "Nota"
+            }
+        },
+        "confirm": {
+            "title": "Guardar costes de productos",
+            "intro": "{count} producto(s) se costearán con las cifras introducidas.",
+            "openingCount": "{count} aún no tienen coste. El suyo se registra como coste inicial.",
+            "changeCount": "{count} ya tienen un coste. ¿Por qué cambia?",
+            "reasonPlaceholder": "Elija un motivo",
+            "reasonCorrection": "Corrección: el coste registrado era incorrecto",
+            "reasonWriteDown": "Depreciación: las existencias valen ahora menos de lo que costaron (dañadas, caducadas, obsoletas, bajó el precio)",
+            "reasonRequired": "Elija por qué cambian los costes existentes.",
+            "writeDownHint": "Una depreciación solo puede bajar un coste. Si el coste registrado era simplemente incorrecto, use una corrección.",
+            "noteLabel": "Nota (opcional)",
+            "notePlaceholder": "p. ej. Recuento de existencias iniciales, factura del proveedor revisada",
+            "accountingTitle": "Cómo se contabiliza",
+            "accountingNote": "No se registra ningún asiento contable. Sus libros usan inventario periódico: las existencias se llevaron a gasto al comprarlas, así que el coste de un producto es la base del coste de ventas y de la valoración de existencias, no un saldo contable. El nuevo coste se aplica a las ventas a partir de ahora; las ventas anteriores conservan el coste con que se registraron. Cada cambio queda registrado con su autor.",
+            "save": "Guardar costes",
+            "saving": "Guardando...",
+            "cancel": "Cancelar"
+        }
+    },
     "addProductModal": {
         "editTitle": "Editar producto",
         "addTitle": "Añadir nuevo producto",
@@ -597,6 +688,8 @@ export const inventoryExtrasMessages = {
         "salePrice": "Precio de venta (৳)",
         "featuredLabel": "Marcar el producto como destacado (aparece en Tendencias)",
         "initialStock": "Existencias iniciales",
+        "unitCost": "Coste unitario",
+        "unitCostHint": "Lo que le cuesta comprar una unidad. Las ventas se costean con él hasta que la primera factura de compra lo sustituya. Déjelo en blanco si no lo sabe.",
         "warrantyEnabled": "Garantía activada",
         "warrantyDuration": "Duración de la garantía (días)",
         "reorderLevel": "Nivel de reposición",
@@ -622,6 +715,7 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
+            "unitCost": "p. ej. 85.00",
             "warrantyDays": "p. ej. 365",
             "vatRate": "p. ej. 15",
             "sdRate": "p. ej. 25"

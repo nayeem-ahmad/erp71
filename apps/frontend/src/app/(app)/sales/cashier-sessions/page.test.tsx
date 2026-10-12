@@ -1,4 +1,6 @@
 'use client';
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/i18n', () => {
   const { enMessages } = require('@/lib/localization/messages/en');
 
@@ -16,8 +18,9 @@ jest.mock('@/lib/i18n', () => {
 }, { virtual: true });
 
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CashierSessionsPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -51,6 +54,7 @@ jest.mock('next/navigation', () => ({
 describe('CashierSessionsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getOpenCashierSession.mockRejectedValue(new Error('No open session'));
         api.getCashTransactions.mockResolvedValue([]);
@@ -157,5 +161,18 @@ describe('CashierSessionsPage', () => {
         await waitFor(() => {
             expect(screen.getByText('No tills are open in this branch.')).toBeInTheDocument();
         });
+    });
+
+    it('shows the filtered branch\'s floor, while the own shift stays on the header branch', async () => {
+        const { api } = require('@/lib/api');
+        render(<CashierSessionsPage />);
+        await waitFor(() => expect(api.getOpenCashierSessionsByStore).toHaveBeenCalledWith('store-1'));
+
+        fireEvent.change(await screen.findByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(api.getOpenCashierSessionsByStore).toHaveBeenLastCalledWith('store-2'));
+        expect(api.getActiveCounters).toHaveBeenCalledWith('store-1');
+        expect(api.getActiveCounters).not.toHaveBeenCalledWith('store-2');
+        expect(screen.queryByRole('option', { name: 'All branches' })).not.toBeInTheDocument();
     });
 });

@@ -40,6 +40,18 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         >
             <ToastIcon type={item.type} />
             <p className="flex-1 min-w-0 whitespace-pre-line leading-snug">{item.message}</p>
+            {item.action ? (
+                <button
+                    type="button"
+                    onClick={() => {
+                        item.action?.onClick();
+                        onDismiss();
+                    }}
+                    className="flex-shrink-0 rounded text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                    {item.action.label}
+                </button>
+            ) : null}
             <button
                 type="button"
                 onClick={onDismiss}

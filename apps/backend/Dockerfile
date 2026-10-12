@@ -46,7 +46,11 @@ COPY --from=builder /app/packages/database ./packages/database
 COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 
-RUN mkdir -p /var/lib/erp71/external-sync-snapshots
+# external-sync-snapshots: see EXTERNAL_SYNC_SNAPSHOT_DIR in docker-compose.prod.yml.
+# state: the "prepared for commit X" marker (apps/backend/scripts/db-prepare.sh).
+# Both are volume mount points in production; creating them here keeps an
+# image run without the volumes working, with the files in the container.
+RUN mkdir -p /var/lib/erp71/external-sync-snapshots /var/lib/erp71/state
 
 EXPOSE 4000
 ENV PORT=4000
@@ -57,181 +61,21 @@ ENV HOSTNAME="0.0.0.0"
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
-# Sync schema, sync the platform catalog, and bring every tenant's accounting
-# defaults up to date before starting the app.
+# Prepare the database for this commit, then start the app.
 #
-# DIRECT_URL is overridden with DATABASE_URL so prisma db push uses the
-# internal Render hostname, bypassing the IP allowlist that blocks external
-# connections during preDeployCommand.
+# "Prepare" is the schema sync (prisma db push), the platform catalog and every
+# sync:* back-fill — the chain that used to be spelled out here as one long
+# `&&` command. It lives in apps/backend/scripts/db-prepare.sh now, with the
+# comments explaining each step and why the order is load-bearing: read them
+# before adding a step.
 #
-# db:seed:platform — NOT db:seed. This runs on every container start, including
-# unattended restarts, so it may only touch platform reference data (subscription
-# plans + addon modules), which the app reads at runtime and which must track the
-# deployed code. prisma/seed.ts is dev/demo fixtures: it writes business data and
-# resets known passwords, and must never run here.
+# --if-needed skips the chain when this commit has already prepared this
+# database, which scripts/deploy.sh does in a one-off container while the old
+# backend is still serving. The proof is a marker on the backend_state volume
+# (/var/lib/erp71/state, docker-compose.prod.yml), so a start after deploy.sh
+# is just Nest booting. Without that marker — a plain `docker compose up -d`,
+# a rollback to another commit, GIT_SHA=unknown — the container prepares
+# itself first, exactly as every start did before. See the script's header.
 #
-# sync:accounting runs on every start, after db:seed so it also covers anything
-# the seed just created. It is idempotent and additive-only (see
-# prisma/sync-accounting.ts), and it is the ONLY thing that carries new default
-# accounts/posting rules to tenants that already exist — the bootstrap itself
-# runs only at tenant creation. Without it, adding a rule silently posts nothing
-# on every existing tenant. It joins the && chain deliberately: a failure here
-# means tenants would post to a stale rule set, which must be loud, not skipped.
-#
-# sync:lead-taxonomy plays the same role for CRM lead sources/categories, and
-# additionally backfills Lead.source_id / Lead.category_id from the legacy enum
-# columns. It is idempotent and additive-only, and it degrades to "seed defaults
-# only" once those columns are dropped (it checks information_schema rather than
-# assuming they exist) — so it cannot become the reason the backend stops booting.
-#
-# sync:crm-activities mirrors LeadConversation / CustomerInteraction / CrmFollowUp
-# into the unified CrmActivity table and materialises Lead.next_step as a planned
-# activity where it is not already a duplicate. It runs AFTER sync:lead-taxonomy
-# because it resolves legacy type strings against the activity purposes that
-# script seeds. Idempotent via @@unique([tenant_id, legacy_source, legacy_id]) +
-# skipDuplicates, guarded on information_schema so it degrades to a no-op once
-# R3 drops the legacy tables, and it catches its own errors rather than exiting
-# non-zero — a failed backfill must not be a full outage.
-#
-# sync:role-permissions is the same idea for the permission matrix:
-# ROLE_DEFAULT_PERMISSIONS is read only at tenant creation and role assignment,
-# so a permission added later reaches nobody who already exists — and the OWNER
-# bypass in StorePermissionGuard hides that from whoever tests the new module.
-# It grants by explicit group and skips a role that already holds part of one, so
-# re-running never undoes an owner's later edit (see prisma/sync-role-permissions.ts).
-#
-# sync:work-schedules gives every tenant a default work schedule and every
-# employee an assignment to it (HRIS Phase 2). Attendance still works without it
-# — resolveScheduleDays falls back to an in-code default — but the tenant would
-# have no row to edit, so their hours would be whatever the code assumed. Skips
-# any tenant that already has a schedule and any employee that already has an
-# assignment, so it never overrides a deliberate change.
-#
-# sync:lead-identity backfills Lead.mobile_norm/email_norm/linkedin_norm, the
-# normalized columns carrying the per-tenant unique indexes that stop duplicate
-# leads. It is REQUIRED, not a nicety: production applies schema with `db push`
-# below, never `prisma migrate deploy`, so the migration that backfills these
-# columns never runs here. Without this step the columns stay NULL on every
-# existing lead, the indexes guard nothing, and the old raw-mobile unique that
-# db push drops is not replaced. Only the oldest lead claiming a value is filled
-# in, so pre-existing duplicates cannot make it throw. See
-# prisma/sync-lead-identity.ts.
-#
-# sync:salary-components seeds the standard Bangladeshi salary split (HRIS
-# Phase 5) for tenants that have none, so the structure screen opens with
-# something recognisable rather than blank. It deliberately does NOT backfill
-# per-employee structures — resolveStructure already falls back to
-# Employee.basic_salary, and stamping a structure nobody chose would silently
-# stop that field affecting pay. See prisma/sync-salary-components.ts.
-#
-# sync:setup-fee-paid stamps TenantSubscription.setup_fee_paid_at on every
-# subscription that predates the one-time setup fee. Same reason as
-# sync:lead-identity above: db push carries the column but never the migration's
-# backfill, so the stamp lands NULL on every existing row. BillingService reads
-# NULL as "never paid", so the day an admin sets a non-zero setup_fee on a plan,
-# every tenant already on it is billed an onboarding fee at their next checkout —
-# for onboarding they had years ago. The stamp must exist before any fee does.
-#
-# sync:support-thread-creators backfills SupportThread.createdById, the shop user
-# who opened each inbox thread. REQUIRED for the same reason as sync:lead-identity:
-# db push adds the column but never runs the migration that fills it, so without
-# this every pre-existing thread reads as "Unknown user" in Admin > Inbox and the
-# per-user filter finds only threads opened after the deploy. The opener is taken
-# from the thread's earliest message. See prisma/sync-support-thread-creators.ts.
-#
-# sync:lead-activity backfills Lead.last_activity_at, "when did anyone last work
-# this lead" — the column behind the CRM dashboard's 14-day neglected-leads tile
-# and GET /crm/leads?staleDays=N. REQUIRED for the same reason as the two above:
-# db push adds the column, never the migration that fills it, so without this the
-# column is NULL everywhere and the tile counts the whole back catalogue as
-# neglected until each lead is next touched. See prisma/sync-lead-activity.ts.
-#
-# sync:crm-activity-approval marks every DONE and CANCELLED CrmActivity approved.
-# REQUIRED for the same reason as sync:lead-activity above: db push adds
-# `is_approved` at its default of false and never runs the migration that fills
-# it. Without this, the Activities page's "Awaiting approval" filter opens on the
-# tenant's entire logged history — years of finished conversations — instead of
-# the handful of plans a reviewer actually needs to read. PLANNED rows are left
-# unapproved on purpose: that backlog is the review queue. See
-# prisma/sync-crm-activity-approval.ts.
-
-# sync:user-mobile-unique is the one step that runs BEFORE db push, not after.
-# db push creates the unique index on User.mobile, and unlike every other index
-# here that column is already populated — duplicates were deliberately allowed
-# between 2026-07-10 and 2026-09-07. Postgres refuses to build a unique index
-# over them, db push exits non-zero, and at the head of this && chain that means
-# the backend never boots. Clearing the collisions first makes the index a
-# formality. It is idempotent and degrades to a no-op on a fresh database that
-# has no User table yet. See prisma/sync-user-mobile-unique.ts.
-#
-# sync:store-name-unique runs BEFORE db push for exactly the same reason, and
-# before sync:warehouse-name-unique below. db push creates the unique index on
-# (Store.tenant_id, name), over a column that is already populated and was never
-# constrained: `@MinLength(1)` with no trim let a whitespace-only branch name
-# through as '', and rename checked neither blank nor duplicate. It has to lead
-# the warehouse repair because a nameless warehouse is renamed after the branch
-# holding it, so a branch fixed first hands it a real name rather than the
-# "Branch Warehouse" fallback. See prisma/sync-store-name-unique.ts.
-#
-# sync:warehouse-name-unique runs BEFORE db push for exactly the same reason.
-# db push creates the unique index on (Warehouse.tenant_id, store_id, name),
-# over a column that is already populated and was never constrained: a warehouse
-# could be saved with a blank name, or with a name another warehouse in the same
-# branch already had. Postgres refuses to build the index over those, db push
-# exits non-zero, and the backend never boots. Repairing the names first — blank
-# ones take the branch's name, repeats are suffixed with their code — makes the
-# index a formality. Idempotent, and a no-op on a fresh database with no
-# Warehouse table yet. See prisma/sync-warehouse-name-unique.ts.
-#
-# sync:board-slug and sync:task-reference run BEFORE db push for the same
-# reason, and are REQUIRED for the readable-project-URL work to deploy at all.
-# Both add a NOT NULL column with no default to a table that already has rows
-# (boards.slug, project_tasks.reference). Migrations 20260922120000 and
-# 20260922130000 do this safely — add nullable, backfill, then set NOT NULL —
-# but production never runs `prisma migrate deploy`, so that sequencing never
-# happens here. db push would go straight to NOT NULL, Postgres would refuse,
-# and the backend would never boot. Filling the columns first makes the NOT NULL
-# and its unique index a formality. Both are idempotent (they fill NULLs only,
-# never rewriting a slug an owner has since edited) and no-ops on a fresh
-# database with no boards/project_tasks table yet. They also create the two
-# history tables the same migrations add. See prisma/sync-board-slug.ts and
-# prisma/sync-task-reference.ts.
-#
-# sync:tenant-role-templates creates the per-module role templates (Sales
-# Manager, Sales User, ... plus Tenant Admin) for tenants that predate them, and
-# gives existing members and pending invitations their TenantUserRole /
-# UserInvitationRole rows. Without it an existing workspace sees no new roles to
-# assign and multi-role reads find an empty role set. See
-# prisma/sync-tenant-role-templates.ts.
-#
-# sync:cancel-entry-permission grants CANCEL_ENTRY to the Tenant Admin role of
-# tenants that predate entry cancellation, and to the members holding it.
-# REQUIRED and it cannot ride on sync:role-permissions, which deliberately skips
-# template roles (`template_key: null`) — CANCEL_ENTRY belongs to exactly one
-# template role and to none of the three legacy ones, so without this every
-# existing Tenant Admin sees the Cancel action 403 while the owner, who bypasses
-# permission checks, sees it work. Must run AFTER sync:tenant-role-templates,
-# which is what creates the Tenant Admin role it grants onto. See
-# prisma/sync-cancel-entry-permission.ts.
-#
-# sync:project-members puts each project's manager and creator on its team.
-# REQUIRED for any workspace that created a project before this ran: the task
-# Assignee picker offers a project's roster and nothing else, and projects used
-# to be seeded with members only when they were PRIVATE — while PUBLIC is the
-# default. So every ordinary project had an empty roster and its tasks could not
-# be assigned to anybody, with nothing on screen saying why. `create` now seeds
-# both people; this is the half a code change cannot reach. Never rewrites an
-# existing row, so a deliberate removal is not undone on the next boot. See
-# prisma/sync-project-members.ts.
-#
-# sync:found-reasons gives tenants that predate the FOUND direction their FOUND
-# reason catalogue. REQUIRED, and it is the half `db push` cannot reach: the
-# release that added `InventoryShrinkage.direction` seeded the four defaults in
-# its migration's INSERT, but production applies schema with `db push` and never
-# runs migration files — so the column and its index arrived and the catalogue
-# did not. The entry screen filters reasons by type and the service refuses a
-# reason that is not an active FOUND one, so without this an existing workspace
-# opens the Found picker to an empty list and cannot record a surplus at all.
-# Only ever fills an EMPTY catalogue, so nothing is relabelled and a reason
-# switched off on purpose stays off. See prisma/sync-found-reasons.ts.
-CMD ["sh", "-c", "DIRECT_URL=$DATABASE_URL npm run sync:user-mobile-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:store-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:warehouse-name-unique --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:board-slug --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:task-reference --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npm run sync:story-code --workspace=@erp71/database && DIRECT_URL=$DATABASE_URL npx prisma db push --skip-generate --accept-data-loss --schema=packages/database/prisma/schema.prisma && npm run db:seed:platform --workspace=@erp71/database && npm run sync:accounting --workspace=@erp71/database && npm run sync:lead-taxonomy --workspace=@erp71/database && npm run sync:crm-activities --workspace=@erp71/database && npm run sync:lead-identity --workspace=@erp71/database && npm run sync:role-permissions --workspace=@erp71/database && npm run sync:tenant-role-templates --workspace=@erp71/database && npm run sync:cancel-entry-permission --workspace=@erp71/database && npm run sync:work-schedules --workspace=@erp71/database && npm run sync:salary-components --workspace=@erp71/database && npm run sync:support-thread-creators --workspace=@erp71/database && npm run sync:lead-activity --workspace=@erp71/database && npm run sync:found-reasons --workspace=@erp71/database && npm run sync:project-members --workspace=@erp71/database && npm run sync:crm-activity-approval --workspace=@erp71/database && npm run sync:setup-fee-paid --workspace=@erp71/database && node apps/backend/dist/src/main.js"]
+# `exec` hands PID 1 to node rather than leaving a shell waiting on it.
+CMD ["sh", "-c", "sh apps/backend/scripts/db-prepare.sh --if-needed && exec node apps/backend/dist/src/main.js"]

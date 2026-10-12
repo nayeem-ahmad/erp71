@@ -1,5 +1,6 @@
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 const toBoolean = ({ value }: { value: unknown }) => {
     if (value === '' || value === null || value === undefined) return undefined;
@@ -18,7 +19,7 @@ export class GetStockAgingDto {
      * outside the named branch matches neither filter and reports nothing.
      */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -55,7 +56,7 @@ export class GetReorderSuggestionsDto {
      * outside the named branch matches neither filter and reports nothing.
      */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -80,7 +81,7 @@ export class GetInventoryValuationDto {
      * outside the named branch matches neither filter and reports nothing.
      */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -105,7 +106,7 @@ export class GetStockOnHandDto {
      * outside the named branch matches neither filter and reports nothing.
      */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     /**
@@ -149,7 +150,7 @@ export class GetShrinkageSummaryDto {
      * outside the named branch matches neither filter and reports nothing.
      */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -221,7 +222,7 @@ export class GetProductTransactionHistoryDto {
      * nothing.
      */
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     /**

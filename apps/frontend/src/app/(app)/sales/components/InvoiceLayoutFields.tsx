@@ -4,9 +4,12 @@ import { useId, useState } from 'react';
 import {
     INVOICE_FOOTER_MAX_LENGTH,
     type InvoiceBalanceMode,
+    type InvoiceLayout,
     type InvoicePadding,
     type InvoicePrintPrefs,
+    type InvoiceTableBorders,
     type InvoiceTableStyle,
+    type InvoiceWarrantyColumn,
 } from '@erp71/shared-types';
 import { Checkbox, Field, Select, Textarea } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
@@ -51,6 +54,17 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
 
     return (
         <div className="space-y-4">
+            <Field label={copy.layoutLabel} htmlFor={`${id}-layout`} hint={copy.layoutHint}>
+                <Select
+                    id={`${id}-layout`}
+                    value={value.layout}
+                    onChange={(e) => set('layout', e.target.value as InvoiceLayout)}
+                >
+                    <option value="standard">{copy.layoutStandard}</option>
+                    <option value="detailed">{copy.layoutDetailed}</option>
+                </Select>
+            </Field>
+
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label={copy.paddingLabel} htmlFor={`${id}-padding`}>
                     <Select
@@ -87,6 +101,29 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
                     <option value="when-owed">{copy.balanceWhenOwed}</option>
                     <option value="always">{copy.balanceAlways}</option>
                     <option value="never">{copy.balanceNever}</option>
+                </Select>
+            </Field>
+
+            <Field label={copy.warrantyColumnLabel} htmlFor={`${id}-warranty`}>
+                <Select
+                    id={`${id}-warranty`}
+                    value={value.warranty_column}
+                    onChange={(e) => set('warranty_column', e.target.value as InvoiceWarrantyColumn)}
+                >
+                    <option value="always">{copy.warrantyAlways}</option>
+                    <option value="when-used">{copy.warrantyWhenUsed}</option>
+                    <option value="never">{copy.warrantyNever}</option>
+                </Select>
+            </Field>
+
+            <Field label={copy.tableBordersLabel} htmlFor={`${id}-borders`}>
+                <Select
+                    id={`${id}-borders`}
+                    value={value.table_borders}
+                    onChange={(e) => set('table_borders', e.target.value as InvoiceTableBorders)}
+                >
+                    <option value="none">{copy.tableBordersNone}</option>
+                    <option value="columns">{copy.tableBordersColumns}</option>
                 </Select>
             </Field>
 

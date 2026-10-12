@@ -6,6 +6,11 @@ jest.mock('@/lib/i18n', () => {
     useI18n: () => ({
       t: enMessages,
       locale: 'en',
+      fmt: (template, values = {}) =>
+        Object.entries(values).reduce(
+          (result, [key, value]) => result.replaceAll(`{${key}}`, String(value)),
+          template,
+        ),
     }),
     formatMessage: (template, values = {}) =>
       Object.entries(values).reduce(
@@ -15,8 +20,12 @@ jest.mock('@/lib/i18n', () => {
   };
 }, { virtual: true });
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import SalesListPage from './page';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => {
     // Forwards the rest of the props: the row menus put `role="menuitem"` on
@@ -40,6 +49,7 @@ jest.mock('@/lib/api', () => ({
         cancelSale: jest.fn(),
         // Printing a row fetches the full sale, because the list payload
         // carries no line items.
+        printSalesBatch: jest.fn(),
         getSale: jest.fn().mockResolvedValue({
             id: 'sale-1',
             serial_number: 'SL-00001',
@@ -58,6 +68,7 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/lib/sale-print-actions', () => ({
     ...jest.requireActual('@/lib/sale-print-actions'),
     printSaleInvoice: jest.fn(),
+    printSaleInvoices: jest.fn(),
     printSaleChallan: jest.fn(),
     printSaleReceipt: jest.fn(),
 }));
@@ -97,6 +108,7 @@ const mockSales = [
 
 describe('SalesListPage — Sales Transaction List', () => {
     beforeEach(() => {
+        mockBranchScope();
         const { api } = require('@/lib/api');
         // The list pages against the server, so the mock returns one page plus
         // the real total rather than a bare array.
@@ -114,12 +126,12 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     it('renders the Sales page heading', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         expect(screen.getByRole('heading', { level: 1, name: 'Sales' })).toBeInTheDocument();
     });
 
     it('displays sales loaded from the API', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getByText('SL-00001')).toBeInTheDocument();
             expect(screen.getByText('SL-00002')).toBeInTheDocument();
@@ -127,21 +139,21 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     it('shows customer name for sales with a customer', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getByText('Alice Smith')).toBeInTheDocument();
         });
     });
 
     it('shows Walk-in for sales with no customer', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getByText('Walk-in')).toBeInTheDocument();
         });
     });
 
     it('displays item count for each sale', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getByText('2 items')).toBeInTheDocument();
             expect(screen.getByText('1 items')).toBeInTheDocument();
@@ -149,7 +161,7 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     it('displays formatted total amounts', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getAllByText('৳ 55.00').length).toBeGreaterThan(0);
             expect(screen.getAllByText('৳ 20.00').length).toBeGreaterThan(0);
@@ -157,21 +169,21 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     it('renders COMPLETED status badge', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getByText('Completed')).toBeInTheDocument();
         });
     });
 
     it('renders REFUNDED status badge', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getByText('Refunded')).toBeInTheDocument();
         });
     });
 
     it('shows payment method tags', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.getByText('CASH')).toBeInTheDocument();
             expect(screen.getByText('BKASH')).toBeInTheDocument();
@@ -179,7 +191,7 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     it('renders view action link to sale detail page', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             const link = screen.getAllByRole('link').find(
                 (l) => l.getAttribute('href') === '/sales/sale-1',
@@ -188,11 +200,50 @@ describe('SalesListPage — Sales Transaction List', () => {
         });
     });
 
+    it('prints the checked rows of this page through one batch request', async () => {
+        const { api } = require('@/lib/api');
+        api.printSalesBatch.mockResolvedValue([
+            {
+                id: 'sale-1',
+                serial_number: 'SL-00001',
+                created_at: '2026-03-20T10:00:00.000Z',
+                total_amount: '55.00',
+                amount_paid: '55.00',
+                items: [],
+                payments: [],
+            },
+            {
+                id: 'sale-2',
+                serial_number: 'SL-00002',
+                created_at: '2026-03-21T11:00:00.000Z',
+                total_amount: '20.00',
+                amount_paid: '20.00',
+                items: [],
+                payments: [],
+            },
+        ]);
+
+        renderWithQueryClient(<SalesListPage />);
+        await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+
+        const rows = screen.getAllByLabelText(/select row/i);
+        fireEvent.click(rows[0]);
+        fireEvent.click(rows[1]);
+        fireEvent.click(screen.getByRole('button', { name: /print invoices/i }));
+
+        await waitFor(() => expect(api.printSalesBatch).toHaveBeenCalledTimes(1));
+        expect(api.printSalesBatch).toHaveBeenCalledWith(['sale-1', 'sale-2']);
+        expect(api.getSale).not.toHaveBeenCalled();
+        const { printSaleInvoices } = require('@/lib/sale-print-actions');
+        await waitFor(() => expect(printSaleInvoices).toHaveBeenCalledTimes(1));
+        expect(printSaleInvoices.mock.calls[0][0].map((sale: { id: string }) => sale.id)).toEqual(['sale-1', 'sale-2']);
+    });
+
     it('prints the invoice from the row instead of opening the invoice page', async () => {
         const { api } = require('@/lib/api');
         const { printSaleInvoice } = require('@/lib/sale-print-actions');
 
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
         // The old behaviour was a link to /sales/:id/invoice. Printing in place
@@ -210,7 +261,7 @@ describe('SalesListPage — Sales Transaction List', () => {
     it('prints the chalan from its own row icon, with no menu in between', async () => {
         const { printSaleChallan } = require('@/lib/sale-print-actions');
 
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
         // The chalan used to be a menuitem behind the print split button. It is
@@ -223,7 +274,7 @@ describe('SalesListPage — Sales Transaction List', () => {
     it('keeps the occasional documents reachable from the row overflow menu', async () => {
         const { printSaleReceipt } = require('@/lib/sale-print-actions');
 
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
         fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
@@ -240,7 +291,7 @@ describe('SalesListPage — Sales Transaction List', () => {
     it('sets the paper size from the header rather than from a row', async () => {
         const { printSaleInvoice } = require('@/lib/sale-print-actions');
 
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
         // No row-level size picker any more — the row prints, the header
@@ -264,7 +315,7 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     it('renders a duplicate action pointing the entry form at the sale', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
         // Duplicate moved into the row overflow menu so the column could carry
@@ -279,7 +330,7 @@ describe('SalesListPage — Sales Transaction List', () => {
         const { api } = require('@/lib/api');
         api.getSalesList.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 0 });
 
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(screen.queryByText('SL-00001')).not.toBeInTheDocument();
         });
@@ -287,14 +338,53 @@ describe('SalesListPage — Sales Transaction List', () => {
 
     it('requests a page from the server on mount', async () => {
         const { api } = require('@/lib/api');
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => {
             expect(api.getSalesList).toHaveBeenCalledTimes(1);
         });
     });
 
+    it('opens on the header branch, and re-asks for page 1 of the branch picked', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all', page: 1 })),
+        );
+    });
+
+    it('asks nothing until the branch is known', async () => {
+        mockBranchScope({ ready: false });
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+        expect(api.getSalesList).not.toHaveBeenCalled();
+    });
+
+    it('goes back to the header branch when the server refuses the chosen one', async () => {
+        const { api } = require('@/lib/api');
+        api.getSalesList.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+            if (storeId === 'store-2') throw Object.assign(new Error('Forbidden'), { status: 403 });
+            return { items: mockSales, total: mockSales.length, page: 1, limit: 20, pages: 1 };
+        });
+        renderWithQueryClient(<SalesListPage />);
+        await waitFor(() => expect(api.getSalesList).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+    });
+
     it('shows sale_date as Sale date and created_at as Created', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
         expect(screen.getByRole('columnheader', { name: /sale date/i })).toBeInTheDocument();
         expect(screen.getByRole('columnheader', { name: /^created$/i })).toBeInTheDocument();
@@ -304,7 +394,7 @@ describe('SalesListPage — Sales Transaction List', () => {
 
     it('sends createdFrom/createdTo when a Created range is chosen', async () => {
         const { api } = require('@/lib/api');
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         await waitFor(() => expect(api.getSalesList).toHaveBeenCalled());
         api.getSalesList.mockClear();
 
@@ -322,7 +412,7 @@ describe('SalesListPage — Sales Transaction List', () => {
     });
 
     it('shows a New Sales Entry action linking to /sales/new (not POS)', async () => {
-        render(<SalesListPage />);
+        renderWithQueryClient(<SalesListPage />);
         const link = await screen.findByRole('link', { name: /new sales entry/i });
         expect(link).toHaveAttribute('href', '/sales/new');
         expect(screen.queryByRole('link', { name: /^POS$/i })).toBeNull();
@@ -369,7 +459,7 @@ describe('SalesListPage — Sales Transaction List', () => {
         };
 
         it('hides the Cancel action from someone without CANCEL_ENTRY', async () => {
-            render(<SalesListPage />);
+            renderWithQueryClient(<SalesListPage />);
             await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
             expect(await openRowMenu()).toBeNull();
@@ -379,7 +469,7 @@ describe('SalesListPage — Sales Transaction List', () => {
             const { api } = require('@/lib/api');
             api.getMe.mockResolvedValue({ tenants: [{ id: 'tenant-1', role: 'OWNER', permissions: [] }] });
 
-            render(<SalesListPage />);
+            renderWithQueryClient(<SalesListPage />);
             await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
             await openRowMenuWithCancel();
@@ -390,7 +480,7 @@ describe('SalesListPage — Sales Transaction List', () => {
             asTenantAdmin();
             api.cancelSale.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
 
-            render(<SalesListPage />);
+            renderWithQueryClient(<SalesListPage />);
             await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
             fireEvent.click(await openRowMenuWithCancel());
 
@@ -411,7 +501,7 @@ describe('SalesListPage — Sales Transaction List', () => {
             const { api } = require('@/lib/api');
             asTenantAdmin();
 
-            render(<SalesListPage />);
+            renderWithQueryClient(<SalesListPage />);
             await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
             fireEvent.click(await openRowMenuWithCancel());
 
@@ -435,7 +525,7 @@ describe('SalesListPage — Sales Transaction List', () => {
                 pages: 1,
             });
 
-            render(<SalesListPage />);
+            renderWithQueryClient(<SalesListPage />);
             await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
 
             expect(await openRowMenu()).toBeNull();

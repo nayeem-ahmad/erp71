@@ -1,14 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ProductDemandsService } from './product-demands.service';
 import { assertWarehouseBelongsToTenant } from '../database/inventory.utils';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
 
 jest.mock('../database/inventory.utils', () => ({
     assertWarehouseBelongsToTenant: jest.fn(),
 }));
 
 describe('ProductDemandsService', () => {
+    const approvals = { requested: jest.fn().mockResolvedValue(undefined) };
     let service: ProductDemandsService;
     let db: any;
     let tx: any;
@@ -19,6 +21,7 @@ describe('ProductDemandsService', () => {
                 findFirst: jest.fn(),
                 create: jest.fn(),
                 update: jest.fn(),
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
             productDemandItem: {
                 deleteMany: jest.fn(),
@@ -38,7 +41,8 @@ describe('ProductDemandsService', () => {
         };
 
         const module: TestingModule = await Test.createTestingModule({
-            providers: [ProductDemandsService, { provide: DatabaseService, useValue: db }],
+            providers: [ProductDemandsService, { provide: DatabaseService, useValue: db },
+                { provide: ApprovalNotifier, useValue: approvals }],
         }).compile();
 
         service = module.get(ProductDemandsService);
@@ -148,9 +152,17 @@ describe('ProductDemandsService', () => {
             id: 'demand-1', status: 'DRAFT', requested_by: 'user-1',
             items: [{ id: 'item-1', product_id: 'prod-1', quantity_requested: 3 }],
         });
-        db.productDemand.update.mockResolvedValue({ id: 'demand-1', status: 'SUBMITTED' });
+        db.productDemand.update.mockResolvedValue({
+            id: 'demand-1', status: 'SUBMITTED', demand_number: 'DMD-0001', store_id: 'store-1', requested_by: 'user-1',
+            items: [{ id: 'item-1' }],
+        });
 
         await service.submit('tenant-1', 'demand-1', { userId: 'user-1' });
+
+        // The branch's approvers hear about it; the requester does not.
+        expect(approvals.requested).toHaveBeenCalledWith(
+            expect.objectContaining({ kind: 'PRODUCT_DEMAND', id: 'demand-1', storeId: 'store-1', requestedBy: 'user-1' }),
+        );
 
         expect(db.productDemand.update).toHaveBeenCalledWith({
             where: { id: 'demand-1' },
@@ -275,15 +287,24 @@ describe('ProductDemandsService', () => {
             where: { id: 'item-2' },
             data: { quantity_approved: 4 },
         });
-        expect(tx.productDemand.update).toHaveBeenCalledWith({
-            where: { id: 'demand-1' },
+        expect(tx.productDemand.updateMany).toHaveBeenCalledWith({
+            where: { id: 'demand-1', tenant_id: 'tenant-1', status: 'SUBMITTED' },
             data: expect.objectContaining({
                 status: 'APPROVED',
                 reviewed_by: 'approver-1',
                 review_note: 'Half now',
             }),
-            include: expect.any(Object),
         });
+    });
+
+    it('loses a race to another reviewer without touching the lines', async () => {
+        db.productDemand.findFirst.mockResolvedValue(submitted());
+        tx.productDemand.updateMany.mockResolvedValue({ count: 0 });
+
+        await expect(
+            service.review('tenant-1', 'demand-1', { status: 'REJECTED' }, 'approver-2'),
+        ).rejects.toThrow(ConflictException);
+        expect(tx.productDemandItem.update).not.toHaveBeenCalled();
     });
 
     it('zeroes every approved quantity on a rejection', async () => {

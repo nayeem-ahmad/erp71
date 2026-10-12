@@ -16,6 +16,7 @@ import {
     LeadEmailPresence,
     LeadPriority,
     LeadStatus,
+    NO_TAXONOMY_FILTER,
     OPEN_LEAD_STATUS_FILTER,
     OPEN_LEAD_STATUSES,
     staleLeadCutoff,
@@ -498,8 +499,10 @@ export class CrmLeadsService {
         if (opts.statusId) where.status_id = opts.statusId;
         // Filters carry a taxonomy row id. A stale bookmarked filter naming a
         // deleted row simply matches nothing, rather than erroring.
-        if (opts.source) where.source_id = opts.source;
-        if (opts.category) where.category_id = opts.category;
+        if (opts.source === NO_TAXONOMY_FILTER) where.source_id = null;
+        else if (opts.source) where.source_id = opts.source;
+        if (opts.category === NO_TAXONOMY_FILTER) where.category_id = null;
+        else if (opts.category) where.category_id = opts.category;
         if (opts.priority) where.priority = opts.priority;
         if (opts.assignedTo === UNASSIGNED_OWNER_FILTER) where.assigned_to = null;
         else if (opts.assignedTo) where.assigned_to = opts.assignedTo;
@@ -1061,7 +1064,8 @@ export class CrmLeadsService {
         });
     }
 
-    async convert(tenantId: string, id: string) {
+    /** `storeId`: the branch the new customer is added at — the header branch. */
+    async convert(tenantId: string, id: string, storeId?: string) {
         const lead = await this.db.lead.findFirst({ where: { id, tenant_id: tenantId } });
         if (!lead) throw new NotFoundException('Lead not found');
         if (lead.status === LeadStatus.CONVERTED) {
@@ -1084,7 +1088,7 @@ export class CrmLeadsService {
             phone: lead.mobile,
             email: lead.email ?? undefined,
             address: lead.address ?? undefined,
-        });
+        }, { storeId });
 
         await this.closeOutPlannedActivities(tenantId, id);
 

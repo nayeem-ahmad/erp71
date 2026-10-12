@@ -43,6 +43,11 @@ export async function resolveInlineCustomer(
     tx: DbLike,
     tenantId: string,
     draft: InlineCustomerDraft,
+    /**
+     * The document's branch: a new customer belongs to it. A reused one (same
+     * phone) keeps their own branch.
+     */
+    storeId: string,
 ): Promise<string> {
     const name = draft.name?.trim();
     if (!name) {
@@ -82,6 +87,7 @@ export async function resolveInlineCustomer(
                     phone,
                     email: draft.email?.trim() || undefined,
                     address: draft.address?.trim() || undefined,
+                    store_id: storeId,
                 },
                 select: { id: true },
             });

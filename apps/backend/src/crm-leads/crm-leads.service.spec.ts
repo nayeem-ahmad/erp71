@@ -5,7 +5,7 @@ import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { DatabaseService } from '../database/database.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
-import { LeadBulkAction, LeadStatus, OPEN_LEAD_STATUS_FILTER, UNASSIGNED_OWNER_FILTER } from './crm-leads.dto';
+import { LeadBulkAction, LeadStatus, NO_TAXONOMY_FILTER, OPEN_LEAD_STATUS_FILTER, UNASSIGNED_OWNER_FILTER } from './crm-leads.dto';
 import { AssetsService } from '../assets/assets.service';
 import { CrmPhotosService } from '../crm-photos/crm-photos.service';
 import { normalizeLeadMobile } from '@erp71/shared-types';
@@ -140,14 +140,14 @@ describe('CrmLeadsService', () => {
             customersService.create.mockResolvedValueOnce({ id: 'cust-1', name: 'Jane Doe', phone: '01700000000' });
             db.lead.update.mockResolvedValueOnce({ ...lead, status: LeadStatus.CONVERTED, converted_customer_id: 'cust-1', score: 100 });
 
-            const result = await service.convert('tenant-1', 'lead-1');
+            const result = await service.convert('tenant-1', 'lead-1', 'branch-a');
 
             expect(customersService.create).toHaveBeenCalledWith('tenant-1', {
                 name: 'Jane Doe',
                 phone: '01700000000',
                 email: 'jane@example.com',
                 address: 'Dhaka',
-            });
+            }, { storeId: 'branch-a' });
             expect(db.lead.update).toHaveBeenCalledWith({
                 where: { id: 'lead-1' },
                 data: {
@@ -1179,6 +1179,30 @@ describe('CrmLeadsService', () => {
             await service.findAll('tenant-1', {} as any);
 
             expect(db.lead.findMany.mock.calls[0][0].where).not.toHaveProperty('assigned_to');
+        });
+    });
+
+    describe('findAll — category and source filters', () => {
+        beforeEach(() => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+        });
+
+        it('filters to one category and one source by row id', async () => {
+            await service.findAll('tenant-1', { category: 'cat-1', source: 'src-1' } as any);
+
+            expect(db.lead.findMany.mock.calls[0][0].where).toEqual(
+                expect.objectContaining({ category_id: 'cat-1', source_id: 'src-1' }),
+            );
+        });
+
+        it('filters to leads with no category, or no source, when given the none sentinel', async () => {
+            await service.findAll('tenant-1', { category: NO_TAXONOMY_FILTER, source: NO_TAXONOMY_FILTER } as any);
+
+            const where = db.lead.findMany.mock.calls[0][0].where;
+            expect(where).toEqual(expect.objectContaining({ category_id: null, source_id: null }));
+            // The count must agree with the rows, or a board column's total lies.
+            expect(db.lead.count.mock.calls[0][0].where).toEqual(where);
         });
     });
 

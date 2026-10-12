@@ -21,6 +21,8 @@ const SIZES = {
     sm: 'w-8 h-8 text-xs',
     /** A comment or feed row: one line of name, one of text. */
     md: 'w-7 h-7 text-[11px]',
+    /** A record's identity bar, beside its name and badges. */
+    base: 'w-10 h-10 text-sm',
     lg: 'w-16 h-16 text-lg',
 } as const;
 

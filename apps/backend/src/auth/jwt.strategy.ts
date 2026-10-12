@@ -2,11 +2,15 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AUTH_SCOPE_APPLICANT, AUTH_SCOPE_STOREFRONT, resolveAuthScope } from './token-scope';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-    constructor(private db: DatabaseService) {
+    constructor(
+        private db: DatabaseService,
+        private authCache: AuthCacheService,
+    ) {
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
@@ -16,18 +20,27 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     async validate(payload: any) {
-        const user = await this.db.user.findUnique({
-            where: { id: payload.sub },
-            select: {
-                id: true,
-                email: true,
-                token_version: true,
-                storefront_token_version: true,
-                applicant_token_version: true,
-                is_platform_admin: true,
-                must_change_password: true,
-            },
-        });
+        // Every authenticated request on every surface starts here, so the row
+        // is kept in `AuthCacheService` rather than read each time. Every column
+        // below is one a write must invalidate on — the three token versions
+        // (sign-out, password change), the email, the platform-admin flag and
+        // the admin-set-password hold — and those writes call `invalidateUser`,
+        // which is what makes a sign-out or a demotion take effect on the very
+        // next request rather than after the TTL.
+        const user = await this.authCache.user(payload.sub, () =>
+            this.db.user.findUnique({
+                where: { id: payload.sub },
+                select: {
+                    id: true,
+                    email: true,
+                    token_version: true,
+                    storefront_token_version: true,
+                    applicant_token_version: true,
+                    is_platform_admin: true,
+                    must_change_password: true,
+                },
+            }),
+        );
 
         if (!user) throw new UnauthorizedException('User not found');
 

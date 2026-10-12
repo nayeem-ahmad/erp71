@@ -64,7 +64,22 @@ export class PaymentMethodsService {
       orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
     });
 
-    return paymentMethods.map((pm) => this.mapToResponse(pm));
+    // `account_id` has no relation to include, so the linked accounts come in
+    // one extra query. Entry screens show "posts to <account>" from it, and a
+    // link to a deleted account reads as no account.
+    const accountIds = [...new Set(paymentMethods.map((pm) => pm.account_id).filter((id): id is string => !!id))];
+    const accounts = accountIds.length
+      ? await this.db.account.findMany({
+        where: { tenant_id: tenantId, id: { in: accountIds } },
+        select: { id: true, name: true, code: true },
+      })
+      : [];
+    const byId = new Map(accounts.map((account) => [account.id, { id: account.id, name: account.name, code: account.code ?? null }]));
+
+    return paymentMethods.map((pm) => ({
+      ...this.mapToResponse(pm),
+      account: (pm.account_id && byId.get(pm.account_id)) || null,
+    }));
   }
 
   /**

@@ -533,7 +533,7 @@ export class TenantBlogService {
     // Scheduling
     // -----------------------------------------------------------------------
 
-    @Cron(CronExpression.EVERY_HOUR)
+    @Cron(CronExpression.EVERY_HOUR, { timeZone: 'Asia/Dhaka' })
     async publishDueScheduledPosts(): Promise<number> {
         const due = await this.db.tenantBlogPost.findMany({
             where: {

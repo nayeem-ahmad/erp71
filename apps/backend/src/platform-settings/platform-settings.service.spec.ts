@@ -41,6 +41,7 @@ describe('PlatformSettingsService', () => {
                 projects: false,
                 platformProjects: true,
                 platformAccounting: true,
+                appShell: false,
             });
         });
 
@@ -64,7 +65,19 @@ describe('PlatformSettingsService', () => {
                 projects: false,
                 platformProjects: true,
                 platformAccounting: true,
+                appShell: false,
             });
+        });
+
+        it('keeps the app shell off until an operator turns it on', async () => {
+            await expect(service.isFeatureEnabled('appShell')).resolves.toBe(false);
+        });
+
+        it('reads the app shell switch once it is stored', async () => {
+            db.platformSetting.findMany.mockResolvedValue([
+                { group: 'general', key: 'app_shell_enabled', value: 'true', is_secret: false },
+            ]);
+            await expect(service.isFeatureEnabled('appShell')).resolves.toBe(true);
         });
 
         it('lets an operator switch off the platform project workspace', async () => {

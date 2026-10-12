@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { User, Phone, Mail, Calendar, Briefcase, KeyRound, LinkIcon, Unlink, Save } from 'lucide-react';
 import { api, type EmployeeLoginState } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { displayEmail } from '@erp71/shared-types';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -104,7 +105,7 @@ export default function EmployeeDetailPage() {
     async function fetchTenantUsers() {
         try {
             // Get tenant users via the invitations/users context from auth/me
-            const me = await api.getMe();
+            const me = await fetchMe();
             const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
             const tenant = me?.tenants?.find((t: any) => t.id === tenantId) || me?.tenants?.[0];
             setTenantUsers(tenant?.users ?? []);

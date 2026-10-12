@@ -8,18 +8,8 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
-import {
-    Alert,
-    Button,
-    Field,
-    FormFooter,
-    Input,
-    PageShell,
-    Select,
-    StatusBadge,
-    Textarea,
-    type StatusBadgeTone,
-} from '@/components/ui';
+import { BranchFilter, Alert, Button, Field, FormFooter, Input, PageShell, Select, StatusBadge, Textarea, type StatusBadgeTone } from '@/components/ui';
+import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -87,6 +77,7 @@ const columnHelper = createColumnHelper<ProductDemand>();
  */
 export default function ProductDemandsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.inventoryDemands;
     const toast = useToastStore((state) => state.show);
     const { permissions, role, ready: permissionsReady } = useTenantPlanFeatures();
@@ -102,7 +93,9 @@ export default function ProductDemandsPage() {
 
     const [statusFilter, setStatusFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
-    const [warehouseFilter, setWarehouseFilter] = useState('');
+    // A warehouse belongs to one branch: the filter offers the chosen branch's
+    // own (every one under "All branches") and is cleared when the branch changes.
+    const [warehouseFilter, setWarehouseFilter] = useBranchBoundState(branch.apiStoreId);
     const [mineOnly, setMineOnly] = useState(false);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
@@ -125,6 +118,7 @@ export default function ProductDemandsPage() {
     const [acting, setActing] = useState(false);
 
     const loadDemands = useCallback(async () => {
+        if (!branch.ready) return;
         setLoading(true);
         setError('');
         try {
@@ -135,14 +129,18 @@ export default function ProductDemandsPage() {
                 mine: mineOnly || undefined,
                 from: applyCreatedRangeQuery(createdRange).createdFrom,
                 to: applyCreatedRangeQuery(createdRange).createdTo,
+                storeId: branch.apiStoreId,
             });
             setDemands(data ?? []);
         } catch (err: any) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             setError(err?.message || copy.loadFailed);
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, priorityFilter, warehouseFilter, mineOnly, createdRange, copy.loadFailed]);
+        // `branch` is a fresh object every render; what it asks for is these two.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [statusFilter, priorityFilter, warehouseFilter, mineOnly, createdRange, copy.loadFailed, branch.ready, branch.apiStoreId]);
 
     useEffect(() => { void loadDemands(); }, [loadDemands]);
 
@@ -161,6 +159,12 @@ export default function ProductDemandsPage() {
             }
         })();
     }, []);
+
+    const filterBranchId = branchOrEmpty(branch.apiStoreId);
+    const filterWarehouses = useMemo(
+        () => (filterBranchId ? warehouses.filter((warehouse: any) => warehouse.store_id === filterBranchId) : warehouses),
+        [warehouses, filterBranchId],
+    );
 
     const productName = useCallback(
         (item: DemandItem) => item.product?.name ?? products.find((p) => p.id === item.product_id)?.name ?? '—',
@@ -392,11 +396,16 @@ export default function ProductDemandsPage() {
                     copy.title,
                     'inventory',
                 )}
-                actions={permissionsReady && canCreate ? (
-                    <Button onClick={() => openForm(null)} icon={<Plus className="h-4 w-4" />}>
-                        {copy.newDemand}
-                    </Button>
-                ) : null}
+                actions={(
+                    <>
+                        <BranchFilter scope={branch} />
+                        {permissionsReady && canCreate ? (
+                            <Button onClick={() => openForm(null)} icon={<Plus className="h-4 w-4" />}>
+                                {copy.newDemand}
+                            </Button>
+                        ) : null}
+                    </>
+                )}
             />
 
             {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -416,8 +425,8 @@ export default function ProductDemandsPage() {
                 </Select>
                 <Select value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)} aria-label={copy.columns.warehouse}>
                     <option value="">{copy.filters.allWarehouses}</option>
-                    {warehouses.map((warehouse: any) => (
-                        <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
+                    {filterWarehouses.map((warehouse: any) => (
+                        <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, filterWarehouses)}</option>
                     ))}
                 </Select>
                 <label className="flex min-h-touch items-center gap-2 text-sm text-gray-700">

@@ -1,5 +1,14 @@
 import type { LineItem } from '@/lib/hooks/useNewSaleCart';
 import { routes } from '@/lib/routes';
+import { grossUpUnitPrice, netUnitPrice, resolveTaxRate } from '@erp71/shared-types';
+import {
+    enteredBeforeVat,
+    enteredDiscount,
+    enteredUnitPrice,
+    productTaxRates,
+    saleLineRates,
+} from '@/lib/sale-vat';
+import type { VatPricing } from '../components/SaleEntryLayout';
 
 /**
  * A document the entry screen was opened from: a quotation or sales order via
@@ -60,6 +69,9 @@ const lineFrom = (
     subgroup: item.product?.subgroup?.name,
     quantity: item.quantity,
     discount: 0,
+    // The product's own VAT/SD rates, so the new sale taxes the line as the
+    // catalogue says; the shop default applies where it has none.
+    ...productTaxRates(item.product),
     // Neither document's payload carries stock rows, so leave availability
     // unknown rather than claiming zero — same as a voice-entry line.
     availableQty: undefined,
@@ -68,9 +80,32 @@ const lineFrom = (
     warehouseId: item.warehouse_id ?? undefined,
 });
 
+/**
+ * A quotation or order line's price in the terms the new sale is entered in.
+ *
+ * Those documents store their lines as typed, VAT-inclusive or before VAT
+ * (`prices_include_vat`). When the shop has since switched how it prices, the
+ * price is converted with the product's rates so the customer is charged what
+ * the document said. A foreign-currency proforma is an export price and is
+ * taken as it stands.
+ */
+function inTargetTerms(line: LineItem, docBeforeVat: boolean, pricing: VatPricing, foreign: boolean): LineItem {
+    const targetBeforeVat = !pricing.pricesIncludeVat;
+    if (foreign || docBeforeVat === targetBeforeVat) return line;
+    const rates = {
+        vatRate: resolveTaxRate(line.vatRate, pricing.defaultVatRate),
+        sdRate: resolveTaxRate(line.sdRate, 0),
+    };
+    return {
+        ...line,
+        price: docBeforeVat ? grossUpUnitPrice(line.price, rates) : netUnitPrice(line.price, rates),
+    };
+}
+
 /** Cart contents for a sale being raised from a quotation or proforma. */
-export function seedFromQuotation(quote: any): SeededSale {
+export function seedFromQuotation(quote: any, pricing: VatPricing): SeededSale {
     const rate = exchangeRateOf(quote);
+    const foreign = !!quote.currency && quote.currency !== 'BDT';
 
     return {
         source: {
@@ -82,7 +117,9 @@ export function seedFromQuotation(quote: any): SeededSale {
             currency: quote.currency || 'BDT',
             amountPaid: 0,
         },
-        items: (quote.items ?? []).map((item: any) => lineFrom(item, item.unit_price, rate, 'Item')),
+        items: (quote.items ?? []).map((item: any) =>
+            inTargetTerms(lineFrom(item, item.unit_price, rate, 'Item'), enteredBeforeVat(quote), pricing, foreign),
+        ),
         customer: quote.customer ? { ...quote.customer, id: quote.customer_id } : null,
         description: quote.notes || '',
     };
@@ -99,12 +136,32 @@ export function seedFromQuotation(quote: any): SeededSale {
  * subtotal comes across as a single rounding adjustment — the same thing the
  * detail screen does, and for the same reason: the original discount/VAT/
  * transport split is not persisted and must not be invented here.
+ *
+ * A shop that enters prices before VAT gets the copy in those terms instead:
+ * each stored (VAT-inclusive) price is taken back with the rates its line was
+ * taxed at, and the gap comes across as a discount, which the screen then
+ * adds VAT on top of again.
  */
-export function seedFromSale(sale: any): SeededSale & { rounding: number; warehouseId?: string } {
-    const items: LineItem[] = (sale.items ?? []).map((item: any) =>
-        lineFrom(item, item.price_at_sale, 1, 'Item'),
-    );
+export function seedFromSale(
+    sale: any,
+    pricing: VatPricing,
+): SeededSale & { rounding: number; discountAmount: number; warehouseId?: string } {
+    const beforeVat = !pricing.pricesIncludeVat;
+    const items: LineItem[] = (sale.items ?? []).map((item: any) => {
+        const rates = saleLineRates(item, pricing.defaultVatRate);
+        return {
+            ...lineFrom(item, item.price_at_sale, 1, 'Item'),
+            ...(beforeVat ? { price: enteredUnitPrice(item, pricing.defaultVatRate) } : {}),
+            vatRate: rates.vatRate,
+            sdRate: rates.sdRate,
+        };
+    });
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const total = Number(sale.total_amount ?? 0);
+    const grossLines = (sale.items ?? []).reduce(
+        (sum: number, item: any) => sum + item.quantity * Number(item.price_at_sale ?? 0),
+        0,
+    );
 
     return {
         source: {
@@ -119,14 +176,15 @@ export function seedFromSale(sale: any): SeededSale & { rounding: number; wareho
         items,
         customer: sale.customer ? { ...sale.customer, id: sale.customer_id } : null,
         description: sale.note || '',
-        rounding: Number((Number(sale.total_amount ?? 0) - subtotal).toFixed(2)),
+        rounding: beforeVat ? 0 : Number((total - subtotal).toFixed(2)),
+        discountAmount: beforeVat ? enteredDiscount(grossLines, subtotal, total) : 0,
         // A copy sells out of the same place unless the user says otherwise.
         warehouseId: sale.warehouse_id ?? undefined,
     };
 }
 
 /** Cart contents for a sale being raised from a sales order. */
-export function seedFromSalesOrder(order: any): SeededSale {
+export function seedFromSalesOrder(order: any, pricing: VatPricing): SeededSale {
     return {
         source: {
             kind: 'salesOrder',
@@ -140,7 +198,9 @@ export function seedFromSalesOrder(order: any): SeededSale {
             currency: 'BDT',
             amountPaid: Number(order.amount_paid ?? 0),
         },
-        items: (order.items ?? []).map((item: any) => lineFrom(item, item.price_at_order, 1, 'Item')),
+        items: (order.items ?? []).map((item: any) =>
+            inTargetTerms(lineFrom(item, item.price_at_order, 1, 'Item'), enteredBeforeVat(order), pricing, false),
+        ),
         customer: order.customer ? { ...order.customer, id: order.customer_id } : null,
         description: '',
     };

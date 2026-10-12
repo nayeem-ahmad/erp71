@@ -11,6 +11,7 @@ import {
     MaxLength,
     Min,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { Type } from 'class-transformer';
 import { PaginationDto } from '../common/pagination.dto';
 
@@ -108,7 +109,7 @@ export class ListInvestorsQueryDto extends PaginationDto {
     status?: (typeof INVESTOR_STATUSES)[number];
 
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -179,7 +180,7 @@ export class ListProfitRunsQueryDto extends PaginationDto {
     year?: number;
 
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 }
 
@@ -195,4 +196,11 @@ export class PayProfitShareDto {
     @IsOptional()
     @IsString()
     notes?: string;
+}
+
+/** The investors summary: one branch, `all`, or (omitted) the caller's default. */
+export class InvestorSummaryQueryDto {
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 }

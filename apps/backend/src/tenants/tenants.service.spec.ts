@@ -2,11 +2,13 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 
 describe('TenantsService', () => {
     let service: TenantsService;
+    let invalidateTenant: jest.SpyInstance;
 
     const db = {
         tenant: {
@@ -33,12 +35,14 @@ describe('TenantsService', () => {
             providers: [
                 TenantsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 { provide: TenantTimezoneService, useValue: timezones },
                 { provide: PlanEntitlementsService, useValue: planEntitlements },
             ],
         }).compile();
 
         service = module.get(TenantsService);
+        invalidateTenant = jest.spyOn(module.get(AuthCacheService), 'invalidateTenant');
     });
 
     describe('password policy', () => {
@@ -244,6 +248,19 @@ describe('TenantsService', () => {
             expect.objectContaining({ data: { timezone: 'America/New_York' } }),
         );
         expect(timezones.invalidate).toHaveBeenCalledWith('tenant-1');
+        // The zone also rides on every member's cached membership, which
+        // `TenantInterceptor` primes the timezone cache from; left alone it would
+        // put the old zone straight back.
+        expect(invalidateTenant).toHaveBeenCalledWith('tenant-1');
+    });
+
+    it('leaves the auth cache alone when the timezone is not part of the change', async () => {
+        db.tenant.findUnique.mockResolvedValue({ localization_enabled: true, secondary_locale: 'bn' });
+        db.tenant.update.mockResolvedValue({ default_locale: 'bn' });
+
+        await service.updateLocalizationSettings('tenant-1', { default_locale: 'bn' } as any);
+
+        expect(invalidateTenant).not.toHaveBeenCalled();
     });
 
     it('sets the timezone even when the language switcher is disabled', async () => {
@@ -279,6 +296,30 @@ describe('TenantsService', () => {
      * The settings form hides it when Mushak is off, but the form is only a
      * convenience — the rule has to hold at the API.
      */
+    describe('how prices are entered', () => {
+        const savedData = () => db.tenant.update.mock.calls[0][0].data;
+
+        it('stores "VAT added on top" and reads it back with the other tax settings', async () => {
+            db.tenant.update.mockResolvedValue({ prices_include_vat: false });
+
+            const result = await service.updateTaxSettings('tenant-1', { prices_include_vat: false } as any);
+
+            expect(savedData().prices_include_vat).toBe(false);
+            expect(db.tenant.update.mock.calls[0][0].select).toEqual(
+                expect.objectContaining({ prices_include_vat: true }),
+            );
+            expect(result).toEqual(expect.objectContaining({ prices_include_vat: false }));
+        });
+
+        it('leaves the setting alone when the request does not mention it', async () => {
+            db.tenant.update.mockResolvedValue({});
+
+            await service.updateTaxSettings('tenant-1', { default_vat_rate: 15 } as any);
+
+            expect(savedData()).not.toHaveProperty('prices_include_vat');
+        });
+    });
+
     describe('mushak POS receipt format', () => {
         const savedData = () => db.tenant.update.mock.calls[0][0].data;
 

@@ -3,15 +3,17 @@
 import { useEffect, useState } from 'react';
 import { Trash2, PlugZap } from 'lucide-react';
 import Link from 'next/link';
-import { api, fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { isOwner } from '@/lib/permissions';
 import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import { toast } from '@/lib/toast';
-import { Alert, Button, ConfirmDialog, PageShell } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, Field, PageShell, Select } from '@/components/ui';
 import { getWorkspaceItem } from '@/lib/session-store';
+import ClearDataGroups, { allGroups, keptGroups, type DataGroup } from '@/components/data-clear/ClearDataGroups';
 import DemoDataCard from './DemoDataCard';
 
 export default function DataManagementPage() {
@@ -21,6 +23,17 @@ export default function DataManagementPage() {
     const [role, setRole] = useState<string | null>(null);
     const [clearingMode, setClearingMode] = useState<'transactions' | 'all' | null>(null);
     const [clearDialog, setClearDialog] = useState<{ mode: 'transactions' | 'all' } | null>(null);
+    // The branches Clear Data can be narrowed to; `''` is the whole shop.
+    const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+    const [branchId, setBranchId] = useState('');
+    const branch = branches.find((b) => b.id === branchId) ?? null;
+    // What Clear All Data will delete — every group, until the owner unticks one.
+    const [clearGroups, setClearGroups] = useState<Set<DataGroup>>(() => allGroups('tenant'));
+
+    const openClear = (mode: 'transactions' | 'all') => {
+        setClearGroups(allGroups(branch ? 'branch' : 'tenant'));
+        setClearDialog({ mode });
+    };
 
     // Bumped after a clear so the demo card remounts and refetches: clearing
     // wipes the batch history the card is showing.
@@ -32,19 +45,39 @@ export default function DataManagementPage() {
     const { externalImport } = usePlatformFeatures();
 
     useEffect(() => {
-        api.getMe().then((me: any) => {
+        fetchMe().then((me: any) => {
             const tenantId = typeof window !== 'undefined' ? getWorkspaceItem('tenant_id') : null;
             const tenant = me?.tenants?.find((entry: any) => entry.id === tenantId) ?? me?.tenants?.[0];
             setRole(tenant?.role ?? null);
+            setBranches(Array.isArray(tenant?.stores) ? tenant.stores : []);
         }).catch(() => null);
     }, []);
 
+    const clearedMessage = (
+        mode: 'transactions' | 'all',
+        kept?: { customers: number; suppliers: number },
+    ): string => {
+        if (!branch) return mode === 'all' ? dm.clearData.clearedAll : dm.clearData.clearedTransactions;
+        if (mode === 'transactions') return dm.clearData.clearedBranch.replace('{branch}', branch.name);
+        const message = dm.clearData.clearedBranchAll.replace('{branch}', branch.name);
+        if (!kept || (kept.customers === 0 && kept.suppliers === 0)) return message;
+        const note = dm.clearData.groups.keptParties
+            .replace('{customers}', String(kept.customers))
+            .replace('{suppliers}', String(kept.suppliers));
+        return `${message} ${note}`;
+    };
+
     const handleClear = async () => {
         if (!clearDialog) return;
-        setClearingMode(clearDialog.mode);
+        const { mode } = clearDialog;
+        setClearingMode(mode);
         try {
-            await fetchWithAuth(`/tenants/data?mode=${clearDialog.mode}`, { method: 'DELETE' });
-            toast.success(clearDialog.mode === 'all' ? dm.clearData.clearedAll : dm.clearData.clearedTransactions);
+            const query = new URLSearchParams({ mode });
+            if (branch) query.set('storeId', branch.id);
+            const keep = mode === 'all' ? keptGroups(branch ? 'branch' : 'tenant', clearGroups) : [];
+            if (keep.length) query.set('keep', keep.join(','));
+            const result = await fetchWithAuth(`/tenants/data?${query}`, { method: 'DELETE' });
+            toast.success(clearedMessage(mode, result?.kept));
             setClearDialog(null);
             setDemoCardKey((key) => key + 1); // Clear Data also resets the demo-batch history.
         } catch (err: any) {
@@ -53,6 +86,17 @@ export default function DataManagementPage() {
             setClearingMode(null);
         }
     };
+
+    let clearPrompt: string;
+    if (clearDialog?.mode === 'all') {
+        clearPrompt = branch
+            ? dm.clearData.branchAllConfirm.replaceAll('{branch}', branch.name)
+            : dm.clearData.allConfirm;
+    } else {
+        clearPrompt = branch
+            ? dm.clearData.branchTransactionsConfirm.replaceAll('{branch}', branch.name)
+            : dm.clearData.transactionsConfirm;
+    }
 
     return (
         <PageShell maxWidth="full">
@@ -110,16 +154,35 @@ export default function DataManagementPage() {
                                 </div>
                             </div>
 
+                            {branches.length > 1 ? (
+                                <Field label={dm.clearData.branchLabel} htmlFor="clear-data-branch" className="sm:w-64">
+                                    <Select
+                                        id="clear-data-branch"
+                                        value={branchId}
+                                        onChange={(e) => setBranchId(e.target.value)}
+                                        disabled={!!clearingMode}
+                                        className="w-full"
+                                    >
+                                        <option value="">{dm.clearData.allBranches}</option>
+                                        {branches.map((b) => (
+                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            ) : null}
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {/* Transactions only */}
                                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
                                     <div>
                                         <p className="text-sm font-bold text-amber-900">{dm.clearData.transactionsTitle}</p>
-                                        <p className="text-xs text-amber-700 mt-1">{dm.clearData.transactionsDesc}</p>
+                                        <p className="text-xs text-amber-700 mt-1">
+                                            {branch ? dm.clearData.branchTransactionsDesc : dm.clearData.transactionsDesc}
+                                        </p>
                                     </div>
                                     <Button
                                         variant="secondary"
-                                        onClick={() => setClearDialog({ mode: 'transactions' })}
+                                        onClick={() => openClear('transactions')}
                                         disabled={!!clearingMode}
                                         loading={clearingMode === 'transactions'}
                                         icon={clearingMode !== 'transactions' ? <Trash2 className="w-3.5 h-3.5" /> : undefined}
@@ -133,11 +196,13 @@ export default function DataManagementPage() {
                                 <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
                                     <div>
                                         <p className="text-sm font-bold text-red-900">{dm.clearData.allTitle}</p>
-                                        <p className="text-xs text-red-700 mt-1">{dm.clearData.allDesc}</p>
+                                        <p className="text-xs text-red-700 mt-1">
+                                            {branch ? dm.clearData.branchAllDesc : dm.clearData.allDesc}
+                                        </p>
                                     </div>
                                     <Button
                                         variant="secondary"
-                                        onClick={() => setClearDialog({ mode: 'all' })}
+                                        onClick={() => openClear('all')}
                                         disabled={!!clearingMode}
                                         loading={clearingMode === 'all'}
                                         icon={clearingMode !== 'all' ? <Trash2 className="w-3.5 h-3.5" /> : undefined}
@@ -156,7 +221,7 @@ export default function DataManagementPage() {
             <ConfirmDialog
                 open={!!clearDialog}
                 title={dm.dialog.title}
-                prompt={clearDialog?.mode === 'all' ? dm.clearData.allConfirm : dm.clearData.transactionsConfirm}
+                prompt={clearPrompt}
                 expected={clearDialog?.mode === 'all' ? dm.clearData.confirmAll : dm.clearData.confirmTransactions}
                 typePromptTemplate={dm.dialog.typePrompt}
                 confirmLabel={dm.dialog.confirm}
@@ -166,7 +231,16 @@ export default function DataManagementPage() {
                 danger={clearDialog?.mode === 'all'}
                 onConfirm={handleClear}
                 onCancel={() => setClearDialog(null)}
-            />
+            >
+                {clearDialog?.mode === 'all' ? (
+                    <ClearDataGroups
+                        scope={branch ? 'branch' : 'tenant'}
+                        deleting={clearGroups}
+                        onChange={setClearGroups}
+                        disabled={!!clearingMode}
+                    />
+                ) : null}
+            </ConfirmDialog>
         </PageShell>
     );
 }

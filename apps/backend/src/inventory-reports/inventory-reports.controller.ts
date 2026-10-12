@@ -4,6 +4,7 @@ import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     GetInventoryValuationDto,
     GetProductTransactionHistoryDto,
@@ -22,36 +23,49 @@ import { INVENTORY_REPORT_READ } from '../auth/permission-sets';
 @UseInterceptors(TenantInterceptor)
 @RequiresFeature('premiumInventoryReports')
 export class InventoryReportsController {
-    constructor(private readonly service: InventoryReportsService) {}
+    constructor(
+        private readonly service: InventoryReportsService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
+
+    /**
+     * The branch the report covers, checked against the caller's access. A
+     * `warehouseId` keeps combining with it in the service, so a warehouse
+     * outside the resolved branch reports nothing rather than another branch.
+     */
+    private async scoped<T extends { storeId?: string }>(tenant: TenantContext, query: T): Promise<T> {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: INVENTORY_REPORT_READ });
+        return { ...query, storeId };
+    }
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('reorder-suggestions')
-    getReorderSuggestions(@Tenant() tenant: TenantContext, @Query() query: GetReorderSuggestionsDto) {
-        return this.service.getReorderSuggestions(tenant.tenantId, query);
+    async getReorderSuggestions(@Tenant() tenant: TenantContext, @Query() query: GetReorderSuggestionsDto) {
+        return this.service.getReorderSuggestions(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('valuation')
-    getInventoryValuation(@Tenant() tenant: TenantContext, @Query() query: GetInventoryValuationDto) {
-        return this.service.getInventoryValuation(tenant.tenantId, query);
+    async getInventoryValuation(@Tenant() tenant: TenantContext, @Query() query: GetInventoryValuationDto) {
+        return this.service.getInventoryValuation(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('stock-on-hand')
-    getStockOnHand(@Tenant() tenant: TenantContext, @Query() query: GetStockOnHandDto) {
-        return this.service.getStockOnHand(tenant.tenantId, query);
+    async getStockOnHand(@Tenant() tenant: TenantContext, @Query() query: GetStockOnHandDto) {
+        return this.service.getStockOnHand(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('stock-aging')
-    getStockAging(@Tenant() tenant: TenantContext, @Query() query: GetStockAgingDto) {
-        return this.service.getStockAging(tenant.tenantId, query);
+    async getStockAging(@Tenant() tenant: TenantContext, @Query() query: GetStockAgingDto) {
+        return this.service.getStockAging(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('shrinkage-summary')
-    getShrinkageSummary(@Tenant() tenant: TenantContext, @Query() query: GetShrinkageSummaryDto) {
-        return this.service.getShrinkageSummary(tenant.tenantId, query);
+    async getShrinkageSummary(@Tenant() tenant: TenantContext, @Query() query: GetShrinkageSummaryDto) {
+        return this.service.getShrinkageSummary(tenant.tenantId, await this.scoped(tenant, query));
     }
 
     /**
@@ -61,7 +75,7 @@ export class InventoryReportsController {
      */
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('product-transaction-history')
-    getProductTransactionHistory(@Tenant() tenant: TenantContext, @Query() query: GetProductTransactionHistoryDto) {
-        return this.service.getProductTransactionHistory(tenant.tenantId, query, tenant.timezone);
+    async getProductTransactionHistory(@Tenant() tenant: TenantContext, @Query() query: GetProductTransactionHistoryDto) {
+        return this.service.getProductTransactionHistory(tenant.tenantId, await this.scoped(tenant, query), tenant.timezone);
     }
 }

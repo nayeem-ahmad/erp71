@@ -24,6 +24,12 @@
  * The replay uses the same `applyToPool` the live system does — there is no
  * second implementation of the averaging rules to drift out of step.
  *
+ * Costs set by hand (ProductCostAdjustment — an opening cost, a correction, a
+ * write-down) are not stock movements but move the pool all the same, so they
+ * are replayed in time order alongside the movements through the same
+ * `applyCostAdjustmentToPool` the live path uses. Without that, a rebuild would
+ * silently undo every cost someone set on the Product Costs screen.
+ *
  * Report-only by default. Read the summary, then re-run with --apply.
  *
  * Usage:
@@ -37,7 +43,11 @@ import { resolve } from 'node:path';
 config({ path: resolve(__dirname, '../../../.env') });
 
 import { PrismaClient } from '@prisma/client';
-import { applyToPool, type CostPool } from '../../../apps/backend/src/database/product-cost.utils';
+import {
+    applyCostAdjustmentToPool,
+    applyToPool,
+    type CostPool,
+} from '../../../apps/backend/src/database/product-cost.utils';
 
 const prisma = new PrismaClient();
 
@@ -91,6 +101,7 @@ async function backfillTenant(tenantId: string, tenantName: string): Promise<Ten
         select: {
             id: true,
             product_id: true,
+            created_at: true,
             movement_type: true,
             quantity_delta: true,
             unit_cost: true,
@@ -99,13 +110,41 @@ async function backfillTenant(tenantId: string, tenantName: string): Promise<Ten
         },
     });
 
+    const adjustments = await prisma.productCostAdjustment.findMany({
+        where: { tenant_id: tenantId },
+        orderBy: [{ product_id: 'asc' }, { created_at: 'asc' }, { id: 'asc' }],
+        select: { product_id: true, new_cost: true, created_at: true },
+    });
+    // Per product, oldest first; consumed as the movement walk passes them.
+    const pendingAdjustments = new Map<string, { newCost: number; at: Date }[]>();
+    for (const a of adjustments) {
+        const list = pendingAdjustments.get(a.product_id) ?? [];
+        list.push({ newCost: Number(a.new_cost), at: a.created_at });
+        pendingAdjustments.set(a.product_id, list);
+    }
+
     const pools = new Map<string, CostPool>();
+    // Apply every adjustment for a product made up to `until` (all of them
+    // when omitted). An adjustment stamped the same instant as a movement is
+    // applied after it: the live path reads stock on hand, so it sees the
+    // movement that committed alongside it.
+    const applyAdjustments = (productId: string, until?: Date) => {
+        const list = pendingAdjustments.get(productId);
+        if (!list) return;
+        let pool = pools.get(productId) ?? { avgCost: null, qtyOnHand: 0 };
+        while (list.length > 0 && (until === undefined || list[0].at < until)) {
+            pool = applyCostAdjustmentToPool(pool, list.shift()!.newCost);
+        }
+        pools.set(productId, pool);
+        if (list.length === 0) pendingAdjustments.delete(productId);
+    };
     // Keyed sale+product so a later edit overwrites the cost an earlier
     // movement assigned — the SaleItem rows reflect the latest edit, so the
     // last issue for that pair is the one that describes them.
     const restatements = new Map<string, Restatement>();
 
     for (const m of movements) {
+        applyAdjustments(m.product_id, m.created_at);
         const pool = pools.get(m.product_id) ?? { avgCost: null, qtyOnHand: 0 };
 
         let unitCost: number | null = m.unit_cost === null ? null : Number(m.unit_cost);
@@ -137,6 +176,11 @@ async function backfillTenant(tenantId: string, tenantName: string): Promise<Ten
         }
 
         pools.set(m.product_id, outcome.pool);
+    }
+    // Adjustments after a product's last movement, and those for products
+    // that never moved at all.
+    for (const productId of [...pendingAdjustments.keys()]) {
+        applyAdjustments(productId);
     }
 
     const costed = [...pools.entries()].filter(([, pool]) => pool.avgCost !== null);

@@ -47,7 +47,11 @@ export interface ChatToolContext {
     storeId?: string;
     /** The workspace's IANA zone. Any tool that filters on calendar days must pass it on. */
     timezone: string;
-    /** Every store in the tenant — the allow-list for a model-supplied `storeId`. */
+    /**
+     * The branches the caller may use — every store in the tenant for an owner,
+     * the member's own branches otherwise. The allow-list for a model-supplied
+     * `storeId`.
+     */
     stores: Array<{ id: string; name: string }>;
     /** True when the caller may see figures spanning every branch at once. */
     hasConsolidatedAccess?: boolean;
@@ -165,16 +169,47 @@ export function page<T>(rows: T[], options: PageOptions = {}) {
 }
 
 /**
- * Only lets through a store id that actually belongs to this tenant. A bad id is
- * dropped (widening to tenant-wide) rather than passed to Prisma, and the model
- * is told, so it does not report a filtered figure as branch-specific.
+ * A store id that matches no row: what a member with no branch is scoped to,
+ * so a filter on it returns nothing instead of being dropped.
+ */
+export const NO_BRANCH = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Only lets through a store id the member may use: `ctx.stores` is every
+ * branch for an owner and the member's own branches for everyone else (see
+ * `ChatService`). Same rule as `BranchScopeService` on the HTTP reports:
+ *
+ * - a named branch outside that list is dropped, and the model is told, so it
+ *   does not report a filtered figure as branch-specific;
+ * - with no branch named — or a dropped one — a caller who may see the whole
+ *   company (owner, or VIEW_CONSOLIDATED_REPORTS) gets the whole business, and
+ *   anyone else gets their current branch, never every branch.
  */
 export function resolveStoreId(ctx: ChatToolContext, requested?: string): { storeId?: string; note?: string } {
-    if (!requested) return {};
-    const match = ctx.stores.find((s) => s.id === requested);
+    const match = requested ? ctx.stores.find((s) => s.id === requested) : undefined;
     if (match) return { storeId: match.id };
+
+    const canSeeAll = ctx.userRole === 'OWNER' || Boolean(ctx.hasConsolidatedAccess);
+    if (canSeeAll) {
+        if (!requested) return {};
+        return {
+            note: `Unknown branch id "${requested}" — this result covers the whole business, not one branch.`,
+        };
+    }
+
+    const own = ctx.storeId ?? (ctx.stores.length === 1 ? ctx.stores[0].id : undefined);
+    const ownName = ctx.stores.find((s) => s.id === own)?.name;
+    if (!own) {
+        // No branch to fall back to. Report nothing rather than every branch.
+        return {
+            storeId: NO_BRANCH,
+            note: 'You have no branch selected, so this result is empty. Pick a branch and ask again.',
+        };
+    }
+    if (!requested) return { storeId: own };
     return {
-        note: `Unknown branch id "${requested}" — this result covers the whole business, not one branch.`,
+        storeId: own,
+        note: `Branch id "${requested}" is not one you can use — this result covers ${ownName ?? 'your current branch'} only.`,
     };
 }
 

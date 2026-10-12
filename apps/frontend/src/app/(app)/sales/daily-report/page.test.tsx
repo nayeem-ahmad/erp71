@@ -17,6 +17,9 @@ jest.mock('@/lib/i18n', () => {
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DailyReportPage from './page';
 import type { DailyReport } from '@/lib/daily-report';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 const quietPayload: DailyReport = {
     tenantName: 'Karim Electronics',
@@ -128,6 +131,7 @@ jest.mock('@/lib/hooks/useSalePrintPrefs', () => ({
 describe('DailyReportPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getDailyReport.mockResolvedValue(quietPayload);
     });
@@ -161,5 +165,18 @@ describe('DailyReportPage', () => {
         await waitFor(() => expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: /share/i }));
         expect(screen.getByRole('textbox')).toHaveValue(quietPayload.whatsappText);
+    });
+
+    it('reads the header branch, never all branches, and follows the filter', async () => {
+        const { api } = require('@/lib/api');
+        render(<DailyReportPage />);
+        await waitFor(() => expect(api.getDailyReport).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })));
+        expect(screen.queryByRole('option', { name: 'All branches' })).not.toBeInTheDocument();
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() =>
+            expect(api.getDailyReport).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-2' })),
+        );
     });
 });

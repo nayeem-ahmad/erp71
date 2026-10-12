@@ -3,9 +3,9 @@ import { join } from 'path';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HISTORY_LIMIT, RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { DatabaseService } from '../database/database.service';
-import { SprintSnapshotService } from './sprint-snapshot.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 
-const snapshots = { refresh: jest.fn().mockResolvedValue(undefined) };
+const burndown = { record: jest.fn().mockResolvedValue(undefined) };
 
 describe('RemainingHoursService', () => {
     let service: RemainingHoursService;
@@ -24,7 +24,7 @@ describe('RemainingHoursService', () => {
             providers: [
                 RemainingHoursService,
                 { provide: DatabaseService, useValue: db },
-                { provide: SprintSnapshotService, useValue: snapshots },
+                { provide: BurndownRecorder, useValue: burndown },
             ],
         }).compile();
 
@@ -59,16 +59,16 @@ describe('RemainingHoursService', () => {
     });
 
     describe('write', () => {
-        beforeEach(() => snapshots.refresh.mockClear());
+        beforeEach(() => burndown.record.mockClear());
 
-        it('re-records the sprint burndown once the change is written', async () => {
+        it('records a burndown point, with the cause and the task, once the change is written', async () => {
             await write();
-            expect(snapshots.refresh).toHaveBeenCalledWith('tenant-1', ['sprint-1']);
+            expect(burndown.record).toHaveBeenCalledWith('tenant-1', ['sprint-1'], expect.any(String), 'task-1');
         });
 
         it('leaves the burndown alone when nothing changed', async () => {
             await write({ newHours: 8 });
-            expect(snapshots.refresh).not.toHaveBeenCalled();
+            expect(burndown.record).not.toHaveBeenCalled();
         });
 
         it('updates the column and logs the change in one call', async () => {
@@ -166,7 +166,7 @@ describe('RemainingHoursService.history', () => {
             providers: [
                 RemainingHoursService,
                 { provide: DatabaseService, useValue: db },
-                { provide: SprintSnapshotService, useValue: snapshots },
+                { provide: BurndownRecorder, useValue: burndown },
             ],
         }).compile();
         service = module.get(RemainingHoursService);
@@ -208,7 +208,7 @@ describe('RemainingHoursService.history', () => {
 describe('remaining_hours has exactly one writer', () => {
     /**
      * Scans the argument object of every `projectTask` write in the module.
-     * Scoped to that delegate on purpose: `SprintSnapshot.remaining_hours` is a
+     * Scoped to that delegate on purpose: `SprintBurndownPoint.remaining_hours` is a
      * different column on a different table, and `select: { remaining_hours:
      * true }` is a read.
      */

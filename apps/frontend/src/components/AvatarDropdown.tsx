@@ -8,7 +8,9 @@ import {
     ChevronDown,
     Users,
     Loader2,
+    LifeBuoy,
 } from 'lucide-react';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { clearAuthSession } from '@/lib/auth-session';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
@@ -18,6 +20,8 @@ interface AvatarDropdownProps {
     roleLabel?: string;
     avatarUrl?: string | null;
     canSwitchAccount?: boolean;
+    /** Opens the support composer; the item is left out when this is not given. */
+    onOpenSupport?: () => void;
 }
 
 export default function AvatarDropdown({
@@ -25,6 +29,7 @@ export default function AvatarDropdown({
     roleLabel,
     avatarUrl,
     canSwitchAccount = false,
+    onOpenSupport,
 }: AvatarDropdownProps) {
     const { t } = useI18n();
     const router = useRouter();
@@ -53,6 +58,11 @@ export default function AvatarDropdown({
     const handleMyProfile = () => {
         setIsOpen(false);
         router.push(routes.profile);
+    };
+
+    const handleOpenSupport = () => {
+        setIsOpen(false);
+        onOpenSupport?.();
     };
 
     const handleSignOut = () => {
@@ -85,7 +95,7 @@ export default function AvatarDropdown({
             <button
                 type="button"
                 onClick={() => setIsOpen((open) => !open)}
-                className="flex items-center gap-2 hover:bg-gray-50 rounded-xl px-2 py-1.5 transition-colors"
+                className="flex min-h-touch min-w-touch items-center justify-center gap-2 hover:bg-gray-50 rounded-xl px-1 sm:px-2 py-1.5 transition-colors"
                 aria-label="User menu"
                 aria-expanded={isOpen}
             >
@@ -101,13 +111,16 @@ export default function AvatarDropdown({
                 </div>
                 {avatarNode}
                 <ChevronDown
-                    className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${
+                    className={`hidden sm:block w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${
                         isOpen ? 'rotate-180' : ''
                     }`}
                 />
             </button>
 
+            {/* Kept mounted for the open/close transition, so `inert` while
+                closed: otherwise Tab walks through its items, select included. */}
             <div
+                inert={!isOpen}
                 className={`absolute end-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden transition-all duration-150 origin-top-right ${
                     isOpen
                         ? 'opacity-100 scale-100 translate-y-0'
@@ -145,6 +158,21 @@ export default function AvatarDropdown({
                         <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         <span>{t.profile.myProfile}</span>
                     </button>
+
+                    {/* Set once and rarely touched, so they live here rather
+                        than as header controls of their own. */}
+                    <LanguageSwitcher />
+
+                    {onOpenSupport ? (
+                        <button
+                            type="button"
+                            onClick={handleOpenSupport}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                            <LifeBuoy className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span>{t.components.feedbackWidget.button}</span>
+                        </button>
+                    ) : null}
                 </div>
 
                 <div className="border-t border-gray-100 py-1">

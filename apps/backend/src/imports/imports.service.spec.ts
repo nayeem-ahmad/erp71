@@ -93,7 +93,7 @@ describe('ImportsService', () => {
                 ),
             },
             documentSequence: {
-                upsert: jest.fn().mockResolvedValue({}),
+                createMany: jest.fn().mockResolvedValue({ count: 1 }),
                 update: jest.fn().mockResolvedValue({ next_number: 2 }),
             },
             product: { findMany: jest.fn() },

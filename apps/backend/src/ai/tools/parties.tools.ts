@@ -79,7 +79,9 @@ export const PARTY_TOOLS: ChatTool[] = [
                     date: isoDate(r.sale_date ?? r.created_at),
                     amount: money(r.total_amount),
                     paid: money(r.amount_paid),
-                    outstanding: money(Number(r.total_amount ?? 0) - Number(r.amount_paid ?? 0)),
+                    // Paid beyond the total went on the customer's account;
+                    // the invoice itself owes nothing.
+                    outstanding: money(Math.max(0, Number(r.total_amount ?? 0) - Number(r.amount_paid ?? 0))),
                     itemCount: Array.isArray(r.items) ? r.items.length : null,
                 })),
             };

@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, MaxLength, Matches } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsUUID, IsNumber, IsBoolean, IsDateString, Min, Max, MaxLength, Matches, ValidateIf } from 'class-validator';
 import { PaginationDto } from '../common/pagination.dto';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export enum CustomerPaymentDirectionDto {
     RECEIVE = 'receive',
@@ -52,6 +53,20 @@ export class CreateCustomerDto {
     @IsOptional()
     @IsUUID()
     territory_id?: string;
+
+    /** The employee who looks after this customer — "Sales By". Null clears it. */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    sales_rep_id?: string | null;
+
+    /**
+     * The branch the customer belongs to. Omitted: the request's header branch.
+     * A member limited to some branches may name only one of theirs.
+     */
+    @IsOptional()
+    @IsUUID()
+    store_id?: string;
 
     @IsOptional()
     @IsNumber()
@@ -160,6 +175,22 @@ export class UpdateCustomerDto {
     @IsUUID()
     territory_id?: string;
 
+    /** The employee who looks after this customer — "Sales By". Null clears it. */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    sales_rep_id?: string | null;
+
+    /**
+     * Moves the customer to another branch — see `customer-visibility.ts`. Only
+     * a member who sees every branch may change it, and a customer always has
+     * one: null is refused.
+     */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsUUID()
+    store_id?: string | null;
+
     @IsOptional()
     @IsNumber()
     @Min(0)
@@ -228,6 +259,36 @@ export class RecordCreditPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /**
+     * When the money changed hands. Defaults to now. Backdating is allowed so a
+     * payment entered late lands in the period it belongs to, and is refused by
+     * the fiscal-period lock if that period is closed. An offsetless value is
+     * read as the tenant's wall clock.
+     */
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+
+    /**
+     * The payment's serial. Omitted (or blank) takes the next number in the
+     * CPY-/CPO- series; a typed one must not be used by any other customer
+     * credit row in the tenant.
+     */
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    paymentNumber?: string;
+
+    /**
+     * The tender: a PaymentMethod of this tenant, active. Its name is kept on
+     * the payment, and its linked ledger account (when set) takes the cash
+     * leg instead of Cash in Hand. Omitted: no method recorded on a new
+     * payment; the stored one kept on an edit.
+     */
+    @IsOptional()
+    @IsUUID()
+    paymentMethodId?: string;
 }
 
 /**
@@ -327,12 +388,44 @@ export class UpdateCreditPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /** Omitted keeps the payment's current date. */
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+
+    /** Omitted (or blank) keeps the payment's current serial. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(40)
+    paymentNumber?: string;
+
+    /**
+     * The tender: a PaymentMethod of this tenant, active. Its name is kept on
+     * the payment, and its linked ledger account (when set) takes the cash
+     * leg instead of Cash in Hand. Omitted: no method recorded on a new
+     * payment; the stored one kept on an edit.
+     */
+    @IsOptional()
+    @IsUUID()
+    paymentMethodId?: string;
+}
+
+export class NextCustomerPaymentNumberQueryDto {
+    @IsOptional()
+    @IsEnum(CustomerPaymentDirectionDto)
+    direction?: CustomerPaymentDirectionDto;
 }
 
 export class ListCustomerCreditPaymentsQueryDto extends PaginationDto {
     @IsOptional()
     @IsUUID()
     customerId?: string;
+
+    /** The branch the payments page shows: a branch id, or `all`. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 
     @IsOptional()
     @IsDateString()

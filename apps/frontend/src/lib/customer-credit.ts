@@ -17,7 +17,11 @@ export interface InvoiceDues {
     invoiceDue: number;
     /** What the customer owed before this invoice. Negative is an advance. */
     previousDue: number;
-    /** `previousDue + invoiceDue` — what they owe with this invoice standing. */
+    /**
+     * `previousDue + total - paid` — what they owe with this invoice standing.
+     * Anything paid beyond the total comes off it, so it can go negative: the
+     * customer is then in advance.
+     */
     totalDue: number;
 }
 
@@ -36,13 +40,56 @@ export function invoiceDues(
     if (previousDue == null || ![previousDue, total, paid].every(Number.isFinite)) return null;
 
     const invoiceDue = toPaisa(creditDueAmount(total, paid));
-    if (Math.abs(previousDue) <= 0.005 && invoiceDue <= 0.005) return null;
+    const totalDue = toPaisa(previousDue + total - paid);
+    if (Math.abs(previousDue) <= 0.005 && Math.abs(totalDue) <= 0.005) return null;
 
     return {
         paid,
         invoiceDue,
         previousDue,
-        totalDue: toPaisa(previousDue + invoiceDue),
+        totalDue: totalDue === 0 ? 0 : totalDue,
+    };
+}
+
+/**
+ * What becomes of money paid beyond a sale's total — the client-side mirror of
+ * the server's `splitSaleOverpayment`, for the entry screen to warn with.
+ *
+ * On a customer's sale the excess settles their previous due first and stands
+ * as an advance after that; neither is refused, but running past the previous
+ * due is worth a warning, since it is as often a typo as a deposit. On a
+ * walk-in sale there is no account to hold it, so it is change.
+ */
+export interface SaleOverpayment {
+    /** Everything paid beyond the total. */
+    excess: number;
+    /** The part of it that settles what the customer already owed. */
+    towardPreviousDue: number;
+    /** The part past that, held on the customer's account. */
+    advance: number;
+    /** The part handed back — all of it on a walk-in sale. */
+    change: number;
+}
+
+export function saleOverpayment(
+    total: number,
+    paid: number,
+    customer: { previousDue: number | null | undefined } | null,
+): SaleOverpayment | null {
+    if (![total, paid].every(Number.isFinite) || paid - total <= 0.005) return null;
+    const excess = toPaisa(paid - total);
+
+    if (!customer) {
+        return { excess, towardPreviousDue: 0, advance: 0, change: excess };
+    }
+
+    const owed = Math.max(0, Number(customer.previousDue ?? 0) || 0);
+    const towardPreviousDue = toPaisa(Math.min(excess, owed));
+    return {
+        excess,
+        towardPreviousDue,
+        advance: toPaisa(excess - towardPreviousDue),
+        change: 0,
     };
 }
 

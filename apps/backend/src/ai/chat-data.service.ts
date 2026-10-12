@@ -306,7 +306,9 @@ export class ChatDataService {
                     party: r.customer?.name ?? 'Walk-in customer',
                     branch: r.store.name,
                     amount: Number(r.total_amount),
-                    outstanding: Number(r.total_amount) - Number(r.amount_paid),
+                    // Paid beyond the total is a payment on account, not a
+                    // negative balance on this invoice.
+                    outstanding: Math.max(0, Number(r.total_amount) - Number(r.amount_paid)),
                     status: 'COMPLETED',
                 }));
             }

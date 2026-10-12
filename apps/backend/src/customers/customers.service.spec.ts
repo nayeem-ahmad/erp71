@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomersService } from './customers.service';
 import { DatabaseService } from '../database/database.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EncryptionService } from '../common/encryption.service';
 import { CustomerPaymentDirectionDto } from './customer.dto';
+import { customerInBranchesWhere } from './customer-visibility';
 
 jest.mock('@erp71/database', () => {
   const actual = jest.requireActual('@erp71/database');
@@ -44,6 +45,11 @@ describe('CustomersService', () => {
       customerGroup: {
         findFirst: jest.fn(),
       },
+      // The employee a customer's sales rep is checked against.
+      employee: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       customerCreditTransaction: {
         count: jest.fn(),
         findMany: jest.fn(),
@@ -56,11 +62,24 @@ describe('CustomersService', () => {
       postingEvent: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      paymentMethod: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      store: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'store-1' }),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'store-1', name: 'Main', code: 'S1' },
+          { id: 'branch-a', name: 'Branch A', code: 'A' },
+          { id: 'branch-b', name: 'Branch B', code: 'B' },
+        ]),
+      },
       sale: {
         count: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
+      // The serial series: one past the highest number under the prefix.
+      $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
       $transaction: jest.fn(),
     };
 
@@ -82,14 +101,259 @@ describe('CustomersService', () => {
 
       const res = await service.create('tenant-1', {
           name: 'Nayeem', phone: '+123', email: '', address: ''
-      });
+      }, { storeId: 'store-1' });
       expect(res.id).toEqual('cust-1');
+  });
+
+  // A member limited to some branches sees only those branches' customers —
+  // see customer-visibility.ts. `null` is the whole tenant.
+  describe('branch scope', () => {
+    const SCOPE = ['branch-a'];
+    const inScope = { AND: [customerInBranchesWhere(SCOPE)] };
+
+    beforeEach(() => {
+      db.store.findFirst = jest.fn().mockResolvedValue({ id: 'branch-a' });
+    });
+
+    it('lists only the scoped customers, keeping the search OR intact', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.customer.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka', search: 'rahim', scope: SCOPE });
+
+      const where = db.customer.findMany.mock.calls[0][0].where;
+      expect(where).toMatchObject({ tenant_id: 'tenant-1', deleted_at: null, ...inScope });
+      expect(where.OR).toHaveLength(4);
+      expect(db.customer.count).toHaveBeenCalledWith({ where });
+    });
+
+    it('lists every customer when unscoped, as before', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.customer.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', { timezone: 'Asia/Dhaka' });
+
+      expect(db.customer.findMany.mock.calls[0][0].where.AND).toBeUndefined();
+    });
+
+    it('shows a scoped customer with only the sales at the member\'s branches', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', nid: null });
+
+      await service.findOne('tenant-1', 'cust-1', SCOPE);
+
+      const args = db.customer.findFirst.mock.calls[0][0];
+      expect(args.where).toMatchObject({ id: 'cust-1', ...inScope });
+      expect(args.include.sales.where).toEqual({ store_id: { in: SCOPE } });
+    });
+
+    it('answers 404 for a customer outside the scope', async () => {
+      db.customer.findFirst.mockResolvedValue(null);
+
+      await expect(service.findOne('tenant-1', 'cust-other', SCOPE)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getCreditLedger('tenant-1', 'cust-other', {}, SCOPE)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.recordCreditPayment('tenant-1', 'cust-other', 'user-1', { amount: 100 } as any, 'branch-a', SCOPE),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('limits purchase history to the member\'s branches', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1' });
+      db.sale.count.mockResolvedValue(0);
+      db.sale.findMany.mockResolvedValue([]);
+
+      await service.getPurchaseHistory('tenant-1', 'cust-1', {}, SCOPE);
+
+      expect(db.customer.findFirst.mock.calls[0][0].where).toMatchObject(inScope);
+      expect(db.sale.findMany.mock.calls[0][0].where).toEqual({ customer_id: 'cust-1', store_id: { in: SCOPE } });
+    });
+
+    it('scopes credit rows through their customer', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([]);
+      db.customerCreditTransaction.count.mockResolvedValue(0);
+
+      await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka', scope: SCOPE } as any);
+      await service.getDueAgingReport('tenant-1', SCOPE);
+
+      for (const [args] of db.customerCreditTransaction.findMany.mock.calls) {
+        expect(args.where.customer).toEqual(customerInBranchesWhere(SCOPE));
+      }
+    });
+
+    it('adds a customer at the request\'s branch', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({ id: 'cust-1' });
+
+      await service.create('tenant-1', { name: 'Rahim', phone: '01711000001' } as any, { storeId: 'branch-a' });
+
+      expect(db.customer.create.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-a' });
+    });
+
+    it('says a clashing phone is another branch\'s customer when the caller cannot see them', async () => {
+      db.customer.findUnique.mockResolvedValue({ id: 'cust-other', deleted_at: null });
+      db.customer.count.mockResolvedValue(0);
+
+      await expect(
+        service.create('tenant-1', { name: 'Rahim', phone: '01711000001' } as any, { scope: SCOPE }),
+      ).rejects.toThrow(/customer of another branch/);
+    });
+
+    it('keeps the plain duplicate message for a customer the caller can see', async () => {
+      db.customer.findUnique.mockResolvedValue({ id: 'cust-1', deleted_at: null });
+      db.customer.count.mockResolvedValue(1);
+
+      await expect(
+        service.create('tenant-1', { name: 'Rahim', phone: '01711000001' } as any, { scope: SCOPE }),
+      ).rejects.toThrow('A customer with this phone number already exists.');
+    });
+
+    it('refuses a branch change from a member who cannot see every branch', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: 'branch-a', phone: null });
+
+      await expect(
+        service.update('tenant-1', 'cust-1', { store_id: 'branch-b' }, { scope: SCOPE, canSetBranch: false }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(db.customer.update).not.toHaveBeenCalled();
+    });
+
+    it('lets a limited member save the form with the branch unchanged', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: 'branch-a', phone: null });
+      db.store.findFirst.mockResolvedValue({ id: 'branch-a' });
+      db.customer.update.mockResolvedValue({ id: 'cust-1', nid: null });
+
+      await service.update('tenant-1', 'cust-1', { name: 'Rahim', store_id: 'branch-a' }, { scope: SCOPE, canSetBranch: false });
+
+      expect(db.customer.update).toHaveBeenCalled();
+    });
+
+    it('moves a customer to another branch of the tenant, but never to no branch', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: 'branch-a', phone: null });
+      db.store.findFirst.mockResolvedValue({ id: 'branch-b' });
+      db.customer.update.mockResolvedValue({ id: 'cust-1', nid: null });
+
+      await service.update('tenant-1', 'cust-1', { store_id: 'branch-b' }, { canSetBranch: true });
+      expect(db.store.findFirst).toHaveBeenCalledWith({ where: { id: 'branch-b', tenant_id: 'tenant-1' }, select: { id: true } });
+      expect(db.customer.update.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-b' });
+
+      await expect(service.update('tenant-1', 'cust-1', { store_id: null }, { canSetBranch: true }))
+        .rejects.toThrow('A customer must belong to a branch.');
+    });
+
+    it('adds a customer to the branch the form names, if it is one of the caller\'s', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({ id: 'cust-1' });
+
+      await service.create('tenant-1', { name: 'Rahim', store_id: 'branch-a' } as any, { storeId: 'branch-b', scope: SCOPE });
+      expect(db.customer.create.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-a' });
+
+      db.store.findFirst.mockResolvedValue({ id: 'branch-b' });
+      await expect(service.create('tenant-1', { name: 'Karim', store_id: 'branch-b' } as any, { scope: SCOPE }))
+        .rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('will not add a customer with no branch at all', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+
+      await expect(service.create('tenant-1', { name: 'Rahim' } as any, {}))
+        .rejects.toThrow('Choose the branch this customer belongs to.');
+      expect(db.customer.create).not.toHaveBeenCalled();
+    });
+
+    it('imports a row to the branch its own column names, else to the file\'s', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customerGroup.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({});
+
+      const result = await service.importRows(
+        'tenant-1',
+        [{ name: 'Own', branch: 'a' }, { name: 'File' }, { name: 'Nowhere', branch: 'Sylhet' }],
+        'skip',
+        'store-1',
+        null,
+      );
+
+      expect(db.customer.create.mock.calls.map(([args]: any[]) => args.data.store_id)).toEqual(['branch-a', 'store-1']);
+      expect(result.created).toBe(2);
+      expect(result.errors).toEqual([expect.stringMatching(/unknown branch "Sylhet"/)]);
+    });
+
+    it('rejects a branch from another tenant', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'cust-1', store_id: null, phone: null });
+      db.store.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.update('tenant-1', 'cust-1', { store_id: 'branch-x' }, { canSetBranch: true }),
+      ).rejects.toThrow('Branch not found.');
+    });
+
+    it('imports new rows at the request\'s branch and will not upsert another branch\'s customer', async () => {
+      db.customer.findFirst.mockResolvedValue(null);
+      db.customerGroup.findFirst.mockResolvedValue(null);
+      db.customer.create.mockResolvedValue({});
+      db.customer.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'cust-other' });
+      db.customer.count.mockResolvedValue(0);
+
+      const result = await service.importRows(
+        'tenant-1',
+        [{ name: 'New', phone: '01711000001' }, { name: 'Theirs', phone: '01711000002' }],
+        'upsert',
+        'branch-a',
+        SCOPE,
+      );
+
+      expect(db.customer.create.mock.calls[0][0].data).toMatchObject({ store_id: 'branch-a' });
+      expect(db.customer.update).not.toHaveBeenCalled();
+      expect(result.created).toBe(1);
+      expect(result.errors).toEqual([expect.stringMatching(/^Row \d+: matches a customer of another branch/)]);
+    });
+  });
+
+  describe('sales rep', () => {
+    it('saves the employee who looks after the customer, once checked against this tenant', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue(null);
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-rafiq' });
+      db.customer.create.mockResolvedValue({ id: 'cust-1', sales_rep_id: 'emp-rafiq' });
+
+      await service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-rafiq' } as any, { storeId: 'store-1' });
+
+      expect(db.customer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ sales_rep_id: 'emp-rafiq' }),
+          include: expect.objectContaining({ salesRep: { select: { id: true, name: true } } }),
+        }),
+      );
+    });
+
+    it('refuses an employee from another workspace', async () => {
+      db.customer.findUnique.mockResolvedValue(null);
+      db.employee.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('tenant-1', { name: 'Osman Surgical', sales_rep_id: 'emp-elsewhere' } as any, { storeId: 'store-1' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.customer.create).not.toHaveBeenCalled();
+    });
+
+    it('clears the rep on update when told null, and leaves it alone when not mentioned', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', phone: null, customer_code: 'CUST-1' });
+      db.customer.update.mockResolvedValue({ id: 'c1' });
+
+      await service.update('tenant-1', 'c1', { sales_rep_id: null } as any);
+      expect(db.customer.update.mock.calls[0][0].data).toEqual(expect.objectContaining({ sales_rep_id: null }));
+
+      await service.update('tenant-1', 'c1', { name: 'Renamed' } as any);
+      expect(db.customer.update.mock.calls[1][0].data).not.toHaveProperty('sales_rep_id');
+    });
   });
 
   it('should throw Error when phone matches existing customer', async () => {
       db.customer.findUnique.mockResolvedValue({ id: 'existing-cust' });
       
-      await expect(service.create('tenant-1', { name: 'Oops', phone: '+123' } as any)).rejects.toThrow(BadRequestException);
+      await expect(service.create('tenant-1', { name: 'Oops', phone: '+123' } as any, { storeId: 'store-1' })).rejects.toThrow(BadRequestException);
   });
 
   it('findAll() should return all customers', async () => {
@@ -200,6 +464,26 @@ describe('CustomersService', () => {
     it('throws NotFoundException when customer does not exist', async () => {
       db.customer.findFirst.mockResolvedValue(null);
       await expect(service.getPurchaseHistory('t1', 'nonexistent')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getSegmentStats()', () => {
+    it('counts only customers that have not been deleted, as the list beside it does', async () => {
+      db.customer.findMany.mockResolvedValue([
+        { segment_category: 'VIP' },
+        { segment_category: null },
+      ]);
+
+      const stats = await service.getSegmentStats('tenant-1');
+
+      expect(db.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ tenant_id: 'tenant-1', deleted_at: null }) }),
+      );
+      expect(stats.total).toBe(2);
+      expect(stats.breakdown).toEqual(expect.arrayContaining([
+        { segment: 'VIP', count: 1, percentage: 50 },
+        { segment: 'Regular', count: 1, percentage: 50 },
+      ]));
     });
   });
 
@@ -332,7 +616,7 @@ describe('CustomersService', () => {
   describe('recordCreditPayment()', () => {
     it('generates payment_number and records payment in a transaction', async () => {
       db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
-      db.customerCreditTransaction.findFirst.mockResolvedValue({ payment_number: 'CPY-00002' });
+      db.$queryRaw.mockResolvedValue([{ next: '3' }]);
       db.customerCreditTransaction.create.mockResolvedValue({
         id: 'pay-3',
         payment_number: 'CPY-00003',
@@ -347,14 +631,7 @@ describe('CustomersService', () => {
         notes: 'Partial payment',
       });
 
-      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            tenant_id: 'tenant-1',
-            type: 'PAYMENT',
-          }),
-        }),
-      );
+      expect(db.$queryRaw.mock.calls[0][0].values).toEqual(expect.arrayContaining(['tenant-1', 'CPY-%']));
       expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -481,6 +758,166 @@ describe('CustomersService', () => {
     });
   });
 
+  // The tender a payment was taken by: kept on the row, and its ledger account
+  // takes the cash leg instead of Cash in Hand.
+  describe('payment method', () => {
+    const posting = () => require('../accounting/posting.utils');
+    const bkash = { id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' };
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-1', payment_number: 'CPY-00001' });
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+    });
+
+    const cashLeg = () => posting().autoPostFromRules.mock.calls
+      .map((c: any[]) => c[0])
+      .find((input: any) => input.conditionValue !== 'discount');
+
+    it('keeps the method on a receipt and debits its account', async () => {
+      db.paymentMethod.findFirst.mockResolvedValue(bkash);
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 400, paymentMethodId: 'pm-bkash' });
+
+      expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({ id: 'pm-bkash', tenant_id: 'tenant-1', is_active: true });
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ payment_method_id: 'pm-bkash', payment_method_name: 'bKash' }),
+      }));
+      expect(cashLeg()).toEqual(expect.objectContaining({ conditionValue: 'receive', overrideDebitAccountId: 'acc-bkash' }));
+      expect(cashLeg().overrideCreditAccountId).toBeUndefined();
+    });
+
+    it('credits the method\'s account on a refund paid out', async () => {
+      db.paymentMethod.findFirst.mockResolvedValue({ id: 'pm-cash', name: 'Cash', account_id: 'acc-drawer' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', {
+        amount: 100,
+        direction: CustomerPaymentDirectionDto.PAY,
+        paymentMethodId: 'pm-cash',
+      });
+
+      expect(cashLeg()).toEqual(expect.objectContaining({ conditionValue: 'pay', overrideCreditAccountId: 'acc-drawer' }));
+      expect(cashLeg().overrideDebitAccountId).toBeUndefined();
+    });
+
+    it('leaves the discount leg on its own rule', async () => {
+      db.paymentMethod.findFirst.mockResolvedValue(bkash);
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 990, discount: 10, paymentMethodId: 'pm-bkash' });
+
+      const discountLeg = posting().autoPostFromRules.mock.calls
+        .map((c: any[]) => c[0])
+        .find((input: any) => input.conditionValue === 'discount');
+      expect(discountLeg.overrideDebitAccountId).toBeUndefined();
+      expect(discountLeg.overrideCreditAccountId).toBeUndefined();
+    });
+
+    it('keeps the rule\'s Cash in Hand when the method has no account', async () => {
+      db.paymentMethod.findFirst.mockResolvedValue({ id: 'pm-nagad', name: 'Nagad', account_id: null });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentMethodId: 'pm-nagad' });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ payment_method_name: 'Nagad' }),
+      }));
+      expect(cashLeg().overrideDebitAccountId).toBeUndefined();
+    });
+
+    it('refuses a method that is not this tenant\'s active one, before writing anything', async () => {
+      db.paymentMethod.findFirst.mockResolvedValue(null);
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentMethodId: 'pm-foreign' }))
+        .rejects.toThrow(BadRequestException);
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('records no method and overrides nothing when none is sent', async () => {
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100 });
+
+      expect(db.paymentMethod.findFirst).not.toHaveBeenCalled();
+      expect(db.customerCreditTransaction.create.mock.calls[0][0].data.payment_method_id).toBeUndefined();
+      expect(cashLeg().overrideDebitAccountId).toBeUndefined();
+    });
+
+    describe('on an edit', () => {
+      const stored = {
+        id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT', amount: 200,
+        discount_amount: 0, payment_number: 'CPY-00001', notes: null, created_at: new Date('2026-10-01T05:00:00Z'),
+        payment_method_id: 'pm-bkash', payment_method_name: 'bKash',
+      };
+
+      beforeEach(() => {
+        db.customerCreditTransaction.findFirst.mockResolvedValue(stored);
+        db.customerCreditTransaction.update.mockResolvedValue({ ...stored });
+      });
+
+      it('switches to a new method and reposts to its account', async () => {
+        db.paymentMethod.findFirst.mockResolvedValue({ id: 'pm-bank', name: 'City Bank', account_id: 'acc-bank' });
+
+        await service.updateCreditPayment('tenant-1', 'pay-1', { paymentMethodId: 'pm-bank' });
+
+        expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
+          data: expect.objectContaining({ payment_method_id: 'pm-bank', payment_method_name: 'City Bank' }),
+        }));
+        expect(cashLeg()).toEqual(expect.objectContaining({ overrideDebitAccountId: 'acc-bank' }));
+      });
+
+      it('keeps the stored method and reposts to its current account', async () => {
+        db.paymentMethod.findFirst.mockResolvedValue({ account_id: 'acc-bkash-2' });
+
+        await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 250 });
+
+        expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({ id: 'pm-bkash', tenant_id: 'tenant-1' });
+        expect(db.customerCreditTransaction.update.mock.calls[0][0].data.payment_method_id).toBeUndefined();
+        expect(cashLeg()).toEqual(expect.objectContaining({ overrideDebitAccountId: 'acc-bkash-2' }));
+      });
+    });
+  });
+
+  // A payment belongs to its customer's branch, whichever header branch the
+  // person recording it is on; its voucher posts there too.
+  describe('payment branch', () => {
+    const posting = () => require('../accounting/posting.utils');
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+    });
+
+    it('records the payment and posts its voucher under the customer\'s branch, not the header', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000, store_id: 'branch-a' });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-1', payment_number: 'CPY-00001' });
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100 }, 'header-branch');
+
+      expect(db.customerCreditTransaction.create.mock.calls[0][0].data.store_id).toBe('branch-a');
+      expect(posting().autoPostFromRules.mock.calls[0][0].storeId).toBe('branch-a');
+    });
+
+    it('reposts an edited payment under the branch it was recorded at', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue({
+        id: 'pay-1', customer_id: 'c1', type: 'PAYMENT', amount: 200, discount_amount: 0, store_id: 'branch-a',
+        payment_number: 'CPY-00001', notes: null, created_at: new Date('2026-10-01T05:00:00Z'),
+      });
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue({ id: 'pay-1' });
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 250 }, 'header-branch');
+
+      expect(posting().autoPostFromRules.mock.calls[0][0].storeId).toBe('branch-a');
+    });
+
+    it('lists only the payments of the branch the page shows', async () => {
+      db.customerCreditTransaction.findMany.mockResolvedValue([]);
+      db.customerCreditTransaction.count.mockResolvedValue(0);
+
+      await service.listCreditPayments('tenant-1', { timezone: 'Asia/Dhaka', branch: 'branch-a' } as any);
+
+      expect(db.customerCreditTransaction.findMany.mock.calls[0][0].where.store_id).toBe('branch-a');
+    });
+  });
+
   describe('deleteCreditPayment()', () => {
     const existingPayment = {
       id: 'pay-2',
@@ -509,6 +946,204 @@ describe('CustomersService', () => {
         data: { due_balance: 200 },
       });
       expect(result.deleted).toBe(true);
+    });
+  });
+
+  describe('payment date', () => {
+    const posting = () => require('../accounting/posting.utils');
+    const existing = {
+      id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT',
+      amount: 200, discount_amount: 0, payment_number: 'CPY-00001', notes: null,
+      created_at: new Date('2026-08-15T04:00:00Z'),
+      customer: { id: 'c1', name: 'Alice' }, creator: null,
+    };
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-x', payment_number: 'CPY-00001' });
+    });
+
+    it('records a backdated payment at the picked time, read in the tenant zone, and dates its voucher to match', async () => {
+      await service.recordCreditPayment(
+        'tenant-1', 'c1', 'user-1', { amount: 100, date: '2026-10-01T09:30' }, undefined, null, 'Asia/Dhaka',
+      );
+
+      const picked = new Date('2026-10-01T03:30:00Z');
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ created_at: picked }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toEqual(picked);
+    });
+
+    it('stamps the row and the voucher with the same instant when no date is given', async () => {
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100 });
+
+      const stamped = db.customerCreditTransaction.create.mock.calls[0][0].data.created_at;
+      expect(stamped).toBeInstanceOf(Date);
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toBe(stamped);
+    });
+
+    it('refuses a payment dated in the future', async () => {
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, date: tomorrow }))
+        .rejects.toThrow('Payment date cannot be in the future');
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('update keeps the payment on its own date when reposting', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue(existing);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 300 });
+
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ created_at: existing.created_at }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toEqual(existing.created_at);
+    });
+
+    it('update moves the payment and its voucher to a new date', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue(existing);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment(
+        'tenant-1', 'pay-1', { date: '2026-08-10T18:00:00+06:00' }, undefined, null, 'Asia/Dhaka',
+      );
+
+      const moved = new Date('2026-08-10T12:00:00Z');
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ created_at: moved }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].date).toEqual(moved);
+    });
+  });
+
+  describe('payment serial', () => {
+    const posting = () => require('../accounting/posting.utils');
+    const existing = {
+      id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT',
+      amount: 200, discount_amount: 0, payment_number: 'CPY-00001', notes: null,
+      created_at: new Date('2026-08-15T04:00:00Z'),
+      customer: { id: 'c1', name: 'Alice' }, creator: null,
+    };
+
+    beforeEach(() => {
+      posting().autoPostFromRules.mockClear();
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.customerCreditTransaction.findFirst.mockResolvedValue(null);
+      db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-x' });
+    });
+
+    it('records a typed serial as given, and does not draw from the series', async () => {
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: '  MR-0457 ' });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'MR-0457' }) }),
+      );
+      expect(db.$queryRaw).not.toHaveBeenCalled();
+      expect(posting().autoPostFromRules.mock.calls[0][0].referenceNumber).toBe('MR-0457');
+    });
+
+    it('numbers a payment left blank from the series', async () => {
+      db.$queryRaw.mockResolvedValue([{ next: '8' }]);
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: '' });
+
+      expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'CPY-00008' }) }),
+      );
+    });
+
+    it('refuses a typed serial another payment already carries', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValue({ id: 'pay-other' });
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'CPY-00004' }))
+        .rejects.toThrow(new ConflictException('Serial CPY-00004 is already used by another payment.'));
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('catches a re-spelling of a taken serial by writing it the way the series does', async () => {
+      db.customerCreditTransaction.findFirst.mockImplementation(async ({ where }: any) =>
+        (where.payment_number === 'CPY-00004' ? { id: 'pay-other' } : null));
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'cpy-4' }))
+        .rejects.toThrow(new ConflictException('Serial CPY-00004 is already used by another payment.'));
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a typed serial ahead of the series, which would skip numbers for good', async () => {
+      db.$queryRaw.mockResolvedValue([{ next: '12' }]);
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'CPY-000125' }))
+        .rejects.toThrow(BadRequestException);
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('update refuses a rename ahead of the series', async () => {
+      db.customerCreditTransaction.findFirst
+        .mockResolvedValueOnce(existing) // the payment itself
+        .mockResolvedValueOnce(null); // nobody else holds the new serial
+      db.$queryRaw.mockResolvedValue([{ next: '2' }]);
+
+      await expect(service.updateCreditPayment('tenant-1', 'pay-1', { paymentNumber: 'CPY-00090' }))
+        .rejects.toThrow(BadRequestException);
+      expect(db.customerCreditTransaction.update).not.toHaveBeenCalled();
+    });
+
+    it('turns a unique-index race into the same plain conflict', async () => {
+      db.customerCreditTransaction.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002', meta: { target: ['tenant_id', 'payment_number'] } }),
+      );
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentNumber: 'MR-1' }))
+        .rejects.toThrow(ConflictException);
+    });
+
+    it('update renames the serial, checking it against every other row, and reposts under it', async () => {
+      db.customerCreditTransaction.findFirst
+        .mockResolvedValueOnce(existing) // the payment itself
+        .mockResolvedValueOnce(null); // nobody else holds the new serial
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { paymentNumber: 'MR-0457' });
+
+      expect(db.customerCreditTransaction.findFirst).toHaveBeenLastCalledWith({
+        where: { tenant_id: 'tenant-1', payment_number: 'MR-0457', id: { not: 'pay-1' } },
+        select: { id: true },
+      });
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'MR-0457' }) }),
+      );
+      expect(posting().autoPostFromRules.mock.calls[0][0].referenceNumber).toBe('MR-0457');
+    });
+
+    it('update keeps the serial when none is sent', async () => {
+      db.customerCreditTransaction.findFirst.mockResolvedValueOnce(existing);
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 800 });
+      db.customerCreditTransaction.update.mockResolvedValue(existing);
+
+      await service.updateCreditPayment('tenant-1', 'pay-1', { amount: 300 });
+
+      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledTimes(1);
+      expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ payment_number: 'CPY-00001' }) }),
+      );
+    });
+
+    it('previews the next serial in the series the direction draws from', async () => {
+      db.$queryRaw.mockResolvedValue([{ next: '3' }]);
+
+      await expect(service.getNextPaymentNumber('tenant-1', CustomerPaymentDirectionDto.PAY))
+        .resolves.toEqual({ payment_number: 'CPO-00003' });
+      expect(db.$queryRaw.mock.calls[0][0].values).toEqual(expect.arrayContaining(['tenant-1', 'CPO-%']));
     });
   });
 
@@ -677,7 +1312,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice', phone: '01711000001' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
@@ -699,7 +1334,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice', phone: '01711000001' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 0, updated: 0, skipped: 1, errors: [] });
@@ -714,7 +1349,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice Updated', phone: '01711000001' }],
-        'upsert',
+        'upsert', 'store-1',
       );
 
       expect(result).toEqual({ created: 0, updated: 1, skipped: 0, errors: [] });
@@ -727,7 +1362,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ phone: '01711000002' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.errors).toHaveLength(1);
@@ -749,7 +1384,7 @@ describe('CustomersService', () => {
           { name: 'Alice', phone: '01711000001' },
           { name: 'Bob', phone: '01711000002' },
         ],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.created).toBe(1);
@@ -766,7 +1401,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Alice', phone: '01711000001', customer_group_name: 'NonExistentGroup' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
@@ -791,7 +1426,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ name: 'Corner Shop', owner_name: 'Rahim Mia' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
@@ -822,7 +1457,7 @@ describe('CustomersService', () => {
           { name: 'Bob', phone: '01711000002' },
           { name: 'Carol', phone: '01711000003' },
         ],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.created).toBe(2);
@@ -837,7 +1472,7 @@ describe('CustomersService', () => {
       const result = await service.importRows(
         tenantId,
         [{ customer_code: 'SHOP-42', name: 'Corner Shop' }],
-        'skip',
+        'skip', 'store-1',
       );
 
       expect(result.created).toBe(1);
@@ -864,7 +1499,7 @@ describe('CustomersService', () => {
       db.customer.findFirst.mockResolvedValue({ customer_code: 'CUST-00007' });
       db.customer.create.mockResolvedValue({ nid: null });
 
-      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any);
+      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any, { storeId: 'store-1' });
 
       expect(db.customer.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -884,7 +1519,7 @@ describe('CustomersService', () => {
       );
 
       await expect(
-        service.create(tenantId, { name: 'Alice', customer_code: 'SHOP-42' } as any),
+        service.create(tenantId, { name: 'Alice', customer_code: 'SHOP-42' } as any, { storeId: 'store-1' }),
       ).rejects.toThrow(BadRequestException);
       expect(db.customer.create).not.toHaveBeenCalled();
     });
@@ -898,7 +1533,7 @@ describe('CustomersService', () => {
         .mockRejectedValueOnce(Object.assign(new Error('conflict'), { code: 'P2002', meta: { target: ['tenant_id', 'customer_code'] } }))
         .mockResolvedValueOnce({ nid: null });
 
-      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any);
+      await service.create(tenantId, { name: 'Alice', phone: '01711000001' } as any, { storeId: 'store-1' });
 
       expect(db.customer.create).toHaveBeenCalledTimes(2);
       expect(db.customer.create).toHaveBeenLastCalledWith(
@@ -913,7 +1548,7 @@ describe('CustomersService', () => {
       db.customer.findFirst.mockResolvedValue(null);
       db.customer.create.mockResolvedValue({ nid: null });
 
-      await service.create(tenantId, { name: 'Corner Shop', owner_name: 'Rahim Mia' } as any);
+      await service.create(tenantId, { name: 'Corner Shop', owner_name: 'Rahim Mia' } as any, { storeId: 'store-1' });
 
       expect(db.customer.findUnique).not.toHaveBeenCalled();
       expect(db.customer.create).toHaveBeenCalledWith(
@@ -990,14 +1625,7 @@ describe('CustomersService', () => {
 
       await service.writeOffDebt('tenant-1', 'c1', 'user-1', dto);
 
-      expect(db.customerCreditTransaction.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            type: 'WRITE_OFF',
-            payment_number: { startsWith: 'CWO-' },
-          }),
-        }),
-      );
+      expect(db.$queryRaw.mock.calls[0][0].values).toEqual(expect.arrayContaining(['tenant-1', 'CWO-%']));
     });
 
     // Writing a debt off drops due_balance, and assertCustomerCreditForSale

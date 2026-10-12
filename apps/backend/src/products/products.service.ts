@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CreateProductDto, MergeProductDto, ProductTypeDto, UpdateProductDto } from './product.dto';
 import { commitMerge, parseTakeFields, planMerge, throwIfBlocked } from './products.merge';
 import { CsvProductRow } from './import-products.dto';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant, ensureDefaultWarehouse } from '../database/inventory.utils';
+import { recordCostAdjustment } from '../database/product-cost.utils';
 import { paginate, PaginatedResult, cursorPaginate, CursorPaginatedResult } from '../common/pagination.dto';
 import { RedisService } from '../cache/redis.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
@@ -44,7 +46,7 @@ export class ProductsService {
         private planEntitlements: PlanEntitlementsService,
     ) { }
 
-    async create(tenantId: string, dto: CreateProductDto) {
+    async create(tenantId: string, dto: CreateProductDto, userId?: string) {
         await this.planEntitlements.assertProductQuota(tenantId);
         const result = await this.db.$transaction(async (tx) => {
             const categoryIds = await this.validateCategorySelection(tx, tenantId, dto.groupId, dto.subgroupId);
@@ -100,6 +102,19 @@ export class ProductsService {
                     // average at retail and reported its first sales at zero
                     // margin. Omitted when unknown: no basis beats a wrong one.
                     unitCost: dto.cost,
+                });
+            } else if (dto.type !== ProductTypeDto.SERVICE && (dto.cost ?? 0) > 0) {
+                // A cost and no opening stock still means something: it is what
+                // the product is expected to cost, and it used to be dropped on
+                // the floor — the product sold uncosted until its first bill.
+                // Held as an opening cost against nothing on hand, so the first
+                // real receipt replaces it outright rather than blending with it.
+                await recordCostAdjustment(tx, {
+                    tenantId,
+                    productId: product.id,
+                    newCost: dto.cost!,
+                    note: 'Entered with the product',
+                    userId,
                 });
             }
 
@@ -208,8 +223,12 @@ export class ProductsService {
      * same bound the cached product lists already carry, and a minute-old
      * reorder figure is worth the round trip it saves.
      */
-    async countLowStock(tenantId: string): Promise<{ count: number }> {
-        const cacheKey = `products:${tenantId}:low-stock-count`;
+    /**
+     * `storeId` counts stock in that branch's warehouses only (a product with
+     * none there counts as zero on hand); omitted, every warehouse.
+     */
+    async countLowStock(tenantId: string, storeId?: string): Promise<{ count: number }> {
+        const cacheKey = storeId ? `products:${tenantId}:low-stock-count:${storeId}` : `products:${tenantId}:low-stock-count`;
         const cached = await this.redis.get<{ count: number }>(cacheKey);
         if (cached) return cached;
 
@@ -219,13 +238,17 @@ export class ProductsService {
         });
         const defaultReorderLevel = settings?.default_reorder_level ?? LOW_STOCK_THRESHOLD;
 
+        const branchStock = storeId
+            ? Prisma.sql`AND ps.warehouse_id IN (SELECT id FROM "Warehouse" WHERE tenant_id = ${tenantId} AND store_id = ${storeId})`
+            : Prisma.empty;
+
         const rows = await this.db.$queryRaw<{ count: bigint }[]>`
             SELECT COUNT(*) AS count
             FROM (
                 SELECT p.id
                 FROM "Product" p
                 LEFT JOIN "ProductStock" ps
-                    ON ps.product_id = p.id AND ps.tenant_id = ${tenantId}
+                    ON ps.product_id = p.id AND ps.tenant_id = ${tenantId} ${branchStock}
                 WHERE p.tenant_id = ${tenantId}
                   AND p.deleted_at IS NULL
                 GROUP BY p.id, p.reorder_level
@@ -427,6 +450,7 @@ export class ProductsService {
     async importFromCsv(
         tenantId: string,
         rows: CsvProductRow[],
+        userId?: string,
     ): Promise<{ created: number; skipped: number; errors: string[] }> {
         let created = 0;
         let skipped = 0;
@@ -467,6 +491,7 @@ export class ProductsService {
 
                 const price = Number(row.selling_price) || 0;
                 const initialStock = Number(row.stock_quantity) || 0;
+                const cost = parseCsvCost(row.cost_price);
 
                 let createdProductId: string | null = null;
                 await this.db.$transaction(async (tx) => {
@@ -495,7 +520,19 @@ export class ProductsService {
                             movementType: 'INITIAL_STOCK',
                             referenceType: 'PRODUCT',
                             referenceId: product.id,
-                            unitCost: row.cost_price != null ? Number(row.cost_price) : price,
+                            // No fallback to the selling price. It used to stand in
+                            // for a missing cost_price, which started the product's
+                            // average at retail and reported every early sale at
+                            // zero margin — the same bug the create path had.
+                            unitCost: cost,
+                        });
+                    } else if (cost !== undefined) {
+                        await recordCostAdjustment(tx, {
+                            tenantId,
+                            productId: product.id,
+                            newCost: cost,
+                            note: 'Imported from CSV',
+                            userId,
                         });
                     }
                 });
@@ -612,7 +649,24 @@ export class ProductsService {
         query: string,
         limit: number = 20,
     ): Promise<any[]> {
-        const searchTerm = `%${query.toLowerCase()}%`;
+        // Every word typed must appear in the name or SKU, in any order — so
+        // "rice 5kg" finds "Miniket Rice 5KG". Matching the whole phrase as one
+        // substring missed a product the moment the words were out of order
+        // or separated by anything other than one space. LIKE wildcards in
+        // the input are escaped so they match literally.
+        const terms = query
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((term) => `%${term.replace(/[!%_]/g, (c) => `!${c}`)}%`);
+        const termFilter = terms.length
+            ? Prisma.join(
+                  terms.map(
+                      (term) => Prisma.sql`(LOWER(p.name) LIKE ${term} ESCAPE '!' OR LOWER(COALESCE(p.sku, '')) LIKE ${term} ESCAPE '!')`,
+                  ),
+                  ' AND ',
+              )
+            : Prisma.sql`TRUE`;
 
         const results = await this.db.$queryRaw`
             SELECT
@@ -630,10 +684,7 @@ export class ProductsService {
             LEFT JOIN "Sale" s ON si.sale_id = s.id AND s.tenant_id = ${tenantId}
             WHERE p.tenant_id = ${tenantId}
             AND p.deleted_at IS NULL
-            AND (
-                LOWER(p.name) LIKE ${searchTerm}
-                OR LOWER(p.sku) LIKE ${searchTerm}
-            )
+            AND ${termFilter}
             GROUP BY p.id, p.name, p.sku, p.price, p.unit_type, p.brand_id, p.group_id, p.subgroup_id
             ORDER BY qty_sold DESC, p.name ASC
             LIMIT ${limit}
@@ -691,6 +742,17 @@ export class ProductsService {
             throw new BadRequestException('Brand not found for this tenant.');
         }
     }
+}
+
+/**
+ * A CSV cell's cost, or undefined when it says nothing usable. Blank, zero,
+ * negative and non-numeric all read as "not known": a zero would seed the pool
+ * as free stock, which is a claim, where an empty cell is an absence.
+ */
+function parseCsvCost(value: unknown): number | undefined {
+    if (value === null || value === undefined || String(value).trim() === '') return undefined;
+    const cost = Number(value);
+    return Number.isFinite(cost) && cost > 0 ? cost : undefined;
 }
 
 function txLike(db: DatabaseService) {

@@ -1,26 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Menu, Zap, X } from 'lucide-react';
-import ChatBell from '@/components/ChatBell';
 import NotificationBell from '@/components/NotificationBell';
 import AvatarDropdown from '@/components/AvatarDropdown';
 import SetPasswordGate from '@/components/SetPasswordGate';
 import Sidebar from '@/components/Sidebar';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
+import AppShellSidebar from '@/components/app-shell/AppShellSidebar';
 import DemoSandboxBanner from '@/components/DemoSandboxBanner';
 import ActivationPendingBanner from '@/components/ActivationPendingBanner';
-import FeedbackWidget from '@/components/FeedbackWidget';
-import VoiceNavWidget from '@/components/VoiceNavWidget';
-import AiChatWidget from '@/components/AiChatWidget';
-import TimeTracker from '@/components/projects/TimeTracker';
+// Fetched on their own after the page is up, and only when rendered; see the file.
+import { AiChatWidget, SupportDialog, TimeTracker, VoiceNavWidget } from '@/components/app-shell-widgets';
 import TimerChip from '@/components/projects/TimerChip';
-import AppHeaderMobileMenu from '@/components/AppHeaderMobileMenu';
 import Toaster from '@/components/Toaster';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { CompactUiProvider } from '@/contexts/CompactUiContext';
 import { PlatformFeaturesProvider } from '@/contexts/PlatformFeaturesContext';
+import { AppShellProvider } from '@/contexts/AppShellContext';
 import { TenantLocaleProvider } from '@/contexts/TenantLocaleContext';
 import {
     DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT,
@@ -28,6 +26,7 @@ import {
     DEFAULT_TENANT_NAV_LAYOUT,
     hasPlanEntitlement,
     normalizePlanFeatures,
+    resolveAppStates,
     type NavLayoutNode,
     type PlatformFeatures,
 } from '@erp71/shared-types';
@@ -35,11 +34,14 @@ import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
 import { isAccountingAdvancedReportPath } from '@/lib/plan-gated-paths';
 import { isPlatformAdminOnlyPath } from '@/lib/platform-admin-paths';
 import { NavLayoutProvider } from '@/contexts/NavLayoutContext';
+import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
 import TenantLocaleSync from '@/components/TenantLocaleSync';
 import { BrandingProvider } from '@/lib/branding';
 import { formatPlanDisplayName } from '@/lib/plan-display';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useMe } from '@/hooks/use-me';
+import { ME_QUERY_KEY, QueryProvider, resetWorkspaceQueries, workspaceScope } from '@/lib/query-client';
 import {
     applyPlatformAdminContext,
     applyRefereeContext,
@@ -62,26 +64,56 @@ import { hasPermission, isOwner } from '@/lib/permissions';
 import { isPosEnabled } from '@/lib/sales-settings';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 import { getLastTenantId, getWorkspaceItem, removeWorkspaceItem, setWorkspaceItem } from '@/lib/session-store';
+import { stripBranchParam } from '@/lib/branch-scope';
 
 type DashboardLayoutProps = Readonly<{ children: React.ReactNode }>;
 
+/**
+ * The query cache is provided here, around the shell, so the shell itself can
+ * read `/auth/me` through it — see `QueryProvider` for why here and not in the
+ * root layout.
+ */
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-    const { t } = useI18n();
+    return (
+        <QueryProvider>
+            <AppShell>{children}</AppShell>
+        </QueryProvider>
+    );
+}
+
+function AppShell({ children }: DashboardLayoutProps) {
+    const { t, fmt } = useI18n();
     const pathname = usePathname();
     const router = useRouter();
-    const [user, setUser] = useState<any>(null);
-    const [hasResolvedUser, setHasResolvedUser] = useState(false);
+    const queryClient = useQueryClient();
+    // The signed-in user, from the cache every page shares. A page that reads
+    // it while the shell is loading it joins the same request, and a page that
+    // reads it afterwards gets it from memory.
+    const meQuery = useMe();
+    const user: any = meQuery.data ?? null;
+    // Resolved once there is an answer, or a failure that is a verdict. A
+    // failure that said nothing about the session (429, 5xx, network) is still
+    // being re-asked below, so the shell keeps waiting rather than drawing a
+    // signed-out-looking app.
+    const hasResolvedUser = meQuery.data !== undefined
+        || (meQuery.isError && !isUnconfirmedSessionError(meQuery.error));
     const [activeStoreId, setActiveStoreId] = useState<string>('');
     const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
     const [showDemoBanner, setShowDemoBanner] = useState(false);
-    const [showEmailVerificationBanner, setShowEmailVerificationBanner] = useState(false);
+    const [emailVerificationDismissed, setEmailVerificationDismissed] = useState(false);
     const [resendingVerification, setResendingVerification] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    // Stable, so the drawer's focus trap does not re-run (and re-focus its first
+    // control) every time the shell re-renders behind it.
+    const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+    const [supportOpen, setSupportOpen] = useState(false);
     const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
-    const [accountPlatformFeatures, setAccountPlatformFeatures] = useState<PlatformFeatures>(DEFAULT_PLATFORM_FEATURES);
+    const accountPlatformFeatures: PlatformFeatures = user?.platform_features ?? DEFAULT_PLATFORM_FEATURES;
+    // Derived rather than set once on load: `me` now refreshes in the background,
+    // and a dismissed banner must stay dismissed through those refreshes.
+    const showEmailVerificationBanner = Boolean(user) && !user.email_verified && !emailVerificationDismissed;
     const [tenantNavLayout, setTenantNavLayout] = useState<NavLayoutNode[]>(DEFAULT_TENANT_NAV_LAYOUT);
     const [platformAdminNavLayout, setPlatformAdminNavLayout] = useState<NavLayoutNode[]>(DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT);
-    const [posEnabled, setPosEnabled] = useState(true);
     // The platform team's own workspace. Resolved lazily, and only in the admin
     // console — it is what scopes the project pages there, in place of a shop.
     // Starts false even when the id is already parked in this tab's store: the
@@ -108,6 +140,52 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         window.addEventListener('erp71:nav-layout-updated', onNavLayoutUpdated);
         return () => window.removeEventListener('erp71:nav-layout-updated', onNavLayoutUpdated);
     }, [refreshNavLayouts]);
+
+    // What used to run once when the shell fetched `/auth/me` now runs whenever
+    // the cached answer changes — a background refresh included, so a shop the
+    // user was removed from is corrected without a reload. Structural sharing
+    // keeps `user` the same object when nothing in it changed, so a refresh that
+    // found nothing new does not re-run this.
+    //
+    // Declared ahead of the context effect below on purpose: effects run in
+    // order, and a stale shop has to be cleared before that one decides
+    // whether the tab still needs the account chooser.
+    useEffect(() => {
+        if (!user) return;
+        // A tab that resumed from `last_tenant_id` may be pointing at a shop
+        // this account no longer belongs to. Correct it against the real
+        // membership list rather than letting the header carry a stale id.
+        const tenantId = globalThis.window === undefined ? null : getWorkspaceItem('tenant_id');
+        const tenants = user.tenants ?? [];
+        const matchedTenant = tenants.find((t: { id: string }) => t.id === tenantId);
+        if (tenantId && !matchedTenant) {
+            removeWorkspaceItem('tenant_id');
+            removeWorkspaceItem('store_id');
+            removeWorkspaceItem('subscription_plan_code');
+            // Whatever was fetched under the shop this tab no longer belongs to
+            // must not be painted into the next one.
+            resetWorkspaceQueries(queryClient);
+            // One shop left is unambiguous; several is a choice only the
+            // user can make, so `/select-account` takes it from here.
+            if (tenants.length === 1) applyTenantContext(tenants[0]);
+            setWorkspaceEpoch((epoch) => epoch + 1);
+        }
+        const sessionTenant = matchedTenant || (tenants.length === 1 ? tenants[0] : undefined);
+        syncLocalePreferenceFromSession(user, { overwrite: false });
+        if (sessionTenant) {
+            const stored = localStorage.getItem('locale');
+            const preferred = stored || user.preferred_locale || 'en';
+            const clamped = clampLocaleToTenant(preferred, sessionTenant);
+            if (clamped !== preferred) {
+                localStorage.setItem('locale', clamped);
+            }
+        }
+        const isDemo = Boolean(user.is_demo) || localStorage.getItem('demo_session') === '1';
+        setShowDemoBanner(isDemo && localStorage.getItem('demo_banner_dismissed') !== '1');
+        if (user.is_demo) {
+            localStorage.setItem('demo_session', '1');
+        }
+    }, [queryClient, user]);
 
     useEffect(() => {
         if (!hasResolvedUser || !user) return;
@@ -158,69 +236,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         }
     }, [hasResolvedUser, pathname, router, user]);
 
+    // No verdict on the session (rate limit, 5xx, network) and nothing cached to
+    // show. Rendering on regardless draws a signed-out-looking shell with no way
+    // forward, so re-ask a few times, then hand over to the login page with this
+    // page as the return path. A background refresh that fails while there is
+    // data on screen is not this case: the screen keeps what it has.
+    const sessionConfirmAttempts = useRef(0);
+    const { isError: meFailed, error: meError, errorUpdatedAt: meErrorAt, refetch: refetchMe } = meQuery;
+    const hasMe = meQuery.data !== undefined;
     useEffect(() => {
-        let cancelled = false;
-        let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-        const loadMe = (attempt: number) => api.getMe().then((me) => {
-            if (cancelled) return;
-            setHasResolvedUser(true);
-            // A tab that resumed from `last_tenant_id` may be pointing at a shop
-            // this account no longer belongs to. Correct it against the real
-            // membership list rather than letting the header carry a stale id.
-            const tenantId = globalThis.window === undefined ? null : getWorkspaceItem('tenant_id');
-            const tenants = me?.tenants ?? [];
-            const matchedTenant = tenants.find((t: { id: string }) => t.id === tenantId);
-            if (tenantId && !matchedTenant) {
-                removeWorkspaceItem('tenant_id');
-                removeWorkspaceItem('store_id');
-                removeWorkspaceItem('subscription_plan_code');
-                // One shop left is unambiguous; several is a choice only the
-                // user can make, so `/select-account` takes it from here.
-                if (tenants.length === 1) applyTenantContext(tenants[0]);
-                setWorkspaceEpoch((epoch) => epoch + 1);
-            }
-            const sessionTenant = matchedTenant || (tenants.length === 1 ? tenants[0] : undefined);
-            syncLocalePreferenceFromSession(me, { overwrite: false });
-            if (sessionTenant) {
-                const stored = localStorage.getItem('locale');
-                const preferred = stored || me?.preferred_locale || 'en';
-                const clamped = clampLocaleToTenant(preferred, sessionTenant);
-                if (clamped !== preferred) {
-                    localStorage.setItem('locale', clamped);
-                }
-            }
-            setUser(me);
-            setAccountPlatformFeatures(me?.platform_features ?? DEFAULT_PLATFORM_FEATURES);
-            setShowEmailVerificationBanner(!me?.email_verified);
-            const isDemo = Boolean(me?.is_demo) || localStorage.getItem('demo_session') === '1';
-            setShowDemoBanner(isDemo && localStorage.getItem('demo_banner_dismissed') !== '1');
-            if (me?.is_demo) {
-                localStorage.setItem('demo_session', '1');
-            }
-        }, (error) => {
-            if (cancelled) return;
-            // No verdict on the session (rate limit, 5xx, network). Rendering on
-            // regardless draws a signed-out-looking shell with no way forward,
-            // so re-ask a few times, then hand over to the login page with this
-            // page as the return path.
-            if (isUnconfirmedSessionError(error)) {
-                if (attempt < SESSION_CONFIRM_MAX_RETRIES) {
-                    retryTimer = setTimeout(() => void loadMe(attempt + 1), sessionConfirmRetryDelayMs(error));
-                } else {
-                    handleUnconfirmedSession();
-                }
-                return;
-            }
-            setHasResolvedUser(true);
-        }).catch(() => null);
-
-        void loadMe(0);
-        return () => {
-            cancelled = true;
-            clearTimeout(retryTimer);
-        };
-    }, []);
+        if (hasMe) {
+            sessionConfirmAttempts.current = 0;
+            return;
+        }
+        if (!meFailed || !isUnconfirmedSessionError(meError)) return;
+        if (sessionConfirmAttempts.current >= SESSION_CONFIRM_MAX_RETRIES) {
+            handleUnconfirmedSession();
+            return;
+        }
+        const retryTimer = setTimeout(() => {
+            sessionConfirmAttempts.current += 1;
+            void refetchMe();
+        }, sessionConfirmRetryDelayMs(meError));
+        return () => clearTimeout(retryTimer);
+    }, [hasMe, meFailed, meError, meErrorAt, refetchMe]);
 
     const useCompactChrome = !pathname.startsWith(routes.sales.pos);
 
@@ -295,25 +334,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         setShowOnboardingBanner(!done && pathname === routes.home);
     }, [hasResolvedUser, pathname, inPlatformAdminMode, inRefereeMode, onboardingDismissed, owner]);
 
-    const refreshSalesSettings = useCallback(() => {
-        if (inPlatformAdminMode || inRefereeMode) {
-            setPosEnabled(true);
-            return;
-        }
-        api.getSalesSettings()
-            .then((settings) => setPosEnabled(isPosEnabled(settings)))
-            .catch(() => setPosEnabled(true));
-    }, [inPlatformAdminMode, inRefereeMode]);
+    // Whether the POS is switched on decides a nav entry and a redirect. Cached
+    // per workspace, so the navigation that re-applies this tab's workspace (and
+    // bumps `workspaceEpoch`) no longer re-fetches it on every click; a key that
+    // moves with the tenant or branch is what re-asks after a real switch.
+    const salesSettingsEnabled = !inPlatformAdminMode && !inRefereeMode;
+    const salesSettingsQuery = useQuery({
+        queryKey: ['sales-settings', ...workspaceScope()],
+        queryFn: () => api.getSalesSettings(),
+        enabled: salesSettingsEnabled,
+    });
+    // On until told otherwise — the old default, and the safe one: a failed read
+    // must not hide the till.
+    const posEnabled = !salesSettingsEnabled || salesSettingsQuery.data === undefined
+        ? true
+        : isPosEnabled(salesSettingsQuery.data);
 
     useEffect(() => {
-        refreshSalesSettings();
-    }, [refreshSalesSettings, workspaceEpoch]);
-
-    useEffect(() => {
-        const onSalesSettingsUpdated = () => refreshSalesSettings();
+        const onSalesSettingsUpdated = () => {
+            void queryClient.invalidateQueries({ queryKey: ['sales-settings'] });
+        };
         window.addEventListener('erp71:sales-settings-updated', onSalesSettingsUpdated);
         return () => window.removeEventListener('erp71:sales-settings-updated', onSalesSettingsUpdated);
-    }, [refreshSalesSettings]);
+    }, [queryClient]);
 
     useEffect(() => {
         if (!mobileNavOpen) return;
@@ -384,7 +427,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const canAccessProjects = inPlatformAdminMode
         ? canAccessPlatformProjects
         : Boolean(platformFeatures.projects) && (owner || hasPermission(perms, 'VIEW_PROJECTS'));
+    // The rail-of-apps shell: a shop's own workspace only — the admin console,
+    // the referral partner portal and the employee portal keep their sidebars.
+    const appShellOn = Boolean(platformFeatures.appShell)
+        && !inPlatformAdminMode
+        && !inRefereeMode
+        && !inEmployeeMode;
+    // Hidden apps belong to the new shell. With it off the workspace sees the
+    // old sidebar exactly as before, whatever an owner hid while it was on.
+    const hiddenApps: readonly string[] = appShellOn ? (activeTenant?.hidden_apps ?? []) : [];
+    // The module gate for the tenant sidebar, the app rail and the Home tiles.
+    const appStates = resolveAppStates({
+        planFeatures,
+        planCode: activePlanCode,
+        platformFeatures,
+        hiddenApps,
+        isOwner: owner,
+        permissions: perms,
+        isPlatformAdmin: inPlatformAdminMode,
+    });
     const canManageBilling = owner || hasPermission(perms, 'MANAGE_USERS');
+    // Who may hide apps: the backend's rule for workspace-wide display settings.
+    // Not on an accounting-only plan, where there is nothing worth hiding and
+    // the settings page sits outside the workspace's allowed paths.
+    const canManageApps = (owner || activeTenant?.role === 'MANAGER') && !accountingOnlyMode;
     const canManageTeam = owner || hasPermission(perms, 'MANAGE_USERS');
     const canViewAudit = canManageTeam;
     // The permission half of the /short-links guards; the Sidebar applies the
@@ -419,6 +485,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         && hasPlanEntitlement(planFeatures, 'premiumAi')
         && !inPlatformAdminMode
         && !inRefereeMode;
+    const canOpenSupport = platformFeatures.support || platformFeatures.feedback;
+    // The gates the sidebar's Chat entry and the chat API apply: the add-on, the
+    // member's permission, and a workspace whose sidebar carries the module.
+    const canUseTeamChat =
+        hasPlanEntitlement(planFeatures, 'teamChat')
+        && (owner || hasPermission(perms, 'USE_TEAM_CHAT'))
+        && !accountingOnlyMode
+        && !inPlatformAdminMode
+        && !inRefereeMode;
+    // Badged on the sidebar's Chat link, and on the mobile menu button that
+    // opens it; team chat no longer has a header icon (UI spec §2.12).
+    const chatUnreadCount = useChatUnreadCount(canUseTeamChat);
+    const chatUnreadLabel = chatUnreadCount > 0 ? fmt(t.chat.badge.unread, { count: chatUnreadCount }) : '';
     const effectivePlatformFeatures: PlatformFeatures = {
         ...platformFeatures,
         voice: canAccessVoice,
@@ -595,10 +674,43 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const handleStoreChange = (storeId: string) => {
         setActiveStoreId(storeId);
         setWorkspaceItem('store_id', storeId);
+        // A page's own branch choice (`?branch=`) gives way to the header: the
+        // page filter starts on the header branch, so a header change is the
+        // user moving every page, this one included.
+        const withoutBranch = stripBranchParam(`${window.location.pathname}${window.location.search}`);
+        if (withoutBranch !== null) router.replace(withoutBranch, { scroll: false });
+        // Every request now carries the other branch's `x-store-id`; nothing
+        // cached under the old one may answer for it.
+        resetWorkspaceQueries(queryClient);
         router.refresh();
     };
 
     const tenantLocaleConfig = (inPlatformAdminMode || inRefereeMode) ? null : activeTenant;
+
+    // What the nav gates on. The classic sidebar, the app rail and the Home
+    // tiles all resolve their menu from this, so they cannot disagree.
+    const navGates = {
+        appStates,
+        canAccessAccounting,
+        canAccessInventoryReports,
+        canAccessAccountingAdvanced,
+        canAccessPremiumCrm: hasPremiumCrm,
+        canAccessManufacturing,
+        canAccessProjects,
+        canAccessPlatformAccounting,
+        canAccessAdmin: isPlatformAdmin,
+        canManageBilling,
+        canManageTeam,
+        canManageShortLinks,
+        platformAdminMode: inPlatformAdminMode,
+        helpEnabled: platformFeatures.help,
+        supportEnabled: platformFeatures.support || platformFeatures.feedback,
+        accountingOnlyMode,
+        posEnabled,
+        planFeatures,
+        memberPermissions: perms,
+        memberIsOwner: owner,
+    };
 
     // Somebody still on a password an admin chose for them — today that means an
     // employee whose login HR just created. `JwtAuthGuard` refuses every endpoint
@@ -620,36 +732,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             platformAdminLayout={platformAdminNavLayout}
         >
         <PlatformFeaturesProvider features={effectivePlatformFeatures}>
+        <AppShellProvider value={{ enabled: appShellOn, navGates, canManageBilling, canManageApps }}>
         <TenantLocaleProvider tenant={tenantLocaleConfig}>
         <TenantLocaleSync tenant={tenantLocaleConfig} />
         <div className="flex h-dvh min-h-dvh bg-canvas font-sans text-gray-900">
-            <Sidebar
-                canAccessAccounting={canAccessAccounting}
-                canAccessInventoryReports={canAccessInventoryReports}
-                canAccessAccountingAdvanced={canAccessAccountingAdvanced}
-                canAccessPremiumCrm={hasPremiumCrm}
-                canAccessManufacturing={canAccessManufacturing}
-                canAccessProjects={canAccessProjects}
-                canAccessPlatformAccounting={canAccessPlatformAccounting}
-                canAccessAdmin={isPlatformAdmin}
-                canManageBilling={canManageBilling}
-                canManageTeam={canManageTeam}
-                canManageShortLinks={canManageShortLinks}
-                platformAdminMode={inPlatformAdminMode}
-                refereeMode={inRefereeMode}
-                employeeMode={inEmployeeMode}
-                helpEnabled={platformFeatures.help}
-                supportEnabled={platformFeatures.support || platformFeatures.feedback}
-                activePlanCode={activePlanCode}
-                accountingOnlyMode={accountingOnlyMode}
-                posEnabled={posEnabled}
-                planFeatures={planFeatures}
-                memberPermissions={perms}
-                memberIsOwner={owner}
-                compactNav={useCompactChrome}
-                isOpen={mobileNavOpen}
-                onClose={() => setMobileNavOpen(false)}
-            />
+            {appShellOn ? (
+                <AppShellSidebar
+                    {...navGates}
+                    chatUnreadCount={chatUnreadCount}
+                    compactNav={useCompactChrome}
+                    isOpen={mobileNavOpen}
+                    onClose={closeMobileNav}
+                />
+            ) : (
+                <Sidebar
+                    {...navGates}
+                    chatUnreadCount={chatUnreadCount}
+                    refereeMode={inRefereeMode}
+                    employeeMode={inEmployeeMode}
+                    activePlanCode={activePlanCode}
+                    compactNav={useCompactChrome}
+                    isOpen={mobileNavOpen}
+                    onClose={closeMobileNav}
+                />
+            )}
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top header */}
@@ -657,11 +763,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button
                             type="button"
-                            className="md:hidden min-h-touch min-w-touch flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
+                            className="relative md:hidden min-h-touch min-w-touch flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0"
                             onClick={() => setMobileNavOpen(true)}
-                            aria-label={t.sidebar.openNavigation}
+                            aria-label={[t.sidebar.openNavigation, chatUnreadLabel].filter(Boolean).join(' · ')}
                         >
                             <Menu className="w-5 h-5" />
+                            {/* On a phone the Chat link is inside the drawer, so its
+                                unread count needs a trace on the way in. */}
+                            {chatUnreadCount > 0 ? (
+                                <span aria-hidden className="absolute end-2 top-2 h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white" />
+                            ) : null}
                         </button>
                         <div className="flex min-w-0 flex-col justify-center gap-0.5">
                             {tenantStores.length > 1 && !inPlatformAdminMode && !inRefereeMode ? (
@@ -690,20 +801,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 md:gap-4 flex-shrink-0">
+                    {/* Only things with live state get a control here: a mic, a
+                        running clock, the assistant, notifications. Preferences
+                        and help live in the avatar menu, and anything with a page
+                        of its own is in the sidebar — see §2.12 of the UI spec. */}
+                    <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
                         <div className={headerActionsClass}>
-                            <div className="hidden md:contents">
-                                {canAccessVoice ? <VoiceNavWidget /> : null}
-                                {canAccessVoice ? <div className="h-8 w-px bg-gray-200 hidden sm:block" /> : null}
-                                <LanguageSwitcher />
-                            </div>
-                            <AppHeaderMobileMenu />
+                            {canAccessVoice ? <VoiceNavWidget /> : null}
                         </div>
                         {canTrackTime && canRenderChildren ? <TimerChip /> : null}
                         <div className={headerActionsClass}>
-                            {platformFeatures.support || platformFeatures.feedback ? <FeedbackWidget /> : null}
                             {canAccessAiChat ? <AiChatWidget /> : null}
-                            <ChatBell />
                             <NotificationBell />
                             <div className="h-8 w-px bg-gray-200 hidden sm:block" />
                             <AvatarDropdown
@@ -727,6 +835,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 }
                                 avatarUrl={user?.avatar_url}
                                 canSwitchAccount={canSwitchAccount}
+                                onOpenSupport={canOpenSupport ? () => setSupportOpen(true) : undefined}
                             />
                         </div>
                     </div>
@@ -770,7 +879,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 {resendingVerification ? t.dashboardLayout.emailVerifySending : t.dashboardLayout.emailVerifyResend}
                             </button>
                             <button
-                                onClick={() => setShowEmailVerificationBanner(false)}
+                                onClick={() => setEmailVerificationDismissed(true)}
                                 className="text-amber-100 hover:text-white transition-colors"
                                 aria-label={t.dashboardLayout.emailVerifyDismiss}
                             >
@@ -798,10 +907,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 onClick={() => {
                                     localStorage.setItem('onboarding_complete', '1');
                                     setShowOnboardingBanner(false);
-                                    // Flip the cached workspace flag too, so a later
-                                    // /auth/me refresh in this session doesn't hand the
-                                    // banner effect a stale `onboarding_dismissed: false`.
-                                    setUser((current: any) => (current?.tenants
+                                    // Flip the cached workspace flag too, so every reader
+                                    // of `me` — this banner, the onboarding redirect —
+                                    // agrees before the server's answer comes back.
+                                    queryClient.setQueryData(ME_QUERY_KEY, (current: any) => (current?.tenants
                                         ? {
                                             ...current,
                                             tenants: current.tenants.map((tenant: any) => (
@@ -831,10 +940,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             {canTrackTime && canRenderChildren ? <TimeTracker /> : null}
+            {supportOpen && canOpenSupport ? <SupportDialog onClose={() => setSupportOpen(false)} /> : null}
             <Toaster />
             <ServiceWorkerRegistrar />
         </div>
         </TenantLocaleProvider>
+        </AppShellProvider>
         </PlatformFeaturesProvider>
         </NavLayoutProvider>
         </BrandingProvider>

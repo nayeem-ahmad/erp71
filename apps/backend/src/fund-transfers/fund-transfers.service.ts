@@ -129,6 +129,9 @@ export class FundTransfersService {
                 ...(query.status ? { status: query.status } : {}),
                 ...(query.sourceStoreId ? { source_store_id: query.sourceStoreId } : {}),
                 ...(query.destinationStoreId ? { destination_store_id: query.destinationStoreId } : {}),
+                ...(query.storeId
+                    ? { OR: [{ source_store_id: query.storeId }, { destination_store_id: query.storeId }] }
+                    : {}),
                 ...(created ? { created_at: created } : {}),
             },
             include: this.transferInclude(),

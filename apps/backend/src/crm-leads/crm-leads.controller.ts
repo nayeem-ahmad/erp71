@@ -77,7 +77,7 @@ export class CrmLeadsController {
     @RequireAnyStorePermission(...CRM_WRITE)
     @Post(':id/convert')
     convert(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.service.convert(tenant.tenantId, id);
+        return this.service.convert(tenant.tenantId, id, tenant.storeId);
     }
 
     @RequireAnyStorePermission(...CRM_WRITE)

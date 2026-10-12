@@ -18,6 +18,7 @@ import {
     ValidateIf,
 } from 'class-validator';
 import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
+import { CloudinaryUploadDto } from '../assets/direct-upload.util';
 import { ProjectPriorityDto } from './project.dto';
 
 const CATEGORIES = ['TODO', 'IN_PROGRESS', 'DONE'] as const;
@@ -63,10 +64,16 @@ export class UpdateBoardDto {
 }
 
 /** An uploaded board background, as `FileReader.readAsDataURL` produces it. */
-export class SetBoardBackgroundImageDto {
+/**
+ * Either the image itself (`imageBase64`) or, from the web app, the
+ * `secure_url`/`public_id` Cloudinary returned for a direct upload — checked
+ * against the tenant's folder before it is saved (see `uploadBackgroundImage`).
+ */
+export class SetBoardBackgroundImageDto extends CloudinaryUploadDto {
     /** A `data:` URL or a bare base64 string. */
+    @IsOptional()
     @IsString()
-    imageBase64!: string;
+    imageBase64?: string;
 
     @IsOptional()
     @IsString()

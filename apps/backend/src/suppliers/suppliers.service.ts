@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { DatabaseService } from '../database/database.service';
 import { paginatedFindMany } from '../common/list-pagination.util';
@@ -18,11 +19,27 @@ import {
     UpdateSupplierDto,
 } from './supplier.dto';
 import { runImport, ImportResult } from '../common/import.util';
-import { nextSupplierPaymentNumber } from './supplier-payment-number.util';
+import { nextSupplierPaymentNumber, SUPPLIER_PAYMENT_PREFIXES } from './supplier-payment-number.util';
+import {
+    assertNotAheadOfSeries,
+    assertSerialFree,
+    canonicalSerial,
+    isSerialConflict,
+    resolvePaymentDate,
+    serialTaken,
+    typedSerial,
+} from '../common/credit-payment-entry.util';
 import { ACTIVE_PURCHASE, purchasePaymentStatus } from '../purchases/purchase-status';
+import { SupplierScope, supplierRowScopeWhere, supplierScopeWhere } from './supplier-visibility';
+import { makeImportBranchResolver } from '../common/import-branch.util';
+import { codeForNewRecord, nextSeriesCode } from '../common/code-series.util';
+
+/** The numbered series a typed payment serial may fall in (payments, payouts). */
+const SERIAL_SERIES = Object.values(SUPPLIER_PAYMENT_PREFIXES);
 
 const SUPPLIER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
+    supplier_code: (dir) => ({ supplier_code: dir }),
     phone: (dir) => ({ phone: dir }),
     email: (dir) => ({ email: dir }),
     due_balance: (dir) => ({ due_balance: dir }),
@@ -43,7 +60,12 @@ const DISCOUNT_LEG = 'discount';
 export class SuppliersService {
     constructor(private db: DatabaseService) {}
 
-    async create(tenantId: string, dto: CreateSupplierDto) {
+    /**
+     * The supplier belongs to `dto.store_id`, or to `opts.storeId` — the
+     * header branch — when the form names none: a branch of this tenant the
+     * caller may use (`opts.scope`; null is every branch).
+     */
+    async create(tenantId: string, dto: CreateSupplierDto, opts: { storeId?: string; scope?: SupplierScope } = {}) {
         // `@IsString()` accepts "" and "   ", either of which would reach the
         // picker as a blank row nobody can pick out of a list.
         const name = dto.name.trim();
@@ -53,14 +75,18 @@ export class SuppliersService {
 
         const existing = await this.db.supplier.findUnique({
             where: { tenant_id_name: { tenant_id: tenantId, name } },
-            select: { id: true, deleted_at: true },
+            select: { id: true, deleted_at: true, supplier_code: true },
         });
 
         if (existing && !existing.deleted_at) {
             throw new BadRequestException('A supplier with this name already exists.');
         }
 
-        const details = { phone: dto.phone, email: dto.email, address: dto.address };
+        const typedCode = dto.supplier_code?.trim() || null;
+        if (typedCode) await this.assertCodeFree(tenantId, typedCode, existing?.id);
+
+        const storeId = await this.branchForNewSupplier(tenantId, dto.store_id ?? opts.storeId, opts.scope ?? null);
+        const details = { phone: dto.phone, email: dto.email, address: dto.address, store_id: storeId };
 
         // `@@unique([tenant_id, name])` spans soft-deleted rows, so a deleted
         // supplier goes on holding its name. Refusing here would reject the name
@@ -68,27 +94,75 @@ export class SuppliersService {
         // taken and can never find what took it. Bring that row back instead:
         // its purchases, payable and ledger are still the same supplier's.
         if (existing) {
+            const supplierCode = typedCode ?? existing.supplier_code ?? (await nextSeriesCode(this.db, 'Supplier', tenantId));
             return this.db.supplier.update({
                 where: { id: existing.id },
-                data: { deleted_at: null, name, ...details },
+                data: { deleted_at: null, name, supplier_code: supplierCode, ...details },
             });
         }
 
-        return this.db.supplier.create({
-            data: { tenant_id: tenantId, name, ...details },
+        if (typedCode) {
+            return this.db.supplier.create({
+                data: { tenant_id: tenantId, name, supplier_code: typedCode, ...details },
+            });
+        }
+        // Left blank: the next SUP-##### code.
+        return codeForNewRecord(this.db, 'Supplier', tenantId, null, (supplierCode) =>
+            this.db.supplier.create({
+                data: { tenant_id: tenantId, name, supplier_code: supplierCode, ...details },
+            }),
+        );
+    }
+
+    /** A file's code must not be another supplier's; the supplier the row names may hold it already. */
+    private async assertImportCodeFree(tenantId: string, code: string, name: string) {
+        const holder = await this.db.supplier.findFirst({
+            where: { tenant_id: tenantId, supplier_code: code },
+            select: { name: true },
         });
+        if (holder && holder.name !== name) {
+            throw new BadRequestException(`supplier code "${code}" is already ${holder.name}'s`);
+        }
+    }
+
+    /** A typed code must not be another supplier's, deleted ones included: the unique index spans them. */
+    private async assertCodeFree(tenantId: string, code: string, ownId?: string) {
+        const holder = await this.db.supplier.findFirst({
+            where: { tenant_id: tenantId, supplier_code: code },
+            select: { id: true },
+        });
+        if (holder && holder.id !== ownId) {
+            throw new BadRequestException(`Supplier code "${code}" is already in use.`);
+        }
+    }
+
+    /** A branch of this tenant, and — for a member limited to some branches — one of theirs. */
+    private async branchForNewSupplier(tenantId: string, storeId: string | null | undefined, scope: SupplierScope) {
+        if (!storeId) throw new BadRequestException('Choose the branch this supplier belongs to.');
+        await this.checkedStoreId(tenantId, storeId);
+        if (scope && !scope.includes(storeId)) {
+            throw new ForbiddenException('You can only add suppliers to your own branches.');
+        }
+        return storeId;
+    }
+
+    private async checkedStoreId(tenantId: string, storeId: string) {
+        const store = await this.db.store.findFirst({ where: { id: storeId, tenant_id: tenantId }, select: { id: true } });
+        if (!store) throw new BadRequestException('Branch not found.');
+        return storeId;
     }
 
     async findAll(
         tenantId: string,
         page = 1,
         limit = 100,
-        opts?: { search?: string; sortBy?: string; sortDir?: string },
+        opts?: { search?: string; sortBy?: string; sortDir?: string; scope?: SupplierScope },
     ): Promise<PaginatedResult<unknown>> {
-        const where: any = { tenant_id: tenantId, deleted_at: null };
+        const where: any = { tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(opts?.scope ?? null) };
         if (opts?.search) {
             where.OR = [
                 { name: { contains: opts.search, mode: 'insensitive' } },
+                { supplier_code: { contains: opts.search, mode: 'insensitive' } },
                 { phone: { contains: opts.search } },
                 { email: { contains: opts.search, mode: 'insensitive' } },
                 { address: { contains: opts.search, mode: 'insensitive' } },
@@ -105,9 +179,9 @@ export class SuppliersService {
         });
     }
 
-    async findOne(tenantId: string, id: string) {
+    async findOne(tenantId: string, id: string, scope: SupplierScope = null) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(scope) },
         });
 
         if (!supplier) {
@@ -117,9 +191,19 @@ export class SuppliersService {
         return supplier;
     }
 
-    async update(tenantId: string, id: string, dto: UpdateSupplierDto) {
+    /**
+     * `opts.canSetBranch` false (a member who does not see every branch) refuses
+     * a move to another branch; moving takes the supplier's payable with it and
+     * leaves their past credit rows where they were.
+     */
+    async update(
+        tenantId: string,
+        id: string,
+        dto: UpdateSupplierDto,
+        opts: { scope?: SupplierScope; canSetBranch?: boolean } = {},
+    ) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(opts.scope ?? null) },
         });
 
         if (!supplier) {
@@ -147,10 +231,23 @@ export class SuppliersService {
             }
         }
 
+        if (dto.store_id !== undefined && dto.store_id !== supplier.store_id) {
+            if (opts.canSetBranch === false) {
+                throw new ForbiddenException('Only an owner can move a supplier to another branch.');
+            }
+            await this.checkedStoreId(tenantId, dto.store_id);
+        }
+
+        // Blank keeps the code it has: every supplier carries one.
+        const code = dto.supplier_code?.trim() || undefined;
+        if (code && code !== supplier.supplier_code) await this.assertCodeFree(tenantId, code, id);
+
         return this.db.supplier.update({
             where: { id },
             data: {
                 ...(name !== undefined ? { name } : {}),
+                ...(code !== undefined ? { supplier_code: code } : {}),
+                ...(dto.store_id !== undefined ? { store_id: dto.store_id } : {}),
                 ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
                 ...(dto.email !== undefined ? { email: dto.email } : {}),
                 ...(dto.address !== undefined ? { address: dto.address } : {}),
@@ -158,9 +255,9 @@ export class SuppliersService {
         });
     }
 
-    async remove(tenantId: string, id: string) {
+    async remove(tenantId: string, id: string, scope: SupplierScope = null) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(scope) },
         });
 
         if (!supplier) {
@@ -179,14 +276,21 @@ export class SuppliersService {
         tenantId: string,
         rows: Record<string, unknown>[],
         mode: 'skip' | 'upsert',
+        /** The branch rows without their own go to: the one picked for the file, else the header branch. */
+        storeId?: string,
+        /** An upsert may not overwrite a supplier outside the importer's scope, nor add one to a branch outside it. */
+        scope: SupplierScope = null,
     ): Promise<ImportResult> {
+        const branchOf = await makeImportBranchResolver(this.db, tenantId, scope);
         return runImport(rows, mode, tenantId, {
             requiredFields: ['name'],
             castRow: (raw) => ({
                 name: String(raw.name ?? '').trim(),
+                supplier_code: raw.supplier_code ? String(raw.supplier_code).trim() || null : null,
                 phone: raw.phone ? String(raw.phone).trim() || null : null,
                 email: raw.email ? String(raw.email).trim() || null : null,
                 address: raw.address ? String(raw.address).trim() || null : null,
+                branch: raw.branch ? String(raw.branch).trim() || null : null,
             }),
             findDuplicate: async (row) => {
                 const existing = await this.db.supplier.findUnique({
@@ -199,18 +303,39 @@ export class SuppliersService {
                 return existing && !existing.deleted_at ? existing.id : null;
             },
             create: async (row) => {
+                const rowStoreId = branchOf(row.branch) ?? storeId;
+                if (!rowStoreId) throw new BadRequestException('no branch — pick one for the file or fill the branch column');
                 // Upsert rather than insert: the name may still be held by a
-                // deleted supplier, whom the file is asking for back.
-                await this.db.supplier.upsert({
+                // deleted supplier, whom the file is asking for back — on the
+                // branch the file puts them, keeping their code unless the file
+                // gives another.
+                const details = { phone: row.phone, email: row.email, address: row.address, store_id: rowStoreId };
+                const upsert = (supplierCode: string) => this.db.supplier.upsert({
                     where: { tenant_id_name: { tenant_id: tenantId, name: row.name } },
-                    create: { tenant_id: tenantId, name: row.name, phone: row.phone, email: row.email, address: row.address },
-                    update: { deleted_at: null, phone: row.phone, email: row.email, address: row.address },
+                    create: { tenant_id: tenantId, name: row.name, supplier_code: supplierCode, ...details },
+                    update: { deleted_at: null, ...(row.supplier_code ? { supplier_code: supplierCode } : {}), ...details },
                 });
+                if (row.supplier_code) {
+                    await this.assertImportCodeFree(tenantId, row.supplier_code, row.name);
+                    await upsert(row.supplier_code);
+                } else {
+                    await codeForNewRecord(this.db, 'Supplier', tenantId, null, upsert);
+                }
             },
             update: async (id, row) => {
+                if (scope && !(await this.db.supplier.count({ where: { id, ...supplierScopeWhere(scope) } }))) {
+                    throw new BadRequestException('matches a supplier of another branch — not updated');
+                }
+                if (row.supplier_code) await this.assertImportCodeFree(tenantId, row.supplier_code, row.name);
                 await this.db.supplier.update({
                     where: { id },
-                    data: { name: row.name, phone: row.phone, email: row.email, address: row.address },
+                    data: {
+                        name: row.name,
+                        ...(row.supplier_code ? { supplier_code: row.supplier_code } : {}),
+                        phone: row.phone,
+                        email: row.email,
+                        address: row.address,
+                    },
                 });
             },
         });
@@ -286,11 +411,16 @@ export class SuppliersService {
             amount: number;
             discount: number;
             date: Date;
+            /** The payment method's ledger account; the rule's Cash in Hand when unset. */
+            cashAccountId?: string;
+            /** The payment's branch — its supplier's — so a branch's payable clears against its purchases. */
+            storeId: string;
         },
     ) {
         const common = {
             tx,
             tenantId: input.tenantId,
+            storeId: input.storeId,
             eventType: 'supplier_payment' as const,
             conditionKey: 'payment_direction' as const,
             sourceModule: 'suppliers',
@@ -312,6 +442,7 @@ export class SuppliersService {
                 conditionValue: input.type === 'PAYMENT' ? 'pay' : 'receive',
                 sourceType: 'supplier_payment',
                 amount: input.amount,
+                ...cashLegOverride(input.type === 'PAYMENT' ? 'out' : 'in', input.cashAccountId),
                 description: `Auto-posted supplier ${input.type === 'PAYMENT' ? 'payment' : 'receipt'} — ${input.supplierName}`,
             })
             : null;
@@ -417,12 +548,13 @@ export class SuppliersService {
         return direction === SupplierPaymentDirectionDto.PAY ? 'PAYMENT' : 'PAYOUT';
     }
 
-    private async findCreditPaymentOrThrow(tenantId: string, paymentId: string) {
+    private async findCreditPaymentOrThrow(tenantId: string, paymentId: string, scope: SupplierScope = null) {
         const payment = await this.db.supplierCreditTransaction.findFirst({
             where: {
                 id: paymentId,
                 tenant_id: tenantId,
                 type: { in: ['PAYMENT', 'PAYOUT'] },
+                ...supplierRowScopeWhere(scope),
             },
             include: {
                 supplier: { select: { id: true, name: true, phone: true, due_balance: true } },
@@ -437,9 +569,10 @@ export class SuppliersService {
         tenantId: string,
         id: string,
         params?: { page?: number; limit?: number; from?: string; to?: string },
+        scope: SupplierScope = null,
     ) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(scope) },
             select: { id: true, name: true, phone: true, due_balance: true },
         });
         if (!supplier) throw new NotFoundException('Supplier not found');
@@ -590,9 +723,9 @@ export class SuppliersService {
      * to it; kept alongside so the two can be diffed before the parallel table is
      * retired.
      */
-    async getGlLedger(tenantId: string, id: string, params?: { from?: string; to?: string }) {
+    async getGlLedger(tenantId: string, id: string, params?: { from?: string; to?: string }, scope: SupplierScope = null) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(scope) },
             select: { id: true, name: true, phone: true, due_balance: true },
         });
         if (!supplier) throw new NotFoundException('Supplier not found');
@@ -615,9 +748,14 @@ export class SuppliersService {
         };
     }
 
+    /**
+     * `query.branch` is the branch the page shows, already checked by the
+     * controller (undefined: every branch the scope allows); `query.scope` the
+     * suppliers the caller may see at all.
+     */
     async listCreditPayments(
         tenantId: string,
-        query: ListSupplierCreditPaymentsQueryDto & { timezone: string },
+        query: Omit<ListSupplierCreditPaymentsQueryDto, 'storeId'> & { timezone: string; branch?: string; scope?: SupplierScope },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
@@ -626,6 +764,8 @@ export class SuppliersService {
         const where: any = {
             tenant_id: tenantId,
             type: { in: ['PAYMENT', 'PAYOUT'] },
+            ...supplierRowScopeWhere(query.scope ?? null),
+            ...(query.branch ? { store_id: query.branch } : {}),
         };
 
         if (query.supplierId) {
@@ -684,8 +824,8 @@ export class SuppliersService {
         return paginate(itemsWithAllocation, total, page, limit);
     }
 
-    async getCreditPayment(tenantId: string, paymentId: string) {
-        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
+    async getCreditPayment(tenantId: string, paymentId: string, scope: SupplierScope = null) {
+        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId, scope);
         if (payment.type !== 'PAYMENT') return payment;
 
         const allocatedSum = await this.db.supplierPaymentAllocation.aggregate({
@@ -696,8 +836,24 @@ export class SuppliersService {
         return { ...payment, allocated_amount: allocated, unapplied_amount: this.settledBy(payment) - allocated };
     }
 
-    async updateCreditPayment(tenantId: string, paymentId: string, dto: UpdateSupplierCreditPaymentDto) {
-        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
+    /**
+     * The serial a new payment would get if saved now, for the entry form to
+     * show. Not reserved: a form left blank is numbered at save time, so two
+     * operators previewing at once cannot collide.
+     */
+    async getNextPaymentNumber(tenantId: string, direction?: SupplierPaymentDirectionDto) {
+        const txType = this.typeFromDirection(direction ?? SupplierPaymentDirectionDto.PAY);
+        return { payment_number: await nextSupplierPaymentNumber(tenantId, this.db, txType) };
+    }
+
+    async updateCreditPayment(
+        tenantId: string,
+        paymentId: string,
+        dto: UpdateSupplierCreditPaymentDto,
+        timeZone?: string,
+        scope: SupplierScope = null,
+    ) {
+        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId, scope);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
         const oldDiscount = Number(payment.discount_amount ?? 0);
@@ -708,6 +864,13 @@ export class SuppliersService {
         const newAmount = dto.amount ?? oldAmount;
         const newDiscount = dto.discount ?? oldDiscount;
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
+        const newDate = resolvePaymentDate(dto.date, timeZone) ?? payment.created_at;
+        const typedRename = typedSerial(dto.paymentNumber);
+        const renamedTo = typedRename && canonicalSerial(typedRename, SERIAL_SERIES);
+        const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
+        const newMethod = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         const allocatedSum = await this.db.supplierPaymentAllocation.aggregate({
             where: { tenant_id: tenantId, transaction_id: paymentId },
@@ -731,6 +894,10 @@ export class SuppliersService {
                 select: { id: true, name: true, due_balance: true },
             });
             if (!supplier) throw new NotFoundException('Supplier not found');
+            if (newNumber && newNumber !== payment.payment_number) {
+                await assertSerialFree(tx, 'supplierCreditTransaction', tenantId, newNumber, paymentId);
+                await assertNotAheadOfSeries(tx, 'SupplierCreditTransaction', tenantId, newNumber, SERIAL_SERIES);
+            }
 
             const dueWithoutPayment = Number(supplier.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
             this.assertPaymentSplit(newType, newAmount, newDiscount, dueWithoutPayment);
@@ -748,6 +915,9 @@ export class SuppliersService {
                     discount_amount: newDiscount,
                     balance_after: balanceAfter,
                     notes: newNotes,
+                    created_at: newDate,
+                    payment_number: newNumber,
+                    ...(newMethod ? { payment_method_id: newMethod.id, payment_method_name: newMethod.name } : {}),
                 },
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
@@ -760,24 +930,34 @@ export class SuppliersService {
                 data: { due_balance: balanceAfter },
             });
 
+            // A method left alone reposts to wherever it is linked today.
+            const cashAccountId = newMethod
+                ? newMethod.account_id ?? undefined
+                : await storedPaymentMethodAccountId(tx, tenantId, payment.payment_method_id);
+
             const posting = await this.postPaymentLegs(tx, {
                 tenantId,
                 supplierId,
                 supplierName: supplier.name,
                 paymentId,
-                paymentNumber: payment.payment_number ?? paymentId,
+                paymentNumber: newNumber ?? paymentId,
                 type: newType,
                 amount: newAmount,
                 discount: newDiscount,
-                date: payment.created_at,
+                date: newDate,
+                cashAccountId,
+                storeId: payment.store_id,
             });
 
             return { ...updated, ...posting };
+        }).catch((err) => {
+            if (newNumber && isSerialConflict(err)) throw serialTaken(newNumber);
+            throw err;
         });
     }
 
-    async deleteCreditPayment(tenantId: string, paymentId: string) {
-        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
+    async deleteCreditPayment(tenantId: string, paymentId: string, scope: SupplierScope = null) {
+        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId, scope);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
         const oldDiscount = Number(payment.discount_amount ?? 0);
@@ -816,10 +996,12 @@ export class SuppliersService {
         id: string,
         userId: string,
         dto: RecordSupplierCreditPaymentDto,
+        timeZone?: string,
+        scope: SupplierScope = null,
     ) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
-            select: { id: true, name: true, due_balance: true },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(scope) },
+            select: { id: true, name: true, due_balance: true, store_id: true },
         });
         if (!supplier) throw new NotFoundException('Supplier not found');
 
@@ -834,21 +1016,39 @@ export class SuppliersService {
         const currentDue = Number(supplier.due_balance);
         this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
+        const paymentDate = resolvePaymentDate(dto.date, timeZone) ?? new Date();
+        const typedRaw = typedSerial(dto.paymentNumber);
+        const typed = typedRaw && canonicalSerial(typedRaw, SERIAL_SERIES);
+        // Kept outside the transaction so a unique-index race can name it.
+        let serial = typed;
+        const method = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         return this.db.$transaction(async (tx) => {
-            const payment_number = await nextSupplierPaymentNumber(tenantId, tx, txType);
+            if (typed) {
+                await assertSerialFree(tx, 'supplierCreditTransaction', tenantId, typed);
+                await assertNotAheadOfSeries(tx, 'SupplierCreditTransaction', tenantId, typed, SERIAL_SERIES);
+            }
+            const payment_number = typed ?? await nextSupplierPaymentNumber(tenantId, tx, txType);
+            serial = payment_number;
 
             const payment = await tx.supplierCreditTransaction.create({
                 data: {
                     tenant_id: tenantId,
                     supplier_id: id,
+                    // A payment belongs to its supplier's branch.
+                    store_id: supplier.store_id,
                     type: txType,
                     amount: dto.amount,
                     discount_amount: discount,
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
+                    payment_method_id: method?.id,
+                    payment_method_name: method?.name,
                     created_by: userId,
+                    created_at: paymentDate,
                 },
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
@@ -876,17 +1076,22 @@ export class SuppliersService {
                 type: txType,
                 amount: dto.amount,
                 discount,
-                date: payment.created_at,
+                date: paymentDate,
+                cashAccountId: method?.account_id ?? undefined,
+                storeId: supplier.store_id,
             });
 
             return { ...payment, ...posting };
+        }).catch((err) => {
+            if (serial && isSerialConflict(err)) throw serialTaken(serial);
+            throw err;
         });
     }
 
     /** Matches part or all of an existing (previously unapplied) supplier payment to specific bill(s). */
-    async allocatePayment(tenantId: string, transactionId: string, dto: AllocateSupplierPaymentDto) {
+    async allocatePayment(tenantId: string, transactionId: string, dto: AllocateSupplierPaymentDto, scope: SupplierScope = null) {
         const transaction = await this.db.supplierCreditTransaction.findFirst({
-            where: { id: transactionId, tenant_id: tenantId, type: 'PAYMENT' },
+            where: { id: transactionId, tenant_id: tenantId, type: 'PAYMENT', ...supplierRowScopeWhere(scope) },
         });
         if (!transaction) throw new NotFoundException('Supplier payment not found');
 
@@ -903,9 +1108,9 @@ export class SuppliersService {
     }
 
     /** Reverses a single bill allocation, freeing that amount back up as an unapplied advance. */
-    async removeAllocation(tenantId: string, allocationId: string) {
+    async removeAllocation(tenantId: string, allocationId: string, scope: SupplierScope = null) {
         const allocation = await this.db.supplierPaymentAllocation.findFirst({
-            where: { id: allocationId, tenant_id: tenantId },
+            where: { id: allocationId, tenant_id: tenantId, ...(scope ? { transaction: supplierRowScopeWhere(scope) } : {}) },
             include: { purchase: { select: { id: true, total_amount: true, paid_amount: true } } },
         });
         if (!allocation) throw new NotFoundException('Allocation not found');
@@ -927,9 +1132,9 @@ export class SuppliersService {
     }
 
     /** Open bills and unapplied advance total for a supplier - the working view for matching payments to bills. */
-    async getBillingSummary(tenantId: string, supplierId: string) {
+    async getBillingSummary(tenantId: string, supplierId: string, scope: SupplierScope = null) {
         const supplier = await this.db.supplier.findFirst({
-            where: { id: supplierId, tenant_id: tenantId, deleted_at: null },
+            where: { id: supplierId, tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(scope) },
             select: { id: true, name: true, due_balance: true },
         });
         if (!supplier) throw new NotFoundException('Supplier not found');

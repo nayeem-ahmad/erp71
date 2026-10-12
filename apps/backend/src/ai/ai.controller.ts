@@ -36,7 +36,11 @@ export class AiController {
         return this.aiService.getUsageSummary(tenant.tenantId);
     }
 
+    // Paid model calls. These had only the platform default to slow a hot loop,
+    // 20 a minute per address; when that default moved to 120 per signed-in user
+    // they were pinned at the 20 they had, like `chat` below.
     @Post('narrate-report')
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     narrateReport(@Tenant() tenant: TenantContext, @Body() dto: NarrateReportDto) {
@@ -44,6 +48,7 @@ export class AiController {
     }
 
     @Post('draft-message')
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     draftMessage(@Tenant() tenant: TenantContext, @Body() dto: DraftMessageDto) {
@@ -51,6 +56,7 @@ export class AiController {
     }
 
     @Post('parse-voice-entry')
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     async parseVoiceEntry(@Tenant() tenant: TenantContext, @Body() dto: ParseVoiceEntryDto) {
@@ -59,6 +65,7 @@ export class AiController {
     }
 
     @Post('parse-voice-sale')
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(TenantInterceptor)
     async parseVoiceSale(@Tenant() tenant: TenantContext, @Body() dto: ParseVoiceSaleDto) {

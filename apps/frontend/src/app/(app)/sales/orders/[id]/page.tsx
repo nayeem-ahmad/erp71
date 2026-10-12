@@ -15,6 +15,8 @@ import { routes } from '@/lib/routes';
 import { PageShell, Button } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
+import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { documentPricing, documentVatTotals, enteredBeforeVat, productTaxRates } from '@/lib/sale-vat';
 
 interface EditItem {
     productId: string;
@@ -22,6 +24,9 @@ interface EditItem {
     sku: string;
     quantity: number;
     priceAtOrder: number;
+    /** The product's own rates, for VAT added on top; null takes the shop default. */
+    vatRate?: number | null;
+    sdRate?: number | null;
 }
 
 function formatDateForInput(value?: string | Date | null) {
@@ -61,6 +66,9 @@ function OrderDetailsPageContent() {
     const [editCustomerId, setEditCustomerId] = useState('');
     const [editDeliveryDate, setEditDeliveryDate] = useState('');
     const [editItems, setEditItems] = useState<EditItem[]>([]);
+    // The shop's default VAT rate, for lines without their own. Whether VAT is
+    // added on top follows the order itself, priced the way it was made.
+    const taxPricing = useTaxPricing();
     const [customers, setCustomers] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [productSearch, setProductSearch] = useState('');
@@ -88,6 +96,7 @@ function OrderDetailsPageContent() {
                     sku: item.product?.sku || '',
                     quantity: item.quantity,
                     priceAtOrder: parseFloat(item.price_at_order),
+                    ...productTaxRates(item.product),
                 })),
             );
         }
@@ -130,7 +139,11 @@ function OrderDetailsPageContent() {
     };
 
     // Edit helpers
-    const editTotal = editItems.reduce((sum, i) => sum + i.quantity * i.priceAtOrder, 0);
+    const editTotals = documentVatTotals(
+        editItems.map((i) => ({ quantity: i.quantity, unitPrice: i.priceAtOrder, vatRate: i.vatRate, sdRate: i.sdRate })),
+        documentPricing(!enteredBeforeVat(order), taxPricing.defaultVatRate),
+    );
+    const editTotal = editTotals.total;
 
     const filteredProducts = products
         .filter(
@@ -153,6 +166,7 @@ function OrderDetailsPageContent() {
                     sku: product.sku || '',
                     quantity: 1,
                     priceAtOrder: parseFloat(product.price),
+                    ...productTaxRates(product),
                 },
             ]);
         }
@@ -182,6 +196,7 @@ function OrderDetailsPageContent() {
                     priceAtOrder: i.priceAtOrder,
                 })),
                 totalAmount: editTotal,
+                vatAmount: editTotals.vatAmount,
             });
             await loadOrder();
             router.push(`/sales/orders/${id}`);
@@ -235,6 +250,8 @@ function OrderDetailsPageContent() {
     }
 
     const totalAmount = Number(order.total_amount);
+    // VAT added on top of before-VAT prices; part of the total above.
+    const vatAmount = Number(order.vat_amount ?? 0);
     const amountPaid = Number(order.amount_paid);
     const amountDue = totalAmount - amountPaid;
     const canEdit = order.status === 'DRAFT' || order.status === 'CONFIRMED';
@@ -383,6 +400,12 @@ function OrderDetailsPageContent() {
                                     <td>{formatBDT(Number(item.price_at_order) * item.quantity, { locale })}</td>
                                 </tr>
                             ))}
+                            {vatAmount > 0.005 && (
+                                <tr>
+                                    <td colSpan={3}>{t.sales.invoice.vat}</td>
+                                    <td>{formatBDT(vatAmount, { locale })}</td>
+                                </tr>
+                            )}
                             <tr className="total-row">
                                 <td colSpan={3}>{t.common.total}</td>
                                 <td>{formatBDT(totalAmount, { locale })}</td>
@@ -528,6 +551,13 @@ function OrderDetailsPageContent() {
                                         ))}
                                     </tbody>
                                     <tfoot>
+                                        {editTotals.vatAmount > 0.005 && (
+                                            <tr>
+                                                <td colSpan={3} className="pt-3 text-end text-sm text-gray-600">{t.sales.invoice.vat}</td>
+                                                <td className="pt-3 text-end text-sm text-gray-700">{formatBDT(editTotals.vatAmount, { locale })}</td>
+                                                <td></td>
+                                            </tr>
+                                        )}
                                         <tr className="border-t-2 border-gray-200">
                                             <td colSpan={3} className="pt-3 text-end text-sm font-semibold">{t.common.total}</td>
                                             <td className="pt-3 text-end text-xl font-bold text-blue-600">{formatBDT(editTotal, { locale })}</td>
@@ -565,6 +595,12 @@ function OrderDetailsPageContent() {
                                 ))}
                             </tbody>
                             <tfoot>
+                                {vatAmount > 0.005 && (
+                                    <tr>
+                                        <td colSpan={3} className="px-4 pt-4 text-end text-sm text-gray-600">{t.sales.invoice.vat}</td>
+                                        <td className="px-4 pt-4 text-end text-sm text-gray-700">{formatBDT(vatAmount, { locale })}</td>
+                                    </tr>
+                                )}
                                 <tr className="border-t-2 border-gray-200">
                                     <td colSpan={3} className="p-4 text-end text-sm font-semibold">{t.common.total}</td>
                                     <td className="p-4 text-end text-xl font-bold text-blue-600">{formatBDT(totalAmount, { locale })}</td>

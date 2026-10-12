@@ -261,6 +261,27 @@ describe('ProductSearch entry bar', () => {
         expect(screen.getByLabelText('Previous rates')).toBeEnabled();
     });
 
+    it('warns when more is entered than is in stock', async () => {
+        render(<ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" />);
+        await stageCoffee();
+
+        fireEvent.change(screen.getByLabelText('Qty'), { target: { value: '10' } });
+
+        expect(screen.getByText(/entering more than is in stock/)).toBeInTheDocument();
+        expect(screen.getByLabelText('Qty')).toHaveClass('border-amber-400');
+    });
+
+    it('stays quiet about stock on a document that brings goods in', async () => {
+        render(<ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" warnOverStock={false} />);
+        await stageCoffee();
+
+        fireEvent.change(screen.getByLabelText('Qty'), { target: { value: '10' } });
+
+        expect(screen.getByText(/Available 6/)).toBeInTheDocument();
+        expect(screen.queryByText(/entering more than is in stock/)).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Qty')).not.toHaveClass('border-amber-400');
+    });
+
     it('offers no inline rates when the document did not ask for history', async () => {
         render(<ProductSearch onProductSelect={jest.fn()} priceLabel="Unit Cost" />);
         await stageCoffee();

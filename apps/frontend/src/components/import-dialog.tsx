@@ -32,6 +32,8 @@ interface ImportDialogProps {
   fields: ImportField[];
   importFn: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') => Promise<ImportResult>;
   onSuccess: () => void;
+  /** Extra choices for the whole file, shown under duplicate handling — e.g. the branch rows go to. */
+  options?: React.ReactNode;
 }
 
 type Step = 'upload' | 'map' | 'preview' | 'result';
@@ -63,6 +65,7 @@ export function ImportDialog({
   fields,
   importFn,
   onSuccess,
+  options,
 }: ImportDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('upload');
@@ -203,6 +206,7 @@ export function ImportDialog({
                 ))}
               </div>
             </div>
+            {options ? <div className="border-t border-gray-100 pt-4">{options}</div> : null}
           </div>
         )}
 

@@ -41,8 +41,8 @@ elif [ ! -f "$ENV_FILE" ]; then
   sed -i \
     -e 's|^FRONTEND_URL=.*|FRONTEND_URL=https://app.erp71.com|' \
     -e 's|^BACKEND_PUBLIC_URL=.*|BACKEND_PUBLIC_URL=https://api.erp71.com|' \
-    -e 's|^NEXT_PUBLIC_API_BASE=.*|NEXT_PUBLIC_API_BASE=https://api.erp71.com|' \
-    -e 's|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=https://api.erp71.com|' \
+    -e 's|^NEXT_PUBLIC_API_BASE=.*|NEXT_PUBLIC_API_BASE=https://app.erp71.com|' \
+    -e 's|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=https://app.erp71.com|' \
     -e "s|^JWT_SECRET=.*|JWT_SECRET=${ERP71_JWT_SECRET}|" \
     -e "s|^FIELD_ENCRYPTION_KEY=.*|FIELD_ENCRYPTION_KEY=${ERP71_FIELD_KEY}|" \
     -e "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://${ERP71_DB_USER}:${ERP71_DB_PASSWORD}@retail-saas-db-1:5432/${ERP71_DB_NAME}|" \
@@ -112,7 +112,14 @@ erp71.com {
 
 app.erp71.com {
 	encode zstd gzip
-	reverse_proxy erp71-frontend-1:3000
+	handle /api/v1/* {
+		reverse_proxy erp71-backend-1:4000 {
+			flush_interval -1
+		}
+	}
+	handle {
+		reverse_proxy erp71-frontend-1:3000
+	}
 }
 
 api.erp71.com {
@@ -132,6 +139,7 @@ fi
 
 echo "==> Smoke checks"
 curl -sf "https://api.erp71.com/api/v1/health" && echo ""
+curl -sf "https://app.erp71.com/api/v1/health" && echo ""
 curl -sf -o /dev/null -w "app.erp71.com HTTP %{http_code}\n" "https://app.erp71.com/"
 
 echo "Done. erp71 is live at https://app.erp71.com"

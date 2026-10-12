@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { CareersApplicationStage, isCareersTerminalStage } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService } from '../audit/audit.service';
 import { TotpService } from '../auth/totp.service';
 import { AUTH_SCOPE_APPLICANT } from '../auth/token-scope';
@@ -59,6 +60,7 @@ export class CareersService {
         private readonly jwt: JwtService,
         private readonly totp: TotpService,
         private readonly audit: AuditService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     // ── The public board ──────────────────────────────────────────────────────
@@ -301,6 +303,8 @@ export class CareersService {
             where: { id: userId },
             data: { applicant_token_version: { increment: 1 } },
         });
+        // `JwtStrategy` checks `atv` against a cached row.
+        this.authCache.invalidateUser(userId);
         this.audit.log('CAREERS_LOGOUT', 'JobSeeker', { userId }, userId).catch(() => {});
     }
 

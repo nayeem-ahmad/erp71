@@ -1,6 +1,10 @@
 'use client';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CustomersPage from './page';
+import { formatBDT } from '@/lib/format';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -16,6 +20,8 @@ jest.mock('@/lib/api', () => ({
         updateCustomer: jest.fn(),
         getCustomerGroups: jest.fn(),
         getTerritories: jest.fn(),
+        getSalesSettings: jest.fn(),
+        getCustomerSegmentStats: jest.fn(),
     },
 }));
 
@@ -40,6 +46,7 @@ const mockCustomers = [
         customer_group_id: 'grp-1',
         territory_id: 'ter-1',
         credit_limit: '5000.00',
+        due_balance: '1500.00',
         default_discount_pct: '2.50',
         birthday: '1990-04-12T00:00:00.000Z',
         total_spent: '250.00',
@@ -70,6 +77,10 @@ describe('CustomersPage — Customer Management', () => {
         api.updateCustomer.mockResolvedValue({ id: 'cust-1' });
         api.getCustomerGroups.mockResolvedValue([{ id: 'grp-1', name: 'Wholesale' }]);
         api.getTerritories.mockResolvedValue([{ id: 'ter-1', name: 'Dhaka North', parent: null }]);
+        api.getSalesSettings.mockResolvedValue({ show_customer_credit: false });
+        api.getCustomerSegmentStats.mockResolvedValue({ total: 0, breakdown: [] });
+        // An owner: customers start on every branch.
+        mockBranchScope({ value: 'all', defaultValue: 'all' });
     });
 
     afterEach(() => {
@@ -372,6 +383,117 @@ describe('CustomersPage — Customer Management', () => {
         render(<CustomersPage />);
         await waitFor(() => {
             expect(api.getCustomersPaged).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('branch filter', () => {
+        it('starts on every branch, and re-asks for page 1 of the branch picked', async () => {
+            const { api } = require('@/lib/api');
+            render(<CustomersPage />);
+            await waitFor(() =>
+                expect(api.getCustomersPaged).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'all' })),
+            );
+            expect(api.getCustomerSegmentStats).toHaveBeenCalledWith('all');
+
+            fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+            await waitFor(() =>
+                expect(api.getCustomersPaged).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-2', page: 1 })),
+            );
+            await waitFor(() => expect(api.getCustomerSegmentStats).toHaveBeenLastCalledWith('store-2'));
+        });
+
+        it('asks nothing until the branch is known', async () => {
+            mockBranchScope({ ready: false });
+            const { api } = require('@/lib/api');
+            render(<CustomersPage />);
+            await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+            expect(api.getCustomersPaged).not.toHaveBeenCalled();
+            expect(api.getCustomerSegmentStats).not.toHaveBeenCalled();
+        });
+
+        it('lets a member who sees every branch move a customer to another one', async () => {
+            const { api } = require('@/lib/api');
+            render(<CustomersPage />);
+            await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+            fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+            const field = await screen.findByLabelText(/^branch/i, { selector: 'select#customer-branch' });
+            fireEvent.change(field, { target: { value: 'store-2' } });
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() =>
+                expect(api.updateCustomer).toHaveBeenCalledWith('cust-1', expect.objectContaining({ store_id: 'store-2' })),
+            );
+        });
+
+        it('keeps a branch the options do not list instead of clearing it', async () => {
+            const { api } = require('@/lib/api');
+            api.getCustomersPaged.mockResolvedValue({
+                items: [{ ...mockCustomers[0], store_id: 'store-9', store: { id: 'store-9', name: 'Sylhet Branch' } }],
+                total: 1, page: 1, limit: 20, pages: 1,
+            });
+            render(<CustomersPage />);
+            await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+            fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+
+            const field = await screen.findByLabelText(/^branch/i, { selector: 'select#customer-branch' });
+            expect(field).toHaveValue('store-9');
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() =>
+                expect(api.updateCustomer).toHaveBeenCalledWith('cust-1', expect.objectContaining({ store_id: 'store-9' })),
+            );
+        });
+
+        // Every customer belongs to a branch; a limited member sees which, but
+        // only an owner moves them.
+        it('shows a limited member the branch read-only and sends no branch', async () => {
+            mockBranchScope({ canSeeAll: false });
+            const { api } = require('@/lib/api');
+            render(<CustomersPage />);
+            await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
+            fireEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+            await waitFor(() => screen.getByPlaceholderText('John Doe'));
+
+            expect(document.querySelector('select#customer-branch')).toBeDisabled();
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+            await waitFor(() => expect(api.updateCustomer).toHaveBeenCalled());
+            expect(api.updateCustomer.mock.calls[0][1]).not.toHaveProperty('store_id');
+        });
+
+        it('adds a new customer to the header branch unless another is picked', async () => {
+            const { api } = require('@/lib/api');
+            render(<CustomersPage />);
+            fireEvent.click(screen.getByRole('button', { name: /new customer/i }));
+            await waitFor(() => screen.getByPlaceholderText('John Doe'));
+
+            const branchSelect = document.querySelector('select#customer-branch') as HTMLSelectElement;
+            expect(branchSelect).toHaveValue('store-1');
+            fireEvent.change(branchSelect, { target: { value: 'store-2' } });
+            fireEvent.change(screen.getByPlaceholderText('John Doe'), { target: { value: 'Bob Jones' } });
+            fireEvent.click(screen.getByRole('button', { name: /add customer/i }));
+
+            await waitFor(() => {
+                expect(api.createCustomer).toHaveBeenCalledWith(expect.objectContaining({ name: 'Bob Jones', store_id: 'store-2' }));
+            });
+        });
+    });
+
+    it('shows the Due column with the Sales Settings switch off, without credit limits', async () => {
+        render(<CustomersPage />);
+        await waitFor(() => screen.getByText('Alice Smith'));
+        expect(screen.getByRole('columnheader', { name: /^due$/i })).toBeInTheDocument();
+        expect(screen.getByText(formatBDT(1500))).toBeInTheDocument();
+        expect(screen.queryByText(`/ ${formatBDT(5000)}`)).not.toBeInTheDocument();
+    });
+
+    it('adds the credit limit under the due once the Sales Settings switch is on', async () => {
+        const { api } = require('@/lib/api');
+        api.getSalesSettings.mockResolvedValue({ show_customer_credit: true });
+        render(<CustomersPage />);
+        await waitFor(() => {
+            expect(screen.getByText(`/ ${formatBDT(5000)}`)).toBeInTheDocument();
         });
     });
 });

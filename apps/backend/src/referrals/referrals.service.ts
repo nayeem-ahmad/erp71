@@ -122,46 +122,59 @@ export class ReferralsService {
         });
     }
 
-    /** Resolve the active referee profile for a signed-in user, linking by email when needed. */
+    /**
+     * Resolve the active referee profile for a signed-in user, linking by email when needed.
+     *
+     * Both candidates come back in one read — the profile linked to this
+     * account, and the one carrying its email — where they used to take up to
+     * three reads in a row. That is safe because `user_id` and `email` are each
+     * unique on `Referee`, so the read is at most two rows. It deliberately
+     * includes inactive and archived profiles: whether the account is already
+     * linked *elsewhere* counts those too, and the activity rules are applied
+     * below exactly as the separate reads applied them. `GET /auth/me` and
+     * `RefereeGuard` both call this on every request they serve.
+     */
     async resolveActiveRefereeForUser(userId: string, email: string) {
-        const select = {
-            id: true,
-            name: true,
-            email: true,
-            referral_code: true,
-            signup_discount: true,
-            commission_rate: true,
-            is_active: true,
-            user_id: true,
-        } as const;
-
-        const byUserId = await this.db.referee.findFirst({
-            where: { user_id: userId, is_active: true, deleted_at: null },
-            select,
+        const rows = await this.db.referee.findMany({
+            where: { OR: [{ user_id: userId }, { email }] },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                referral_code: true,
+                signup_discount: true,
+                commission_rate: true,
+                is_active: true,
+                user_id: true,
+                deleted_at: true,
+            },
+            take: 2,
         });
-        if (byUserId) return byUserId;
 
-        const byEmail = await this.db.referee.findFirst({
-            where: { email, is_active: true, deleted_at: null },
-            select,
-        });
+        const live = (row: (typeof rows)[number]) => row.is_active && row.deleted_at === null;
+        // Callers get the profile without the archive stamp, as they always have.
+        const profile = ({ deleted_at: _deletedAt, ...rest }: (typeof rows)[number]) => rest;
+
+        const linked = rows.find((row) => row.user_id === userId);
+        if (linked && live(linked)) return profile(linked);
+
+        const byEmail = rows.find((row) => row.email === email && live(row));
         if (!byEmail) return null;
         if (byEmail.user_id && byEmail.user_id !== userId) return null;
 
         if (!byEmail.user_id) {
-            const linkedElsewhere = await this.db.referee.findFirst({
-                where: { user_id: userId, id: { not: byEmail.id } },
-            });
-            if (linkedElsewhere) return null;
+            // Already linked to another profile — live or not — so this one
+            // cannot be claimed as well.
+            if (linked && linked.id !== byEmail.id) return null;
 
             await this.db.referee.update({
                 where: { id: byEmail.id },
                 data: { user_id: userId },
             });
-            return { ...byEmail, user_id: userId };
+            return { ...profile(byEmail), user_id: userId };
         }
 
-        return byEmail;
+        return profile(byEmail);
     }
 
     private mapReferee(r: any) {

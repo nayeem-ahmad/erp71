@@ -8,10 +8,8 @@ const stores = [
 
 function renderBar(overrides: Partial<React.ComponentProps<typeof ReportScopeBar>> = {}) {
     const props: React.ComponentProps<typeof ReportScopeBar> = {
-        scope: 'branch',
-        onScopeChange: jest.fn(),
-        storeId: 's1',
-        onStoreIdChange: jest.fn(),
+        compare: false,
+        onCompareChange: jest.fn(),
         selectedStoreIds: ['s1', 's2'],
         onSelectedStoreIdsChange: jest.fn(),
         includeCompanyBucket: false,
@@ -34,29 +32,37 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof ReportScopeBar
 }
 
 describe('ReportScopeBar', () => {
-    it('renders branch dropdown when scope is branch', () => {
-        renderBar({ scope: 'branch' });
+    it('leaves the branch to the page filter: no branch select or scope radios', () => {
+        renderBar();
 
-        expect(screen.getByLabelText('Branch')).toBeInTheDocument();
-        expect(screen.getByRole('option', { name: 'Branch A' })).toBeInTheDocument();
+        expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
+        expect(screen.queryByRole('radio', { name: 'This branch' })).not.toBeInTheDocument();
         expect(screen.queryByText('Company overhead')).not.toBeInTheDocument();
     });
 
-    it('renders compare branch checkboxes when scope is compare', () => {
-        renderBar({ scope: 'compare' });
+    it('offers Compare branches as a checkbox, and remembers it', () => {
+        localStorage.clear();
+        const { props } = renderBar();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Compare branches' }));
+
+        expect(props.onCompareChange).toHaveBeenCalledWith(true);
+        expect(localStorage.getItem('report_scope')).toBe('compare');
+    });
+
+    it('renders compare branch checkboxes when comparing', () => {
+        renderBar({ compare: true });
 
         expect(screen.getByText('Branch A')).toBeInTheDocument();
         expect(screen.getByText('Branch B')).toBeInTheDocument();
         expect(screen.getByText('Company overhead')).toBeInTheDocument();
-        expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
     });
 
-    it('hides consolidated scopes when user cannot consolidate', () => {
-        renderBar({ canConsolidate: false });
+    it('hides compare when the user cannot consolidate', () => {
+        renderBar({ canConsolidate: false, compare: true });
 
-        expect(screen.getByText('This branch')).toBeInTheDocument();
-        expect(screen.queryByText('All branches')).not.toBeInTheDocument();
         expect(screen.queryByText('Compare branches')).not.toBeInTheDocument();
+        expect(screen.queryByText('Company overhead')).not.toBeInTheDocument();
     });
 
     it('calls onGenerate when generate is clicked', () => {
@@ -96,16 +102,15 @@ describe('ReportScopeBar', () => {
             expect(localStorage.getItem('report_level')).toBe('subgroup');
         });
 
-        it('keeps the level radios independent of the scope radios', () => {
-            const onScopeChange = jest.fn();
+        it('keeps the level radios independent of the compare toggle', () => {
+            const onCompareChange = jest.fn();
             const onLevelChange = jest.fn();
-            renderBar({ level: 'group', onLevelChange, onScopeChange });
+            renderBar({ level: 'group', onLevelChange, onCompareChange });
 
             expect(screen.getByRole('radio', { name: 'Group' })).toBeChecked();
-            expect(screen.getByRole('radio', { name: 'This branch' })).toBeChecked();
 
             fireEvent.click(screen.getByRole('radio', { name: 'Account' }));
-            expect(onScopeChange).not.toHaveBeenCalled();
+            expect(onCompareChange).not.toHaveBeenCalled();
         });
     });
 });

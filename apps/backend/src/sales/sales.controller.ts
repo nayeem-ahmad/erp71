@@ -1,13 +1,14 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete, ForbiddenException } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { SalesService } from './sales.service';
-import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
+import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, PrintSalesBatchDto, UpdateSaleDto } from './sale.dto';
 import { CancelEntryDto } from '../common/cancel-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 import { SALES_READ, SALE_DELETE, SALE_WRITE } from '../auth/permission-sets';
 // `StorePermissionGuard` is class-wide but only the cancel route names a
@@ -17,7 +18,10 @@ import { SALES_READ, SALE_DELETE, SALE_WRITE } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class SalesController {
-    constructor(private readonly salesService: SalesService) { }
+    constructor(
+        private readonly salesService: SalesService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...SALE_WRITE)
     @Post()
@@ -38,9 +42,12 @@ export class SalesController {
         @Query('sortDir') sortDir?: string,
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
+        @Query('storeId') requestedStoreId?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
+        const storeId = await this.branchScope.resolveStoreId(tenant, requestedStoreId, { permissions: SALES_READ });
         return this.salesService.findAll(tenant.tenantId, { timezone: tenant.timezone,
+            storeId,
             page: page ? parseInt(page, 10) : undefined,
             limit: limit ? parseInt(limit, 10) : undefined,
             createdBy: mineOnly ? tenant.userId : undefined,
@@ -51,6 +58,33 @@ export class SalesController {
             createdFrom: createdFrom || undefined,
             createdTo: createdTo || undefined,
         });
+    }
+
+    /**
+     * Invoices the quotations selected on the quotations list, each as a credit
+     * sale in its own branch. A branch the caller cannot sell in is skipped for
+     * that quotation rather than refusing the whole batch.
+     */
+    @RequireAnyStorePermission(...SALE_WRITE)
+    @Post('from-quotations')
+    async createFromQuotations(@Tenant() tenant: TenantContext, @Body() dto: CreateSalesFromQuotationsDto) {
+        return this.salesService.createFromQuotations(tenant.tenantId, tenant.userId, dto, (storeId) =>
+            this.branchScope
+                .resolveStoreId(tenant, storeId, { permissions: SALE_WRITE, allowAll: false })
+                .then(
+                    () => true,
+                    (error) => {
+                        if (error instanceof ForbiddenException) return false;
+                        throw error;
+                    },
+                ),
+        );
+    }
+
+    @RequireAnyStorePermission(...SALES_READ)
+    @Post('print-batch')
+    async printBatch(@Tenant() tenant: TenantContext, @Body() dto: PrintSalesBatchDto) {
+        return this.salesService.findForPrintBatch(tenant.tenantId, dto.ids);
     }
 
     @RequireAnyStorePermission(...SALES_READ)

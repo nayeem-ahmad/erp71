@@ -78,8 +78,8 @@ export const chatMessages = {
         back: "گفتگو پر واپس",
         starting: "شروع ہو رہا ہے…",
     },
-    bell: {
-        label: "ٹیم چیٹ",
+    badge: {
+        unread: "{count, plural, one {# غیر پڑھا پیغام} other {# غیر پڑھے پیغامات}}",
     },
     errors: {
         listFailed: "آپ کی گفتگو لوڈ نہیں ہو سکی",

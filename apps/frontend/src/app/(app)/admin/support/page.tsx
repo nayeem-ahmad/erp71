@@ -6,6 +6,7 @@ import { ArrowLeft, MessageSquare, Search, Send, CheckCircle, RotateCcw, Loader2
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { Select, StatusBadge } from '@/components/ui';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { api } from '@/lib/api';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import FeedbackAutomationPanel from '@/components/admin/FeedbackAutomationPanel';
@@ -80,7 +81,6 @@ export default function AdminSupportPage() {
     const [resolving, setResolving] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     /** Latest filters, so the poll interval never reads a stale closure. */
     const filtersRef = useRef({ search, statusFilter, categoryFilter, tenantFilter, userFilter });
     filtersRef.current = { search, statusFilter, categoryFilter, tenantFilter, userFilter };
@@ -182,17 +182,13 @@ export default function AdminSupportPage() {
     useEffect(() => {
         if (!activeThreadId) return;
         void loadMessages(activeThreadId);
-
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(() => {
-            void loadMessages(activeThreadId, { silent: true });
-            void loadThreads({ silent: true });
-        }, 10000);
-
-        return () => {
-            if (pollRef.current) clearInterval(pollRef.current);
-        };
     }, [activeThreadId]);
+
+    useVisibleInterval(() => {
+        if (!activeThreadId) return;
+        void loadMessages(activeThreadId, { silent: true });
+        void loadThreads({ silent: true });
+    }, activeThreadId ? 10000 : null);
 
     useEffect(() => {
         const lastId = messages[messages.length - 1]?.id ?? null;

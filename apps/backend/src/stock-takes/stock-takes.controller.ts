@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
-import { PaginationDto } from '../common/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchListQueryDto } from '../common/branch-list-query.dto';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { CreateStockTakeSessionDto, UpdateStockTakeCountsDto, UpdateStockTakeStatusDto } from './stock-takes.dto';
 import { StockTakesService } from './stock-takes.service';
 
@@ -13,7 +14,10 @@ import { STOCK_TAKE_STAFF } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class StockTakesController {
-    constructor(private readonly service: StockTakesService) {}
+    constructor(
+        private readonly service: StockTakesService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Post()
@@ -23,15 +27,15 @@ export class StockTakesController {
 
     @RequireAnyStorePermission(...STOCK_TAKE_STAFF)
     @Get()
-    findAll(
+    async findAll(
         @Tenant() tenant: TenantContext,
-        @Query() query: PaginationDto,
-        @Query('createdFrom') createdFrom?: string,
-        @Query('createdTo') createdTo?: string,
+        @Query() query: BranchListQueryDto,
     ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: STOCK_TAKE_STAFF });
         return this.service.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
-            createdFrom,
-            createdTo,
+            createdFrom: query.createdFrom,
+            createdTo: query.createdTo,
+            storeId,
         });
     }
 

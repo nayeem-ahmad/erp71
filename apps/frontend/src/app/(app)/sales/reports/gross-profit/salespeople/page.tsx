@@ -9,7 +9,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 import { CoverageNotice, MarginCell, ProfitCell, StatTile, type Coverage } from '@/components/gross-profit';
 
 interface Row {
@@ -43,25 +44,30 @@ function defaultFrom() {
 
 export default function GrossProfitBySalespersonPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const gp = t.salesReports.grossProfit;
     const [rows, setRows] = useState<Row[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
-    const [groupBy, setGroupBy] = useState<'user' | 'counter'>('user');
+    // By the employee each sale is credited to, unless asked for who entered it
+    // or the till it went through.
+    const [groupBy, setGroupBy] = useState<'salesRep' | 'user' | 'counter'>('salesRep');
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate, groupBy]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate, groupBy]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getGrossProfitBySalesperson({ from: fromDate, to: toDate, groupBy });
+            const data = await api.getGrossProfitBySalesperson({ storeId: branch.apiStoreId, from: fromDate, to: toDate, groupBy });
             setSummary(data.summary);
             setRows(data.rows);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load gross profit by salesperson', error);
         } finally {
             setLoading(false);
@@ -71,7 +77,7 @@ export default function GrossProfitBySalespersonPage() {
     const columns: ColumnDef<Row, any>[] = useMemo(
         () => [
             columnHelper.accessor('name', {
-                header: groupBy === 'counter' ? gp.counter : gp.salesperson,
+                header: groupBy === 'counter' ? gp.counter : groupBy === 'user' ? gp.enteredBy : gp.salesperson,
                 size: 200,
             }),
             columnHelper.accessor('orders', { header: gp.orders, size: 90 }),
@@ -112,6 +118,7 @@ export default function GrossProfitBySalespersonPage() {
                     gp.bySalespersonTitle,
                     'sales',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="grid md:grid-cols-4 gap-4">
@@ -153,9 +160,10 @@ export default function GrossProfitBySalespersonPage() {
                 />
                 <select
                     value={groupBy}
-                    onChange={(e) => setGroupBy(e.target.value as 'user' | 'counter')}
+                    onChange={(e) => setGroupBy(e.target.value as 'salesRep' | 'user' | 'counter')}
                     className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-h-touch"
                 >
+                    <option value="salesRep">{gp.groupBySalesRep}</option>
                     <option value="user">{gp.groupByUser}</option>
                     <option value="counter">{gp.groupByCounter}</option>
                 </select>

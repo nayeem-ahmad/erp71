@@ -1006,6 +1006,33 @@ describe('TaskDetailPanel description', () => {
         expect(updateProjectTask).not.toHaveBeenCalled();
     });
 
+    /**
+     * Switching to another tab or app blurs the editor on the way out, with no
+     * related target, the same as a click on empty page. The difference is that
+     * the editor stays `document.activeElement`, and the browser focuses it again
+     * on the way back. Reading that as leaving closed a half-written description.
+     */
+    it('stays open when the window loses focus, and still saves on a real leave', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'Half a thought');
+        act(() => editor.focus());
+        // A blur that leaves focus where it was: the window went away, not the focus.
+        fireEvent.blur(editor, { relatedTarget: null });
+
+        expect(screen.getByLabelText('Description', { selector: '[contenteditable]' })).toBeInTheDocument();
+        expect(updateProjectTask).not.toHaveBeenCalled();
+
+        // Back on the tab, clicking away still saves.
+        act(() => editor.blur());
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { description: 'Half a thought' }),
+        );
+    });
+
     it('clears the description when the text is emptied', async () => {
         getProjectTask.mockResolvedValue(withDescription('Old detail'));
         panel();
@@ -1874,6 +1901,27 @@ describe('TaskDetailPanel sprint', () => {
 
         expect(await screen.findByRole('option', { name: /Sprint 7/ })).toHaveTextContent('Active');
         expect(screen.getByRole('option', { name: /Sprint 8/ })).toHaveTextContent('Planned');
+    });
+
+    it('does not offer a completed sprint, which takes no new tasks', async () => {
+        getSprints.mockResolvedValue([...sprints, { id: 'sp0', name: 'Sprint 6', status: 'COMPLETED' }]);
+        panel();
+        fireEvent.click(await chip());
+
+        expect(await screen.findByRole('option', { name: /Sprint 8/ })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /Sprint 6/ })).not.toBeInTheDocument();
+    });
+
+    it('still shows the completed sprint a task already sits in', async () => {
+        getSprints.mockResolvedValue([...sprints, { id: 'sp0', name: 'Sprint 6', status: 'COMPLETED' }]);
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            sprint: { id: 'sp0', name: 'Sprint 6', status: 'COMPLETED' },
+        });
+        panel();
+        fireEvent.click(await chip());
+
+        expect(await screen.findByRole('option', { name: /Sprint 6/ })).toHaveTextContent('Completed');
     });
 
     it('moves the task into a sprint', async () => {

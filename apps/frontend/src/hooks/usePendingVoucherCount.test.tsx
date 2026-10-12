@@ -42,6 +42,35 @@ describe('usePendingVoucherCount', () => {
         expect(getCount).toHaveBeenCalledTimes(1);
     });
 
+    it('polls only while the tab is in view, and catches up on return', async () => {
+        getCount.mockResolvedValue({ count: 3, approvalEnabled: true });
+        let visibility: DocumentVisibilityState = 'visible';
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+        const setVisibility = (next: DocumentVisibilityState) => {
+            visibility = next;
+            act(() => {
+                document.dispatchEvent(new Event('visibilitychange'));
+            });
+        };
+
+        try {
+            const { result } = renderHook(() => usePendingVoucherCount());
+            await waitFor(() => expect(result.current.approvalEnabled).toBe(true));
+            expect(getCount).toHaveBeenCalledTimes(1);
+
+            setVisibility('hidden');
+            await act(async () => {
+                jest.advanceTimersByTime(5 * 60_000);
+            });
+            expect(getCount).toHaveBeenCalledTimes(1);
+
+            setVisibility('visible');
+            await waitFor(() => expect(getCount).toHaveBeenCalledTimes(2));
+        } finally {
+            delete (document as { visibilityState?: unknown }).visibilityState;
+        }
+    });
+
     it('refreshes immediately when a voucher is approved elsewhere in the app', async () => {
         getCount.mockResolvedValue({ count: 2, approvalEnabled: true });
 

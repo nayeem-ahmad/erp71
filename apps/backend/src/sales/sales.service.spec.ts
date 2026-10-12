@@ -4,7 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
     applyInventoryMovement,
     resolveEntryWarehouses,
@@ -13,6 +13,8 @@ import {
     usableWarehouseIds,
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
+import { computeEntryTax } from '@erp71/shared-types';
 
 jest.mock('../database/inventory.utils', () => ({
   applyInventoryMovement: jest.fn(),
@@ -51,6 +53,12 @@ jest.mock('../accounting/posting.utils', () => ({
   voidAutoPostedVoucher: jest.fn(),
 }));
 
+// The numbering engine has its own spec; here it only matters which number the
+// service asks for and where it puts it.
+jest.mock('../database/document-number.utils', () => ({
+  issueDocumentNumber: jest.fn(),
+}));
+
 describe('SalesService', () => {
   let service: SalesService;
   let db: any;
@@ -59,6 +67,7 @@ describe('SalesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     tx = {
+      $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
       product: {
         findMany: jest.fn(),
       },
@@ -103,11 +112,14 @@ describe('SalesService', () => {
       customer: {
         update: jest.fn(),
         findFirst: jest.fn(),
-        findUnique: jest.fn().mockResolvedValue(null),
+        // The branch a credit row is written under (customer-branch.util).
+        findUnique: jest.fn().mockResolvedValue({ store_id: 'store-1' }),
         create: jest.fn().mockResolvedValue({ id: 'cust-inline' }),
       },
       customerCreditTransaction: {
         create: jest.fn(),
+        // The receipt-number lookup: none yet, so the series starts at 1.
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn(),
       },
@@ -165,6 +177,10 @@ describe('SalesService', () => {
       tenant: {
         findUnique: jest.fn().mockResolvedValue({ name: 'Tenant 1', sms_on_sale: true }),
       },
+      // Names the "Prepared By" line of a printed invoice.
+      user: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       // Read to work out a sale's previous due. Empty is a customer whose
       // ledger has not moved since the sale.
       customerCreditTransaction: {
@@ -202,6 +218,88 @@ describe('SalesService', () => {
     db.voucher.findMany.mockResolvedValue([]);
     db.voucher.findFirst.mockResolvedValue(null);
     db.postingEvent.findMany.mockResolvedValue([]);
+    (issueDocumentNumber as jest.Mock).mockReset();
+    (issueDocumentNumber as jest.Mock).mockResolvedValue('INV-2627-00001');
+  });
+
+  describe('invoice numbering', () => {
+    const saleDto = {
+      storeId: 'store-1',
+      totalAmount: 100,
+      amountPaid: 100,
+      items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+    });
+
+    it('issues the invoice number from the tenant format, for the sale date, store and counter', async () => {
+      await service.create('tenant-1', 'user-1', {
+        ...saleDto,
+        counterId: 'counter-2',
+        saleDate: '2026-06-30T20:00:00.000Z',
+      });
+
+      expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+        tenantId: 'tenant-1',
+        docType: 'SALE',
+        storeId: 'store-1',
+        counterId: 'counter-2',
+        on: new Date('2026-06-30T20:00:00.000Z'),
+      }));
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          serial_number: 'INV-2627-00001',
+          sale_date: new Date('2026-06-30T20:00:00.000Z'),
+        }),
+      }));
+    });
+
+    it('no longer invents a reference number the user did not type', async () => {
+      await service.create('tenant-1', 'user-1', saleDto);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ reference_number: null }),
+      }));
+    });
+
+    it('keeps a reference number the user typed', async () => {
+      db.sale.findFirst.mockResolvedValue(null);
+
+      await service.create('tenant-1', 'user-1', { ...saleDto, referenceNumber: 'PO-7781' });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ serial_number: 'INV-2627-00001', reference_number: 'PO-7781' }),
+      }));
+    });
+
+    it('steps over a number already printed as another sale\'s invoice or reference', async () => {
+      await service.create('tenant-1', 'user-1', saleDto);
+      const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls[0][1];
+
+      tx.sale.findFirst.mockResolvedValueOnce({ id: 'old-sale' });
+      await expect(isTaken('INV-2627-00001')).resolves.toBe(true);
+      expect(tx.sale.findFirst).toHaveBeenLastCalledWith({
+        where: {
+          tenant_id: 'tenant-1',
+          OR: [{ serial_number: 'INV-2627-00001' }, { reference_number: 'INV-2627-00001' }],
+        },
+        select: { id: true },
+      });
+
+      tx.sale.findFirst.mockResolvedValueOnce(null);
+      await expect(isTaken('INV-2627-00002')).resolves.toBe(false);
+    });
+
+    it('issues no number for a sale that fails validation', async () => {
+      await expect(service.create('tenant-1', 'user-1', { ...saleDto, totalAmount: 5 }))
+        .rejects.toThrow(BadRequestException);
+
+      expect(issueDocumentNumber).not.toHaveBeenCalled();
+    });
   });
 
   describe('create() — Story 10.3: Atomic Sale Transaction', () => {
@@ -233,6 +331,102 @@ describe('SalesService', () => {
       expect(tx.saleItem.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ vat_rate: 15, vat_amount: 150, sd_rate: 0, sd_amount: 0 }),
       });
+    });
+
+    it('accepts a sale entered with VAT added on top, and remembers it was entered that way', async () => {
+      // The entry screen grosses 1,000 + 15% up to 1,150 and scales the 10
+      // discount to the same terms. What it posts must pass the total check
+      // and leave the VAT it showed in the snapshot.
+      const entry = computeEntryTax(
+        [{ key: 'prod-1', quantity: 1, unitPrice: 1000, vatRate: 15, sdRate: 0 }],
+        10,
+        false,
+      );
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: entry.total });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 15, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: entry.total,
+        amountPaid: entry.total,
+        discountAmount: entry.postedDiscount,
+        pricesIncludeVat: false,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: entry.postedUnitPrices[0] }],
+      });
+
+      // 1,000 less 10 is 990; 15% of that is 148.50.
+      expect(entry.total).toBe(1138.5);
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            total_amount: 1138.5,
+            vat_amount: entry.vatAmount,
+            prices_include_vat: false,
+          }),
+        }),
+      );
+      expect(entry.vatAmount).toBe(148.5);
+    });
+
+    it('counts a sale that does not say how it was entered as VAT-inclusive', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ prices_include_vat: true }) }),
+      );
+    });
+
+    it('stamps the sales rep the screen named, once checked against this tenant', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.employee = { findFirst: jest.fn().mockResolvedValue({ id: 'emp-rafiq' }) };
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        salesRepId: 'emp-rafiq',
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      });
+
+      expect(tx.employee.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'emp-rafiq', tenant_id: 'tenant-1', deleted_at: null } }),
+      );
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ sales_rep_id: 'emp-rafiq' }) }),
+      );
+    });
+
+    it('records no sales rep on a walk-in sale that names none', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        amountPaid: 100,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ sales_rep_id: null }) }),
+      );
     });
 
     it('declares VAT on what was billed, not on the undiscounted lines', async () => {
@@ -389,6 +583,8 @@ describe('SalesService', () => {
       tx.saleItem.create.mockResolvedValue({});
       tx.productStock.updateMany.mockResolvedValue({ count: 1 });
       tx.customer.update.mockResolvedValue({});
+      // No customer holds this phone yet.
+      tx.customer.findUnique.mockResolvedValueOnce(null);
 
       await service.create('tenant-1', 'user-1', {
         storeId: 'store-1',
@@ -398,8 +594,9 @@ describe('SalesService', () => {
         items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 50 }],
       });
 
+      // A new customer belongs to the sale's branch.
       expect(tx.customer.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'Walk-in Rahim' }),
+        data: expect.objectContaining({ tenant_id: 'tenant-1', name: 'Walk-in Rahim', store_id: 'store-1' }),
         select: { id: true },
       });
       // The sale, and everything keyed off the customer, use the new id.
@@ -553,6 +750,16 @@ describe('SalesService', () => {
       expect(tx.sale.create).not.toHaveBeenCalled();
     });
 
+    it('keeps how a parked draft was entered, for when it is completed', async () => {
+      await service.create('tenant-1', 'user-1', { ...draftDto, pricesIncludeVat: false });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'DRAFT', prices_include_vat: false }),
+        }),
+      );
+    });
+
     it('stores the sale as DRAFT with its lines and posts nothing', async () => {
       const result = await service.create('tenant-1', 'user-1', draftDto);
 
@@ -579,6 +786,15 @@ describe('SalesService', () => {
       expect(tx.customer.update).not.toHaveBeenCalled();
       expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
       expect(result.posting_status).toBe('skipped');
+    });
+
+    it('parks a draft under a placeholder, so an abandoned draft leaves no gap in the series', async () => {
+      await service.create('tenant-1', 'user-1', draftDto);
+
+      expect(issueDocumentNumber).not.toHaveBeenCalled();
+      const { data } = tx.sale.create.mock.calls[0][0];
+      expect(data.serial_number).toMatch(/^DRAFT-[0-9A-F]{10}$/);
+      expect(data.reference_number).toBeNull();
     });
 
     it('rejects a draft referencing a product that no longer exists', async () => {
@@ -643,6 +859,35 @@ describe('SalesService', () => {
       });
       expect(autoPostFromRules).toHaveBeenCalled();
       expect(result.status).toBe('COMPLETED');
+    });
+
+    it('issues the invoice number when the draft is completed, not when it was parked', async () => {
+      tx.cashierSession.findFirst.mockResolvedValue({ id: 'session-1', counter_id: 'counter-3' });
+      const parkedOn = new Date('2026-07-02T04:00:00.000Z');
+      tx.sale.findFirst.mockResolvedValue({ ...draftRow, sale_date: parkedOn });
+
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+        tenantId: 'tenant-1',
+        docType: 'SALE',
+        storeId: 'store-1',
+        // The till completing it, which is often not the one that parked it.
+        counterId: 'counter-3',
+        on: parkedOn,
+      }));
+      expect(tx.sale.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'draft-1' },
+        data: expect.objectContaining({ serial_number: 'INV-2627-00001', status: 'COMPLETED' }),
+      }));
+    });
+
+    it('numbers a completed draft for the date it is completed on, when one is given', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1', { saleDate: '2026-10-07T06:00:00.000Z' });
+
+      expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+        on: new Date('2026-10-07T06:00:00.000Z'),
+      }));
     });
 
     it('accepts edited items and payments on the way out', async () => {
@@ -864,6 +1109,123 @@ describe('SalesService', () => {
           payments: [{ paymentMethod: 'CASH', amount: 600 }],
         }),
       ).rejects.toThrow(/Select a customer/);
+    });
+  });
+
+  describe('create() — paying more than the total', () => {
+    const overpaidSale = {
+      storeId: 'store-1',
+      totalAmount: 850,
+      amountPaid: 1500,
+      items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 850 }],
+      payments: [{ paymentMethod: 'CASH', amount: 1500 }],
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({
+        id: 'sale-over', serial_number: 'SL-9', reference_number: 'INV-2610-0009', total_amount: 850,
+      });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Rahim Store' });
+      // The spend update hands back the customer as they stand: owing 400.
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '400.00' });
+      tx.customerCreditTransaction.create.mockResolvedValue({ id: 'ct-receipt' });
+    });
+
+    it('puts the excess on the customer\'s account: previous due first, the rest in advance', async () => {
+      const result = await service.create('tenant-1', 'user-1', { ...overpaidSale, customerId: 'cust-1' });
+
+      // The sale keeps everything that was taken, so its memo reads
+      // paid 1,500 against 850 with 400 owed before: 250 in advance.
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          amount_paid: 1500,
+          payments: { create: [expect.objectContaining({ payment_method: 'CASH', amount: 1500 })] },
+        }),
+      }));
+      expect(tx.customerCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          customer_id: 'cust-1',
+          type: 'PAYMENT',
+          amount: 650,
+          balance_after: -250,
+          reference_type: 'SALE',
+          reference_id: 'sale-over',
+          payment_number: 'CPY-00001',
+          notes: 'Paid with sale INV-2610-0009',
+        }),
+      });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { due_balance: -250 },
+      });
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'customer_payment',
+        conditionKey: 'payment_direction',
+        conditionValue: 'receive',
+        sourceId: 'ct-receipt',
+        amount: 650,
+        partyType: 'CUSTOMER',
+        partyId: 'cust-1',
+      }));
+      // The sale's own voucher is for the sale and no more.
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'sale',
+        amount: 850,
+      }));
+      expect(result.previous_due).toBe(400);
+      expect(result.account_payment).toEqual({
+        id: 'ct-receipt', payment_number: 'CPY-00001', amount: 650, balance_after: -250,
+      });
+      expect(result.change_returned).toBe(0);
+    });
+
+    it('does not refuse an excess beyond everything the customer owed', async () => {
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '0.00' });
+
+      await expect(
+        service.create('tenant-1', 'user-1', { ...overpaidSale, customerId: 'cust-1' }),
+      ).resolves.toBeDefined();
+
+      expect(tx.customerCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type: 'PAYMENT', amount: 650, balance_after: -650 }),
+      });
+    });
+
+    it('treats a walk-in\'s excess as change, kept off the sale and its tenders', async () => {
+      const result = await service.create('tenant-1', 'user-1', overpaidSale);
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          amount_paid: 850,
+          payments: { create: [expect.objectContaining({ payment_method: 'CASH', amount: 850 })] },
+        }),
+      }));
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+      expect(result.change_returned).toBe(650);
+      expect(result.account_payment).toBeNull();
+    });
+
+    it('keeps the excess off the account when the till says it was handed back', async () => {
+      await service.create('tenant-1', 'user-1', {
+        ...overpaidSale,
+        customerId: 'cust-1',
+        returnChange: true,
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ amount_paid: 850 }),
+      }));
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to put an excess on a customer the tenant does not have', async () => {
+      tx.customer.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create('tenant-1', 'user-1', { ...overpaidSale, customerId: 'cust-elsewhere' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
     });
   });
 
@@ -1214,6 +1576,24 @@ describe('SalesService', () => {
       expect(result.previous_due).toBe(1000);
     });
 
+    it('says who prepared the sale, so its invoice can print the line', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', created_by: 'user-1', items: [], payments: [] });
+      db.user.findMany.mockResolvedValue([{ id: 'user-1', name: 'Rina Akter', email: 'rina@example.com' }]);
+
+      const result = await service.findOne('tenant-1', 's1');
+
+      expect(result.prepared_by).toBe('Rina Akter');
+    });
+
+    it('leaves prepared_by empty for a sale nobody is recorded against', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', created_by: null, items: [], payments: [] });
+
+      const result = await service.findOne('tenant-1', 's1');
+
+      expect(result.prepared_by).toBeNull();
+      expect(db.user.findMany).not.toHaveBeenCalled();
+    });
+
     it('should throw NotFoundException when sale does not exist', async () => {
       db.sale.findFirst.mockResolvedValue(null);
 
@@ -1235,6 +1615,84 @@ describe('SalesService', () => {
     });
   });
 
+  describe('findForPrintBatch()', () => {
+    const postedAt = new Date('2026-09-01T10:00:00Z');
+    const sale = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      status: 'COMPLETED',
+      customer_id: null,
+      created_at: postedAt,
+      customer: null,
+      items: [{ quantity: 1, product: { name: 'Rice' } }],
+      payments: [],
+      ...extra,
+    });
+
+    it('returns this tenant\'s sales in request order and omits ids it does not have', async () => {
+      db.sale.findMany.mockResolvedValue([
+        sale('b'),
+        sale('a', {
+          customer_id: 'cust-1',
+          customer: { id: 'cust-1', due_balance: '1400.00' },
+        }),
+      ]);
+      db.customerCreditTransaction.findMany.mockResolvedValue([
+        { id: 'ct-1', type: 'CREDIT_SALE', amount: '400.00', created_at: postedAt },
+      ]);
+
+      const result = await service.findForPrintBatch('tenant-1', ['a', 'missing', 'b', 'a']);
+
+      expect(db.sale.findMany).toHaveBeenCalledTimes(1);
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenant_id: 'tenant-1', id: { in: ['a', 'missing', 'b'] } },
+          include: {
+            items: { include: { product: true } },
+            payments: true,
+            customer: true,
+            salesOrder: { select: { id: true, order_number: true } },
+            salesRep: { select: { id: true, name: true } },
+            // The branch letterhead needs it, as the single sale's does.
+            store: { select: { id: true, name: true, address: true } },
+          },
+        }),
+      );
+      expect(result.map((row: { id: string }) => row.id)).toEqual(['a', 'b']);
+      // The same previous-due helper the single sale uses, not a second definition.
+      expect(result[0].previous_due).toBe(1000);
+      expect(result[1].previous_due).toBeNull();
+    });
+
+    it('names who prepared each sale with one lookup for the whole batch', async () => {
+      db.sale.findMany.mockResolvedValue([
+        sale('a', { created_by: 'user-1' }),
+        sale('b', { created_by: 'user-1' }),
+        sale('c', { created_by: null }),
+      ]);
+      db.user.findMany.mockResolvedValue([{ id: 'user-1', name: 'Rina Akter', email: 'rina@example.com' }]);
+
+      const result = await service.findForPrintBatch('tenant-1', ['a', 'b', 'c']);
+
+      expect(db.user.findMany).toHaveBeenCalledTimes(1);
+      expect(db.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['user-1'] } } }),
+      );
+      expect(result.map((row: { prepared_by: string | null }) => row.prepared_by)).toEqual([
+        'Rina Akter',
+        'Rina Akter',
+        null,
+      ]);
+    });
+
+    it('rejects an empty list and more than 100 ids without querying', async () => {
+      await expect(service.findForPrintBatch('tenant-1', [])).rejects.toThrow(BadRequestException);
+      await expect(
+        service.findForPrintBatch('tenant-1', Array.from({ length: 101 }, (_, i) => `s${i}`)),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.sale.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getInvoiceData()', () => {
     it('loads the branch address, so the letterhead can print it', async () => {
       db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });
@@ -1249,6 +1707,30 @@ describe('SalesService', () => {
           }),
         }),
       );
+    });
+
+    it('loads the order the sale came from and who prepared it, for the invoice header and footer', async () => {
+      db.sale.findFirst.mockResolvedValue({
+        id: 's1',
+        created_by: 'user-1',
+        salesOrder: { id: 'so-1', order_number: 'SO-0042' },
+        items: [],
+        payments: [],
+      });
+      db.tenant.findUnique.mockResolvedValue({ name: 'Rahim Store' });
+      db.user.findMany.mockResolvedValue([{ id: 'user-1', name: null, email: 'rina@example.com' }]);
+
+      const result = await service.getInvoiceData('tenant-1', 's1');
+
+      expect(db.sale.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            salesOrder: { select: { id: true, order_number: true } },
+          }),
+        }),
+      );
+      // An account with no name is still identified, by its email.
+      expect(result.sale.prepared_by).toBe('rina@example.com');
     });
 
     it('puts the previous due on the sale, worked back past later payments', async () => {
@@ -1294,29 +1776,6 @@ describe('SalesService', () => {
       db.sale.findFirst.mockResolvedValue(null);
 
       await expect(service.getInvoiceData('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('generateReferenceNumber()', () => {
-    it('increments the max sequence for the YYMM prefix across all dates', async () => {
-      const now = new Date();
-      const yymm = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
-      tx.salesSettings.findUnique.mockResolvedValue({ reference_number_format: 'YYMM-#' });
-      tx.sale.findMany.mockResolvedValue([
-        { reference_number: `${yymm}-001` },
-        { reference_number: `${yymm}-005` },
-      ]);
-
-      const result = await service.generateReferenceNumber('tenant-1', tx);
-
-      expect(tx.sale.findMany).toHaveBeenCalledWith({
-        where: {
-          tenant_id: 'tenant-1',
-          reference_number: { startsWith: `${yymm}-` },
-        },
-        select: { reference_number: true },
-      });
-      expect(result).toBe(`${yymm}-006`);
     });
   });
 
@@ -1479,7 +1938,7 @@ describe('SalesService', () => {
     it('restores stock, reverses loyalty, credit and spend, and voids both posting legs', async () => {
       tx.sale.findFirst.mockResolvedValue(completedSale);
       tx.loyaltyTransaction.findMany.mockResolvedValue([{ points: 30 }, { points: -10 }]);
-      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', amount: 120 }]);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', type: 'CREDIT_SALE', amount: 120 }]);
 
       const result = await service.remove('tenant-1', 'sale-1');
 
@@ -1508,6 +1967,26 @@ describe('SalesService', () => {
       expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'sale', 'sale-1', 'paid');
       expect(tx.sale.delete).toHaveBeenCalledWith({ where: { id: 'sale-1' } });
       expect(result).toEqual({ deleted: true, id: 'sale-1' });
+    });
+
+    it('takes back a receipt for money paid beyond the total, with its voucher', async () => {
+      tx.sale.findFirst.mockResolvedValue(completedSale);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([
+        { id: 'ct-receipt', type: 'PAYMENT', amount: 650, discount_amount: 0 },
+      ]);
+
+      await service.remove('tenant-1', 'sale-1');
+
+      expect(tx.customerCreditTransaction.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['ct-receipt'] } },
+      });
+      // The receipt lowered the due by 650, so undoing it raises it by 650.
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { total_spent: { decrement: 300 }, due_balance: { decrement: -650 } },
+      });
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'customer_payment', 'ct-receipt');
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'customer_payment', 'ct-receipt', 'discount');
     });
 
     it('leaves the due balance alone when the sale was fully paid', async () => {
@@ -1571,7 +2050,7 @@ describe('SalesService', () => {
     it('reverses stock, serials, loyalty, credit and spend, and voids both posting legs', async () => {
       tx.sale.findFirst.mockResolvedValue(completedSale);
       tx.loyaltyTransaction.findMany.mockResolvedValue([{ points: 30 }, { points: -10 }]);
-      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', amount: 120 }]);
+      tx.customerCreditTransaction.findMany.mockResolvedValue([{ id: 'ct-1', type: 'CREDIT_SALE', amount: 120 }]);
       tx.sale.update.mockResolvedValue({ id: 'sale-1', status: 'CANCELLED' });
 
       await service.cancel('tenant-1', 'user-9', 'sale-1', 'Customer walked out');
@@ -1765,6 +2244,193 @@ describe('SalesService', () => {
         where: { id: 'quote-1', tenant_id: 'tenant-1', status: { not: 'CONVERTED' } },
         data: { status: 'CONVERTED' },
       });
+    });
+  });
+
+  describe('createFromQuotations()', () => {
+    const openQuote = (overrides: Record<string, unknown> = {}) => ({
+      id: 'quote-1',
+      quote_number: 'QT-0001',
+      status: 'SENT',
+      store_id: 'store-1',
+      customer_id: 'cust-1',
+      currency: 'BDT',
+      exchange_rate: null,
+      prices_include_vat: true,
+      total_amount: '30',
+      notes: 'Deliver Friday',
+      items: [{ product_id: 'prod-1', quantity: 2, unit_price: '15', product: { vat_rate: null, sd_rate: null } }],
+      ...overrides,
+    });
+
+    let createSpy: jest.SpyInstance;
+    const canSellIn = jest.fn();
+
+    beforeEach(() => {
+      db.quotation = { findMany: jest.fn().mockResolvedValue([openQuote()]) };
+      db.sale.findMany.mockResolvedValue([]);
+      db.tenant.findUnique.mockResolvedValue({ default_vat_rate: '15' });
+      canSellIn.mockReset().mockResolvedValue(true);
+      createSpy = jest.spyOn(service, 'create').mockImplementation(async (_tenant, _user, dto: any) => ({
+        id: `sale-for-${dto.quotationId}`,
+        serial_number: `INV-${dto.quotationId}`,
+        total_amount: dto.totalAmount,
+      }) as any);
+    });
+
+    afterEach(() => createSpy.mockRestore());
+
+    it('invoices each quotation as a credit sale that claims the quotation', async () => {
+      const result = await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['quote-1'] }, canSellIn);
+
+      expect(createSpy).toHaveBeenCalledWith(
+        'tenant-1',
+        'user-1',
+        {
+          storeId: 'store-1',
+          customerId: 'cust-1',
+          quotationId: 'quote-1',
+          items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 15 }],
+          totalAmount: 30,
+          amountPaid: 0,
+          pricesIncludeVat: true,
+          note: 'Deliver Friday',
+        },
+        { claimQuotation: true },
+      );
+      expect(result).toEqual({
+        converted: [{
+          quotationId: 'quote-1',
+          quoteNumber: 'QT-0001',
+          saleId: 'sale-for-quote-1',
+          serialNumber: 'INV-quote-1',
+          totalAmount: 30,
+        }],
+        skipped: [],
+        failed: [],
+      });
+    });
+
+    it('reads the quotations and the sales already raised against them inside the tenant', async () => {
+      await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['quote-1', 'quote-1'] }, canSellIn);
+
+      expect(db.quotation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { tenant_id: 'tenant-1', id: { in: ['quote-1'] } },
+        orderBy: { created_at: 'asc' },
+      }));
+      expect(db.sale.findMany).toHaveBeenCalledWith({
+        where: { tenant_id: 'tenant-1', quotation_id: { in: ['quote-1'] }, status: { not: 'CANCELLED' } },
+        select: { quotation_id: true },
+      });
+    });
+
+    it('skips, with a reason, every quotation a batch should not invoice', async () => {
+      db.quotation.findMany.mockResolvedValue([
+        openQuote({ id: 'q-converted', quote_number: 'QT-2', status: 'CONVERTED' }),
+        openQuote({ id: 'q-invoiced', quote_number: 'QT-3' }),
+        openQuote({ id: 'q-walk-in', quote_number: 'QT-4', customer_id: null }),
+        openQuote({ id: 'q-other-branch', quote_number: 'QT-5', store_id: 'store-2' }),
+        openQuote({ id: 'q-repriced', quote_number: 'QT-6', total_amount: '45' }),
+      ]);
+      db.sale.findMany.mockResolvedValue([{ quotation_id: 'q-invoiced' }]);
+      canSellIn.mockImplementation(async (storeId: string) => storeId === 'store-1');
+
+      const result = await service.createFromQuotations(
+        'tenant-1',
+        'user-1',
+        { quotationIds: ['q-converted', 'q-invoiced', 'q-walk-in', 'q-other-branch', 'q-repriced', 'q-missing'] },
+        canSellIn,
+      );
+
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(result.converted).toEqual([]);
+      expect(result.skipped).toEqual([
+        { quotationId: 'q-missing', quoteNumber: null, reason: 'NOT_FOUND' },
+        { quotationId: 'q-converted', quoteNumber: 'QT-2', reason: 'NOT_CONVERTIBLE', status: 'CONVERTED' },
+        { quotationId: 'q-invoiced', quoteNumber: 'QT-3', reason: 'ALREADY_INVOICED', status: 'SENT' },
+        { quotationId: 'q-walk-in', quoteNumber: 'QT-4', reason: 'NO_CUSTOMER', status: 'SENT' },
+        { quotationId: 'q-other-branch', quoteNumber: 'QT-5', reason: 'BRANCH_FORBIDDEN', status: 'SENT' },
+        { quotationId: 'q-repriced', quoteNumber: 'QT-6', reason: 'TOTAL_CHANGED', status: 'SENT' },
+      ]);
+    });
+
+    it('asks about each branch once, however many quotations come from it', async () => {
+      db.quotation.findMany.mockResolvedValue([
+        openQuote({ id: 'q-a' }),
+        openQuote({ id: 'q-b' }),
+        openQuote({ id: 'q-c', store_id: 'store-2' }),
+      ]);
+
+      await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['q-a', 'q-b', 'q-c'] }, canSellIn);
+
+      expect(canSellIn).toHaveBeenCalledTimes(2);
+      expect(canSellIn).toHaveBeenCalledWith('store-1');
+      expect(canSellIn).toHaveBeenCalledWith('store-2');
+    });
+
+    it('carries on past a sale that is refused, and says why', async () => {
+      db.quotation.findMany.mockResolvedValue([
+        openQuote({ id: 'q-a', quote_number: 'QT-A' }),
+        openQuote({ id: 'q-b', quote_number: 'QT-B' }),
+        openQuote({ id: 'q-c', quote_number: 'QT-C' }),
+      ]);
+      createSpy.mockImplementation(async (_tenant, _user, dto: any) => {
+        if (dto.quotationId === 'q-a') throw new BadRequestException('Credit limit exceeded for this customer.');
+        if (dto.quotationId === 'q-b') throw new Error('connection reset by peer');
+        return { id: 'sale-c', serial_number: 'INV-C', total_amount: 30 } as any;
+      });
+
+      const result = await service.createFromQuotations('tenant-1', 'user-1', { quotationIds: ['q-a', 'q-b', 'q-c'] }, canSellIn);
+
+      expect(result.converted).toEqual([
+        { quotationId: 'q-c', quoteNumber: 'QT-C', saleId: 'sale-c', serialNumber: 'INV-C', totalAmount: 30 },
+      ]);
+      expect(result.failed).toEqual([
+        { quotationId: 'q-a', quoteNumber: 'QT-A', message: 'Credit limit exceeded for this customer.' },
+        // An unexpected error's own text is database detail, not something to show.
+        {
+          quotationId: 'q-b',
+          quoteNumber: 'QT-B',
+          message: 'Something went wrong converting this quotation. Try converting it on its own.',
+        },
+      ]);
+    });
+  });
+
+  describe('create() — claiming the quotation for a batch', () => {
+    const dto = {
+      storeId: 'store-1',
+      customerId: 'cust-1',
+      quotationId: 'quote-1',
+      totalAmount: 30,
+      amountPaid: 30,
+      items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 15 }],
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 30 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.quotation.findFirst.mockResolvedValue({ id: 'quote-1' });
+    });
+
+    it('converts the quotation before the sale is written, only from an open status', async () => {
+      await service.create('tenant-1', 'user-1', dto, { claimQuotation: true });
+
+      expect(tx.quotation.updateMany).toHaveBeenNthCalledWith(1, {
+        where: { id: 'quote-1', tenant_id: 'tenant-1', status: { in: ['DRAFT', 'SENT', 'ACCEPTED'] } },
+        data: { status: 'CONVERTED' },
+      });
+      expect(tx.quotation.updateMany.mock.invocationCallOrder[0])
+        .toBeLessThan(tx.sale.create.mock.invocationCallOrder[0]);
+    });
+
+    it('writes no sale when another run converted the quotation first', async () => {
+      tx.quotation.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.create('tenant-1', 'user-1', dto, { claimQuotation: true }))
+        .rejects.toThrow(ConflictException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
     });
   });
 });

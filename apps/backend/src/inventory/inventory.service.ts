@@ -286,6 +286,7 @@ export class InventoryService {
             tenant_id: tenantId,
             ...(query.productId ? { product_id: query.productId } : {}),
             ...(query.warehouseId ? { warehouse_id: query.warehouseId } : {}),
+            ...(query.storeId ? { warehouse: { store_id: query.storeId } } : {}),
             ...(query.movementType ? { movement_type: query.movementType } : {}),
             ...buildDateWindow(query.from, query.to),
         };

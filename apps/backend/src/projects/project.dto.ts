@@ -18,6 +18,7 @@ import {
     Min,
     MinLength,
     ValidateIf,
+    ValidateNested,
 } from 'class-validator';
 import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
 import { PROJECT_CODE_PATTERN } from './url-keys/project-code';
@@ -477,11 +478,12 @@ export class ListTasksDto {
  * The Tasks page's "delete selected" action.
  *
  * One request for the whole selection rather than a `DELETE /project-tasks/:id`
- * per row: the platform's default throttle is 20 requests a minute per address
- * (`THROTTLE_LIMIT`, see app.module.ts) and is not raised in production, so a
- * selection of any real size used to spend the caller's whole budget and come
- * back as `429 Too Many Requests` on everything past the twentieth — a partial
- * delete reported as a failure.
+ * per row: the platform's default throttle was 20 requests a minute per
+ * address, not raised in production, so a selection of any real size used to
+ * spend the caller's whole budget and come back as `429 Too Many Requests` on
+ * everything past the twentieth — a partial delete reported as a failure. It is
+ * now 120 a minute per signed-in user (`THROTTLE_LIMIT`, see
+ * `common/default-throttle.util.ts`), still well under a large selection.
  *
  * Capped at the same 200 as a task page's `limit`: a selection cannot hold more
  * rows than one page of the list it was made on.
@@ -995,6 +997,12 @@ export class UpdateSprintDto {
     @IsOptional() @IsDateString()
     endDate?: string;
 
+    /**
+     * Accepted only to be refused with a reason: a status change goes through
+     * `POST /sprints/:id/start` or `/complete`, which take the burndown point
+     * and close the sprint's history. Declared so the request fails loudly
+     * rather than having the field silently stripped.
+     */
     @IsOptional() @IsEnum(SprintStatusDto)
     status?: SprintStatusDto;
 
@@ -1005,6 +1013,45 @@ export class UpdateSprintDto {
     @IsOptional()
     @IsIn(BOARD_BACKGROUND_COLORS)
     backgroundColor?: BoardBackgroundColor | null;
+}
+
+/** Where a completing sprint's unfinished tasks go. */
+export class CarryToDto {
+    @IsIn(['backlog', 'sprint', 'new'])
+    kind!: 'backlog' | 'sprint' | 'new';
+
+    /** `kind: 'sprint'` — a PLANNED sprint in this tenant. */
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'sprint')
+    @IsUUID()
+    sprintId?: string;
+
+    /** `kind: 'new'` — the sprint to create, validated like `CreateSprintDto`. */
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'new')
+    @IsString() @MinLength(1) @MaxLength(200)
+    name?: string;
+
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'new')
+    @IsDateString()
+    startDate?: string;
+
+    @ValidateIf((dto: CarryToDto) => dto.kind === 'new')
+    @IsDateString()
+    endDate?: string;
+
+    @IsOptional() @IsString() @MaxLength(1000)
+    goal?: string;
+
+    /** `kind: 'new'` — start the new sprint straight away. */
+    @IsOptional() @IsBoolean()
+    start?: boolean;
+}
+
+export class CompleteSprintDto {
+    /** Omitted means the backlog — what completing always did. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => CarryToDto)
+    carryTo?: CarryToDto;
 }
 
 export class AssignTasksToSprintDto {

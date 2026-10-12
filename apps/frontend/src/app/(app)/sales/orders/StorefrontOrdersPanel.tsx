@@ -5,6 +5,8 @@ import { ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
+import { Alert } from '@/components/ui';
 
 interface StorefrontOrder {
     id: string;
@@ -37,7 +39,18 @@ const STATUS_COLORS: Record<string, string> = {
     CANCELLED: 'bg-red-50 text-red-700 border-red-200',
 };
 
-export default function StorefrontOrdersPanel() {
+interface StorefrontOrdersPanelProps {
+    /** The page's branch filter: a branch id, `all`, or undefined for the server's default. */
+    storeId?: string;
+    /**
+     * The picked branch is a shop, not the storefront's: web orders all belong
+     * to the online branch, so the panel says where they are instead of
+     * showing an empty table.
+     */
+    onShopBranch?: boolean;
+}
+
+export default function StorefrontOrdersPanel({ storeId, onShopBranch = false }: StorefrontOrdersPanelProps) {
     const { t } = useI18n();
     const m = t.storefront.dashboard.orders;
     const [data, setData] = useState<PaginatedOrders | null>(null);
@@ -46,13 +59,15 @@ export default function StorefrontOrdersPanel() {
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
     useEffect(() => {
-        loadOrders(page);
-    }, [page]);
+        if (!onShopBranch) loadOrders(page);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, storeId, onShopBranch]);
 
     const loadOrders = async (p: number) => {
         setLoading(true);
         try {
-            const result = await fetchWithAuth(`/storefront/orders?page=${p}&limit=20`);
+            const branchQuery = storeId ? `&storeId=${encodeURIComponent(storeId)}` : '';
+            const result = await fetchWithAuth(`/storefront/orders?page=${p}&limit=20${branchQuery}`);
             setData(result);
         } catch (err) {
             console.error('Failed to load storefront orders', err);
@@ -71,11 +86,15 @@ export default function StorefrontOrdersPanel() {
             });
             await loadOrders(page);
         } catch (err: any) {
-            alert(err.message || m.updateFailed);
+            toast.error(err.message || m.updateFailed);
         } finally {
             setUpdatingId(null);
         }
     };
+
+    if (onShopBranch) {
+        return <Alert tone="info">{t.branchParties.onlineOrdersElsewhere}</Alert>;
+    }
 
     return (
         <div className="space-y-4">

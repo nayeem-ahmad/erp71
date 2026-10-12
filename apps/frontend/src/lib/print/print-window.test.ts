@@ -1,5 +1,6 @@
 import { buildPrintDocument, openPrintWindow, PRINT_PREVIEW_SKIP_MESSAGE } from './print-window';
 import { PRINT_DENSITY_KEY, PRINT_DENSITY_MESSAGE, readPrintDensity } from './density';
+import { loadMessages } from '@/lib/localization/load-messages';
 
 const base = {
     title: 'Invoice INV-001',
@@ -249,6 +250,69 @@ describe('buildPrintDocument — tenant footer', () => {
     });
 });
 
+describe('a job of several documents', () => {
+    const footerConfig = {
+        footer: {
+            show: true,
+            lines: [{ text: 'Ref {{doc_number}}' }],
+            images: [],
+            rule: { show: false },
+            spacingMm: 4,
+            repeatOnEveryPage: true,
+            pinToPageBottom: true,
+        },
+    };
+    const sheets = [
+        { headerHtml: '<div>HEAD-1</div>', bodyHtml: '<p>body-1</p>', context: { docNumber: 'S-1' } },
+        { headerHtml: '<div>HEAD-2</div>', bodyHtml: '<p>body-2</p>', context: { docNumber: 'S-2' } },
+    ];
+
+    it('lays out each document with its own header and starts each on a fresh page', () => {
+        const html = buildPrintDocument({ title: 'Invoices', paperSize: 'A4', sheets, repeatHeader: true });
+
+        const jobs = html.split('<section class="p71-job">').slice(1);
+        expect(jobs).toHaveLength(2);
+        expect(jobs[0]).toContain('<thead><tr><td><div>HEAD-1</div></td></tr></thead>');
+        expect(jobs[0]).toContain('body-1');
+        expect(jobs[1]).toContain('<thead><tr><td><div>HEAD-2</div></td></tr></thead>');
+        expect(html).toContain('.p71-job + .p71-job { break-before: page; }');
+    });
+
+    it('fills each document\'s tenant footer from its own values, pinned as alone', () => {
+        const html = buildPrintDocument({
+            title: 'Invoices',
+            paperSize: 'A4',
+            sheets,
+            headerConfig: footerConfig,
+        });
+
+        const jobs = html.split('<section class="p71-job">').slice(1);
+        expect(jobs[0]).toContain('Ref S-1');
+        expect(jobs[0]).not.toContain('Ref S-2');
+        expect(jobs[1]).toContain('Ref S-2');
+        expect(html.match(/p71-doc p71-doc--pinned/g)).toHaveLength(2);
+        expect(html).toContain('.p71-doc--pinned { height: 267mm; }');
+    });
+
+    it('draws each document on its own paper in the preview', () => {
+        const html = buildPrintDocument({
+            title: 'Invoices',
+            paperSize: 'A4',
+            sheets,
+            preview: { title: '2 invoices — A4', printLabel: 'Print', closeLabel: 'Close' },
+        });
+
+        expect(html.match(/<div class="p71-pv-sheet p71-job">/g)).toHaveLength(2);
+    });
+
+    it('leaves a single document\'s markup alone', () => {
+        const html = buildPrintDocument({ ...base });
+
+        expect(html).not.toContain('p71-job');
+        expect(html).toContain('<div class="p71-wrap"><p>body</p></div>');
+    });
+});
+
 describe('a footer pinned to the page bottom', () => {
     const footer = {
         show: true,
@@ -374,6 +438,163 @@ describe('a pinned footer that does not repeat', () => {
         });
 
         expect(html).not.toContain('p71-sheet');
+    });
+});
+
+describe('a document\u2019s own footer that asks to be pinned', () => {
+    const docFooter = '<div class="p71-doc-ft">Prepared By- Rina</div>';
+
+    it('is pushed to the page bottom without any tenant footer being designed', () => {
+        const html = buildPrintDocument({ ...base, footerHtml: docFooter, pinFooter: true });
+
+        expect(html).toContain('<div class="p71-sheet">');
+        expect(html).toContain('.p71-sheet > .p71-doc-ft');
+        // Printed once, after the content — not in a repeating tfoot.
+        expect(html).not.toContain('<tfoot>');
+    });
+
+    it('flows under the content when it did not ask', () => {
+        expect(buildPrintDocument({ ...base, footerHtml: docFooter })).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('is not pinned on a roll, which has no page bottom', () => {
+        const html = buildPrintDocument({ ...base, paperSize: 'Thermal80', footerHtml: docFooter, pinFooter: true });
+
+        expect(html).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('does not pin an empty footer', () => {
+        expect(buildPrintDocument({ ...base, pinFooter: true })).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('gives way to a tenant footer, which follows its own pin setting', () => {
+        const html = buildPrintDocument({
+            ...base,
+            footerHtml: docFooter,
+            pinFooter: true,
+            headerConfig: { footer: { show: true, lines: [{ text: 'Bank' }], pinToPageBottom: false } },
+        });
+
+        expect(html).not.toContain('Prepared By- Rina');
+        expect(html).not.toContain('<div class="p71-sheet">');
+    });
+});
+
+describe('a closing block that stays with a pinned footer', () => {
+    const docFooter = '<div class="p71-doc-ft">Prepared By- Rina</div>';
+    const end = '<div class="d-sums">TOTALS</div>';
+    const opts = { ...base, endHtml: end, footerHtml: docFooter, pinFooter: true };
+
+    it('shares the last row of the page table with the footer, which cannot split', () => {
+        const html = buildPrintDocument(opts);
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).toContain('<table class="p71-doc p71-doc--end">');
+        const endRow = body.slice(body.indexOf('<tr class="p71-end">'));
+        expect(endRow.indexOf('TOTALS')).toBeLessThan(endRow.indexOf('Prepared By- Rina'));
+        expect(html).toContain('.p71-doc--end > tbody > tr.p71-end { height: 100%; break-inside: avoid; }');
+        // Not the flex column, whose footer can be left alone on a page.
+        expect(body).not.toContain('<div class="p71-sheet">');
+    });
+
+    it('keeps the repeating letterhead above both, so the next page is identifiable', () => {
+        const html = buildPrintDocument({ ...opts, repeatHeader: true, headerHtml: '<div>HEADER</div>' });
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).toContain('<thead><tr><td><div>HEADER</div></td></tr></thead>');
+        expect(body.indexOf('</thead>')).toBeLessThan(body.indexOf('<tr class="p71-end">'));
+    });
+
+    it('is only more body when nothing is pinned', () => {
+        const html = buildPrintDocument({ ...opts, pinFooter: false });
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).not.toContain('p71-doc--end"');
+        expect(body.indexOf('TOTALS')).toBeLessThan(body.indexOf('Prepared By- Rina'));
+    });
+
+    it('is only more body on a roll, which has no page bottom', () => {
+        const body = buildPrintDocument({ ...opts, paperSize: 'Thermal80' });
+
+        expect(body).not.toContain('<tr class="p71-end">');
+        expect(body).toContain('TOTALS');
+    });
+
+    it('goes after the body, ahead of a tenant footer that repeats on every page', () => {
+        const html = buildPrintDocument({
+            ...opts,
+            footerHtml: undefined,
+            headerConfig: { footer: { show: true, lines: [{ text: 'Bank' }], repeatOnEveryPage: true } },
+        });
+        const body = html.slice(html.indexOf('<body>'));
+
+        expect(body).toContain('<tfoot>');
+        expect(body).not.toContain('<tr class="p71-end">');
+        expect(body).toContain('TOTALS');
+    });
+
+    it('gives every invoice of a batch its own page-tall table', () => {
+        const html = buildPrintDocument({
+            ...base,
+            paperSize: 'A4',
+            pinFooter: true,
+            sheets: [
+                { bodyHtml: 'ONE', endHtml: end, footerHtml: docFooter },
+                { bodyHtml: 'TWO', endHtml: end, footerHtml: docFooter },
+            ],
+        });
+
+        expect(html.match(/<tr class="p71-end">/g)).toHaveLength(2);
+        expect(html).toContain('.p71-job + .p71-job');
+    });
+});
+
+describe('the page margin line', () => {
+    const stamp = { text: 'Printed 06-10-2026 1:02:59 PM', pageNumbers: true };
+
+    it('writes the text bottom-left and page X of Y bottom-right', () => {
+        const html = buildPrintDocument({ ...base, pageStamp: stamp });
+
+        expect(html).toContain('@bottom-left { content: "Printed 06-10-2026 1:02:59 PM";');
+        expect(html).toContain('@bottom-right { content: "Page " counter(page) " of " counter(pages);');
+    });
+
+    it('moves to the top margin when the footer bleeds into the bottom one', () => {
+        const html = buildPrintDocument({
+            ...base,
+            pageStamp: stamp,
+            headerConfig: { footer: { show: true, lines: [{ text: 'Band' }], bleed: true } },
+        });
+
+        expect(html).toContain('@top-left {');
+        expect(html).toContain('@top-right {');
+        expect(html).not.toContain('@bottom-right {');
+    });
+
+    it('leaves the page count off a batch, where it would count across documents', () => {
+        const html = buildPrintDocument({
+            ...base,
+            pageStamp: stamp,
+            sheets: [{ bodyHtml: 'ONE' }, { bodyHtml: 'TWO' }],
+        });
+
+        expect(html).not.toContain('counter(pages)');
+        expect(html).toContain('"Printed 06-10-2026 1:02:59 PM"');
+    });
+
+    it('prints nothing in the margin of a roll', () => {
+        expect(buildPrintDocument({ ...base, paperSize: 'Thermal80', pageStamp: stamp })).not.toContain('@bottom-left');
+    });
+
+    it('cannot break out of the stylesheet or the CSS string', () => {
+        const html = buildPrintDocument({ ...base, pageStamp: { text: 'a"b\\c</style><script>x</script>' } });
+
+        expect(html).toContain('content: "a\\"b\\\\c\\3C /style>\\3C script>x\\3C /script>";');
+        expect(html.match(/<\/style>/g)).toHaveLength(1);
+    });
+
+    it('is absent unless asked for', () => {
+        expect(buildPrintDocument(base)).not.toContain('@bottom-left');
     });
 });
 
@@ -706,13 +927,24 @@ describe('openPrintWindow — compactable documents', () => {
         expect(html).not.toContain('p71-pv');
     });
 
-    it('words the switch in the language the app is showing', () => {
+    it('words the switch in the language the app is showing', async () => {
+        // The app is showing Bangla only once its chunk has arrived.
+        await loadMessages('bn');
         document.documentElement.dataset.locale = 'bn';
         const win = mockWindow();
 
         openPrintWindow({ ...base, compactable: true });
 
         expect(written(win)).toContain('কমপ্যাক্ট লেআউট');
+    });
+
+    it('words the switch in English rather than wait for a language not yet loaded', () => {
+        document.documentElement.dataset.locale = 'hi';
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, compactable: true });
+
+        expect(written(win)).toContain('>Compact layout<');
     });
 
     it('remembers what the window reports back', () => {

@@ -58,6 +58,8 @@ export type QuotationPdfData = {
     items: QuotationPdfItem[];
     totalLabel: string;
     total: number;
+    /** VAT added on top of the lines, shown above the total it is part of. */
+    vat?: { label: string; amount: number };
     /** Rendered under the total when the document asks for a deposit. */
     advance?: { label: string; amount: number };
     terms?: QuotationPdfTerm[];
@@ -354,6 +356,15 @@ export async function downloadQuotationPdf(data: QuotationPdfData): Promise<void
 
     const totalsLeft = right - 70;
     ensureSpace(16);
+    if (data.vat) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(...muted);
+        doc.text(data.vat.label, totalsLeft, y, { baseline: 'top' });
+        doc.setTextColor(...ink);
+        doc.text(money(data.vat.amount, data.currency), right, y, { align: 'right', baseline: 'top' });
+        y += 9 * PT * 1.6;
+    }
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
     doc.line(totalsLeft, y, right, y);

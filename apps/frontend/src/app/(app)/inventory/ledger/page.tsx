@@ -5,6 +5,8 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { BookOpen, RefreshCw } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { branchOrEmpty, useBranchBoundState, useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { warehouseLabel } from '@/lib/warehouse-label';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -29,13 +31,17 @@ const columnHelper = createColumnHelper<LedgerRow>();
 
 export default function InventoryLedgerPage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [warehouses, setWarehouses] = useState<any[]>([]);
-    const [warehouseId, setWarehouseId] = useState('');
+    // A warehouse belongs to one branch: the picker offers the chosen branch's
+    // own (every one under "All branches") and is cleared when the branch changes.
+    const [warehouseId, setWarehouseId] = useBranchBoundState(branch.apiStoreId);
     const [movementType, setMovementType] = useState('');
 
     const {
         items: rows,
         loading,
+        error: ledgerError,
         serverPagination,
         reload: loadLedger,
     } = useServerList<LedgerRow>({
@@ -43,10 +49,19 @@ export default function InventoryLedgerPage() {
         fetch: (p) => api.getInventoryLedger({
             warehouseId: warehouseId || undefined,
             movementType: movementType || undefined,
+            storeId: branch.apiStoreId,
             ...p,
         }),
-        deps: [warehouseId, movementType],
+        deps: [warehouseId, movementType, branch.apiStoreId],
+        enabled: branch.ready,
     });
+    useBranchForbiddenReset(ledgerError, branch, t.dashboardLayout.branchFilterForbidden);
+
+    const filterBranchId = branchOrEmpty(branch.apiStoreId);
+    const filterWarehouses = useMemo(
+        () => (filterBranchId ? warehouses.filter((warehouse: any) => warehouse.store_id === filterBranchId) : warehouses),
+        [warehouses, filterBranchId],
+    );
 
     useEffect(() => {
         void loadWarehouses();
@@ -116,9 +131,12 @@ export default function InventoryLedgerPage() {
                         'inventory',
                     )}
                     actions={(
-                        <button onClick={() => void loadLedger()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
-                            <RefreshCw className="w-4 h-4 me-2" /> {t.common.refresh}
-                        </button>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <button onClick={() => void loadLedger()} className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center">
+                                <RefreshCw className="w-4 h-4 me-2" /> {t.common.refresh}
+                            </button>
+                        </>
                     )}
                 />
 
@@ -127,8 +145,8 @@ export default function InventoryLedgerPage() {
                         <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventoryLedger.warehouseLabel}</label>
                         <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                             <option value="">{t.inventoryLedger.allWarehouses}</option>
-                            {warehouses.map((warehouse) => (
-                                <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, warehouses)}</option>
+                            {filterWarehouses.map((warehouse) => (
+                                <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, filterWarehouses)}</option>
                             ))}
                         </select>
                     </div>

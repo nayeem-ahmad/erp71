@@ -5,6 +5,7 @@ import { Mail, MapPin, Clock } from 'lucide-react';
 import MarketingFooter from '@/components/marketing/MarketingFooter';
 import MarketingNav from '@/components/marketing/MarketingNav';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { browserApiBase } from '@/lib/api-base';
 
 export default function ContactClient() {
     const { t } = useI18n();
@@ -39,7 +40,7 @@ export default function ContactClient() {
         setSubmitting(true);
         try {
             const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'}/api/v1/contact`,
+                `${browserApiBase()}/contact`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

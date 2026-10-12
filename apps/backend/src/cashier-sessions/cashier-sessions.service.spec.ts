@@ -806,4 +806,125 @@ describe('CashierSessionsService', () => {
       );
     });
   });
+
+  describe('getOverview', () => {
+    const NOW = new Date('2026-10-07T08:00:00.000Z'); // 14:00 in Dhaka
+    const session = (overrides: Record<string, unknown>) => ({
+      id: 'sess-1',
+      tenant_id: 't1',
+      store_id: 'store-1',
+      status: 'OPEN',
+      opened_at: new Date('2026-10-07T03:00:00.000Z'),
+      closed_at: null,
+      opening_cash: 1000,
+      closing_cash: 0,
+      expected_cash: null,
+      variance: null,
+      store: { id: 'store-1', name: 'Main Store' },
+      counter: { id: 'c1', name: 'Counter 1', counter_number: 1 },
+      user: { id: 'u1', name: 'Rina' },
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      db.sale.groupBy = jest.fn().mockResolvedValue([]);
+    });
+
+    it("scopes both reads to the tenant and branch, and 'closed today' to the tenant's day", async () => {
+      db.cashierSession.findMany.mockResolvedValue([]);
+
+      await service.getOverview('t1', 'store-1', 'Asia/Dhaka', NOW);
+
+      const [openCall, closedCall] = db.cashierSession.findMany.mock.calls.map((c: any[]) => c[0].where);
+      expect(openCall).toEqual({ tenant_id: 't1', status: 'OPEN', store_id: 'store-1' });
+      // Midnight in Dhaka is 18:00 UTC the day before.
+      expect(closedCall).toEqual({
+        tenant_id: 't1',
+        status: 'CLOSED',
+        closed_at: { gte: new Date('2026-10-06T18:00:00.000Z') },
+        store_id: 'store-1',
+      });
+      // No closed shifts, no takings query.
+      expect(db.sale.groupBy).not.toHaveBeenCalled();
+    });
+
+    it('covers every branch when no branch is given', async () => {
+      db.cashierSession.findMany.mockResolvedValue([]);
+      await service.getOverview('t1', undefined, 'Asia/Dhaka', NOW);
+      for (const [args] of db.cashierSession.findMany.mock.calls) {
+        expect(args.where).not.toHaveProperty('store_id');
+        expect(args.where.tenant_id).toBe('t1');
+      }
+    });
+
+    it('reports open tills through the shift summary and closed ones from what was frozen at close', async () => {
+      const open = session({});
+      const closed = session({
+        id: 'sess-2',
+        status: 'CLOSED',
+        closed_at: new Date('2026-10-07T07:00:00.000Z'),
+        closing_cash: 4400,
+        expected_cash: 4500,
+        variance: -100,
+        user: { id: 'u2', name: 'Kamal' },
+      });
+      const legacy = session({ id: 'sess-3', status: 'CLOSED', closed_at: NOW, closing_cash: 900 });
+      db.cashierSession.findMany.mockImplementation(async ({ where }: any) =>
+        where.status === 'OPEN' ? [open] : [closed, legacy],
+      );
+      // The open till: one ৳500 cash sale.
+      db.cashierSession.findUnique.mockResolvedValue({ ...open });
+      db.sale.findMany.mockResolvedValue([
+        { id: 'sale-1', total_amount: 500, payments: [{ payment_method: 'Cash', amount: 500 }] },
+      ]);
+      db.sale.groupBy.mockResolvedValue([
+        { session_id: 'sess-2', _sum: { total_amount: 3200 }, _count: { _all: 7 } },
+      ]);
+
+      const result = await service.getOverview('t1', undefined, 'Asia/Dhaka', NOW);
+
+      expect(result.open).toEqual([
+        expect.objectContaining({
+          id: 'sess-1',
+          cashier: { id: 'u1', name: 'Rina' },
+          store: { id: 'store-1', name: 'Main Store' },
+          opening_cash: 1000,
+          sales_count: 1,
+          sales_total: 500,
+          cash_takings: 500,
+          expected_cash: 1500,
+          closing_cash: null,
+          variance: null,
+        }),
+      ]);
+      expect(result.closed_today[0]).toEqual(
+        expect.objectContaining({
+          id: 'sess-2',
+          sales_count: 7,
+          sales_total: 3200,
+          expected_cash: 4500,
+          closing_cash: 4400,
+          variance: -100,
+        }),
+      );
+      // Closed before reconciliation existed: never presented as balanced.
+      expect(result.closed_today[1]).toEqual(
+        expect.objectContaining({ id: 'sess-3', expected_cash: null, variance: null, sales_count: 0 }),
+      );
+      expect(db.sale.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenant_id: 't1', session_id: { in: ['sess-2', 'sess-3'] } }),
+        }),
+      );
+      expect(result.totals).toEqual({
+        open_count: 1,
+        expected_cash: 1500,
+        sales_total: 3700,
+        closed_count: 2,
+        short: -100,
+        over: 0,
+      });
+    });
+  });
 });
+

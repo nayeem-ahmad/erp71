@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import ProductDemandsPage from './page';
 import { pickSearchOption } from '@/test-utils/id-search-select';
 
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/api', () => ({
     api: {
         getProductDemands: jest.fn(),

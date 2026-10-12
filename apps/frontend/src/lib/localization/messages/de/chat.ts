@@ -78,8 +78,8 @@ export const chatMessages = {
         back: "Zurück zu den Unterhaltungen",
         starting: "Wird gestartet…",
     },
-    bell: {
-        label: "Team-Chat",
+    badge: {
+        unread: "{count, plural, one {# ungelesene Nachricht} other {# ungelesene Nachrichten}}",
     },
     errors: {
         listFailed: "Ihre Unterhaltungen konnten nicht geladen werden",

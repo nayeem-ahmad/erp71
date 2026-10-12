@@ -9,7 +9,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 
 interface CustomerRow {
     customer: {
@@ -44,6 +45,7 @@ function defaultTo() {
 
 export default function SalesByCustomerPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<CustomerRow[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
@@ -51,19 +53,22 @@ export default function SalesByCustomerPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const load = async () => {
         setLoading(true);
         try {
             const data = await api.getSalesByCustomer({
+                storeId: branch.apiStoreId,
                 from: fromDate || undefined,
                 to: toDate || undefined,
             });
             setSummary(data.summary);
             setRows(data.rows);
         } catch (err) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load customer sales', err);
         } finally {
             setLoading(false);
@@ -106,6 +111,7 @@ export default function SalesByCustomerPage() {
                         t.salesReports.customers.title,
                         'sales',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="grid md:grid-cols-4 gap-4">

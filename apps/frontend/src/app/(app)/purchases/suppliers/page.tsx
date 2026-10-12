@@ -7,7 +7,8 @@ import { DataTable } from '@/components/data-table';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Button, Field, Alert, Input } from '@/components/ui';
+import { BranchFilter, Button, Field, Alert, Input, Select } from '@/components/ui';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -17,22 +18,28 @@ import { ImportDialog, type ImportField } from '@/components/import-dialog';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
+    // Blank numbers the supplier SUP-#####.
+    { key: 'supplier_code', label: 'Supplier Code', required: false },
     { key: 'phone', label: 'Phone', required: false },
     { key: 'email', label: 'Email', required: false },
     { key: 'address', label: 'Address', required: false },
     { key: 'contact_person', label: 'Contact Person', required: false },
+    // A branch's code or name; empty rows go to the branch picked for the file.
+    { key: 'branch', label: 'Branch', required: false },
 ];
 
 interface Supplier {
     id: string;
     name: string;
+    supplier_code: string | null;
     phone: string | null;
     email: string | null;
     address: string | null;
     created_at: string;
+    store_id: string;
 }
 
-const emptyForm = { name: '', phone: '', email: '', address: '' };
+const emptyForm = { name: '', supplier_code: '', phone: '', email: '', address: '', store_id: '' };
 
 const columnHelper = createColumnHelper<Supplier>();
 
@@ -45,6 +52,14 @@ export default function SuppliersPage() {
     const [error, setError] = useState('');
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [importOpen, setImportOpen] = useState(false);
+    // Every supplier belongs to a branch; the list starts on all of them for
+    // those who may see them all, as the customer list does.
+    const branch = useBranchScope({ startOnAll: true });
+    const [importBranch, setImportBranch] = useState('');
+    const branchName = useMemo(
+        () => new Map(branch.branches.map((b) => [b.id, b.name])),
+        [branch.branches],
+    );
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -57,18 +72,22 @@ export default function SuppliersPage() {
     const {
         items: suppliers,
         loading,
+        error: listError,
         serverPagination,
         reload: load,
     } = useServerList<Supplier>({
         tableId: 'suppliers',
-        fetch: (p) => api.getSuppliersPaged({ search: debouncedSearch || undefined, ...p }),
-        deps: [debouncedSearch],
+        fetch: (p) => api.getSuppliersPaged({ search: debouncedSearch || undefined, storeId: branch.apiStoreId, ...p }),
+        deps: [debouncedSearch, branch.apiStoreId],
+        enabled: branch.ready,
         initialSort: { id: 'name', desc: false },
     });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
     const openCreate = () => {
         setEditTarget(null);
-        setForm(emptyForm);
+        // A new supplier goes to the header branch unless another is picked.
+        setForm({ ...emptyForm, store_id: branch.headerBranchId ?? branch.branches[0]?.id ?? '' });
         setError('');
         setModalOpen(true);
     };
@@ -77,9 +96,11 @@ export default function SuppliersPage() {
         setEditTarget(supplier);
         setForm({
             name: supplier.name,
+            supplier_code: supplier.supplier_code ?? '',
             phone: supplier.phone ?? '',
             email: supplier.email ?? '',
             address: supplier.address ?? '',
+            store_id: supplier.store_id,
         });
         setError('');
         setModalOpen(true);
@@ -98,20 +119,29 @@ export default function SuppliersPage() {
         }
         setSaving(true);
         setError('');
+        // Blank: a new supplier gets the next code, an edited one keeps its own.
+        const code = form.supplier_code.trim();
         try {
             if (editTarget) {
                 await api.updateSupplier(editTarget.id, {
                     name: form.name.trim(),
+                    ...(code ? { supplier_code: code } : {}),
                     phone: form.phone.trim() || undefined,
                     email: form.email.trim() || undefined,
                     address: form.address.trim() || undefined,
+                    // Only owners move a supplier to another branch.
+                    ...(branch.canSeeAll && form.store_id && form.store_id !== editTarget.store_id
+                        ? { store_id: form.store_id }
+                        : {}),
                 });
             } else {
                 await api.createSupplier({
                     name: form.name.trim(),
+                    ...(code ? { supplier_code: code } : {}),
                     phone: form.phone.trim() || undefined,
                     email: form.email.trim() || undefined,
                     address: form.address.trim() || undefined,
+                    ...(form.store_id ? { store_id: form.store_id } : {}),
                 });
             }
             closeModal();
@@ -136,6 +166,14 @@ export default function SuppliersPage() {
 
     const columns: ColumnDef<Supplier, any>[] = useMemo(
         () => [
+            columnHelper.accessor('supplier_code', {
+                header: t.suppliers.columns.code,
+                cell: (info) => (
+                    <span className="text-sm font-mono text-gray-500">{info.getValue() || '-'}</span>
+                ),
+                size: 120,
+                meta: { hideOnMobile: true },
+            }),
             columnHelper.accessor('name', {
                 header: t.suppliers.columns.supplier,
                 cell: (info) => (
@@ -150,6 +188,18 @@ export default function SuppliersPage() {
                 ),
                 size: 150,
             }),
+            ...(branch.canSeeAll && !branch.hidden
+                ? [columnHelper.accessor('store_id', {
+                    id: 'branch',
+                    header: t.common.branch,
+                    cell: (info) => (
+                        <span className="text-sm text-gray-600">{branchName.get(info.getValue()) ?? '—'}</span>
+                    ),
+                    enableSorting: false,
+                    meta: { hideOnMobile: true },
+                    size: 140,
+                })]
+                : []),
             columnHelper.accessor('email', {
                 header: t.suppliers.columns.email,
                 cell: (info) => (
@@ -197,7 +247,7 @@ export default function SuppliersPage() {
                 size: 90,
             }),
         ],
-        [t, locale],
+        [t, locale, branch.canSeeAll, branch.hidden, branchName],
     );
 
     return (
@@ -213,7 +263,8 @@ export default function SuppliersPage() {
                     )}
                     actions={(
                         <>
-                            <Button variant="secondary" onClick={() => setImportOpen(true)} icon={<Upload className="w-4 h-4" />}>
+                            <BranchFilter scope={branch} />
+                            <Button variant="secondary" onClick={() => { setImportBranch(branch.headerBranchId ?? ''); setImportOpen(true); }} icon={<Upload className="w-4 h-4" />}>
                                 Import
                             </Button>
                             <Button onClick={openCreate} icon={<Plus className="w-4 h-4" />}>
@@ -262,6 +313,20 @@ export default function SuppliersPage() {
                                 className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
                             />
                         </Field>
+                        <Field
+                            label={t.suppliers.codeLabel}
+                            hint={editTarget ? t.suppliers.codeEditHint : t.suppliers.codeHint}
+                            htmlFor="supplier-code"
+                        >
+                            <input
+                                id="supplier-code"
+                                type="text"
+                                value={form.supplier_code}
+                                onChange={(e) => setForm({ ...form, supplier_code: e.target.value })}
+                                placeholder={t.suppliers.codePlaceholder}
+                                className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 font-mono text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
+                            />
+                        </Field>
                         <Field label={t.common.phone} htmlFor="supplier-phone">
                             <input
                                 id="supplier-phone"
@@ -282,6 +347,23 @@ export default function SuppliersPage() {
                                 className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 focus:bg-white"
                             />
                         </Field>
+                        {!branch.hidden && (
+                            <Field label={t.common.branch} required htmlFor="supplier-branch">
+                                <Select
+                                    id="supplier-branch"
+                                    value={form.store_id}
+                                    onChange={(e) => setForm({ ...form, store_id: e.target.value })}
+                                    // A supplier keeps its branch unless an owner moves it.
+                                    disabled={Boolean(editTarget) && !branch.canSeeAll}
+                                    className="w-full"
+                                >
+                                    {branch.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                    {form.store_id && !branchName.has(form.store_id) ? (
+                                        <option value={form.store_id}>{form.store_id}</option>
+                                    ) : null}
+                                </Select>
+                            </Field>
+                        )}
                         <Field label={t.common.address} htmlFor="supplier-address">
                             <textarea
                                 id="supplier-address"
@@ -309,8 +391,15 @@ export default function SuppliersPage() {
                 onClose={() => setImportOpen(false)}
                 entityLabel="Suppliers"
                 fields={IMPORT_FIELDS}
-                importFn={(rows, mode) => api.importSuppliers(rows, mode)}
+                importFn={(rows, mode) => api.importSuppliers(rows, mode, importBranch || undefined)}
                 onSuccess={() => void load()}
+                options={branch.hidden ? undefined : (
+                    <Field label={t.branchParties.importBranchLabel} hint={t.branchParties.importBranchHint} htmlFor="supplier-import-branch">
+                        <Select id="supplier-import-branch" value={importBranch} onChange={(e) => setImportBranch(e.target.value)} className="w-full">
+                            {branch.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </Select>
+                    </Field>
+                )}
             />
 
             {deleteId && (

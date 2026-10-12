@@ -580,6 +580,8 @@ async function main() {
             },
             create: {
                 tenant_id: tenant.id,
+                // Seed parties all belong to the main branch.
+                store_id: store.id,
                 customer_code: def.code,
                 name: def.name,
                 phone: def.phone,
@@ -737,6 +739,7 @@ async function main() {
             await prisma.customerCreditTransaction.create({
                 data: {
                     tenant_id: tenant.id,
+                    store_id: def.customer.store_id,
                     customer_id: def.customer.id,
                     type: 'CREDIT_SALE',
                     amount: balanceDue,
@@ -835,11 +838,11 @@ async function main() {
     ];
 
     const suppliers: any[] = [];
-    for (const def of supplierDefs) {
+    for (const [i, def] of supplierDefs.entries()) {
         const s = await prisma.supplier.upsert({
             where: { tenant_id_name: { tenant_id: tenant.id, name: def.name } },
             update: {},
-            create: { tenant_id: tenant.id, ...def },
+            create: { tenant_id: tenant.id, store_id: store.id, supplier_code: `SUP-${String(i + 1).padStart(5, '0')}`, ...def },
         });
         suppliers.push(s);
     }
@@ -937,6 +940,7 @@ async function main() {
         await prisma.supplierCreditTransaction.create({
             data: {
                 tenant_id: tenant.id,
+                store_id: def.supplier.store_id,
                 supplier_id: def.supplier.id,
                 type: 'CREDIT_PURCHASE',
                 amount: subtotal,

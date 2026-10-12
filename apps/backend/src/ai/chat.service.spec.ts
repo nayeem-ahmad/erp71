@@ -3,6 +3,7 @@ import { StorePermission } from '@erp71/shared-types';
 import { ChatService } from './chat.service';
 import { CHAT_TOOLS } from './chat-tools';
 import type { TenantContext } from '../database/tenant.decorator';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 const OWNER_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-1', storeId: 'store-1', userRole: 'OWNER', timezone: 'Asia/Dhaka' };
 const STAFF_CTX: TenantContext = { tenantId: 'tenant-1', userId: 'user-2', storeId: 'store-1', userRole: 'CASHIER', timezone: 'Asia/Dhaka' };
@@ -43,7 +44,13 @@ function makeService(overrides: {
             findMany: jest.fn().mockResolvedValue([]),
         },
         aiUsageLog: { count: jest.fn().mockResolvedValue(0) },
-        store: { findMany: jest.fn().mockResolvedValue([{ id: 'store-1', name: 'Gulshan' }]) },
+        store: {
+            findMany: jest.fn().mockResolvedValue([
+                { id: 'store-1', name: 'Gulshan' },
+                { id: 'store-2', name: 'Dhanmondi' },
+            ]),
+        },
+        userStoreAccess: { findMany: jest.fn().mockResolvedValue([{ store_id: 'store-1', access_level: 'FULL' }]) },
         $transaction: jest.fn().mockResolvedValue([
             { id: 'msg-user' },
             { id: 'msg-assistant', created_at: new Date('2026-07-21T10:00:00Z') },
@@ -135,6 +142,7 @@ function makeService(overrides: {
             prime: jest.fn(),
             invalidate: jest.fn(),
         } as any, // timezones
+        new AuthCacheService({ ttlMs: 0 }),
     );
 
     return { service, db, ai, platformSettings, planEntitlements, salesReports, chatData, webSearch, anomalies };
@@ -464,6 +472,28 @@ describe('ChatService.chat', () => {
         expect(systemPrompt).toMatch(/Today is \d{4}-\d{2}-\d{2}/);
         expect(systemPrompt).toContain('Gulshan (id: store-1)');
         expect(systemPrompt).toContain('Never state a number that did not come from a tool result');
+    });
+
+    it("offers a member only their own branches, so the model cannot name another's", async () => {
+        const { service, ai, db } = makeService({ grantedPermissions: [StorePermission.VIEW_FINANCIAL_REPORTS] });
+
+        await service.chat(STAFF_CTX, 'anything');
+
+        const systemPrompt = ai.callOpenRouterWithTools.mock.calls[0][1][0].content;
+        expect(systemPrompt).toContain('Gulshan (id: store-1)');
+        expect(systemPrompt).not.toContain('Dhanmondi');
+        expect(db.userStoreAccess.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { user_id: 'user-2', tenant_id: 'tenant-1' } }),
+        );
+    });
+
+    it('offers an owner every branch of the tenant', async () => {
+        const { service, ai } = makeService();
+
+        await service.chat(OWNER_CTX, 'anything');
+
+        const systemPrompt = ai.callOpenRouterWithTools.mock.calls[0][1][0].content;
+        expect(systemPrompt).toContain('Dhanmondi (id: store-2)');
     });
 
     /**

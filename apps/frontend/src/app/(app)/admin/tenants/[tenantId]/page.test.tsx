@@ -22,6 +22,7 @@ jest.mock('@/lib/api', () => ({
         loadAdminTenantDemoData: jest.fn(),
         suspendTenant: jest.fn(),
         deleteAdminTenant: jest.fn(),
+        clearAdminTenantData: jest.fn(),
         impersonateTenant: jest.fn(),
         getAdminTenantMessagingIdentity: jest.fn(),
         updateAdminTenantMessagingIdentity: jest.fn(),
@@ -157,7 +158,7 @@ describe('AdminTenantDetailPage', () => {
 
         // The unset features show what Inherit currently resolves to.
         expect(screen.getAllByText('Inheriting: On')).toHaveLength(1);   // manufacturing
-        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(6);
+        expect(screen.getAllByText('Inheriting: Off')).toHaveLength(7);
         expect(screen.getAllByText('Overridden for this tenant.')).toHaveLength(1); // aiChat
 
         // Pin Voice on for this tenant; every other feature keeps its state.
@@ -178,6 +179,7 @@ describe('AdminTenantDetailPage', () => {
                 aiChat: true,
                 externalImport: null,
                 projects: null,
+                appShell: null,
             });
         });
     });
@@ -239,6 +241,109 @@ describe('AdminTenantDetailPage', () => {
 
         await waitFor(() => {
             expect(api.deleteAdminTenant).toHaveBeenCalledWith('tenant1', 'Deleted by platform admin');
+        });
+    });
+
+    describe('clearing data', () => {
+        const typeNameAndConfirm = (label: RegExp) => {
+            const confirm = screen.getAllByRole('button', { name: label }).pop()!;
+            expect(confirm).toBeDisabled();
+            fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Acme Corp' } });
+            fireEvent.click(screen.getAllByRole('button', { name: label }).pop()!);
+        };
+
+        beforeEach(() => {
+            tabParam = 'danger';
+            require('@/lib/api').api.clearAdminTenantData.mockResolvedValue({ cleared: 'transactions' });
+        });
+
+        it('clears every transaction of a one-branch tenant once its name is typed', async () => {
+            const { api } = require('@/lib/api');
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            // Nothing to choose between with a single branch.
+            expect(screen.queryByLabelText('Branch')).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: /clear transactions/i }));
+            expect(api.clearAdminTenantData).not.toHaveBeenCalled();
+            typeNameAndConfirm(/clear transactions/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'transactions', undefined, []);
+            });
+        });
+
+        it('clears all data of the tenant, keeping the groups unticked', async () => {
+            const { api } = require('@/lib/api');
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            fireEvent.click(screen.getByRole('button', { name: /clear all data/i }));
+            const dialog = within(screen.getByRole('dialog'));
+            fireEvent.click(dialog.getByRole('checkbox', { name: /Products & pricing/ }));
+            fireEvent.click(dialog.getByRole('checkbox', { name: /^Customers/ }));
+            typeNameAndConfirm(/clear all data/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'all', undefined, ['products', 'customers']);
+            });
+        });
+
+        it('deletes every group when nothing is unticked', async () => {
+            const { api } = require('@/lib/api');
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            fireEvent.click(screen.getByRole('button', { name: /clear all data/i }));
+            typeNameAndConfirm(/clear all data/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'all', undefined, []);
+            });
+        });
+
+        const twoBranches = () => require('@/lib/api').api.getAdminTenant.mockResolvedValue({
+            ...mockTenant,
+            stores: [...mockTenant.stores, { id: 'store2', name: 'Uttara', address: null }],
+            store_count: 2,
+        });
+
+        it("clears one branch's transactions", async () => {
+            const { api } = require('@/lib/api');
+            twoBranches();
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'store2' } });
+            fireEvent.click(screen.getByRole('button', { name: /clear transactions/i }));
+            expect(within(screen.getByRole('dialog')).getByText(/Uttara/)).toBeInTheDocument();
+            typeNameAndConfirm(/clear transactions/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'transactions', 'store2', []);
+            });
+        });
+
+        it('clears all of one branch, offering only its own customers, suppliers and stock', async () => {
+            const { api } = require('@/lib/api');
+            twoBranches();
+            api.clearAdminTenantData.mockResolvedValue({ cleared: 'all', storeId: 'store2', kept: { customers: 2, suppliers: 0 } });
+            render(<AdminTenantDetailPage />);
+            await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+            fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'store2' } });
+            fireEvent.click(screen.getByRole('button', { name: /clear all data/i }));
+
+            const dialog = within(screen.getByRole('dialog'));
+            expect(dialog.getByText(/Uttara/)).toBeInTheDocument();
+            expect(dialog.getAllByRole('checkbox')).toHaveLength(3);
+            fireEvent.click(dialog.getByRole('checkbox', { name: /Stock levels/ }));
+            typeNameAndConfirm(/clear all data/i);
+
+            await waitFor(() => {
+                expect(api.clearAdminTenantData).toHaveBeenCalledWith('tenant1', 'all', 'store2', ['stock']);
+            });
         });
     });
 });

@@ -1,10 +1,11 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
-import { PaginationDto } from '../common/pagination.dto';
 import { SalesOrdersService } from './sales-orders.service';
 import { CreateSalesOrderDto, UpdateSalesOrderDto, UpdateOrderStatusDto, AddDepositDto } from './sales-orders.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchListQueryDto } from '../common/branch-list-query.dto';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
@@ -13,7 +14,10 @@ import { SALES_ORDER_WRITE, SALES_READ } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class SalesOrdersController {
-    constructor(private readonly ordersService: SalesOrdersService) {}
+    constructor(
+        private readonly ordersService: SalesOrdersService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...SALES_ORDER_WRITE)
     @Post()
@@ -25,13 +29,13 @@ export class SalesOrdersController {
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
-        @Query() query: PaginationDto,
-        @Query('createdFrom') createdFrom?: string,
-        @Query('createdTo') createdTo?: string,
+        @Query() query: BranchListQueryDto,
     ) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: SALES_READ });
         return this.ordersService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
-            createdFrom,
-            createdTo,
+            createdFrom: query.createdFrom,
+            createdTo: query.createdTo,
+            storeId,
         });
     }
 

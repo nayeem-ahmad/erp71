@@ -15,6 +15,8 @@ import { formatBDT, formatCalendarDate, formatDateTime } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { warehouseLabel } from '@/lib/warehouse-label';
+import { BranchFilter } from '@/components/ui';
+import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 
 interface HistoryRow {
     id: string;
@@ -83,11 +85,12 @@ function ProductTransactionHistoryContent() {
     const copy = t.inventoryReports.productTransactionHistory;
     const searchParams = useSearchParams();
     const fieldId = useId();
+    const branch = useBranchScope();
 
     const [productId, setProductId] = useState(searchParams.get('productId') ?? '');
     const [selectedProduct, setSelectedProduct] = useState<FilterOption | null>(null);
-    const [warehouseId, setWarehouseId] = useState(searchParams.get('warehouseId') ?? '');
-    const [storeId, setStoreId] = useState('');
+    const [warehouseId, setWarehouseId] = useBranchBoundState(branch.apiStoreId, searchParams.get('warehouseId') ?? '');
+    const storeId = branchOrEmpty(branch.apiStoreId);
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
     const [page, setPage] = useState(1);
@@ -99,15 +102,12 @@ function ProductTransactionHistoryContent() {
     // accident.
     const [error, setError] = useState<string | null>(null);
 
-    const [stores, setStores] = useState<any[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
 
     useEffect(() => {
         const loadFilters = async () => {
             try {
-                const [storeData, warehouseData] = await Promise.all([api.getStores(), api.getInventoryWarehouses()]);
-                setStores(storeData);
-                setWarehouses(warehouseData);
+                setWarehouses(await api.getInventoryWarehouses());
             } catch (err) {
                 console.error('Failed to load transaction history filters', err);
             }
@@ -120,9 +120,10 @@ function ProductTransactionHistoryContent() {
     // report.
     useEffect(() => {
         setPage(1);
-    }, [productId, warehouseId, storeId, fromDate, toDate]);
+    }, [productId, warehouseId, branch.apiStoreId, fromDate, toDate]);
 
     useEffect(() => {
+        if (!branch.ready) return;
         if (!productId) {
             setReport(null);
             setError(null);
@@ -136,7 +137,7 @@ function ProductTransactionHistoryContent() {
                 const data = await api.getProductTransactionHistory({
                     productId,
                     warehouseId: warehouseId || undefined,
-                    storeId: storeId || undefined,
+                    storeId: branch.apiStoreId,
                     from: fromDate || undefined,
                     to: toDate || undefined,
                     page,
@@ -149,6 +150,7 @@ function ProductTransactionHistoryContent() {
                 setSelectedProduct({ id: data.product.id, name: data.product.name, detail: data.product.sku });
             } catch (err) {
                 if (cancelled) return;
+                if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
                 console.error('Failed to load product transaction history', err);
                 setReport(null);
                 setError(err instanceof Error ? err.message : String(err));
@@ -161,12 +163,14 @@ function ProductTransactionHistoryContent() {
         return () => {
             cancelled = true;
         };
-    }, [productId, warehouseId, storeId, fromDate, toDate, page]);
+        // `branch` itself is a fresh object each render; what the read depends
+        // on is the branch it asks for.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId, productId, warehouseId, fromDate, toDate, page]);
 
     // A warehouse belongs to exactly one branch, so picking a branch narrows the
-    // warehouse list. The branch select clears `warehouseId` on the way past:
-    // the two are AND-ed server-side, so a warehouse left over from another
-    // branch would report nothing at all.
+    // warehouse list ("All branches" offers every one). The branch filter clears
+    // `warehouseId` on the way past (`useBranchBoundState`).
     const visibleWarehouses = useMemo(
         () => warehouses.filter((warehouse: any) => !storeId || warehouse.store_id === storeId),
         [warehouses, storeId],
@@ -379,6 +383,7 @@ function ProductTransactionHistoryContent() {
                     copy.title,
                     'inventory',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="bg-white border border-gray-100 rounded-lg p-3 md:p-4 space-y-3">
@@ -403,23 +408,6 @@ function ProductTransactionHistoryContent() {
                 />
 
                 <div className="flex flex-wrap gap-3 items-end">
-                    <Field label={copy.branchLabel} htmlFor={`${fieldId}-branch`} className="min-w-[180px] flex-1">
-                        <Select
-                            id={`${fieldId}-branch`}
-                            value={storeId}
-                            onChange={(e) => {
-                                setStoreId(e.target.value);
-                                setWarehouseId('');
-                            }}
-                        >
-                            <option value="">{copy.allBranches}</option>
-                            {stores.map((store: any) => (
-                                <option key={store.id} value={store.id}>
-                                    {store.name}
-                                </option>
-                            ))}
-                        </Select>
-                    </Field>
                     <Field label={copy.warehouseLabel} htmlFor={`${fieldId}-warehouse`} className="min-w-[180px] flex-1">
                         <Select
                             id={`${fieldId}-warehouse`}
@@ -453,7 +441,7 @@ function ProductTransactionHistoryContent() {
                     <Button
                         variant="secondary"
                         onClick={() => {
-                            setStoreId('');
+                            branch.resetToHeader();
                             setWarehouseId('');
                             setFromDate('');
                             setToDate('');

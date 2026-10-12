@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button, Select, Textarea } from '@/components/ui';
-import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { assigneeColumns } from './task-assignee';
@@ -13,6 +12,16 @@ export interface ComposerProject {
     id: string;
     code: string;
     name: string;
+}
+
+/** The card the composer asks its caller to save. */
+export interface ComposerCard {
+    projectId: string;
+    title: string;
+    /** Both columns, every time — see `assigneeColumns`. */
+    assigneeId: string;
+    assigneeEmployeeId: string;
+    userStoryId?: string;
 }
 
 /** What the composer hands the New Task form, so nothing typed is lost on the way. */
@@ -39,10 +48,12 @@ export interface ComposerDraft {
  * in a long column. Focus goes back to "Add a card", so the next card is still
  * one keystroke away. "More fields" trades the line for the full New Task form,
  * carrying over whatever was already typed and picked.
+ *
+ * The caller does the write: a board files the card into a column, a sprint
+ * commits it to the sprint (and, in its card view, to a status).
  */
 export default function BoardCardComposer({
-    boardId,
-    columnId,
+    create,
     projects,
     projectId,
     onProjectChange,
@@ -55,9 +66,10 @@ export default function BoardCardComposer({
     userStory,
     projectLocked = false,
     compact = false,
+    label,
 }: {
-    boardId: string;
-    columnId: string;
+    /** Saves the card. Throwing keeps the composer open, and the message becomes the toast. */
+    create: (card: ComposerCard) => Promise<unknown>;
     projects: ComposerProject[];
     projectId: string;
     onProjectChange: (next: string) => void;
@@ -73,9 +85,9 @@ export default function BoardCardComposer({
     defaultAssigneeLabel: string;
     /** Fetches that roster lazily — a board need not pay for it unopened. */
     onAssigneeMenuOpen: () => void;
-    /** Gets the API's answer: the reloaded board, naming the card just made. */
-    onCreated: (board: unknown) => void | Promise<void>;
-    /** Opens the full New Task form for this column, seeded with the draft. */
+    /** Gets `create`'s answer — on a board, the reloaded board naming the card just made. */
+    onCreated: (result: unknown) => void | Promise<void>;
+    /** Opens the full New Task form for this spot, seeded with the draft. */
     onOpenFull: (draft: ComposerDraft) => void;
     /**
      * The story a card composed here joins — set in a story swimlane, so the
@@ -96,9 +108,12 @@ export default function BoardCardComposer({
      * has no hover, so there it is always shown.
      */
     compact?: boolean;
+    /** The trigger's words, where "Add a card" is not what the page calls its rows. */
+    label?: string;
 }) {
     const { t } = useI18n();
     const bm = t.projects.board;
+    const triggerLabel = label ?? bm.addCard;
 
     const [open, setOpen] = useState(false);
     const [title, setTitle] = useState('');
@@ -142,17 +157,16 @@ export default function BoardCardComposer({
         if (!trimmed || !projectId || saving) return;
         setSaving(true);
         try {
-            const board = await api.createBoardCard(boardId, columnId, {
+            const result = await create({
                 projectId,
                 title: trimmed,
-                // Both columns, every time — see the API client's note.
                 ...assigneeColumns(chosen),
                 ...(userStory ? { userStoryId: userStory.id } : {}),
             });
             toast.success(t.projects.task.created);
             refocus.current = true;
             close();
-            await onCreated(board);
+            await onCreated(result);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : bm.createFailed);
         } finally {
@@ -183,7 +197,7 @@ export default function BoardCardComposer({
                 }`}
             >
                 <Plus className="h-3.5 w-3.5" />
-                {bm.addCard}
+                {triggerLabel}
             </button>
         );
     }
@@ -194,7 +208,7 @@ export default function BoardCardComposer({
                 autoFocus
                 rows={2}
                 value={title}
-                aria-label={bm.addCard}
+                aria-label={triggerLabel}
                 placeholder={bm.newCardPlaceholder}
                 onChange={(event) => setTitle(event.target.value)}
                 onKeyDown={(event) => {

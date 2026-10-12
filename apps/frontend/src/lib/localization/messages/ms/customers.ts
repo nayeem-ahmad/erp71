@@ -20,6 +20,7 @@ export const customersMessages = {
                 group: "Kumpulan",
                 territory: "Wilayah",
                 totalSpent: "Jumlah Perbelanjaan",
+                due: "Terhutang",
                 points: "Mata",
                 pointsSuffix: "mata",
                 segment: "Segmen",

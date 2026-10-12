@@ -15,7 +15,8 @@ jest.mock('@/lib/i18n', () => {
   };
 }, { virtual: true });
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import SalesHubPage from './page';
 import { setWorkspaceItem } from '@/lib/session-store';
 
@@ -46,12 +47,12 @@ describe('SalesHubPage', () => {
     });
 
     it('renders the sales hub heading', () => {
-        render(<SalesHubPage />);
+        renderWithQueryClient(<SalesHubPage />);
         expect(screen.getByRole('heading', { level: 1, name: 'Sales & Customer Operations' })).toBeInTheDocument();
     });
 
     it('shows daily operation entry points', async () => {
-        render(<SalesHubPage />);
+        renderWithQueryClient(<SalesHubPage />);
         await waitFor(() => {
             expect(screen.getByRole('link', { name: /New Sales Entry/i })).toHaveAttribute('href', '/sales/new');
             expect(screen.getByRole('link', { name: /^Sales$/i })).toHaveAttribute('href', '/sales/list');
@@ -59,14 +60,14 @@ describe('SalesHubPage', () => {
     });
 
     it('does not show a Point of Sale link', async () => {
-        render(<SalesHubPage />);
+        renderWithQueryClient(<SalesHubPage />);
         await waitFor(() => {
             expect(screen.queryByRole('link', { name: /Point of Sale/i })).toBeNull();
         });
     });
 
     it('shows setup links', async () => {
-        render(<SalesHubPage />);
+        renderWithQueryClient(<SalesHubPage />);
         await waitFor(() => {
             expect(screen.getByRole('link', { name: /Customer Groups/i })).toHaveAttribute('href', '/sales/customer-groups');
         });

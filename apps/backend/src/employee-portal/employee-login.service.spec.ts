@@ -29,6 +29,7 @@ describe('EmployeeLoginService', () => {
     let db: any;
     let audit: any;
     let policy: any;
+    let authCache: any;
     let service: EmployeeLoginService;
     /** The writes the transaction callback made, in order. */
     let tx: any;
@@ -76,7 +77,8 @@ describe('EmployeeLoginService', () => {
                 },
             });
 
-        service = new EmployeeLoginService(db, audit, policy);
+        authCache = { invalidateUser: jest.fn() };
+        service = new EmployeeLoginService(db, audit, policy, authCache);
     });
 
     describe('create', () => {
@@ -263,6 +265,17 @@ describe('EmployeeLoginService', () => {
             expect(await bcrypt.compare(result.password, data.passwordHash)).toBe(true);
         });
 
+        // The version bumps and the re-armed hold are read off the row
+        // `JwtStrategy` caches, so they bite only once it is dropped.
+        it('drops the cached user row after the write', async () => {
+            await service.reset(TENANT, 'emp-1', {});
+
+            expect(authCache.invalidateUser).toHaveBeenCalledWith('user-1');
+            expect(authCache.invalidateUser.mock.invocationCallOrder[0]).toBeGreaterThan(
+                db.user.update.mock.invocationCallOrder[0],
+            );
+        });
+
         /**
          * `MANAGE_HR` is not owner-level, and `reset` puts a working password on
          * the screen of whoever called it. If it would act on a staff account,
@@ -320,6 +333,12 @@ describe('EmployeeLoginService', () => {
                 where: { id: 'user-1' },
                 data: { token_version: { increment: 1 } },
             });
+            // And the cached row from before the bump is dropped once the
+            // transaction has committed, or the old token keeps passing.
+            expect(authCache.invalidateUser).toHaveBeenCalledWith('user-1');
+            expect(authCache.invalidateUser.mock.invocationCallOrder[0]).toBeGreaterThan(
+                tx.user.update.mock.invocationCallOrder[0],
+            );
         });
 
         it("does not sign out an owner, whose permission rows are empty by design", async () => {
@@ -330,6 +349,7 @@ describe('EmployeeLoginService', () => {
 
             expect(tx.employee.update).toHaveBeenCalled();
             expect(tx.user.update).not.toHaveBeenCalled();
+            expect(authCache.invalidateUser).not.toHaveBeenCalled();
         });
 
         it('does not sign out an account that also holds staff permissions', async () => {

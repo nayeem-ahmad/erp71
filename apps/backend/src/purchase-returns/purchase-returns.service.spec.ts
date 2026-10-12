@@ -132,7 +132,7 @@ describe('PurchaseReturnsService', () => {
             tenant_id: 'tenant-1',
             store_id: 'store-1',
             supplier_id: 'sup-1',
-            supplier: { id: 'sup-1', due_balance: 100 },
+            supplier: { id: 'sup-1', due_balance: 100, store_id: 'store-sup' },
             items: [
                 { id: 'item-1', product_id: 'prod-1', unit_cost: 12.5, quantity: 4, returnItems: [] },
             ],
@@ -166,6 +166,7 @@ describe('PurchaseReturnsService', () => {
             expect.objectContaining({
                 data: expect.objectContaining({
                     supplier_id: 'sup-1',
+                    store_id: 'store-sup',
                     type: 'ADJUSTMENT',
                     amount: -25,
                     balance_after: 75,

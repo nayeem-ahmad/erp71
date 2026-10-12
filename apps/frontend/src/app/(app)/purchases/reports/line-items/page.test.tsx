@@ -1,8 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { defaultLineItemWindow } from '@/components/reports/useLineItemFilters';
 import PurchaseLineItemsPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
 
 const searchParams = new Map<string, string>();
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
@@ -28,7 +31,6 @@ jest.mock('@/hooks/useMediaQuery', () => ({
 jest.mock('@/lib/api', () => ({
     api: {
         getPurchaseLineItems: jest.fn(),
-        getStores: jest.fn(),
         getSuppliersPaged: jest.fn(),
         searchProductsByQuantity: jest.fn(),
     },
@@ -84,9 +86,9 @@ function lastQuery() {
 describe('PurchaseLineItemsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         searchParams.clear();
         api().getPurchaseLineItems.mockResolvedValue(REPORT);
-        api().getStores.mockResolvedValue([{ id: 'store-1', name: 'Main' }]);
         api().getSuppliersPaged.mockResolvedValue({
             items: [{ id: 'sup-1', name: 'Rahman Traders', phone: '01811000001' }],
             total: 1,

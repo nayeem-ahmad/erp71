@@ -239,9 +239,11 @@ export interface PrintHeaderConfig {
          */
         position?: TitlePosition;
         /**
-         * Fine-tuning nudge from the slot, in mm. Applied as a relative offset,
-         * so the title still takes its place in the flow and only its painted
-         * position shifts — a tenant cannot push it off the page and lose it.
+         * Fine-tuning nudge from the slot, in mm. Across and up are applied as a
+         * relative offset, so the title still takes its place in the flow and
+         * only its painted position shifts — a tenant cannot push it off the
+         * page and lose it. Down is a margin, so the header grows to hold the
+         * block and its divider is never painted over.
          */
         offsetXMm?: number;
         offsetYMm?: number;
@@ -279,6 +281,23 @@ export interface HeaderContext {
     website?: string;
     vatRegNo?: string;
     tin?: string;
+    /** Who entered the document — fills `{{entry_by}}` (and the older `{{prepared_by}}`). */
+    preparedBy?: string;
+    /** The employee a sale is credited to — fills `{{sales_by}}`. */
+    salesBy?: string;
+    /** When it was printed, already formatted — fills `{{print_date}}`. */
+    printDate?: string;
+    /**
+     * An image (a QR code, as a data URL) printed under the title in the header
+     * block, for a document whose number and date are printed elsewhere.
+     */
+    docQr?: string;
+    /**
+     * Leave the document number and date out of the header's title block.
+     * Only that block: `{{doc_number}}` and `{{date}}` in a template's own lines
+     * and footer still fill, since the context still carries them.
+     */
+    hideDocMeta?: boolean;
 }
 
 /**

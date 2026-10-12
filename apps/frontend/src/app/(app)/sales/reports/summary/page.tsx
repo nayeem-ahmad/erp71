@@ -9,7 +9,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 
 interface SummaryRow {
     date: string;
@@ -41,6 +42,7 @@ function defaultTo() {
 
 export default function SalesSummaryPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<SummaryRow[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
@@ -50,20 +52,23 @@ export default function SalesSummaryPage() {
     const [narration, setNarration] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadReport();
-    }, [fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const loadReport = async () => {
         setLoading(true);
         setNarration(null);
         try {
             const data = await api.getSalesSummary({
+                storeId: branch.apiStoreId,
                 from: fromDate || undefined,
                 to: toDate || undefined,
             });
             setSummary(data.summary);
             setRows(data.rows);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load sales summary', error);
         } finally {
             setLoading(false);
@@ -133,6 +138,7 @@ export default function SalesSummaryPage() {
                         t.salesReports.summary.title,
                         'sales',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="grid md:grid-cols-5 gap-4">

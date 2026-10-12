@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { codeForNewRecord } from '../common/code-series.util';
 
 /** Prisma client or transaction client — both expose the model delegates used here. */
 type DbLike = any;
@@ -40,6 +41,8 @@ export async function resolveInlineSupplier(
     tx: DbLike,
     tenantId: string,
     draft: InlineSupplierDraft,
+    /** The document's branch: a new supplier belongs to it; a reused one keeps theirs. */
+    storeId: string,
 ): Promise<string> {
     const name = draft.name?.trim();
     if (!name) {
@@ -61,9 +64,11 @@ export async function resolveInlineSupplier(
         return existing.id;
     }
 
-    const created = await tx.supplier.create({
-        data: { tenant_id: tenantId, name, ...detailsOf(draft) },
-        select: { id: true },
-    });
+    const created = await codeForNewRecord<{ id: string }>(tx, 'Supplier', tenantId, null, (supplierCode) =>
+        tx.supplier.create({
+            data: { tenant_id: tenantId, name, supplier_code: supplierCode, store_id: storeId, ...detailsOf(draft) },
+            select: { id: true },
+        }),
+    );
     return created.id;
 }

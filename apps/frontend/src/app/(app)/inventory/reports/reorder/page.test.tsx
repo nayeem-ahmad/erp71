@@ -2,6 +2,9 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import ReorderSuggestionsPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -78,6 +81,7 @@ const mockReorderRows = [
 describe('ReorderSuggestionsPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getReorderSuggestions.mockResolvedValue(mockReorderRows);
         api.getStores.mockResolvedValue([

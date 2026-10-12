@@ -158,4 +158,32 @@ describe('syncCancelEntryPermission', () => {
         expect(await syncCancelEntryPermission(client)).toEqual({ roleGrants: 0, memberGrants: 0 });
         expect(tables.tenantRolePermission).toHaveLength(0);
     });
+
+    describe('with ADJUST_PRODUCT_COST', () => {
+        const ADJUST = StorePermission.ADJUST_PRODUCT_COST;
+
+        it('is likewise held by Tenant Admin and by no module role', () => {
+            const admin = TENANT_ROLE_TEMPLATES.find((template) => template.key === 'tenant_admin')!;
+            expect(admin.permissions).toContain(ADJUST);
+            const moduleRoles = TENANT_ROLE_TEMPLATES.filter((template) => template.key !== 'tenant_admin');
+            for (const role of moduleRoles) {
+                expect(role.permissions).not.toContain(ADJUST);
+            }
+        });
+
+        it('grants that permission, and independently of CANCEL_ENTRY', async () => {
+            const { client, tables } = seedTenant({
+                tenantRolePermission: [{ tenant_role_id: 'r-admin', permission: PERMISSION }],
+            });
+
+            const result = await syncCancelEntryPermission(client, { permission: ADJUST });
+
+            expect(result).toEqual({ roleGrants: 1, memberGrants: 2 });
+            expect(tables.tenantRolePermission).toEqual([
+                { tenant_role_id: 'r-admin', permission: PERMISSION },
+                { tenant_role_id: 'r-admin', permission: ADJUST },
+            ]);
+            expect(tables.userStorePermission.every((row) => row.permission === ADJUST)).toBe(true);
+        });
+    });
 });

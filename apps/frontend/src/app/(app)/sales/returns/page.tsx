@@ -17,7 +17,8 @@ import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 interface SalesReturn {
     id: string;
@@ -43,21 +44,24 @@ const columnHelper = createColumnHelper<SalesReturn>();
 
 export default function ReturnsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const printHeader = usePrintHeader('SALES_RETURN');
     const [returns, setReturns] = useState<SalesReturn[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
+        if (!branch.ready) return;
         loadReturns();
-    }, [createdRange]);
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const loadReturns = async () => {
         setLoading(true);
         try {
-            const data = await api.getReturns(applyCreatedRangeQuery(createdRange));
+            const data = await api.getReturns({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setReturns(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load returns', error);
         } finally {
             setLoading(false);
@@ -245,10 +249,13 @@ export default function ReturnsPage() {
                         'sales',
                     )}
                     actions={
-                        <Link href={routes.sales.returnNew} className={`${compactDensity.btnPrimary} bg-danger hover:bg-red-700 text-white`}>
-                            <Plus className="w-4 h-4" />
-                            {t.returns.processReturn}
-                        </Link>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <Link href={routes.sales.returnNew} className={`${compactDensity.btnPrimary} bg-danger hover:bg-red-700 text-white`}>
+                                <Plus className="w-4 h-4" />
+                                {t.returns.processReturn}
+                            </Link>
+                        </>
                     }
                 />
 

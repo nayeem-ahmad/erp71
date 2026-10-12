@@ -7,6 +7,8 @@ import { VoucherType } from '@erp71/shared-types';
 import { AccountingPageShell } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -38,6 +40,7 @@ const voucherTypeOptions = [
 
 export default function AccountingJournalPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [response, setResponse] = useState<VoucherListResponse>({
         data: [],
         meta: { page: 1, limit: 30, total: 0, totalPages: 1 },
@@ -47,10 +50,17 @@ export default function AccountingJournalPage() {
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [page, setPage] = useState(1);
+    // A branch change is page 1 of a fresh list, like any other filter.
+    const [pagedBranch, setPagedBranch] = useState(branch.apiStoreId);
+    if (pagedBranch !== branch.apiStoreId) {
+        setPagedBranch(branch.apiStoreId);
+        setPage(1);
+    }
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadJournal();
-    }, [voucherType, from, to, page]);
+    }, [voucherType, from, to, page, branch.ready, branch.apiStoreId]);
 
     const loadJournal = async () => {
         setLoading(true);
@@ -61,9 +71,11 @@ export default function AccountingJournalPage() {
                 to: to || undefined,
                 page,
                 limit: 30,
+                storeId: branch.apiStoreId,
             });
             setResponse(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load journal', error);
             setResponse({ data: [], meta: { page: 1, limit: 30, total: 0, totalPages: 1 } });
         } finally {
@@ -112,7 +124,12 @@ export default function AccountingJournalPage() {
                     t.journal.title,
                     'accounting',
                 )}
-                actions={filterControls}
+                actions={(
+                    <>
+                        <BranchFilter scope={branch} />
+                        {filterControls}
+                    </>
+                )}
             />
 
             <div className="bg-white rounded border overflow-hidden">

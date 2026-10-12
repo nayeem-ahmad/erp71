@@ -9,6 +9,7 @@ import {
     MaxLength,
     Min,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { PaginationDto } from '../common/pagination.dto';
 
 export const LOAN_DIRECTIONS = ['PAYABLE', 'RECEIVABLE'] as const;
@@ -111,7 +112,7 @@ export class ListLoansQueryDto extends PaginationDto {
     status?: (typeof LOAN_STATUSES)[number];
 
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -142,4 +143,11 @@ export class CreateLoanPaymentDto {
     @IsOptional()
     @IsString()
     notes?: string;
+}
+
+/** The loans summary: one branch, `all`, or (omitted) the caller's default. */
+export class LoanSummaryQueryDto {
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 }

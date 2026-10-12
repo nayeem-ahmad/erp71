@@ -4,11 +4,15 @@ import {
     ExpressRetailProduct,
     ExpressRetailPurchase,
     ExpressRetailPurchaseLine,
+    ExpressRetailPurchaseReturn,
+    ExpressRetailQuotation,
+    ExpressRetailQuotationLine,
     ExpressRetailSale,
     ExpressRetailSaleLine,
     ExpressRetailSaleReturn,
     ExpressRetailSupplier,
 } from './express-retail.client';
+import { partyLabel } from './skipped-records';
 
 /**
  * Pure mapping from Express Retail Pro payloads onto our own shapes. Kept free
@@ -23,7 +27,27 @@ export type SyncWarning = {
     /** Machine-readable reason so the UI can group these. */
     code: string;
     message: string;
+    /**
+     * Set only when the record was not imported at all. A run keeps every one
+     * of these (notes can be trimmed), and they are what the skipped-records
+     * report lists.
+     */
+    skipped?: SkippedRecord;
 };
+
+/** Enough about a record the run could not import to find it in the provider and act on it. */
+export interface SkippedRecord {
+    /** The provider's document number, or a master record's code. */
+    number: string | null;
+    /** `YYYY-MM-DD`, for documents. */
+    date: string | null;
+    /** The customer or supplier as the provider names it, else its provider id. */
+    party: string | null;
+    amount: number | null;
+    lines: number | null;
+    /** The write error, trimmed to the line that says what went wrong. */
+    error?: string;
+}
 
 export interface DateWindow {
     from: string;
@@ -104,25 +128,54 @@ export function buildDocumentNumber(prefix: string, invoice: string): string {
     return `${prefix}${invoice}`.slice(0, 191);
 }
 
+/** The longest provider code kept as it is: anything longer is an internal id, not a code anyone types. */
+const READABLE_CODE_MAX = 20;
+/** Sixteen or more hex digits with a letter among them: a GUID or hash, dashes or not. An all-digit run is a barcode. */
+const HEX_ID = /^(?=.*[a-f])[0-9a-f]{16,}$/i;
+
+/**
+ * The provider's code for a product, customer or supplier when it reads like
+ * one — `P01212`, `C00564` — or null when it is blank or an internal id such
+ * as a GUID, which the import then replaces with the next in the tenant's own
+ * series (`PRD-00001`, `CUST-00001`, `SUP-00001`).
+ */
+export function readableCode(raw: string | null | undefined): string | null {
+    const code = (raw ?? '').trim();
+    if (!code || code.length > READABLE_CODE_MAX || HEX_ID.test(code.replaceAll('-', ''))) return null;
+    return code;
+}
+
+/** `base`, or the first of `variant(2)`, `variant(3)`, … not yet claimed in this run; claims it. */
+function claimFirstFree(base: string, claimed: Set<string>, variant: (n: number) => string): string {
+    let candidate = base;
+    let n = 1;
+    while (claimed.has(candidate)) {
+        n += 1;
+        candidate = variant(n);
+    }
+    claimed.add(candidate);
+    return candidate;
+}
+
 /**
  * Provider product/customer codes are *almost* unique — the live data has a
- * handful of duplicates, and our schema enforces uniqueness per tenant. Append
- * the provider row id to any code we have already claimed.
+ * handful of duplicates, and our schema enforces uniqueness per tenant. A code
+ * already claimed in this run becomes `P01139-2`, `P01139-3`, …; no code stays
+ * null for the import to number.
  */
-export function dedupeCode(code: string, externalId: string, claimed: Set<string>): string {
-    const base = (code || '').trim() || `EXT-${externalId}`;
-    if (!claimed.has(base)) {
-        claimed.add(base);
-        return base;
-    }
-    const disambiguated = `${base}-${externalId}`;
-    claimed.add(disambiguated);
-    return disambiguated;
+export function dedupeCode(code: string | null, claimed: Set<string>): string | null {
+    return code ? claimFirstFree(code, claimed, (n) => `${code}-${n}`) : null;
+}
+
+/** A supplier name already claimed in this run becomes `Acme (2)`, `Acme (3)`, …: names are unique per tenant. */
+export function dedupeName(name: string, claimed: Set<string>): string {
+    return claimFirstFree(name, claimed, (n) => `${name} (${n})`);
 }
 
 export interface MappedProduct {
     externalId: string;
-    sku: string;
+    /** The provider's SKU, or null for the import to give the next in the tenant's series. */
+    sku: string | null;
     name: string;
     price: number;
     purchaseRate: number;
@@ -139,7 +192,7 @@ export function mapProduct(row: ExpressRetailProduct, claimedSkus: Set<string>):
 
     return {
         externalId,
-        sku: dedupeCode(row.code, externalId, claimedSkus),
+        sku: dedupeCode(readableCode(row.code), claimedSkus),
         name: (row.name || '').trim() || `Unnamed product ${externalId}`,
         price: toMoney(row.sale_rate),
         purchaseRate: toMoney(row.purchase_rate),
@@ -152,7 +205,8 @@ export function mapProduct(row: ExpressRetailProduct, claimedSkus: Set<string>):
 
 export interface MappedCustomer {
     externalId: string;
-    customerCode: string;
+    /** The provider's code, or null for the import to give the next in the tenant's series. */
+    customerCode: string | null;
     name: string;
     ownerName: string | null;
     phone: string | null;
@@ -170,7 +224,7 @@ export function mapCustomer(row: ExpressRetailCustomer, claimedCodes: Set<string
 
     return {
         externalId,
-        customerCode: dedupeCode(row.code, externalId, claimedCodes),
+        customerCode: dedupeCode(readableCode(row.code), claimedCodes),
         name: (row.name || '').trim() || `Unnamed customer ${externalId}`,
         ownerName: emptyToNull(row.owner_name),
         phone: emptyToNull(row.phone),
@@ -186,6 +240,8 @@ export function mapCustomer(row: ExpressRetailCustomer, claimedCodes: Set<string
 export interface MappedSupplier {
     externalId: string;
     name: string;
+    /** The provider's code, or null for the import to give the next in the tenant's series. */
+    supplierCode: string | null;
     phone: string | null;
     email: string | null;
     address: string | null;
@@ -194,15 +250,20 @@ export interface MappedSupplier {
     externalUpdatedAt: Date | null;
 }
 
-export function mapSupplier(row: ExpressRetailSupplier, claimedNames: Set<string>): MappedSupplier {
+export function mapSupplier(
+    row: ExpressRetailSupplier,
+    claimedNames: Set<string>,
+    claimedCodes: Set<string> = new Set(),
+): MappedSupplier {
     const externalId = String(row.id);
     // Supplier is unique on [tenant_id, name] in our schema, so the name is the
     // value that has to be disambiguated rather than the code.
-    const name = dedupeCode((row.name || '').trim() || `Unnamed supplier ${externalId}`, externalId, claimedNames);
+    const name = dedupeName((row.name || '').trim() || `Unnamed supplier ${externalId}`, claimedNames);
 
     return {
         externalId,
         name,
+        supplierCode: dedupeCode(readableCode(row.code), claimedCodes),
         previousDue: toMoney(row.previous_due),
         phone: emptyToNull(row.phone),
         email: emptyToNull(row.email),
@@ -220,6 +281,12 @@ export interface MappedSaleItem {
 
 export interface MappedSale {
     externalId: string;
+    /**
+     * The customer as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedCustomer?: unknown;
     serialNumber: string;
     /** The provider's own transaction number, unprefixed, for `reference_number`. */
     referenceNumber: string | null;
@@ -278,6 +345,7 @@ export function mapSale(
         note: emptyToNull(row.description),
         externalUpdatedAt: parseTimestamp(row.updated_at),
         items,
+        embeddedCustomer: row.customer ?? null,
     };
 }
 
@@ -290,6 +358,12 @@ export interface MappedPurchaseItem {
 
 export interface MappedPurchase {
     externalId: string;
+    /**
+     * The supplier as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedSupplier?: unknown;
     purchaseNumber: string;
     /** The provider's own transaction number, unprefixed, for `reference_number`. */
     referenceNumber: string | null;
@@ -352,6 +426,7 @@ export function mapPurchase(
         purchaseDate: parseProviderDate(row.date),
         externalUpdatedAt: parseTimestamp(row.updated_at),
         items,
+        embeddedSupplier: row.supplier ?? null,
     };
 }
 
@@ -376,11 +451,37 @@ export interface MappedSaleReturn {
     referenceNumber: string | null;
     /** From the nested `sale` object — the return has no sale_id column. */
     externalSaleId: string | null;
+    /**
+     * The customer the provider files the return under. Used only when the
+     * return's sale is not imported; otherwise the sale's customer is the one.
+     */
+    externalCustomerId?: string | null;
     totalRefund: number;
+    /**
+     * What the return takes off the customer's due. Left out by a provider
+     * whose returns are not credited to the customer's account (Express), so
+     * those import as before.
+     */
+    dueCredit?: number;
     reason: string | null;
     returnDate: Date;
     externalUpdatedAt: Date | null;
     items: MappedSaleReturnItem[];
+}
+
+/**
+ * Where each party and product stood when the imported range begins, keyed by
+ * provider id: the provider's own current figure less what the range's
+ * documents will add up to once imported. Zero entries are left out.
+ *
+ * It catches whatever the provider holds that no imported document explains:
+ * opening dues and opening stock typed into the provider when it was set up,
+ * history before the range, and records the import cannot read.
+ */
+export interface OpeningPositions {
+    customers: Map<string, number>;
+    suppliers: Map<string, number>;
+    stock: Map<string, number>;
 }
 
 export function mapSaleReturn(
@@ -415,11 +516,178 @@ export function mapSaleReturn(
         returnNumber: buildDocumentNumber(documentPrefix, row.invoice),
         referenceNumber: emptyToNull(row.invoice),
         externalSaleId: row.sale ? String(row.sale.id) : null,
+        externalCustomerId: emptyToNull(row.customer_id),
         totalRefund: toMoney(row.amount),
+        // Express takes the whole return off the customer's due: the running
+        // balance (`previous_due`) on their next sale or payment shows it.
+        // Cash handed back is a CP payment of its own.
+        dueCredit: toMoney(row.amount),
         reason: emptyToNull(row.description),
         returnDate: parseProviderDate(row.date),
         externalUpdatedAt: parseTimestamp(row.updated_at),
         items,
+    };
+}
+
+export interface MappedPurchaseReturnItem {
+    externalProductId: string;
+    quantity: number;
+    unitCost: number;
+    lineTotal: number;
+}
+
+export interface MappedPurchaseReturn {
+    externalId: string;
+    returnNumber: string;
+    /** The provider's own number, unprefixed — Express reuses the purchase's. */
+    referenceNumber: string | null;
+    externalPurchaseId: string | null;
+    externalSupplierId: string | null;
+    /** The supplier as embedded on the parent purchase. */
+    embeddedSupplier?: unknown;
+    totalAmount: number;
+    /**
+     * What the return takes off the supplier's due, in full even when nothing
+     * was owed. Left out, the due never goes below zero, as for a return
+     * entered by hand.
+     */
+    dueCredit?: number;
+    notes: string | null;
+    returnDate: Date;
+    externalUpdatedAt: Date | null;
+    items: MappedPurchaseReturnItem[];
+}
+
+/** Goods sent back to a supplier. A cash-supplier ('G') purchase has no supplier to credit. */
+export function mapPurchaseReturn(row: ExpressRetailPurchaseReturn, documentPrefix: string, warnings: SyncWarning[]): MappedPurchaseReturn {
+    const externalId = String(row.id);
+    const purchase = row.purchase;
+    const cashSupplier = (purchase?.supplier_type ?? '').toUpperCase() === 'G';
+
+    const items: MappedPurchaseReturnItem[] = (row.purchase_return_details ?? []).map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'PURCHASE_RETURN',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Purchase return ${row.invoice}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        const unitCost = toMoney(line.unit_price);
+        const lineTotal = toMoney(line.amount);
+        return {
+            externalProductId: String(line.product_id),
+            quantity,
+            unitCost,
+            lineTotal: lineTotal > 0 ? lineTotal : Math.round(unitCost * quantity * 100) / 100,
+        };
+    });
+
+    return {
+        externalId,
+        returnNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalPurchaseId: purchase ? String(purchase.id) : null,
+        externalSupplierId: cashSupplier ? null : emptyToNull(row.supplier_id ?? purchase?.supplier_id ?? null),
+        embeddedSupplier: cashSupplier ? null : purchase?.supplier ?? null,
+        totalAmount: toMoney(row.amount),
+        // Express takes a return off the supplier's due in full: a supplier
+        // owed nothing then owes the shop, as the running balance on their
+        // next purchase shows (Keranigonj Godaun at −13,000).
+        dueCredit: toMoney(row.amount),
+        notes: emptyToNull(row.description),
+        returnDate: parseProviderDate(row.date),
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+        items,
+    };
+}
+
+export interface MappedQuotationItem {
+    externalProductId: string;
+    quantity: number;
+    unitPrice: number;
+}
+
+/**
+ * A price offer to a customer. Unlike every other document here it moves no
+ * stock and no money, so it never posts — it is history the tenant can look
+ * up, revise or convert, nothing more.
+ */
+export interface MappedQuotation {
+    externalId: string;
+    /**
+     * The customer as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedCustomer?: unknown;
+    quoteNumber: string;
+    /** The provider's own quotation number, unprefixed, for warnings. */
+    referenceNumber: string | null;
+    externalCustomerId: string | null;
+    totalAmount: number;
+    quoteDate: Date;
+    validUntil: Date | null;
+    /** Our status vocabulary: SENT, ACCEPTED, REJECTED, EXPIRED or CONVERTED. */
+    status: string;
+    notes: string | null;
+    externalUpdatedAt: Date | null;
+    items: MappedQuotationItem[];
+}
+
+/**
+ * Express keeps no validity date or accepted/converted state on a quotation,
+ * and leaves deleted ones out of the list, so every one it returns is an open
+ * offer: SENT. The total is the header's, which carries transport, VAT and the
+ * header discount that no line does.
+ */
+export function mapQuotation(
+    row: ExpressRetailQuotation,
+    lines: ExpressRetailQuotationLine[],
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedQuotation {
+    const externalId = String(row.id);
+    if (lines.length === 0) {
+        warnings.push({
+            entity: 'QUOTATION',
+            externalId,
+            code: 'QUOTATION_LINES_MISSING',
+            message: `Quotation ${row.invoice}: no line items came back from Express Retail — imported with its total only`,
+        });
+    }
+
+    const items: MappedQuotationItem[] = lines.map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'QUOTATION',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Quotation ${row.invoice}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        // The offered price after the line's own discount: the line total over
+        // the quantity, or the list price less the discount when no total came.
+        const net = toMoney(line.total) || toMoney(line.unit_price) * originalQuantity - toMoney(line.discountAmount);
+        const unitPrice = originalQuantity > 0 ? Math.round((net / originalQuantity) * 100) / 100 : toMoney(line.unit_price);
+        return { externalProductId: String(line.product_id), quantity, unitPrice };
+    });
+
+    return {
+        externalId,
+        quoteNumber: buildDocumentNumber(documentPrefix, row.invoice),
+        referenceNumber: emptyToNull(row.invoice),
+        externalCustomerId: emptyToNull(row.customer_id),
+        totalAmount: toMoney(row.total),
+        quoteDate: parseProviderDate(row.date),
+        validUntil: null,
+        status: 'SENT',
+        notes: emptyToNull(row.description),
+        externalUpdatedAt: parseTimestamp(row.updated_at),
+        items,
+        embeddedCustomer: row.customer ?? null,
     };
 }
 
@@ -430,6 +698,12 @@ export type PaymentParty = 'CUSTOMER' | 'SUPPLIER';
 
 export interface MappedPayment {
     externalId: string;
+    /**
+     * The customer or supplier as the provider embeds it on the document, when it does. Lets
+     * the import create one missing from the provider's own list (deleted
+     * there) instead of losing the link or skipping the document.
+     */
+    embeddedParty?: unknown;
     /** Prefixed, so an imported payment cannot collide with our own numbering. */
     paymentNumber: string;
     /** The provider's own transaction number, unprefixed. */
@@ -486,6 +760,7 @@ export function mapPayment(
             externalId,
             code: 'PAYMENT_TYPE_UNKNOWN',
             message: `Payment ${row.invoice}: unrecognised type "${row.type}" — skipped rather than guess whether it was money in or out`,
+            skipped: skippedPayment(row, party),
         });
         return null;
     }
@@ -497,6 +772,7 @@ export function mapPayment(
             externalId,
             code: 'PAYMENT_AMOUNT_INVALID',
             message: `Payment ${row.invoice}: amount ${row.amount ?? 'null'} is not a positive number — skipped`,
+            skipped: skippedPayment(row, party),
         });
         return null;
     }
@@ -524,6 +800,18 @@ export function mapPayment(
         previousDue,
         note: noteParts.length ? noteParts.join(' — ') : null,
         externalUpdatedAt: parseTimestamp(row.updated_at),
+        embeddedParty: (party === 'CUSTOMER' ? row.customer : row.supplier) ?? null,
+    };
+}
+
+function skippedPayment(row: ExpressRetailPayment, party: PaymentParty): SkippedRecord {
+    const partyId = emptyToNull((party === 'CUSTOMER' ? row.customer_id : row.supplier_id) ?? null);
+    return {
+        number: emptyToNull(row.invoice),
+        date: emptyToNull(row.date)?.slice(0, 10) ?? null,
+        party: partyLabel(partyId, party === 'CUSTOMER' ? row.customer : row.supplier),
+        amount: toMoney(row.amount),
+        lines: null,
     };
 }
 

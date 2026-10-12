@@ -1,5 +1,6 @@
 'use client';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import ActivitiesPage from './page';
 import { tenantDateOnly } from '@/lib/created-range';
 
@@ -88,7 +89,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     });
 
     it('opens on today, so the list is the day\'s agenda rather than everything ever planned', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         const today = tenantDateOnly();
@@ -98,7 +99,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     });
 
     it('filters by the owner of the related lead', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
         const owners = await withMembersLoaded('All lead owners');
 
@@ -110,7 +111,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     });
 
     it('filters to activities on leads nobody owns', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.change(selectByOption('All lead owners'), { target: { value: 'unassigned' } });
@@ -121,7 +122,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     });
 
     it('filters by who has to do the activity, separately from who owns the lead', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
         const assignees = await withMembersLoaded('All assignees');
 
@@ -138,7 +139,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
      * options with one value make the select pick the wrong one on change.
      */
     it('offers Me first, carrying the signed-in user\'s id and appearing once', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         const owners = await withMembersLoaded('All lead owners');
@@ -155,7 +156,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     });
 
     it('drops the due range when Overdue only is ticked, which would otherwise contradict it', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.click(screen.getByLabelText('Overdue only'));
@@ -169,7 +170,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     });
 
     it('unticks Overdue only when a due range is chosen', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         const overdue = screen.getByLabelText('Overdue only') as HTMLInputElement;
@@ -187,7 +188,7 @@ describe('CrmActivitiesPage — owner and due-date filters', () => {
     });
 
     it('keeps the created-date filter separate from the due-date one', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(screen.getByRole('button', { name: /created · any time/i })).toBeInTheDocument();
@@ -214,7 +215,7 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
     });
 
     it('offers both write actions in the page header', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(screen.getByRole('button', { name: /log activity/i })).toBeInTheDocument();
@@ -222,7 +223,7 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
     });
 
     it('asks which lead or customer, since the list spans every record', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.click(screen.getByRole('button', { name: /schedule activity/i }));
@@ -232,7 +233,7 @@ describe('CrmActivitiesPage — logging and scheduling without opening the lead'
     });
 
     it('reloads the list and the counters once something is filed', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
         const listCalls = api.getAllCrmActivities.mock.calls.length;
 
@@ -275,7 +276,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
     const lastCall = () => api.getAllCrmActivities.mock.calls.at(-1)![0];
 
     it('comes back to the status and assignee the last visit left set', async () => {
-        const first = render(<ActivitiesPage />);
+        const first = renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         const status = screen.getByRole('option', { name: 'All statuses' }).closest('select')!;
@@ -284,7 +285,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
         first.unmount();
 
         jest.clearAllMocks();
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         const restored = screen.getByRole('option', { name: 'All statuses' }).closest('select') as HTMLSelectElement;
@@ -296,7 +297,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
     });
 
     it('remembers a due range chosen instead of the default agenda', async () => {
-        const first = render(<ActivitiesPage />);
+        const first = renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.click(screen.getByRole('button', { name: /^due · /i }));
@@ -306,14 +307,14 @@ describe('CrmActivitiesPage — remembered filters', () => {
         first.unmount();
 
         jest.clearAllMocks();
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         await waitFor(() => expect(lastCall().dueFrom).toBe(chosen));
     });
 
     it('remembers Overdue only, and the due range it cleared stays cleared', async () => {
-        const first = render(<ActivitiesPage />);
+        const first = renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.click(screen.getByLabelText('Overdue only'));
@@ -321,7 +322,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
         first.unmount();
 
         jest.clearAllMocks();
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect((screen.getByLabelText('Overdue only') as HTMLInputElement).checked).toBe(true);
@@ -332,7 +333,7 @@ describe('CrmActivitiesPage — remembered filters', () => {
     });
 
     it('opens on today\'s planned agenda when nothing has been remembered yet', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         await waitFor(() => {
@@ -367,7 +368,7 @@ describe('CrmActivitiesPage — activity approval', () => {
 
     it('approves a planned activity without reloading the list', async () => {
         asReviewer();
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         const toggle = await waitFor(() => {
@@ -390,7 +391,7 @@ describe('CrmActivitiesPage — activity approval', () => {
     it('rolls the switch back when the server refuses', async () => {
         asReviewer();
         api.setCrmActivityApproval.mockRejectedValue(new Error('nope'));
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         const toggle = await waitFor(() => {
@@ -404,7 +405,7 @@ describe('CrmActivitiesPage — activity approval', () => {
     });
 
     it('shows the switch disabled to someone who cannot approve', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(screen.getByRole('switch', { name: 'Approve this activity' })).toBeDisabled();
@@ -417,14 +418,14 @@ describe('CrmActivitiesPage — activity approval', () => {
         api.getAllCrmActivities.mockResolvedValue([
             { ...activity, status: 'DONE', summary: 'Spoke to Karim', is_approved: true },
         ]);
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     });
 
     it('filters the list to activities still awaiting a reviewer', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.change(selectByOption('All approvals'), { target: { value: 'pending' } });
@@ -433,7 +434,7 @@ describe('CrmActivitiesPage — activity approval', () => {
     });
 
     it('asks for no approval slice until one is chosen', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(lastCall().approval).toBeUndefined();
@@ -462,7 +463,7 @@ describe('CrmActivitiesPage — only mine', () => {
     const toggle = () => screen.getByRole('button', { name: 'Only mine' });
 
     it('shows the whole team until somebody asks for their own', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(lastCall().mine).toBeUndefined();
@@ -470,7 +471,7 @@ describe('CrmActivitiesPage — only mine', () => {
     });
 
     it('narrows the list to the caller, letting the server resolve the id', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.click(toggle());
@@ -481,7 +482,7 @@ describe('CrmActivitiesPage — only mine', () => {
     });
 
     it('scopes the tiles with the list, so the two cannot disagree', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.click(toggle());
@@ -492,7 +493,7 @@ describe('CrmActivitiesPage — only mine', () => {
     });
 
     it('locks the assignee filter while the scope is on, rather than lying about it', async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         fireEvent.click(toggle());
@@ -501,7 +502,7 @@ describe('CrmActivitiesPage — only mine', () => {
     });
 
     it('remembers the choice for the next visit', async () => {
-        const first = render(<ActivitiesPage />);
+        const first = renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
         fireEvent.click(toggle());
         await waitFor(() => expect(lastCall().mine).toBe(true));
@@ -513,7 +514,7 @@ describe('CrmActivitiesPage — only mine', () => {
         api.getCrmAssignees.mockResolvedValue([]);
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
 
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
         expect(toggle()).toHaveAttribute('aria-pressed', 'true');
@@ -554,7 +555,7 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
         api.getAllCrmActivities.mock.calls.filter((call: any[]) => !call[0]?.leadId).length;
 
     const openDrawer = async () => {
-        render(<ActivitiesPage />);
+        renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
         fireEvent.click(screen.getByRole('button', { name: 'View activities' }));
         const drawer = await screen.findByRole('dialog');

@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/access.dart';
 import '../core/auth/auth_controller.dart';
+import '../features/alerts/alert_settings_screen.dart';
+import '../features/alerts/alerts_screen.dart';
+import '../features/approvals/approvals_screen.dart';
+import '../features/ask/ask_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/auth/splash_screen.dart';
 import '../features/auth/two_factor_screen.dart';
-import '../features/crm/access.dart';
+import '../features/business/cashiers/cashiers_screen.dart';
+import '../features/business/cashiers/till_detail_screen.dart';
+import '../features/business/home/business_home_screen.dart';
 import '../features/crm/activities/activities_screen.dart';
 import '../features/crm/contacts/contact_detail_screen.dart';
 import '../features/crm/contacts/contact_form_screen.dart';
@@ -19,6 +26,7 @@ import '../features/crm/leads/lead_form_screen.dart';
 import '../features/crm/leads/leads_screen.dart';
 import '../features/crm/no_crm_screen.dart';
 import '../features/home/home_shell.dart';
+import '../features/home/more_screen.dart';
 import '../features/workspace/workspace_screens.dart';
 
 /// Screens that belong to getting signed in, and are left once that is done.
@@ -46,14 +54,18 @@ String? redirectFor(AuthState auth, String location) {
     case AuthSignedIn(:final workspaces, :final workspace):
       if (workspaces.isEmpty) return only('/no-workspace');
       if (workspace == null) return only('/workspaces');
-      if (!canUseCrm(workspace)) {
+      final access = MobileAccess.of(workspace);
+      if (!access.any) {
         return {'/no-crm', '/workspaces', '/account'}.contains(location)
             ? null
             : '/no-crm';
       }
       // `/workspaces` stays reachable for switching.
       if (location == '/workspaces') return null;
-      return _entryLocations.contains(location) ? '/home' : null;
+      if (_entryLocations.contains(location)) return access.startLocation;
+      // A link into an area this member cannot open — or one left over from
+      // the workspace they just switched away from — lands on their start.
+      return access.allows(location) ? null : access.startLocation;
   }
 }
 
@@ -90,7 +102,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   final router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/home',
+    initialLocation: '/splash',
     refreshListenable: refresh,
     redirect: (context, state) =>
         redirectFor(ref.read(authControllerProvider), state.matchedLocation),
@@ -108,6 +120,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/no-crm', builder: (_, _) => const NoCrmScreen()),
       GoRoute(path: '/account', builder: (_, _) => const AccountScreen()),
+      GoRoute(path: '/ask', builder: (_, _) => const AskScreen()),
+      GoRoute(
+        path: '/notification-settings',
+        builder: (_, _) => const AlertSettingsScreen(),
+      ),
       GoRoute(
         path: '/leads/new',
         parentNavigatorKey: rootNavigatorKey,
@@ -122,7 +139,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/contacts/new',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (_, _) => const ContactFormScreen(),
+        builder: (_, state) => ContactFormScreen(
+          scanOnOpen: state.uri.queryParameters['scan'] == '1',
+        ),
       ),
       GoRoute(
         path: '/contacts/:id/edit',
@@ -132,10 +151,37 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => HomeShell(shell: shell),
+        // Every branch exists for everyone, in ShellBranch order; the
+        // redirect keeps a member out of the ones they cannot use and the bar
+        // shows only theirs.
         branches: [
           StatefulShellBranch(
             routes: [
-              GoRoute(path: '/home', builder: (_, _) => const CrmHomeScreen()),
+              GoRoute(
+                path: '/home',
+                builder: (_, _) => const BusinessHomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/cashiers',
+                builder: (_, _) => const CashiersScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (_, state) => TillDetailScreen(
+                      sessionId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/crm', builder: (_, _) => const CrmHomeScreen()),
             ],
           ),
           StatefulShellBranch(
@@ -183,6 +229,24 @@ final routerProvider = Provider<GoRouter>((ref) {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/more', builder: (_, _) => const MoreScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/approvals',
+                builder: (_, _) => const ApprovalsScreen(),
               ),
             ],
           ),

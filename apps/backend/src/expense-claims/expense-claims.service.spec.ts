@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
 import { ExpenseClaimsService } from './expense-claims.service';
 import { AssetsService } from '../assets/assets.service';
 import { DatabaseService } from '../database/database.service';
+import { ApprovalNotifier } from '../approvals/approval-notifier';
 
 const CLAIM = (over: Record<string, any> = {}) => ({
     id: 'claim-1',
@@ -22,6 +23,7 @@ const LINES = [
 ];
 
 describe('ExpenseClaimsService', () => {
+    const approvals = { requested: jest.fn().mockResolvedValue(undefined) };
     let service: ExpenseClaimsService;
     let db: any;
     let assets: any;
@@ -33,7 +35,9 @@ describe('ExpenseClaimsService', () => {
                 findMany: jest.fn().mockResolvedValue([]),
                 create: jest.fn().mockResolvedValue(CLAIM()),
                 update: jest.fn().mockResolvedValue(CLAIM()),
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
+            employee: { findFirst: jest.fn().mockResolvedValue({ user_id: 'user-emp-1' }) },
             expenseClaimLine: {
                 deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
                 createMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -56,6 +60,7 @@ describe('ExpenseClaimsService', () => {
             providers: [
                 ExpenseClaimsService,
                 { provide: DatabaseService, useValue: db },
+                { provide: ApprovalNotifier, useValue: approvals },
                 { provide: AssetsService, useValue: assets },
             ],
         }).compile();
@@ -113,9 +118,12 @@ describe('ExpenseClaimsService', () => {
     });
 
     describe('lifecycle', () => {
-        it('submits a draft', async () => {
+        it('submits a draft, and tells the approvers — not the claimant', async () => {
             await service.submit('t1', 'claim-1', 'emp-1');
             expect(db.expenseClaim.update.mock.calls[0][0].data.status).toBe('SUBMITTED');
+            expect(approvals.requested).toHaveBeenCalledWith(
+                expect.objectContaining({ tenantId: 't1', kind: 'EXPENSE_CLAIM', id: 'claim-1', requestedBy: 'user-emp-1' }),
+            );
         });
 
         it('refuses to submit a claim with no lines', async () => {
@@ -158,10 +166,19 @@ describe('ExpenseClaimsService', () => {
             db.expenseClaim.findFirst.mockResolvedValue(CLAIM({ status: 'SUBMITTED' }));
             await service.review('t1', 'claim-1', 'user-1', { status: 'APPROVED' });
 
-            const data = db.expenseClaim.update.mock.calls[0][0].data;
-            expect(data.status).toBe('APPROVED');
-            expect(data.approved_by).toBe('user-1');
-            expect(data.approved_at).toBeInstanceOf(Date);
+            const call = db.expenseClaim.updateMany.mock.calls[0][0];
+            // Only while still submitted: see the race below.
+            expect(call.where).toEqual({ id: 'claim-1', tenant_id: 't1', status: 'SUBMITTED' });
+            expect(call.data.status).toBe('APPROVED');
+            expect(call.data.approved_by).toBe('user-1');
+            expect(call.data.approved_at).toBeInstanceOf(Date);
+        });
+
+        it('loses a race to another reviewer instead of overwriting them', async () => {
+            db.expenseClaim.findFirst.mockResolvedValue(CLAIM({ status: 'SUBMITTED' }));
+            db.expenseClaim.updateMany.mockResolvedValue({ count: 0 });
+            await expect(service.review('t1', 'claim-1', 'user-2', { status: 'REJECTED' }))
+                .rejects.toThrow(ConflictException);
         });
 
         it('refuses to review a draft', async () => {

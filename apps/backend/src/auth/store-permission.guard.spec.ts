@@ -3,6 +3,14 @@ import { Reflector } from '@nestjs/core';
 import { StorePermissionGuard } from './store-permission.guard';
 import { StorePermission } from '@erp71/shared-types';
 import { STORE_PERMISSIONS_ANY_KEY, STORE_PERMISSIONS_KEY } from './store-permission.decorator';
+import { AuthCacheService } from '../database/auth-cache.service';
+
+/** Grant rows as the loader reads them: every permission the member holds, by store. */
+const grantRows = (permissions: StorePermission[], storeId = 'store-1') =>
+    permissions.map((permission) => ({ store_id: storeId, permission }));
+
+/** The cache switched off, so each test sees exactly the queries one request makes. */
+const noCache = () => new AuthCacheService({ ttlMs: 0 });
 
 const makeContext = (overrides: Partial<{
     userId: string;
@@ -45,7 +53,7 @@ describe('StorePermissionGuard', () => {
 
     beforeEach(() => {
         reflector = { getAllAndOverride: jest.fn() } as any;
-        guard = new StorePermissionGuard(reflector, db as any);
+        guard = new StorePermissionGuard(reflector, db as any, noCache());
         jest.resetAllMocks();
     });
 
@@ -74,9 +82,7 @@ describe('StorePermissionGuard', () => {
         it('resolves the role from the membership and enforces the permission', async () => {
             reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
             db.$queryRaw.mockResolvedValue(membershipRows('CASHIER'));
-            db.userStorePermission.findMany.mockResolvedValue([
-                { permission: StorePermission.CREATE_SALE },
-            ]);
+            db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE]));
 
             const ctx = makeContext({ noPresetRole: true });
             await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -98,7 +104,7 @@ describe('StorePermissionGuard', () => {
             const ctx = makeContext({ noPresetRole: true });
             await guard.canActivate(ctx);
             // Same request object: a second guard on it must not re-query.
-            const second = new StorePermissionGuard(reflector, db as any);
+            const second = new StorePermissionGuard(reflector, db as any, noCache());
             await second.canActivate(ctx);
             expect(db.$queryRaw).toHaveBeenCalledTimes(1);
         });
@@ -113,19 +119,37 @@ describe('StorePermissionGuard', () => {
 
     it('allows when user has all required permissions', async () => {
         reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
-        db.userStorePermission.findMany.mockResolvedValue([
-            { permission: StorePermission.CREATE_SALE },
-        ]);
+        db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE]));
         await expect(guard.canActivate(makeContext())).resolves.toBe(true);
     });
 
     it('throws ForbiddenException when permission is missing', async () => {
         reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE, StorePermission.EDIT_PRODUCTS]);
-        db.userStorePermission.findMany.mockResolvedValue([
-            { permission: StorePermission.CREATE_SALE },
-            // EDIT_PRODUCTS not granted
-        ]);
+        // EDIT_PRODUCTS not granted
+        db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE]));
         await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
+    });
+
+    // The grants are read for the whole workspace and picked by store here, so a
+    // permission held at another branch must not count at this one.
+    it('counts only the permissions held at the store the request names', async () => {
+        reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+        db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE], 'store-2'));
+
+        await expect(guard.canActivate(makeContext({ storeId: 'store-1' }))).rejects.toThrow(ForbiddenException);
+    });
+
+    it('uses the sole branch a member can reach when the request names none', async () => {
+        reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+        const ctx = makeContext();
+        const req = ctx.switchToHttp().getRequest() as any;
+        req.storeId = undefined;
+        req.headers['x-store-id'] = undefined;
+        db.userStoreAccess.findMany.mockResolvedValue([{ store_id: 'store-9', access_level: 'STORE_ONLY' }]);
+        db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE], 'store-9'));
+
+        await expect(guard.canActivate(ctx)).resolves.toBe(true);
+        expect(req.storeId).toBe('store-9');
     });
 
     it('throws BadRequestException when store context is missing (non-OWNER)', async () => {
@@ -152,17 +176,13 @@ describe('StorePermissionGuard', () => {
     describe('workspace scoping', () => {
         it('reads permissions for the workspace being accessed, not just the store', async () => {
             reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
-            db.userStorePermission.findMany.mockResolvedValue([{ permission: StorePermission.CREATE_SALE }]);
+            db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE], 'store-mine'));
 
             await guard.canActivate(makeContext({ tenantId: 'tenant-victim', storeId: 'store-mine' }));
 
             expect(db.userStorePermission.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: expect.objectContaining({
-                        user_id: 'user-1',
-                        store_id: 'store-mine',
-                        tenant_id: 'tenant-victim',
-                    }),
+                    where: { user_id: 'user-1', tenant_id: 'tenant-victim' },
                 }),
             );
         });
@@ -188,14 +208,14 @@ describe('StorePermissionGuard', () => {
 
         it('allows when the member holds one of the listed permissions', async () => {
             requireKeys(undefined, [StorePermission.CREATE_SALE, StorePermission.CREATE_QUOTATION]);
-            db.userStorePermission.findMany.mockResolvedValue([{ permission: StorePermission.CREATE_QUOTATION }]);
+            db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_QUOTATION]));
 
             await expect(guard.canActivate(makeContext())).resolves.toBe(true);
         });
 
         it('refuses when the member holds none of them', async () => {
             requireKeys(undefined, [StorePermission.CREATE_SALE, StorePermission.CREATE_QUOTATION]);
-            db.userStorePermission.findMany.mockResolvedValue([{ permission: StorePermission.VIEW_PROJECTS }]);
+            db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.VIEW_PROJECTS]));
 
             await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
         });
@@ -216,33 +236,93 @@ describe('StorePermissionGuard', () => {
 
         it('requires the all-of list AND the any-of set when a route declares both', async () => {
             requireKeys([StorePermission.VIEW_LEDGER], [StorePermission.CREATE_SALE]);
-            db.userStorePermission.findMany.mockResolvedValue([{ permission: StorePermission.CREATE_SALE }]);
+            db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE]));
 
             await expect(guard.canActivate(makeContext())).rejects.toThrow(ForbiddenException);
         });
 
         it('reads the grants once, for the workspace, for both lists together', async () => {
             requireKeys([StorePermission.VIEW_LEDGER], [StorePermission.CREATE_SALE, StorePermission.CREATE_RETURN]);
-            db.userStorePermission.findMany.mockResolvedValue([
-                { permission: StorePermission.VIEW_LEDGER },
-                { permission: StorePermission.CREATE_RETURN },
-            ]);
+            db.userStorePermission.findMany.mockResolvedValue(
+                grantRows([StorePermission.VIEW_LEDGER, StorePermission.CREATE_RETURN]),
+            );
 
             await expect(guard.canActivate(makeContext())).resolves.toBe(true);
             expect(db.userStorePermission.findMany).toHaveBeenCalledTimes(1);
             expect(db.userStorePermission.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: expect.objectContaining({
-                        tenant_id: 'tenant-1',
-                        permission: {
-                            in: [
-                                StorePermission.VIEW_LEDGER,
-                                StorePermission.CREATE_SALE,
-                                StorePermission.CREATE_RETURN,
-                            ],
-                        },
-                    }),
-                }),
+                expect.objectContaining({ where: { user_id: 'user-1', tenant_id: 'tenant-1' } }),
+            );
+        });
+    });
+
+    /**
+     * Across requests the membership and grants come from `AuthCacheService`.
+     * What matters is not that they are cached but that a revocation still
+     * lands on the very next request: the write that revokes calls
+     * `invalidateMember`, and the guard then reads the new answer.
+     */
+    describe('with the cross-request cache on', () => {
+        let cache: AuthCacheService;
+        let cached: StorePermissionGuard;
+
+        const memberRow = (role: string) => [
+            { tenant_id: 'tenant-1', user_id: 'user-1', role, tenant_deleted_at: null, tenant_timezone: null, roles: [] },
+        ];
+
+        beforeEach(() => {
+            cache = new AuthCacheService({ ttlMs: 30_000 });
+            cached = new StorePermissionGuard(reflector, db as any, cache);
+            reflector.getAllAndOverride.mockReturnValue([StorePermission.CREATE_SALE]);
+        });
+
+        it('answers a second request without querying the membership or the grants again', async () => {
+            db.$queryRaw.mockResolvedValue(memberRow('CASHIER'));
+            db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE]));
+
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).resolves.toBe(true);
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).resolves.toBe(true);
+
+            expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+            expect(db.userStorePermission.findMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('refuses a revoked permission on the next request once the revoke invalidates', async () => {
+            db.$queryRaw.mockResolvedValue(memberRow('CASHIER'));
+            db.userStorePermission.findMany.mockResolvedValueOnce(grantRows([StorePermission.CREATE_SALE]));
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).resolves.toBe(true);
+
+            // The admin takes CREATE_SALE away; `TeamService` invalidates after commit.
+            db.userStorePermission.findMany.mockResolvedValueOnce([]);
+            cache.invalidateMember('user-1', 'tenant-1');
+
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).rejects.toThrow(
+                ForbiddenException,
+            );
+        });
+
+        it('refuses a removed member on the next request once the removal invalidates', async () => {
+            db.$queryRaw.mockResolvedValueOnce(memberRow('CASHIER'));
+            db.userStorePermission.findMany.mockResolvedValue(grantRows([StorePermission.CREATE_SALE]));
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).resolves.toBe(true);
+
+            db.$queryRaw.mockResolvedValueOnce([]);
+            cache.invalidateMember('user-1', 'tenant-1');
+
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).rejects.toThrow(
+                'Invalid tenant context',
+            );
+        });
+
+        it('refuses a demoted owner on the next request once a tenant-wide change invalidates', async () => {
+            db.$queryRaw.mockResolvedValueOnce(memberRow('OWNER'));
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).resolves.toBe(true);
+
+            db.$queryRaw.mockResolvedValueOnce(memberRow('CASHIER'));
+            db.userStorePermission.findMany.mockResolvedValue([]);
+            cache.invalidateTenant('tenant-1');
+
+            await expect(cached.canActivate(makeContext({ noPresetRole: true }))).rejects.toThrow(
+                ForbiddenException,
             );
         });
     });

@@ -11,7 +11,8 @@ import type { WarrantyClaim } from '@erp71/shared-types';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { BranchFilter, PageShell, Button } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { getWorkspaceItem } from '@/lib/session-store';
 
@@ -59,6 +60,7 @@ const columnHelper = createColumnHelper<WarrantyClaim>();
 
 export default function WarrantyClaimsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [claims, setClaims] = useState<WarrantyClaim[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
@@ -83,15 +85,17 @@ export default function WarrantyClaimsPage() {
     const storeId = typeof window !== 'undefined' ? getWorkspaceItem('store_id') ?? '' : '';
 
     useEffect(() => {
+        if (!branch.ready) return;
         loadClaims();
-    }, [createdRange]);
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const loadClaims = async () => {
         setLoading(true);
         try {
-            const data = await api.getWarrantyClaims(applyCreatedRangeQuery(createdRange));
+            const data = await api.getWarrantyClaims({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setClaims(data);
         } catch (err) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load warranty claims', err);
         } finally {
             setLoading(false);
@@ -270,13 +274,16 @@ export default function WarrantyClaimsPage() {
                     'sales',
                 )}
                 actions={
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                    >
-                        <Plus className="w-4 h-4" />
-                        {t.warrantyClaims.newClaim}
-                    </button>
+                    <>
+                        <BranchFilter scope={branch} />
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            {t.warrantyClaims.newClaim}
+                        </button>
+                    </>
                 }
             />
 

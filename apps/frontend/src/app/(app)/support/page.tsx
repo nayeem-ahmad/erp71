@@ -12,6 +12,7 @@ import { usePlatformFeatures } from '@/contexts/PlatformFeaturesContext';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import SupportComposer from '@/components/SupportComposer';
 import { useSupportStream, type SupportStreamEvent } from '@/hooks/useSupportStream';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
 
@@ -238,18 +239,14 @@ export default function SupportPage() {
      * The safety net under the stream. Runs whether or not a thread is open —
      * the list's statuses go stale too, and this used to stand still until
      * something was selected, so a ticket resolved while the list was on screen
-     * stayed "open" until the page was navigated.
+     * stayed "open" until the page was navigated. Paused while the tab is
+     * hidden; the stream stays open, and the first tick back catches up.
      */
-    useEffect(() => {
-        const timer = setInterval(() => {
-            void loadThreads({ silent: true });
-            const open = activeThreadIdRef.current;
-            if (open) void loadMessages(open, { silent: true });
-        }, connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS);
-
-        return () => clearInterval(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [connected]);
+    useVisibleInterval(() => {
+        void loadThreads({ silent: true });
+        const open = activeThreadIdRef.current;
+        if (open) void loadMessages(open, { silent: true });
+    }, connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS);
 
     useEffect(() => {
         const lastId = messages[messages.length - 1]?.id ?? null;

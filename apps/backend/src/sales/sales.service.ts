@@ -1,6 +1,15 @@
-import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Injectable, BadRequestException, ConflictException, HttpException, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { CreateSaleDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
+import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
+import {
+    BULK_CONVERTIBLE_QUOTATION_STATUSES,
+    priceQuotationForSale,
+    quotationSkipReason,
+    totalChangedSinceQuoted,
+    type QuotationConversionResult,
+    type QuotationSkipReason,
+} from './quotation-to-sale.util';
 import {
     applyInventoryMovement,
     resolveEntryWarehouses,
@@ -17,6 +26,8 @@ import { resolvePaymentMethodAccountId } from '../accounting/payment-account.uti
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 import { resolveSalePreviousDue } from './sale-previous-due.util';
+import { loadPreparerNames, preparerOf } from './sale-preparer.util';
+import { checkedSalesRepId, SALES_REP_SELECT, salesRepForSale } from '../customers/sales-rep.util';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
@@ -26,12 +37,87 @@ import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
 import {
     assertCustomerCreditForSale,
     creditDueAmount,
+    customerLedgerDueDelta,
 } from '../customers/customer-credit.utils';
+import {
+    CUSTOMER_PAYMENT_DISCOUNT_LEG,
+    nextCustomerCreditNumber,
+} from '../customers/customer-payment-number.util';
+import { netOfChange, splitSaleOverpayment } from './sale-overpayment.util';
+import { issueDocumentNumber } from '../database/document-number.utils';
 import {
     assertSessionForPosSale,
     findOpenSessionForUser,
     requiresCashierSession,
 } from '../cashier-sessions/active-session.util';
+import { customerBranchId } from '../customers/customer-branch.util';
+
+/**
+ * What a parked draft carries in `serial_number` until it is finalised. Random
+ * rather than a timestamp so two drafts parked in the same millisecond cannot
+ * collide on the unique index; prefixed so nobody mistakes it for an invoice.
+ */
+export function draftPlaceholderNumber(): string {
+    return `DRAFT-${randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+}
+
+/** One list page — the largest a server-paged table shows — not the tenant's whole history. */
+const PRINT_BATCH_LIMIT = 100;
+
+/** Rules a server-side caller adds to one sale. The HTTP route passes none. */
+interface CreateSaleOptions {
+    /**
+     * The quotation must still be open, and is converted before the sale is
+     * written rather than after — see `claimQuotation`.
+     */
+    claimQuotation?: boolean;
+}
+
+/**
+ * Previous due reads the ledger once per sale. Capped so a full batch does not
+ * take every connection in the pool at once.
+ */
+const PRINT_BATCH_CONCURRENCY = 8;
+const PRINT_BATCH_MESSAGE = `Provide between 1 and ${PRINT_BATCH_LIMIT} sale ids.`;
+
+/** The ids in the order given, each once — the order the invoices print in. */
+function orderedPrintIds(ids: string[]): string[] {
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > PRINT_BATCH_LIMIT) {
+        throw new BadRequestException(PRINT_BATCH_MESSAGE);
+    }
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const id of ids) {
+        if (typeof id !== 'string' || !id) {
+            throw new BadRequestException(PRINT_BATCH_MESSAGE);
+        }
+        if (seen.has(id)) continue;
+        seen.add(id);
+        ordered.push(id);
+    }
+    if (ordered.length === 0) {
+        throw new BadRequestException(PRINT_BATCH_MESSAGE);
+    }
+    return ordered;
+}
+
+async function mapWithConcurrency<T, R>(
+    items: T[],
+    limit: number,
+    fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let next = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (next < items.length) {
+            const index = next;
+            next += 1;
+            results[index] = await fn(items[index]);
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
 
 /**
  * Columns the sales list may sort on. An allowlist rather than passing the
@@ -59,7 +145,7 @@ export class SalesService {
         private crmCampaigns: CrmCampaignsService,
     ) { }
 
-    async create(tenantId: string, userId: string, dto: CreateSaleDto) {
+    async create(tenantId: string, userId: string, dto: CreateSaleDto, options: CreateSaleOptions = {}) {
         if (dto.isDraft) {
             return this.createDraft(tenantId, userId, dto);
         }
@@ -68,22 +154,31 @@ export class SalesService {
             // Resolve a quick-created customer first: credit limits, loyalty
             // redemption and the postings below all key off `customerId`.
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
             const prep = await this.prepareSale(tx, tenantId, dto);
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
+            if (options.claimQuotation) {
+                await this.claimQuotation(tx, tenantId, source.quotationId);
+            }
             const session = await this.resolveCashierSession(tx, tenantId, userId, dto);
+            // Credited to the customer's own rep unless the screen names one.
+            const salesRepId = await salesRepForSale(tx, tenantId, dto.salesRepId, dto.customerId);
 
-            // 1. Generate Serial Number (Simplified for v0.1)
-            const serialNumber = `SL-${Date.now()}`;
+            // The invoice number, in the tenant's own format. Issued after the
+            // checks above so a rejected sale consumes no number — the counter
+            // update rolls back with everything else.
+            const saleDate = dto.saleDate ? new Date(dto.saleDate) : new Date();
+            const serialNumber = await this.issueSaleNumber(tx, tenantId, {
+                storeId: dto.storeId,
+                counterId: session.counterId,
+                on: saleDate,
+            });
 
-            // 2. Generate and validate reference number
-            const referenceNumber = dto.referenceNumber
-                ? await this.validateReferenceNumber(tenantId, dto.referenceNumber)
-                : await this.generateReferenceNumber(tenantId, tx);
+            // Only ever what the user typed — see the column comment on Sale.
+            const referenceNumber = await this.validateReferenceNumber(tenantId, dto.referenceNumber);
 
-            // 3. Create Sale Record
             const sale = await tx.sale.create({
                 data: {
                     tenant_id: tenantId,
@@ -101,13 +196,15 @@ export class SalesService {
                     // column comments on Sale.
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
-                    amount_paid: dto.amountPaid,
-                    sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
+                    sales_rep_id: salesRepId,
+                    amount_paid: prep.amountPaid,
+                    sale_date: saleDate,
                     status: 'COMPLETED',
                     note: dto.note,
                     created_by: userId,
-                    payments: dto.payments ? {
-                        create: dto.payments.map(paymentRecordData)
+                    payments: prep.payments ? {
+                        create: prep.payments.map(paymentRecordData)
                     } : undefined
                 },
             });
@@ -122,6 +219,140 @@ export class SalesService {
             this.sendReceiptEmail(tenantId, dto.customerId, Number(result.total_amount), result.serial_number);
             void this.crmCampaigns.attributeSale(tenantId, dto.customerId, Number(result.total_amount))
                 .catch((err) => this.logger.warn(`CRM attribution failed for customer ${dto.customerId}: ${err}`));
+        }
+
+        return result;
+    }
+
+    /**
+     * "Convert to sales" on the quotations list: invoices each quotation as a
+     * credit sale, its whole total kept as the customer's due.
+     *
+     * Every sale goes through `create()` in its own transaction, one after
+     * another. One quotation refused — short of stock, over the customer's
+     * credit limit — must not undo the ones before it, and running them side
+     * by side would only have them queue on the same invoice counter and stock
+     * rows. Whatever was not converted comes back with its reason instead of
+     * failing the request, so the screen can say which and why.
+     *
+     * `canSellIn` answers whether the caller may create sales in a branch. The
+     * route guard checks the header branch only, and a list showing every
+     * branch can hand over quotations from several.
+     */
+    async createFromQuotations(
+        tenantId: string,
+        userId: string,
+        dto: CreateSalesFromQuotationsDto,
+        canSellIn: (storeId: string) => Promise<boolean>,
+    ): Promise<QuotationConversionResult> {
+        const ids = [...new Set(dto.quotationIds)];
+        const [quotes, invoiced, tenant] = await Promise.all([
+            this.db.quotation.findMany({
+                where: { tenant_id: tenantId, id: { in: ids } },
+                select: {
+                    id: true,
+                    quote_number: true,
+                    status: true,
+                    store_id: true,
+                    customer_id: true,
+                    currency: true,
+                    exchange_rate: true,
+                    prices_include_vat: true,
+                    total_amount: true,
+                    notes: true,
+                    items: {
+                        // QuotationItem has no sort column; `id` keeps the sale's
+                        // lines in one stable order.
+                        orderBy: { id: 'asc' },
+                        select: {
+                            product_id: true,
+                            quantity: true,
+                            unit_price: true,
+                            product: { select: { vat_rate: true, sd_rate: true } },
+                        },
+                    },
+                },
+                // Oldest first, so the invoice numbers run in the order the
+                // offers were made.
+                orderBy: { created_at: 'asc' },
+            }),
+            this.db.sale.findMany({
+                where: { tenant_id: tenantId, quotation_id: { in: ids }, status: { not: 'CANCELLED' } },
+                select: { quotation_id: true },
+            }),
+            this.db.tenant.findUnique({ where: { id: tenantId }, select: { default_vat_rate: true } }),
+        ]);
+
+        const result: QuotationConversionResult = { converted: [], skipped: [], failed: [] };
+
+        // Anything not returned belongs to another workspace, or does not exist.
+        const found = new Set(quotes.map((quote) => quote.id));
+        for (const id of ids) {
+            if (!found.has(id)) result.skipped.push({ quotationId: id, quoteNumber: null, reason: 'NOT_FOUND' });
+        }
+
+        const invoicedIds = new Set(invoiced.map((sale) => sale.quotation_id));
+        const defaultVatRate = Number(tenant?.default_vat_rate ?? 0) || 0;
+        const branchAccess = new Map<string, Promise<boolean>>();
+        const mayInvoiceIn = (storeId: string) => {
+            if (!branchAccess.has(storeId)) branchAccess.set(storeId, canSellIn(storeId));
+            return branchAccess.get(storeId) as Promise<boolean>;
+        };
+
+        for (const quote of quotes) {
+            const ref = { quotationId: quote.id, quoteNumber: quote.quote_number };
+            const pricing = priceQuotationForSale(quote, defaultVatRate);
+            const reason: QuotationSkipReason | null =
+                quotationSkipReason(quote, invoicedIds.has(quote.id))
+                ?? (!(await mayInvoiceIn(quote.store_id)) ? 'BRANCH_FORBIDDEN' : null)
+                ?? (totalChangedSinceQuoted(pricing) ? 'TOTAL_CHANGED' : null);
+
+            if (reason) {
+                result.skipped.push({ ...ref, reason, status: quote.status });
+                continue;
+            }
+
+            try {
+                const sale = await this.create(
+                    tenantId,
+                    userId,
+                    {
+                        storeId: quote.store_id,
+                        customerId: quote.customer_id ?? undefined,
+                        quotationId: quote.id,
+                        items: pricing.items,
+                        totalAmount: pricing.totalAmount,
+                        // Nothing taken now: the whole total stays on the
+                        // customer's account, and the credit limit applies.
+                        amountPaid: 0,
+                        pricesIncludeVat: pricing.pricesIncludeVat,
+                        note: quote.notes ?? undefined,
+                    },
+                    { claimQuotation: true },
+                );
+                result.converted.push({
+                    ...ref,
+                    saleId: sale.id,
+                    serialNumber: sale.serial_number,
+                    totalAmount: Number(sale.total_amount),
+                });
+            } catch (error) {
+                // A refusal the sale meant to make says why in words a shop
+                // owner can act on. Anything else is ours, and its text is a
+                // stack of database detail nobody at the counter should read.
+                if (!(error instanceof HttpException)) {
+                    this.logger.error(
+                        `Converting quotation ${quote.id} to a sale failed: ${error}`,
+                        (error as Error)?.stack,
+                    );
+                }
+                result.failed.push({
+                    ...ref,
+                    message: error instanceof HttpException
+                        ? error.message
+                        : 'Something went wrong converting this quotation. Try converting it on its own.',
+                });
+            }
         }
 
         return result;
@@ -220,6 +451,32 @@ export class SalesService {
     }
 
     /**
+     * The batch path's strict form of `markQuotationConverted`: the quotation
+     * must still be open, and it is converted before its sale is written.
+     *
+     * Two runs over the same selection — a double click, a second tab — both
+     * reach this update. Postgres makes the second wait on the row until the
+     * first commits, then finds nothing left to match, so the second sale rolls
+     * back instead of billing the customer twice. Once claimed, the later
+     * `markQuotationConverted` call in `create()` matches nothing and is harmless.
+     */
+    private async claimQuotation(tx: any, tenantId: string, quotationId: string | null) {
+        if (!quotationId) return;
+
+        const claimed = await tx.quotation.updateMany({
+            where: {
+                id: quotationId,
+                tenant_id: tenantId,
+                status: { in: [...BULK_CONVERTIBLE_QUOTATION_STATUSES] },
+            },
+            data: { status: 'CONVERTED' },
+        });
+        if (claimed.count !== 1) {
+            throw new ConflictException('This quotation was converted while the batch was running.');
+        }
+    }
+
+    /**
      * Everything a sale must validate and resolve *before* any row is written:
      * warehouse, product costs, warranty serials, totals, loyalty preview and
      * the customer's credit headroom. Shared by create() and finalizeDraft() so
@@ -279,10 +536,29 @@ export class SalesService {
         }
 
         const balanceDue = creditDueAmount(computedTotal, dto.amountPaid);
-        if (dto.amountPaid - computedTotal > 0.02) {
-            throw new BadRequestException(
-                `Payment amount exceeds sale total by ৳${(dto.amountPaid - computedTotal).toFixed(2)}.`,
-            );
+
+        // Paying more than the total is never refused — the entry screen
+        // warns instead. What happens to the excess is `splitSaleOverpayment`'s
+        // call: change handed back is taken off the tenders before they are
+        // stored, a payment on account is posted by applySalePostings.
+        const { changeReturned, accountPayment } = splitSaleOverpayment({
+            total: computedTotal,
+            amountPaid: dto.amountPaid,
+            hasCustomer: !!dto.customerId,
+            returnChange: dto.returnChange,
+        });
+        let accountCustomerName: string | null = null;
+        if (accountPayment > 0) {
+            // Checked here, before anything is written: the excess lands on
+            // this customer's ledger, so it must be one of this tenant's.
+            const accountCustomer = await tx.customer.findFirst({
+                where: { id: dto.customerId, tenant_id: tenantId, deleted_at: null },
+                select: { id: true, name: true },
+            });
+            if (!accountCustomer) {
+                throw new NotFoundException('Customer not found');
+            }
+            accountCustomerName = accountCustomer.name;
         }
 
         let creditCustomerDueBalance = 0;
@@ -341,6 +617,13 @@ export class SalesService {
             balanceDue,
             creditCustomerDueBalance,
             tax,
+            // What the sale and its payment rows record: everything taken,
+            // less any change handed back.
+            amountPaid: dto.amountPaid - changeReturned,
+            payments: netOfChange(dto.payments, changeReturned),
+            changeReturned,
+            accountPayment,
+            accountCustomerName,
         };
     }
 
@@ -367,6 +650,9 @@ export class SalesService {
             balanceDue,
             creditCustomerDueBalance,
             tax,
+            changeReturned,
+            accountPayment,
+            accountCustomerName,
         } = prep;
 
         // 3. Process Items and update stock
@@ -498,6 +784,7 @@ export class SalesService {
                 data: {
                     tenant_id: tenantId,
                     customer_id: dto.customerId,
+                    store_id: await customerBranchId(tx, dto.customerId),
                     type: 'CREDIT_SALE',
                     amount: balanceDue,
                     balance_after: balanceAfter,
@@ -510,6 +797,66 @@ export class SalesService {
                 where: { id: dto.customerId },
                 data: { due_balance: balanceAfter },
             });
+        }
+
+        // Paid beyond the total: the excess is a receipt on the customer's
+        // account, exactly as if it had been taken on the customer payments
+        // screen — its own CPY- number, its own Dr <tender> / Cr AR voucher —
+        // linked back to this sale so cancelling the sale takes it back too.
+        // It settles the previous due first, and anything past that leaves the
+        // customer in advance (a negative due).
+        let accountReceipt: { id: string; payment_number: string; amount: number; balance_after: number } | null = null;
+        if (accountPayment > 0 && dto.customerId) {
+            const dueBefore = previousDue ?? 0;
+            const balanceAfter = Math.round((dueBefore - accountPayment) * 100) / 100;
+            const paymentNumber = await nextCustomerCreditNumber(tenantId, tx, 'PAYMENT');
+            const receipt = await tx.customerCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    customer_id: dto.customerId,
+                    store_id: await customerBranchId(tx, dto.customerId),
+                    type: 'PAYMENT',
+                    amount: accountPayment,
+                    balance_after: balanceAfter,
+                    reference_type: 'SALE',
+                    reference_id: sale.id,
+                    payment_number: paymentNumber,
+                    notes: `Paid with sale ${sale.reference_number || sale.serial_number}`,
+                    created_by: userId,
+                },
+            });
+            await tx.customer.update({
+                where: { id: dto.customerId },
+                data: { due_balance: balanceAfter },
+            });
+
+            // The tender the sale's own voucher posts to, so the excess lands
+            // in the same cash, bank or wallet account as the rest of it.
+            const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
+            await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'customer_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: 'receive',
+                sourceModule: 'customers',
+                sourceType: 'customer_payment',
+                sourceId: receipt.id,
+                amount: accountPayment,
+                description: `Customer payment — ${accountCustomerName ?? 'customer'}`,
+                referenceNumber: paymentNumber,
+                storeId: dto.storeId,
+                partyType: 'CUSTOMER',
+                partyId: dto.customerId,
+                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+            });
+
+            accountReceipt = {
+                id: receipt.id,
+                payment_number: paymentNumber,
+                amount: accountPayment,
+                balance_after: balanceAfter,
+            };
         }
 
         let posting: AutoPostResult = { postingStatus: 'skipped' };
@@ -586,6 +933,10 @@ export class SalesService {
             voucher_type: posting.voucherType ?? null,
             loyalty: loyaltyResult,
             previous_due: previousDue,
+            // What became of anything paid beyond the total, for the entry
+            // screen to tell the cashier.
+            change_returned: changeReturned,
+            account_payment: accountReceipt,
         };
     }
 
@@ -620,18 +971,17 @@ export class SalesService {
             // A parked draft is picked up again later, so its quick-created
             // customer is saved with it rather than deferred to finalisation.
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
-            const referenceNumber = dto.referenceNumber
-                ? await this.validateReferenceNumber(tenantId, dto.referenceNumber)
-                : await this.generateReferenceNumber(tenantId, tx);
+            const referenceNumber = await this.validateReferenceNumber(tenantId, dto.referenceNumber);
 
             // The link is recorded, but the quotation is deliberately *not*
             // marked CONVERTED here: a parked draft posts nothing, so the quote
             // is still live until the draft is finalised.
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
             const draftSession = await this.resolveCashierSession(tx, tenantId, userId, dto, { enforce: false });
+            const draftSalesRepId = await salesRepForSale(tx, tenantId, dto.salesRepId, dto.customerId);
 
             // A draft is not a tax invoice — nothing is posted and no 6.3 may
             // be issued against it — but the entry screen still shows a VAT
@@ -655,7 +1005,11 @@ export class SalesService {
                     counter_id: draftSession.counterId,
                     session_id: draftSession.sessionId,
                     customer_id: dto.customerId,
-                    serial_number: `SL-${Date.now()}`,
+                    // A placeholder, not an invoice number: a parked draft may
+                    // never be completed, and one that is abandoned must not
+                    // leave a hole in the series. finalizeDraft() issues the
+                    // real number.
+                    serial_number: draftPlaceholderNumber(),
                     reference_number: referenceNumber,
                     quotation_id: source.quotationId,
                     sales_order_id: source.salesOrderId,
@@ -664,6 +1018,10 @@ export class SalesService {
                     total_amount: dto.totalAmount,
                     vat_amount: draftTax.vat_amount,
                     sd_amount: draftTax.sd_amount,
+                    // Completing the draft keeps it: the parked prices were
+                    // entered this way.
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
+                    sales_rep_id: draftSalesRepId,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
                     status: 'DRAFT',
@@ -706,7 +1064,8 @@ export class SalesService {
     /**
      * Turn a parked DRAFT into a real sale: the same validation, stock movement,
      * loyalty, credit and accounting work a direct sale goes through, applied to
-     * the existing Sale row so its serial and reference number survive. Optional
+     * the existing Sale row so its id and reference number survive. The invoice
+     * number is issued here, not when the draft was parked — see createDraft(). Optional
      * overrides let the user adjust lines/payments on the way out — warranty
      * serials can *only* arrive here, since a draft never captured them.
      */
@@ -788,15 +1147,22 @@ export class SalesService {
             // applySalePostings recreates the items (with unit cost attached).
             await tx.saleItem.deleteMany({ where: { sale_id: id } });
             await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
-            for (const p of payments) {
+            for (const p of prep.payments ?? []) {
                 await tx.paymentRecord.create({
                     data: { sale_id: id, ...paymentRecordData(p) },
                 });
             }
 
+            const serialNumber = await this.issueSaleNumber(tx, tenantId, {
+                storeId: draft.store_id,
+                counterId: finalizeSession.counterId,
+                on: dto.saleDate ? new Date(dto.saleDate) : draft.sale_date,
+            });
+
             const sale = await tx.sale.update({
                 where: { id },
                 data: {
+                    serial_number: serialNumber,
                     customer_id: saleDto.customerId ?? null,
                     status: 'COMPLETED',
                     total_amount: prep.computedTotal,
@@ -804,7 +1170,7 @@ export class SalesService {
                     // posted, which may differ from what was parked.
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
-                    amount_paid: amountPaid,
+                    amount_paid: prep.amountPaid,
                     note: saleDto.note ?? null,
                     // The resolved id, not the parked one: a draft may have been
                     // saved with no warehouse at all, and the posted sale must
@@ -892,6 +1258,8 @@ export class SalesService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** One branch (already resolved by the controller); omitted, every branch. */
+            storeId?: string;
             /** IANA zone the calendar-day bounds above are measured in. */
             timezone: string;
         },
@@ -907,6 +1275,7 @@ export class SalesService {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const where: any = {
             tenant_id: tenantId,
+            ...(opts?.storeId ? { store_id: opts.storeId } : {}),
             ...(created ? { created_at: created } : {}),
             ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
             // Accepts one status or a comma-separated set, so a caller can ask
@@ -971,6 +1340,8 @@ export class SalesService {
                 // from and link back to it.
                 quotation: { select: { id: true, quote_number: true, doc_kind: true } },
                 salesOrder: { select: { id: true, order_number: true } },
+                // "Sales By" on the invoice and the edit screen.
+                salesRep: { select: SALES_REP_SELECT },
                 // The branch's name and address print on its letterhead.
                 store: { select: { id: true, name: true, address: true } },
             },
@@ -980,18 +1351,62 @@ export class SalesService {
             throw new NotFoundException('Sale not found');
         }
 
-        const [posting, previousDue] = await Promise.all([
+        const [posting, previousDue, preparers] = await Promise.all([
             loadPostingSummary(this.db, tenantId, 'sales', 'sale', sale.id),
             // Printed with the invoice, which the list and this screen both
             // print from this response.
             resolveSalePreviousDue(this.db, tenantId, sale, Number(sale.customer?.due_balance ?? 0)),
+            loadPreparerNames(this.db, [sale]),
         ]);
 
         return {
             ...sale,
             ...posting,
             previous_due: previousDue,
+            prepared_by: preparerOf(preparers, sale),
         };
+    }
+
+    /**
+     * The sales behind one bulk invoice print.
+     *
+     * One query, scoped to this tenant, then each sale's previous due through
+     * the same helper a single invoice uses. Ids this tenant does not have are
+     * left out — a missing id and another tenant's id look the same, so the
+     * response cannot be used to learn which is which.
+     */
+    async findForPrintBatch(tenantId: string, ids: string[]) {
+        const ordered = orderedPrintIds(ids);
+        const sales = await this.db.sale.findMany({
+            where: { tenant_id: tenantId, id: { in: ordered } },
+            include: {
+                items: { include: { product: true } },
+                payments: true,
+                customer: true,
+                // The order the sale was raised from prints as its Order No.
+                salesOrder: { select: { id: true, order_number: true } },
+                salesRep: { select: SALES_REP_SELECT },
+                // The branch's name and address print on its letterhead.
+                store: { select: { id: true, name: true, address: true } },
+            },
+        });
+        const preparers = await loadPreparerNames(this.db, sales);
+        const byId = new Map(sales.map((sale) => [sale.id, sale]));
+        const found = ordered.flatMap((id) => {
+            const sale = byId.get(id);
+            return sale ? [sale] : [];
+        });
+
+        return mapWithConcurrency(found, PRINT_BATCH_CONCURRENCY, async (sale) => ({
+            ...sale,
+            prepared_by: preparerOf(preparers, sale),
+            previous_due: await resolveSalePreviousDue(
+                this.db,
+                tenantId,
+                sale,
+                Number(sale.customer?.due_balance ?? 0),
+            ),
+        }));
     }
 
     async update(tenantId: string, id: string, dto: UpdateSaleDto) {
@@ -1189,11 +1604,14 @@ export class SalesService {
                 }
             }
 
+            const salesRepId = await checkedSalesRepId(tx, tenantId, dto.salesRepId);
+
             // 5. Update sale record
             return tx.sale.update({
                 where: { id },
                 data: {
                     ...(dto.customerId !== undefined && { customer_id: dto.customerId || null }),
+                    ...(salesRepId !== undefined && { sales_rep_id: salesRepId }),
                     ...(dto.status && { status: dto.status }),
                     ...(dto.note !== undefined && { note: dto.note }),
                     ...(dto.mushakDestination !== undefined && {
@@ -1288,26 +1706,38 @@ export class SalesService {
             }
             await tx.loyaltyTransaction.deleteMany({ where: { tenantId, saleId: sale.id } });
 
-            // Credit: drop the CREDIT_SALE row and take its amount back
-            // off the customer's outstanding due.
-            const creditTxns = await tx.customerCreditTransaction.findMany({
+            // Credit: drop the rows this sale wrote on the customer's ledger
+            // — its CREDIT_SALE, and the receipt for anything paid beyond the
+            // total — and move the due back by what they moved it.
+            const ledgerRows = await tx.customerCreditTransaction.findMany({
                 where: {
                     tenant_id: tenantId,
                     reference_type: 'SALE',
                     reference_id: sale.id,
                 },
-                select: { id: true, amount: true },
+                select: { id: true, type: true, amount: true, discount_amount: true },
             });
-            const creditTotal = creditTxns.reduce((sum: number, c: { amount: any }) => sum + Number(c.amount), 0);
+            const dueMoved = ledgerRows.reduce(
+                (sum: number, row: { type: string; amount: any; discount_amount?: any }) =>
+                    sum + customerLedgerDueDelta(row.type, Number(row.amount), Number(row.discount_amount ?? 0)),
+                0,
+            );
             await tx.customerCreditTransaction.deleteMany({
-                where: { id: { in: creditTxns.map((c: { id: string }) => c.id) } },
+                where: { id: { in: ledgerRows.map((row: { id: string }) => row.id) } },
             });
+            // A receipt posted as a customer payment, so its vouchers are
+            // keyed to the receipt row, not to the sale.
+            for (const row of ledgerRows) {
+                if (row.type !== 'PAYMENT') continue;
+                await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', row.id);
+                await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', row.id, CUSTOMER_PAYMENT_DISCOUNT_LEG);
+            }
 
             await tx.customer.update({
                 where: { id: sale.customer_id },
                 data: {
                     total_spent: { decrement: Number(sale.total_amount) },
-                    ...(creditTotal !== 0 && { due_balance: { decrement: creditTotal } }),
+                    ...(Math.abs(dueMoved) > 0.005 && { due_balance: { decrement: dueMoved } }),
                 },
             });
         }
@@ -1449,6 +1879,9 @@ export class SalesService {
                     items: { include: { product: true } },
                     payments: true,
                     customer: true,
+                    // The order the sale was raised from prints as its Order No.
+                    salesOrder: { select: { id: true, order_number: true } },
+                    salesRep: { select: SALES_REP_SELECT },
                     // The branch's name and address print on its letterhead.
                     store: { select: { id: true, name: true, address: true } },
                 },
@@ -1476,7 +1909,9 @@ export class SalesService {
             Number(sale.customer?.due_balance ?? 0),
         );
 
-        return { sale: { ...sale, previous_due: previousDue }, tenant };
+        const preparers = await loadPreparerNames(this.db, [sale]);
+
+        return { sale: { ...sale, previous_due: previousDue, prepared_by: preparerOf(preparers, sale) }, tenant };
     }
 
     private validateWarrantySerials(
@@ -1526,41 +1961,31 @@ export class SalesService {
         return referenceNumber;
     }
 
-    async generateReferenceNumber(tenantId: string, tx: any): Promise<string> {
-        const settings = await tx.salesSettings.findUnique({ where: { tenant_id: tenantId } });
-        const format = settings?.reference_number_format || 'YYMM-#';
-
-        // Generate based on format
-        if (format.includes('YYMM')) {
-            const now = new Date();
-            const yy = String(now.getFullYear()).slice(-2);
-            const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const template = format.replace('YYMM', `${yy}${mm}`); // e.g. '2606-#'
-            // The literal prefix is everything before the '#' placeholder. Matching
-            // on `template` directly would include the '#' and never match a stored
-            // reference, so the sequence always reset to 001 and collided.
-            const literalPrefix = template.slice(0, template.indexOf('#'));
-
-            // Take the highest existing sequence for this YYMM prefix and add one.
-            // The prefix already scopes the period (e.g. 2606- = June 2026), so do not
-            // filter by created_at — yesterday's 2606-005 must yield 2606-006 today.
-            const existing = await tx.sale.findMany({
+    /**
+     * The next invoice number in the tenant's Document Numbering format.
+     *
+     * Steps over a number already printed on another sale, as its invoice
+     * number or as a typed reference: the printed invoice shows the reference
+     * when there is one, so the two must not repeat each other either.
+     */
+    private issueSaleNumber(
+        tx: any,
+        tenantId: string,
+        target: { storeId: string; counterId: string | null; on: Date },
+    ): Promise<string> {
+        return issueDocumentNumber(tx, {
+            tenantId,
+            docType: 'SALE',
+            storeId: target.storeId,
+            counterId: target.counterId,
+            on: target.on,
+            isTaken: async (candidate) => Boolean(await tx.sale.findFirst({
                 where: {
                     tenant_id: tenantId,
-                    reference_number: { startsWith: literalPrefix },
+                    OR: [{ serial_number: candidate }, { reference_number: candidate }],
                 },
-                select: { reference_number: true },
-            });
-
-            let maxSeq = 0;
-            for (const { reference_number } of existing) {
-                const seq = parseInt(reference_number.slice(literalPrefix.length), 10);
-                if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
-            }
-
-            return `${literalPrefix}${String(maxSeq + 1).padStart(3, '0')}`;
-        }
-
-        throw new BadRequestException('Invalid reference number format in settings');
+                select: { id: true },
+            })),
+        });
     }
 }

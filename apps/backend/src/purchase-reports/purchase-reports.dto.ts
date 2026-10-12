@@ -1,10 +1,11 @@
 import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { COMPARISON_MODES, TREND_GRANULARITIES, type ComparisonMode, type TrendGranularity } from '../sales-reports/sales-reports.dto';
 import { LineItemSearchDto } from '../common/line-item-search';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export class GetPurchaseTrendDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsString()
@@ -24,7 +25,7 @@ export class GetPurchaseTrendDto {
 
 export class GetPurchaseSummaryDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -38,7 +39,7 @@ export class GetPurchaseSummaryDto {
 
 export class GetPurchasesByProductDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()
@@ -60,7 +61,7 @@ export class GetPurchasesByProductDto {
 
 export class GetPurchasesBySupplierDto {
     @IsOptional()
-    @IsUUID()
+    @IsStoreIdOrAll()
     storeId?: string;
 
     @IsOptional()

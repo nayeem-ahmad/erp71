@@ -1,4 +1,4 @@
-import { buildCustomerCandidates, buildProductCandidates, buildSupplierCandidates } from './candidates';
+import { buildCustomerCandidates, buildProductCandidates, buildSupplierCandidates, respectEarlierLinks } from './candidates';
 import type { ExistingRecord } from './match.types';
 
 const SOURCE = 'ExpressRetail';
@@ -131,5 +131,66 @@ describe('buildSupplierCandidates', () => {
         ];
         const [row] = buildSupplierCandidates([{ externalId: '4', name: 'Beximco' }], many, SOURCE);
         expect(row.altIds.length).toBeLessThanOrEqual(3);
+    });
+});
+
+describe('two of the tenant\'s customers on one phone number', () => {
+    // From Babu Bazar: FENI. JAHAN SURGICAL and COX. RAYHAN SURGICAL share 01838598820.
+    const existing: ExistingRecord[] = [
+        { id: 'c61', name: 'FENI. JAHAN SURGICAL', phone: '01838598820' },
+        { id: 'c270', name: 'COX. RAYHAN SURGICAL', phone: '01838-598820' },
+    ];
+
+    it('offers both, closest name first, and decides neither', () => {
+        const [row] = buildCustomerCandidates([{ externalId: '49179', name: 'COX. RAYHAN SURGICAL', phone: '01838-598820' }], existing, SOURCE);
+
+        expect(row.matchId).toBe('c270');
+        expect(row.altIds).toEqual(['c61']);
+        expect(row.confidence).toBe('medium');
+        expect(row.decision).toBe('');
+    });
+});
+
+describe('respectEarlierLinks', () => {
+    const names = new Map([
+        ['c61', 'FENI. JAHAN SURGICAL'],
+        ['c270', 'COX. RAYHAN SURGICAL'],
+    ]);
+    const scoredOnto270 = (externalId: string) => ({
+        entity: 'CUSTOMER' as const,
+        externalId,
+        source: SOURCE,
+        sourceName: 'x',
+        sourceExtra: '',
+        suggestedMatch: 'COX. RAYHAN SURGICAL',
+        matchId: 'c270',
+        confidence: 'high' as const,
+        score: 1,
+        altCandidates: [],
+        altIds: [],
+        decision: 'accept' as const,
+        notes: '',
+    });
+
+    it('keeps the record an earlier import linked, whatever scoring says', () => {
+        const [row] = respectEarlierLinks([scoredOnto270('45448')], new Map([['CUSTOMER:45448', 'c61']]), names);
+
+        expect(row).toMatchObject({ matchId: 'c61', suggestedMatch: 'FENI. JAHAN SURGICAL', decision: 'accept', notes: 'Linked by an earlier import' });
+        expect(row.altIds).toEqual(['c270']);
+    });
+
+    it('does not offer a record another source record holds', () => {
+        const [row] = respectEarlierLinks([scoredOnto270('new-1')], new Map([['CUSTOMER:49179', 'c270']]), names);
+
+        expect(row.matchId).toBeNull();
+        expect(row.confidence).toBe('none');
+        expect(row.decision).toBe('new');
+    });
+
+    it('drops a link to a record since deleted', () => {
+        const [row] = respectEarlierLinks([scoredOnto270('45448')], new Map([['CUSTOMER:45448', 'gone']]), names);
+
+        expect(row.matchId).toBe('c270');
+        expect(row.notes).toBe('');
     });
 });

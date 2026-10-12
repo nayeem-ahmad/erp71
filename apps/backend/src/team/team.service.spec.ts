@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { TeamService } from './team.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService } from '../audit/audit.service';
 import { InvitationsService } from '../invitations/invitations.service';
 import { StorePermission, UserRole } from '@erp71/shared-types';
@@ -43,16 +44,21 @@ const cashier: TenantContext = { tenantId: 't1', userId: 'cash', userRole: UserR
 
 describe('TeamService', () => {
     let service: TeamService;
+    // On, so the cases at the bottom can show each write clearing what the
+    // guards would otherwise go on serving. TeamService never reads through it.
+    let authCache: AuthCacheService;
 
     beforeEach(async () => {
         jest.clearAllMocks();
         db.$transaction.mockImplementation(async (arg: any) =>
             typeof arg === 'function' ? arg(db) : Promise.all(arg),
         );
+        authCache = new AuthCacheService({ ttlMs: 30_000 });
         const mod = await Test.createTestingModule({
             providers: [
                 TeamService,
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: authCache },
                 { provide: AuditService, useValue: audit },
                 { provide: InvitationsService, useValue: invitations },
             ],
@@ -441,5 +447,109 @@ describe('TeamService', () => {
 
         await expect(service.deleteRole(owner, 'role-1')).rejects.toThrow(BadRequestException);
         expect(db.tenantRole.delete).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The guards answer "is this person a member, with which roles, which
+     * branches and which permissions" from `AuthCacheService`. Every write here
+     * changes one of those answers, and the member must feel it on their very
+     * next request — so each case primes the cache the way a request would,
+     * performs the write, and checks the next read goes back to the database.
+     */
+    describe('the cached authorization each write leaves behind', () => {
+        const FAMILIES = ['membership', 'grants', 'storeAccess'] as const;
+
+        /** What a request by this member would have cached. */
+        const prime = async (userId: string, tenantId = 't1') => {
+            await authCache.membership(userId, tenantId, async () => ({ role: 'CASHIER' }));
+            await authCache.grants(userId, tenantId, async () => new Map());
+            await authCache.storeAccess(userId, tenantId, async () => []);
+        };
+
+        /** Which families the next request by this member would read afresh. */
+        const reloaded = async (userId: string, tenantId = 't1') => {
+            const hits: string[] = [];
+            for (const family of FAMILIES) {
+                await authCache[family](userId, tenantId, async () => {
+                    hits.push(family);
+                    return 'fresh' as any;
+                });
+            }
+            return hits;
+        };
+
+        const member = {
+            role: UserRole.CASHIER,
+            user_id: 'u2',
+            tenant_role_id: 'role-cashier',
+            tenantRole: { permissions: [] },
+            roles: [],
+        };
+
+        beforeEach(async () => {
+            await prime('u2');
+            await prime('u3');
+            await prime('u2', 't2');
+            db.tenantUser.findUnique.mockResolvedValue(member);
+        });
+
+        it('removing a member drops theirs, and nobody else\'s', async () => {
+            await service.removeMember(owner, 'u2');
+
+            expect(await reloaded('u2')).toEqual([...FAMILIES]);
+            expect(await reloaded('u3')).toEqual([]);
+            // Their membership of another workspace is untouched.
+            expect(await reloaded('u2', 't2')).toEqual([]);
+        });
+
+        it('revoking a branch drops theirs', async () => {
+            await service.revokeStoreAccess(owner, 'u2', 's1');
+            expect(await reloaded('u2')).toEqual([...FAMILIES]);
+        });
+
+        it('granting a branch drops theirs', async () => {
+            db.store.findFirst.mockResolvedValue({ id: 's2' });
+            db.userStoreAccess.findUnique.mockResolvedValue(null);
+
+            await service.grantStoreAccess(owner, 'u2', 's2', 'STORE_ONLY', false);
+            expect(await reloaded('u2')).toEqual([...FAMILIES]);
+        });
+
+        it('replacing branch permissions drops theirs', async () => {
+            db.userStoreAccess.findUnique.mockResolvedValue({ id: 'a1', tenant_id: 't1' });
+
+            await service.setStorePermissions(owner, 'u2', 's1', [StorePermission.CREATE_SALE]);
+            expect(await reloaded('u2')).toEqual([...FAMILIES]);
+        });
+
+        it('changing their roles drops theirs', async () => {
+            db.tenantRole.findFirst.mockResolvedValue({ id: 'role-manager', name: 'Manager', tenant_id: 't1', permissions: [] });
+
+            await service.updateRoles(owner, 'u2', ['role-manager']);
+            expect(await reloaded('u2')).toEqual([...FAMILIES]);
+        });
+
+        it('editing a role drops everyone\'s in the workspace — but only that workspace', async () => {
+            db.tenantRole.findFirst.mockResolvedValue({
+                id: 'role-1',
+                name: 'Custom',
+                tenant_id: 't1',
+                permissions: [{ permission: StorePermission.CREATE_SALE }],
+            });
+            db.tenantUserRole.findMany.mockResolvedValue([{ tenantUser: { user_id: 'u2' } }]);
+
+            await service.updateRoleTemplate(owner, 'role-1', { permissions: [StorePermission.VIEW_LEDGER] });
+
+            expect(await reloaded('u2')).toEqual([...FAMILIES]);
+            expect(await reloaded('u3')).toEqual([...FAMILIES]);
+            expect(await reloaded('u2', 't2')).toEqual([]);
+        });
+
+        it('a write that is refused leaves the cache alone', async () => {
+            await expect(service.removeMember(owner, 'owner')).rejects.toThrow(BadRequestException);
+            await expect(service.removeMember(cashier, 'u2')).rejects.toThrow(ForbiddenException);
+
+            expect(await reloaded('u2')).toEqual([]);
+        });
     });
 });

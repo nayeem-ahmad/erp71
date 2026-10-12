@@ -1,24 +1,74 @@
 // Service Worker for Retail POS Offline Support
 // Bumped whenever the caching *strategy* changes, so the activate handler drops
-// the entries the old strategy left behind. v3 cached every public asset
-// cache-first and forever: a new logo or favicon only appeared on a hard reload
-// (which bypasses the SW) and the next ordinary reload served the old one back.
-const CACHE_NAME = 'retail-pos-v4';
-const STATIC_ASSETS = ['/', '/dashboard/pos'];
+// the entries the old strategy left behind — and since the browser only
+// installs a new worker when these bytes change, a bump is also what ships a
+// change to clients at all. v3 cached every public asset cache-first and
+// forever: a new logo or favicon only appeared on a hard reload (which bypasses
+// the SW) and the next ordinary reload served the old one back. v5 stopped
+// answering API calls and pre-caches the POS under its real URL.
+const CACHE_NAME = 'retail-pos-v5';
+
+// Pages fetched into the cache at install, so a reload with no connection
+// still has a POS to come back to.
+//
+// Only `/sales/pos`: it is the one screen built to work offline (sales queue in
+// IndexedDB, products from the products-cache), and a cashier usually reaches
+// it through in-app links — client-side navigations this worker never sees as
+// a page load, so the navigation handler below would never cache it. The list
+// used to be `/` and `/dashboard/pos`. The latter is a permanent redirect to
+// `/sales/pos`, so it was stored under the old URL, where a reload of the POS
+// never looks — and a redirected response cannot answer a navigation anyway.
+// `/` is the front door, which only reads the session and moves on.
+//
+// Taken once per install, i.e. per version of this file rather than per deploy,
+// so the copy can predate the latest release; every full load of `/sales/pos`
+// replaces it through the navigation handler.
+const PRECACHE_URLS = ['/sales/pos'];
 
 // ── Install ─────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   // Take over immediately — don't wait for old SW to release clients
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        // Non-fatal: static pre-cache may fail in dev
-        console.warn('[SW] Pre-cache failed:', err);
-      });
-    })
-  );
+  event.waitUntil(Promise.all([precache(), routeApiPastWorker(event)]));
 });
+
+function precache() {
+  return caches.open(CACHE_NAME).then((cache) =>
+    Promise.all(
+      PRECACHE_URLS.map((url) =>
+        fetch(url)
+          .then((response) => {
+            // A redirected or failed response could never answer the offline
+            // reload it is kept for, so it is not worth a cache entry.
+            if (response.ok && !response.redirected) return cache.put(url, response);
+            console.warn('[SW] Pre-cache skipped:', url, response.status);
+          })
+          .catch((err) => {
+            // Non-fatal: the install must not fail over an offline extra.
+            console.warn('[SW] Pre-cache failed:', url, err);
+          })
+      )
+    )
+  );
+}
+
+// Where the browser supports it (the static routing API, Chromium 123+), tell
+// it at install that API calls never come to this worker, so it doesn't have to
+// start the worker just to have the fetch handler below decline them. Every
+// other browser gets the same result, one step later, from that handler.
+function routeApiPastWorker(event) {
+  if (typeof event.addRoutes !== 'function' || typeof URLPattern !== 'function') {
+    return Promise.resolve();
+  }
+  try {
+    return event
+      .addRoutes({ condition: { urlPattern: new URLPattern({ pathname: '/api/*' }) }, source: 'network' })
+      .catch((err) => console.warn('[SW] API route not registered:', err));
+  } catch (err) {
+    console.warn('[SW] API route not registered:', err);
+    return Promise.resolve();
+  }
+}
 
 // ── Activate ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
@@ -57,20 +107,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: network-first, no SW caching (handled by IndexedDB on client)
+  // API calls go straight to the network: no respondWith, so the worker adds
+  // nothing to the request. They used to be answered through it, and since the
+  // app calls the API on its own origin that would be every call. Nothing is
+  // lost offline: the page sees a failed fetch (it used to see a made-up 503
+  // `{ error: 'offline' }`, which the POS did not recognise as a network
+  // failure) and queues the sale in IndexedDB. Queued sales are posted by
+  // syncPendingSales below, whose requests never reach this handler (a
+  // worker's own fetches skip it), and by useOfflineSync's syncNow in the page,
+  // which takes this early return like any other API call.
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request).catch(() => {
-        // Return a 503 so the client can detect failure and fall back to IDB
-        return new Response(
-          JSON.stringify({ error: 'offline' }),
-          {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-      })
-    );
     return;
   }
 

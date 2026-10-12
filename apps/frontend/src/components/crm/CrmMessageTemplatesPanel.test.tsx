@@ -136,6 +136,53 @@ describe('CrmMessageTemplatesPanel', () => {
         expect(api.deleteCrmMessageTemplate).not.toHaveBeenCalled();
     });
 
+    /**
+     * `{{nmae}}` is left standing at pick time, so the editor is the last place
+     * it can be noticed before a customer reads it.
+     */
+    it('warns about a placeholder it does not recognise, without blocking the save', async () => {
+        render(<CrmMessageTemplatesPanel canManage />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Add template' }));
+
+        fireEvent.change(screen.getByLabelText(/Template name/), { target: { value: 'Thanks' } });
+        fireEvent.change(screen.getByLabelText(/^Message/), {
+            target: { value: 'Thank you {{nmae}}, from {{user}}.' },
+        });
+
+        expect(
+            screen.getByText('Not a placeholder: {{nmae}}. It goes out exactly as typed.'),
+        ).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(api.createCrmMessageTemplate).toHaveBeenCalled());
+    });
+
+    it('warns about a mistyped placeholder in the subject too', async () => {
+        render(<CrmMessageTemplatesPanel canManage />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Add template' }));
+
+        fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: 'Chase {{customer}}' } });
+
+        expect(
+            screen.getByText('Not a placeholder: {{customer}}. It goes out exactly as typed.'),
+        ).toBeInTheDocument();
+    });
+
+    /** Templates saved before the editor warned have to be findable as well. */
+    it('flags a saved template whose placeholders will not fill', async () => {
+        api.getCrmMessageTemplates.mockResolvedValue([
+            REMINDER,
+            { ...REMINDER, id: 'tpl-2', name: 'Thanks', subject: 'Thank {{nmae}}', body: 'From {{bussiness}}' },
+        ]);
+        render(<CrmMessageTemplatesPanel canManage={false} />);
+
+        expect(
+            await screen.findByText('Not a placeholder: {{nmae}} {{bussiness}}. It goes out exactly as typed.'),
+        ).toBeInTheDocument();
+        // The template that only uses known tokens carries no warning.
+        expect(screen.getAllByText(/Not a placeholder/)).toHaveLength(1);
+    });
+
     it('confirms before deleting one', async () => {
         render(<CrmMessageTemplatesPanel canManage />);
 

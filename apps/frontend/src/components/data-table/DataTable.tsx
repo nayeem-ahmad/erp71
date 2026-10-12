@@ -118,6 +118,14 @@ export interface DataTableProps<T> {
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
     /** Table density — defaults to CompactUiContext when inside accounting module */
     density?: UiDensity;
+    /**
+     * Opens a row: clicking anywhere on it that is not itself a control, or
+     * Enter on the focused row. Buttons, links and inputs inside keep their own
+     * clicks.
+     */
+    onRowClick?: (row: T) => void;
+    /** Extra classes per row — a selected row, one just added. */
+    rowClassName?: (row: T) => string | undefined;
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
      *  client row count. Pages using this must also set `showSearch={false}` and render
@@ -141,6 +149,16 @@ export interface DataTableProps<T> {
         }>;
     };
 }
+
+/** Whether a click started on something with a click of its own inside a row. */
+function isFromControl(target: EventTarget | null): boolean {
+    return target instanceof Element
+        && !!target.closest('button, a, input, select, textarea, label, [role="button"], [role="menuitem"]');
+}
+
+/** The label around a selection checkbox — see the injected `select` column. */
+const SELECT_HIT_AREA =
+    'inline-flex cursor-pointer items-center justify-center max-md:min-h-touch max-md:min-w-touch';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500];
 /** Mirrors the backend `PaginationDto` hard cap on `take` (e.g. crm-leads.service.ts). Server-mode
@@ -290,6 +308,8 @@ export default function DataTable<T>({
     filterPresets,
     density,
     serverPagination,
+    onRowClick,
+    rowClassName,
 }: DataTableProps<T>) {
     const { t } = useI18n();
     // Lazy: every list page renders this table, but printing is a rare click.
@@ -314,27 +334,35 @@ export default function DataTable<T>({
         if (!enableRowSelection || hasCallerSelectColumn) return columns;
         const selectColumn: ColumnDef<T, any> = {
             id: 'select',
+            // The box stays 16px; the label around it is the 44px target a
+            // finger needs on a phone, and collapses to the box on desktop so
+            // the rows keep their density.
             header: ({ table }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
-                    checked={table.getIsAllPageRowsSelected()}
-                    ref={(el) => {
-                        if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected();
-                    }}
-                    onChange={table.getToggleAllPageRowsSelectedHandler()}
-                />
+                <label className={SELECT_HIT_AREA}>
+                    <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
+                        checked={table.getIsAllPageRowsSelected()}
+                        ref={(el) => {
+                            if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected();
+                        }}
+                        onChange={table.getToggleAllPageRowsSelectedHandler()}
+                    />
+                </label>
             ),
             cell: ({ row }) => (
-                <input
-                    type="checkbox"
-                    aria-label="Select row"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
-                    checked={row.getIsSelected()}
-                    onChange={row.getToggleSelectedHandler()}
-                    onClick={(e) => e.stopPropagation()}
-                />
+                // A click anywhere in the target must not also open the row.
+                <label className={SELECT_HIT_AREA} onClick={(e) => e.stopPropagation()}>
+                    <input
+                        type="checkbox"
+                        aria-label="Select row"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/40 cursor-pointer"
+                        checked={row.getIsSelected()}
+                        onChange={row.getToggleSelectedHandler()}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </label>
             ),
             enableSorting: false,
             enableColumnFilter: false,
@@ -976,7 +1004,20 @@ export default function DataTable<T>({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {table.getRowModel().rows.map((row) => (
-                                    <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <tr
+                                        key={row.id}
+                                        className={`hover:bg-gray-50/50 transition-colors ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${rowClassName?.(row.original) ?? ''}`}
+                                        onClick={onRowClick ? (event) => {
+                                            if (isFromControl(event.target)) return;
+                                            onRowClick(row.original);
+                                        } : undefined}
+                                        onKeyDown={onRowClick ? (event) => {
+                                            if (event.key !== 'Enter' || event.target !== event.currentTarget) return;
+                                            event.preventDefault();
+                                            onRowClick(row.original);
+                                        } : undefined}
+                                        tabIndex={onRowClick ? 0 : undefined}
+                                    >
                                         {row.getVisibleCells().map((cell) => (
                                             <td
                                                 key={cell.id}

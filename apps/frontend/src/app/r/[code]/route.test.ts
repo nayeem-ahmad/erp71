@@ -20,12 +20,16 @@ global.fetch = mockFetch as unknown as typeof fetch;
 
 const originalApiBase = process.env.NEXT_PUBLIC_API_BASE;
 const originalApiUrl = process.env.NEXT_PUBLIC_API_URL;
+// The server-side base prefers BACKEND_URL when it is set; cleared so these
+// tests exercise the public value whatever the shell running them exports.
+const originalBackendUrl = process.env.BACKEND_URL;
 
 beforeEach(() => {
     mockFetch.mockReset();
     mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     delete process.env.NEXT_PUBLIC_API_BASE;
     delete process.env.NEXT_PUBLIC_API_URL;
+    delete process.env.BACKEND_URL;
 });
 
 afterAll(() => {
@@ -33,6 +37,8 @@ afterAll(() => {
     else process.env.NEXT_PUBLIC_API_BASE = originalApiBase;
     if (originalApiUrl === undefined) delete process.env.NEXT_PUBLIC_API_URL;
     else process.env.NEXT_PUBLIC_API_URL = originalApiUrl;
+    if (originalBackendUrl === undefined) delete process.env.BACKEND_URL;
+    else process.env.BACKEND_URL = originalBackendUrl;
 });
 
 async function callGet(code: string) {

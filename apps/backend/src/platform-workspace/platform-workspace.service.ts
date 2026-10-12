@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { platformAdminUserWhere } from '../auth/platform-admin.util';
 
@@ -54,6 +55,7 @@ export class PlatformWorkspaceService {
     constructor(
         private readonly db: DatabaseService,
         private readonly platformSettings: PlatformSettingsService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     /** The workspace, if it has ever been provisioned. Never creates one. */
@@ -172,6 +174,10 @@ export class PlatformWorkspaceService {
             // stepped down on purpose, and a login should not quietly undo that.
             update: {},
         });
+        // No `AuthCacheService` invalidation, though this runs on every platform
+        // accounting request: an absent membership is never cached, and an owner
+        // created here holds no branch access or grants — the empty lists a
+        // cache could already hold for them are still the truth.
     }
 
     /**
@@ -238,6 +244,7 @@ export class PlatformWorkspaceService {
                     skipDuplicates: true,
                 });
             });
+            this.authCache.invalidateMember(member.user_id, tenantId);
 
             this.logger.log(`Gave platform workspace member ${member.user_id} access to its store`);
         }
@@ -266,6 +273,7 @@ export class PlatformWorkspaceService {
             })),
             skipDuplicates: true,
         });
+        if (result.count > 0) this.authCache.invalidateTenant(tenantId);
 
         return result.count;
     }

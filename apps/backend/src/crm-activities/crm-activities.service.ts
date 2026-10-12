@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
 import { JOB_NAMES } from '../system-health/jobs/job-names';
@@ -596,7 +596,9 @@ export class CrmActivitiesService {
      * filtered down to today's ~1/365th up front, rather than the whole table
      * pulled into Node to be filtered there.
      */
-    @Cron(CronExpression.EVERY_DAY_AT_8AM)
+    // 14:00 Bangladesh time — the 08:00 UTC it always ran at, kept, since it
+    // is a reminder people see.
+    @Cron('0 14 * * *', { timeZone: 'Asia/Dhaka' })
     async autoCreateBirthdayActivities() {
         return this.jobTracker.track(JOB_NAMES.CRM_BIRTHDAY_FOLLOWUPS, () =>
             this.autoCreateBirthdayActivitiesImpl(),
@@ -698,7 +700,10 @@ export class CrmActivitiesService {
      * `created_at` for the "how long has this been true" comparison so a
      * newly-created customer isn't immediately flagged as dormant on day one.
      */
-    @Cron(CronExpression.EVERY_DAY_AT_8AM)
+    // 03:30 Bangladesh time, in the night batch window: it walks every
+    // customer gone quiet across every tenant, which used to land at 14:00, in
+    // the middle of the trading day. The follow-ups are waiting when shops open.
+    @Cron('30 3 * * *', { timeZone: 'Asia/Dhaka' })
     async autoCreateReorderActivities() {
         return this.jobTracker.track(JOB_NAMES.CRM_REORDER_FOLLOWUPS, () =>
             this.autoCreateReorderActivitiesImpl(),

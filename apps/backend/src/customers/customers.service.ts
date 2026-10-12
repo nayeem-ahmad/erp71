@@ -1,7 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { checkedSalesRepId, listSalesReps, SALES_REP_SELECT } from './sales-rep.util';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
 import { ageBalance, type AgingEntry } from '../accounting/aging.utils';
 import {
@@ -18,7 +20,21 @@ import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
+import {
+    assertNotAheadOfSeries,
+    assertSerialFree,
+    canonicalSerial,
+    isSerialConflict,
+    resolvePaymentDate,
+    serialTaken,
+    typedSerial,
+} from '../common/credit-payment-entry.util';
 import { customerLedgerDueDelta } from './customer-credit.utils';
+import { CREDIT_TRANSACTION_PREFIXES, CUSTOMER_PAYMENT_DISCOUNT_LEG, nextCustomerCreditNumber } from './customer-payment-number.util';
+import { type CustomerScope, customerInBranchesWhere, customerScopeWhere, saleScopeWhere } from './customer-visibility';
+
+/** The numbered series a typed payment serial may fall in (receipts, payouts, write-offs). */
+const SERIAL_SERIES = Object.values(CREDIT_TRANSACTION_PREFIXES);
 
 const CUSTOMER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -31,30 +47,16 @@ const CUSTOMER_SORTABLE: SortableMap = {
     segment_category: (dir) => ({ segment_category: dir }),
     customer_type: (dir) => ({ customer_type: dir }),
     loyalty_points: (dir) => ({ loyalty_points: dir }),
+    due_balance: (dir) => ({ due_balance: dir }),
 };
 const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
-
-/**
- * Document-number prefixes per credit-transaction type. A write-off gets its own
- * series rather than sharing the payment one: "CWO-00004" on a customer's
- * statement has to be unmistakably not a receipt, because it is the row that
- * says money stopped being expected rather than that it arrived.
- */
-const CREDIT_TRANSACTION_PREFIXES = {
-    PAYMENT: 'CPY-',
-    PAYOUT: 'CPO-',
-    WRITE_OFF: 'CWO-',
-} as const;
 
 /** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
 const AMOUNT_EPSILON = 0.005;
 
-/**
- * The legKey of a payment's discount voucher. The cash voucher stays keyless,
- * so payments recorded before discounts existed keep their idempotency keys.
- */
-const DISCOUNT_LEG = 'discount';
+const DISCOUNT_LEG = CUSTOMER_PAYMENT_DISCOUNT_LEG;
 
+import { makeImportBranchResolver } from '../common/import-branch.util';
 @Injectable()
 export class CustomersService {
     constructor(
@@ -181,7 +183,11 @@ export class CustomersService {
             type: 'PAYMENT' | 'PAYOUT';
             amount: number;
             discount: number;
+            /** The payment's own date; the vouchers are dated to match it. */
+            date?: Date;
             storeId?: string;
+            /** The payment method's ledger account; the rule's Cash in Hand when unset. */
+            cashAccountId?: string;
         },
     ) {
         const isPayout = input.type === 'PAYOUT';
@@ -193,6 +199,7 @@ export class CustomersService {
             sourceModule: 'customers',
             sourceId: input.paymentId,
             referenceNumber: input.paymentNumber,
+            date: input.date,
             storeId: input.storeId,
             partyType: 'CUSTOMER' as const,
             partyId: input.customerId,
@@ -204,6 +211,7 @@ export class CustomersService {
                 conditionValue: this.directionFromType(input.type),
                 sourceType: isPayout ? 'customer_payout' : 'customer_payment',
                 amount: input.amount,
+                ...cashLegOverride(isPayout ? 'out' : 'in', input.cashAccountId),
                 description: isPayout
                     ? `Customer payout — ${input.customerName}`
                     : `Customer payment — ${input.customerName}`,
@@ -286,12 +294,13 @@ export class CustomersService {
         });
     }
 
-    private async findCreditPaymentOrThrow(tenantId: string, paymentId: string) {
+    private async findCreditPaymentOrThrow(tenantId: string, paymentId: string, scope: CustomerScope = null) {
         const payment = await this.db.customerCreditTransaction.findFirst({
             where: {
                 id: paymentId,
                 tenant_id: tenantId,
                 type: { in: ['PAYMENT', 'PAYOUT'] },
+                ...this.creditRowScopeWhere(scope),
             },
             include: {
                 customer: { select: { id: true, name: true, phone: true, customer_code: true, due_balance: true } },
@@ -302,30 +311,56 @@ export class CustomersService {
         return payment;
     }
 
+    /** A credit row's customer must be in scope — see `customer-visibility.ts`. */
+    private creditRowScopeWhere(scope: CustomerScope) {
+        return scope ? { customer: customerInBranchesWhere(scope) } : {};
+    }
+
+    /**
+     * The branch a new customer is added at: named, a branch of this tenant,
+     * and — for a member limited to some branches — one of theirs.
+     */
+    private async branchForNewCustomer(tenantId: string, storeId: string | null | undefined, scope: CustomerScope) {
+        if (!storeId) throw new BadRequestException('Choose the branch this customer belongs to.');
+        await this.checkedStoreId(tenantId, storeId);
+        if (scope && !scope.includes(storeId)) {
+            throw new ForbiddenException('You can only add customers to your own branches.');
+        }
+        return storeId;
+    }
+
+    /** `store_id` as an edit names it: a branch of this tenant, or null. */
+    private async checkedStoreId(tenantId: string, storeId: string | null | undefined) {
+        if (storeId === undefined || storeId === null) return storeId;
+        const store = await this.db.store.findFirst({
+            where: { id: storeId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!store) throw new BadRequestException('Branch not found.');
+        return storeId;
+    }
+
     private async generatePaymentNumber(
         tenantId: string,
         tx: any,
         txType: 'PAYMENT' | 'PAYOUT' | 'WRITE_OFF',
     ): Promise<string> {
-        const prefix = CREDIT_TRANSACTION_PREFIXES[txType];
-        const last = await tx.customerCreditTransaction.findFirst({
-            where: {
-                tenant_id: tenantId,
-                type: txType,
-                payment_number: { startsWith: prefix },
-            },
-            orderBy: { payment_number: 'desc' },
-            select: { payment_number: true },
-        });
-
-        if (!last?.payment_number) return `${prefix}00001`;
-
-        const match = last.payment_number.match(new RegExp(`${prefix.replace('-', '\\-')}(\\d+)`));
-        const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-        return `${prefix}${String(nextNum).padStart(5, '0')}`;
+        return nextCustomerCreditNumber(tenantId, tx, txType);
     }
 
-    async create(tenantId: string, dto: CreateCustomerDto) {
+    /**
+     * The customer belongs to `dto.store_id`, or to `opts.storeId` — the
+     * request's header branch — when the form names none. Either way it must
+     * be a branch of this tenant the caller may use (`opts.scope`; null is
+     * every branch). `opts.scope` also decides the message for a phone number
+     * held by a customer outside it, since the caller cannot find that
+     * customer to pick them.
+     */
+    async create(
+        tenantId: string,
+        dto: CreateCustomerDto,
+        opts: { storeId?: string; scope?: CustomerScope } = {},
+    ) {
         if (dto.phone) {
             const existing = await this.db.customer.findUnique({
                 where: {
@@ -337,26 +372,42 @@ export class CustomersService {
             });
 
             if (existing) {
-                throw new BadRequestException('A customer with this phone number already exists.');
+                const seen = !opts.scope || existing.deleted_at
+                    || (await this.db.customer.count({
+                        where: { id: existing.id, ...customerScopeWhere(opts.scope) },
+                    })) > 0;
+                throw new BadRequestException(seen
+                    ? 'A customer with this phone number already exists.'
+                    : 'This phone number belongs to a customer of another branch. An owner can move them to your branch.');
             }
         }
 
-        const { nid, customer_code: requestedCode, ...rest } = dto;
+        const { nid, customer_code: requestedCode, sales_rep_id, store_id: requestedStoreId, ...rest } = dto;
+        const storeId = await this.branchForNewCustomer(tenantId, requestedStoreId ?? opts.storeId, opts.scope ?? null);
+        const salesRepId = await checkedSalesRepId(this.db, tenantId, sales_rep_id);
         const record = await this.withCustomerCode(tenantId, requestedCode, (customer_code) =>
             this.db.customer.create({
                 data: {
                     tenant_id: tenantId,
                     customer_code,
                     ...rest,
+                    store_id: storeId,
+                    ...(salesRepId !== undefined ? { sales_rep_id: salesRepId } : {}),
                     ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
                 },
                 include: {
                     customerGroup: true,
                     territory: true,
+                    salesRep: { select: SALES_REP_SELECT },
                 }
             }),
         );
         return this.decryptCustomer(record);
+    }
+
+    /** The employees a customer's sales rep can be picked from — see `listSalesReps`. */
+    salesReps(tenantId: string) {
+        return listSalesReps(this.db, tenantId);
     }
 
     async findAll(
@@ -373,13 +424,15 @@ export class CustomersService {
             createdTo?: string;
             /** IANA zone the calendar-day bounds above are measured in. */
             timezone: string;
+            /** Whose customers — see `customer-visibility.ts`. Omitted: everyone's. */
+            scope?: CustomerScope;
         },
     ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
         const limit = Math.min(opts?.limit ?? 20, 100);
         const skip = (page - 1) * limit;
 
-        const where: any = { tenant_id: tenantId, deleted_at: null };
+        const where: any = { tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(opts?.scope ?? null) };
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         if (created) where.created_at = created;
         if (opts?.search) {
@@ -396,7 +449,14 @@ export class CustomersService {
         const [items, total] = await Promise.all([
             this.db.customer.findMany({
                 where,
-                include: { customerGroup: true, territory: true },
+                // The rep travels with the customer so the sale screen can
+                // credit the sale to them on picking the customer.
+                include: {
+                    customerGroup: true,
+                    territory: true,
+                    salesRep: { select: SALES_REP_SELECT },
+                    store: { select: { id: true, name: true } },
+                },
                 orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, CUSTOMER_SORTABLE, CUSTOMER_DEFAULT_ORDER),
                 skip,
                 take: limit,
@@ -407,13 +467,17 @@ export class CustomersService {
         return paginate(items.map(c => this.decryptCustomer(c)), total, page, limit);
     }
 
-    async findOne(tenantId: string, id: string) {
+    /** A limited member sees the customer's sales at their own branches only. */
+    async findOne(tenantId: string, id: string, scope: CustomerScope = null) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
             include: {
                 customerGroup: true,
                 territory: true,
+                salesRep: { select: SALES_REP_SELECT },
+                store: { select: { id: true, name: true } },
                 sales: {
+                    where: saleScopeWhere(scope),
                     include: { items: { include: { product: true } } },
                     orderBy: { sale_date: 'desc' }
                 }
@@ -428,9 +492,10 @@ export class CustomersService {
         tenantId: string,
         id: string,
         params?: { page?: number; limit?: number; from?: string; to?: string },
+        scope: CustomerScope = null,
     ) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, ...customerScopeWhere(scope) },
             select: { id: true },
         });
         if (!customer) throw new NotFoundException('Customer not found');
@@ -439,7 +504,7 @@ export class CustomersService {
         const limit = Math.min(params?.limit ?? 20, 100);
         const skip = (page - 1) * limit;
 
-        const where: any = { customer_id: id };
+        const where: any = { customer_id: id, ...saleScopeWhere(scope) };
         if (params?.from || params?.to) {
             where.sale_date = {};
             if (params?.from) where.sale_date.gte = new Date(params.from);
@@ -471,9 +536,11 @@ export class CustomersService {
         };
     }
 
-    async getSegmentStats(tenantId: string) {
+    async getSegmentStats(tenantId: string, scope: CustomerScope = null) {
         const customers = await this.db.customer.findMany({
-            where: { tenant_id: tenantId },
+            // Deleted customers left out, as the list these cards sit above
+            // leaves them out — otherwise Total disagrees with the list.
+            where: { tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
             select: { segment_category: true },
         });
 
@@ -494,9 +561,19 @@ export class CustomersService {
         };
     }
 
-    async update(tenantId: string, id: string, dto: UpdateCustomerDto) {
+    /**
+     * `canSetBranch`: only a member who sees every customer may move one to
+     * another branch — a limited member could otherwise hand a customer off to
+     * a branch they cannot see, or claim one they have no sale with.
+     */
+    async update(
+        tenantId: string,
+        id: string,
+        dto: UpdateCustomerDto,
+        opts: { scope?: CustomerScope; canSetBranch?: boolean } = {},
+    ) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId },
+            where: { id, tenant_id: tenantId, ...customerScopeWhere(opts.scope ?? null) },
         });
 
         if (!customer) throw new NotFoundException('Customer not found');
@@ -530,25 +607,34 @@ export class CustomersService {
             }
         }
 
-        const { nid, ...rest } = dto;
+        const { nid, sales_rep_id, store_id, ...rest } = dto;
         if (rest.customer_code) rest.customer_code = rest.customer_code.trim();
+        if (store_id !== undefined && store_id !== customer.store_id && opts.canSetBranch === false) {
+            throw new ForbiddenException('Only a member who sees every branch can change a customer\'s branch.');
+        }
+        const salesRepId = await checkedSalesRepId(this.db, tenantId, sales_rep_id);
+        if (store_id === null) throw new BadRequestException('A customer must belong to a branch.');
+        const storeId = await this.checkedStoreId(tenantId, store_id);
         const record = await this.db.customer.update({
             where: { id },
             data: {
                 ...rest,
+                ...(storeId !== undefined ? { store_id: storeId } : {}),
+                ...(salesRepId !== undefined ? { sales_rep_id: salesRepId } : {}),
                 ...(nid != null ? { nid: this.encryptNid(nid) } : {}),
             },
             include: {
                 customerGroup: true,
                 territory: true,
+                salesRep: { select: SALES_REP_SELECT },
             }
         });
         return this.decryptCustomer(record);
     }
 
-    async getAnalytics(tenantId: string, id: string) {
+    async getAnalytics(tenantId: string, id: string, scope: CustomerScope = null) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
             select: {
                 id: true, name: true, total_spent: true, created_at: true,
                 segment_category: true, loyalty_points: true, due_balance: true,
@@ -594,9 +680,10 @@ export class CustomersService {
         tenantId: string,
         id: string,
         params?: { from?: string; to?: string },
+        scope: CustomerScope = null,
     ) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
             select: { id: true, name: true, phone: true, due_balance: true, credit_limit: true, credit_enabled: true },
         });
         if (!customer) throw new NotFoundException('Customer not found');
@@ -625,9 +712,10 @@ export class CustomersService {
         tenantId: string,
         id: string,
         params?: { page?: number; limit?: number; from?: string; to?: string },
+        scope: CustomerScope = null,
     ) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
             select: { id: true, name: true, phone: true, due_balance: true, credit_limit: true, credit_enabled: true },
         });
         if (!customer) throw new NotFoundException('Customer not found');
@@ -720,9 +808,13 @@ export class CustomersService {
         };
     }
 
+    /**
+     * `query.branch` is the branch the payments page shows, already checked by
+     * the controller (undefined: every branch the scope allows).
+     */
     async listCreditPayments(
         tenantId: string,
-        query: ListCustomerCreditPaymentsQueryDto & { timezone: string },
+        query: Omit<ListCustomerCreditPaymentsQueryDto, 'storeId'> & { timezone: string; scope?: CustomerScope; branch?: string },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
@@ -731,6 +823,8 @@ export class CustomersService {
         const where: any = {
             tenant_id: tenantId,
             type: { in: ['PAYMENT', 'PAYOUT'] },
+            ...this.creditRowScopeWhere(query.scope ?? null),
+            ...(query.branch ? { store_id: query.branch } : {}),
         };
 
         if (query.customerId) {
@@ -767,14 +861,31 @@ export class CustomersService {
         return paginate(enriched, total, page, limit);
     }
 
-    async getCreditPayment(tenantId: string, paymentId: string) {
-        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
+    async getCreditPayment(tenantId: string, paymentId: string, scope: CustomerScope = null) {
+        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId, scope);
         const [enriched] = await this.enrichPaymentsWithVouchers(tenantId, [payment]);
         return enriched;
     }
 
-    async updateCreditPayment(tenantId: string, paymentId: string, dto: UpdateCreditPaymentDto, storeId?: string) {
-        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
+    /**
+     * The serial a new payment would get if saved now, for the entry form to
+     * show. Not reserved: a form left blank is numbered at save time, so two
+     * operators previewing at once cannot collide.
+     */
+    async getNextPaymentNumber(tenantId: string, direction?: CustomerPaymentDirectionDto) {
+        const txType = this.typeFromDirection(direction ?? CustomerPaymentDirectionDto.RECEIVE);
+        return { payment_number: await this.generatePaymentNumber(tenantId, this.db, txType) };
+    }
+
+    async updateCreditPayment(
+        tenantId: string,
+        paymentId: string,
+        dto: UpdateCreditPaymentDto,
+        storeId?: string,
+        scope: CustomerScope = null,
+        timeZone?: string,
+    ) {
+        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId, scope);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
         const oldDiscount = Number(payment.discount_amount ?? 0);
@@ -785,6 +896,15 @@ export class CustomersService {
         const newAmount = dto.amount ?? oldAmount;
         const newDiscount = dto.discount ?? oldDiscount;
         const newNotes = dto.notes !== undefined ? dto.notes : payment.notes;
+        // Kept when not changed: the vouchers are voided and reposted below,
+        // and a repost left undated would move an old payment into today.
+        const newDate = resolvePaymentDate(dto.date, timeZone) ?? payment.created_at;
+        const typedRename = typedSerial(dto.paymentNumber);
+        const renamedTo = typedRename && canonicalSerial(typedRename, SERIAL_SERIES);
+        const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
+        const newMethod = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         return this.db.$transaction(async (tx) => {
             const customer = await tx.customer.findFirst({
@@ -792,6 +912,10 @@ export class CustomersService {
                 select: { id: true, name: true, due_balance: true },
             });
             if (!customer) throw new NotFoundException('Customer not found');
+            if (newNumber && newNumber !== payment.payment_number) {
+                await assertSerialFree(tx, 'customerCreditTransaction', tenantId, newNumber, paymentId);
+                await assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', tenantId, newNumber, SERIAL_SERIES);
+            }
 
             const dueWithoutPayment = Number(customer.due_balance) - this.dueDelta(oldType, oldAmount, oldDiscount);
             this.assertPaymentSplit(newType, newAmount, newDiscount, dueWithoutPayment);
@@ -808,6 +932,9 @@ export class CustomersService {
                     discount_amount: newDiscount,
                     balance_after: balanceAfter,
                     notes: newNotes,
+                    created_at: newDate,
+                    payment_number: newNumber,
+                    ...(newMethod ? { payment_method_id: newMethod.id, payment_method_name: newMethod.name } : {}),
                 },
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
@@ -820,16 +947,24 @@ export class CustomersService {
                 data: { due_balance: balanceAfter },
             });
 
+            // A method left alone reposts to wherever it is linked today.
+            const cashAccountId = newMethod
+                ? newMethod.account_id ?? undefined
+                : await storedPaymentMethodAccountId(tx, tenantId, payment.payment_method_id);
+
             const posting = await this.postPaymentLegs(tx, {
                 tenantId,
                 customerId,
                 customerName: customer.name,
                 paymentId,
-                paymentNumber: payment.payment_number ?? paymentId,
+                paymentNumber: newNumber ?? paymentId,
                 type: newType,
                 amount: newAmount,
                 discount: newDiscount,
-                storeId,
+                date: newDate,
+                // The payment's own branch (its customer's), not the editor's header.
+                storeId: payment.store_id,
+                cashAccountId,
             });
 
             return {
@@ -840,11 +975,14 @@ export class CustomersService {
                 discount_voucher_id: posting.discount_voucher_id,
                 discount_voucher_number: posting.discount_voucher_number,
             };
+        }).catch((err) => {
+            if (newNumber && isSerialConflict(err)) throw serialTaken(newNumber);
+            throw err;
         });
     }
 
-    async deleteCreditPayment(tenantId: string, paymentId: string) {
-        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId);
+    async deleteCreditPayment(tenantId: string, paymentId: string, scope: CustomerScope = null) {
+        const payment = await this.findCreditPaymentOrThrow(tenantId, paymentId, scope);
         const oldType = payment.type as 'PAYMENT' | 'PAYOUT';
         const oldAmount = Number(payment.amount);
         const oldDiscount = Number(payment.discount_amount ?? 0);
@@ -877,10 +1015,12 @@ export class CustomersService {
         userId: string,
         dto: RecordCreditPaymentDto,
         storeId?: string,
+        scope: CustomerScope = null,
+        timeZone?: string,
     ) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
-            select: { id: true, name: true, due_balance: true },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
+            select: { id: true, name: true, due_balance: true, store_id: true },
         });
         if (!customer) throw new NotFoundException('Customer not found');
 
@@ -891,21 +1031,39 @@ export class CustomersService {
         const currentDue = Number(customer.due_balance);
         this.assertPaymentSplit(txType, dto.amount, discount, currentDue);
         const balanceAfter = currentDue + this.dueDelta(txType, dto.amount, discount);
+        const paymentDate = resolvePaymentDate(dto.date, timeZone) ?? new Date();
+        const typedRaw = typedSerial(dto.paymentNumber);
+        const typed = typedRaw && canonicalSerial(typedRaw, SERIAL_SERIES);
+        // Kept outside the transaction so a unique-index race can name it.
+        let serial = typed;
+        const method = dto.paymentMethodId
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            : null;
 
         return this.db.$transaction(async (tx) => {
-            const payment_number = await this.generatePaymentNumber(tenantId, tx, txType);
+            if (typed) {
+                await assertSerialFree(tx, 'customerCreditTransaction', tenantId, typed);
+                await assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', tenantId, typed, SERIAL_SERIES);
+            }
+            const payment_number = typed ?? await this.generatePaymentNumber(tenantId, tx, txType);
+            serial = payment_number;
 
             const payment = await tx.customerCreditTransaction.create({
                 data: {
                     tenant_id: tenantId,
                     customer_id: id,
+                    // A payment belongs to its customer's branch.
+                    store_id: customer.store_id,
                     type: txType,
                     amount: dto.amount,
                     discount_amount: discount,
                     balance_after: balanceAfter,
                     payment_number,
                     notes: dto.notes,
+                    payment_method_id: method?.id,
+                    payment_method_name: method?.name,
                     created_by: userId,
+                    created_at: paymentDate,
                 },
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
@@ -927,10 +1085,17 @@ export class CustomersService {
                 type: txType,
                 amount: dto.amount,
                 discount,
-                storeId,
+                date: paymentDate,
+                // The payment's branch — its customer's — so the branch's
+                // receivable clears against its own sales.
+                storeId: customer.store_id,
+                cashAccountId: method?.account_id ?? undefined,
             });
 
             return { ...payment, ...posting };
+        }).catch((err) => {
+            if (serial && isSerialConflict(err)) throw serialTaken(serial);
+            throw err;
         });
     }
 
@@ -954,10 +1119,11 @@ export class CustomersService {
         userId: string,
         dto: WriteOffCustomerDebtDto,
         storeId?: string,
+        scope: CustomerScope = null,
     ) {
         const customer = await this.db.customer.findFirst({
-            where: { id, tenant_id: tenantId, deleted_at: null },
-            select: { id: true, name: true, due_balance: true, credit_enabled: true },
+            where: { id, tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
+            select: { id: true, name: true, due_balance: true, credit_enabled: true, store_id: true },
         });
         if (!customer) throw new NotFoundException('Customer not found');
 
@@ -994,6 +1160,7 @@ export class CustomersService {
                 data: {
                     tenant_id: tenantId,
                     customer_id: id,
+                    store_id: customer.store_id,
                     type: 'WRITE_OFF',
                     amount: dto.amount,
                     balance_after: balanceAfter,
@@ -1061,9 +1228,9 @@ export class CustomersService {
      * comes back out of the period the write-off was posted in, so a recovery
      * that crosses a fiscal year needs the period reopened or a manual journal.
      */
-    async reverseWriteOff(tenantId: string, writeOffId: string) {
+    async reverseWriteOff(tenantId: string, writeOffId: string, scope: CustomerScope = null) {
         const writeOff = await this.db.customerCreditTransaction.findFirst({
-            where: { id: writeOffId, tenant_id: tenantId, type: 'WRITE_OFF' },
+            where: { id: writeOffId, tenant_id: tenantId, type: 'WRITE_OFF', ...this.creditRowScopeWhere(scope) },
             select: { id: true, customer_id: true, amount: true },
         });
         if (!writeOff) throw new NotFoundException('Write-off not found');
@@ -1097,13 +1264,13 @@ export class CustomersService {
     /** Every debt this workspace has forgiven — the bad-debt register. */
     async listWriteOffs(
         tenantId: string,
-        query: ListCustomerWriteOffsQueryDto & { timezone: string },
+        query: ListCustomerWriteOffsQueryDto & { timezone: string; scope?: CustomerScope },
     ): Promise<PaginatedResult<any>> {
         const page = query.page ?? 1;
         const limit = Math.min(query.limit ?? 20, 100);
         const skip = (page - 1) * limit;
 
-        const where: any = { tenant_id: tenantId, type: 'WRITE_OFF' };
+        const where: any = { tenant_id: tenantId, type: 'WRITE_OFF', ...this.creditRowScopeWhere(query.scope ?? null) };
         if (query.customerId) where.customer_id = query.customerId;
         // The reason rides in reference_id beside reference_type 'BAD_DEBT'; see
         // writeOffDebt. No column was added for it because the reason never
@@ -1150,11 +1317,11 @@ export class CustomersService {
      * raise a due and which settle one, so this report cannot disagree with the
      * customer's own statement about what a row means.
      */
-    async getDueAgingReport(tenantId: string) {
+    async getDueAgingReport(tenantId: string, scope: CustomerScope = null) {
         const now = new Date();
 
         const transactions = await this.db.customerCreditTransaction.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...this.creditRowScopeWhere(scope) },
             select: {
                 customer_id: true,
                 type: true,
@@ -1205,7 +1372,12 @@ export class CustomersService {
         tenantId: string,
         rows: Record<string, unknown>[],
         mode: 'skip' | 'upsert',
+        /** The branch rows without their own go to: the one picked for the file, else the header branch. */
+        storeId?: string,
+        /** An upsert may not overwrite a customer outside the importer's scope, nor add one to a branch outside it. */
+        scope: CustomerScope = null,
     ): Promise<ImportResult> {
+        const branchOf = await makeImportBranchResolver(this.db, tenantId, scope);
         const text = (value: unknown): string | null => {
             if (value === undefined || value === null) return null;
             return String(value).trim() || null;
@@ -1230,6 +1402,7 @@ export class CustomersService {
                 email: text(raw.email),
                 address: text(raw.address),
                 customer_group_name: text(raw.customer_group_name),
+                branch: text(raw.branch),
             }),
             findDuplicate: async (row) => {
                 if (row.customer_code) {
@@ -1258,6 +1431,8 @@ export class CustomersService {
                 return null;
             },
             create: async (row) => {
+                const rowStoreId = branchOf(row.branch) ?? storeId;
+                if (!rowStoreId) throw new BadRequestException('no branch — pick one for the file or fill the branch column');
                 const customer_group_id = await resolveGroupId(row.customer_group_name);
                 await this.withCustomerCode(tenantId, row.customer_code, (customer_code) =>
                     this.db.customer.create({
@@ -1270,11 +1445,15 @@ export class CustomersService {
                             email: row.email,
                             address: row.address,
                             customer_group_id,
+                            store_id: rowStoreId,
                         },
                     }),
                 );
             },
             update: async (id, row) => {
+                if (scope && !(await this.db.customer.count({ where: { id, ...customerScopeWhere(scope) } }))) {
+                    throw new BadRequestException('matches a customer of another branch — not updated');
+                }
                 const customer_group_id =
                     row.customer_group_name !== null ? await resolveGroupId(row.customer_group_name) : undefined;
                 await this.db.customer.update({

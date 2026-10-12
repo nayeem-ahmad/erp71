@@ -52,4 +52,31 @@ describe('Toaster', () => {
 
         expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
+
+    it('offers a follow-up action that runs once and closes the toast', () => {
+        const onClick = jest.fn();
+        render(<Toaster />);
+
+        act(() => {
+            toast.success('CPY-00012 saved', { action: { label: 'Print receipt', onClick } });
+        });
+
+        act(() => {
+            screen.getByRole('button', { name: 'Print receipt' }).click();
+        });
+
+        expect(onClick).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('keeps an action toast up for twice as long', () => {
+        act(() => {
+            toast.success('Saved', { action: { label: 'Print', onClick: () => {} } });
+            toast.success('Plain', 1500);
+        });
+
+        const [withAction, plain] = useToastStore.getState().toasts;
+        expect(withAction.duration).toBe(8000);
+        expect(plain.duration).toBe(1500);
+    });
 });

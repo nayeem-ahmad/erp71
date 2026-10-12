@@ -462,7 +462,7 @@ export class FeedbackAutomationService {
 
     // Runs hourly; only does real work when enabled and due per the configured cadence
     // ('manual' means only the direct admin trigger ever runs plan proposals).
-    @Cron('0 * * * *')
+    @Cron('0 * * * *', { timeZone: 'Asia/Dhaka' })
     async runScheduledBatch(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.FEEDBACK_PLAN_BATCH, () => this.runScheduledBatchImpl());
     }

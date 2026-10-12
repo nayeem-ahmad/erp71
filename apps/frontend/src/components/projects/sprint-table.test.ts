@@ -1,6 +1,7 @@
 import {
     NO_LANE,
     assigneeOptions,
+    busiestProjectId,
     groupSprintTasks,
     sprintStats,
     sprintTimeline,
@@ -68,10 +69,11 @@ describe('sprintStats', () => {
         const stats = sprintStats(
             [task('a'), task('b', { status: { id: 'd', name: 'Done', category: 'DONE' }, remaining_hours: 0 })],
             [
-                { date: '2026-08-06', ideal: 10, actual: 12, committed: 16, isWorkingDay: true },
-                { date: '2026-08-07', ideal: 10, actual: null, committed: null, isWorkingDay: false },
-                { date: '2026-08-09', ideal: 0, actual: null, committed: null, isWorkingDay: true },
+                { date: '2026-08-06', value: 10, isWorkingDay: true },
+                { date: '2026-08-07', value: 10, isWorkingDay: false },
+                { date: '2026-08-09', value: 0, isWorkingDay: true },
             ],
+            12,
             '2026-08-06',
         );
         expect(stats.doneCount).toBe(1);
@@ -80,6 +82,12 @@ describe('sprintStats', () => {
         expect(stats.workingDaysLeft).toBe(2);
         // Two hours more left than the ideal says — behind.
         expect(stats.variance).toBe(-2);
+    });
+
+    it('has no variance outside the sprint, or with no live figure', () => {
+        const ideal = [{ date: '2026-08-06', value: 10, isWorkingDay: true }];
+        expect(sprintStats([], ideal, 12, '2026-09-01').variance).toBeNull();
+        expect(sprintStats([], ideal, null, '2026-08-06').variance).toBeNull();
     });
 });
 
@@ -111,5 +119,25 @@ describe('assigneeOptions', () => {
             { key: 'user:u2', label: 'Zara' },
             { key: NO_LANE, label: null },
         ]);
+    });
+});
+
+describe('busiestProjectId', () => {
+    const inProject = (id: string, projectId: string) =>
+        task(id, { project: { id: projectId, code: projectId.toUpperCase(), name: projectId } });
+
+    it('picks the project with the most tasks in the sprint', () => {
+        const tasks = [inProject('a', 'p1'), inProject('b', 'p2'), inProject('c', 'p2'), task('d')];
+        expect(busiestProjectId(tasks)).toBe('p2');
+    });
+
+    it('breaks a tie in favour of the project seen first', () => {
+        expect(busiestProjectId([inProject('a', 'p2'), inProject('b', 'p1')])).toBe('p2');
+    });
+
+    it('skips projects the caller cannot offer, and answers null for an empty sprint', () => {
+        const tasks = [inProject('a', 'p1'), inProject('b', 'p1'), inProject('c', 'p2')];
+        expect(busiestProjectId(tasks, (id) => id !== 'p1')).toBe('p2');
+        expect(busiestProjectId([])).toBeNull();
     });
 });

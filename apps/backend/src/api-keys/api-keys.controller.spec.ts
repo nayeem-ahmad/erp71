@@ -8,6 +8,7 @@ import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { DatabaseService } from '../database/database.service';
 
 describe('ApiKeysController — subscription guard', () => {
@@ -43,6 +44,7 @@ describe('ApiKeysController — subscription guard', () => {
             providers: [
                 { provide: ApiKeysService, useValue: apiKeysService },
                 { provide: DatabaseService, useValue: db },
+                { provide: AuthCacheService, useValue: new AuthCacheService({ ttlMs: 0 }) },
                 Reflector,
                 SubscriptionAccessGuard,
             ],

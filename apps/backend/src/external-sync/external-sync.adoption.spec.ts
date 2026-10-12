@@ -44,9 +44,18 @@ describe('adoption query shape', () => {
         });
 
         it('declines to match when there is no phone', () => {
-            // `dedupeCode` builds customer_code from the provider's row id, so
-            // it is not identity and cannot stand in for a missing phone.
+            // customer_code is the provider's code with `-2` added on a repeat,
+            // so it is not identity and cannot stand in for a missing phone.
             expect(customerAdoptionWhere('tenant-1', null, 'C-101')).toBeNull();
+        });
+
+        it('declines to match on a number that is not a phone', () => {
+            // Press Club's Dizi customers "M.R Surgical" (32), "LS Trade
+            // International" (415) and "Easy Health Care" (01) would otherwise
+            // have been welded to Babu Bazar customers with the same junk.
+            for (const junk of ['32', '415', '01', '017', '77777']) {
+                expect(customerAdoptionWhere('tenant-1', junk, null)).toBeNull();
+            }
         });
 
         it('queries the phone exactly as given, without normalizing it', () => {
@@ -115,6 +124,9 @@ describe('a decided mapping takes precedence over adoption', () => {
                 findFirst: jest.fn().mockResolvedValue(null),
                 create: jest.fn().mockResolvedValue({ id: 'created-1' }),
             },
+            // Costed already, so the opening-cost seed has nothing to do here.
+            productCost: { findMany: jest.fn().mockResolvedValue([{ product_id: 'chosen-1' }, { product_id: 'created-1' }]) },
+            productPrice: { findMany: jest.fn().mockResolvedValue([]) },
         };
         const service = new ExternalSyncService(db as never, { decrypt: jest.fn() } as never, {} as never);
         return { db, service };

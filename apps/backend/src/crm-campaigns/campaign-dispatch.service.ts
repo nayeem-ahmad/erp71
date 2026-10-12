@@ -274,7 +274,7 @@ export class CampaignDispatchService {
     }
 
     /** Cron: fire due scheduled campaigns, then push in-flight ones forward. */
-    @Cron('*/5 * * * *')
+    @Cron('*/5 * * * *', { timeZone: 'Asia/Dhaka' })
     async processScheduledCampaigns(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.CRM_CAMPAIGNS, () => this.processCampaigns());
     }

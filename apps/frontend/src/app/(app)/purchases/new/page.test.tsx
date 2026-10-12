@@ -41,7 +41,10 @@ const COFFEE = {
     name: 'Coffee Beans',
     sku: 'CB-001',
     price: '10.00',
-    stocks: [{ quantity: 4 }, { quantity: 2 }],
+    stocks: [
+        { warehouse_id: 'wh-main', quantity: 4 },
+        { warehouse_id: 'wh-annex', quantity: 2 },
+    ],
 };
 
 const MAIN_WAREHOUSE = {
@@ -137,8 +140,8 @@ describe('NewPurchasePage', () => {
 
         const costInput = screen.getByLabelText('Unit Cost') as HTMLInputElement;
         expect(costInput.value).toBe('8');
-        // Stock on hand is summed across warehouses.
-        expect(screen.getByText(/Available 6/)).toBeInTheDocument();
+        // Only the warehouse the goods are received into counts, not every warehouse.
+        expect(screen.getByText(/Available 4/)).toBeInTheDocument();
     });
 
     it("prefers the chosen supplier's own last cost", async () => {
@@ -244,6 +247,55 @@ describe('NewPurchasePage', () => {
                 }),
             );
         });
+    });
+
+    it('shows stock for the chosen warehouse and follows it when the warehouse changes', async () => {
+        (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE, ANNEX_WAREHOUSE]);
+        await renderPage();
+
+        const picker = await screen.findByLabelText('Warehouse') as HTMLSelectElement;
+        await waitFor(() => expect(picker.value).toBe('wh-main'));
+
+        const search = screen.getByPlaceholderText(/search products/i);
+        fireEvent.focus(search);
+        fireEvent.change(search, { target: { value: 'coffee' } });
+        expect(await screen.findByText('Avail: 4')).toBeInTheDocument();
+        fireEvent.click(screen.getAllByText('Coffee Beans')[0]);
+        await waitFor(() => expect((screen.getByLabelText('Unit Cost') as HTMLInputElement).value).not.toBe(''));
+        expect(screen.getByText(/Available 4/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        const lineRow = () => screen.getByText('Coffee Beans', { selector: 'div' }).closest('tr') as HTMLElement;
+        expect(within(lineRow()).getByTestId('line-available')).toHaveTextContent('4');
+
+        fireEvent.change(picker, { target: { value: 'wh-annex' } });
+        expect(within(lineRow()).getByTestId('line-available')).toHaveTextContent('2');
+
+        // The search follows the switch too.
+        fireEvent.focus(search);
+        fireEvent.change(search, { target: { value: 'coffee' } });
+        expect(await screen.findByText('Avail: 2')).toBeInTheDocument();
+        fireEvent.keyDown(search, { key: 'Escape' });
+
+        // A per-line override reads that line's own warehouse.
+        fireEvent.click(screen.getByLabelText('Per-line warehouse'));
+        fireEvent.change(screen.getByLabelText('Warehouse — Coffee Beans'), {
+            target: { value: 'wh-main' },
+        });
+        expect(within(lineRow()).getByTestId('line-available')).toHaveTextContent('4');
+    });
+
+    it('does not warn about buying more than is in stock', async () => {
+        await renderPage();
+        await stageProduct();
+
+        fireEvent.change(screen.getByLabelText('Qty'), { target: { value: '10' } });
+        expect(screen.queryByText(/entering more than is in stock/)).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Qty')).not.toHaveClass('border-amber-400');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        expect(screen.getByTestId('line-available')).toHaveTextContent('4');
+        expect(screen.getByTestId('line-available')).not.toHaveClass('text-amber-600');
     });
 
     it('does not post a line override the user cannot see', async () => {

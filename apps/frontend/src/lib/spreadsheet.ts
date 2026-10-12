@@ -1,5 +1,11 @@
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+/*
+ * xlsx and papaparse are imported inside the functions that use them, never at
+ * the top. This module reaches sixteen list pages through `import-dialog.tsx`,
+ * and a static import put SheetJS (hundreds of kilobytes minified) and Papa
+ * Parse into every one of them, for a dialog most visits never open. Now the
+ * chunk is fetched when somebody actually picks a file, the way
+ * `data-table/export-utils.ts` already loads it for export.
+ */
 
 export interface ParsedSpreadsheet {
     headers: string[];
@@ -21,7 +27,7 @@ export async function parseSpreadsheetFile(file: File, sheetName?: string): Prom
     }
 
     if (ext === 'csv') {
-        const text = await file.text();
+        const [text, { default: Papa }] = await Promise.all([file.text(), import('papaparse')]);
         // Papa's `errors` array includes non-fatal notices (e.g. "Unable to
         // auto-detect delimiting character" for a single-column CSV) even when
         // parsing succeeded, so — like the original callback-based parseFile,
@@ -33,7 +39,7 @@ export async function parseSpreadsheetFile(file: File, sheetName?: string): Prom
         return { headers: parsed.meta.fields ?? [], rows: parsed.data };
     }
 
-    const buffer = await file.arrayBuffer();
+    const [buffer, XLSX] = await Promise.all([file.arrayBuffer(), import('xlsx')]);
     const wb = XLSX.read(buffer, { type: 'array' });
     const resolved = sheetName ?? wb.SheetNames[0];
     const ws = wb.Sheets[resolved];
@@ -48,7 +54,7 @@ export async function parseSpreadsheetFile(file: File, sheetName?: string): Prom
 
 /** The workbook's tab names, in order — for checking a file before parsing it. */
 export async function listSheetNames(file: File): Promise<string[]> {
-    const buffer = await file.arrayBuffer();
+    const [buffer, XLSX] = await Promise.all([file.arrayBuffer(), import('xlsx')]);
     return XLSX.read(buffer, { type: 'array' }).SheetNames;
 }
 

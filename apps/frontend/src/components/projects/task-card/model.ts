@@ -60,6 +60,8 @@ export interface Task {
     } | null;
     /** Both come from `TASK_INCLUDE` and were previously discarded here. */
     sprint?: { id: string; name: string; status?: string } | null;
+    /** Every sprint the task has been in, oldest first; the open row is its current one. */
+    sprintHistory?: SprintStay[];
     milestone?: { id: string; name: string } | null;
     labels?: { label: ProjectLabel }[];
     checklistItems?: ChecklistItem[];
@@ -90,6 +92,14 @@ export interface SubtaskRow {
     reference?: number;
     title: string;
     status?: { id: string; name: string; category: string } | null;
+}
+
+/** One stay of a task in a sprint. `removed_at` null means it is still there. */
+export interface SprintStay {
+    added_at: string;
+    removed_at: string | null;
+    outcome: 'DONE' | 'CARRIED_OVER' | 'RETURNED_TO_BACKLOG' | 'REMOVED' | null;
+    sprint: { id: string; name: string; status: string };
 }
 
 /** A sprint the task can be moved into. Tenant-wide — see the fetch below. */

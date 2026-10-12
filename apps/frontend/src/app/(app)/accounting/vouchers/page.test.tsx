@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingVouchersListPage from './page';
 import { api } from '@/lib/api';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ replace: jest.fn() }),
@@ -104,6 +107,7 @@ describe('AccountingVouchersListPage', () => {
         // Mock state leaks between tests otherwise — the bulk assertions below
         // check that an endpoint was NOT called, which a stale call defeats.
         jest.clearAllMocks();
+        mockBranchScope();
         (api.getMe as jest.Mock).mockResolvedValue({
             tenants: [{ id: 'tenant-1', role: 'ACCOUNTANT', permissions: [] }],
         });
@@ -149,6 +153,39 @@ describe('AccountingVouchersListPage', () => {
         await waitFor(() => {
             expect(getVouchers).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
         });
+    });
+
+    it('lists the header branch\'s vouchers, and goes back to page 1 of the branch picked', async () => {
+        const getVouchers = api.getVouchers as jest.Mock;
+        getVouchers.mockResolvedValue({
+            data: [
+                {
+                    id: 'voucher-1',
+                    voucher_number: 'CP-00001',
+                    voucher_type: 'cash_payment',
+                    date: '2026-03-21T00:00:00.000Z',
+                    total_amount: 125,
+                },
+            ],
+            meta: { page: 1, limit: 20, total: 40, totalPages: 2 },
+        });
+
+        render(<AccountingVouchersListPage />);
+
+        await waitFor(() =>
+            expect(getVouchers).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1', page: 1 })),
+        );
+        await screen.findByText('CP-00001');
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await waitFor(() =>
+            expect(getVouchers).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1', page: 2 })),
+        );
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+        await waitFor(() =>
+            expect(getVouchers).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all', page: 1 })),
+        );
     });
 
     it('offers a duplicate action that opens the entry form prefilled from the voucher', async () => {

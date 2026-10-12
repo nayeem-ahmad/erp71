@@ -10,7 +10,8 @@ import {
     CompactStat,
 } from '@/components/accounting/compact';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Button } from '@/components/ui';
+import { BranchFilter, Button } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { api } from '@/lib/api';
@@ -60,6 +61,9 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function LoansPage() {
     const { t } = useI18n();
+    // Which branch's loans (or the company's) to list and total. A new loan is
+    // still booked on the header branch.
+    const branch = useBranchScope();
     const [loans, setLoans] = useState<Loan[]>([]);
     const [summary, setSummary] = useState<LoanSummary | null>(null);
     const [loading, setLoading] = useState(true);
@@ -91,15 +95,17 @@ export default function LoansPage() {
         try {
             const [loansData, summaryData] = await Promise.all([
                 api.getLoans({
+                    storeId: branch.apiStoreId,
                     direction: directionFilter || undefined,
                     status: statusFilter || undefined,
                     ...applyCreatedRangeQuery(createdRange),
                 }),
-                api.getLoanSummary(),
+                api.getLoanSummary({ storeId: branch.apiStoreId }),
             ]);
             setLoans(loansData ?? []);
             setSummary(summaryData ?? null);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load loans', error);
         } finally {
             setLoading(false);
@@ -107,8 +113,9 @@ export default function LoansPage() {
     };
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadData();
-    }, [directionFilter, statusFilter, createdRange]);
+    }, [branch.ready, branch.apiStoreId, directionFilter, statusFilter, createdRange]);
 
     const openCreate = () => {
         setEditingId(null);
@@ -334,10 +341,13 @@ export default function LoansPage() {
                     'accounting',
                 )}
                 actions={(
-                    <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}>
-                        <Plus className="w-3.5 h-3.5" />
-                        {t.loans.addLoan}
-                    </button>
+                    <>
+                        <BranchFilter scope={branch} />
+                        <button type="button" onClick={openCreate} className={`${compactDensity.btnPrimary} bg-primary text-white hover:bg-primary-hover`}>
+                            <Plus className="w-3.5 h-3.5" />
+                            {t.loans.addLoan}
+                        </button>
+                    </>
                 )}
             />
 

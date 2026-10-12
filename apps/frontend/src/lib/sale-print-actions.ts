@@ -1,6 +1,8 @@
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
-import { printSalesInvoice, type PaperSize } from '@/lib/sales-invoice-printer';
+import { invoiceQrDataUrl } from '@/lib/invoice-qr';
+import { enteredBeforeVat, enteredUnitPrice } from '@/lib/sale-vat';
+import { printSalesInvoice, printSalesInvoices, type InvoiceData, type PaperSize } from '@/lib/sales-invoice-printer';
 import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { paperSizeLabel } from '@/lib/print';
@@ -29,7 +31,7 @@ export interface PrintableSale {
     total_amount: string;
     amount_paid: string;
     note?: string | null;
-    customer?: { name?: string; phone?: string | null; address?: string | null } | null;
+    customer?: { name?: string; phone?: string | null; address?: string | null; customer_code?: string | null } | null;
     items: {
         quantity: number;
         /** The list endpoint says `price_at_sale`; the cart says `price`. */
@@ -37,7 +39,17 @@ export interface PrintableSale {
         price?: number;
         discount?: number;
         name?: string;
-        product?: { name?: string; sku?: string | null } | null;
+        product?: {
+            name?: string;
+            sku?: string | null;
+            warranty_enabled?: boolean;
+            warranty_duration_days?: number | null;
+            vat_rate?: string | number | null;
+            sd_rate?: string | number | null;
+        } | null;
+        /** The rates the stored line was taxed at (its snapshot). */
+        vat_rate?: string | number | null;
+        sd_rate?: string | number | null;
     }[];
     payments?: { payment_method?: string; method?: string; amount: string | number }[];
     /**
@@ -46,6 +58,20 @@ export interface PrintableSale {
      * dues at all.
      */
     previous_due?: number | null;
+    /**
+     * Tax contained in the total, stored with the sale when it was posted. The
+     * invoice reads it rather than working it out again from today's rates.
+     */
+    vat_amount?: string | number | null;
+    sd_amount?: string | number | null;
+    /** False when the sale was entered before VAT, with the tax added on top. */
+    prices_include_vat?: boolean | null;
+    /** The order the sale was raised from, when it was. */
+    salesOrder?: { order_number?: string | null } | null;
+    /** Name of the user who entered the sale, as the print endpoints resolve it. */
+    prepared_by?: string | null;
+    /** The employee the sale is credited to ("Sales By"). */
+    salesRep?: { id?: string; name?: string | null } | null;
     /**
      * The branch the sale was rung up at. Its letterhead and name print on the
      * sale's documents, whatever branch the operator has selected now.
@@ -64,6 +90,8 @@ export interface SalePrintContext {
     /** `t.sales.printMenu` — menu and preview wording. */
     menuLabels: any;
     unknownProductLabel: string;
+    /** The signed-in user printing, named on the detailed invoice's print line. */
+    printedBy?: string;
     /** The printing member's invoice layout; the built-in one when omitted. */
     invoiceLayout?: InvoicePrintPrefs;
 }
@@ -76,6 +104,23 @@ function unitPrice(item: PrintableSale['items'][number]): number {
     if (typeof item.price === 'number') return item.price;
     const raw = item.price_at_sale;
     return typeof raw === 'number' ? raw : parseFloat(raw ?? '0') || 0;
+}
+
+/** "6 months" for a product's warranty period; empty when it carries none. */
+function warrantyLabel(product: PrintableSale['items'][number]['product']): string | undefined {
+    const days = product?.warranty_duration_days;
+    if (!product?.warranty_enabled || !days || days <= 0) return undefined;
+    const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+    if (days % 365 === 0) return plural(days / 365, 'year');
+    if (days % 30 === 0) return plural(days / 30, 'month');
+    return plural(days, 'day');
+}
+
+/** A stored decimal as a number, or undefined when the sale does not carry it. */
+function storedAmount(value: string | number | null | undefined): number | undefined {
+    if (value == null) return undefined;
+    const parsed = typeof value === 'number' ? value : parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function paymentMethod(p: NonNullable<PrintableSale['payments']>[number]): string {
@@ -98,12 +143,15 @@ function previewFor(
     size: PaperSize,
     ctx: SalePrintContext,
     skipPreview: boolean,
+    /** A batch names its count instead of one document. */
+    count?: number,
 ): PrintPreviewOptions | undefined {
     if (skipPreview) return undefined;
 
     const copy = ctx.menuLabels.preview;
-    const documentName =
-        doc === 'invoice' ? copy.invoice : doc === 'challan' ? copy.challan : copy.receipt;
+    const documentName = count != null
+        ? copy.invoices.replace('{count}', String(count))
+        : doc === 'invoice' ? copy.invoice : doc === 'challan' ? copy.challan : copy.receipt;
 
     return {
         title: copy.heading
@@ -115,6 +163,13 @@ function previewFor(
     };
 }
 
+/** VAT plus SD stored with the sale, or undefined when it carries neither column. */
+function taxInside(sale: PrintableSale): number | undefined {
+    const vat = storedAmount(sale.vat_amount);
+    const sd = storedAmount(sale.sd_amount);
+    return vat === undefined && sd === undefined ? undefined : (vat ?? 0) + (sd ?? 0);
+}
+
 /**
  * The sale's own invoice — the commercial document, prices and all.
  *
@@ -122,19 +177,24 @@ function previewFor(
  * because a list row carries the stored total while the detail screen may hold
  * edited lines that have not been saved; taking the lines makes what prints
  * match what is on screen either way.
+ *
+ * Shared with the batch printer so a row and a selection cannot drift.
+ *
+ * A sale entered before VAT (`prices_include_vat === false`) prints the way it
+ * was entered: before-VAT unit prices, then the discount, the VAT added on top
+ * and the total — the stored VAT, so the invoice agrees with its Mushak.
  */
-export function printSaleInvoice(
-    sale: PrintableSale,
-    size: PaperSize,
-    ctx: SalePrintContext,
-    skipPreview = false,
-): void {
+export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): InvoiceData {
+    const beforeVat = enteredBeforeVat(sale);
     const items = sale.items.map((i) => ({
         name: itemName(i, ctx.unknownProductLabel),
         sku: i.product?.sku ?? undefined,
         quantity: i.quantity,
-        unitPrice: unitPrice(i),
+        // A stored line is VAT-inclusive; one entered before VAT is taken back
+        // to its typed price. A cart line (`price`) already holds that price.
+        unitPrice: beforeVat && typeof i.price !== 'number' ? enteredUnitPrice(i) : unitPrice(i),
         discount: i.discount || 0,
+        warranty: warrantyLabel(i.product),
     }));
 
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity - (i.discount || 0), 0);
@@ -151,32 +211,107 @@ export function printSaleInvoice(
         ? storedPaid
         : payments.reduce((sum, p) => sum + p.amount, 0);
 
-    printSalesInvoice(
-        {
-            referenceNumber: sale.reference_number || sale.serial_number,
-            date: formatDate(sale.sale_date ?? sale.created_at, ctx.locale),
-            companyName: ctx.invoiceHeader.companyName,
-            storeName: sale.store?.name,
-            companyAddress: sale.store?.address || undefined,
-            headerConfig: ctx.invoiceHeader.headerConfig,
-            customerName: sale.customer?.name,
-            customerPhone: sale.customer?.phone ?? undefined,
-            items,
-            payments,
-            subtotal,
+    // Entered before VAT: the stored VAT is added to the before-VAT lines, and
+    // whatever is left between those and the total is the discount (or, above
+    // it, an adjustment) — so the printed block always foots.
+    const tax = taxInside(sale) ?? 0;
+    const gap = Math.round((subtotal + tax - total) * 100) / 100;
+    const amounts = beforeVat
+        ? {
+            discountAmount: gap > 0.005 ? gap : undefined,
+            rounding: gap < -0.005 ? -gap : undefined,
+            vat: tax > 0.005 ? tax : undefined,
+            taxIncluded: undefined,
+        }
+        : {
             // The difference between the lines and the stored total is whatever
             // invoice-level adjustment was applied; showing it as rounding is
             // closer than silently printing a total the lines do not sum to.
             rounding: Math.abs(total - subtotal) > 0.005 ? total - subtotal : undefined,
-            total,
-            amountPaid,
-            previousDue: sale.previous_due,
-            note: sale.note ?? undefined,
-        },
+            // Both stored columns, or neither: a sale carrying only one would read
+            // as having no tax inside it rather than an unknown amount.
+            taxIncluded: taxInside(sale),
+        };
+
+    return {
+        referenceNumber: sale.reference_number || sale.serial_number,
+        date: formatDate(sale.sale_date ?? sale.created_at, ctx.locale),
+        companyName: ctx.invoiceHeader.companyName,
+        storeName: sale.store?.name,
+        companyAddress: sale.store?.address || undefined,
+        headerConfig: ctx.invoiceHeader.headerConfig,
+        customerName: sale.customer?.name,
+        customerCode: sale.customer?.customer_code ?? undefined,
+        customerPhone: sale.customer?.phone ?? undefined,
+        shippingAddress: sale.customer?.address ?? undefined,
+        orderNumber: sale.salesOrder?.order_number ?? undefined,
+        preparedBy: sale.prepared_by ?? undefined,
+        salesBy: sale.salesRep?.name ?? undefined,
+        printedBy: ctx.printedBy,
+        items,
+        payments,
+        subtotal,
+        ...amounts,
+        total,
+        amountPaid,
+        previousDue: sale.previous_due,
+        note: sale.note ?? undefined,
+    };
+}
+
+/**
+ * The code the detailed layout prints, or nothing for any other layout — which
+ * would not use it, and should not wait on it.
+ */
+async function qrFor(sale: PrintableSale, ctx: SalePrintContext): Promise<string | undefined> {
+    return ctx.invoiceLayout?.layout === 'detailed' ? invoiceQrDataUrl(sale.id) : undefined;
+}
+
+export async function printSaleInvoice(
+    sale: PrintableSale,
+    size: PaperSize,
+    ctx: SalePrintContext,
+    skipPreview = false,
+): Promise<void> {
+    // Drawn before the window opens, so the page is complete when it appears.
+    const qrDataUrl = await qrFor(sale, ctx);
+    printSalesInvoice(
+        { ...saleToInvoiceData(sale, ctx), qrDataUrl },
         size,
         previewFor('invoice', size, ctx, skipPreview),
         ctx.invoiceLayout,
     );
+}
+
+/**
+ * The checked rows, as one print job. False when the browser blocked the window.
+ *
+ * `headerFor` gives each sale its own branch's letterhead, since a selection
+ * can span branches; without it every sheet takes `ctx.invoiceHeader`.
+ */
+export async function printSaleInvoices(
+    sales: PrintableSale[],
+    size: PaperSize,
+    ctx: SalePrintContext,
+    skipPreview = false,
+    headerFor: (sale: PrintableSale) => SalePrintContext['invoiceHeader'] = () => ctx.invoiceHeader,
+): Promise<boolean> {
+    const codes = await Promise.all(sales.map((sale) => qrFor(sale, ctx)));
+    const opened = printSalesInvoices(
+        sales.map((sale, i) => ({
+            ...saleToInvoiceData(sale, { ...ctx, invoiceHeader: headerFor(sale) }),
+            qrDataUrl: codes[i],
+        })),
+        size,
+        previewFor('invoice', size, ctx, skipPreview, sales.length),
+        ctx.invoiceLayout,
+    );
+    return opened != null;
+}
+
+/** The branch a sale was rung up at — whose letterhead its documents carry. */
+export function saleStoreId(sale: PrintableSale): string | undefined {
+    return sale.store_id ?? sale.store?.id ?? undefined;
 }
 
 /**

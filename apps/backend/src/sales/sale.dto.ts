@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
     ArrayMinSize,
     IsArray,
     IsBoolean,
@@ -8,10 +9,12 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    ValidateIf,
     ValidateNested,
 } from 'class-validator';
 import { PaymentInstrumentDto } from '../common/payment-instrument.dto';
 import { InlineCustomerDto } from '../customers/customer.dto';
+import { QUOTATION_BATCH_LIMIT } from './quotation-to-sale.util';
 
 export class CreateSaleItemDto {
     @IsString()
@@ -123,8 +126,24 @@ export class CreateSaleDto {
     @IsNumber()
     totalAmount: number;
 
+    /**
+     * Everything taken against this sale, which may be more than its total.
+     * On a customer's sale the excess is a payment on their account — it
+     * settles their previous due, then stands as an advance. On a walk-in sale
+     * it is change handed back. See `splitSaleOverpayment`.
+     */
     @IsNumber()
     amountPaid: number;
+
+    /**
+     * The excess over the total was handed back as change, even though a
+     * customer is on the sale. Sent by the POS, whose tender boxes take what
+     * the customer hands over and work the change out from it; the invoice
+     * screen leaves it off, so its excess lands on the customer's account.
+     */
+    @IsOptional()
+    @IsBoolean()
+    returnChange?: boolean;
 
     @IsArray()
     @ArrayMinSize(1)
@@ -152,6 +171,25 @@ export class CreateSaleDto {
     @IsOptional()
     @IsNumber()
     pointsToRedeem?: number;
+
+    /**
+     * How the screen entered the prices: false when they were typed before VAT
+     * and grossed up on the way here. The posted prices and total are
+     * VAT-inclusive either way; this only lets the sale be shown back the way
+     * it was entered. Left out (POS, imports), the sale counts as VAT-inclusive.
+     */
+    @IsOptional()
+    @IsBoolean()
+    pricesIncludeVat?: boolean;
+
+    /**
+     * The employee who made the sale ("Sales By"). Left out, it is the
+     * customer's own sales rep; null records none.
+     */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsString()
+    salesRepId?: string | null;
 
     /**
      * Park the entry as a DRAFT: the sale and its lines are stored, but nothing
@@ -255,6 +293,12 @@ export class UpdateSaleDto {
     @IsString()
     customerId?: string | null;
 
+    /** Change who the sale is credited to; null clears it. */
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsString()
+    salesRepId?: string | null;
+
     /**
      * Move the whole sale to another warehouse. Only read when `items` are
      * also supplied: the stock is reversed and re-applied as one step there,
@@ -312,4 +356,28 @@ export class UpdateSaleDto {
     @IsOptional()
     @IsString()
     mushakVehicleNo?: string;
+}
+
+/** The sales a counter wants on one print job. One page of a list, not a dump. */
+export class PrintSalesBatchDto {
+    @IsArray()
+    @ArrayMinSize(1)
+    @ArrayMaxSize(100)
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    ids: string[];
+}
+
+/**
+ * The quotations "Convert to sales" invoices in one go, each as a credit sale.
+ * A list page's worth: every sale is posted one after another, so a larger
+ * batch only means a longer wait on a request that cannot be resumed.
+ */
+export class CreateSalesFromQuotationsDto {
+    @IsArray()
+    @ArrayMinSize(1)
+    @ArrayMaxSize(QUOTATION_BATCH_LIMIT)
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    quotationIds: string[];
 }

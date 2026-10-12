@@ -1,19 +1,31 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
 import { useEffect, useMemo } from 'react';
 import { DEFAULT_LOCALE } from '@/lib/localization/config';
-import { messageCatalog } from '@/lib/localization/messages';
+import { getLoadedMessagesOrDefault } from '@/lib/localization/load-messages';
 import { getStoredLocalePreference } from '@/lib/localization/preference';
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+    // Synchronous on purpose: this page is the last resort when the app itself
+    // has failed, so it must not wait on — or fail on — fetching a language
+    // chunk. The user's language is usually already loaded by the provider this
+    // page replaces; if not, English.
     const m = useMemo(() => {
         const locale = getStoredLocalePreference() ?? DEFAULT_LOCALE;
-        return messageCatalog[locale].marketing.globalError;
+        return getLoadedMessagesOrDefault(locale).marketing.globalError;
     }, []);
 
+    // The SDK is loaded here only when there is somewhere to send the error.
+    // A static import kept part of it in every page's bundle — this component
+    // is the root error boundary, so it ships with all of them — and without a
+    // DSN `sentry.client.config.ts` never initialises it, which made
+    // `captureException` a no-op anyway. With one, the config has already
+    // fetched the chunk and this resolves from the cache.
     useEffect(() => {
-        Sentry.captureException(error);
+        if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return;
+        void import(/* webpackExports: ["captureException"] */ '@sentry/nextjs').then((Sentry) =>
+            Sentry.captureException(error),
+        );
     }, [error]);
 
     return (

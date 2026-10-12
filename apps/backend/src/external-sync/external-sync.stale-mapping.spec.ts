@@ -35,6 +35,11 @@ describe('external-sync stale mapping repair', () => {
                 findFirst: jest.fn(async () => null),
                 create: jest.fn(async () => ({ id: 'fresh-product-id' })),
             },
+            // Every product here already has a cost on file, so the opening-cost
+            // seed (covered in external-sync.opening-cost.spec.ts) stays out of
+            // the way.
+            productCost: { findMany: jest.fn(async () => [{ product_id: 'gone-product-id' }, { product_id: 'fresh-product-id' }]) },
+            productPrice: { findMany: jest.fn(async () => []) },
         } as any;
     }
 

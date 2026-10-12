@@ -1,10 +1,23 @@
 # ERP71 mobile
 
-The Flutter app for Android and iOS. The first release covers **Google sign-in
-and the CRM**: an overview of the pipeline and today's work, leads, activities
-(follow-ups and logged calls), and contacts. It talks to the same NestJS API as
-the web app and needs nothing from it that the web does not already use, apart
-from `POST /auth/logout/session` (see [Signing out](#signing-out)).
+The Flutter app for Android and iOS, for the people who run a shop and the
+people who sell for it:
+
+- **Home**: how today's sales compare with yesterday and the same weekday
+  last week, how they were paid, and what is owed.
+- **Approvals**: expense claims, leave, product demands, stock transfers and
+  vouchers waiting for a decision.
+- **Alerts**: the bell, also delivered as push notifications. That covers
+  approvals waiting, short tills, large sales and refunds, cancelled sales,
+  website enquiries, low stock and a daily anomaly check.
+- **Cashiers**: open tills and today's closed shifts, with their drawer counts.
+- **The CRM**: leads, activities and contacts.
+- **Ask ERP71**: questions about the business, typed or spoken, in English or
+  Bangla.
+- **App lock**: optional, using the phone's fingerprint, face or PIN.
+
+It talks to the same NestJS API as the web app. The plan behind it is
+`docs/mobile-admin-plan.md`; push setup is `docs/ops/mobile-push-setup.md`.
 
 ## Running it
 
@@ -76,6 +89,78 @@ client exists.
   `CREATE_CRM_INTERACTIONS` to mark done. Leads and contacts need no
   permission beyond membership.
 
+## Which tabs a member gets
+
+The bottom bar is built from what the member can use in the chosen workspace
+(`core/access.dart`, mirroring `apps/backend/src/auth/permission-sets.ts`):
+
+| Area | Shown when | Server check |
+|---|---|---|
+| Home | any `SALES_READ` permission, active or trial subscription | as Sales › Overview |
+| Approvals | `MANAGE_HR`, `APPROVE_PRODUCT_DEMAND`, `APPROVE_GOODS_TRANSFER` or `APPROVE_VOUCHER` | each kind as its own approve endpoint; branch entries only in branches where the member holds it |
+| Alerts | always | the member's own notifications |
+| Cashiers (under More) | `CREATE_SALE` or `MANAGE_COUNTERS` (`POS_STAFF`) | as the cashier-session reads |
+| CRM | the CRM rules above | as every CRM endpoint |
+| Ask ERP71 | the plan includes AI (`premiumAi`) | the assistant's own plan, credit and tool checks |
+
+Someone with Home, Approvals or Cashiers gets *Home · Approvals · Alerts ·
+More*, with Cashiers, the CRM, Ask and notification settings under More. A
+CRM-only member keeps the CRM's four tabs plus Alerts. Owners, and members
+holding `VIEW_CONSOLIDATED_REPORTS`, can switch Home and Cashiers between
+*All branches* and each branch; everyone else sees their own branch. Payables
+are left off Home for a member who cannot read purchasing.
+
+## Notifications
+
+Every bell notification is also pushed, through Firebase Cloud Messaging. This
+is off until the server has a key (`docs/ops/mobile-push-setup.md`). The app
+asks `GET /push/config` for the Firebase values, so there is no
+`google-services.json`. It registers its token with `POST /push/devices` at
+each sign-in, naming the session by its refresh token, and the server only
+pushes to phones whose session is still live. Tapping a notification switches
+to its workspace and opens the matching screen, or Alerts when the phone has
+none.
+
+What reaches a phone is each person's choice, under More › Notifications (or
+the tune button on Alerts):
+
+- each kind of alert on or off;
+- quiet hours, default 22:00–08:00 shop time, with anything held sent as one
+  summary afterwards.
+
+The server also caps pushes at 30 a day and collapses repeats within ten
+minutes. People who manage users set the shop's alert amounts on the same
+screen.
+
+## Approvals
+
+A decision sheet shows the entry. Approve takes an optional note. Reject needs
+a reason, said on the field when missing. Approving ৳50,000 or more asks for
+the phone's own lock first. If someone else decided the entry first, the
+server answers 409; the app says so and drops it from the list.
+
+## Ask ERP71
+
+The same `POST /ai/chat` the web assistant uses, so it reads only what the
+member's role can see, and each answer spends the workspace's AI credits. The
+microphone (`speech_to_text`, `en_US` or `bn_BD`) fills the question box. What
+was heard is never sent until the person taps Send.
+
+## App lock
+
+Off by default; turned on from Account → Security. The setting belongs to the
+phone, kept in secure storage beside the session. When on, the app is covered
+at launch and whenever it comes back after five minutes out of sight, until
+the phone's own check passes. The check is fingerprint or face, falling back
+to the phone's PIN, pattern or passcode. A phone whose screen lock was
+removed afterwards is let in and the lock switched off, rather than locking
+its owner out. The platform pieces it needs are already in place: Android's
+`MainActivity` is a `FlutterFragmentActivity` with the `USE_BIOMETRIC`
+permission, and iOS has `NSFaceIDUsageDescription` in `Info.plist`.
+Voice adds `RECORD_AUDIO`, the Bluetooth headset permissions and the
+`RecognitionService` query on Android, and the microphone and speech usage
+strings on iOS.
+
 ## Signing out
 
 Signing out ends **this phone's** session only, through
@@ -96,7 +181,16 @@ lib/
   core/format/             money, dates and times, the web's formats
   features/auth/           sign-in, two-step verification, launch
   features/workspace/      workspace picker, account, branch
+  core/access.dart         which areas a member may open, from their permissions
+  core/push/               Firebase behind PushChannel, and the registrar
+  core/security/           the app lock
+  core/voice/              speech to text behind SpeechInput
+  features/alerts/         the Alerts tab, push taps, notification settings
+  features/approvals/      the Approvals tab and decision sheet
+  features/ask/            Ask ERP71
+  features/business/       Home (the pulse) and Cashiers (tills and shifts)
   features/crm/            overview, leads, activities, contacts
+  features/lock/           the lock screen and its setting
   ui/                      theme and shared widgets
 ```
 
@@ -128,8 +222,53 @@ The look follows `docs/ui-design-guidelines.md`: one blue-600 accent, emerald,
 amber and red for status, a gray-100 canvas, 44 px touch targets, and money
 always through `formatBDT`.
 
+## Distributing to testers
+
+Android builds reach a chosen few through **Firebase App Distribution** in
+project `erp71-709cf` (Android app `1:31523003932:android:c94a1a719dab04d3dd09d9`).
+Testers get an email, install the Firebase App Tester app or open the link, and
+are told when a new build arrives. They need "install unknown apps" allowed once.
+
+```bash
+scripts/distribute-android.sh                 # build, upload, send to the `pilot` group
+scripts/distribute-android.sh pilot "notes"   # same, with your own release notes
+```
+
+The script sets the build number to the commit count, so each upload is a newer
+version and phones offer it as an update; `pubspec.yaml`'s version name is left
+alone. It refuses to run without the upload key:
+
+- **The upload key** is `~/.config/erp71/android/erp71-upload.jks`, alias
+  `erp71-upload`, named by `android/key.properties` (gitignored):
+
+  ```properties
+  storeFile=/Users/<you>/.config/erp71/android/erp71-upload.jks
+  storePassword=…
+  keyAlias=erp71-upload
+  keyPassword=…
+  ```
+
+  **Back up both the keystore and its password.** A phone only updates an app
+  signed by the same key, so a lost key means every tester uninstalls and
+  reinstalls. It will become the Play upload key later.
+- **Testers:** `firebase appdistribution:testers:add --project erp71-709cf --group-alias pilot a@example.com b@example.com`
+  (or the console's App Distribution › Testers & Groups). Removing someone:
+  `firebase appdistribution:testers:remove --project erp71-709cf a@example.com`.
+- **Google sign-in** in these builds needs an **Android OAuth client** for
+  `com.erp71.app` with the upload key's SHA-1
+  (`A1:E8:0F:76:F6:AE:6C:41:5B:2A:42:BC:39:02:48:90:3E:9E:F9:F6`), created in
+  Cloud Console › APIs & Services › Credentials of `erp71-709cf` — the backend
+  web client's project. Adding the SHA to the Firebase Android app does **not**
+  create one, and no CLI can. Check which keys have a client with
+  `firebase apps:sdkconfig ANDROID 1:31523003932:android:c94a1a719dab04d3dd09d9 --project erp71-709cf`
+  (the `client_type: 1` entries carry each client's certificate hash).
+
+Without `android/key.properties` a release build signs with the debug key —
+fine for checks, never for testers.
+
 ## Not done yet
 
-Tracked in `TODO.md` under *Mobile App*: release signing and store listings,
-push notifications for assigned activities, business-card scanning, custom
-lead fields, customers' activity timelines, Bangla strings, and offline use.
+Tracked in `TODO.md` under *Mobile App* and *Mobile app for tenant admins*:
+store listings, turning push on in production, iOS push,
+business-card scanning, custom lead fields, customers' activity timelines,
+Bangla strings for the app itself, the home-screen widget, and offline use.

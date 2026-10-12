@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldCheck, Store, ChevronRight, Loader2, LogOut, Gift, UserRound } from 'lucide-react';
-import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { safeAppPath } from '@/lib/safe-redirect';
 import { normalizeWorkspaceSlug, preferredWorkspaceSlug, resolveWorkspaceSlug } from '@/lib/workspace-slug';
@@ -35,7 +35,7 @@ function SelectAccountContent() {
     const workspaceSlug = normalizeWorkspaceSlug(searchParams.get('workspace'));
 
     useEffect(() => {
-        api.getMe()
+        fetchMe()
             .then((data: any) => {
                 const { isPlatformAdmin, isReferee, isEmployee, tenants, count } = getLoginContexts(data);
 

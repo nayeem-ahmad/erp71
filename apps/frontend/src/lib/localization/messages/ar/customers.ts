@@ -20,6 +20,7 @@ export const customersMessages = {
             "group": "المجموعة",
             "territory": "المنطقة",
             "totalSpent": "إجمالي الإنفاق",
+            "due": "المستحق",
             "points": "النقاط",
             "pointsSuffix": "نقطة",
             "segment": "الشريحة",

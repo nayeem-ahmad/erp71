@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import AdminDashboard from './AdminDashboard';
 import { api } from '@/lib/api';
 
@@ -57,7 +58,7 @@ describe('AdminDashboard', () => {
     });
 
     it('raises past-due, lapsed and unanswered support for attention', async () => {
-        render(<AdminDashboard {...identity} />);
+        renderWithQueryClient(<AdminDashboard {...identity} />);
 
         expect(await screen.findByText('5 subscriptions past due')).toBeInTheDocument();
         expect(screen.getByText('2 subscriptions past their period end')).toBeInTheDocument();
@@ -73,13 +74,13 @@ describe('AdminDashboard', () => {
             support: { open_threads: 0, awaiting_reply: 0 },
         }));
 
-        render(<AdminDashboard {...identity} />);
+        renderWithQueryClient(<AdminDashboard {...identity} />);
 
         expect(await screen.findByText('The platform is running clean 🎉')).toBeInTheDocument();
     });
 
     it('shows tenant count without a period delta, since that would read as growth net of nothing', async () => {
-        render(<AdminDashboard {...identity} />);
+        renderWithQueryClient(<AdminDashboard {...identity} />);
 
         expect(await screen.findByText('Live tenants')).toBeInTheDocument();
         expect(screen.getByText('128')).toBeInTheDocument();
@@ -87,14 +88,14 @@ describe('AdminDashboard', () => {
     });
 
     it('labels the run rate as a ceiling and says discounts are not applied', async () => {
-        render(<AdminDashboard {...identity} />);
+        renderWithQueryClient(<AdminDashboard {...identity} />);
 
         expect(await screen.findByText('Run rate (ceiling)')).toBeInTheDocument();
         expect(screen.getByText('List prices, before discounts')).toBeInTheDocument();
     });
 
     it('ranks tenants by revenue with their plan alongside', async () => {
-        render(<AdminDashboard {...identity} />);
+        renderWithQueryClient(<AdminDashboard {...identity} />);
 
         expect(await screen.findByText('Beta Store')).toBeInTheDocument();
         expect(screen.getByText('PREMIUM · 3 payments')).toBeInTheDocument();
@@ -107,13 +108,13 @@ describe('AdminDashboard', () => {
             ],
         }));
 
-        render(<AdminDashboard {...identity} />);
+        renderWithQueryClient(<AdminDashboard {...identity} />);
 
         expect(await screen.findByText('No subscription')).toBeInTheDocument();
     });
 
     it('drops the greeting when embedded under the admin page header', async () => {
-        const { rerender } = render(<AdminDashboard {...identity} />);
+        const { rerender } = renderWithQueryClient(<AdminDashboard {...identity} />);
         expect(await screen.findByText('Good morning 👋')).toBeInTheDocument();
 
         rerender(<AdminDashboard {...identity} variant="embedded" />);
@@ -124,7 +125,7 @@ describe('AdminDashboard', () => {
     it('surfaces an error when the overview itself fails', async () => {
         (api.getAdminDashboardOverview as jest.Mock).mockRejectedValue(new Error('Platform is down'));
 
-        render(<AdminDashboard {...identity} />);
+        renderWithQueryClient(<AdminDashboard {...identity} />);
 
         expect(await screen.findByText('Platform is down')).toBeInTheDocument();
     });

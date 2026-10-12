@@ -50,7 +50,8 @@ next-env.d.ts
 # Project specific
 .bmad-core/
 .gemini/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 
 /src/generated/prisma
 .getaibd/
@@ -61,3 +62,6 @@ next-env.d.ts
 # Local DB dumps (never commit — contains live customer data)
 /backups/
 *.dump
+babu-bazar-stock-xr.pdf
+stock-babu-bazar-2.csv
+stock-babu-bazar.csv

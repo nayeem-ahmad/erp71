@@ -15,6 +15,7 @@ import {
 } from '@/components/ui';
 import DataTable from '@/components/data-table/DataTable';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import CompleteSprintModal from '@/components/projects/CompleteSprintModal';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -63,6 +64,7 @@ export default function SprintsPage() {
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<Sprint | null>(null);
+    const [completing, setCompleting] = useState<Sprint | null>(null);
     const [form, setForm] = useState({ name: '', goal: '', startDate: '', endDate: '' });
 
     const load = useCallback(async () => {
@@ -233,9 +235,7 @@ export default function SprintsPage() {
                             <Button
                                 variant="secondary"
                                 className="min-h-touch"
-                                onClick={() =>
-                                    act(() => api.completeSprint(row.original.id), m.sprint.completedMsg)
-                                }
+                                onClick={() => setCompleting(row.original)}
                             >
                                 {m.sprint.complete}
                             </Button>
@@ -365,6 +365,17 @@ export default function SprintsPage() {
                     </ModalFooter>
                 </form>
             </ModalShell>
+            )}
+
+            {completing && (
+                <CompleteSprintModal
+                    sprint={completing}
+                    onClose={() => setCompleting(null)}
+                    onCompleted={() => {
+                        setCompleting(null);
+                        void load();
+                    }}
+                />
             )}
 
             <ConfirmDialog

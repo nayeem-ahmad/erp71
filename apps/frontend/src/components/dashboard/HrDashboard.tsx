@@ -70,10 +70,12 @@ export default function HrDashboard({
         previous: prev,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'hr',
         fetchOverview: (window) => api.getHrDashboardOverview(window),
         fetchTrends: (window) => api.getHrDashboardTrends(window),
         unavailableMessage: hr.overviewUnavailable,
@@ -215,6 +217,7 @@ export default function HrDashboard({
             range={range}
             onRangeChange={setRange}
             error={error}
+            refreshing={refreshing}
         >
             <AttentionSection
                 items={attentionItems}

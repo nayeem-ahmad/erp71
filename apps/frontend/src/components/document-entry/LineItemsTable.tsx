@@ -60,6 +60,11 @@ interface LineItemsTableProps {
      */
     entryWarehouseId?: string;
     warehouseLabel?: string;
+    /**
+     * Flag a line whose quantity is above the stock on hand. Off on a purchase,
+     * where the goods are coming in — see the same prop on ProductSearch.
+     */
+    warnOverStock?: boolean;
 }
 
 /**
@@ -123,6 +128,7 @@ export default function LineItemsTable({
     entryWarehouseName,
     entryWarehouseId,
     warehouseLabel = 'Warehouse',
+    warnOverStock = true,
 }: LineItemsTableProps) {
     const priceFrozen = readOnly || readOnlyPrice;
     const showHistory = !!historyType && !priceFrozen;
@@ -241,7 +247,7 @@ export default function LineItemsTable({
                                             ) : (
                                                 <span
                                                     data-testid="line-available"
-                                                    className={item.quantity > availableOf(item)! ? 'text-amber-600 font-medium' : 'text-gray-500'}
+                                                    className={warnOverStock && item.quantity > availableOf(item)! ? 'text-amber-600 font-medium' : 'text-gray-500'}
                                                 >
                                                     {availableOf(item)}
                                                 </span>

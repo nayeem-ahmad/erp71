@@ -18,7 +18,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 type OrdersTab = 'sales' | 'online';
 
@@ -27,6 +28,8 @@ interface SalesOrder {
     order_number: string;
     created_at: string;
     total_amount: string;
+    /** VAT added on top of the lines; part of `total_amount`. */
+    vat_amount?: string | null;
     amount_paid: string;
     status: string;
     payment_status: string;
@@ -55,6 +58,7 @@ const columnHelper = createColumnHelper<SalesOrder>();
 
 export default function OrdersPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const printHeader = usePrintHeader('SALES_ORDER');
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -75,17 +79,18 @@ export default function OrdersPage() {
     }, [router, searchParams]);
 
     useEffect(() => {
-        if (activeTab === 'sales') {
+        if (activeTab === 'sales' && branch.ready) {
             loadOrders();
         }
-    }, [activeTab, createdRange]);
+    }, [activeTab, createdRange, branch.ready, branch.apiStoreId]);
 
     const loadOrders = async () => {
         setLoading(true);
         try {
-            const data = await api.getOrders(applyCreatedRangeQuery(createdRange));
+            const data = await api.getOrders({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setOrders(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load orders', error);
         } finally {
             setLoading(false);
@@ -133,6 +138,7 @@ export default function OrdersPage() {
                     <thead><tr><th>${t.shared.print.product}</th><th>${t.shared.print.qty}</th><th>${t.shared.print.price}</th><th>${t.shared.print.subtotal}</th></tr></thead>
                     <tbody>
                         ${order.items.map((item: any) => `<tr><td>${item.product?.name || t.shared.item}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.price_at_order), { locale })}</td><td>${formatBDT(item.quantity * Number(item.price_at_order), { locale })}</td></tr>`).join('')}
+                        ${Number(order.vat_amount ?? 0) > 0.005 ? `<tr><td colspan="3">${t.sales.invoice.vat}</td><td>${formatBDT(Number(order.vat_amount), { locale })}</td></tr>` : ''}
                         <tr class="total-row"><td colspan="3">${t.shared.print.total}</td><td>${formatBDT(Number(order.total_amount), { locale })}</td></tr>
                     </tbody>
                 </table>
@@ -276,14 +282,19 @@ export default function OrdersPage() {
                         'sales',
                     )}
                     actions={
+                        // The online tab is the storefront's queue, which the
+                        // branch filter does not narrow.
                         activeTab === 'sales' ? (
-                            <Link
-                                href={routes.sales.orderNew}
-                                className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
-                            >
-                                <Plus className="w-4 h-4" />
-                                {t.orders.newOrder}
-                            </Link>
+                            <>
+                                <BranchFilter scope={branch} />
+                                <Link
+                                    href={routes.sales.orderNew}
+                                    className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    {t.orders.newOrder}
+                                </Link>
+                            </>
                         ) : null
                     }
                 />
@@ -315,7 +326,11 @@ export default function OrdersPage() {
 
 
                 {activeTab === 'online' ? (
-                    <StorefrontOrdersPanel />
+                    <StorefrontOrdersPanel
+                        storeId={branch.apiStoreId}
+                        // Web orders belong to the online branch; on a shop's branch say so.
+                        onShopBranch={Boolean(branch.branches.find((b) => b.id === branch.apiStoreId && !b.is_online))}
+                    />
                 ) : (
                     <>
                         <div className="flex flex-wrap items-center gap-2">

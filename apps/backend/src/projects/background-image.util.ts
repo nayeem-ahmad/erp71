@@ -1,6 +1,7 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import type { AssetsService } from '../assets/assets.service';
 import { parseImageUpload } from '../common/image-upload.util';
+import { isDirectUpload } from '../assets/direct-upload.util';
 
 /**
  * The upload half of a canvas background, shared by the two canvases that have
@@ -10,12 +11,18 @@ import { parseImageUpload } from '../common/image-upload.util';
  * thing that differs between them is the folder the file lands in.
  */
 
-/** An uploaded background, as `FileReader.readAsDataURL` produces it. */
+/**
+ * An uploaded background: either the file itself, as `FileReader.readAsDataURL`
+ * produces it, or — from the web app — what Cloudinary handed back after the
+ * browser uploaded it there directly (see `direct-upload.util.ts`).
+ */
 export interface BackgroundImageUpload {
     /** A `data:` URL or a bare base64 string. */
-    imageBase64: string;
+    imageBase64?: string;
     mimeType?: string;
     fileName?: string;
+    secure_url?: string;
+    public_id?: string;
 }
 
 /** The three columns a background is, all cleared — the plain canvas. */
@@ -44,13 +51,22 @@ export function withoutStorageKey<T extends { background_image_key?: string | nu
  *
  * Throws before anything is stored if the payload is not an image or storage is
  * not configured, so the caller only ever writes a row for a file that exists.
+ *
+ * A direct upload is already on Cloudinary, so it is only checked — and the
+ * check matters more here than anywhere: the key is what a replaced background
+ * is *deleted* by, so a `public_id` outside this tenant's folder would let one
+ * workspace destroy another's file just by changing its own background.
  */
 export async function uploadBackgroundImage(
     assets: AssetsService,
     folder: string,
     dto: BackgroundImageUpload,
 ): Promise<{ url: string; publicId: string }> {
-    const { buffer } = parseImageUpload(dto.imageBase64, dto.mimeType);
+    if (isDirectUpload(dto)) {
+        return assets.verifyDirectUpload(dto, folder);
+    }
+
+    const { buffer } = parseImageUpload(dto.imageBase64 ?? '', dto.mimeType);
 
     if (!assets.isEnabled()) {
         // Distinguishable from a transient failure: this will not fix itself

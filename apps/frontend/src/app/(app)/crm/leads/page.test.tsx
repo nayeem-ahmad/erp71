@@ -1,5 +1,5 @@
 'use client';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LeadsPage from './page';
 
 jest.mock('next/link', () => {
@@ -646,7 +646,7 @@ describe('LeadsPage — a denied list is not an empty one', () => {
         render(<LeadsPage />);
         await screen.findAllByText(/plan does not include the CRM module/i);
 
-        fireEvent.click(screen.getAllByRole('button')[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
         expect(await screen.findByText('Karim Traders')).toBeInTheDocument();
         await waitFor(() =>
@@ -749,5 +749,110 @@ describe('LeadsPage — tenant stages', () => {
         const bulk = selectByOption('Set status…');
         const options = Array.from(bulk.options).map((o) => o.value);
         expect(options).toEqual(['', 'st-new', 'st-neg']);
+    });
+});
+
+/**
+ * List or board is a preference kept in localStorage, so it is cleared on both
+ * sides of every test here — a board left behind would open every later suite
+ * on the board.
+ */
+describe('LeadsPage — board view', () => {
+    const STAGES = [
+        { id: 'st-new', code: 'NEW', name: 'New', lifecycle: 'NEW', sort_order: 1, is_system: true, is_active: true },
+        { id: 'st-neg', code: 'NEGOTIATION', name: 'Negotiation', lifecycle: 'QUALIFIED', sort_order: 2, is_system: false, is_active: true },
+        { id: 'st-lost', code: 'LOST', name: 'Lost', lifecycle: 'LOST', sort_order: 3, is_system: true, is_active: true },
+    ];
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.clear();
+        sessionStorage.clear();
+        searchParams = new URLSearchParams();
+        api.getLeadTaxonomy.mockImplementation(async (kind: string) => (kind === 'statuses' ? STAGES : []));
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-2', name: 'Rifat' }]);
+        // The list, and the board's Negotiation column, hold both leads.
+        api.getLeads.mockImplementation(async (q: any) =>
+            q.statusId === 'st-neg' || (!q.statusId && !q.priority && !q.assignedTo)
+                ? { items: leads, total: 2 }
+                : { items: [], total: 0 },
+        );
+    });
+
+    afterEach(() => {
+        localStorage.clear();
+    });
+
+    afterAll(() => {
+        api.getLeadTaxonomy.mockResolvedValue([]);
+    });
+
+    const boardButton = () => screen.getByRole('button', { name: 'Board' });
+
+    it('lays the leads out in a column per stage, grouped by status unless told otherwise', async () => {
+        render(<LeadsPage />);
+        await screen.findByRole('cell', { name: 'Karim Traders' });
+
+        fireEvent.click(boardButton());
+
+        const negotiation = await screen.findByRole('region', { name: 'Negotiation' });
+        expect(await within(negotiation).findByText('Karim Traders')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'New' })).toBeInTheDocument();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(boardButton()).toHaveAttribute('aria-pressed', 'true');
+        expect(selectByOption('Status').value).toBe('status');
+        expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ statusId: 'st-new', page: 1 }));
+    });
+
+    it('re-lays the columns by the field chosen', async () => {
+        render(<LeadsPage />);
+        await screen.findByRole('cell', { name: 'Karim Traders' });
+        fireEvent.click(boardButton());
+        await screen.findByRole('region', { name: 'Negotiation' });
+
+        fireEvent.change(selectByOption('Status'), { target: { value: 'priority' } });
+
+        expect(await screen.findByRole('region', { name: 'Urgent' })).toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Negotiation' })).not.toBeInTheDocument();
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ priority: 'URGENT', page: 1 })),
+        );
+    });
+
+    it('turns the stage filter into the columns it allows, not an extra filter on each', async () => {
+        render(<LeadsPage />);
+        await screen.findByRole('cell', { name: 'Karim Traders' });
+        fireEvent.change(selectByOption('All statuses'), { target: { value: 'open' } });
+        fireEvent.click(boardButton());
+
+        await screen.findByRole('region', { name: 'Negotiation' });
+        expect(screen.queryByRole('region', { name: 'Lost' })).not.toBeInTheDocument();
+        const columnCalls = api.getLeads.mock.calls.map(([q]: any[]) => q).filter((q: any) => q.statusId);
+        expect(columnCalls.length).toBeGreaterThan(0);
+        expect(columnCalls.every((q: any) => q.status === undefined)).toBe(true);
+    });
+
+    it('opens on the board next time without fetching a page of the list first', async () => {
+        localStorage.setItem('crm_leads_view', JSON.stringify({ view: 'board', groupBy: 'status' }));
+        render(<LeadsPage />);
+
+        await within(await screen.findByRole('region', { name: 'Negotiation' })).findByText('Karim Traders');
+        // Every request is a column's page or the board's one-row total.
+        expect(api.getLeads.mock.calls.every(([q]: any[]) => q.statusId || q.limit === 1)).toBe(true);
+    });
+
+    it('cannot group by owner while only my leads are shown, and returns to it when the scope is off', async () => {
+        localStorage.setItem('crm_leads_view', JSON.stringify({ view: 'board', groupBy: 'owner' }));
+        localStorage.setItem('crm_mine_only', 'true');
+        render(<LeadsPage />);
+
+        await screen.findByRole('region', { name: 'Negotiation' });
+        expect(selectByOption('Status').value).toBe('status');
+        expect(screen.getByRole('option', { name: 'Lead Owner' })).toBeDisabled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Only mine' }));
+
+        expect(await screen.findByRole('region', { name: 'Rifat' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Unassigned' })).toBeInTheDocument();
     });
 });

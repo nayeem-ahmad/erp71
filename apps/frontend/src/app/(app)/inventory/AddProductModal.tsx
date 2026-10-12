@@ -3,10 +3,25 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { Camera, Bold, Italic, List, ListOrdered, Trash2 } from 'lucide-react';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { Button } from '@/components/ui';
+import { Button, Field, Input } from '@/components/ui';
 import { api } from '@/lib/api';
 import { COMPOUND_UNIT_DEFS, CompoundUnitType } from '@/lib/compound-units';
 import { useI18n } from '@/lib/i18n';
+import { directUploader, withServerFallback, type CloudinaryUpload } from '@/lib/uploads/direct-upload';
+
+/**
+ * Straight to Cloudinary when it can, through `/assets/upload` when it cannot.
+ * Either way the product stores only the URL, so the form does not care which.
+ */
+function uploadProductImage(
+    file: File,
+    upload: (file: Blob) => Promise<CloudinaryUpload>,
+): Promise<string> {
+    return withServerFallback(
+        async () => (await upload(file)).secure_url,
+        async () => (await api.uploadFile(file)).url,
+    );
+}
 
 interface AddProductModalProps {
     isOpen: boolean;
@@ -27,6 +42,10 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
         type: 'GOODS' as 'GOODS' | 'SERVICE',
         price: '',
         initialStock: '',
+        // What a unit costs to buy, create mode only. Changing an existing
+        // product's cost goes through Inventory → Product Costs instead, where
+        // the change carries a reason.
+        cost: '',
         isFeatured: false,
         warrantyEnabled: false,
         warrantyDurationDays: '',
@@ -83,6 +102,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 type: (initialProduct.type as 'GOODS' | 'SERVICE') || 'GOODS',
                 price: String(initialProduct.price ?? ''),
                 initialStock: '',
+                cost: '',
                 isFeatured: Boolean(initialProduct.is_featured),
                 warrantyEnabled: Boolean(initialProduct.warranty_enabled),
                 warrantyDurationDays: initialProduct.warranty_duration_days != null ? String(initialProduct.warranty_duration_days) : '',
@@ -108,6 +128,7 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 type: 'GOODS',
                 price: '',
                 initialStock: '',
+                cost: '',
                 isFeatured: false,
                 warrantyEnabled: false,
                 warrantyDurationDays: '',
@@ -141,8 +162,8 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
         setUploading(true);
         try {
-            const { url } = await api.uploadFile(file);
-            setFormData({ ...formData, image_url: url });
+            const url = await uploadProductImage(file, directUploader('product-image'));
+            setFormData((prev) => ({ ...prev, image_url: url }));
         } catch (error) {
             console.error('Upload failed', error);
         } finally {
@@ -156,9 +177,9 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
 
         setUploadingGallery(true);
         try {
-            const promises = Array.from(files).map((file) => api.uploadFile(file));
-            const results = await Promise.all(promises);
-            const urls = results.map((r) => r.url);
+            // One uploader for the batch: one signature request, however many files.
+            const upload = directUploader('product-image');
+            const urls = await Promise.all(Array.from(files).map((file) => uploadProductImage(file, upload)));
             setFormData((prev) => ({
                 ...prev,
                 images_gallery: [...prev.images_gallery, ...urls],
@@ -180,6 +201,9 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                 type: formData.type,
                 price: parseFloat(formData.price),
                 initialStock: mode === 'create' && formData.type !== 'SERVICE' ? parseInt(formData.initialStock) || 0 : undefined,
+                // Blank stays unknown rather than zero: a zero cost would report
+                // every sale of the product at full margin.
+                cost: mode === 'create' && formData.type !== 'SERVICE' && formData.cost !== '' ? parseFloat(formData.cost) : undefined,
                 isFeatured: formData.isFeatured,
                 warrantyEnabled: formData.warrantyEnabled,
                 warrantyDurationDays: formData.warrantyEnabled ? parseOptionalInt(formData.warrantyDurationDays) : undefined,
@@ -472,6 +496,26 @@ export default function AddProductModal({ isOpen, onClose, mode = 'create', init
                                         </div>
                                     )}
                                 </div>
+
+                                {mode === 'create' && formData.type !== 'SERVICE' && (
+                                    <Field
+                                        label={t.addProductModal.unitCost}
+                                        htmlFor="add-product-unit-cost"
+                                        hint={t.addProductModal.unitCostHint}
+                                    >
+                                        <Input
+                                            id="add-product-unit-cost"
+                                            type="number"
+                                            inputMode="decimal"
+                                            min="0"
+                                            step="0.01"
+                                            placeholder={t.addProductModal.placeholders.unitCost}
+                                            value={formData.cost}
+                                            onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+                                            className="w-full"
+                                        />
+                                    </Field>
+                                )}
 
                                 <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-100">
                                     <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">

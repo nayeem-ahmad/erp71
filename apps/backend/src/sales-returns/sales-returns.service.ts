@@ -205,7 +205,7 @@ export class SalesReturnsService {
                 if (returnPaymentMode === 'credit') {
                     const customer = await tx.customer.findUnique({
                         where: { id: sale.customer_id },
-                        select: { due_balance: true },
+                        select: { due_balance: true, store_id: true },
                     });
                     const currentDue = Number(customer?.due_balance ?? 0);
                     const creditReduction = Math.min(totalRefund, currentDue);
@@ -215,6 +215,7 @@ export class SalesReturnsService {
                             data: {
                                 tenant_id: tenantId,
                                 customer_id: sale.customer_id,
+                                store_id: customer!.store_id,
                                 type: 'ADJUSTMENT',
                                 amount: -creditReduction,
                                 balance_after: balanceAfter,
@@ -265,7 +266,7 @@ export class SalesReturnsService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
     ): Promise<PaginatedResult<unknown>> {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const result = await paginatedFindMany({
@@ -275,7 +276,7 @@ export class SalesReturnsService {
                     include: { sale: true, items: { include: { product: true } } },
                 }),
             count: (args) => this.db.salesReturn.count(args as any),
-            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
+            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
             orderBy: { created_at: 'desc' },
             page,
             limit,

@@ -25,6 +25,14 @@ import {
 } from './snapshot-file';
 import { resolveSyncWindow } from './window';
 
+/**
+ * A READY snapshot whose quotations could not be extracted says so on its row;
+ * otherwise its count reads as "the provider has no quotations".
+ */
+function quotationsNote(doc: SnapshotDocument): string | null {
+    return doc.quotationsError ? `Quotations not extracted: ${doc.quotationsError}` : null;
+}
+
 class ExtractCancelledError extends Error {
     constructor() {
         super('Extract cancelled');
@@ -123,7 +131,9 @@ export class ExternalSyncSnapshotService {
             }
 
             const chunks = def.planWindows(snapshot.window_from, snapshot.window_to);
-            const total = 3 + chunks.length * 5;
+            const withQuotations = typeof client.fetchQuotationDocuments === 'function';
+            const withPurchaseReturns = typeof client.fetchPurchaseReturnDocuments === 'function';
+            const total = 3 + chunks.length * (5 + (withQuotations ? 1 : 0) + (withPurchaseReturns ? 1 : 0));
             let done = 0;
             const mark = async (phase: string) => {
                 done += 1;
@@ -150,6 +160,9 @@ export class ExternalSyncSnapshotService {
             const customerPayments: unknown[] = [];
             const supplierPayments: unknown[] = [];
             const saleReturns: unknown[] = [];
+            const quotations: unknown[] = [];
+            let quotationsError: string | undefined;
+            const purchaseReturns: unknown[] = [];
 
             for (const chunk of chunks) {
                 sales.push(...(await client.fetchSaleDocuments(chunk)));
@@ -167,6 +180,22 @@ export class ExternalSyncSnapshotService {
                 saleReturns.push(...(await client.fetchSaleReturnDocuments(chunk)));
                 await mark('Sale returns');
                 await this.throwIfCancelled(snapshotId);
+                if (withPurchaseReturns) {
+                    purchaseReturns.push(...(await client.fetchPurchaseReturnDocuments!(chunk)));
+                    await mark('Purchase returns');
+                    await this.throwIfCancelled(snapshotId);
+                }
+                if (withQuotations && !quotationsError) {
+                    try {
+                        quotations.push(...(await client.fetchQuotationDocuments!(chunk)));
+                    } catch (error) {
+                        // Kept, not thrown: see SnapshotDocument.quotationsError.
+                        quotationsError = String((error as Error)?.message ?? error);
+                        quotations.length = 0;
+                    }
+                    await mark('Quotations');
+                    await this.throwIfCancelled(snapshotId);
+                }
             }
 
             const unsigned: SnapshotDocument = {
@@ -189,6 +218,8 @@ export class ExternalSyncSnapshotService {
                         customerPayments,
                         supplierPayments,
                         saleReturns,
+                        quotations,
+                        purchaseReturns,
                     }),
                     sha256: '',
                 },
@@ -200,6 +231,9 @@ export class ExternalSyncSnapshotService {
                 customerPayments,
                 supplierPayments,
                 saleReturns,
+                quotations,
+                ...(withPurchaseReturns ? { purchaseReturns } : {}),
+                ...(quotationsError ? { quotationsError } : {}),
             };
 
             const written = await writeSnapshotFile(dest, unsigned);
@@ -212,7 +246,7 @@ export class ExternalSyncSnapshotService {
                     byte_size: written.byteSize,
                     sha256: written.sha256,
                     finished_at: new Date(),
-                    error_message: null,
+                    error_message: quotationsNote(unsigned),
                 },
             });
         } catch (error) {
@@ -314,6 +348,7 @@ export class ExternalSyncSnapshotService {
                 byte_size: buffer.length,
                 sha256: doc.manifest.sha256,
                 finished_at: new Date(),
+                error_message: quotationsNote(doc),
             },
         });
         try {

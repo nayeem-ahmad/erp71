@@ -9,12 +9,14 @@ import { DatabaseService } from '../database/database.service';
 import { resolveCoarseRolesForNames } from '@erp71/shared-types';
 import { TENANT_ROLES_KEY } from './tenant-roles.decorator';
 import { loadTenantMembership } from '../database/tenant-membership.loader';
+import { AuthCacheService } from '../database/auth-cache.service';
 
 @Injectable()
 export class TenantRoleGuard implements CanActivate {
     constructor(
         private readonly reflector: Reflector,
         private readonly db: DatabaseService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -38,7 +40,7 @@ export class TenantRoleGuard implements CanActivate {
 
         // Shared with `SubscriptionAccessGuard` and `TenantInterceptor`, which
         // read the same row on the same request — see the loader.
-        const membership = await loadTenantMembership(this.db, request, tenantId, userId);
+        const membership = await loadTenantMembership(this.db, request, tenantId, userId, this.authCache);
 
         if (!membership) {
             throw new ForbiddenException('Invalid tenant context');

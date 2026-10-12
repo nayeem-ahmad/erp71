@@ -1,4 +1,6 @@
 'use client';
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/i18n', () => {
   const { enMessages } = require('@/lib/localization/messages/en');
 
@@ -18,6 +20,7 @@ jest.mock('@/lib/i18n', () => {
 
 import { render, screen, waitFor } from '@testing-library/react';
 import SalesByProductPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -46,6 +49,7 @@ jest.mock('@/components/data-table', () => ({
 describe('SalesByProductPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getSalesByProduct.mockResolvedValue({
             summary: { totalRevenue: 0, totalUnitsSold: 0, productCount: 0 },

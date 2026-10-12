@@ -204,9 +204,10 @@ export class LoansService {
         return this.getLoan(tenantId, loanId);
     }
 
-    async getSummary(tenantId: string) {
+    /** `storeId` narrows to one branch's loans; omitted, every loan in the tenant. */
+    async getSummary(tenantId: string, storeId?: string) {
         const loans = await this.db.loan.findMany({
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...(storeId ? { store_id: storeId } : {}) },
             include: { payments: { select: { amount: true } } },
         });
 

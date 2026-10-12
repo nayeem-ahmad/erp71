@@ -5,6 +5,8 @@ import {
     ExpressRetailSaleLine,
     ExpressRetailPurchase,
     ExpressRetailPurchaseLine,
+    ExpressRetailQuotation,
+    ExpressRetailQuotationLine,
 } from './express-retail.client';
 import {
     DIZI_CASHIER_PROVIDER,
@@ -19,9 +21,12 @@ import {
     MappedPayment,
     MappedProduct,
     MappedPurchase,
+    MappedPurchaseReturn,
+    MappedQuotation,
     MappedSale,
     MappedSaleReturn,
     MappedSupplier,
+    OpeningPositions,
     PaymentParty,
     SyncWarning,
     groupBy,
@@ -29,16 +34,21 @@ import {
     mapPayment,
     mapProduct,
     mapPurchase,
+    mapPurchaseReturn,
+    mapQuotation,
     mapSale,
     mapSaleReturn,
     mapSupplier,
     splitIntoMonthlyWindows,
 } from './external-sync.mapper';
 import {
+    diziQuotationDate,
     mapDiziCustomer,
     mapDiziPayment,
     mapDiziProduct,
     mapDiziPurchase,
+    mapDiziQuotation,
+    diziOpeningPositions,
     mapDiziSale,
     mapDiziSaleReturn,
     mapDiziSupplier,
@@ -78,16 +88,33 @@ export interface ProviderClient {
     fetchPurchaseDocuments(window: DateWindow): Promise<unknown[]>;
     fetchPayments(window: DateWindow, party: PaymentParty): Promise<unknown[]>;
     fetchSaleReturnDocuments(window: DateWindow): Promise<unknown[]>;
+    /**
+     * Quotation headers paired with their detail. Optional: a provider that
+     * does not expose quotations leaves it out and the step is skipped.
+     */
+    fetchQuotationDocuments?(window: DateWindow): Promise<unknown[]>;
+    /** Purchase returns with their lines. Optional, as quotations are. */
+    fetchPurchaseReturnDocuments?(window: DateWindow): Promise<unknown[]>;
 }
 
 export interface ProviderMappers {
     product(row: any, claimedSkus: Set<string>): MappedProduct;
     customer(row: any, claimedCodes: Set<string>): MappedCustomer;
-    supplier(row: any, claimedNames: Set<string>): MappedSupplier;
+    supplier(row: any, claimedNames: Set<string>, claimedCodes?: Set<string>): MappedSupplier;
     sale(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedSale;
     purchase(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedPurchase;
     payment(row: any, party: PaymentParty, documentPrefix: string, warnings: SyncWarning[]): MappedPayment | null;
     saleReturn(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedSaleReturn;
+    /** Present exactly when the provider's client has `fetchQuotationDocuments`. */
+    quotation?(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedQuotation;
+    /** Present exactly when the provider's client has `fetchPurchaseReturnDocuments`. */
+    purchaseReturn?(doc: any, documentPrefix: string, warnings: SyncWarning[]): MappedPurchaseReturn;
+    /**
+     * Opening dues and stock worked out from everything a snapshot holds, for
+     * a provider that sends no opening figures of its own. Express carries a
+     * party's opening due on the row (`previous_due`) and leaves this out.
+     */
+    openingPositions?(records: any): OpeningPositions;
 }
 
 export interface ProviderDefinition {
@@ -137,6 +164,9 @@ const EXPRESS_MAPPERS: ProviderMappers = {
         mapPurchase(doc.header, doc.lines, prefix, warnings),
     payment: mapPayment,
     saleReturn: (doc, prefix, warnings) => mapSaleReturn(doc, prefix, warnings),
+    quotation: (doc: { header: ExpressRetailQuotation; lines: ExpressRetailQuotationLine[] }, prefix, warnings) =>
+        mapQuotation(doc.header, doc.lines, prefix, warnings),
+    purchaseReturn: (doc, prefix, warnings) => mapPurchaseReturn(doc, prefix, warnings),
 };
 
 class ExpressProviderClient implements ProviderClient {
@@ -181,6 +211,19 @@ class ExpressProviderClient implements ProviderClient {
     fetchSaleReturnDocuments(window: DateWindow) {
         return this.inner.fetchSaleReturns(window);
     }
+
+    fetchPurchaseReturnDocuments(window: DateWindow) {
+        return this.inner.fetchPurchaseReturns(window);
+    }
+
+    async fetchQuotationDocuments(window: DateWindow) {
+        const [headers, lines] = await Promise.all([
+            this.inner.fetchQuotations(window),
+            this.inner.fetchQuotationLines(window),
+        ]);
+        const byId = groupBy(lines, (line) => String(line.quotation_id));
+        return headers.map((header) => ({ header, lines: byId.get(String(header.id)) ?? [] }));
+    }
 }
 
 export const EXPRESS_RETAIL_DEFINITION: ProviderDefinition = {
@@ -206,6 +249,8 @@ const DIZI_MAPPERS: ProviderMappers = {
     purchase: (doc, prefix, warnings) => mapDiziPurchase(doc.header, doc.detail, prefix, warnings),
     payment: mapDiziPayment,
     saleReturn: (doc, prefix, warnings) => mapDiziSaleReturn(doc, prefix, warnings),
+    quotation: (doc, prefix, warnings) => mapDiziQuotation(doc.header, doc.detail, prefix, warnings),
+    openingPositions: diziOpeningPositions,
 };
 
 class DiziProviderClient implements ProviderClient {
@@ -263,6 +308,19 @@ class DiziProviderClient implements ProviderClient {
             this.inner.fetchSaleReturnDetail(h.Id),
         );
         return details;
+    }
+
+    async fetchQuotationDocuments(window: DateWindow) {
+        const headers = (await this.inner.fetchQuotationHeaders()).filter(
+            // An undated header cannot be placed in the window; keep it rather
+            // than silently dropping every quotation of a build that names its
+            // date field differently. The mapper warns and dates it.
+            (h) => !h.IsDeleted && (!diziQuotationDate(h) || inWindow(diziQuotationDate(h), window)),
+        );
+        const details = await mapWithConcurrency(headers, DIZI_DETAIL_CONCURRENCY, (h) =>
+            this.inner.fetchQuotationDetail(h.Id).catch(() => null),
+        );
+        return headers.map((header, i) => ({ header, detail: details[i] }));
     }
 }
 

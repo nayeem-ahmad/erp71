@@ -1,4 +1,5 @@
 import 'package:erp71_mobile/app/router.dart';
+import 'package:erp71_mobile/core/access.dart';
 import 'package:erp71_mobile/core/auth/auth_controller.dart';
 import 'package:erp71_mobile/core/auth/models.dart';
 import 'package:erp71_mobile/core/format/format.dart';
@@ -92,7 +93,8 @@ void main() {
         redirectFor(signedIn(null, [crmWorkspace, crmWorkspace]), '/home'),
         '/workspaces',
       );
-      expect(redirectFor(signedIn(crmWorkspace), '/sign-in'), '/home');
+      // A CRM-only member starts on the CRM overview.
+      expect(redirectFor(signedIn(crmWorkspace), '/sign-in'), '/crm');
       expect(redirectFor(signedIn(crmWorkspace), '/leads/abc'), isNull);
       expect(redirectFor(signedIn(crmWorkspace), '/workspaces'), isNull);
     });
@@ -100,6 +102,50 @@ void main() {
     test('keeps a workspace without the CRM out of it', () {
       expect(redirectFor(signedIn(plainWorkspace), '/leads'), '/no-crm');
       expect(redirectFor(signedIn(plainWorkspace), '/account'), isNull);
+    });
+
+    test('an owner starts on Home and may open every area', () {
+      final owner = Workspace.fromJson(
+        workspaceJson(role: 'OWNER', permissions: const []),
+      );
+      expect(redirectFor(signedIn(owner), '/sign-in'), '/home');
+      expect(redirectFor(signedIn(owner), '/no-crm'), '/home');
+      for (final place in ['/home', '/cashiers/s1', '/crm', '/leads/abc']) {
+        expect(redirectFor(signedIn(owner), place), isNull, reason: place);
+      }
+    });
+
+    test('a cashier without the CRM gets the business areas only', () {
+      final cashier = Workspace.fromJson(
+        workspaceJson(permissions: const ['CREATE_SALE'], premiumCrm: false),
+      );
+      expect(redirectFor(signedIn(cashier), '/sign-in'), '/home');
+      expect(redirectFor(signedIn(cashier), '/cashiers'), isNull);
+      // Not '/no-crm': there is something here for them.
+      expect(redirectFor(signedIn(cashier), '/leads'), '/home');
+      expect(redirectFor(signedIn(cashier), '/crm'), '/home');
+    });
+
+    test('someone who only runs counters starts on Cashiers', () {
+      final counters = Workspace.fromJson(
+        workspaceJson(
+          permissions: const ['MANAGE_COUNTERS'],
+          premiumCrm: false,
+        ),
+      );
+      expect(redirectFor(signedIn(counters), '/sign-in'), '/cashiers');
+      expect(redirectFor(signedIn(counters), '/home'), '/cashiers');
+    });
+
+    test('the pulse waits for an active subscription, like the API', () {
+      final unpaid = Workspace.fromJson(
+        workspaceJson(role: 'OWNER', status: 'PAST_DUE'),
+      );
+      final access = MobileAccess.of(unpaid);
+      expect(access.home, isFalse);
+      expect(access.crm, isFalse);
+      // Till reads are not behind the subscription guard.
+      expect(access.cashiers, isTrue);
     });
   });
 

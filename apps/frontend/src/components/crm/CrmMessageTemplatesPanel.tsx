@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import {
     TEMPLATE_TOKENS,
+    unknownTemplateTokens,
     type CrmMessageTemplate,
     type TemplateUsage,
 } from '@/lib/crm-message-templates';
@@ -74,6 +75,18 @@ export default function CrmMessageTemplatesPanel({ canManage }: Readonly<{ canMa
     const purposeId = useId();
     const subjectId = useId();
     const bodyId = useId();
+
+    /**
+     * The "this will not be filled" line for whatever text is passed, or null
+     * when every `{{token}}` in it is one `fillTemplate` knows. A warning and
+     * not a validation error: literal double braces are the tenant's call.
+     */
+    const tokenWarning = (...texts: string[]) => {
+        const unknown = [...new Set(texts.flatMap(unknownTemplateTokens))];
+        return unknown.length ? m.unknownTokens.replace('{tokens}', unknown.join(' ')) : null;
+    };
+    const subjectWarning = editor ? tokenWarning(editor.subject) : null;
+    const bodyWarning = editor ? tokenWarning(editor.body) : null;
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -200,69 +213,77 @@ export default function CrmMessageTemplatesPanel({ canManage }: Readonly<{ canMa
             ) : (
                 <div className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
                     <ul className="divide-y divide-gray-50">
-                        {rows.map((row) => (
-                            <li key={row.id} className="flex items-start justify-between gap-3 px-3 py-2">
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="truncate text-sm font-medium text-gray-800">
-                                            {row.name}
-                                        </span>
-                                        <StatusBadge tone="info">{m.usage[row.usage]}</StatusBadge>
-                                        {row.channel && (
-                                            <StatusBadge tone="neutral">
-                                                {row.channel.icon ? `${row.channel.icon} ` : ''}
-                                                {row.channel.name}
-                                            </StatusBadge>
-                                        )}
-                                        {row.purpose && (
-                                            <StatusBadge tone="neutral">
-                                                {row.purpose.icon ? `${row.purpose.icon} ` : ''}
-                                                {row.purpose.name}
-                                            </StatusBadge>
-                                        )}
-                                        {!row.is_active && (
-                                            <StatusBadge tone="neutral">{m.inactive}</StatusBadge>
+                        {rows.map((row) => {
+                            // Shown on the row as well as in the editor, so a
+                            // template saved before the editor warned is findable.
+                            const rowWarning = tokenWarning(row.subject ?? '', row.body);
+                            return (
+                                <li key={row.id} className="flex items-start justify-between gap-3 px-3 py-2">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="truncate text-sm font-medium text-gray-800">
+                                                {row.name}
+                                            </span>
+                                            <StatusBadge tone="info">{m.usage[row.usage]}</StatusBadge>
+                                            {row.channel && (
+                                                <StatusBadge tone="neutral">
+                                                    {row.channel.icon ? `${row.channel.icon} ` : ''}
+                                                    {row.channel.name}
+                                                </StatusBadge>
+                                            )}
+                                            {row.purpose && (
+                                                <StatusBadge tone="neutral">
+                                                    {row.purpose.icon ? `${row.purpose.icon} ` : ''}
+                                                    {row.purpose.name}
+                                                </StatusBadge>
+                                            )}
+                                            {!row.is_active && (
+                                                <StatusBadge tone="neutral">{m.inactive}</StatusBadge>
+                                            )}
+                                        </div>
+                                        {/* Whole body, wrapped: a template is judged by its wording,
+                                            and a truncated one cannot be. */}
+                                        <p className="mt-0.5 whitespace-pre-wrap text-xs text-gray-500">
+                                            {row.body}
+                                        </p>
+                                        {rowWarning && (
+                                            <p className="mt-0.5 text-xs text-warning-text">{rowWarning}</p>
                                         )}
                                     </div>
-                                    {/* Whole body, wrapped: a template is judged by its wording,
-                                        and a truncated one cannot be. */}
-                                    <p className="mt-0.5 whitespace-pre-wrap text-xs text-gray-500">
-                                        {row.body}
-                                    </p>
-                                </div>
-                                {canManage && (
-                                    <div className="flex shrink-0 items-center gap-1">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => openEdit(row)}
-                                            aria-label={m.edit}
-                                        >
-                                            <Pencil className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => toggleActive(row)}
-                                            aria-label={row.is_active ? m.deactivate : m.activate}
-                                        >
-                                            {row.is_active
-                                                ? <EyeOff className="h-4 w-4" />
-                                                : <Eye className="h-4 w-4" />}
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setDeleting(row)}
-                                            aria-label={m.delete.action}
-                                            className="text-danger"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                )}
-                            </li>
-                        ))}
+                                    {canManage && (
+                                        <div className="flex shrink-0 items-center gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => openEdit(row)}
+                                                aria-label={m.edit}
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => toggleActive(row)}
+                                                aria-label={row.is_active ? m.deactivate : m.activate}
+                                            >
+                                                {row.is_active
+                                                    ? <EyeOff className="h-4 w-4" />
+                                                    : <Eye className="h-4 w-4" />}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setDeleting(row)}
+                                                aria-label={m.delete.action}
+                                                className="text-danger"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
             )}
@@ -324,7 +345,13 @@ export default function CrmMessageTemplatesPanel({ canManage }: Readonly<{ canMa
                                         ))}
                                     </Select>
                                 </Field>
-                                <Field label={m.fields.subject} hint={m.fields.subjectHint} htmlFor={subjectId}>
+                                <Field
+                                    label={m.fields.subject}
+                                    hint={subjectWarning
+                                        ? <span className="text-warning-text">{subjectWarning}</span>
+                                        : m.fields.subjectHint}
+                                    htmlFor={subjectId}
+                                >
                                     <Input
                                         id={subjectId}
                                         value={editor.subject}
@@ -335,7 +362,13 @@ export default function CrmMessageTemplatesPanel({ canManage }: Readonly<{ canMa
                                 </Field>
                             </>
                         )}
-                        <Field label={m.fields.body} required error={bodyError ?? undefined} htmlFor={bodyId}>
+                        <Field
+                            label={m.fields.body}
+                            required
+                            error={bodyError ?? undefined}
+                            hint={bodyWarning && <span className="text-warning-text">{bodyWarning}</span>}
+                            htmlFor={bodyId}
+                        >
                             <Textarea
                                 id={bodyId}
                                 rows={5}

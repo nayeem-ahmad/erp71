@@ -1,11 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
-import { getProviderDefinition } from './provider-adapter';
+import { getProviderDefinition, type ProviderMappers } from './provider-adapter';
 import {
     buildCustomerCandidates,
     buildProductCandidates,
     buildSupplierCandidates,
+    respectEarlierLinks,
 } from './match/candidates';
 import type { ApplyMatchDecisionsDto, MatchDecisionRowDto } from './external-sync.match.dto';
 import type { CandidateRow, ExistingRecord, MatchEntity, SourceRecord } from './match/match.types';
@@ -68,11 +69,13 @@ export class ExternalSyncMatchService {
         let rawProducts: unknown[];
         let rawCustomers: unknown[];
         let rawSuppliers: unknown[];
+        let rawSales: unknown[];
         try {
             const doc = await readSnapshotFile(snapshotFilePath(tenantId, snapshotId));
             rawProducts = doc.products;
             rawCustomers = doc.customers;
             rawSuppliers = doc.suppliers;
+            rawSales = doc.sales;
         } catch (error: unknown) {
             if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
                 throw new NotFoundException('Snapshot file is missing on disk');
@@ -115,11 +118,16 @@ export class ExternalSyncMatchService {
         ]);
 
         const label = def.label;
-        const rows: CandidateRow[] = [
-            ...buildProductCandidates(sourceProducts, products as ExistingRecord[], label),
-            ...buildCustomerCandidates(sourceCustomers, customers as ExistingRecord[], label),
-            ...buildSupplierCandidates(sourceSuppliers, suppliers as ExistingRecord[], label),
-        ];
+        const names = new Map([...products, ...customers, ...suppliers].map((record) => [record.id, record.name]));
+        const rows: CandidateRow[] = respectEarlierLinks(
+            [
+                ...buildProductCandidates(sourceProducts, products as ExistingRecord[], label),
+                ...buildCustomerCandidates(sourceCustomers, customers as ExistingRecord[], label),
+                ...buildSupplierCandidates(sourceSuppliers, suppliers as ExistingRecord[], label),
+            ],
+            await this.earlierLinks(tenantId, connection.id, def.mappers, rawSales),
+            names,
+        );
 
         return {
             manifest: {
@@ -132,6 +140,72 @@ export class ExternalSyncMatchService {
             },
             rows,
         };
+    }
+
+    /**
+     * Each source record's link from earlier imports, keyed `ENTITY:externalId`.
+     *
+     * A customer's is the customer holding most of their imported sales, where
+     * there are any, rather than what the mapping says: a review that relinked
+     * a customer left their documents where they were, and the documents are
+     * the record of who they are here. A mapping alone that points at another
+     * source customer's documents is left out, for scoring to decide.
+     */
+    private async earlierLinks(
+        tenantId: string,
+        connectionId: string,
+        mappers: ProviderMappers,
+        sales: unknown[],
+    ): Promise<Map<string, string>> {
+        const mappings = await this.db.externalSyncMapping.findMany({
+            where: { connection_id: connectionId, entity_type: { in: ['PRODUCT', 'CUSTOMER', 'SUPPLIER', 'SALE'] } },
+            select: { entity_type: true, external_id: true, internal_id: true },
+        });
+
+        const saleIds = new Map(mappings.filter((m) => m.entity_type === 'SALE').map((m) => [m.external_id, m.internal_id]));
+        const buyerOf = new Map<string, string>();
+        for (const doc of sales) {
+            try {
+                const sale = mappers.sale(doc, '', []);
+                const id = saleIds.get(sale.externalId);
+                if (id && sale.externalCustomerId) buyerOf.set(id, sale.externalCustomerId);
+            } catch {
+                // A sale the mappers cannot read says nothing about who bought it.
+            }
+        }
+
+        const tally = new Map<string, Map<string, number>>();
+        const ids = [...buyerOf.keys()];
+        for (let i = 0; i < ids.length; i += 1000) {
+            const rows = await this.db.sale.findMany({
+                where: { tenant_id: tenantId, id: { in: ids.slice(i, i + 1000) } },
+                select: { id: true, customer_id: true },
+            });
+            for (const row of rows) {
+                if (!row.customer_id) continue;
+                const buyer = buyerOf.get(row.id)!;
+                const counts = tally.get(buyer) ?? new Map<string, number>();
+                counts.set(row.customer_id, (counts.get(row.customer_id) ?? 0) + 1);
+                tally.set(buyer, counts);
+            }
+        }
+        const homes = new Map([...tally].map(([buyer, counts]) => [buyer, [...counts].sort((a, b) => b[1] - a[1])[0][0]]));
+        const homesHeld = new Set(homes.values());
+
+        const links = new Map<string, string>();
+        for (const m of mappings) {
+            if (m.entity_type === 'SALE') continue;
+            if (m.entity_type === 'CUSTOMER') {
+                const home = homes.get(m.external_id);
+                if (home) {
+                    links.set(`CUSTOMER:${m.external_id}`, home);
+                    continue;
+                }
+                if (homesHeld.has(m.internal_id)) continue;
+            }
+            links.set(`${m.entity_type}:${m.external_id}`, m.internal_id);
+        }
+        return links;
     }
 
     async applyDecisions(tenantId: string, dto: ApplyMatchDecisionsDto) {

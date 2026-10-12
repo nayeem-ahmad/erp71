@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { FolderKanban, GitBranch, GripVertical, MessageSquare, Play, Undo2 } from 'lucide-react';
 import Avatar from '@/components/Avatar';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
@@ -65,7 +65,9 @@ interface DragState {
  * and priority badges, the running clock, counts, hours, assignee initials),
  * category-tinted column heads with their count and hours left, and pointer
  * dragging — mouse from anywhere on the card, touch from the grip — so a card
- * moves on a phone too. Dropping a card changes its status; with swimlanes on,
+ * moves on a phone too. A tap on the card still opens it: the body listens for
+ * click, which a finger-scroll does not fire, and a finished drag swallows the
+ * click that follows the drop. Dropping a card changes its status; with swimlanes on,
  * a card moves between columns inside its own row.
  *
  * It also reads the board's appearance settings (`board-view.ts`) — card size,
@@ -85,6 +87,7 @@ export default function SprintCardBoard({
     laneControls,
     view = DEFAULT_BOARD_VIEW,
     lift = '',
+    composer,
 }: {
     lanes: SprintLane[];
     laneMode: SprintLaneMode;
@@ -104,14 +107,28 @@ export default function SprintCardBoard({
         onToggle: (key: string) => void;
         onFocus: (key: string) => void;
     };
+    /**
+     * "Add a card" at the foot of each column, as on a board. The page builds
+     * it, since what a card composed here joins — the column's status, a
+     * person's or a story's lane — is the page's to decide. `lane` is null
+     * with swimlanes off.
+     */
+    composer?: (column: StatusColumn, lane: SprintLane | null) => ReactNode;
 }) {
     const { t, fmt } = useI18n();
     const m = t.projects;
     const [drag, setDrag] = useState<DragState | null>(null);
+    /**
+     * A finished drag is followed by a click on the card. Without this the
+     * click opens the card the reader just put down. Cleared on the next
+     * press, so a click the browser never fires cannot eat the tap after it.
+     */
+    const swallowCardClick = useRef(false);
 
     const grouped = laneMode !== 'none';
 
     const begin = (e: React.PointerEvent, task: SprintCardTask, fromHandle: boolean) => {
+        swallowCardClick.current = false;
         if (busy) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         if (e.pointerType !== 'mouse' && !fromHandle) return;
@@ -144,6 +161,7 @@ export default function SprintCardBoard({
             onOpen(drag.task.id);
             return;
         }
+        swallowCardClick.current = true;
         const target = drag.target;
         if (!target) return;
 
@@ -191,7 +209,8 @@ export default function SprintCardBoard({
     const d = density(view);
     const widthClass = columnWidthClass(view.columnWidth);
 
-    const renderColumn = (column: StatusColumn, cards: SprintCardTask[], columnIndex: number, laneKey?: string) => {
+    const renderColumn = (column: StatusColumn, cards: SprintCardTask[], columnIndex: number, lane: SprintLane | null) => {
+        const laneKey = lane?.key;
         const tint = tintOf(view, column.category);
         const left = sumHours(cards).remaining;
         const isTarget =
@@ -202,7 +221,7 @@ export default function SprintCardBoard({
         return (
             <div
                 key={column.key}
-                className={`flex ${widthClass} shrink-0 flex-col rounded-md border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${
+                className={`group/cell flex ${widthClass} shrink-0 flex-col rounded-md border bg-gray-50 ${lift} ${motionClass(view, 'column')} ${
                     isTarget ? 'border-blue-400 ring-1 ring-blue-300' : 'border-gray-200'
                 }`}
                 style={{ animationDelay: staggerDelay(view, columnIndex) }}
@@ -236,6 +255,11 @@ export default function SprintCardBoard({
                                     dragging={Boolean(drag?.active && drag.task.id === task.id)}
                                     busy={busy}
                                     onOpen={() => onOpen(task.id)}
+                                    consumeSwallowedClick={() => {
+                                        if (!swallowCardClick.current) return false;
+                                        swallowCardClick.current = false;
+                                        return true;
+                                    }}
                                     onReturn={() => onReturn(task)}
                                     index={index}
                                     {...handlers(task)}
@@ -245,6 +269,7 @@ export default function SprintCardBoard({
                     })}
                     {isTarget && (drag?.target?.index ?? 0) >= others.length && <DropIndicator />}
                 </div>
+                {composer && <div className={`${d.columnPad} pt-0`}>{composer(column, lane)}</div>}
             </div>
         );
     };
@@ -288,7 +313,7 @@ export default function SprintCardBoard({
                                             column,
                                             byColumn[column.key] ?? [],
                                             columnIndex,
-                                            grouped ? lane.key : undefined,
+                                            grouped ? lane : null,
                                         ),
                                     )}
                                 </div>
@@ -321,6 +346,7 @@ function SprintCard({
     dragging,
     busy,
     onOpen,
+    consumeSwallowedClick,
     onReturn,
     onPointerDownBody,
     onPointerDownHandle,
@@ -334,6 +360,8 @@ function SprintCard({
     dragging: boolean;
     busy: boolean;
     onOpen: () => void;
+    /** True when the click is the one a finished drag left behind, and should not open. */
+    consumeSwallowedClick: () => boolean;
     onReturn: () => void;
     onPointerDownBody: (e: React.PointerEvent) => void;
     onPointerDownHandle: (e: React.PointerEvent) => void;
@@ -407,6 +435,10 @@ function SprintCard({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
+            onClick={() => {
+                if (consumeSwallowedClick()) return;
+                onOpen();
+            }}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();

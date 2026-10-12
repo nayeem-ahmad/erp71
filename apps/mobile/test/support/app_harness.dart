@@ -3,6 +3,9 @@ import 'package:erp71_mobile/config/app_config.dart';
 import 'package:erp71_mobile/core/auth/token_store.dart';
 import 'package:erp71_mobile/core/format/format.dart';
 import 'package:erp71_mobile/core/providers.dart';
+import 'package:erp71_mobile/core/push/push_channel.dart';
+import 'package:erp71_mobile/core/voice/speech_input.dart';
+import 'package:erp71_mobile/core/security/app_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,15 +14,19 @@ import 'fake_backend.dart';
 import 'fixtures.dart';
 
 /// The whole app against [backend], on a 360 × 780 phone — the narrowest
-/// width the UI rules require to work without horizontal scrolling. A layout
-/// that overflows fails the test.
+/// width the UI rules require to work without horizontal scrolling — unless
+/// [size] says otherwise. A layout that overflows fails the test.
 Future<void> pumpApp(
   WidgetTester tester, {
   required FakeBackend backend,
   FakeGoogleAuth? google,
   InMemoryKeyValueStore? storage,
+  FakeDeviceAuthenticator? authenticator,
+  FakePushChannel? push,
+  FakeSpeechInput? speech,
+  Size size = const Size(360, 780),
 }) async {
-  tester.view.physicalSize = const Size(1080, 2340);
+  tester.view.physicalSize = size * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
   addTearDown(() => setActiveTimeZone(null));
@@ -36,6 +43,11 @@ Future<void> pumpApp(
         ),
         httpClientProvider.overrideWithValue(backend.client),
         googleAuthProvider.overrideWithValue(google ?? FakeGoogleAuth()),
+        deviceAuthenticatorProvider.overrideWithValue(
+          authenticator ?? FakeDeviceAuthenticator(),
+        ),
+        pushChannelProvider.overrideWithValue(push ?? FakePushChannel()),
+        speechInputProvider.overrideWithValue(speech ?? FakeSpeechInput()),
       ],
       child: const Erp71App(),
     ),
@@ -65,6 +77,10 @@ FakeBackend crmBackend() {
     )
     ..on('POST', '/auth/google', (_) => authResponse())
     ..on('POST', '/auth/logout/session', (_) => null)
+    // Push is off unless a test turns it on; the bell starts empty.
+    ..on('GET', '/push/config', (_) => {'enabled': false})
+    ..on('GET', '/notifications', (_) => page([]))
+    ..on('GET', '/notifications/unread-count', (_) => {'count': 0})
     ..on('GET', '/crm/dashboard/overview', (_) => overviewJson())
     ..on(
       'GET',
@@ -105,6 +121,34 @@ FakeBackend crmBackend() {
     ..on('GET', '/crm/lead-taxonomy/categories', (_) => <Object?>[]);
   return backend;
 }
+
+/// [crmBackend] signed in as an owner of two branches, with the business
+/// endpoints answering.
+FakeBackend ownerBackend() => crmBackend()
+  ..on(
+    'POST',
+    '/auth/google',
+    (_) => authResponse(tenants: [ownerWorkspaceJson()]),
+  )
+  ..on('GET', '/auth/me', (_) => meJson(tenants: [ownerWorkspaceJson()]))
+  ..on('GET', '/mobile/pulse', (_) => pulseJson())
+  ..on(
+    'GET',
+    '/approvals/inbox',
+    (_) => {
+      'items': <Object?>[],
+      'kinds': ['EXPENSE_CLAIM', 'LEAVE_REQUEST'],
+      'counts': <String, Object?>{},
+      'total': 0,
+    },
+  )
+  ..on('GET', '/cashier-sessions/overview', (_) => cashierOverviewJson())
+  ..on('GET', '/cashier-sessions/:id/summary', (_) => tillSummaryJson())
+  ..on(
+    'GET',
+    '/cashier-sessions/:id/cash-transactions',
+    (_) => cashMovementsJson(),
+  );
 
 /// From the sign-in screen, through Google, onto the Overview.
 Future<void> signInWithGoogle(WidgetTester tester) async {

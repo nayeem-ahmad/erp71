@@ -1,4 +1,4 @@
-import { IsString, IsArray, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { IsBoolean, IsString, IsArray, IsNumber, IsOptional, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InlineCustomerDto } from '../customers/customer.dto';
 
@@ -33,6 +33,20 @@ export class CreateSalesOrderDto {
     @IsNumber()
     totalAmount: number;
 
+    /**
+     * False when the lines were typed before VAT and `vatAmount` was added on
+     * top (and is part of `totalAmount`). Left out, the order is VAT-inclusive.
+     */
+    @IsOptional()
+    @IsBoolean()
+    pricesIncludeVat?: boolean;
+
+    /** VAT added on top of the lines; part of `totalAmount`. */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    vatAmount?: number;
+
     @IsOptional()
     @IsString()
     status?: string;
@@ -60,6 +74,12 @@ export class UpdateSalesOrderDto {
     @IsOptional()
     @IsNumber()
     totalAmount?: number;
+
+    /** VAT added on top of the lines; the order keeps the mode it was made in. */
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    vatAmount?: number;
 }
 
 export class UpdateOrderStatusDto {

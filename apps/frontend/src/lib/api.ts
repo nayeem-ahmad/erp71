@@ -15,9 +15,11 @@ import type {
     RefereePayoutRequestStatus,
     ReferralCommissionStatus,
 } from '@/components/admin/referrals/types';
+import type { CloudinaryUpload, UploadPurpose, UploadSignature } from '@/lib/uploads/direct-upload';
 import type { CandidateRow, MatchManifest } from '@/types/match';
 import type { DailyReport } from '@/lib/daily-report';
-import { normalizeApiBase } from './api-base';
+import { browserApiBase } from './api-base';
+import { getQueryClient, ME_QUERY_KEY, readMe } from './query-client';
 import { readSseFrames, type SseFrame } from './sse';
 import { handleExpiredSession, handleMissingSession } from './session-expiry';
 import {
@@ -127,16 +129,12 @@ export type ActivationStatus = {
     latest_request: ActivationRequestRecord | null;
 };
 
-const DEFAULT_PROD_API_BASE = 'https://erp71-backend.onrender.com';
-// In dev (remote container) use a relative path so browser calls go to the
-// Next.js dev server which proxies them to the backend via next.config rewrites.
-// In production keep the explicit backend URL.
-//
-// `normalizeApiBase` lives in ./api-base so the server-side public routes
-// (/s, /q, /store/../p, /r) apply the identical `/api/v1` rule instead of each
-// re-deriving it — see that file for why that mattered.
-const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL)
-    || (process.env.NODE_ENV === 'production' ? `${DEFAULT_PROD_API_BASE}/api/v1` : '/api/v1');
+// The app's own origin in production, `/api/v1` on the page's origin when
+// unset — `browserApiBase` says why same-origin is worth having. It lives in
+// ./api-base so the server-side public routes (/s, /q, /store/../p, /r) apply
+// the identical `/api/v1` rule instead of each re-deriving it — see that file
+// for why that mattered.
+const API_BASE = browserApiBase();
 
 /**
  * An API failure that keeps its HTTP status.
@@ -158,9 +156,11 @@ export class ApiError extends Error {
         public readonly code?: string,
         /**
          * Seconds to wait before retrying, when the backend rate-limited the
-         * call. Read from the body rather than the `Retry-After` header, which
-         * the browser cannot see cross-origin unless the API exposes it — and
-         * the app and the API are on different hosts in production.
+         * call. Read from the body rather than the `Retry-After` header: the
+         * app now calls its own origin, where the header is readable, but the
+         * marketing host and any deployment configured with a separate API host
+         * still call cross-origin, and there the browser hides every header the
+         * API does not list in `Access-Control-Expose-Headers` — it lists none.
          */
         public readonly retryAfter?: number,
     ) {
@@ -519,6 +519,9 @@ export async function fetchBlobWithAuth(
         throw new ApiError(message, response.status, code);
     }
 
+    // Only readable same-origin: the API exposes no headers to cross-origin
+    // callers, so a deployment that calls a separate API host gets the
+    // `'export'` fallback name instead of the server's.
     const disposition = response.headers.get('Content-Disposition') ?? '';
     const filenameMatch = disposition.match(/filename="([^"]+)"/);
     const filename = filenameMatch ? filenameMatch[1] : 'export';
@@ -622,8 +625,57 @@ async function requestWithAuth(endpoint: string, options: RequestInit = {}, isRe
     return response.json();
 }
 
+/**
+ * Endpoints whose writes change what `GET /auth/me` returns: the profile,
+ * password and 2FA (`/auth`); roles, grants and store access (`/team`); the
+ * per-workspace settings carried on each tenant row — dashboard, locales,
+ * timezone, storefront slug (`/tenants`); the branch list (`/stores`); the plan,
+ * its activation and add-ons; invitations, which add a workspace; and the
+ * platform switches and workspace edits a platform admin makes.
+ *
+ * Deliberately broad. Missing one leaves a screen showing a permission or a plan
+ * the user no longer has until the cache ages out; matching one too many costs a
+ * single background request.
+ */
+const ME_AFFECTING_PATHS = [
+    '/auth',
+    '/team',
+    '/tenants',
+    '/stores',
+    '/billing',
+    '/activation',
+    '/addon-modules',
+    '/invitations',
+    '/admin/platform-settings',
+    '/admin/tenants',
+];
+
+/**
+ * Writes that end the session they are made on. A password change bumps
+ * `token_version` and revokes every refresh token, so by the time it returns
+ * this tab's token is dead: re-reading `me` would only 401, fail to renew, and
+ * race the caller's own move to the login page with an "expired" one.
+ */
+const SESSION_ENDING_PATHS = ['/auth/change-password', '/auth/logout'];
+
+/** Whether a successful request of this method to this endpoint leaves the cached `me` out of date. */
+export function invalidatesMe(endpoint: string, method: string | undefined): boolean {
+    const verb = (method ?? 'GET').toUpperCase();
+    if (verb === 'GET' || verb === 'HEAD') return false;
+    const path = endpoint.split('?')[0];
+    if (SESSION_ENDING_PATHS.includes(path)) return false;
+    return ME_AFFECTING_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
 export async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const json = await requestWithAuth(endpoint, options);
+    if (invalidatesMe(endpoint, options.method)) {
+        // Done here, once, rather than at each of the dozens of call sites that
+        // write one of these: whatever is on screen re-reads `me` in the
+        // background, and a `fetchMe` straight after this write waits for the
+        // new answer instead of serving the one from before it.
+        void getQueryClient().invalidateQueries({ queryKey: ME_QUERY_KEY });
+    }
     // Backend wraps all responses in { data: T } — unwrap transparently
     return json && typeof json === 'object' && 'data' in json ? json.data : json;
 }
@@ -830,6 +882,8 @@ export async function fetchPaginated<T = any>(endpoint: string, options: Request
 const MAX_PAGE_SIZE = 100;
 /** Backstop against an endpoint that never reports a shrinking remainder. */
 const MAX_PAGES_FETCHED = 100;
+/** Pages `fetchAllPages` requests at once after the first. */
+const FETCH_ALL_CONCURRENCY = 5;
 
 /**
  * Fetch every page of a paginated list endpoint and return the rows as one flat array.
@@ -844,10 +898,18 @@ const MAX_PAGES_FETCHED = 100;
  */
 type CreatedRangeParams = { createdFrom?: string; createdTo?: string };
 
-function withCreatedRange(endpoint: string, params?: CreatedRangeParams): string {
+/**
+ * A transaction list the page-level branch filter narrows: `storeId` is one
+ * branch or `'all'` (see `useBranchScope`). Only the endpoints typed with this
+ * accept it — the API rejects unknown query params — so it stays opt-in.
+ */
+type BranchListParams = CreatedRangeParams & { storeId?: string };
+
+function withCreatedRange(endpoint: string, params?: BranchListParams): string {
     const query = new URLSearchParams();
     if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
     if (params?.createdTo) query.set('createdTo', params.createdTo);
+    if (params?.storeId) query.set('storeId', params.storeId);
     const qs = query.toString();
     return qs ? `${endpoint}?${qs}` : endpoint;
 }
@@ -859,10 +921,23 @@ export async function fetchAllPages<T = any>(endpoint: string): Promise<T[]> {
 
     // A non-paginated endpoint reports total === items.length, so this loop never runs.
     const pages = Math.min(first.pages || 1, MAX_PAGES_FETCHED);
-    for (let page = 2; page <= pages; page++) {
-        const next = await fetchPaginated<T>(`${endpoint}${join}page=${page}&limit=${MAX_PAGE_SIZE}`);
-        if (!next.items.length) break;
-        all.push(...next.items);
+    // Pages 2..n are independent once the first reports the count, so fetch them in
+    // small parallel batches (order preserved) instead of one round trip at a time.
+    for (let start = 2; start <= pages; start += FETCH_ALL_CONCURRENCY) {
+        const batch: number[] = [];
+        for (let page = start; page <= pages && batch.length < FETCH_ALL_CONCURRENCY; page++) batch.push(page);
+        const results = await Promise.all(
+            batch.map((page) => fetchPaginated<T>(`${endpoint}${join}page=${page}&limit=${MAX_PAGE_SIZE}`)),
+        );
+        let exhausted = false;
+        for (const next of results) {
+            if (!next.items.length) {
+                exhausted = true;
+                break;
+            }
+            all.push(...next.items);
+        }
+        if (exhausted) break;
     }
     return all;
 }
@@ -1034,6 +1109,15 @@ export type ExternalSyncWarning = {
     externalId: string;
     code: string;
     message: string;
+    /** Present only when the record was not imported; the run keeps every one of these. */
+    skipped?: {
+        number: string | null;
+        date: string | null;
+        party: string | null;
+        amount: number | null;
+        lines: number | null;
+        error?: string;
+    };
 };
 
 export type ExternalSyncConnection = {
@@ -1066,10 +1150,12 @@ export type ExternalSyncProvider = {
 export type ExternalSyncStep =
     | 'MASTERS'
     | 'SALES'
+    | 'QUOTATIONS'
     | 'PURCHASES'
     | 'CUSTOMER_PAYMENTS'
     | 'SUPPLIER_PAYMENTS'
-    | 'SALE_RETURNS';
+    | 'SALE_RETURNS'
+    | 'PURCHASE_RETURNS';
 
 export type ExternalSyncSnapshot = {
     id: string;
@@ -1094,7 +1180,8 @@ export type ExternalSyncRun = {
     status: 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     /** What the run is doing right now; null once finished. */
     phase: string | null;
-    progress: { done: number; total: number; warnings: number } | null;
+    /** `warnings` and `codes` count every warning raised, not only the ones stored. */
+    progress: { done: number; total: number; warnings: number; codes?: Record<string, number> } | null;
     steps: ExternalSyncStep[] | null;
     window_from: string;
     window_to: string;
@@ -1109,7 +1196,12 @@ export type ExternalSyncRun = {
         | 'supplierPayments'
         | 'saleReturns',
         ExternalSyncTally
-    > | null;
+    > & {
+        /** Absent on runs from before quotations were imported. */
+        quotations?: ExternalSyncTally;
+        /** Absent on runs from before purchase returns were imported. */
+        purchaseReturns?: ExternalSyncTally;
+    } | null;
     warnings: ExternalSyncWarning[] | null;
     error_message: string | null;
     started_at: string;
@@ -1223,10 +1315,13 @@ function leadConversationQuery(
  * one payload, so they share one caller rather than seven copies of this.
  */
 function dashboardWindowFetcher(path: string) {
-    return (params?: { from?: string; to?: string; mine?: boolean }) => {
+    return (params?: { from?: string; to?: string; mine?: boolean; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        // A branch or `all`, from the page's branch filter. Like `mine`, only the
+        // dashboards that declare it send it (sales, purchases, inventory).
+        if (params?.storeId) query.set('storeId', params.storeId);
         // Only `CrmDashboardQueryDto` declares `mine`, and only the CRM dashboard
         // ever passes it. The API validates with `forbidNonWhitelisted`, so
         // sending it to one of the other module dashboards would be a 400 rather
@@ -1245,6 +1340,18 @@ export interface PaymentMethodAccount {
     category: string;
 }
 
+/** What `POST /admin/tenants/:id/restore` reports back. */
+export type AdminTenantRestoreSummary = {
+    backup_created_at: string;
+    tables: number;
+    rows_deleted: number;
+    rows_restored: number;
+    rows_skipped: Record<string, number>;
+    references_cleared: Record<string, number>;
+    unknown_tables: string[];
+    unknown_columns: string[];
+};
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -1261,7 +1368,8 @@ export const api = {
      * How many products sit at or below their reorder level. Counted by the
      * server so the dashboard tile does not have to walk the whole catalog.
      */
-    getLowStockCount: (): Promise<{ count: number }> => fetchWithAuth('/products/low-stock-count'),
+    getLowStockCount: (params?: { storeId?: string }): Promise<{ count: number }> =>
+        fetchWithAuth(`/products/low-stock-count${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getProductsPaged: (params?: {
         groupId?: string;
         subgroupId?: string;
@@ -1406,6 +1514,8 @@ export const api = {
         limit?: number;
         sortBy?: string;
         sortDir?: string;
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.productId) query.set('productId', params.productId);
@@ -1417,9 +1527,10 @@ export const api = {
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchPaginated(`/inventory/ledger${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string }) => {
+    getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.sourceWarehouseId) query.set('sourceWarehouseId', params.sourceWarehouseId);
@@ -1429,6 +1540,7 @@ export const api = {
         if (params?.isCrossBranch !== undefined) query.set('isCrossBranch', String(params.isCrossBranch));
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchWithAuth(`/warehouse-transfers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getWarehouseTransfer: (id: string) => fetchWithAuth(`/warehouse-transfers/${id}`),
@@ -1461,6 +1573,8 @@ export const api = {
         mine?: boolean;
         from?: string;
         to?: string;
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
@@ -1470,6 +1584,7 @@ export const api = {
         if (params?.mine) query.set('mine', 'true');
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchWithAuth(`/product-demands${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getProductDemand: (id: string) => fetchWithAuth(`/product-demands/${id}`),
@@ -1500,7 +1615,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     /** Omit `direction` for the whole adjustment log; 'LOSS' or 'FOUND' narrows it to one side. */
-    getInventoryShrinkage: (params?: CreatedRangeParams & { direction?: 'LOSS' | 'FOUND' }) => {
+    getInventoryShrinkage: (params?: BranchListParams & { direction?: 'LOSS' | 'FOUND' }) => {
         const endpoint = withCreatedRange('/inventory-shrinkage', params);
         if (!params?.direction) return fetchWithAuth(endpoint);
         return fetchWithAuth(`${endpoint}${endpoint.includes('?') ? '&' : '?'}direction=${params.direction}`);
@@ -1511,7 +1626,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getStockTakes: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/stock-takes', params)),
+    getStockTakes: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/stock-takes', params)),
     getStockTake: (id: string) => fetchWithAuth(`/stock-takes/${id}`),
     createStockTake: (data: any) => fetchWithAuth('/stock-takes', {
         method: 'POST',
@@ -1539,6 +1654,38 @@ export const api = {
         if (params?.subgroupId) query.set('subgroupId', params.subgroupId);
         return fetchWithAuth(`/inventory-reports/reorder-suggestions${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /**
+     * What every stock product costs, with tenant-wide counts of the ones that
+     * have no cost on file. Not a bare paginated list — the page and its
+     * totals sit under `pagination`, next to `summary` and `costingMethod`.
+     */
+    getProductCosts: (params?: { search?: string; groupId?: string; status?: 'ALL' | 'UNCOSTED' | 'COSTED'; inStockOnly?: boolean; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.groupId) query.set('groupId', params.groupId);
+        if (params?.status) query.set('status', params.status);
+        if (params?.inStockOnly) query.set('inStockOnly', 'true');
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchWithAuth(`/product-costs${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /** Every cost set by hand, newest first. */
+    getProductCostAdjustments: (params?: { productId?: string; page?: number; limit?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.productId) query.set('productId', params.productId);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.limit) query.set('limit', String(params.limit));
+        return fetchPaginated(`/product-costs/adjustments${query.toString() ? `?${query.toString()}` : ''}`);
+    },
+    /**
+     * Set one or more product costs, all-or-nothing. `reason` applies to the
+     * products that already have a cost on file; the rest are opening costs.
+     */
+    createProductCostAdjustments: (body: {
+        items: { productId: string; unitCost: number }[];
+        reason?: 'CORRECTION' | 'WRITE_DOWN';
+        note?: string;
+    }) => fetchWithAuth('/product-costs/adjustments', { method: 'POST', body: JSON.stringify(body) }),
     getStockOnHand: (params?: { storeId?: string; warehouseId?: string; groupId?: string; subgroupId?: string; brandId?: string; includeZeroStock?: boolean }) => {
         const query = new URLSearchParams();
         if (params?.storeId) query.set('storeId', params.storeId);
@@ -1719,6 +1866,28 @@ export const api = {
         });
     },
     /**
+     * Ask the API to sign one browser → Cloudinary upload for `purpose`. The
+     * folder is fixed inside the signature; see `lib/uploads/direct-upload.ts`,
+     * which is the only caller that should need this.
+     */
+    getUploadSignature: (purpose: UploadPurpose): Promise<UploadSignature> =>
+        fetchWithAuth('/assets/upload-signature', {
+            method: 'POST',
+            body: JSON.stringify({ purpose }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * Save an avatar the browser already uploaded to Cloudinary. Same route as
+     * `updateProfileAvatar`, with the upload's result in place of the file; the
+     * API checks it is in this user's own avatar folder before storing it.
+     */
+    setProfileAvatarFromUpload: (upload: CloudinaryUpload): Promise<{ avatarUrl?: string }> =>
+        fetchWithAuth('/auth/me/avatar', {
+            method: 'PATCH',
+            body: JSON.stringify(upload),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
      * Store a cropped lead/contact photo and get back both its URL and
      * Cloudinary's public_id. The record it belongs to may not exist yet, which
      * is why this is not a route on /crm/leads or /crm/contacts.
@@ -1774,6 +1943,8 @@ export const api = {
         mine?: boolean;
         createdFrom?: string;
         createdTo?: string;
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params.page) query.set('page', String(params.page));
@@ -1785,6 +1956,7 @@ export const api = {
         if (params.mine) query.set('mine', 'true');
         if (params.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params.createdTo) query.set('createdTo', params.createdTo);
+        if (params.storeId) query.set('storeId', params.storeId);
         return fetchPaginated(`/sales?${query.toString()}`);
     },
     /** The most recent few sales — callers that do not need the whole history. */
@@ -1799,6 +1971,8 @@ export const api = {
         return fetchPaginated(`/sales${qs ? `?${qs}` : ''}`);
     },
     /** Every customer as a flat array — for pickers and id→customer maps. */
+    /** Employees a customer's (or a sale's) sales rep can be picked from: id and name. */
+    getSalesReps: (): Promise<{ id: string; name: string }[]> => fetchWithAuth('/customers/sales-reps'),
     getCustomers: (params?: { search?: string; createdFrom?: string; createdTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
@@ -1819,11 +1993,14 @@ export const api = {
         sortDir?: string;
         createdFrom?: string;
         createdTo?: string;
+        /** A branch id or `all`; omitted, the server shows every customer the member may see. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.search) query.set('search', params.search);
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.segment) query.set('segment', params.segment);
         if (params?.customerType) query.set('customerType', params.customerType);
         if (params?.sortBy) query.set('sortBy', params.sortBy);
@@ -1842,7 +2019,8 @@ export const api = {
         return fetchWithAuth(`/customers/${id}/history${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerHistory: (id: string) => fetchWithAuth(`/customers/${id}/history`),
-    getCustomerSegmentStats: () => fetchWithAuth('/customers/segment-stats'),
+    getCustomerSegmentStats: (storeId?: string) =>
+        fetchWithAuth(`/customers/segment-stats${storeId ? `?storeId=${encodeURIComponent(storeId)}` : ''}`),
     runCustomerSegmentation: () => fetchWithAuth('/customers/run-segmentation', { method: 'POST' }),
     evaluateCustomerSegments: () => fetchWithAuth('/customers/segments/evaluate', { method: 'POST' }),
     createCustomer: (data: any) => fetchWithAuth('/customers', {
@@ -1850,10 +2028,11 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    importCustomers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+    /** `storeId`: the branch rows without a `branch` column go to; omitted, the header branch. */
+    importCustomers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert', storeId?: string) =>
         fetchWithAuth('/customers/import', {
             method: 'POST',
-            body: JSON.stringify({ rows, mode }),
+            body: JSON.stringify({ rows, mode, ...(storeId ? { storeId } : {}) }),
             headers: { 'Content-Type': 'application/json' },
         }),
     updateCustomer: (id: string, data: any) => fetchWithAuth(`/customers/${id}`, {
@@ -1892,7 +2071,7 @@ export const api = {
             },
         );
     },
-    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
+    recordCreditPayment: (id: string, data: { amount: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string; paymentMethodId?: string }) => fetchWithAuth(`/customers/${id}/credit/payment`, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
@@ -1902,8 +2081,11 @@ export const api = {
         to?: string;
         customerId?: string;
         search?: string;
+        /** The page's branch filter: a branch id or `all`. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.customerId) query.set('customerId', params.customerId);
@@ -1911,7 +2093,10 @@ export const api = {
         return fetchAllPages(`/customers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomerCreditPayment: (paymentId: string) => fetchWithAuth(`/customers/credit/payments/${paymentId}`),
-    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string }) =>
+    /** The serial a new payment would get; a preview, not a reservation. */
+    getNextCustomerPaymentNumber: (direction: 'receive' | 'pay'): Promise<{ payment_number: string }> =>
+        fetchWithAuth(`/customers/credit/payments/next-number?direction=${direction}`),
+    updateCustomerCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'receive' | 'pay'; notes?: string; date?: string; paymentNumber?: string; paymentMethodId?: string }) =>
         fetchWithAuth(`/customers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -2393,7 +2578,7 @@ export const api = {
         return fetchWithAuth(`/accounting/accounts/next-code?${query.toString()}`);
     },
     getVoucherNumberPreview: (voucherType: string) => fetchWithAuth(`/accounting/vouchers/next-number?voucherType=${encodeURIComponent(voucherType)}`),
-    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number }) => {
+    getVouchers: (params?: { voucherType?: string; from?: string; to?: string; createdFrom?: string; createdTo?: string; approvalStatus?: string; page?: number; limit?: number; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.voucherType) query.set('voucherType', params.voucherType);
         if (params?.from) query.set('from', params.from);
@@ -2403,6 +2588,7 @@ export const api = {
         if (params?.approvalStatus) query.set('approvalStatus', params.approvalStatus);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchWithAuth(`/accounting/vouchers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getVoucher: (id: string) => fetchWithAuth(`/accounting/vouchers/${id}`),
@@ -2413,27 +2599,30 @@ export const api = {
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/reports/ledger/${accountId}${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getFinancialKpis: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+    getFinancialKpis: (params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/kpis${query.toString() ? `?${query.toString()}` : ''}`);
     },
     // One request for the whole accounting dashboard. The equivalent report
     // endpoints each rescan the tenant's voucher details, so this exists to keep
     // the page to a single pass over them.
-    getAccountingDashboardOverview: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+    getAccountingDashboardOverview: (params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/overview${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getFinancialTrends: (params?: { from?: string; to?: string } & ApprovedOnlyParams) => {
+    getFinancialTrends: (params?: { from?: string; to?: string; storeId?: string } & ApprovedOnlyParams) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
+        if (params?.storeId) query.set('storeId', params.storeId);
         appendApprovedOnly(query, params);
         return fetchWithAuth(`/accounting/dashboard/trends${query.toString() ? `?${query.toString()}` : ''}`);
     },
@@ -2559,7 +2748,7 @@ export const api = {
         return fetchWithAuth(`/sales-reports/gross-profit/by-product${query.toString() ? `?${query.toString()}` : ''}`);
     },
 
-    getGrossProfitBySalesperson: (params?: { storeId?: string; from?: string; to?: string; groupBy?: 'user' | 'counter' }) => {
+    getGrossProfitBySalesperson: (params?: { storeId?: string; from?: string; to?: string; groupBy?: 'salesRep' | 'user' | 'counter' }) => {
         const query = new URLSearchParams();
         if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);
@@ -2595,8 +2784,9 @@ export const api = {
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/gross-profit/cost-coverage${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    getMonthlySalesByCustomer: (params?: { from?: string; to?: string; customerId?: string }) => {
+    getMonthlySalesByCustomer: (params?: { storeId?: string; from?: string; to?: string; customerId?: string }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.customerId) query.set('customerId', params.customerId);
@@ -2609,9 +2799,15 @@ export const api = {
         if (params.to) query.set('to', params.to);
         return fetchWithAuth(`/sales-reports/branch-report?${query.toString()}`);
     },
+    /**
+     * The branches of the workspace this tab is in. They are part of `/auth/me`,
+     * so this reads the shared cache (`readMe`) instead of asking for the whole
+     * profile again — a page that wants its stores costs no request when the
+     * app shell already has them.
+     */
     getStores: () => {
         const tenantId = getWorkspaceItem('tenant_id');
-        return fetchWithAuth('/auth/me').then((me: any) => {
+        return readMe(() => api.getMe()).then((me: any) => {
             if (!tenantId || !me?.tenants) return [];
             const tenant = me.tenants.find((t: any) => t.id === tenantId);
             return tenant?.stores ?? [];
@@ -2636,7 +2832,7 @@ export const api = {
         if (params.to) query.set('to', params.to);
         return fetchBlobWithAuth(`/accounting/export?${query.toString()}`);
     },
-    getReturns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-returns', params)),
+    getReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-returns', params)),
     getReturn: (id: string) => fetchWithAuth(`/sales-returns/${id}`),
     createReturn: (data: any) => fetchWithAuth('/sales-returns', {
         method: 'POST',
@@ -2651,7 +2847,7 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getOrders: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-orders', params)),
+    getOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-orders', params)),
     getOrder: (id: string) => fetchWithAuth(`/sales-orders/${id}`),
     createOrder: (data: any) => fetchWithAuth('/sales-orders', {
         method: 'POST',
@@ -2694,8 +2890,11 @@ export const api = {
         search?: string;
         sortBy?: string;
         sortDir?: string;
+        /** The list's branch filter: a branch id or `all`. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.page) query.set('page', String(params.page));
         if (params?.limit) query.set('limit', String(params.limit));
         if (params?.search) query.set('search', params.search);
@@ -2738,6 +2937,9 @@ export const api = {
         discount?: number;
         direction?: 'pay' | 'receive';
         notes?: string;
+        date?: string;
+        paymentNumber?: string;
+        paymentMethodId?: string;
         allocations?: { purchaseId: string; amount: number }[];
     }) =>
         fetchWithAuth(`/suppliers/${id}/credit/payment`, {
@@ -2759,8 +2961,11 @@ export const api = {
         to?: string;
         supplierId?: string;
         search?: string;
+        /** The page's branch filter: a branch id or `all`. */
+        storeId?: string;
     }) => {
         const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.supplierId) query.set('supplierId', params.supplierId);
@@ -2768,7 +2973,10 @@ export const api = {
         return fetchAllPages(`/suppliers/credit/payments${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSupplierCreditPayment: (paymentId: string) => fetchWithAuth(`/suppliers/credit/payments/${paymentId}`),
-    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string }) =>
+    /** The serial a new payment would get; a preview, not a reservation. */
+    getNextSupplierPaymentNumber: (direction: 'pay' | 'receive'): Promise<{ payment_number: string }> =>
+        fetchWithAuth(`/suppliers/credit/payments/next-number?direction=${direction}`),
+    updateSupplierCreditPayment: (paymentId: string, data: { amount?: number; discount?: number; direction?: 'pay' | 'receive'; notes?: string; date?: string; paymentNumber?: string; paymentMethodId?: string }) =>
         fetchWithAuth(`/suppliers/credit/payments/${paymentId}`, {
             method: 'PATCH',
             body: JSON.stringify(data),
@@ -2781,10 +2989,11 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    importSuppliers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>
+    /** `storeId`: the branch rows without a `branch` column go to; omitted, the header branch. */
+    importSuppliers: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert', storeId?: string) =>
         fetchWithAuth('/suppliers/import', {
             method: 'POST',
-            body: JSON.stringify({ rows, mode }),
+            body: JSON.stringify({ rows, mode, ...(storeId ? { storeId } : {}) }),
             headers: { 'Content-Type': 'application/json' },
         }),
     getPurchaseSummary: (params?: { storeId?: string; from?: string; to?: string }) => {
@@ -2816,21 +3025,22 @@ export const api = {
     updateSupplier: (id: string, data: any) => fetchWithAuth(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSupplier: (id: string) => fetchWithAuth(`/suppliers/${id}`, { method: 'DELETE' }),
     getPurchaseInvoice: (id: string) => fetchWithAuth(`/purchases/${id}/invoice`),
-    getPurchaseOrders: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-orders', params)),
+    getPurchaseOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-orders', params)),
     getPurchaseOrder: (id: string) => fetchWithAuth(`/purchase-orders/${id}`),
     createPurchaseOrder: (data: any) => fetchWithAuth('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseOrderStatus: (id: string, status: string) => fetchWithAuth(`/purchase-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     getPurchaseOrderInvoice: (id: string) => fetchWithAuth(`/purchase-orders/${id}/invoice`),
-    getPurchaseQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-quotations', params)),
+    getPurchaseQuotations: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-quotations', params)),
     getPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`),
     createPurchaseQuotation: (data: any) => fetchWithAuth('/purchase-quotations', { method: 'POST', body: JSON.stringify(data) }),
     updatePurchaseQuotationStatus: (id: string, status: string) => fetchWithAuth(`/purchase-quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     convertPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}/convert`, { method: 'POST' }),
     deletePurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`, { method: 'DELETE' }),
-    getPurchases: (params?: { createdFrom?: string; createdTo?: string }) => {
+    getPurchases: (params?: BranchListParams) => {
         const query = new URLSearchParams();
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getPurchase: (id: string) => fetchWithAuth(`/purchases/${id}`),
@@ -2845,7 +3055,16 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    getPurchaseReturns: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
+    /**
+     * Save a corrected purchase — the whole bill again, as the entry screen
+     * holds it. Stock, the supplier's account and the vouchers follow.
+     */
+    updatePurchase: (id: string, data: any) => fetchWithAuth(`/purchases/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getPurchaseReturns: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/purchase-returns', params)),
     getPurchaseReturn: (id: string) => fetchWithAuth(`/purchase-returns/${id}`),
     createPurchaseReturn: (data: any) => fetchWithAuth('/purchase-returns', {
         method: 'POST',
@@ -2873,6 +3092,8 @@ export const api = {
         etaTo?: string;
         sortBy?: string;
         sortDir?: 'asc' | 'desc';
+        /** A branch or `'all'`, from the page's branch filter. */
+        storeId?: string;
     }): Promise<Paginated<any>> => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params ?? {})) {
@@ -2925,18 +3146,25 @@ export const api = {
     deleteImportDocument: (id: string, documentId: string) =>
         fetchWithAuth(`/imports/${id}/documents/${documentId}`, { method: 'DELETE' }),
 
-    getLcRegister: (days?: number) => fetchWithAuth(`/imports/lc-register${days ? `?days=${days}` : ''}`),
-    getImportDutyReport: (params?: { from?: string; to?: string; includeUnpaid?: boolean }) => {
+    getLcRegister: (days?: number, params?: { storeId?: string }) => {
+        const query = new URLSearchParams();
+        if (days) query.set('days', String(days));
+        if (params?.storeId) query.set('storeId', params.storeId);
+        const suffix = query.toString();
+        return fetchWithAuth(`/imports/lc-register${suffix ? `?${suffix}` : ''}`);
+    },
+    getImportDutyReport: (params?: { from?: string; to?: string; includeUnpaid?: boolean; storeId?: string }) => {
         const query = new URLSearchParams();
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         if (params?.includeUnpaid) query.set('includeUnpaid', 'true');
+        if (params?.storeId) query.set('storeId', params.storeId);
         const suffix = query.toString();
         return fetchWithAuth(`/imports/duty-report${suffix ? `?${suffix}` : ''}`);
     },
     getImportBankLimits: () => fetchWithAuth('/imports/bank-limits'),
 
-    getQuotations: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
+    getQuotations: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-quotations', params)),
     getQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}`),
     createQuotation: (data: any) => fetchWithAuth('/sales-quotations', {
         method: 'POST',
@@ -2961,6 +3189,14 @@ export const api = {
     }),
     convertQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/convert`, {
         method: 'POST',
+    }),
+    /**
+     * Invoices each quotation as a credit sale. Never throws for a quotation it
+     * could not convert — those come back under `skipped` / `failed` with why.
+     */
+    createSalesFromQuotations: (quotationIds: string[]) => fetchWithAuth('/sales/from-quotations', {
+        method: 'POST',
+        body: JSON.stringify({ quotationIds }),
     }),
     /** Idempotent — calling this again returns the same live code rather than minting a new one. */
     shareQuotation: (id: string) => fetchWithAuth(`/sales-quotations/${id}/share`, { method: 'POST' }),
@@ -3135,6 +3371,13 @@ export const api = {
         fetchWithAuth('/storefront-pages/menu/reorder', { method: 'PATCH', body: JSON.stringify({ links }) }),
     // Sales detail
     getSale: (id: string) => fetchWithAuth(`/sales/${id}`),
+    /** The checked sales, in the order given, ready to print as one job. */
+    printSalesBatch: (ids: string[]) =>
+        fetchWithAuth('/sales/print-batch', {
+            method: 'POST',
+            body: JSON.stringify({ ids }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getSaleInvoice: (id: string) => fetchWithAuth(`/sales/${id}/invoice`),
 
     // ── NBR Mushak 6.x ──────────────────────────────────────────────────
@@ -3724,6 +3967,43 @@ export const api = {
         body: JSON.stringify({ reason }),
         headers: { 'Content-Type': 'application/json' },
     }),
+    /**
+     * `keep`: for `all`, the master data groups to leave alone (see `ClearDataGroups`).
+     * `kept` comes back for a branch's `all`: its customers and suppliers a record elsewhere still names.
+     */
+    clearAdminTenantData: (
+        tenantId: string,
+        mode: 'transactions' | 'all',
+        storeId?: string,
+        keep: string[] = [],
+    ): Promise<{
+        cleared: 'transactions' | 'all';
+        storeId?: string;
+        storeName?: string;
+        kept?: { customers: number; suppliers: number };
+    }> => {
+        const params = new URLSearchParams({ mode });
+        if (storeId) params.set('storeId', storeId);
+        if (keep.length) params.set('keep', keep.join(','));
+        return fetchWithAuth(`/admin/tenants/${tenantId}/data?${params}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ reason: 'Cleared by platform admin' }),
+            headers: { 'Content-Type': 'application/json' },
+        });
+    },
+    /** The whole workspace as one gzipped JSON file (`TenantBackupService`). */
+    downloadAdminTenantBackup: (tenantId: string) => fetchBlobWithAuth(`/admin/tenants/${tenantId}/backup`),
+    /**
+     * Replace the workspace's data with a backup of the same workspace. `confirm`
+     * is the workspace name as typed by the admin; the server checks it again.
+     */
+    restoreAdminTenantBackup: (tenantId: string, file: File, confirm: string): Promise<AdminTenantRestoreSummary> => {
+        const body = new FormData();
+        body.append('file', file);
+        body.append('confirm', confirm);
+        body.append('reason', 'Restored by platform admin');
+        return fetchWithAuth(`/admin/tenants/${tenantId}/restore`, { method: 'POST', body });
+    },
     createAdminTenant: (data: {
         ownerMode: 'new' | 'existing';
         ownerEmail?: string;
@@ -4294,6 +4574,11 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         }),
     removeMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`, { method: 'DELETE' }),
+    /**
+     * The network read behind the shared `me` cache. Call `useMe()` or
+     * `fetchMe()` from `@/hooks/use-me` instead: this one always costs a round
+     * trip, and the cache exists so that nobody pays it twice.
+     */
     getMe: () => fetchWithAuth('/auth/me'),
     getNavLayout: (scope: 'tenant' | 'platform_admin') =>
         fetchWithAuth(`/navigation/layout?scope=${scope}`),
@@ -4355,6 +4640,17 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
+    // The business apps the owner hid from the rail and Home (app shell).
+    getTenantAppSettings: (): Promise<{ hidden_apps: string[] }> => fetchWithAuth('/tenants/app-settings'),
+    updateTenantAppSettings: (data: { hidden_apps: string[] }): Promise<{ hidden_apps: string[] }> =>
+        fetchWithAuth('/tenants/app-settings', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    // One count per app for the Home tiles; the header branch unless one is given.
+    getHomePulse: (params?: { storeId?: string }): Promise<Record<string, { count: number; href: string }>> =>
+        fetchWithAuth(`/home/pulse${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getTenantLocalizationSettings: () => fetchWithAuth('/tenants/localization-settings'),
     updateTenantLocalizationSettings: (data: { default_locale?: SupportedLocaleCode; timezone?: string }) => fetchWithAuth('/tenants/localization-settings', {
         method: 'PATCH',
@@ -4388,7 +4684,7 @@ export const api = {
     // Warranty Claims
     lookupWarrantySerial: (serialNumber: string) =>
         fetchWithAuth(`/warranty-claims/lookup?serialNumber=${encodeURIComponent(serialNumber)}`),
-    getWarrantyClaims: (params?: CreatedRangeParams) => fetchAllPages(withCreatedRange('/warranty-claims', params)),
+    getWarrantyClaims: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/warranty-claims', params)),
     getWarrantyClaim: (id: string) => fetchWithAuth(`/warranty-claims/${id}`),
     createWarrantyClaim: (data: any) => fetchWithAuth('/warranty-claims', {
         method: 'POST',
@@ -4784,8 +5080,10 @@ export const api = {
         appendReportScopeParams(q, params);
         return fetchWithAuth(`/accounting/reports/trial-balance${q.toString() ? `?${q}` : ''}`);
     },
-    listFundTransfers: (params?: { status?: string; sourceStoreId?: string; destinationStoreId?: string; from?: string; to?: string }) => {
+    listFundTransfers: (params?: { status?: string; storeId?: string; sourceStoreId?: string; destinationStoreId?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();
+        // A branch (or `all`): transfers where it is the source or the destination.
+        if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.status) q.set('status', params.status);
         if (params?.sourceStoreId) q.set('sourceStoreId', params.sourceStoreId);
         if (params?.destinationStoreId) q.set('destinationStoreId', params.destinationStoreId);
@@ -4984,8 +5282,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteExpenseCategory: (id: string) => fetchWithAuth(`/expenses/categories/${id}`, { method: 'DELETE' }),
-    getExpenseEntries: (params?: { from?: string; to?: string; categoryId?: string; createdFrom?: string; createdTo?: string }) => {
+    getExpenseEntries: (params?: { storeId?: string; from?: string; to?: string; categoryId?: string; createdFrom?: string; createdTo?: string }) => {
         const q = new URLSearchParams();
+        if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
         if (params?.categoryId) q.set('categoryId', params.categoryId);
@@ -5004,8 +5303,9 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
     }),
     deleteExpenseEntry: (id: string) => fetchWithAuth(`/expenses/entries/${id}`, { method: 'DELETE' }),
-    getExpenseSummary: (params?: { from?: string; to?: string }) => {
+    getExpenseSummary: (params?: { storeId?: string; from?: string; to?: string }) => {
         const q = new URLSearchParams();
+        if (params?.storeId) q.set('storeId', params.storeId);
         if (params?.from) q.set('from', params.from);
         if (params?.to) q.set('to', params.to);
         return fetchWithAuth(`/expenses/summary?${q}`);
@@ -5021,7 +5321,8 @@ export const api = {
         if (params?.createdTo) q.set('createdTo', params.createdTo);
         return fetchAllPages(`/loans${q.toString() ? `?${q}` : ''}`);
     },
-    getLoanSummary: () => fetchWithAuth('/loans/summary'),
+    getLoanSummary: (params?: { storeId?: string }) =>
+        fetchWithAuth(`/loans/summary${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getLoan: (id: string) => fetchWithAuth(`/loans/${id}`),
     createLoan: (data: any) => fetchWithAuth('/loans', {
         method: 'POST',
@@ -5048,7 +5349,8 @@ export const api = {
         if (params?.search) q.set('search', params.search);
         return fetchAllPages(`/investors${q.toString() ? `?${q}` : ''}`);
     },
-    getInvestorSummary: () => fetchWithAuth('/investors/summary'),
+    getInvestorSummary: (params?: { storeId?: string }) =>
+        fetchWithAuth(`/investors/summary${params?.storeId ? `?storeId=${encodeURIComponent(params.storeId)}` : ''}`),
     getInvestor: (id: string) => fetchWithAuth(`/investors/${id}`),
     createInvestor: (data: any) => fetchWithAuth('/investors', {
         method: 'POST',
@@ -5223,6 +5525,14 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    // Settings → Document Numbering (see packages/shared-types/document-numbering.ts).
+    getDocumentNumbering: (docType: string) => fetchWithAuth(`/document-numbering/${encodeURIComponent(docType)}`),
+    updateDocumentNumbering: (docType: string, data: Record<string, unknown>) =>
+        fetchWithAuth(`/document-numbering/${encodeURIComponent(docType)}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // The signed-in member's own invoice layout (see useInvoicePrintPrefs).
     getMyInvoicePrint: () => fetchWithAuth('/sales-settings/my-invoice-print'),
     updateMyInvoicePrint: (data: Record<string, unknown>) => fetchWithAuth('/sales-settings/my-invoice-print', {
@@ -5267,7 +5577,8 @@ export const api = {
         if (params.limit) q.set('limit', String(params.limit));
         return fetchWithAuth(`/products/${productId}/rate-history?${q}`, init);
     },
-    getCurrentUser: () => fetchWithAuth('/auth/me'),
+    /** The signed-in user, from the shared `me` cache — the same answer as `fetchMe()`. */
+    getCurrentUser: () => readMe(() => api.getMe()),
 
     // ── Projects ───────────────────────────────────────────────────────────
 
@@ -5585,7 +5896,8 @@ export const api = {
      */
     setBoardBackgroundImage: (
         id: string,
-        data: { imageBase64: string; mimeType?: string; fileName?: string },
+        /** The image itself, or what Cloudinary returned for a direct upload of it. */
+        data: { imageBase64: string; mimeType?: string; fileName?: string } | CloudinaryUpload,
     ) =>
         fetchWithAuth(`/projects/boards/${id}/background/image`, {
             method: 'PUT',
@@ -5956,10 +6268,6 @@ export const api = {
         fetchWithAuth(`/sprints${projectId ? `?projectId=${projectId}` : ''}`),
     getSprint: (id: string) => fetchWithAuth(`/sprints/${id}`),
     getSprintBurndown: (id: string) => fetchWithAuth(`/sprints/${id}/burndown`),
-    rebuildSprintSnapshots: (id: string, overwrite = false) =>
-        fetchWithAuth(`/sprints/${id}/rebuild-snapshots${overwrite ? '?overwrite=true' : ''}`, {
-            method: 'POST',
-        }),
     createSprint: (data: Record<string, unknown>) =>
         fetchWithAuth('/sprints', {
             method: 'POST',
@@ -5975,7 +6283,8 @@ export const api = {
     /** The sprint's counterpart of `setBoardBackgroundImage`. Returns the updated sprint. */
     setSprintBackgroundImage: (
         id: string,
-        data: { imageBase64: string; mimeType?: string; fileName?: string },
+        /** The image itself, or what Cloudinary returned for a direct upload of it. */
+        data: { imageBase64: string; mimeType?: string; fileName?: string } | CloudinaryUpload,
     ) =>
         fetchWithAuth(`/sprints/${id}/background/image`, {
             method: 'PUT',
@@ -5985,7 +6294,22 @@ export const api = {
     clearSprintBackground: (id: string) =>
         fetchWithAuth(`/sprints/${id}/background`, { method: 'DELETE' }),
     startSprint: (id: string) => fetchWithAuth(`/sprints/${id}/start`, { method: 'POST' }),
-    completeSprint: (id: string) => fetchWithAuth(`/sprints/${id}/complete`, { method: 'POST' }),
+    /**
+     * Omit `carryTo` to return unfinished tasks to the backlog. Returns the
+     * completed sprint with `carried_over` and `carried_to` (null for the backlog).
+     */
+    completeSprint: (
+        id: string,
+        carryTo?:
+            | { kind: 'backlog' }
+            | { kind: 'sprint'; sprintId: string }
+            | { kind: 'new'; name: string; startDate: string; endDate: string; goal?: string; start?: boolean },
+    ) =>
+        fetchWithAuth(`/sprints/${id}/complete`, {
+            method: 'POST',
+            body: JSON.stringify(carryTo ? { carryTo } : {}),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     assignTasksToSprint: (id: string, taskIds: string[]) =>
         fetchWithAuth(`/sprints/${id}/tasks`, {
             method: 'POST',

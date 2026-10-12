@@ -283,6 +283,7 @@ export class ImportsService {
 
         const where: Prisma.ImportShipmentWhereInput = {
             tenant_id: tenantId,
+            ...(query.storeId ? { store_id: query.storeId } : {}),
             ...(query.status ? { status: query.status } : {}),
             ...(query.supplierId ? { supplier_id: query.supplierId } : {}),
             ...(query.openOnly === 'true' ? { status: { notIn: closedStates } } : {}),
@@ -1035,7 +1036,7 @@ export class ImportsService {
             if (shipment.supplier_id) {
                 const supplier = await tx.supplier.findFirst({
                     where: { id: shipment.supplier_id, tenant_id: tenantId },
-                    select: { due_balance: true },
+                    select: { due_balance: true, store_id: true },
                 });
                 const balanceAfter = num(supplier?.due_balance) + sheet.goods_value_bdt;
 
@@ -1043,6 +1044,8 @@ export class ImportsService {
                     data: {
                         tenant_id: tenantId,
                         supplier_id: shipment.supplier_id,
+                        // A credit row belongs to its supplier's branch.
+                        store_id: supplier!.store_id,
                         type: 'CREDIT_PURCHASE',
                         amount: new Prisma.Decimal(sheet.goods_value_bdt),
                         balance_after: new Prisma.Decimal(balanceAfter),
@@ -1189,7 +1192,7 @@ export class ImportsService {
         if (shipment.supplier_id) {
             const supplier = await tx.supplier.findFirst({
                 where: { id: shipment.supplier_id, tenant_id: tenantId },
-                select: { due_balance: true },
+                select: { due_balance: true, store_id: true },
             });
             const balanceAfter = Math.round((num(supplier?.due_balance) - bookedBdt) * 100) / 100;
 
@@ -1197,6 +1200,8 @@ export class ImportsService {
                 data: {
                     tenant_id: tenantId,
                     supplier_id: shipment.supplier_id,
+                    // A credit row belongs to its supplier's branch.
+                    store_id: supplier!.store_id,
                     type: 'PAYMENT',
                     amount: new Prisma.Decimal(bookedBdt),
                     balance_after: new Prisma.Decimal(balanceAfter),
@@ -1364,10 +1369,11 @@ export class ImportsService {
      * watches a date. `days_to_expiry` goes negative rather than clamping,
      * because "expired eleven days ago" is the row that needs acting on.
      */
-    async lcRegister(tenantId: string, withinDays?: number) {
+    async lcRegister(tenantId: string, withinDays?: number, storeId?: string) {
         const shipments = await this.db.importShipment.findMany({
             where: {
                 tenant_id: tenantId,
+                ...(storeId ? { store_id: storeId } : {}),
                 lc_number: { not: null },
                 status: { notIn: [ShipmentStatus.CLOSED, ShipmentStatus.CANCELLED] },
                 ...(withinDays
@@ -1441,7 +1447,10 @@ export class ImportsService {
      * return needs. Dated on `paid_at` rather than `created_at`, because the
      * return reports what was paid in the period, not what was typed in.
      */
-    async dutyReport(tenantId: string, range: { from?: string; to?: string; includeUnpaid?: boolean }) {
+    async dutyReport(
+        tenantId: string,
+        range: { from?: string; to?: string; includeUnpaid?: boolean; storeId?: string },
+    ) {
         const window = range.from || range.to
             ? {
                   ...(range.from ? { gte: new Date(range.from) } : {}),
@@ -1452,6 +1461,7 @@ export class ImportsService {
         const costs = await this.db.importCost.findMany({
             where: {
                 tenant_id: tenantId,
+                ...(range.storeId ? { shipment: { store_id: range.storeId } } : {}),
                 cost_type: { in: ['CUSTOMS_DUTY', 'VAT', 'AIT', 'RD', 'SD'] },
                 // Unpaid assessments are excluded by default because the VAT
                 // return reports what was paid. They are still worth being able

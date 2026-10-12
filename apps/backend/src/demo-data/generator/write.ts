@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { applyInventoryMovement } from '../../database/inventory.utils';
 import { autoPostFromRules } from '../../accounting/posting.utils';
 import { classifyPaymentMode } from '../../sales/classify-payment-mode';
+import { nextSeriesNumber, seriesCode } from '../../common/code-series.util';
 import { type AnomalyKind, anomalyNote } from './anomalies';
 import type { DemoWorld, ProductRuntime, StoreRuntime } from './context';
 import { businessName, personName, phoneNumber } from './people';
@@ -212,6 +213,8 @@ export class DemoWriter {
             const customer = await tx.customer.create({
                 data: {
                     tenant_id: tenantId,
+                    // Demo parties all belong to the main branch.
+                    store_id: this.world.mainStore.storeId,
                     customer_code: `D${batchNumber}-CUS${String(i + 1).padStart(5, '0')}`,
                     name: personName(rng),
                     phone: phoneNumber(rng, seq),
@@ -224,10 +227,14 @@ export class DemoWriter {
         }
         this.counts.customers = this.world.customers.length;
 
+        // Numbered in one read: the batch's own transaction holds every insert.
+        const firstSupplierNumber = await nextSeriesNumber(tx, 'Supplier', tenantId);
         for (let i = 0; i < supplierCount; i++) {
             const supplier = await tx.supplier.create({
                 data: {
                     tenant_id: tenantId,
+                    store_id: this.world.mainStore.storeId,
+                    supplier_code: seriesCode('Supplier', firstSupplierNumber + i),
                     name: `${businessName(rng)} #${batchNumber}-${i + 1}`,
                     phone: phoneNumber(rng, batchNumber * 100000 + 90000 + i),
                 },
@@ -330,6 +337,7 @@ export class DemoWriter {
         await tx.supplierCreditTransaction.create({
             data: {
                 tenant_id: this.world.tenantId,
+                store_id: this.world.mainStore.storeId,
                 supplier_id: supplier.id,
                 type: 'CREDIT_PURCHASE',
                 amount: total,
@@ -564,7 +572,7 @@ export class DemoWriter {
             const balanceAfter = money(customer.due + balanceDue);
             await tx.customerCreditTransaction.create({
                 data: {
-                    tenant_id: this.world.tenantId, customer_id: customer.id, type: 'CREDIT_SALE',
+                    tenant_id: this.world.tenantId, store_id: this.world.mainStore.storeId, customer_id: customer.id, type: 'CREDIT_SALE',
                     amount: balanceDue, balance_after: balanceAfter,
                     reference_type: 'SALE', reference_id: sale.id, created_by: this.world.userId, created_at: date,
                 },
@@ -714,7 +722,7 @@ export class DemoWriter {
             const paymentNumber = this.world.ref('CPY');
             const payment = await tx.customerCreditTransaction.create({
                 data: {
-                    tenant_id: this.world.tenantId, customer_id: customer.id, type: 'PAYMENT',
+                    tenant_id: this.world.tenantId, store_id: this.world.mainStore.storeId, customer_id: customer.id, type: 'PAYMENT',
                     amount, balance_after: balanceAfter, payment_number: paymentNumber,
                     notes: 'Demo credit settlement', created_by: this.world.userId, created_at: date,
                 },
@@ -758,7 +766,7 @@ export class DemoWriter {
         const paymentNumber = this.world.ref('SPY');
         const payment = await tx.supplierCreditTransaction.create({
             data: {
-                tenant_id: this.world.tenantId, supplier_id: supplier.id, type: 'PAYMENT',
+                tenant_id: this.world.tenantId, store_id: this.world.mainStore.storeId, supplier_id: supplier.id, type: 'PAYMENT',
                 amount, balance_after: balanceAfter, payment_number: paymentNumber,
                 notes: overpay ? anomalyNote('SUPPLIER_OVERPAYMENT') : 'Demo supplier payment',
                 created_by: this.world.userId, created_at: date,
@@ -941,7 +949,7 @@ export class DemoWriter {
             const balanceAfter = money(supplier.due - creditReduction);
             await tx.supplierCreditTransaction.create({
                 data: {
-                    tenant_id: this.world.tenantId, supplier_id: supplier.id, type: 'ADJUSTMENT',
+                    tenant_id: this.world.tenantId, store_id: this.world.mainStore.storeId, supplier_id: supplier.id, type: 'ADJUSTMENT',
                     amount: -creditReduction, balance_after: balanceAfter, reference_type: 'PURCHASE_RETURN',
                     reference_id: purchaseReturn.id, notes: 'Demo purchase return', created_by: this.world.userId, created_at: date,
                 },

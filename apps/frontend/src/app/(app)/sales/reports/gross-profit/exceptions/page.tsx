@@ -9,7 +9,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 import { MarginCell, ProfitCell, StatTile } from '@/components/gross-profit';
 
 interface Row {
@@ -52,6 +53,7 @@ function defaultFrom() {
 
 export default function MarginExceptionsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const gp = t.salesReports.grossProfit;
     const [rows, setRows] = useState<Row[]>([]);
     const [byUser, setByUser] = useState<UserRow[]>([]);
@@ -62,14 +64,16 @@ export default function MarginExceptionsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate, floor]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate, floor]);
 
     const load = async () => {
         setLoading(true);
         try {
             const parsed = Number(floor);
             const data = await api.getMarginExceptions({
+                storeId: branch.apiStoreId,
                 from: fromDate,
                 to: toDate,
                 marginFloorPct: Number.isFinite(parsed) ? parsed : 0,
@@ -78,6 +82,7 @@ export default function MarginExceptionsPage() {
             setRows(data.rows);
             setByUser(data.byUser);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load margin exceptions', error);
         } finally {
             setLoading(false);
@@ -130,6 +135,7 @@ export default function MarginExceptionsPage() {
                     gp.exceptionsTitle,
                     'sales',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="grid md:grid-cols-4 gap-4">

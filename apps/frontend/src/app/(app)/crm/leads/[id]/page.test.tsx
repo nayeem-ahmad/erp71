@@ -8,9 +8,10 @@ jest.mock('next/link', () => {
     return MockLink;
 });
 
+const push = jest.fn();
 jest.mock('next/navigation', () => ({
     useParams: () => ({ id: 'lead-1' }),
-    useRouter: () => ({ push: jest.fn() }),
+    useRouter: () => ({ push }),
 }));
 
 jest.mock('@/components/crm/CrmActivityPanel', () => ({
@@ -22,6 +23,8 @@ jest.mock('@/lib/api', () => ({
     api: {
         getLead: jest.fn(),
         updateLead: jest.fn(),
+        convertLead: jest.fn(),
+        deleteLead: jest.fn(),
         getCrmAssignees: jest.fn().mockResolvedValue([]),
         getCustomFields: jest.fn().mockResolvedValue([]),
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
@@ -134,5 +137,71 @@ describe('LeadDetailPage — owner and address', () => {
         const [, payload] = api.updateLead.mock.calls[0];
         expect(payload.assigned_to).toBe('user-1');
         expect(payload.address).toBe('9 Banani Rd, Dhaka');
+    });
+});
+
+describe('LeadDetailPage — photo', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('shows the lead photo in the identity bar when one is saved', async () => {
+        api.getLead.mockResolvedValue({ ...lead, photo_url: 'https://res.cloudinary.com/demo/lead.jpg' });
+        render(<LeadDetailPage />);
+
+        const photo = await screen.findByRole('img', { name: 'Karim Traders' });
+        expect(photo).toHaveAttribute('src', 'https://res.cloudinary.com/demo/lead.jpg');
+        expect(screen.queryByText('KT')).not.toBeInTheDocument();
+    });
+
+    it('falls back to initials when the lead has no photo', async () => {
+        api.getLead.mockResolvedValue({ ...lead, photo_url: null });
+        render(<LeadDetailPage />);
+
+        expect(await screen.findByText('KT')).toBeInTheDocument();
+        expect(screen.queryByRole('img', { name: 'Karim Traders' })).not.toBeInTheDocument();
+    });
+});
+
+describe('LeadDetailPage — convert and delete', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        api.getLead.mockResolvedValue(lead);
+        jest.spyOn(window, 'confirm').mockReturnValue(true);
+        jest.spyOn(window, 'alert').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('opens the new customer once the lead is converted', async () => {
+        api.convertLead.mockResolvedValue({ lead: { ...lead, status: 'CONVERTED' }, customer: { id: 'cust-9' } });
+        render(<LeadDetailPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Convert to Customer' }));
+
+        await waitFor(() => expect(push).toHaveBeenCalledWith(expect.stringContaining('cust-9')));
+        expect(window.alert).not.toHaveBeenCalled();
+    });
+
+    it('says a customer already has this phone, then opens that customer', async () => {
+        api.convertLead.mockRejectedValue(Object.assign(new Error('exists'), { customerId: 'cust-3' }));
+        render(<LeadDetailPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Convert to Customer' }));
+
+        await waitFor(() => expect(push).toHaveBeenCalledWith(expect.stringContaining('cust-3')));
+        expect(window.alert).toHaveBeenCalledWith('A customer with this phone already exists.');
+    });
+
+    it('returns to the leads list after deleting', async () => {
+        api.deleteLead.mockResolvedValue(undefined);
+        render(<LeadDetailPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.deleteLead).toHaveBeenCalledWith('lead-1'));
+        expect(push).toHaveBeenCalledWith('/crm/leads');
     });
 });

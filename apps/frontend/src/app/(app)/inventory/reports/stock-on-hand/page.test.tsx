@@ -2,11 +2,15 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StockOnHandPage from './page';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
+import { ApiError } from '@/lib/api';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
+    ApiError: jest.requireActual('@/lib/api').ApiError,
     api: {
         getStockOnHand: jest.fn(),
-        getStores: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getProductGroups: jest.fn(),
         getProductSubgroups: jest.fn(),
@@ -82,12 +86,11 @@ const mockReport = {
 describe('StockOnHandPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        // Most of these are about the report, not the filter: start them on
+        // "All branches" so every warehouse is on offer.
+        mockBranchScope({ value: 'all' });
         const { api } = require('@/lib/api');
         api.getStockOnHand.mockResolvedValue(mockReport);
-        api.getStores.mockResolvedValue([
-            { id: 'store-1', name: 'Dhaka Branch' },
-            { id: 'store-2', name: 'Chattogram Branch' },
-        ]);
         api.getInventoryWarehouses.mockResolvedValue([
             { id: 'wh-1', name: 'Dhaka Main', is_active: true, store_id: 'store-1' },
             { id: 'wh-2', name: 'Chattogram', is_active: true, store_id: 'store-2' },
@@ -244,7 +247,7 @@ describe('StockOnHandPage', () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('All Branches'), { target: { value: 'store-2' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
 
         await waitFor(() =>
             expect(api.getStockOnHand).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-2' })),
@@ -255,7 +258,7 @@ describe('StockOnHandPage', () => {
         render(<StockOnHandPage />);
         await waitFor(() => expect(screen.getByText('Dhaka Main')).toBeInTheDocument());
 
-        fireEvent.change(screen.getByLabelText('All Branches'), { target: { value: 'store-2' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
 
         // wh-1 belongs to store-1, so it leaves the picker; wh-2 is store-2's own.
         await waitFor(() => expect(screen.queryByText('Dhaka Main')).not.toBeInTheDocument());
@@ -276,12 +279,44 @@ describe('StockOnHandPage', () => {
             expect(api.getStockOnHand).toHaveBeenCalledWith(expect.objectContaining({ warehouseId: 'wh-1' })),
         );
 
-        fireEvent.change(screen.getByLabelText('All Branches'), { target: { value: 'store-2' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
 
         await waitFor(() =>
             expect(api.getStockOnHand).toHaveBeenLastCalledWith(
                 expect.objectContaining({ storeId: 'store-2', warehouseId: undefined }),
             ),
+        );
+    });
+
+    it('opens on the header branch and sends it as storeId', async () => {
+        mockBranchScope();
+        const { api } = require('@/lib/api');
+        render(<StockOnHandPage />);
+
+        await waitFor(() =>
+            expect(api.getStockOnHand).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+        expect(api.getStockOnHand).toHaveBeenCalledTimes(1);
+        // Only the header branch's own warehouse is on offer.
+        await waitFor(() => expect(screen.getByRole('option', { name: 'Dhaka Main' })).toBeInTheDocument());
+        expect(screen.queryByRole('option', { name: 'Chattogram' })).not.toBeInTheDocument();
+    });
+
+    it('goes back to the header branch when the server refuses the chosen one', async () => {
+        mockBranchScope();
+        const { api } = require('@/lib/api');
+        api.getStockOnHand.mockImplementation(async ({ storeId }: { storeId?: string }) => {
+            if (storeId === 'store-2') throw new ApiError('Forbidden', 403);
+            return mockReport;
+        });
+        render(<StockOnHandPage />);
+        await waitFor(() => expect(api.getStockOnHand).toHaveBeenCalled());
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(resetToHeaderSpy).toHaveBeenCalled());
+        await waitFor(() =>
+            expect(api.getStockOnHand).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-1' })),
         );
     });
 });

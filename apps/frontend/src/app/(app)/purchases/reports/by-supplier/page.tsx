@@ -9,6 +9,8 @@ import { formatBDT } from '@/lib/format';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { useI18n } from '@/lib/i18n';
 
 interface SupplierRow {
@@ -44,6 +46,7 @@ function defaultTo() {
 
 export default function PurchasesBySupplierPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<SupplierRow[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [fromDate, setFromDate] = useState(defaultFrom());
@@ -51,19 +54,22 @@ export default function PurchasesBySupplierPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, fromDate, toDate]);
 
     const load = async () => {
         setLoading(true);
         try {
             const data = await api.getPurchasesBySupplier({
+                storeId: branch.apiStoreId,
                 from: fromDate || undefined,
                 to: toDate || undefined,
             });
             setSummary(data.summary);
             setRows(data.rows);
         } catch (err) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load purchases by supplier', err);
         } finally {
             setLoading(false);
@@ -130,6 +136,7 @@ export default function PurchasesBySupplierPage() {
                         t.purchaseReports.bySupplier.title,
                         'purchases',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="grid md:grid-cols-4 gap-4">

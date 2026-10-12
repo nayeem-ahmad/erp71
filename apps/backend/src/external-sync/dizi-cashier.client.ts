@@ -40,6 +40,8 @@ export interface DiziItem {
     BuyingPriceIncludingTax: number | string | null;
     WeightedAvgCost: number | string | null;
     MinimumStock: number | string | null;
+    /** Units on hand now, across Dizi's warehouses. */
+    StockInHand?: number | string | null;
     IsService: boolean | null;
     IsActive: boolean | null;
     IsDeleted: boolean | null;
@@ -181,6 +183,67 @@ export interface DiziSaleReturnDetail {
     ReturnItems: DiziSaleReturnItem[] | null;
 }
 
+/**
+ * Quotation shapes, taken from Dizi's own quotation screen (salequotation
+ * list/addEdit views and saleQuotationController.js) rather than recorded
+ * from a live account, so every field is optional and the mapper still reads
+ * the odd alternative spelling. The list row carries QuotationNo,
+ * TransactionDate, TraderId and TotalAmount; the detail carries Date,
+ * ValidUntil, CustomerId, Narration and the lines under SaleQuotationItems.
+ */
+export interface DiziQuotationHeader {
+    Id: string;
+    QuotationNo?: string | null;
+    SlipNo?: string | null;
+    TransactionDate?: string | null;
+    QuotationDate?: string | null;
+    Date?: string | null;
+    CreatedOn?: string | null;
+    CreatedDate?: string | null;
+    TraderId?: string | null;
+    CustomerId?: string | null;
+    TotalAmount?: number | string | null;
+    IsDeleted?: boolean | null;
+}
+
+/**
+ * A quotation line is pre-tax: PricePerUnit x Quantity = SubTotalAmount, with
+ * the line's tax in TaxAmount. The header discount is spread over the lines as
+ * DiscountAmount (on the base) and DiscountOnTax.
+ */
+export interface DiziQuotationItem {
+    ItemId: string | null;
+    Quantity: number | string | null;
+    PricePerUnit?: number | string | null;
+    SubTotalAmount?: number | string | null;
+    TaxAmount?: number | string | null;
+    DiscountAmount?: number | string | null;
+    DiscountOnTax?: number | string | null;
+    IsDeleted?: boolean | null;
+}
+
+export interface DiziQuotationDetail {
+    Id: string;
+    QuotationNo?: string | null;
+    SlipNo?: string | null;
+    Date?: string | null;
+    QuotationDate?: string | null;
+    TransactionDate?: string | null;
+    CustomerId?: string | null;
+    TraderId?: string | null;
+    TotalAmount?: number | string | null;
+    ValidUntil?: string | null;
+    ValidTill?: string | null;
+    ExpiryDate?: string | null;
+    Status?: string | null;
+    IsConverted?: boolean | null;
+    SalesId?: string | null;
+    Narration?: string | null;
+    Note?: string | null;
+    UpdatedOn?: string | null;
+    SaleQuotationItems?: DiziQuotationItem[] | null;
+}
+
 export interface DiziCashierCredentials {
     baseUrl: string;
     username: string;
@@ -291,6 +354,14 @@ export class DiziCashierClient {
 
     fetchSaleReturnDetail(id: string): Promise<DiziSaleReturnDetail> {
         return this.fetchDetail<DiziSaleReturnDetail>(`api/SalesReturn/${encodeURIComponent(id)}`);
+    }
+
+    fetchQuotationHeaders(): Promise<DiziQuotationHeader[]> {
+        return this.fetchList<DiziQuotationHeader>('api/SaleQuotation/', 'TransactionDate-desc', 'quotations');
+    }
+
+    fetchQuotationDetail(id: string): Promise<DiziQuotationDetail> {
+        return this.fetchDetail<DiziQuotationDetail>(`api/SaleQuotation/${encodeURIComponent(id)}`);
     }
 
     /**

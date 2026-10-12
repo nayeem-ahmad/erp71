@@ -16,6 +16,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { ImportsService } from './imports.service';
 import {
     AcceptShipmentDto,
@@ -47,23 +48,40 @@ import {
 @RequireStorePermission(StorePermission.VIEW_IMPORTS)
 @UseInterceptors(TenantInterceptor)
 export class ImportsController {
-    constructor(private readonly imports: ImportsService) {}
+    constructor(
+        private readonly imports: ImportsService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
+
+    /** The branch a list or report covers, checked against the caller's access. */
+    private branch(tenant: TenantContext, storeId: string | undefined): Promise<string | undefined> {
+        return this.branchScope.resolveStoreId(tenant, storeId, {
+            permissions: [StorePermission.VIEW_IMPORTS, StorePermission.MANAGE_IMPORTS],
+        });
+    }
 
     // ── Reports ──────────────────────────────────────────────────────────────
     // Declared before `:id`, or that route captures them.
 
     @Get('lc-register')
-    lcRegister(@Tenant() tenant: TenantContext, @Query('days') days?: string) {
-        return this.imports.lcRegister(tenant.tenantId, days ? Number(days) : undefined);
+    async lcRegister(
+        @Tenant() tenant: TenantContext,
+        @Query('days') days?: string,
+        @Query('storeId') storeId?: string,
+    ) {
+        const branch = await this.branch(tenant, storeId);
+        return this.imports.lcRegister(tenant.tenantId, days ? Number(days) : undefined, branch);
     }
 
     @Get('duty-report')
-    dutyReport(
+    async dutyReport(
         @Tenant() tenant: TenantContext,
         @Query('from') from?: string,
         @Query('to') to?: string,
+        @Query('storeId') storeId?: string,
     ) {
-        return this.imports.dutyReport(tenant.tenantId, { from, to });
+        const branch = await this.branch(tenant, storeId);
+        return this.imports.dutyReport(tenant.tenantId, { from, to, storeId: branch });
     }
 
     @Get('bank-limits')
@@ -80,8 +98,8 @@ export class ImportsController {
     }
 
     @Get()
-    findAll(@Tenant() tenant: TenantContext, @Query() query: ListShipmentsQueryDto) {
-        return this.imports.findAll(tenant.tenantId, query);
+    async findAll(@Tenant() tenant: TenantContext, @Query() query: ListShipmentsQueryDto) {
+        return this.imports.findAll(tenant.tenantId, { ...query, storeId: await this.branch(tenant, query.storeId) });
     }
 
     @Get(':id')

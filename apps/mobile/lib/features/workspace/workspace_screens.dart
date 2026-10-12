@@ -9,6 +9,7 @@ import '../../core/auth/models.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 import '../auth/sign_in_screen.dart' show webAppUrl;
+import '../lock/app_lock_gate.dart' show AppLockSetting;
 
 /// Picks the shop to work in. Shown after sign-in when there is more than one
 /// and none was used before, and from the account screen to switch.
@@ -230,6 +231,8 @@ class AccountScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          const SizedBox(height: 12),
+          const SectionCard(title: 'Security', child: AppLockSetting()),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),

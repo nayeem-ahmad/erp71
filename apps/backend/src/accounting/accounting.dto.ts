@@ -17,6 +17,7 @@ import {
     Min,
     Max,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { AccountCategory, AccountType, VoucherApprovalStatus, VoucherAttribution, VoucherType } from './accounting.constants';
 import { REPORT_LEVELS } from './report-level.utils';
 
@@ -290,6 +291,11 @@ export class CreateVoucherDto {
 }
 
 export class ListVouchersQueryDto {
+    /** A branch's own vouchers, or `all` (company-level vouchers included). Resolved against the caller's access. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsString()
     @IsIn(Object.values(VoucherType))
@@ -381,6 +387,11 @@ export class ListLedgerQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class FinancialKpiQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -391,6 +402,11 @@ export class FinancialKpiQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class AccountingOverviewQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;
@@ -401,6 +417,11 @@ export class AccountingOverviewQueryDto extends ApprovedOnlyQueryDto {
 }
 
 export class FinancialTrendQueryDto extends ApprovedOnlyQueryDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsDateString()
     from?: string;

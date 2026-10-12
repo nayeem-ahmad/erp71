@@ -3,6 +3,8 @@ import { DatabaseService } from '../database/database.service';
 import { ProjectAccessService, ProjectViewer } from './project-access.service';
 import { isValidProjectCode, suggestProjectCode } from './url-keys/project-code';
 import { ProjectSettingsService } from './project-settings.service';
+import { SprintMembershipService } from './sprint-membership.service';
+import { BurndownRecorder } from './burndown-recorder.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import {
@@ -45,6 +47,8 @@ export class ProjectsService {
         private readonly db: DatabaseService,
         private readonly settings: ProjectSettingsService,
         private readonly access: ProjectAccessService,
+        private readonly membership: SprintMembershipService,
+        private readonly burndownRecorder: BurndownRecorder,
     ) {}
 
     /**
@@ -506,13 +510,22 @@ export class ProjectsService {
     async remove(viewer: ProjectViewer, id: string) {
         const tenantId = viewer.tenantId;
         await this.assertProject(viewer, id);
-        await this.db.$transaction([
-            this.db.projectTask.updateMany({
+        const left = await this.db.$transaction(async (tx) => {
+            const inSprints = await tx.projectTask.findMany({
                 where: { tenant_id: tenantId, project_id: id, sprint_id: { not: null } },
-                data: { sprint_id: null },
-            }),
-            this.db.project.update({ where: { id }, data: { deleted_at: new Date() } }),
-        ]);
+                select: { id: true },
+            });
+            const { leftSprintIds } = await this.membership.moveTasks(
+                tx,
+                tenantId,
+                inSprints.map((task) => task.id),
+                null,
+                'REMOVED',
+            );
+            await tx.project.update({ where: { id }, data: { deleted_at: new Date() } });
+            return leftSprintIds;
+        });
+        await this.burndownRecorder.record(tenantId, left, 'TASK_REMOVED');
         return { success: true };
     }
 

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { DemoWorld, ProductRuntime, StoreRuntime } from './context';
 import { DemoWriter, money } from './write';
+import { ensureOnlineBranchInTx } from '../../stores/online-branch.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -18,6 +19,8 @@ type Tx = Prisma.TransactionClient;
 export class PipelineWriter {
     /** Customers whose loyalty balance moved today, flushed once at day end. */
     private readonly loyaltyDirty = new Set<number>();
+    /** The tenant's online branch, read or created on the first storefront order. */
+    private onlineStoreId?: string;
 
     constructor(private readonly world: DemoWorld, private readonly core: DemoWriter) {}
 
@@ -306,9 +309,12 @@ export class PipelineWriter {
         // Storefront orders deliberately do not move stock: in the app they are
         // web enquiries until the shop confirms one into a sale, and inventing a
         // movement here would put ProductStock out of step with the ledger.
+        // Storefront orders belong to the online branch, as in the app.
+        this.onlineStoreId ??= await ensureOnlineBranchInTx(tx, this.world.tenantId);
         await tx.storefrontOrder.create({
             data: {
                 tenantId: this.world.tenantId,
+                store_id: this.onlineStoreId,
                 customerName: customer.name,
                 customerEmail: `${customer.name.toLowerCase().replace(/[^a-z]+/g, '.')}@example.com`,
                 customerPhone: null,

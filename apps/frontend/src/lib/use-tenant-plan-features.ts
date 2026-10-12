@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { api } from './api';
+import { useMemo } from 'react';
+import { useMe } from '@/hooks/use-me';
 import { extractTenantPlan } from './nav-visibility';
 import { getWorkspaceItem } from './session-store';
 
@@ -31,24 +31,21 @@ const EMPTY: TenantPlanState = {
   ready: true,
 };
 
-export function useTenantPlanFeatures() {
-  const [state, setState] = useState<TenantPlanState>({ ...EMPTY, ready: false });
+const PENDING: TenantPlanState = { ...EMPTY, ready: false };
 
-  useEffect(() => {
-    let active = true;
-    api.getMe()
-      .then((me) => {
-        if (!active) return;
-        const tenantId = getWorkspaceItem('tenant_id');
-        setState({ ...extractTenantPlan(me, tenantId), ready: true });
-      })
-      .catch(() => {
-        if (active) setState(EMPTY);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+/**
+ * The workspace's plan and this member's grants, read off the shared `/auth/me`
+ * cache. Sixteen screens use this; each used to fetch `/auth/me` for itself on
+ * mount, and now they are ready on the first render whenever the shell already
+ * holds the answer.
+ */
+export function useTenantPlanFeatures(): TenantPlanState {
+  const { data: me, isError } = useMe();
+  const tenantId = getWorkspaceItem('tenant_id');
 
-  return state;
+  return useMemo(() => {
+    if (me !== undefined) return { ...extractTenantPlan(me, tenantId), ready: true };
+    // Nothing to read the plan from: degrade to the free set, as before.
+    return isError ? EMPTY : PENDING;
+  }, [me, isError, tenantId]);
 }

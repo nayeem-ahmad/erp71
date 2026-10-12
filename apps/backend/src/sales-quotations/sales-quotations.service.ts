@@ -89,7 +89,7 @@ export class SalesQuotationsService {
 
         return this.db.$transaction(async (tx) => {
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
             const quoteNumber = await nextDocumentNumber(tx, {
@@ -110,6 +110,8 @@ export class SalesQuotationsService {
                     customer_id: dto.customerId,
                     quote_number: quoteNumber,
                     total_amount: dto.totalAmount,
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
+                    vat_amount: dto.vatAmount ?? 0,
                     valid_until: dto.validUntil ? new Date(dto.validUntil) : null,
                     notes: dto.notes,
                     ...terms,
@@ -156,6 +158,8 @@ export class SalesQuotationsService {
                     customer_id: oldQuote.customer_id,
                     quote_number: oldQuote.quote_number,
                     total_amount: oldQuote.total_amount,
+                    prices_include_vat: oldQuote.prices_include_vat,
+                    vat_amount: oldQuote.vat_amount,
                     valid_until: oldQuote.valid_until,
                     notes: oldQuote.notes,
                     version: newVersion,
@@ -240,6 +244,9 @@ export class SalesQuotationsService {
             storeId: quote.store_id,
             customerId: quote.customer_id || undefined,
             totalAmount: toBdt(quote.total_amount),
+            // The order is priced exactly as the quotation was.
+            pricesIncludeVat: quote.prices_include_vat ?? true,
+            vatAmount: toBdt(quote.vat_amount),
             items: quote.items.map(item => ({
                 productId: item.product_id,
                 quantity: item.quantity,
@@ -308,6 +315,10 @@ export class SalesQuotationsService {
                 updateData.valid_until = dto.validUntil ? new Date(dto.validUntil) : null;
             }
 
+            if (dto.vatAmount !== undefined) {
+                updateData.vat_amount = dto.vatAmount;
+            }
+
             if (dto.items && dto.items.length > 0) {
                 const totalAmount = dto.totalAmount ?? dto.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
@@ -353,7 +364,7 @@ export class SalesQuotationsService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; docKind?: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string; docKind?: string },
     ): Promise<PaginatedResult<unknown>> {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
@@ -365,6 +376,7 @@ export class SalesQuotationsService {
             count: (args) => this.db.quotation.count(args as any),
             where: {
                 tenant_id: tenantId,
+                ...(opts?.storeId ? { store_id: opts.storeId } : {}),
                 ...(created ? { created_at: created } : {}),
                 // Absent means both kinds, which is what an unfiltered list has
                 // always shown. The two are only ever separated on request.
@@ -492,6 +504,7 @@ export class SalesQuotationsService {
                 valid_until: true,
                 notes: true,
                 total_amount: true,
+                vat_amount: true,
                 doc_kind: true,
                 currency: true,
                 incoterm: true,

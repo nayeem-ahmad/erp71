@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import {
   Palette, Globe, Receipt, Monitor, ShoppingBag, CreditCard, Tag, Gift,
   Bell, Mail, HandCoins, Sparkles, FileSearch, Database, Store, Printer,
-  BarChart3, Link2, KeyRound,
+  BarChart3, Link2, KeyRound, Hash, LayoutGrid,
 } from 'lucide-react';
 import CompactLinkGrid from '@/components/ui/compact/CompactLinkGrid';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -16,8 +16,17 @@ import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { isItemVisible } from '@/lib/nav-visibility';
 import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
 import { isAccountingOnlyPlan } from '@/lib/plan-entitlements';
+import { useAppShell } from '@/contexts/AppShellContext';
 
-type Card = { href: string; key: string; icon: any; accent: string; entitlement?: string };
+type Card = {
+  href: string;
+  key: string;
+  icon: any;
+  accent: string;
+  entitlement?: string;
+  /** Only with the app shell on — the page manages the rail's apps. */
+  appShellOnly?: boolean;
+};
 type Section = { key: string; cards: Card[] };
 
 const SECTIONS: Section[] = [
@@ -27,12 +36,14 @@ const SECTIONS: Section[] = [
     // Gated on the accounting module: without it the only choice on the page is
     // the retail dashboard the tenant already has.
     { href: routes.settings.dashboard, key: 'dashboard', icon: BarChart3, accent: 'bg-blue-50 text-blue-700 border-blue-100', entitlement: 'premiumAccounting' },
+    { href: routes.settings.apps, key: 'apps', icon: LayoutGrid, accent: 'bg-blue-50 text-blue-700 border-blue-100', appShellOnly: true },
     { href: routes.settings.tax, key: 'tax', icon: Receipt, accent: 'bg-amber-50 text-amber-700 border-amber-100' },
     { href: routes.settings.stores, key: 'stores', icon: Store, accent: 'bg-orange-50 text-orange-700 border-orange-100' },
   ]},
   { key: 'salesPos', cards: [
     { href: routes.settings.counters, key: 'counters', icon: Monitor, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
     { href: routes.settings.sales, key: 'sales', icon: ShoppingBag, accent: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+    { href: routes.settings.documentNumbering, key: 'documentNumbering', icon: Hash, accent: 'bg-blue-50 text-blue-700 border-blue-100' },
     { href: routes.settings.printTemplates, key: 'printTemplates', icon: Printer, accent: 'bg-slate-50 text-slate-700 border-slate-200' },
     { href: routes.settings.paymentMethods, key: 'paymentMethods', icon: CreditCard, accent: 'bg-primary-light text-blue-700 border-primary-border' },
     { href: routes.settings.discountCodes, key: 'discountCodes', icon: Tag, accent: 'bg-danger-light text-danger-text border-red-200' },
@@ -60,15 +71,17 @@ export default function SettingsHubPage() {
   const { planCode, features, ready } = useTenantPlanFeatures();
   const s = t.settings.hub;
   const accountingOnly = isAccountingOnlyPlan(planCode, features);
+  const { enabled: appShellEnabled } = useAppShell();
 
   const grids = useMemo(() =>
     SECTIONS.map((section) => ({
       label: s.sections[section.key],
       links: section.cards
         .filter((c) => isItemVisible(c, features) && !(accountingOnly && isAccountingOnlyBlockedPath(c.href)))
+        .filter((c) => !c.appShellOnly || appShellEnabled)
         .map((c) => ({ href: c.href, title: s.links[c.key], icon: c.icon, accent: c.accent })),
     })).filter((g) => g.links.length > 0),
-  [s, features, accountingOnly]);
+  [s, features, accountingOnly, appShellEnabled]);
 
   return (
     <PageShell maxWidth="full">

@@ -158,4 +158,19 @@ describe('FundTransfersService', () => {
         );
         expect(result).toHaveLength(1);
     });
+
+    it('lists the transfers out of or into one branch', async () => {
+        db.fundTransfer.findMany.mockResolvedValue([]);
+
+        await service.list('tenant-1', { timezone: 'Asia/Dhaka', storeId: 'store-1' });
+
+        expect(db.fundTransfer.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: {
+                    tenant_id: 'tenant-1',
+                    OR: [{ source_store_id: 'store-1' }, { destination_store_id: 'store-1' }],
+                },
+            }),
+        );
+    });
 });

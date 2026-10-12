@@ -14,15 +14,27 @@ export function RankedListPanel({
     title,
     items,
     emptyLabel,
+    loading = false,
 }: {
     title: string;
     items: RankedItem[];
     emptyLabel: string;
+    /**
+     * The list's request is still out. Without this an empty list reads "none
+     * found" for as long as the request takes, which is a claim, not a wait.
+     */
+    loading?: boolean;
 }) {
     return (
         <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <h3 className="mb-2 text-xs font-bold text-gray-900">{title}</h3>
-            {items.length === 0 ? (
+            {loading ? (
+                <div data-testid="ranked-list-skeleton" className="animate-pulse space-y-2 py-1">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <div key={index} className="h-6 rounded bg-gray-100" />
+                    ))}
+                </div>
+            ) : items.length === 0 ? (
                 <p className="py-4 text-center text-[11px] text-gray-400">{emptyLabel}</p>
             ) : (
                 <ul>

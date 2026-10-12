@@ -1,3 +1,5 @@
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+
 /**
  * Browser origins that must always be trusted in production, whatever the
  * environment happens to say.
@@ -61,4 +63,33 @@ export function getAllowedOrigins(): string[] {
 export function isAllowedOrigin(origin: string | undefined): boolean {
     if (!origin) return true;
     return getAllowedOrigins().includes(origin);
+}
+
+/**
+ * How long a browser may reuse a CORS preflight answer, in seconds.
+ *
+ * Left unset, browsers keep one for about 5 s and per exact URL, so a
+ * cross-origin caller pays an `OPTIONS` round trip before nearly every request
+ * — about 0.25 s each from Bangladesh. The app no longer needs this: it calls
+ * the API on its own origin and sends no preflights at all. It is for what
+ * stays cross-origin — the marketing site, and any deployment configured with
+ * a separate API host. 7200 is Chromium's ceiling, so more would buy nothing
+ * there.
+ */
+export const CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200;
+
+/** `enableCors` options: allowlisted browser origins, credentials, cached preflights. */
+export function corsOptions(allowedOrigins: string[] = getAllowedOrigins()): CorsOptions {
+    return {
+        origin: (origin, callback) => {
+            // No Origin header: server-to-server, webhooks, same-origin GETs.
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+                return;
+            }
+            callback(new Error(`Origin ${origin} is not allowed by CORS`));
+        },
+        credentials: true,
+        maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
+    };
 }

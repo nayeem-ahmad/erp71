@@ -17,6 +17,7 @@ import { toast } from '@/lib/toast';
 import { DataTable } from '@/components/data-table';
 import PlatformUserFormModal, { type PlatformAdminUser } from '@/components/admin/platform-users/PlatformUserFormModal';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -40,7 +41,7 @@ export default function AdminUsersPage() {
     const [actionUserId, setActionUserId] = useState('');
 
     useEffect(() => {
-        api.getMe().then((me: { id?: string }) => setSelfId(me?.id ?? '')).catch(() => null);
+        fetchMe().then((me: { id?: string }) => setSelfId(me?.id ?? '')).catch(() => null);
     }, []);
 
     const load = async (query = search) => {

@@ -9,6 +9,8 @@ import { formatBDT } from '@/lib/format';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { useI18n } from '@/lib/i18n';
 
 interface ProductRow {
@@ -44,6 +46,7 @@ function defaultTo() {
 
 export default function PurchasesByProductPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<ProductRow[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [groups, setGroups] = useState<any[]>([]);
@@ -59,13 +62,15 @@ export default function PurchasesByProductPage() {
     }, []);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [groupId, subgroupId, fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, groupId, subgroupId, fromDate, toDate]);
 
     const load = async () => {
         setLoading(true);
         try {
             const data = await api.getPurchasesByProduct({
+                storeId: branch.apiStoreId,
                 groupId: groupId || undefined,
                 subgroupId: subgroupId || undefined,
                 from: fromDate || undefined,
@@ -74,6 +79,7 @@ export default function PurchasesByProductPage() {
             setSummary(data.summary);
             setRows(data.rows);
         } catch (err) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load purchases by product', err);
         } finally {
             setLoading(false);
@@ -156,6 +162,7 @@ export default function PurchasesByProductPage() {
                         t.purchaseReports.byProduct.title,
                         'purchases',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="grid md:grid-cols-3 gap-4">

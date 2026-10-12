@@ -13,6 +13,7 @@ import {
     ValidateNested,
     ArrayMinSize,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { Type } from 'class-transformer';
 import {
     IMPORT_COST_TYPES,
@@ -344,6 +345,11 @@ export class CreateImportDocumentDto {
 }
 
 export class ListShipmentsQueryDto extends PaginationDto {
+    /** One branch, or `all`. Resolved against the caller's branch access before use. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsIn(SHIPMENT_STATUSES)
     status?: string;

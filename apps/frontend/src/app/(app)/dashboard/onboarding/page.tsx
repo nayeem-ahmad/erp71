@@ -7,7 +7,9 @@ import {
     Stethoscope, ShoppingBag, Computer, Pill,
 } from 'lucide-react';
 import { BUSINESS_TYPE_LABELS, BUSINESS_TYPE_VALUES, BUSINESS_TYPES_WITH_TEMPLATE, type BusinessType } from '@erp71/shared-types';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { useI18n } from '@/lib/i18n';
 import { getWorkspaceItem, setWorkspaceItem } from '@/lib/session-store';
 
@@ -351,21 +353,21 @@ function PosStep({ onNext }: { onNext: () => void }) {
         }
     }, []);
 
+    // Coming back from ringing up the sale — in another tab or another window —
+    // is the moment it matters, so a focus check answers straight away; the
+    // poll covers a sale made on another device, while this tab is in view.
     useEffect(() => {
         void checkForSales();
-        const interval = setInterval(() => {
-            void checkForSales();
-        }, 4000);
 
         const onFocus = () => {
             void checkForSales();
         };
         window.addEventListener('focus', onFocus);
         return () => {
-            clearInterval(interval);
             window.removeEventListener('focus', onFocus);
         };
     }, [checkForSales]);
+    useVisibleInterval(() => void checkForSales(), 4000);
 
     if (saleDetected) {
         return (
@@ -462,7 +464,7 @@ export default function OnboardingPage() {
             return;
         }
 
-        api.getMe()
+        fetchMe()
             .then((me) => {
                 const tenantId = getWorkspaceItem('tenant_id');
                 const tenant = me?.tenants?.find((item: any) => item.id === tenantId) || me?.tenants?.[0];

@@ -25,6 +25,7 @@ export const OPEN_ROUTES: Record<string, string> = {
     'AiController.getConversation': "self-scoped conversations; per-tool permission is checked in the chat service", // GET /ai/chat/conversations/:id
     'AiController.deleteConversation': "self-scoped conversations; per-tool permission is checked in the chat service", // DELETE /ai/chat/conversations/:id
     'AssetsController.uploadFile': "TODO(api-audit 2026-09-29): no permission declared — see TODO.md", // POST /assets/upload
+    'AssetsController.uploadSignature': "one route signs for every upload purpose; it asserts the permission that purpose's save route needs (UPLOAD_PURPOSES)", // POST /assets/upload-signature
     'AuditController.list': "permission is enforced in the service layer, not by a decorator", // GET /audit-logs
     'AuthController.logout': "sign-in session and account bootstrap for the signed-in user (no workspace data)", // POST /auth/logout
     'AuthController.setupStore': "sign-in session and account bootstrap for the signed-in user (no workspace data)", // POST /auth/setup-store
@@ -50,6 +51,12 @@ export const OPEN_ROUTES: Record<string, string> = {
     'DemoDataController.status': "loading demo data asserts OWNER in the service; the reads are status only", // GET /tenants/demo-data/status
     'DemoDataController.batches': "loading demo data asserts OWNER in the service; the reads are status only", // GET /tenants/demo-data/batches
     'DemoDataController.options': "loading demo data asserts OWNER in the service; the reads are status only", // GET /tenants/demo-data/options
+    'AlertsController.preferences': "self-scoped: the signed-in member’s own push preferences and the shop’s alert lines they are subject to", // GET /alerts/preferences
+    'AlertsController.updatePreferences': "self-scoped: changes only the signed-in member’s own push preferences", // PUT /alerts/preferences
+    'HomePulseController.getPulse': "every metric asserts its own module’s permission, plan and branch in the service (home-pulse.service); a member gets only counts they could open", // GET /home/pulse
+    'PushController.config': "self-scoped: the app's own push setup, the same for every member and nothing tenant-owned", // GET /push/config
+    'PushController.register': "self-scoped: registers the signed-in person's own phone against their own session", // POST /push/devices
+    'PushController.unregister': "self-scoped: removes only the signed-in person's own phone", // POST /push/devices/unregister
     'TenantExternalSyncController.getMatchCandidates': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/match-candidates
     'TenantExternalSyncController.applyMatchDecisions': "every handler asserts OWNER in the service (assertAllowed)", // POST /tenants/external-sync/match-decisions
     'TenantExternalSyncController.listProviders': "every handler asserts OWNER in the service (assertAllowed)", // GET /tenants/external-sync/providers
@@ -110,6 +117,8 @@ export const OPEN_ROUTES: Record<string, string> = {
     'TenantsController.getLocalizationSettings': "shell read: every page needs it to render, whatever the member’s role", // GET /tenants/localization-settings
     'TenantsController.getDashboardSettings': "shell read: every page needs it to render, whatever the member’s role", // GET /tenants/dashboard-settings
     'TenantsController.updateDashboardSettings': "asserts OWNER/MANAGER in the service (tenants.service)", // PATCH /tenants/dashboard-settings
+    'TenantsController.getAppSettings': "shell read: the rail and Home need the hidden list, whatever the member’s role", // GET /tenants/app-settings
+    'TenantsController.updateAppSettings': "asserts OWNER/MANAGER in the service (tenants.service)", // PATCH /tenants/app-settings
     'TenantsController.getPasswordPolicy': "shell read: every page needs it to render, whatever the member’s role", // GET /tenants/password-policy
     'TenantsController.updatePasswordPolicy': "asserts OWNER/MANAGER in the service (tenants.service)", // PATCH /tenants/password-policy
     'TenantsController.clearData': "shell read: every page needs it to render, whatever the member’s role", // DELETE /tenants/data

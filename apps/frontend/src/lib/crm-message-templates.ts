@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { getWorkspaceItem } from '@/lib/session-store';
 
 /** Which composer a template is offered in. */
@@ -64,6 +65,26 @@ export function fillTemplate(text: string, vars: TemplateVars): string {
 }
 
 /**
+ * The `{{…}}` placeholders in `text` that `fillTemplate` will never replace —
+ * a misspelt token, or one that is not in `TEMPLATE_TOKENS` at all — each listed
+ * once, exactly as typed.
+ *
+ * For a warning in Setup, not a validation rule: a token left standing is right
+ * at pick time, but `{{nmae}}` should not first surface in front of a customer.
+ * Only the double-brace form counts, so a tenant's literal `{500}` is its own.
+ */
+export function unknownTemplateTokens(text: string): string[] {
+    const known: readonly string[] = TEMPLATE_TOKENS;
+    const found = new Set<string>();
+    for (const [whole, inner] of text.matchAll(/\{\{([^{}]*)\}\}/g)) {
+        // Trimmed and lowercased the way `fillTemplate` reads it; anything with
+        // a space left in it cannot be a known token, so it falls through too.
+        if (!known.includes(inner.trim().toLowerCase())) found.add(whole);
+    }
+    return [...found];
+}
+
+/**
  * The tenant's message templates for one composer.
  *
  * `usage` is sent to the server rather than filtered here so the picker and the
@@ -116,7 +137,7 @@ export function useTemplateIdentity() {
 
     useEffect(() => {
         let cancelled = false;
-        api.getMe()
+        fetchMe()
             .then((me: { name?: string | null; tenants?: { id: string; name?: string | null }[] }) => {
                 if (cancelled) return;
                 // Same tenant resolution CRM Setup uses: the workspace this tab

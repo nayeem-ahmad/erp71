@@ -112,6 +112,9 @@ export type PublicQuotation = {
     notes: string | null;
     items: PublicQuotationItem[];
     total_amount: number;
+    /// VAT added on top of the lines (part of `total_amount`); 0 when the
+    /// prices include it.
+    vat_amount: number;
 
     /// QUOTE | PROFORMA. The page reads this to decide what to call itself and
     /// whether to render the terms and bank panels at all.
@@ -171,6 +174,7 @@ export function toPublicQuotation(
         notes: row.notes ?? null,
         items,
         total_amount,
+        vat_amount: money(row.vat_amount),
 
         doc_kind: row.doc_kind ?? 'QUOTE',
         currency: row.currency ?? 'BDT',

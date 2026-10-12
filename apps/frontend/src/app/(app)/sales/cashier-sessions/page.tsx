@@ -7,10 +7,11 @@ import { formatBDT, formatDateTime } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell, Button, BranchFilter } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { toast } from '@/lib/toast';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 export default function CashierSessionsPage() {
     const { t, locale } = useI18n();
@@ -33,12 +34,22 @@ export default function CashierSessionsPage() {
     // read short by exactly its takings.
     const [summary, setSummary] = useState<any>(null);
     const [openTills, setOpenTills] = useState<any[]>([]);
+    // The branch filter picks whose floor the open-tills panel shows. Your own
+    // shift and opening one stay on the header branch: a till is opened where
+    // you are signed in to sell, not wherever you are looking.
+    const branch = useBranchScope({ allowAll: false });
+    const floorStoreId = branch.apiStoreId;
 
     useEffect(() => {
         loadSession();
         loadCounters();
-        loadOpenTills();
     }, []);
+
+    useEffect(() => {
+        if (!branch.ready) return;
+        void loadOpenTills();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, floorStoreId]);
 
     const loadSession = async () => {
         try {
@@ -67,12 +78,12 @@ export default function CashierSessionsPage() {
     // the only way a supervisor sees the shop at all.
     const loadOpenTills = async () => {
         try {
-            const storeId = getWorkspaceItem('store_id') || '';
-            if (!storeId) return;
-            const data = await api.getOpenCashierSessionsByStore(storeId);
+            if (!floorStoreId) return;
+            const data = await api.getOpenCashierSessionsByStore(floorStoreId);
             setOpenTills(Array.isArray(data) ? data : []);
-        } catch {
-            // Non-fatal: the panel is additional context, not the page.
+        } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
+            // Otherwise non-fatal: the panel is additional context, not the page.
         }
     };
 
@@ -180,7 +191,9 @@ export default function CashierSessionsPage() {
                         'sales',
                     )}
                     actions={
-                        !session ? (
+                        <>
+                        <BranchFilter scope={branch} />
+                        {!session ? (
                             <button
                                 onClick={() => setShowOpenModal(true)}
                                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg text-sm font-semibold shadow-lg flex items-center space-x-2 rtl:space-x-reverse transition-all"
@@ -196,7 +209,8 @@ export default function CashierSessionsPage() {
                                 <Clock className="w-5 h-5" />
                                 <span>{t.cashierSessions.closeShift}</span>
                             </button>
-                        )
+                        )}
+                        </>
                     }
                 />
 

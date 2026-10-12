@@ -1,4 +1,5 @@
 import { IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { TAKE_FIELDS, type TakeField } from './products.merge';
 
 const COMPOUND_UNIT_TYPES = ['none', 'ft_in', 'dozen_pcs', 'kg_g', 'lb_oz', 'm_cm'] as const;
@@ -25,10 +26,11 @@ export class CreateProductDto {
     price: number;
 
     /**
-     * What a unit costs to buy. Seeds the weighted-average pool when the
-     * product is created with opening stock. Optional — a product entered
-     * without one simply has no cost basis until its first purchase receipt,
-     * which is more honest than assuming the selling price.
+     * What a unit costs to buy. Seeds the weighted-average pool: through the
+     * opening-stock movement when there is opening stock, otherwise as an
+     * opening cost held until the first receipt replaces it. Optional — a
+     * product entered without one simply has no cost basis until its first
+     * purchase receipt, which is more honest than assuming the selling price.
      */
     @IsOptional()
     @IsNumber()
@@ -230,4 +232,11 @@ export class MergeProductDto {
     @IsArray()
     @IsIn([...TAKE_FIELDS], { each: true })
     takeFields?: TakeField[];
+}
+
+/** The dashboard low-stock tile: one branch, `all`, or (omitted) the caller's default. */
+export class LowStockCountQueryDto {
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
 }

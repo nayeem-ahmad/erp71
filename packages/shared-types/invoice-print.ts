@@ -15,6 +15,33 @@
  * gains an option.
  */
 
+/**
+ * Which page design the invoice prints on. `standard` is the layout the
+ * invoice has always had; `detailed` is the full trade invoice — a labelled
+ * invoice / order / date strip, bill-to and payment status side by side, a
+ * warranty column, tax broken out beside the totals, and a QR code that opens
+ * the invoice in the app for anyone allowed to see it. Sheet paper only: a
+ * roll prints the standard design whatever is chosen.
+ */
+export const INVOICE_LAYOUTS = ['standard', 'detailed'] as const;
+export type InvoiceLayout = (typeof INVOICE_LAYOUTS)[number];
+
+/**
+ * Whether the detailed layout prints its Warranty column: always (empty where
+ * no item has one, as a trade invoice's does), only when some item on the
+ * invoice has a warranty, or never.
+ */
+export const INVOICE_WARRANTY_COLUMNS = ['always', 'when-used', 'never'] as const;
+export type InvoiceWarrantyColumn = (typeof INVOICE_WARRANTY_COLUMNS)[number];
+
+/**
+ * Rules on the detailed layout's item table: none (its shaded header and rows
+ * alone), or a thin line around the table and between its columns. The
+ * standard layout has its own `table_style`.
+ */
+export const INVOICE_TABLE_BORDERS = ['none', 'columns'] as const;
+export type InvoiceTableBorders = (typeof INVOICE_TABLE_BORDERS)[number];
+
 /** Breathing room around the invoice body, on top of the page margin. */
 export const INVOICE_PADDINGS = ['narrow', 'normal', 'wide'] as const;
 export type InvoicePadding = (typeof INVOICE_PADDINGS)[number];
@@ -34,6 +61,7 @@ export const INVOICE_FOOTER_MAX_LENGTH = 500;
 
 export interface InvoicePrintPrefs {
   version: 1;
+  layout: InvoiceLayout;
   padding: InvoicePadding;
   balance: InvoiceBalanceMode;
   table_style: InvoiceTableStyle;
@@ -45,6 +73,10 @@ export interface InvoicePrintPrefs {
   signature_lines: boolean;
   /** Drop the Discount column when no line carries a discount. */
   hide_empty_discount: boolean;
+  /** The detailed layout's Warranty column — see `INVOICE_WARRANTY_COLUMNS`. */
+  warranty_column: InvoiceWarrantyColumn;
+  /** The detailed layout's item table rules — see `INVOICE_TABLE_BORDERS`. */
+  table_borders: InvoiceTableBorders;
   /**
    * The line under the invoice. `null` prints the built-in thank-you; an empty
    * string prints no footer at all — the two are different answers.
@@ -55,6 +87,7 @@ export interface InvoicePrintPrefs {
 /** Exactly how the invoice printed before any of this was configurable. */
 export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   version: 1,
+  layout: 'standard',
   padding: 'normal',
   balance: 'when-owed',
   table_style: 'minimal',
@@ -62,6 +95,8 @@ export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   serial_column: false,
   signature_lines: false,
   hide_empty_discount: false,
+  warranty_column: 'always',
+  table_borders: 'none',
   footer_text: null,
 };
 
@@ -89,6 +124,7 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
 
   return {
     version: 1,
+    layout: oneOf(INVOICE_LAYOUTS, r.layout, d.layout),
     padding: oneOf(INVOICE_PADDINGS, r.padding, d.padding),
     balance: oneOf(INVOICE_BALANCE_MODES, r.balance, d.balance),
     table_style: oneOf(INVOICE_TABLE_STYLES, r.table_style, d.table_style),
@@ -96,6 +132,14 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
     serial_column: bool(r.serial_column, d.serial_column),
     signature_lines: bool(r.signature_lines, d.signature_lines),
     hide_empty_discount: bool(r.hide_empty_discount, d.hide_empty_discount),
+    warranty_column: oneOf(
+      INVOICE_WARRANTY_COLUMNS,
+      r.warranty_column,
+      // The first version of this option was an on/off switch, "hide when empty".
+      // Anyone who turned it on keeps what they chose.
+      r.hide_empty_warranty === true ? 'when-used' : d.warranty_column,
+    ),
+    table_borders: oneOf(INVOICE_TABLE_BORDERS, r.table_borders, d.table_borders),
     footer_text:
       typeof r.footer_text === 'string'
         ? r.footer_text.slice(0, INVOICE_FOOTER_MAX_LENGTH)

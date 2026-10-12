@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Loader2, Play, Upload } from 'lucide-react';
 import { Button, Checkbox, Input, Select, StatusBadge } from '@/components/ui';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { downloadMatchWorkbook } from '@/lib/match-workbook';
+import { snapshotCountEntries } from '@/lib/snapshot-counts';
 import {
     applyBulkDecision,
     assembleDecisionRows,
@@ -174,15 +176,11 @@ export function SnapshotImportPanel({
     }, [refreshList]);
 
     const extracting = snapshots.some((snap) => snap.status === 'EXTRACTING');
-    useEffect(() => {
-        if (!extracting) return;
-        const timer = setInterval(() => {
-            void refreshList().catch(() => {
-                // A failed poll is not worth interrupting the page for.
-            });
-        }, SNAPSHOT_POLL_MS);
-        return () => clearInterval(timer);
-    }, [extracting, refreshList]);
+    useVisibleInterval(() => {
+        void refreshList().catch(() => {
+            // A failed poll is not worth interrupting the page for.
+        });
+    }, extracting ? SNAPSHOT_POLL_MS : null);
 
     const selected = snapshots.find((snap) => snap.id === selectedId) ?? null;
     const selectedReadyId = selected?.status === 'READY' ? selected.id : null;
@@ -499,13 +497,27 @@ export function SnapshotImportPanel({
                                                     </span>
                                                 ) : null}
                                                 {snap.error_message ? (
-                                                    <span className="ms-2 text-danger">{snap.error_message}</span>
+                                                    // On a READY snapshot it is a partial extract
+                                                    // (quotations only), not a failure.
+                                                    <span
+                                                        className={`ms-2 ${snap.status === 'READY' ? 'text-warning-text' : 'text-danger'}`}
+                                                    >
+                                                        {snap.error_message}
+                                                    </span>
                                                 ) : null}
                                             </td>
                                             <td className="py-2 pe-3 text-gray-500">
-                                                {snap.counts
-                                                    ? `${snap.counts.products ?? 0}p / ${snap.counts.customers ?? 0}c / ${snap.counts.suppliers ?? 0}s`
-                                                    : '—'}
+                                                {snap.counts ? (
+                                                    <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                                        {snapshotCountEntries(snap.counts).map((entry) => (
+                                                            <span key={entry.key} className="whitespace-nowrap">
+                                                                {entry.count} {entry.label}
+                                                            </span>
+                                                        ))}
+                                                    </span>
+                                                ) : (
+                                                    '—'
+                                                )}
                                             </td>
                                             <td className="py-2">
                                                 <div className="flex flex-wrap gap-2">

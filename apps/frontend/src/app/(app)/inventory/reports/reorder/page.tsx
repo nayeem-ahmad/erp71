@@ -10,6 +10,8 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { BranchFilter } from '@/components/ui';
+import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 
 interface ReorderRow {
     product: { id: string; name: string; sku?: string | null; group?: { name: string } | null; subgroup?: { name: string } | null };
@@ -26,36 +28,38 @@ const columnHelper = createColumnHelper<ReorderRow>();
 
 export default function ReorderSuggestionsPage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<ReorderRow[]>([]);
-    const [stores, setStores] = useState<any[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
     const [subgroups, setSubgroups] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [storeId, setStoreId] = useState('');
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useBranchBoundState(branch.apiStoreId);
+    const storeId = branchOrEmpty(branch.apiStoreId);
     const [groupId, setGroupId] = useState('');
     const [subgroupId, setSubgroupId] = useState('');
 
     useEffect(() => {
-        void Promise.all([loadRows(), loadFilters()]);
+        void loadFilters();
     }, []);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadRows();
-    }, [storeId, warehouseId, groupId, subgroupId]);
+    }, [branch.ready, branch.apiStoreId, warehouseId, groupId, subgroupId]);
 
     const loadRows = async () => {
         setLoading(true);
         try {
             const data = await api.getReorderSuggestions({
-                storeId: storeId || undefined,
+                storeId: branch.apiStoreId,
                 warehouseId: warehouseId || undefined,
                 groupId: groupId || undefined,
                 subgroupId: subgroupId || undefined,
             });
             setRows(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load reorder suggestions', error);
         } finally {
             setLoading(false);
@@ -64,13 +68,11 @@ export default function ReorderSuggestionsPage() {
 
     const loadFilters = async () => {
         try {
-            const [storeData, warehouseData, groupData, subgroupData] = await Promise.all([
-                api.getStores(),
+            const [warehouseData, groupData, subgroupData] = await Promise.all([
                 api.getInventoryWarehouses(),
                 api.getProductGroups(),
                 api.getProductSubgroups(),
             ]);
-            setStores(storeData);
             setWarehouses(warehouseData.filter((warehouse: any) => warehouse.is_active));
             setGroups(groupData);
             setSubgroups(subgroupData);
@@ -81,9 +83,8 @@ export default function ReorderSuggestionsPage() {
 
     // A warehouse belongs to exactly one branch, so picking a branch narrows the
     // warehouse picker to that branch's own — the same scoping the entry screens
-    // get from `useWarehouses`. The branch select clears `warehouseId` on the way
-    // past: the two filters are AND-ed server-side, so a warehouse left over from
-    // another branch would report nothing at all.
+    // get from `useWarehouses` — and "All branches" offers every warehouse. The
+    // branch filter clears `warehouseId` on the way past (`useBranchBoundState`).
     const visibleWarehouses = useMemo(
         () => warehouses.filter((warehouse: any) => !storeId || warehouse.store_id === storeId),
         [warehouses, storeId],
@@ -123,13 +124,10 @@ export default function ReorderSuggestionsPage() {
                         t.inventoryReports.reorder.title,
                         'inventory',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                    <select value={storeId} onChange={(e) => { setStoreId(e.target.value); setWarehouseId(''); }} aria-label={t.inventoryReports.reorder.allBranches} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
-                        <option value="">{t.inventoryReports.reorder.allBranches}</option>
-                        {stores.map((store: any) => <option key={store.id} value={store.id}>{store.name}</option>)}
-                    </select>
                     <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium min-w-[220px]">
                         <option value="">{t.inventoryReports.reorder.allWarehouses}</option>
                         {visibleWarehouses.map((warehouse: any) => <option key={warehouse.id} value={warehouse.id}>{warehouseLabel(warehouse, visibleWarehouses)}</option>)}

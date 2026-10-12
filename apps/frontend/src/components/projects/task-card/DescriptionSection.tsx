@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Pencil, Plus } from 'lucide-react';
-import { Button, CompactSection, RichTextEditor } from '@/components/ui';
+import { Button, CompactSection } from '@/components/ui';
+import { RichTextEditor } from '@/components/ui/LazyRichTextEditor';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -138,6 +139,11 @@ export default function DescriptionSection({
                     // Focus moving to the toolbar, or tabbing to the tick and
                     // the cross, is not focus leaving the editor.
                     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    // Switching tabs or apps blurs with no related target too,
+                    // the same as a click on empty page. The difference is that
+                    // the editor stays the active element and gets focus back
+                    // on return, so the edit is still in progress.
+                    if (document.activeElement === event.target) return;
                     if (uploading.current) {
                         pendingCommit.current = true;
                         return;

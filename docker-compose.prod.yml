@@ -28,6 +28,34 @@ services:
       EXTERNAL_SYNC_SNAPSHOT_DIR: /var/lib/erp71/external-sync-snapshots
     volumes:
       - external_sync_snapshots:/var/lib/erp71/external-sync-snapshots
+      # The "database prepared for commit X" marker. It has to outlive any one
+      # container: scripts/deploy.sh writes it from a one-off `run` container
+      # while the old backend is still serving, and the new backend reads it
+      # on start to skip straight to listening. Losing it costs one slow start,
+      # never correctness. See apps/backend/scripts/db-prepare.sh.
+      - backend_state:/var/lib/erp71/state
+    # "healthy" = Nest is listening and answering /health. scripts/deploy.sh
+    # waits for it before calling a deploy done. 127.0.0.1, not localhost, so
+    # the probe never depends on how the container resolves ::1. curl ships in
+    # the node:22-bookworm base image.
+    #
+    # interval: also the delay before the first probe, so a ready container
+    # reports healthy up to 10 s late; that delays deploy.sh, not traffic
+    # (Caddy does not read Docker health). Kept at 10 s because /health sits
+    # behind the global per-IP throttle (THROTTLE_LIMIT, 20/min by default),
+    # and these probes all come from one address. `start_interval` would close
+    # that gap but needs Docker Engine 25+; on an older engine Compose refuses
+    # to create the container, which would fail every deploy.
+    # start_period: long enough for a container that finds no marker and
+    # prepares the database itself before listening (about 20 s measured on
+    # the #766 deploy; a release with a heavy back-fill takes longer). Probes
+    # that fail inside it do not count; the first that passes ends it.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "--max-time", "4", "http://127.0.0.1:4000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 300s
     depends_on:
       db:
         condition: service_healthy
@@ -40,6 +68,8 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
+        # The browser's API base — the app's own origin in production, so API
+        # calls need no CORS preflight (see .env.production.example).
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
         BACKEND_URL: ${BACKEND_URL:-http://backend:4000}
@@ -52,7 +82,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      # Server-side target for the next.config.js /api/v1 rewrite (see Dockerfile).
+      # Server-side target for the next.config.js /api/v1 rewrite (see Dockerfile),
+      # and for the public pages' server-side fetches (publicApiBase in
+      # src/lib/api-base.ts), which would otherwise go out to Caddy and back.
       # Frontend and backend are separate containers, so this must be the backend
       # service on the compose network, not localhost.
       BACKEND_URL: ${BACKEND_URL:-http://backend:4000}
@@ -87,3 +119,4 @@ volumes:
   caddy_data:
   caddy_config:
   external_sync_snapshots:
+  backend_state:

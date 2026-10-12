@@ -5,6 +5,7 @@ import { StorefrontMediaService } from './storefront-media.service';
 import { StorefrontSettingsDto, UploadStorefrontImageDto } from '../storefront/storefront.dto';
 import { UpdateBrandingDto } from './update-branding.dto';
 import { UpdateDashboardSettingsDto } from './dashboard-settings.dto';
+import { UpdateAppSettingsDto } from './app-settings.dto';
 import { UpdateLocalizationSettingsDto } from './localization-settings.dto';
 import { UpdatePasswordPolicyDto } from './password-policy.dto';
 import { UpdateTaxSettingsDto } from './tax-settings.dto';
@@ -15,6 +16,7 @@ import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { SETTINGS_ADMIN } from '../auth/permission-sets';
+import { parseDataGroups } from './clear-tenant-data';
 @Controller('tenants')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -135,6 +137,19 @@ export class TenantsController {
         return this.tenantsService.updateDashboardSettings(tenant.tenantId, dto, tenant.userRole);
     }
 
+    @Get('app-settings')
+    async getAppSettings(@Tenant() tenant: TenantContext) {
+        return this.tenantsService.getAppSettings(tenant.tenantId);
+    }
+
+    @Patch('app-settings')
+    async updateAppSettings(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: UpdateAppSettingsDto,
+    ) {
+        return this.tenantsService.updateAppSettings(tenant.tenantId, dto, tenant.userRole);
+    }
+
     /**
      * Readable by every member: the change-password form renders the rules it is
      * about to enforce. Only the PATCH is admin-gated.
@@ -156,7 +171,15 @@ export class TenantsController {
     async clearData(
         @Tenant() tenant: TenantContext,
         @Query('mode') mode: string,
+        @Query('storeId') storeId?: string,
+        @Query('keep') keep?: string,
     ) {
-        return this.tenantsService.clearData(tenant.tenantId, mode as 'transactions' | 'all', tenant.userRole);
+        return this.tenantsService.clearData(
+            tenant.tenantId,
+            mode as 'transactions' | 'all',
+            tenant.userRole,
+            storeId || undefined,
+            parseDataGroups(keep),
+        );
     }
 }

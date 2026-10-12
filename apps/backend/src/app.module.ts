@@ -4,6 +4,7 @@ import { CorrelationMiddleware } from './common/correlation.middleware';
 import { TransformInterceptor } from './common/transform.interceptor';
 import { CommonModule } from './common/common.module';
 import { accountThrottler } from './common/account-throttle.util';
+import { defaultThrottler, ipThrottler } from './common/default-throttle.util';
 import { ApiThrottlerGuard } from './common/api-throttler.guard';
 import { CacheModule } from './cache/cache.module';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -26,10 +27,12 @@ import { TeamModule } from './team/team.module';
 import { StoresModule } from './stores/stores.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProductsModule } from './products/products.module';
+import { ProductCostsModule } from './product-costs/product-costs.module';
 import { AssetsModule } from './assets/assets.module';
 import { SalesModule } from './sales/sales.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { SalesSettingsModule } from './sales-settings/sales-settings.module';
+import { DocumentNumberingModule } from './document-numbering/document-numbering.module';
 import { PrintTemplatesModule } from './print-templates/print-templates.module';
 import { CustomersModule } from './customers/customers.module';
 import { CustomerGroupsModule } from './customer-groups/customer-groups.module';
@@ -60,6 +63,7 @@ import { PurchaseReportsModule } from './purchase-reports/purchase-reports.modul
 import { BillingModule } from './billing/billing.module';
 import { ActivationModule } from './activation/activation.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
+import { TenantBackupModule } from './tenant-backup/tenant-backup.module';
 import { ExternalSyncModule } from './external-sync/external-sync.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { AccountModule } from './account/account.module';
@@ -108,6 +112,12 @@ import { CrmDashboardModule } from './crm-dashboard/crm-dashboard.module';
 import { InventoryDashboardModule } from './inventory-dashboard/inventory-dashboard.module';
 import { PurchaseDashboardModule } from './purchase-dashboard/purchase-dashboard.module';
 import { SalesDashboardModule } from './sales-dashboard/sales-dashboard.module';
+import { MobileModule } from './mobile/mobile.module';
+import { HomePulseModule } from './home-pulse/home-pulse.module';
+import { PushModule } from './push/push.module';
+import { ApprovalsModule } from './approvals/approvals.module';
+import { ApprovalNotifyModule } from './approvals/approval-notify.module';
+import { AlertsModule } from './alerts/alerts.module';
 import { HrDashboardModule } from './hr-dashboard/hr-dashboard.module';
 import { HrReportsModule } from './hr-reports/hr-reports.module';
 import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
@@ -135,13 +145,13 @@ import { SocialMediaModule } from './social-media/social-media.module';
     imports: [
         SentryModule.forRoot(),
         ThrottlerModule.forRoot([
-            {
-                ttl: Number(process.env.THROTTLE_TTL_MS ?? 60_000),
-                limit: Number(process.env.THROTTLE_LIMIT ?? 20),
-            },
+            // Per signed-in user, per address without a valid token; and a
+            // per-address ceiling over both. See the file for why.
+            defaultThrottler(),
             // Inert except on the routes carrying @ThrottleAccount(). See the
             // file for why sign-in cannot be rate-limited by address alone.
             accountThrottler,
+            ipThrottler(),
         ]),
         ScheduleModule.forRoot(),
         CommonModule,
@@ -169,10 +179,12 @@ import { SocialMediaModule } from './social-media/social-media.module';
         StoresModule,
         NotificationsModule,
         ProductsModule,
+        ProductCostsModule,
         AssetsModule,
         SalesModule,
         PaymentMethodsModule,
         SalesSettingsModule,
+        DocumentNumberingModule,
         PrintTemplatesModule,
         CustomersModule,
         CustomerGroupsModule,
@@ -203,6 +215,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         BillingModule,
         ActivationModule,
         AdminTenantsModule,
+        TenantBackupModule,
         ExternalSyncModule,
         WarrantyClaimsModule,
         AccountModule,
@@ -243,6 +256,12 @@ import { SocialMediaModule } from './social-media/social-media.module';
         InventoryDashboardModule,
         PurchaseDashboardModule,
         SalesDashboardModule,
+        MobileModule,
+        HomePulseModule,
+        PushModule,
+        ApprovalsModule,
+        ApprovalNotifyModule,
+        AlertsModule,
         HrDashboardModule,
         HrReportsModule,
         AdminDashboardModule,

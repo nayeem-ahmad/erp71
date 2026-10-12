@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PasswordResetPurpose } from '@prisma/client';
 import type { PasswordPolicy } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { AuditService } from '../audit/audit.service';
@@ -67,6 +68,7 @@ export class PasswordResetService {
         private sms: SmsService,
         private audit: AuditService,
         private passwordPolicy: PasswordPolicyService,
+        private authCache: AuthCacheService,
     ) {}
 
     private hash(rawToken: string): string {
@@ -146,6 +148,9 @@ export class PasswordResetService {
                 await tx.emailVerificationToken.deleteMany({ where: { user_id: record.user_id } });
             }
         });
+        // After the commit, not inside it: the token versions just bumped are
+        // checked against the row `JwtStrategy` caches.
+        this.authCache.invalidateUser(record.user_id);
         this.audit
             .logForUserTenants('PASSWORD_RESET_COMPLETED', 'User', { userId: record.user_id }, record.user_id)
             .catch(() => {});

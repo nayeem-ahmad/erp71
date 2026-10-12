@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import ModalShell, { ModalFooter, ModalHeader } from '../ModalShell';
 import { Button } from './compact';
@@ -24,7 +24,11 @@ export interface ConfirmDialogProps {
     /** Confirm button label while the action is running. */
     workingLabel?: string;
     loading?: boolean;
+    /** Holds the confirm button off until the caller's own input is complete — a reason in `children`, say. */
+    confirmDisabled?: boolean;
     danger?: boolean;
+    /** Extra content between the prompt and the type-to-confirm input, e.g. options the action takes. */
+    children?: ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -44,7 +48,9 @@ export function ConfirmDialog({
     cancelLabel,
     workingLabel,
     loading = false,
+    confirmDisabled: confirmHeld = false,
     danger,
+    children,
     onConfirm,
     onCancel,
 }: ConfirmDialogProps) {
@@ -62,7 +68,7 @@ export function ConfirmDialog({
 
     const close = () => { setValue(''); onCancel(); };
     const requiresInput = expected !== undefined;
-    const confirmDisabled = loading || (requiresInput && value.trim().toLowerCase() !== expected);
+    const confirmDisabled = loading || confirmHeld || (requiresInput && value.trim().toLowerCase() !== expected);
 
     return (
         <ModalShell size="sm" onBackdropClick={close}>
@@ -75,6 +81,7 @@ export function ConfirmDialog({
                     <div className="space-y-2 flex-1">
                         {body && <p className="text-sm text-gray-700 whitespace-pre-line">{body}</p>}
                         <p className="text-sm font-semibold text-gray-800">{emphasis}</p>
+                        {children}
                         {requiresInput && (
                             <Input
                                 type="text"

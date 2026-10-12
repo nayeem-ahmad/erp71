@@ -13,6 +13,7 @@ import {
     resolveMobileToE164,
 } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService, type AuditContext } from '../audit/audit.service';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { generatePassword } from '../password-policy/generate-password';
@@ -52,6 +53,7 @@ export class EmployeeLoginService {
         private readonly db: DatabaseService,
         private readonly audit: AuditService,
         private readonly passwordPolicy: PasswordPolicyService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     /**
@@ -192,6 +194,8 @@ export class EmployeeLoginService {
                 applicant_token_version: { increment: 1 },
             },
         });
+        // The versions and the hold are all read off the row `JwtStrategy` caches.
+        this.authCache.invalidateUser(userId);
 
         await this.audit
             .log('EMPLOYEE_LOGIN_PASSWORD_RESET', 'Employee', { ...ctx, tenantId }, employee.id, {
@@ -245,6 +249,9 @@ export class EmployeeLoginService {
                 });
             }
         });
+        // After the commit: the bump only revokes once `JwtStrategy` stops
+        // serving the cached row that predates it.
+        if (portalOnly) this.authCache.invalidateUser(userId);
 
         await this.audit
             .log('EMPLOYEE_LOGIN_REVOKED', 'Employee', { ...ctx, tenantId }, employee.id, {

@@ -12,7 +12,7 @@ function makeDb() {
 }
 
 function makeService(db: ReturnType<typeof makeDb>) {
-    return new ProjectTasksService(db as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+    return new ProjectTasksService(db as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
 }
 
 describe('resolving a task by key', () => {

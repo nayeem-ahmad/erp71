@@ -123,6 +123,8 @@ export class PurchaseReturnsService {
                         data: {
                             tenant_id: tenantId,
                             supplier_id: purchase.supplier_id,
+                            // A credit row belongs to its supplier's branch.
+                            store_id: purchase.supplier!.store_id,
                             type: 'ADJUSTMENT',
                             amount: -creditReduction,
                             balance_after: balanceAfter,
@@ -175,7 +177,7 @@ export class PurchaseReturnsService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
     ): Promise<PaginatedResult<unknown>> {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const result = await paginatedFindMany({
@@ -185,7 +187,7 @@ export class PurchaseReturnsService {
                     include: this.returnInclude(),
                 }),
             count: (args) => this.db.purchaseReturn.count(args as any),
-            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
+            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
             orderBy: { created_at: 'desc' },
             page,
             limit,

@@ -9,7 +9,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 
 interface ProductRow {
     product: {
@@ -44,6 +45,7 @@ function defaultTo() {
 
 export default function SalesByProductPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [rows, setRows] = useState<ProductRow[]>([]);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [groups, setGroups] = useState<any[]>([]);
@@ -59,13 +61,15 @@ export default function SalesByProductPage() {
     }, []);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadReport();
-    }, [groupId, subgroupId, fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, groupId, subgroupId, fromDate, toDate]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
             const data = await api.getSalesByProduct({
+                storeId: branch.apiStoreId,
                 groupId: groupId || undefined,
                 subgroupId: subgroupId || undefined,
                 from: fromDate || undefined,
@@ -74,6 +78,7 @@ export default function SalesByProductPage() {
             setSummary(data.summary);
             setRows(data.rows);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load sales by product', error);
         } finally {
             setLoading(false);
@@ -156,6 +161,7 @@ export default function SalesByProductPage() {
                         t.salesReports.products.title,
                         'sales',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="grid md:grid-cols-3 gap-4">

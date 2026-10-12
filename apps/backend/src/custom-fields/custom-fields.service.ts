@@ -85,6 +85,14 @@ export class CustomFieldsService {
       return { key, label: f.label, order: f.order ?? idx };
     });
 
+    // A slot freed by a deleted field still holds that field's values on every
+    // record. Wipe them before a new field takes the slot, or they would show
+    // up under the new label.
+    const claimedSlots = resolved
+      .filter((_, idx) => !inputs[idx].key)
+      .map((r) => r.key);
+    await this.clearSlotValues(tenantId, entity, claimedSlots);
+
     // Upsert active definitions; deactivate everything not in the new set.
     for (const r of resolved) {
       await this.db.customFieldDefinition.upsert({
@@ -116,6 +124,27 @@ export class CustomFieldsService {
     return resolved
       .sort((a, b) => a.order - b.order)
       .map((r) => ({ key: r.key, label: r.label, order: r.order }));
+  }
+
+  private async clearSlotValues(
+    tenantId: string,
+    entity: CustomFieldEntity,
+    keys: string[],
+  ): Promise<void> {
+    if (!keys.length) return;
+    switch (entity) {
+      case CustomFieldEntity.LEAD:
+        await this.db.$executeRaw`
+          UPDATE "Lead"
+          SET custom_fields = custom_fields - ${keys}::text[]
+          WHERE tenant_id = ${tenantId} AND custom_fields ?| ${keys}::text[]
+        `;
+        return;
+      default: {
+        const unhandled: never = entity;
+        throw new Error(`No record table for custom-field entity ${unhandled}`);
+      }
+    }
   }
 
   async sanitizeValues(

@@ -6,6 +6,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
 import { ImportWizardFrame } from '@/components/external-sync/ImportStepper';
+import { SkippedRecordsPanel, skippedRecordsOf } from '@/components/external-sync/SkippedRecords';
 import {
     SnapshotImportPanel,
     type SnapshotImportAdapter,
@@ -25,6 +26,7 @@ import {
     type ExternalSyncStep,
     type ExternalSyncWarning,
 } from '@/lib/api';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -36,9 +38,11 @@ const STEPS: Array<{ key: ExternalSyncStep; label: string; hint: string }> = [
     { key: 'MASTERS', label: 'Products, customers, suppliers', hint: 'Everything else references these' },
     { key: 'PURCHASES', label: 'Purchases', hint: 'Stock must exist before it is sold' },
     { key: 'SALES', label: 'Sales', hint: 'Needs products, customers and their stock' },
+    { key: 'QUOTATIONS', label: 'Quotations', hint: 'Needs products and customers' },
     { key: 'CUSTOMER_PAYMENTS', label: 'Customer payments', hint: 'Needs customers' },
     { key: 'SUPPLIER_PAYMENTS', label: 'Supplier payments', hint: 'Needs suppliers' },
     { key: 'SALE_RETURNS', label: 'Sale returns', hint: 'Needs the parent sales already imported' },
+    { key: 'PURCHASE_RETURNS', label: 'Purchase returns', hint: 'Needs the parent purchases already imported' },
 ];
 
 type StoreOption = { id: string; name: string };
@@ -225,11 +229,7 @@ export default function TenantExternalImportPage() {
         if (next) setWizardStep(next);
     }
 
-    useEffect(() => {
-        if (!activeRun) return;
-        const timer = setInterval(() => void loadRuns(), RUN_POLL_MS);
-        return () => clearInterval(timer);
-    }, [activeRun, loadRuns]);
+    useVisibleInterval(() => void loadRuns(), activeRun ? RUN_POLL_MS : null);
 
     function validate(): boolean {
         const errors: Record<string, string> = {};
@@ -371,7 +371,7 @@ export default function TenantExternalImportPage() {
                             placeholder="https://…"
                         />
                     </Field>
-                    <Field label="Branch for imported documents" required error={fieldErrors.storeId}>
+                    <Field label="Branch for imported documents" required error={fieldErrors.storeId} hint="Customers and suppliers this import brings in belong to it too; ones that already exist keep their own.">
                         <Select value={form.storeId} onChange={(e) => setForm({ ...form, storeId: e.target.value })}>
                             <option value="">Select a branch</option>
                             {stores.map((store) => (
@@ -650,8 +650,12 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
 }
 
 function RunRow({ run }: { run: ExternalSyncRun }) {
-    const [showWarnings, setShowWarnings] = useState(false);
+    const [open, setOpen] = useState<'warnings' | 'skipped' | null>(null);
     const warnings: ExternalSyncWarning[] = run.warnings ?? [];
+    const skipped = skippedRecordsOf(run);
+    // The run stores at most 500 notes; progress counts every one raised.
+    const noteCount = Math.max(run.progress?.warnings ?? 0, warnings.length);
+    const toggle = (panel: 'warnings' | 'skipped') => setOpen((current) => (current === panel ? null : panel));
 
     const imported = run.stats
         ? Object.values(run.stats).reduce((sum, tally) => sum + tally.created + tally.updated, 0)
@@ -672,24 +676,39 @@ function RunRow({ run }: { run: ExternalSyncRun }) {
                 </td>
                 <td className="py-2 pe-3">{run.stats ? `${imported} records` : '—'}</td>
                 <td className="py-2">
-                    {run.error_message ? (
-                        <span className="text-danger">{run.error_message}</span>
-                    ) : warnings.length > 0 ? (
-                        <button
-                            type="button"
-                            className="text-blue-600 hover:underline"
-                            onClick={() => setShowWarnings((open) => !open)}
-                        >
-                            {warnings.length} notes
-                        </button>
-                    ) : (
-                        <span className="text-gray-400">—</span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {skipped.length > 0 ? (
+                            <button type="button" className="text-danger hover:underline" onClick={() => toggle('skipped')}>
+                                {skipped.length} skipped
+                            </button>
+                        ) : null}
+                        {run.error_message ? <span className="text-danger">{run.error_message}</span> : null}
+                        {!run.error_message && noteCount > 0 ? (
+                            <button type="button" className="text-blue-600 hover:underline" onClick={() => toggle('warnings')}>
+                                {noteCount} notes
+                            </button>
+                        ) : null}
+                        {!run.error_message && noteCount === 0 && skipped.length === 0 ? (
+                            <span className="text-gray-400">—</span>
+                        ) : null}
+                    </div>
                 </td>
             </tr>
-            {showWarnings ? (
+            {open === 'skipped' ? (
                 <tr>
                     <td colSpan={5} className="py-2">
+                        <SkippedRecordsPanel run={run} />
+                    </td>
+                </tr>
+            ) : null}
+            {open === 'warnings' ? (
+                <tr>
+                    <td colSpan={5} className="py-2">
+                        {noteCount > warnings.length ? (
+                            <p className="mb-1 text-xs text-gray-500">
+                                Showing the first {warnings.length} of {noteCount} notes.
+                            </p>
+                        ) : null}
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning, index) => (
                                 <li key={`${warning.externalId}-${index}`}>{warning.message}</li>

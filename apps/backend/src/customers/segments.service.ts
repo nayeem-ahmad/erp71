@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { AppLogger } from '../common/app-logger.service';
 import { DatabaseService } from '../database/database.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
@@ -97,7 +97,10 @@ export class SegmentsService {
         return { updated, total: customers.length };
     }
 
-    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+    // 02:30 Bangladesh time: a full pass over every customer, so it runs in the
+    // night batch window, after the 01:00 external sync has pulled the day's
+    // sales in. See `JOB_REGISTRY` for the whole night's order.
+    @Cron('30 2 * * *', { timeZone: 'Asia/Dhaka' })
     async handleCron() {
         await this.jobTracker.track(JOB_NAMES.CUSTOMER_SEGMENTS, () => this.handleCronImpl());
     }

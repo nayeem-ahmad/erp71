@@ -13,8 +13,9 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, Button, Input } from '@/components/ui';
+import { BranchFilter, PageShell, Button, Input, Field, Select } from '@/components/ui';
 import { useServerList } from '@/hooks/useServerList';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'customer_code', label: 'Customer Code', required: false },
@@ -24,6 +25,8 @@ const IMPORT_FIELDS: ImportField[] = [
     { key: 'email', label: 'Email', required: false },
     { key: 'address', label: 'Address', required: false },
     { key: 'customer_group_name', label: 'Customer Group', required: false },
+    // A branch's code or name; empty rows go to the branch picked for the file.
+    { key: 'branch', label: 'Branch', required: false },
 ];
 
 interface Customer {
@@ -38,12 +41,15 @@ interface Customer {
     profile_pic_url?: string | null;
     customer_group_id?: string | null;
     territory_id?: string | null;
+    store_id?: string | null;
+    store?: { id: string; name: string } | null;
     credit_limit?: string | number | null;
     default_discount_pct?: string | number | null;
     birthday?: string | null;
     total_spent?: string | number | null;
     segment_category?: string | null;
     loyalty_points?: number | null;
+    due_balance?: string | number | null;
     created_at: string;
     customerGroup?: { name: string } | null;
     territory?: { name: string } | null;
@@ -75,15 +81,39 @@ export default function CustomersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Customer | null>(null);
     const [importOpen, setImportOpen] = useState(false);
+    const [importBranch, setImportBranch] = useState('');
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
     const [runningSegmentation, setRunningSegmentation] = useState(false);
     const [evaluating, setEvaluating] = useState(false);
     const [evalMessage, setEvalMessage] = useState('');
+    // The tenant admin's Sales Settings switch: adds each customer's credit
+    // limit under their due. Off until it reads true, so the limit never
+    // flashes in for a shop that has it off.
+    const [showCredit, setShowCredit] = useState(false);
+    // Customers are company-level, so a member who may see every branch starts
+    // on all of them. A limited member sees only their branches' customers —
+    // the server enforces that whatever is sent; see customer-visibility.ts.
+    const branch = useBranchScope({ startOnAll: true });
+
+    useEffect(() => {
+        let cancelled = false;
+        const load = () => {
+            api.getSalesSettings()
+                .then((s: { show_customer_credit?: boolean }) => { if (!cancelled) setShowCredit(Boolean(s?.show_customer_credit)); })
+                .catch(() => { /* keep the column hidden if settings cannot be read */ });
+        };
+        load();
+        window.addEventListener('erp71:sales-settings-updated', load);
+        return () => {
+            cancelled = true;
+            window.removeEventListener('erp71:sales-settings-updated', load);
+        };
+    }, []);
 
     const segmentCardStyle: Record<string, { bg: string; text: string; bar: string; icon: React.ReactNode }> = useMemo(() => ({
-        VIP: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-500', icon: <Crown className="w-5 h-5 text-emerald-500" /> },
-        'At-Risk': { bg: 'bg-danger-light border-red-200', text: 'text-danger-text', bar: 'bg-danger', icon: <AlertTriangle className="w-5 h-5 text-danger" /> },
-        Regular: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', bar: 'bg-gray-400', icon: <UserCheck className="w-5 h-5 text-gray-400" /> },
+        VIP: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-500', icon: <Crown className="w-4 h-4 text-emerald-500" /> },
+        'At-Risk': { bg: 'bg-danger-light border-red-200', text: 'text-danger-text', bar: 'bg-danger', icon: <AlertTriangle className="w-4 h-4 text-danger" /> },
+        Regular: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', bar: 'bg-gray-400', icon: <UserCheck className="w-4 h-4 text-gray-400" /> },
     }), []);
 
     const [search, setSearch] = useState('');
@@ -100,6 +130,7 @@ export default function CustomersPage() {
     const {
         items: customers,
         loading,
+        error: listError,
         serverPagination,
         reload: loadCustomers,
     } = useServerList<Customer>({
@@ -109,18 +140,22 @@ export default function CustomersPage() {
             segment: segment || undefined,
             customerType: customerType || undefined,
             ...applyCreatedRangeQuery(createdRange),
+            storeId: branch.apiStoreId,
             ...p,
         }),
-        deps: [debouncedSearch, segment, customerType, createdRange],
+        deps: [debouncedSearch, segment, customerType, createdRange, branch.apiStoreId],
+        enabled: branch.ready,
     });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
     useEffect(() => {
-        loadSegmentStats();
-    }, []);
+        if (branch.ready) loadSegmentStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId]);
 
     const loadSegmentStats = async () => {
         try {
-            const stats = await api.getCustomerSegmentStats();
+            const stats = await api.getCustomerSegmentStats(branch.apiStoreId);
             setSegmentStats(stats);
         } catch (error) {
             console.error('Failed to load segment stats', error);
@@ -254,6 +289,23 @@ export default function CustomersPage() {
                 sortingFn: (a, b) => Number(a.getValue('total_spent') || 0) - Number(b.getValue('total_spent') || 0),
                 size: 120,
             }),
+            columnHelper.accessor('due_balance', {
+                header: t.customers.columns.due,
+                cell: (info) => {
+                    const due = Number(info.getValue() || 0);
+                    const limit = info.row.original.credit_limit;
+                    return (
+                        <div className="text-sm">
+                            <span className={due > 0 ? 'font-semibold text-amber-700' : 'text-gray-500'}>{formatBDT(due)}</span>
+                            {showCredit && limit != null ? (
+                                <span className="block text-xs text-gray-400">/ {formatBDT(Number(limit))}</span>
+                            ) : null}
+                        </div>
+                    );
+                },
+                sortingFn: (a, b) => Number(a.original.due_balance || 0) - Number(b.original.due_balance || 0),
+                size: 120,
+            }),
             columnHelper.accessor('loyalty_points', {
                 header: t.customers.columns.points,
                 cell: (info) => {
@@ -313,7 +365,7 @@ export default function CustomersPage() {
                 size: 90,
             }),
         ],
-        [t, locale],
+        [t, locale, showCredit],
     );
 
     // Server-side equivalents of the old client-side presets: filtering the loaded rows
@@ -350,6 +402,7 @@ export default function CustomersPage() {
                     )}
                     actions={
                         <>
+                            <BranchFilter scope={branch} />
                             <button
                                 onClick={handleRunSegmentation}
                                 disabled={runningSegmentation}
@@ -360,7 +413,7 @@ export default function CustomersPage() {
                                 {runningSegmentation ? t.customers.running : t.customers.runSegmentation}
                             </button>
                             <button
-                                onClick={() => setImportOpen(true)}
+                                onClick={() => { setImportBranch(branch.headerBranchId ?? ''); setImportOpen(true); }}
                                 className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
                             >
                                 <Upload className="w-4 h-4 me-1.5" />
@@ -374,26 +427,28 @@ export default function CustomersPage() {
                 />
 
                 {segmentStats && segmentStats.total > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm">
-                            <p className="text-xs font-medium text-gray-500 mb-1">{t.customers.totalCustomers}</p>
-                            <p className="text-3xl font-bold text-gray-900">{segmentStats.total}</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                        <div className="bg-white border border-gray-100 rounded-lg px-3 py-2.5 shadow-sm">
+                            <p className="text-xs font-medium text-gray-500 truncate">{t.customers.totalCustomers}</p>
+                            <p className="text-xl font-bold text-gray-900 mt-0.5">{segmentStats.total}</p>
                         </div>
                         {segmentStats.breakdown.map((seg) => {
                             const style = segmentCardStyle[seg.segment] ?? segmentCardStyle['Regular'];
                             return (
-                                <div key={seg.segment} className={`border rounded-lg p-5 shadow-sm ${style.bg}`}>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <p className={`text-[10px] font-semibold ${style.text}`}>{seg.segment}</p>
+                                <div key={seg.segment} className={`border rounded-lg px-3 py-2.5 shadow-sm ${style.bg}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className={`text-xs font-semibold truncate ${style.text}`}>{seg.segment}</p>
                                         {style.icon}
                                     </div>
-                                    <p className={`text-3xl font-bold ${style.text}`}>{seg.count}</p>
-                                    <div className="mt-3 bg-white/60 rounded-full h-1.5 overflow-hidden">
+                                    <div className="flex flex-wrap items-baseline gap-x-2 mt-0.5">
+                                        <p className={`text-xl font-bold ${style.text}`}>{seg.count}</p>
+                                        <p className={`text-xs font-semibold ${style.text} opacity-70`}>
+                                            {formatMessage(t.customers.percentOfTotal, { percent: String(seg.percentage) })}
+                                        </p>
+                                    </div>
+                                    <div className="mt-1.5 bg-white/60 rounded-full h-1 overflow-hidden">
                                         <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${seg.percentage}%` }} />
                                     </div>
-                                    <p className={`text-xs font-bold mt-1 ${style.text} opacity-70`}>
-                                        {formatMessage(t.customers.percentOfTotal, { percent: String(seg.percentage) })}
-                                    </p>
                                 </div>
                             );
                         })}
@@ -405,6 +460,9 @@ export default function CustomersPage() {
                     onClose={closeModal}
                     onSave={handleSaveCustomer}
                     customer={editTarget}
+                    branches={branch.hidden ? undefined : branch.branches}
+                    canSetBranch={branch.canSeeAll}
+                    defaultBranchId={branch.headerBranchId}
                 />
 
                 <ImportDialog
@@ -412,7 +470,14 @@ export default function CustomersPage() {
                     onClose={() => setImportOpen(false)}
                     entityLabel="Customers"
                     fields={IMPORT_FIELDS}
-                    importFn={(rows, mode) => api.importCustomers(rows, mode)}
+                    importFn={(rows, mode) => api.importCustomers(rows, mode, importBranch || undefined)}
+                    options={branch.hidden ? undefined : (
+                        <Field label={t.branchParties.importBranchLabel} hint={t.branchParties.importBranchHint} htmlFor="customer-import-branch">
+                            <Select id="customer-import-branch" value={importBranch} onChange={(e) => setImportBranch(e.target.value)} className="w-full">
+                                {branch.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </Select>
+                        </Field>
+                    )}
                     onSuccess={() => void loadCustomers()}
                 />
                 {evalMessage && (

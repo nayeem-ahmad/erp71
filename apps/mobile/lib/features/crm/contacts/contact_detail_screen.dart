@@ -132,6 +132,7 @@ class ContactDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              _CardPhotos(contactId: contactId),
               const SizedBox(height: 12),
               SectionCard(
                 title: 'Details',
@@ -189,6 +190,72 @@ class ContactDetailScreen extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The business-card photos kept against a contact. Shows nothing while
+/// loading, on error, or when there are none — the card is a bonus, not part
+/// of the record the screen exists to show.
+class _CardPhotos extends ConsumerWidget {
+  const _CardPhotos({required this.contactId});
+
+  final String contactId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final urls = ref.watch(contactCardsProvider(contactId)).value ?? const [];
+    if (urls.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SectionCard(
+        title: 'Business card',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final url in urls)
+              GestureDetector(
+                onTap: () => _open(context, url),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    height: 180,
+                    errorBuilder: (_, _, _) => const SizedBox(
+                      height: 80,
+                      child: Center(child: Text('Card photo unavailable')),
+                    ),
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : const SizedBox(
+                            height: 180,
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _open(BuildContext context, String url) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Business card')),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
           ),
         ),
       ),

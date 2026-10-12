@@ -1,5 +1,5 @@
 import { NAV_REGISTRY } from '@erp71/shared-types';
-import { messageCatalog } from './localization/messages';
+import { messageCatalog } from '@/test-utils/message-catalog';
 
 /**
  * Every `labelKey` in NAV_REGISTRY must resolve to a real message.

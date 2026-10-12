@@ -1,5 +1,5 @@
 import { resolveLocale } from '@/lib/localization/config';
-import { messageCatalog } from '@/lib/localization/messages';
+import { getLoadedMessagesOrDefault } from '@/lib/localization/load-messages';
 
 export interface PrintWindowLabels {
     print: string;
@@ -15,13 +15,14 @@ export interface PrintWindowLabels {
  * printers, most of them plain functions with no `t` of their own, and these
  * words are the same for every document. The app marks the active locale on
  * `<html>` (`applyLocaleToDocument`), so a language switch is followed without
- * a reload.
+ * a reload. The marked language is the one on screen, so its dictionary has
+ * already been loaded and the lookup stays synchronous.
  */
 export function printWindowLabels(): PrintWindowLabels {
     const marked = typeof document === 'undefined'
         ? undefined
         : document.documentElement.dataset.locale;
-    const copy = messageCatalog[resolveLocale(marked)];
+    const copy = getLoadedMessagesOrDefault(resolveLocale(marked));
 
     return {
         print: copy.common.print,

@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
 import { AdminTenantsService } from './admin-tenants.service';
 import { LoadDemoDataDto } from '../demo-data/demo-data.dto';
+import { parseDataGroups } from '../tenants/clear-tenant-data';
 import {
     ListAdminTenantsQueryDto,
     ListAdminTenantLedgerQueryDto,
@@ -11,6 +12,8 @@ import {
     UpdateAdminTenantFeaturesDto,
     SuspendTenantDto,
     DeleteTenantDto,
+    ClearTenantDataQueryDto,
+    ClearTenantDataDto,
     CreateAdminTenantDto,
     RecordTenantPaymentDto,
     RecordTenantRefundDto,
@@ -161,6 +164,23 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.deleteTenant(tenantId, dto, req.user.userId);
+    }
+
+    @Delete(':tenantId/data')
+    clearData(
+        @Param('tenantId') tenantId: string,
+        @Query() query: ClearTenantDataQueryDto,
+        @Body() dto: ClearTenantDataDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.clearData(
+            tenantId,
+            query.mode,
+            query.storeId || undefined,
+            parseDataGroups(query.keep),
+            dto,
+            req.user.userId,
+        );
     }
 
     @Get(':tenantId/ledger')

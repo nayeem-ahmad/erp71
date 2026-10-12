@@ -77,3 +77,41 @@ describe('getAllowedOrigins', () => {
         );
     });
 });
+
+describe('corsOptions', () => {
+    async function decide(origin: string | undefined, allowed: string[]) {
+        const { corsOptions } = await import('./allowed-origins.util');
+        const options = corsOptions(allowed);
+        const check = options.origin as (
+            origin: string | undefined,
+            callback: (err: Error | null, allow?: boolean) => void,
+        ) => void;
+        return new Promise<{ err: Error | null; allow?: boolean }>((resolve) => {
+            check(origin, (err, allow) => resolve({ err, allow }));
+        });
+    }
+
+    it('lets browsers cache a preflight for two hours', async () => {
+        // Without Access-Control-Max-Age a browser keeps a preflight for ~5 s
+        // per URL, so every cross-origin call paid an extra round trip.
+        const { corsOptions } = await import('./allowed-origins.util');
+        expect(corsOptions(['https://erp71.com']).maxAge).toBe(7200);
+        expect(corsOptions(['https://erp71.com']).credentials).toBe(true);
+    });
+
+    it('allows an allowlisted origin', async () => {
+        await expect(decide('https://erp71.com', ['https://erp71.com'])).resolves.toEqual({
+            err: null,
+            allow: true,
+        });
+    });
+
+    it('allows requests that carry no Origin', async () => {
+        await expect(decide(undefined, ['https://erp71.com'])).resolves.toEqual({ err: null, allow: true });
+    });
+
+    it('refuses an origin that is not on the list', async () => {
+        const { err } = await decide('https://evil.example', ['https://erp71.com']);
+        expect(err?.message).toContain('https://evil.example');
+    });
+});

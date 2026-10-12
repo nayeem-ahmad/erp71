@@ -14,7 +14,7 @@ describe('StoresService.rename', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        service = new StoresService(db as any, { log: jest.fn() } as any);
+        service = new StoresService(db as any, { log: jest.fn() } as any, { invalidateTenant: jest.fn() } as any);
     });
 
     it('renames a store that belongs to the tenant', async () => {
@@ -131,7 +131,7 @@ describe('StoresService.rename', () => {
 
 describe('StoresService.create', () => {
     const tx = {
-        store: { create: jest.fn() },
+        store: { create: jest.fn(), findMany: jest.fn() },
         tenantUser: { findMany: jest.fn(), findUnique: jest.fn() },
         userStoreAccess: { createMany: jest.fn() },
         userStorePermission: { createMany: jest.fn() },
@@ -141,6 +141,7 @@ describe('StoresService.create', () => {
         $transaction: jest.fn((fn: any) => fn(tx)),
     };
     const audit = { log: jest.fn() };
+    const authCache = { invalidateTenant: jest.fn() };
     let service: StoresService;
 
     beforeEach(() => {
@@ -148,15 +149,17 @@ describe('StoresService.create', () => {
         db.$transaction.mockImplementation((fn: any) => fn(tx));
         db.store.findFirst.mockResolvedValue(null);
         tx.store.create.mockResolvedValue({ id: 's-new', name: 'Dhanmondi Branch', address: null });
+        // The tenant's existing branch codes: S1, and one an owner typed.
+        tx.store.findMany.mockResolvedValue([{ code: 'S1' }, { code: 'DHK' }]);
         tx.tenantUser.findMany.mockResolvedValue([{ user_id: 'u-owner' }]);
         tx.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER', tenantRole: null });
-        service = new StoresService(db as any, audit as any);
+        service = new StoresService(db as any, audit as any, authCache as any);
     });
 
     it('creates the branch with a trimmed name and a null address when none is given', async () => {
         const result = await service.create(OWNER_CTX, { name: '  Dhanmondi Branch  ' });
         expect(tx.store.create).toHaveBeenCalledWith({
-            data: { tenant_id: 't1', name: 'Dhanmondi Branch', address: null },
+            data: { tenant_id: 't1', name: 'Dhanmondi Branch', address: null, code: 'S2' },
             select: { id: true, name: true, address: true },
         });
         expect(result).toEqual({ id: 's-new', name: 'Dhanmondi Branch', address: null });
@@ -165,7 +168,7 @@ describe('StoresService.create', () => {
     it('keeps a trimmed address when one is given', async () => {
         await service.create(OWNER_CTX, { name: 'Uttara', address: '  Sector 7  ' });
         expect(tx.store.create).toHaveBeenCalledWith({
-            data: { tenant_id: 't1', name: 'Uttara', address: 'Sector 7' },
+            data: { tenant_id: 't1', name: 'Uttara', address: 'Sector 7', code: 'S2' },
             select: { id: true, name: true, address: true },
         });
     });
@@ -180,6 +183,24 @@ describe('StoresService.create', () => {
             select: { id: true },
         });
         expect(db.$transaction).not.toHaveBeenCalled();
+    });
+
+    // Owners' cached branch lists — and whether a member's single branch can be
+    // assumed without a header — change with the new branch.
+    it('drops the workspace\'s cached access answers once the branch exists', async () => {
+        await service.create(OWNER_CTX, { name: 'Mirpur' });
+
+        expect(authCache.invalidateTenant).toHaveBeenCalledWith('t1');
+        expect(authCache.invalidateTenant.mock.invocationCallOrder[0]).toBeGreaterThan(
+            tx.userStoreAccess.createMany.mock.invocationCallOrder[0],
+        );
+    });
+
+    it('leaves the cache alone when the branch is refused', async () => {
+        db.store.findFirst.mockResolvedValue({ id: 's1' });
+        await expect(service.create(OWNER_CTX, { name: 'dhanmondi branch' })).rejects.toThrow();
+
+        expect(authCache.invalidateTenant).not.toHaveBeenCalled();
     });
 
     it('grants every owner access, so a new branch is not invisible in /auth/me', async () => {

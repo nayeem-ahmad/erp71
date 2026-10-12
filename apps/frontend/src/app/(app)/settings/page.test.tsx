@@ -91,4 +91,20 @@ describe('SettingsHubPage', () => {
         expect(await screen.findByRole('link', { name: /audit logs/i })).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: 'URL Shortener' })).not.toBeInTheDocument();
     });
+
+    it('offers the Apps page only with the app shell on', () => {
+        useTenantPlanFeatures.mockReturnValue({ planCode: 'STANDARD', features: {}, ready: true });
+        const { AppShellProvider } = require('@/contexts/AppShellContext');
+
+        const { unmount } = render(<SettingsHubPage />);
+        expect(screen.queryByRole('link', { name: /^Apps$/ })).not.toBeInTheDocument();
+        unmount();
+
+        render(
+            <AppShellProvider value={{ enabled: true, navGates: {}, canManageBilling: true, canManageApps: true }}>
+                <SettingsHubPage />
+            </AppShellProvider>,
+        );
+        expect(screen.getByRole('link', { name: /^Apps$/ })).toHaveAttribute('href', '/settings/apps');
+    });
 });

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Sparkles, CheckCircle2, XCircle, RotateCcw, ExternalLink, AlertTriangle, GitMerge } from 'lucide-react';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { api } from '@/lib/api';
 import ModalShell, { ModalHeader } from '@/components/ModalShell';
 
@@ -86,7 +87,6 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [readiness, setReadiness] = useState<PrReadiness | null>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const load = async () => {
         try {
@@ -113,18 +113,19 @@ export default function FeedbackAutomationPanel({ feedbackId, onClose }: { feedb
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [feedbackId]);
 
+    const working = !!detail && WORKING_STATUSES.has(detail.status);
+    const awaitingMerge = detail?.status === 'PR_OPENED';
+
+    // While awaiting merge, keep checking CI so the Merge button lights up as soon as it's green.
     useEffect(() => {
-        if (pollRef.current) clearInterval(pollRef.current);
-        if (detail && WORKING_STATUSES.has(detail.status)) {
-            pollRef.current = setInterval(() => void load(), 4000);
-        } else if (detail && detail.status === 'PR_OPENED') {
-            // While awaiting merge, keep checking CI so the Merge button lights up as soon as it's green.
-            void refreshPr();
-            pollRef.current = setInterval(() => void refreshPr(), 8000);
-        }
-        return () => { if (pollRef.current) clearInterval(pollRef.current); };
+        if (awaitingMerge) void refreshPr();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [detail?.status]);
+    }, [awaitingMerge]);
+
+    useVisibleInterval(
+        () => void (working ? load() : refreshPr()),
+        working ? 4000 : awaitingMerge ? 8000 : null,
+    );
 
     async function run(fn: () => Promise<unknown>) {
         setBusy(true);

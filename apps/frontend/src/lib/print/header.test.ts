@@ -22,6 +22,65 @@ const ctx: HeaderContext = {
     vatRegNo: '00123456789',
 };
 
+describe('the header title block with a QR code', () => {
+    const ctx: HeaderContext = { docTitle: 'Invoice', docNumber: 'INV-001', docDate: '06/10/2026' };
+    const qr = 'data:image/png;base64,QQQQ';
+
+    it('prints the code under the title, after any number and date', () => {
+        const html = renderHeaderHtml({ title: { show: true } }, { ...ctx, docQr: qr }, 'A4');
+
+        expect(html.indexOf('p71-hd-title')).toBeLessThan(html.indexOf('p71-hd-qr'));
+        expect(html.indexOf('p71-hd-meta')).toBeLessThan(html.indexOf('p71-hd-qr'));
+    });
+
+    it('drops only the number and date when asked, leaving the title', () => {
+        const html = renderHeaderHtml({ title: { show: true } }, { ...ctx, docQr: qr, hideDocMeta: true }, 'A4');
+
+        expect(html).toContain('p71-hd-title');
+        expect(html).toContain('<img class="p71-hd-qr"');
+        expect(html).not.toContain('p71-hd-meta');
+        expect(html).not.toContain('INV-001');
+    });
+
+    it('keeps the code when the template hides its title', () => {
+        const html = renderHeaderHtml({ title: { show: false } }, { ...ctx, docQr: qr, hideDocMeta: true }, 'A4');
+
+        expect(html).toContain('<img class="p71-hd-qr"');
+        expect(html).not.toContain('p71-hd-title');
+    });
+
+    it('prints nothing for a hidden title and no code, as before', () => {
+        expect(renderHeaderHtml({ title: { show: false }, company: { show: false } }, ctx, 'A4')).not.toContain('p71-hd-doc');
+    });
+
+    it('accepts only an image data URL or https address', () => {
+        expect(renderHeaderHtml({}, { ...ctx, docQr: 'javascript:alert(1)' }, 'A4')).not.toContain('p71-hd-qr"');
+        expect(renderHeaderHtml({}, { ...ctx, docQr: 'https://cdn.example/q.png' }, 'A4')).toContain('p71-hd-qr"');
+    });
+
+    it('aligns the code with the title block it sits in', () => {
+        const css = headerCss({}, 'A4');
+
+        expect(css).toContain('.p71-hd-doc--right .p71-hd-qr { margin-left: auto; }');
+        expect(css).toContain('.p71-hd-qr { display: block; width: 20mm; height: 20mm;');
+    });
+});
+
+describe('applyTokens — who prepared it and when it printed', () => {
+    it('fills {{prepared_by}} and {{print_date}} from the context', () => {
+        expect(
+            applyTokens('By {{prepared_by}} on {{print_date}}', {
+                preparedBy: 'Rina Akter',
+                printDate: '06-10-2026 1:02:59 PM',
+            }).text,
+        ).toBe('By Rina Akter on 06-10-2026 1:02:59 PM');
+    });
+
+    it('drops the line when neither is known, rather than printing a bare label', () => {
+        expect(applyTokens('Prepared by: {{prepared_by}}', {}).empty).toBe(true);
+    });
+});
+
 describe('applyTokens', () => {
     it('substitutes known tokens and ignores case/whitespace', () => {
         expect(applyTokens('{{company_name}} — {{ PHONE }}', ctx)).toEqual({
@@ -430,19 +489,29 @@ describe('title position', () => {
         expect(html.indexOf('p71-hd-doc--below')).toBeGreaterThan(html.indexOf('p71-hd--logo-left'));
     });
 
-    it('applies a nudge as a relative offset so the title stays in the flow', () => {
-        const html = render({ title: { position: 'above-center', offsetXMm: -6, offsetYMm: 3 } });
+    it('applies a nudge across or up as a relative offset so the title stays in the flow', () => {
+        const html = render({ title: { position: 'above-center', offsetXMm: -6, offsetYMm: -3 } });
 
-        expect(html).toContain('left:-6mm;top:3mm');
+        expect(html).toContain('style="left:-6mm;top:-3mm"');
         expect(headerCss({ title: { position: 'above-center' } }, 'A4')).toContain('position: relative');
     });
 
+    it('pushes a nudge down into the layout, so the header grows and its divider is never painted over', () => {
+        const html = render({ title: { position: 'beside-right', offsetYMm: 6 } });
+
+        expect(html).toContain('style="margin-top:6mm"');
+        expect(html).not.toMatch(/[";]top:6mm/);
+    });
+
     it('omits the offset style when there is no nudge', () => {
-        expect(render({ title: { position: 'above-center' } })).not.toContain('left:0mm');
+        const html = render({ title: { position: 'above-center' } });
+        expect(html).not.toContain('left:0mm');
+        expect(html).not.toMatch(/p71-hd-doc[^>]*style=/);
     });
 
     it('clamps a nudge far beyond the page', () => {
         expect(render({ title: { offsetXMm: 9999, offsetYMm: -9999 } })).toContain('left:100mm;top:-100mm');
+        expect(render({ title: { offsetYMm: 9999 } })).toContain('margin-top:100mm');
     });
 
     it('ignores a position that is not one of the known slots', () => {

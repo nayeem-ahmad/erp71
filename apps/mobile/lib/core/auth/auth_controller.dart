@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api_exception.dart';
 import '../format/format.dart';
 import '../providers.dart';
+import '../push/push_registrar.dart';
 import 'auth_repository.dart';
 import 'google_auth.dart';
 import 'models.dart';
@@ -191,6 +192,9 @@ class AuthController extends Notifier<AuthState> {
   /// Forgets the session on the phone first, so signing out holds whatever
   /// happens next; telling the server and Google is best effort after that.
   Future<void> signOut() async {
+    // While the access token still works: the phone goes quiet at once even if
+    // the session's own end never reaches the server.
+    await ref.read(pushTokenProvider).unregister(ref.read(apiClientProvider));
     final store = ref.read(tokenStoreProvider);
     final refreshToken = store.tokens?.refreshToken;
     await store.clearTokens();

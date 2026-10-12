@@ -2,11 +2,13 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProductTransactionHistoryPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
         getProductTransactionHistory: jest.fn(),
-        getStores: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         searchProductsByQuantity: jest.fn(),
     },
@@ -120,10 +122,10 @@ const REPORT = {
 describe('ProductTransactionHistoryPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         searchParams.clear();
         const { api } = require('@/lib/api');
         api.getProductTransactionHistory.mockResolvedValue(REPORT);
-        api.getStores.mockResolvedValue([{ id: 'store-1', name: 'Dhaka Branch' }]);
         api.getInventoryWarehouses.mockResolvedValue([
             { id: 'wh-1', name: 'Dhaka Main', store_id: 'store-1', store: { id: 'store-1', name: 'Dhaka Branch' } },
         ]);
@@ -133,7 +135,7 @@ describe('ProductTransactionHistoryPage', () => {
     it('asks for nothing until a product is picked', async () => {
         render(<ProductTransactionHistoryPage />);
 
-        await waitFor(() => expect(require('@/lib/api').api.getStores).toHaveBeenCalled());
+        await waitFor(() => expect(require('@/lib/api').api.getInventoryWarehouses).toHaveBeenCalled());
         expect(require('@/lib/api').api.getProductTransactionHistory).not.toHaveBeenCalled();
         expect(screen.getByText('Pick a product to see its transaction history.')).toBeInTheDocument();
     });
@@ -192,7 +194,7 @@ describe('ProductTransactionHistoryPage', () => {
 
         await waitFor(() =>
             expect(api.getProductTransactionHistory).toHaveBeenLastCalledWith(
-                expect.objectContaining({ productId: 'prod-1', warehouseId: 'wh-1', page: 1 }),
+                expect.objectContaining({ productId: 'prod-1', storeId: 'store-1', warehouseId: 'wh-1', page: 1 }),
             ),
         );
     });

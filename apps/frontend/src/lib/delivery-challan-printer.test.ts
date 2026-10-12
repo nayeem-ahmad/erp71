@@ -4,7 +4,7 @@ import {
     type DeliveryChallanData,
     type PaperSize,
 } from './delivery-challan-printer';
-import { messageCatalog } from './localization/messages';
+import { messageCatalog } from '@/test-utils/message-catalog';
 
 const labels: ChallanLabels = {
     title: 'Delivery Challan',

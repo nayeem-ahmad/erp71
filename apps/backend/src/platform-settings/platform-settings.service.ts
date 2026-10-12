@@ -120,6 +120,10 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         // something sold to a tenant, so this is a kill switch. Independent of
         // whether any tenant's plan includes the accounting module.
         platform_accounting_enabled: { isSecret: false, default: 'true' },
+        // The rail-of-apps shell. Off by default: it replaces the sidebar every
+        // member works in, so it is piloted per tenant through an override
+        // before the platform default is switched on.
+        app_shell_enabled: { isSecret: false, default: 'false' },
         default_signup_plan:   { isSecret: false, default: 'STANDARD' },
         // The "Try Demo" entry points: the sign-in page button, the marketing
         // hero CTA, and `/demo`. On by default — the shared demo workspace is

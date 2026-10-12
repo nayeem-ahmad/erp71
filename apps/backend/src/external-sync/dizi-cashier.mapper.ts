@@ -3,6 +3,8 @@ import {
     DiziPayment,
     DiziPurchaseDetail,
     DiziPurchaseHeader,
+    DiziQuotationDetail,
+    DiziQuotationHeader,
     DiziSaleDetail,
     DiziSaleHeader,
     DiziSaleReturnDetail,
@@ -14,18 +16,23 @@ import {
     MappedProduct,
     MappedPurchase,
     MappedPurchaseItem,
+    MappedQuotation,
+    MappedQuotationItem,
     MappedSale,
     MappedSaleItem,
     MappedSaleReturn,
     MappedSaleReturnItem,
     MappedSupplier,
+    OpeningPositions,
     PaymentParty,
     SyncWarning,
     buildDocumentNumber,
     dedupeCode,
+    dedupeName,
     emptyToNull,
     parseProviderDate,
     parseTimestamp,
+    readableCode,
     resolvePaymentStatus,
     resolveQuantity,
     toMoney,
@@ -40,8 +47,8 @@ import {
  * Dizi differs from Express in ways that shape the code here:
  *  - ids are GUIDs, so `externalId` is `row.Id` verbatim;
  *  - amounts arrive as JSON numbers, not strings, but `toMoney` handles both;
- *  - product/customer codes are frequently null, so `dedupeCode` leans on its
- *    `EXT-<id>` fallback more than it does for Express;
+ *  - product/customer codes are frequently null, so more of its products and
+ *    customers take the next code in the tenant's own series than Express's do;
  *  - line items live on a per-document detail call, so the sale/purchase/return
  *    mappers take the fetched detail rather than a separate lines array.
  */
@@ -55,7 +62,7 @@ export function mapDiziProduct(row: DiziItem, claimedSkus: Set<string>): MappedP
 
     return {
         externalId,
-        sku: dedupeCode((row.SKU || row.Barcode || '').trim(), externalId, claimedSkus),
+        sku: dedupeCode(readableCode(row.SKU) ?? readableCode(row.Barcode), claimedSkus),
         name: (row.Name || '').trim() || `Unnamed product ${externalId}`,
         price: toMoney(row.PriceIncludingTax),
         purchaseRate,
@@ -71,7 +78,7 @@ export function mapDiziCustomer(row: DiziTrader, claimedCodes: Set<string>): Map
 
     return {
         externalId,
-        customerCode: dedupeCode((row.Code || '').trim(), externalId, claimedCodes),
+        customerCode: dedupeCode(readableCode(row.Code), claimedCodes),
         name: (row.Name || '').trim() || `Unnamed customer ${externalId}`,
         ownerName: emptyToNull(row.ContactPerson),
         phone: emptyToNull(row.ContactNo),
@@ -95,15 +102,20 @@ export function mapDiziCustomer(row: DiziTrader, claimedCodes: Set<string>): Map
     };
 }
 
-export function mapDiziSupplier(row: DiziTrader, claimedNames: Set<string>): MappedSupplier {
+export function mapDiziSupplier(
+    row: DiziTrader,
+    claimedNames: Set<string>,
+    claimedCodes: Set<string> = new Set(),
+): MappedSupplier {
     const externalId = String(row.Id);
     // Supplier is unique on [tenant_id, name] in our schema, so the name is the
     // value that has to be disambiguated.
-    const name = dedupeCode((row.Name || '').trim() || `Unnamed supplier ${externalId}`, externalId, claimedNames);
+    const name = dedupeName((row.Name || '').trim() || `Unnamed supplier ${externalId}`, claimedNames);
 
     return {
         externalId,
         name,
+        supplierCode: dedupeCode(readableCode(row.Code), claimedCodes),
         phone: emptyToNull(row.ContactNo),
         email: emptyToNull(row.Email),
         address: emptyToNull(row.Location),
@@ -191,7 +203,12 @@ export function mapDiziPurchase(
     });
 
     const totalAmount = toMoney(header.TotalAmount);
-    const paidAmount = toMoney(header.ReceivedAmount) || toMoney(detail?.PaidAmount);
+    // Only what the header says changed hands with the goods. The detail's
+    // PaidAmount is what the supplier has been paid so far, and Dizi records
+    // every one of those payments, even cash handed over at the counter, as a
+    // supplier payment of its own; counting it here as well paid each bill
+    // twice and took it off the supplier's due.
+    const paidAmount = toMoney(header.ReceivedAmount);
 
     return {
         externalId,
@@ -239,6 +256,7 @@ export function mapDiziPayment(
             externalId,
             code: 'PAYMENT_AMOUNT_INVALID',
             message: `Payment ${slip}: amount ${row.Amount ?? 'null'} is not a usable number — skipped`,
+            skipped: { number: slip, date: emptyToNull(row.Date ?? null)?.slice(0, 10) ?? null, party: null, amount: 0, lines: null },
         });
         return null;
     }
@@ -304,15 +322,220 @@ export function mapDiziSaleReturn(
         };
     });
 
+    const totalRefund = toMoney(detail.GrossAmount) || toMoney(detail.TotalAmount);
+
     return {
         externalId,
         returnNumber: buildDocumentNumber(documentPrefix, slip),
         referenceNumber: emptyToNull(detail.ReturnSlipNo),
         externalSaleId: emptyToNull(detail.SalesId),
-        totalRefund: toMoney(detail.GrossAmount) || toMoney(detail.TotalAmount),
+        externalCustomerId: emptyToNull(detail.TraderId),
+        totalRefund,
+        // Dizi credits the whole return to the customer's account. Cash handed
+        // back is a negative customer payment of its own, which raises the due
+        // again, so crediting only part here would count that cash twice.
+        dueCredit: totalRefund,
         reason: emptyToNull(detail.Narration),
         returnDate: parseProviderDate(detail.ReturnDate),
         externalUpdatedAt: parseTimestamp(detail.UpdatedOn),
         items,
     };
+}
+
+/** The quotation's business date, whichever field this Dizi build names it. */
+export function diziQuotationDate(header: DiziQuotationHeader): string | null {
+    return emptyToNull(header.TransactionDate ?? header.QuotationDate ?? header.Date ?? header.CreatedOn ?? header.CreatedDate ?? null);
+}
+
+/** Dizi's quotation states onto ours; anything unrecognised reads as sent. */
+const DIZI_QUOTATION_STATUS: Record<string, string> = {
+    DRAFT: 'DRAFT',
+    SENT: 'SENT',
+    PENDING: 'SENT',
+    OPEN: 'SENT',
+    ACCEPTED: 'ACCEPTED',
+    APPROVED: 'ACCEPTED',
+    REJECTED: 'REJECTED',
+    DECLINED: 'REJECTED',
+    CANCELLED: 'REJECTED',
+    CANCELED: 'REJECTED',
+    EXPIRED: 'EXPIRED',
+    CONVERTED: 'CONVERTED',
+    INVOICED: 'CONVERTED',
+};
+
+/**
+ * Quotations, like sales, carry their lines only on the detail payload. A
+ * quotation whose detail could not be fetched still imports as a header with
+ * its total, and says so, rather than vanishing.
+ *
+ * The field names come from Dizi's own quotation screen, not a recorded
+ * payload (see the types in dizi-cashier.client.ts), so the header values
+ * still fall back through the spellings Dizi uses on its sales.
+ */
+export function mapDiziQuotation(
+    header: DiziQuotationHeader,
+    detail: DiziQuotationDetail | null,
+    documentPrefix: string,
+    warnings: SyncWarning[],
+): MappedQuotation {
+    const externalId = String(header.Id);
+    const number = emptyToNull(
+        header.QuotationNo ?? header.SlipNo ?? detail?.QuotationNo ?? detail?.SlipNo ?? null,
+    );
+    const slip = number ?? externalId;
+
+    const lines = detail?.SaleQuotationItems?.filter((line) => !line.IsDeleted) ?? null;
+    if (!detail || !lines) {
+        warnings.push({
+            entity: 'QUOTATION',
+            externalId,
+            code: 'QUOTATION_LINES_MISSING',
+            message: `Quotation ${slip}: line items could not be read from Dizi — imported with its total only`,
+        });
+    }
+
+    const items: MappedQuotationItem[] = (lines ?? []).map((line) => {
+        const { quantity, rounded, originalQuantity } = resolveQuantity(line.Quantity);
+        if (rounded) {
+            warnings.push({
+                entity: 'QUOTATION',
+                externalId,
+                code: 'QUANTITY_ROUNDED',
+                message: `Quotation ${slip}: quantity ${originalQuantity} rounded to ${quantity} (our line quantities are whole numbers)`,
+            });
+        }
+        // The offered (tax-inclusive, post-discount) unit price. Dizi keeps the
+        // line pre-tax and spreads the header discount over the lines, so the
+        // line's net over its quantity is that price, and the lines add up to
+        // the quotation total.
+        const gross = toMoney(line.SubTotalAmount) || toMoney(line.PricePerUnit) * originalQuantity;
+        const net = gross + toMoney(line.TaxAmount) - toMoney(line.DiscountAmount) - toMoney(line.DiscountOnTax);
+        const unitPrice = originalQuantity > 0 ? Math.round((net / originalQuantity) * 100) / 100 : toMoney(line.PricePerUnit);
+        return { externalProductId: String(line.ItemId ?? ''), quantity, unitPrice };
+    });
+
+    const lineSum = Math.round(items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) * 100) / 100;
+    // A quotation whose date no field carries is still imported, dated today,
+    // rather than dropped; the warning says so.
+    let date = diziQuotationDate(header) ?? emptyToNull(detail?.Date ?? detail?.QuotationDate ?? detail?.TransactionDate ?? null);
+    if (!date) {
+        date = new Date().toISOString().slice(0, 10);
+        warnings.push({
+            entity: 'QUOTATION',
+            externalId,
+            code: 'QUOTATION_DATE_MISSING',
+            message: `Quotation ${slip}: no date could be read from Dizi — dated today`,
+        });
+    }
+    const validUntil = emptyToNull(detail?.ValidUntil ?? detail?.ValidTill ?? detail?.ExpiryDate ?? null);
+
+    const converted = detail?.IsConverted === true || Boolean(emptyToNull(detail?.SalesId ?? null));
+    const status = converted
+        ? 'CONVERTED'
+        : DIZI_QUOTATION_STATUS[(detail?.Status ?? '').trim().toUpperCase()] ?? 'SENT';
+
+    return {
+        externalId,
+        quoteNumber: buildDocumentNumber(documentPrefix, slip),
+        referenceNumber: number,
+        externalCustomerId: emptyToNull(header.TraderId ?? header.CustomerId ?? detail?.CustomerId ?? detail?.TraderId ?? null),
+        totalAmount: toMoney(header.TotalAmount) || toMoney(detail?.TotalAmount) || lineSum,
+        quoteDate: parseProviderDate(date ?? ''),
+        validUntil: validUntil ? parseProviderDate(validUntil) : null,
+        status,
+        notes: emptyToNull(detail?.Narration ?? detail?.Note ?? null),
+        externalUpdatedAt: parseTimestamp(detail?.UpdatedOn),
+        items,
+    };
+}
+
+/** Everything a Dizi snapshot holds, as the opening arithmetic reads it. */
+export interface DiziRecords {
+    products: DiziItem[];
+    customers: DiziTrader[];
+    suppliers: DiziTrader[];
+    sales: Array<{ header: DiziSaleHeader; detail: DiziSaleDetail | null }>;
+    purchases: Array<{ header: DiziPurchaseHeader; detail: DiziPurchaseDetail | null }>;
+    customerPayments: DiziPayment[];
+    supplierPayments: DiziPayment[];
+    saleReturns: DiziSaleReturnDetail[];
+}
+
+/**
+ * Each party's opening due and each product's opening stock for an import of
+ * these records (see {@link OpeningPositions}).
+ *
+ * Dizi sends no opening figure of its own: a trader's `Balance` and an item's
+ * `StockInHand` are current, and already include every document here. So the
+ * documents' effect is worked out the way the import will book them — through
+ * the same mappers — and taken off. What is left is what Dizi holds beyond its
+ * documents: opening dues and opening stock entered when the shop started on
+ * Dizi, and Dizi purchase returns, which the import cannot read yet.
+ */
+export function diziOpeningPositions(records: DiziRecords): OpeningPositions {
+    const ignored: SyncWarning[] = [];
+    const customerDocs = new Map<string, number>();
+    const supplierDocs = new Map<string, number>();
+    const stockDocs = new Map<string, number>();
+    const add = (map: Map<string, number>, key: string | null | undefined, amount: number) => {
+        if (key) map.set(key, (map.get(key) ?? 0) + amount);
+    };
+
+    // A sale raises its customer's due by what was left unpaid, as the import does.
+    const saleCustomer = new Map<string, string | null>();
+    for (const doc of records.sales) {
+        const sale = mapDiziSale(doc.header, doc.detail, '', ignored);
+        saleCustomer.set(sale.externalId, sale.externalCustomerId);
+        add(customerDocs, sale.externalCustomerId, Math.max(0, sale.totalAmount - sale.amountPaid));
+        for (const line of sale.items) add(stockDocs, line.externalProductId, -line.quantity);
+    }
+    for (const doc of records.purchases) {
+        const purchase = mapDiziPurchase(doc.header, doc.detail, '', ignored);
+        add(supplierDocs, purchase.externalSupplierId, Math.max(0, purchase.totalAmount - purchase.paidAmount));
+        for (const line of purchase.items) add(stockDocs, line.externalProductId, line.quantity);
+    }
+    // Money in settles a customer and money out settles a supplier; a refund
+    // the other way raises the due again.
+    const payments: Array<[DiziPayment[], PaymentParty, Map<string, number>]> = [
+        [records.customerPayments, 'CUSTOMER', customerDocs],
+        [records.supplierPayments, 'SUPPLIER', supplierDocs],
+    ];
+    for (const [rows, party, docs] of payments) {
+        for (const row of rows) {
+            const payment = mapDiziPayment(row, party, '', ignored);
+            if (!payment) continue;
+            const settles = payment.direction === (party === 'CUSTOMER' ? 'IN' : 'OUT');
+            add(docs, payment.externalPartyId, settles ? -payment.amount : payment.amount);
+        }
+    }
+    // The import credits a return to its sale's customer, or failing that to
+    // the customer the return names.
+    for (const detail of records.saleReturns) {
+        const ret = mapDiziSaleReturn(detail, '', ignored);
+        const customer = (ret.externalSaleId ? saleCustomer.get(ret.externalSaleId) : null) ?? ret.externalCustomerId;
+        add(customerDocs, customer, -(ret.dueCredit ?? 0));
+        for (const line of ret.items) add(stockDocs, line.externalProductId, line.quantity);
+    }
+
+    const dues = (rows: DiziTrader[], docs: Map<string, number>) => {
+        const openings = new Map<string, number>();
+        for (const row of rows) {
+            const id = String(row.Id);
+            const opening = Math.round((toMoney(row.Balance) - (docs.get(id) ?? 0)) * 100) / 100;
+            if (Math.abs(opening) >= 0.01) openings.set(id, opening);
+        }
+        return openings;
+    };
+
+    const stock = new Map<string, number>();
+    for (const row of records.products) {
+        if (row.IsService === true) continue;
+        const id = String(row.Id);
+        // Our quantities are whole numbers; the documents' were rounded the same way.
+        const opening = Math.round(toMoney(row.StockInHand) - (stockDocs.get(id) ?? 0));
+        if (opening !== 0) stock.set(id, opening);
+    }
+
+    return { customers: dues(records.customers, customerDocs), suppliers: dues(records.suppliers, supplierDocs), stock };
 }

@@ -13,7 +13,8 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { PageShell, Input, Select } from '@/components/ui';
+import { BranchFilter, PageShell, Input, Select } from '@/components/ui';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { useServerList } from '@/hooks/useServerList';
 import { toast } from '@/lib/toast';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
@@ -55,6 +56,7 @@ const columnHelper = createColumnHelper<Sale>();
 
 export default function SalesPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Sale | null>(null);
 
@@ -75,9 +77,11 @@ export default function SalesPage() {
         density,
         setDensity,
         busyId,
+        batchBusy,
         printInvoice,
         printChallan,
         printReceipt,
+        printInvoices,
     } = useSalePrinting({ resolve: fetchPrintableSale });
     // The member's own invoice layout — edited in the same Print settings.
     const invoiceLayout = useInvoicePrintPrefs();
@@ -103,21 +107,27 @@ export default function SalesPage() {
     const {
         items: sales,
         loading,
+        error: listError,
         serverPagination,
         reload,
         setItems: setSales,
     } = useServerList<Sale>({
         tableId: 'sales',
         initialSort: { id: 'created_at', desc: true },
-        deps: [debouncedSearch, statusFilter, createdRange],
+        // The branch filter is a filter like the rest: a change is page 1 of a
+        // fresh query, and the export walks the same filtered query.
+        deps: [debouncedSearch, statusFilter, createdRange, branch.apiStoreId],
+        enabled: branch.ready,
         fetch: (params) =>
             api.getSalesList({
                 ...params,
                 search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
                 ...applyCreatedRangeQuery(createdRange),
+                storeId: branch.apiStoreId,
             }),
     });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
     const handleDelete = useCallback(async (sale: Sale) => {
         if (!window.confirm(t.shared.confirm.deleteSale)) return;
@@ -333,6 +343,20 @@ export default function SalesPage() {
         [t, locale, handleDelete, deletingId, canCancel, paperSize, busyId, printInvoice, printChallan, printReceipt],
     );
 
+    // Tick the rows, print them as one job — the day's invoices for the file,
+    // or a delivery run's, without a popup per sale. Selection covers the page
+    // on screen, which the server caps at the 100 the endpoint accepts.
+    const bulkActions = useMemo(
+        () => [
+            {
+                label: t.sales.printMenu.printSelected,
+                icon: <Printer className="w-4 h-4" />,
+                onClick: (rows: Sale[]) => void printInvoices(rows.map((row) => row.id)),
+            },
+        ],
+        [t, printInvoices],
+    );
+
     // Was a client-side preset over the whole downloaded set; with server
     // paging the filter has to reach the query or it would only ever narrow the
     // current page.
@@ -360,6 +384,7 @@ export default function SalesPage() {
                     )}
                     actions={
                         <>
+                            <BranchFilter scope={branch} />
                             <button
                                 type="button"
                                 onClick={() => setPrintSettingsOpen(true)}
@@ -414,6 +439,10 @@ export default function SalesPage() {
                     emptyIcon={<Receipt className="w-16 h-16 text-gray-200" />}
                     showSearch={false}
                     serverPagination={serverPagination}
+                    enableRowSelection
+                    getRowId={(sale) => sale.id}
+                    bulkActions={bulkActions}
+                    bulkActionsDisabled={batchBusy}
                 />
 
                 {printSettingsOpen && (

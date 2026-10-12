@@ -5,6 +5,7 @@ import { AlertCircle, CalendarPlus, CheckCircle2, ClipboardList, Pencil, PhoneCa
 import { Button, Field, Input, Select, Switch, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import CrmActivityComposer from './CrmActivityComposer';
+import CrmMessageTemplatePicker from './CrmMessageTemplatePicker';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { toast } from '@/lib/toast';
@@ -34,8 +35,9 @@ type Props = {
     leadId?: string;
     customerId?: string;
     /**
-     * Who that id names. Passed straight to the composer, where it fills the
-     * `{{name}}` / `{{phone}}` placeholders in a picked message template — the
+     * Who that id names. Passed to the composer and the complete dialog, where
+     * it fills the `{{name}}` / `{{phone}}` placeholders in a picked message
+     * template — the
      * page already has the record on screen, and refetching it here to read one
      * name would be a round trip for nothing.
      */
@@ -131,6 +133,9 @@ export default function CrmActivityPanel({
     const canApprove = useCanApproveCrmActivity();
 
     const editAssigneeId = useId();
+    const completeChannelId = useId();
+    const completeSummaryId = useId();
+    const completeOutcomeId = useId();
     const nextSubjectId = useId();
     const nextDueId = useId();
     const nextAssigneeId = useId();
@@ -455,23 +460,43 @@ export default function CrmActivityPanel({
                     <ModalHeader title={m.completeTitle} onClose={() => setCompleting(null)} />
                     <div className="space-y-3 p-4">
                         <p className="text-sm font-medium text-gray-700">{completing.subject}</p>
-                        <Field label={m.fields.channel} required>
-                            <Select value={done.channel} onChange={(e) => setDone({ ...done, channel: e.target.value })}>
+                        <Field label={m.fields.channel} required htmlFor={completeChannelId}>
+                            <Select
+                                id={completeChannelId}
+                                value={done.channel}
+                                onChange={(e) => setDone({ ...done, channel: e.target.value })}
+                            >
                                 {channels.map((c) => (
                                     <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
                             </Select>
                         </Field>
-                        <Field label={m.fields.summary} required>
+                        {/* Completing writes the same summary the Log dialog does,
+                            so it offers the same LOG templates, narrowed the same
+                            way to the channel above. Only the summary is filled. */}
+                        {done.channel && (
+                            <CrmMessageTemplatePicker
+                                usage="LOG"
+                                channelId={done.channel}
+                                recipient={targetLabel}
+                                onPick={({ body }) => setDone((prev) => ({ ...prev, summary: body }))}
+                            />
+                        )}
+                        <Field label={m.fields.summary} required htmlFor={completeSummaryId}>
                             <Textarea
+                                id={completeSummaryId}
                                 rows={3}
                                 value={done.summary}
                                 onChange={(e) => setDone({ ...done, summary: e.target.value })}
                                 placeholder={m.fields.summaryPlaceholder}
                             />
                         </Field>
-                        <Field label={m.fields.outcome}>
-                            <Input value={done.outcome} onChange={(e) => setDone({ ...done, outcome: e.target.value })} />
+                        <Field label={m.fields.outcome} htmlFor={completeOutcomeId}>
+                            <Input
+                                id={completeOutcomeId}
+                                value={done.outcome}
+                                onChange={(e) => setDone({ ...done, outcome: e.target.value })}
+                            />
                         </Field>
 
                         {/* Present by default rather than hidden behind a second

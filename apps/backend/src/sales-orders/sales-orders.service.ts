@@ -30,7 +30,7 @@ export class SalesOrdersService {
     async create(tenantId: string, userId: string, dto: CreateSalesOrderDto) {
         return this.db.$transaction(async (tx) => {
             if (dto.newCustomer) {
-                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer);
+                dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
             const orderNumber = `ORD-${Date.now()}`;
@@ -49,6 +49,8 @@ export class SalesOrdersService {
                     customer_id: dto.customerId,
                     order_number: orderNumber,
                     total_amount: dto.totalAmount,
+                    prices_include_vat: dto.pricesIncludeVat ?? true,
+                    vat_amount: dto.vatAmount ?? 0,
                     status: dto.status || 'DRAFT',
                     payment_status: 'UNPAID',
                     delivery_date: deliveryDate,
@@ -145,7 +147,7 @@ export class SalesOrdersService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string },
+        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string },
     ): Promise<PaginatedResult<unknown>> {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         return paginatedFindMany({
@@ -155,7 +157,7 @@ export class SalesOrdersService {
                     include: { customer: true, items: { include: { product: true } }, deposits: true },
                 }),
             count: (args) => this.db.salesOrder.count(args as any),
-            where: { tenant_id: tenantId, ...(created ? { created_at: created } : {}) },
+            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
             orderBy: { created_at: 'desc' },
             page,
             limit,
@@ -186,6 +188,8 @@ export class SalesOrdersService {
             if (dto.deliveryDate !== undefined) {
                 updateData.delivery_date = this.normalizeDeliveryDate(dto.deliveryDate);
             }
+
+            if (dto.vatAmount !== undefined) updateData.vat_amount = dto.vatAmount;
 
             if (dto.items && dto.items.length > 0) {
                 // Delete old items and create new ones

@@ -1,4 +1,5 @@
-import { clearSidebarLayoutState, storeAuthResponse } from './auth-session';
+import { applyTenantContext, clearAuthSession, clearSidebarLayoutState, storeAuthResponse } from './auth-session';
+import { getQueryClient, ME_QUERY_KEY } from './query-client';
 import { getWorkspaceItem, setWorkspaceItem } from './session-store';
 
 jest.mock('./api', () => ({
@@ -110,5 +111,63 @@ describe('storeAuthResponse with a workspace named in the URL', () => {
         expect(result).toEqual({ redirectTo: '/dashboard' });
         expect(getWorkspaceItem('tenant_id')).toBe('tenant-karim');
         expect(getWorkspaceItem('active_context')).toBeNull();
+    });
+});
+
+describe('the query cache across sign-in, sign-out and workspace switches', () => {
+    const SHOP_A = { id: 'tenant-a', stores: [{ id: 'store-a' }] };
+    const SHOP_B = { id: 'tenant-b', stores: [{ id: 'store-b' }] };
+    const credentials = { access_token: 'token', refresh_token: 'refresh' };
+
+    beforeEach(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+        api.getMe.mockReset();
+    });
+
+    it('seeds /auth/me at sign-in, fresh, so the next screen does not fetch it again', async () => {
+        api.getMe.mockResolvedValue({ id: 'user-1', tenants: [SHOP_A] });
+
+        await storeAuthResponse(credentials);
+
+        const state = getQueryClient().getQueryState(ME_QUERY_KEY);
+        expect(state?.data).toEqual({ id: 'user-1', tenants: [SHOP_A] });
+        expect(state?.isInvalidated).toBe(false);
+        expect(api.getMe).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops everything the previous session cached when a new one signs in', async () => {
+        const client = getQueryClient();
+        client.setQueryData(['dashboard', 'tenant-a', 'store-a', 'kpis'], { total: 99 });
+        client.setQueryData(ME_QUERY_KEY, { id: 'previous-user' });
+        api.getMe.mockResolvedValue({ id: 'user-2', tenants: [SHOP_B] });
+
+        await storeAuthResponse(credentials);
+
+        expect(client.getQueryData(['dashboard', 'tenant-a', 'store-a', 'kpis'])).toBeUndefined();
+        expect(client.getQueryData(ME_QUERY_KEY)).toEqual({ id: 'user-2', tenants: [SHOP_B] });
+    });
+
+    it('clears the whole cache on sign-out', () => {
+        const client = getQueryClient();
+        client.setQueryData(ME_QUERY_KEY, { id: 'user-1' });
+        client.setQueryData(['dashboard', 'tenant-a', 'store-a', 'kpis'], { total: 1 });
+
+        clearAuthSession();
+
+        expect(client.getQueryCache().getAll()).toHaveLength(0);
+    });
+
+    it('resets workspace data when the tab enters a different shop, and only then', () => {
+        const client = getQueryClient();
+        applyTenantContext(SHOP_A);
+        client.setQueryData(['dashboard', 'tenant-a', 'store-a', 'kpis'], { total: 1 });
+
+        // The app shell re-applies the shop it is already in on every navigation.
+        applyTenantContext(SHOP_A);
+        expect(client.getQueryData(['dashboard', 'tenant-a', 'store-a', 'kpis'])).toEqual({ total: 1 });
+
+        applyTenantContext(SHOP_B);
+        expect(client.getQueryData(['dashboard', 'tenant-a', 'store-a', 'kpis'])).toBeUndefined();
     });
 });

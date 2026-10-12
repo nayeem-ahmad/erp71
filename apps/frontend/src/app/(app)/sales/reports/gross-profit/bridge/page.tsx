@@ -9,7 +9,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, PageShell } from '@/components/ui';
 import { ProfitCell, StatTile } from '@/components/gross-profit';
 
 interface Bridge {
@@ -37,6 +38,7 @@ function isoDaysAgo(days: number) {
 
 export default function MarginBridgePage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const gp = t.salesReports.grossProfit;
     const [rows, setRows] = useState<Row[]>([]);
     const [bridge, setBridge] = useState<Bridge | null>(null);
@@ -47,16 +49,18 @@ export default function MarginBridgePage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void load();
-    }, [from, to, compareFrom, compareTo]);
+    }, [branch.ready, branch.apiStoreId, from, to, compareFrom, compareTo]);
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await api.getMarginBridge({ from, to, compareFrom, compareTo });
+            const data = await api.getMarginBridge({ storeId: branch.apiStoreId, from, to, compareFrom, compareTo });
             setBridge(data.summary.bridge);
             setRows(data.rows);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load margin bridge', error);
         } finally {
             setLoading(false);
@@ -94,6 +98,7 @@ export default function MarginBridgePage() {
                     gp.bridgeTitle,
                     'sales',
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             <div className="grid md:grid-cols-3 gap-4">

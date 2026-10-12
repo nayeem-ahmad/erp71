@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { Button, Field, Input, RichTextEditor, Select } from '@/components/ui';
+import { Button, Field, Input, Select } from '@/components/ui';
+import { RichTextEditor } from '@/components/ui/LazyRichTextEditor';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';

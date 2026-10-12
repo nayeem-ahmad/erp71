@@ -9,6 +9,7 @@ describe('PlanEntitlementsService', () => {
         tenantUser: { count: jest.fn(), findMany: jest.fn() },
         userInvitation: { count: jest.fn() },
         store: { count: jest.fn() },
+        tenant: { findUnique: jest.fn().mockResolvedValue({ online_store_id: null }) },
         employee: { findMany: jest.fn() },
         userStorePermission: { findMany: jest.fn() },
     };
@@ -154,5 +155,19 @@ describe('PlanEntitlementsService', () => {
                 }),
             }),
         );
+    });
+
+    // The storefront's own branch is not a shop: a one-shop plan with a
+    // storefront still has its one shop to add.
+    it('leaves the online branch out of the store quota', async () => {
+        db.tenantSubscription.findUnique.mockResolvedValue({
+            plan: { code: 'BASIC', features_json: { maxSkus: -1, maxUsers: 5, maxStores: 2 } },
+            status: 'ACTIVE',
+        });
+        db.tenant.findUnique.mockResolvedValue({ online_store_id: 'online-1' });
+        db.store.count.mockResolvedValue(1);
+
+        await expect(service.assertStoreQuota('tenant-1')).resolves.toBeUndefined();
+        expect(db.store.count).toHaveBeenCalledWith({ where: { tenant_id: 'tenant-1', id: { not: 'online-1' } } });
     });
 });

@@ -78,8 +78,8 @@ export const chatMessages = {
         back: "কথোপকথনে ফিরুন",
         starting: "শুরু হচ্ছে…",
     },
-    bell: {
-        label: "টিম চ্যাট",
+    badge: {
+        unread: "{count, plural, one {# টি অপঠিত বার্তা} other {# টি অপঠিত বার্তা}}",
     },
     errors: {
         listFailed: "আপনার কথোপকথন লোড করা যায়নি",

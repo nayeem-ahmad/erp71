@@ -9,7 +9,8 @@ import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 type LcRow = {
     id: string;
@@ -48,20 +49,32 @@ function expiryClass(row: LcRow): string {
 
 export default function LcRegisterPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.imports.lcRegister;
     const [rows, setRows] = useState<LcRow[]>([]);
     const [banks, setBanks] = useState<BankRow[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Bank limits are the company's facilities with each bank, so they stay
+    // whole; the register itself follows the branch filter.
     useEffect(() => {
-        Promise.all([api.getLcRegister(), api.getImportBankLimits()])
-            .then(([register, limits]) => {
-                setRows(register);
-                setBanks(limits);
-            })
-            .catch(() => {})
-            .finally(() => setLoading(false));
+        api.getImportBankLimits()
+            .then(setBanks)
+            .catch(() => {});
     }, []);
+
+    useEffect(() => {
+        if (!branch.ready) return;
+        setLoading(true);
+        api.getLcRegister(undefined, { storeId: branch.apiStoreId })
+            .then(setRows)
+            .catch((error) => {
+                handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden);
+            })
+            .finally(() => setLoading(false));
+        // `branch` is a fresh object every render; what it asks for is these two.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId]);
 
     return (
         <PageShell>
@@ -75,6 +88,7 @@ export default function LcRegisterPage() {
                     [{ label: t.imports.title, href: routes.purchases.imports.root }],
                     copy.title,
                 )}
+                actions={<BranchFilter scope={branch} />}
             />
 
             {banks.length > 0 && (

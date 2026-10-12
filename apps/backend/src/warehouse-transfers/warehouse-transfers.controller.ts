@@ -5,6 +5,7 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import {
     CreateWarehouseTransferDto,
     ListWarehouseTransfersQueryDto,
@@ -29,7 +30,10 @@ import { WarehouseTransfersService } from './warehouse-transfers.service';
 @RequireStorePermission(StorePermission.VIEW_PRODUCT_CATALOG)
 @UseInterceptors(TenantInterceptor)
 export class WarehouseTransfersController {
-    constructor(private readonly service: WarehouseTransfersService) {}
+    constructor(
+        private readonly service: WarehouseTransfersService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @Post()
     @RequireStorePermission(StorePermission.CREATE_GOODS_TRANSFER)
@@ -38,8 +42,11 @@ export class WarehouseTransfersController {
     }
 
     @Get()
-    findAll(@Tenant() tenant: TenantContext, @Query() query: ListWarehouseTransfersQueryDto) {
-        return this.service.findAll(tenant.tenantId, query);
+    async findAll(@Tenant() tenant: TenantContext, @Query() query: ListWarehouseTransfersQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, {
+            permissions: [StorePermission.VIEW_PRODUCT_CATALOG],
+        });
+        return this.service.findAll(tenant.tenantId, { ...query, storeId });
     }
 
     @Get(':id')

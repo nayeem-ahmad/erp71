@@ -1,4 +1,4 @@
-import { availableCustomerCredit, canKeepDue, creditDueAmount, invoiceDues } from './customer-credit';
+import { availableCustomerCredit, canKeepDue, creditDueAmount, invoiceDues, saleOverpayment } from './customer-credit';
 
 describe('customer-credit', () => {
     it('computes credit due from total and paid amount', () => {
@@ -46,6 +46,23 @@ describe('invoiceDues', () => {
         expect(invoiceDues(500, 0, -300)).toMatchObject({ invoiceDue: 500, totalDue: 200 });
     });
 
+    it('takes what is paid beyond the total off the previous due', () => {
+        expect(invoiceDues(850, 1500, 400)).toEqual({
+            paid: 1500,
+            invoiceDue: 0,
+            previousDue: 400,
+            totalDue: -250,
+        });
+    });
+
+    it('states an advance taken on an invoice when nothing was owed before', () => {
+        expect(invoiceDues(850, 1000, 0)).toMatchObject({ invoiceDue: 0, previousDue: 0, totalDue: -150 });
+    });
+
+    it('settles to zero when the excess clears the previous due exactly', () => {
+        expect(invoiceDues(850, 1250, 400)).toMatchObject({ totalDue: 0 });
+    });
+
     it('says nothing when there is no previous due to state', () => {
         // A walk-in or a cancelled sale: the server sends none.
         expect(invoiceDues(500, 200, null)).toBeNull();
@@ -64,5 +81,35 @@ describe('invoiceDues', () => {
     it('keeps the totals to the paisa', () => {
         // 0.1 + 0.2 is 0.30000000000000004 in floating point.
         expect(invoiceDues(0.2, 0, 0.1)?.totalDue).toBe(0.3);
+    });
+});
+describe('saleOverpayment', () => {
+    it('finds nothing on a sale paid exactly or short', () => {
+        expect(saleOverpayment(850, 850, { previousDue: 400 })).toBeNull();
+        expect(saleOverpayment(850, 600, { previousDue: 400 })).toBeNull();
+    });
+
+    it('puts the excess toward the previous due', () => {
+        expect(saleOverpayment(850, 1150, { previousDue: 400 })).toEqual({
+            excess: 300, towardPreviousDue: 300, advance: 0, change: 0,
+        });
+    });
+
+    it('holds whatever runs past the previous due as an advance', () => {
+        expect(saleOverpayment(850, 1500, { previousDue: 400 })).toEqual({
+            excess: 650, towardPreviousDue: 400, advance: 250, change: 0,
+        });
+    });
+
+    it('makes it all advance for a customer who owed nothing, or was already in advance', () => {
+        expect(saleOverpayment(850, 1000, { previousDue: 0 })).toMatchObject({ towardPreviousDue: 0, advance: 150 });
+        expect(saleOverpayment(850, 1000, { previousDue: -300 })).toMatchObject({ towardPreviousDue: 0, advance: 150 });
+        expect(saleOverpayment(850, 1000, { previousDue: null })).toMatchObject({ advance: 150 });
+    });
+
+    it('makes a walk-in sale\'s excess change', () => {
+        expect(saleOverpayment(850, 1000, null)).toEqual({
+            excess: 150, towardPreviousDue: 0, advance: 0, change: 150,
+        });
     });
 });

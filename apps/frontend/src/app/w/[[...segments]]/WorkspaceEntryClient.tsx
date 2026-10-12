@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
 import { applyTenantContext } from '@/lib/auth-session';
 import { routes } from '@/lib/routes';
 import { getAccessToken } from '@/lib/session-store';
@@ -51,7 +51,7 @@ function WorkspaceEntryContent() {
             return;
         }
 
-        api.getMe()
+        fetchMe()
             .then((me: { tenants?: unknown[] }) => {
                 const match = resolveWorkspaceSlug((me?.tenants ?? []) as { id: string }[], slug);
                 if (match.status === 'matched') {

@@ -1,7 +1,10 @@
 'use client';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import InventoryValuationPage from './page';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -76,6 +79,7 @@ const mockValuationData = {
 describe('InventoryValuationPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBranchScope();
         const { api } = require('@/lib/api');
         api.getInventoryValuation.mockResolvedValue(mockValuationData);
         api.getStores.mockResolvedValue([
@@ -216,5 +220,19 @@ describe('InventoryValuationPage', () => {
         await waitFor(() => {
             expect(screen.getByTestId('row-count')).toHaveTextContent('0');
         });
+    });
+
+    it('asks for the header branch, and the chosen one after a change', async () => {
+        const { api } = require('@/lib/api');
+        render(<InventoryValuationPage />);
+        await waitFor(() =>
+            expect(api.getInventoryValuation).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+
+        await waitFor(() =>
+            expect(api.getInventoryValuation).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'all' })),
+        );
     });
 });

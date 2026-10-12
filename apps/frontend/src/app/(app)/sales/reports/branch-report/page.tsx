@@ -7,7 +7,8 @@ import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 function defaultFrom() {
     const d = new Date();
@@ -17,11 +18,6 @@ function defaultFrom() {
 
 function defaultTo() {
     return new Date().toISOString().slice(0, 10);
-}
-
-interface Store {
-    id: string;
-    name: string;
 }
 
 interface BranchSummary {
@@ -95,28 +91,17 @@ function Skeleton({ className }: { className?: string }) {
 export default function BranchReportPage() {
     const { t } = useI18n();
     const m = t.reports.branch;
-    const [stores, setStores] = useState<Store[]>([]);
-    const [selectedStore, setSelectedStore] = useState<string>('');
+    // One branch at a time: this report compares a branch against the company,
+    // so "All branches" has nothing to compare. It opens on the header branch.
+    const branch = useBranchScope({ allowAll: false });
+    const selectedStore = branch.apiStoreId ?? '';
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
     const [inputFrom, setInputFrom] = useState(defaultFrom());
     const [inputTo, setInputTo] = useState(defaultTo());
     const [report, setReport] = useState<BranchReport | null>(null);
     const [loading, setLoading] = useState(false);
-    const [storesLoading, setStoresLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        api.getStores()
-            .then((s: Store[]) => {
-                setStores(s);
-                if (s.length > 0) {
-                    setSelectedStore(s[0].id);
-                }
-            })
-            .catch(() => {})
-            .finally(() => setStoresLoading(false));
-    }, []);
 
     useEffect(() => {
         if (selectedStore) {
@@ -132,6 +117,7 @@ export default function BranchReportPage() {
             const data = await api.getBranchReport({ storeId, from, to });
             setReport(data as BranchReport);
         } catch (err: any) {
+            if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
             setError(err?.message ?? m.loadFailed);
         } finally {
             setLoading(false);
@@ -161,25 +147,12 @@ export default function BranchReportPage() {
                         m.title,
                         'sales',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                        {/* Store selector */}
-                        {storesLoading ? (
-                            <Skeleton className="h-10 w-40" />
-                        ) : (
-                            <select
-                                value={selectedStore}
-                                onChange={(e) => setSelectedStore(e.target.value)}
-                                className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                {stores.length === 0 && (
-                                    <option value="">{m.noStores}</option>
-                                )}
-                                {stores.map((s) => (
-                                    <option key={s.id} value={s.id}>{s.name}</option>
-                                ))}
-                            </select>
+                        {branch.ready && !selectedStore && (
+                            <span className="text-sm text-gray-500">{m.noStores}</span>
                         )}
 
                         <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">

@@ -8,6 +8,8 @@ function makeTx() {
             create: jest.fn().mockResolvedValue({ id: 'sup-new' }),
             update: jest.fn().mockResolvedValue({}),
         },
+        // The tenant's suppliers already run to SUP-00006.
+        $queryRaw: jest.fn().mockResolvedValue([{ last: '6' }]),
     };
 }
 
@@ -18,13 +20,16 @@ describe('resolveInlineSupplier', () => {
         const id = await resolveInlineSupplier(tx, 'tenant-1', {
             name: '  Fresh Farms  ',
             phone: ' 01700000000 ',
-        });
+        }, 'store-1');
 
         expect(id).toBe('sup-new');
         expect(tx.supplier.create).toHaveBeenCalledWith({
             data: {
                 tenant_id: 'tenant-1',
                 name: 'Fresh Farms',
+                supplier_code: 'SUP-00007',
+                // A new supplier belongs to the document's branch.
+                store_id: 'store-1',
                 phone: '01700000000',
                 email: undefined,
                 address: undefined,
@@ -37,7 +42,7 @@ describe('resolveInlineSupplier', () => {
         const tx = makeTx();
         tx.supplier.findUnique.mockResolvedValue({ id: 'sup-7', deleted_at: null });
 
-        const id = await resolveInlineSupplier(tx, 'tenant-1', { name: 'Fresh Farms' });
+        const id = await resolveInlineSupplier(tx, 'tenant-1', { name: 'Fresh Farms' }, 'store-1');
 
         expect(id).toBe('sup-7');
         expect(tx.supplier.create).not.toHaveBeenCalled();
@@ -51,7 +56,7 @@ describe('resolveInlineSupplier', () => {
         const id = await resolveInlineSupplier(tx, 'tenant-1', {
             name: 'Fresh Farms',
             phone: '01700000000',
-        });
+        }, 'store-1');
 
         expect(id).toBe('sup-9');
         expect(tx.supplier.update).toHaveBeenCalledWith({
@@ -65,7 +70,7 @@ describe('resolveInlineSupplier', () => {
         const tx = makeTx();
         tx.supplier.findUnique.mockResolvedValue({ id: 'sup-9', deleted_at: new Date() });
 
-        await resolveInlineSupplier(tx, 'tenant-1', { name: 'Fresh Farms', phone: '  ', email: '' });
+        await resolveInlineSupplier(tx, 'tenant-1', { name: 'Fresh Farms', phone: '  ', email: '' }, 'store-1');
 
         expect(tx.supplier.update).toHaveBeenCalledWith({
             where: { id: 'sup-9' },
@@ -77,7 +82,7 @@ describe('resolveInlineSupplier', () => {
         const tx = makeTx();
 
         await expect(
-            resolveInlineSupplier(tx, 'tenant-1', { name: '   ' }),
+            resolveInlineSupplier(tx, 'tenant-1', { name: '   ' }, 'store-1'),
         ).rejects.toThrow(BadRequestException);
         expect(tx.supplier.findUnique).not.toHaveBeenCalled();
         expect(tx.supplier.create).not.toHaveBeenCalled();

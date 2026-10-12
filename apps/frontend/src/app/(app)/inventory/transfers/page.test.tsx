@@ -42,6 +42,10 @@ jest.mock('@/lib/api', () => ({
 }));
 
 import { api } from '@/lib/api';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 const mockApi = api as jest.Mocked<typeof api>;
 
 const sampleTransfers = [
@@ -212,9 +216,8 @@ describe('InventoryTransfersPage', () => {
     it('changes status filter and reloads transfers', async () => {
         render(<InventoryTransfersPage />);
         await waitFor(() => expect(screen.getByText('All Statuses')).toBeInTheDocument());
-        const statusDropdowns = screen.getAllByRole('combobox');
-        // The status filter is the first combobox in the header area
-        const statusSelect = statusDropdowns[0];
+        // The status filter sits in the header beside the branch filter.
+        const statusSelect = screen.getByDisplayValue('All Statuses');
         await act(async () => {
             fireEvent.change(statusSelect, { target: { value: 'SENT' } });
         });
@@ -223,6 +226,48 @@ describe('InventoryTransfersPage', () => {
                 expect.objectContaining({ status: 'SENT' })
             );
         });
+    });
+
+    it('lists the header branch\'s transfers, and re-asks for the branch picked', async () => {
+        mockBranchScope();
+        render(<InventoryTransfersPage />);
+        await waitFor(() =>
+            expect(mockApi.getWarehouseTransfers).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' })),
+        );
+        expect(mockApi.getWarehouseTransfers).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+            fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+        });
+
+        await waitFor(() =>
+            expect(mockApi.getWarehouseTransfers).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 'store-2' })),
+        );
+    });
+
+    it('clears a warehouse filter when the branch changes', async () => {
+        mockBranchScope();
+        render(<InventoryTransfersPage />);
+        await waitFor(() => expect(screen.getAllByText('Main Warehouse').length).toBeGreaterThan(0));
+        const sourceFilter = screen.getAllByRole('combobox').find(
+            (element) => element.closest('form') === null && (element as HTMLSelectElement).value === '' && element.querySelector('option[value="w1"]'),
+        ) as HTMLSelectElement;
+        await act(async () => {
+            fireEvent.change(sourceFilter, { target: { value: 'w1' } });
+        });
+        await waitFor(() =>
+            expect(mockApi.getWarehouseTransfers).toHaveBeenLastCalledWith(expect.objectContaining({ sourceWarehouseId: 'w1' })),
+        );
+
+        await act(async () => {
+            fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'all' } });
+        });
+
+        await waitFor(() =>
+            expect(mockApi.getWarehouseTransfers).toHaveBeenLastCalledWith(
+                expect.objectContaining({ storeId: 'all', sourceWarehouseId: undefined }),
+            ),
+        );
     });
 
     it('renders Add Line button in the form', async () => {

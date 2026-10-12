@@ -11,6 +11,8 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { BranchFilter } from '@/components/ui';
+import { branchOrEmpty, handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 
 interface ShrinkageSummaryRow {
     warehouseName: string;
@@ -23,8 +25,8 @@ const columnHelper = createColumnHelper<ShrinkageSummaryRow>();
 
 export default function ShrinkageReportPage() {
     const { t } = useI18n();
+    const branch = useBranchScope();
     const [report, setReport] = useState<any>({ summary: { totalQuantity: 0, totalValue: 0, topReasons: [] }, rows: [], detailRows: [] });
-    const [stores, setStores] = useState<any[]>([]);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [reasons, setReasons] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
@@ -34,8 +36,8 @@ export default function ShrinkageReportPage() {
     // miscount would report neither, so there is no "both" option — LOSS is the
     // default because this is the shrinkage report.
     const [direction, setDirection] = useState<'LOSS' | 'FOUND'>('LOSS');
-    const [storeId, setStoreId] = useState('');
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useBranchBoundState(branch.apiStoreId);
+    const storeId = branchOrEmpty(branch.apiStoreId);
     const [reasonId, setReasonId] = useState('');
     const [groupId, setGroupId] = useState('');
     const [subgroupId, setSubgroupId] = useState('');
@@ -43,19 +45,20 @@ export default function ShrinkageReportPage() {
     const [toDate, setToDate] = useState('');
 
     useEffect(() => {
-        void Promise.all([loadReport(), loadFilters()]);
+        void loadFilters();
     }, []);
 
     useEffect(() => {
+        if (!branch.ready) return;
         void loadReport();
-    }, [direction, storeId, warehouseId, reasonId, groupId, subgroupId, fromDate, toDate]);
+    }, [branch.ready, branch.apiStoreId, direction, warehouseId, reasonId, groupId, subgroupId, fromDate, toDate]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
             const data = await api.getShrinkageSummary({
                 direction,
-                storeId: storeId || undefined,
+                storeId: branch.apiStoreId,
                 warehouseId: warehouseId || undefined,
                 reasonId: reasonId || undefined,
                 groupId: groupId || undefined,
@@ -65,6 +68,7 @@ export default function ShrinkageReportPage() {
             });
             setReport(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load shrinkage report', error);
         } finally {
             setLoading(false);
@@ -76,14 +80,12 @@ export default function ShrinkageReportPage() {
     // rather than refetched.
     const loadFilters = async () => {
         try {
-            const [storeData, warehouseData, reasonData, groupData, subgroupData] = await Promise.all([
-                api.getStores(),
+            const [warehouseData, reasonData, groupData, subgroupData] = await Promise.all([
                 api.getInventoryWarehouses(),
                 api.getInventoryReasons(),
                 api.getProductGroups(),
                 api.getProductSubgroups(),
             ]);
-            setStores(storeData);
             setWarehouses(warehouseData.filter((warehouse: any) => warehouse.is_active));
             setReasons(reasonData.filter((reason: any) => reason.is_active));
             setGroups(groupData);
@@ -95,9 +97,8 @@ export default function ShrinkageReportPage() {
 
     // A warehouse belongs to exactly one branch, so picking a branch narrows the
     // warehouse picker to that branch's own — the same scoping the entry screens
-    // get from `useWarehouses`. The branch select clears `warehouseId` on the way
-    // past: the two filters are AND-ed server-side, so a warehouse left over from
-    // another branch would report nothing at all.
+    // get from `useWarehouses` — and "All branches" offers every warehouse. The
+    // branch filter clears `warehouseId` on the way past (`useBranchBoundState`).
     const visibleWarehouses = useMemo(
         () => warehouses.filter((warehouse: any) => !storeId || warehouse.store_id === storeId),
         [warehouses, storeId],
@@ -151,6 +152,7 @@ export default function ShrinkageReportPage() {
                         t.inventoryReports.shrinkage.title,
                         'inventory',
                     )}
+                    actions={<BranchFilter scope={branch} />}
                 />
 
                 <div className="grid md:grid-cols-3 gap-4">
@@ -187,10 +189,6 @@ export default function ShrinkageReportPage() {
                     >
                         <option value="LOSS">{t.inventoryReports.shrinkage.directionLoss}</option>
                         <option value="FOUND">{t.inventoryReports.shrinkage.directionFound}</option>
-                    </select>
-                    <select value={storeId} onChange={(e) => { setStoreId(e.target.value); setWarehouseId(''); }} aria-label={t.inventoryReports.reorder.allBranches} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
-                        <option value="">{t.inventoryReports.reorder.allBranches}</option>
-                        {stores.map((store: any) => <option key={store.id} value={store.id}>{store.name}</option>)}
                     </select>
                     <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium">
                         <option value="">{t.inventoryReports.reorder.allWarehouses}</option>

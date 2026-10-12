@@ -19,6 +19,8 @@ import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entr
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { toast } from '@/lib/toast';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
+import { documentPricing, documentVatTotals, productTaxRates } from '@/lib/sale-vat';
 import { useI18n } from '@/lib/i18n';
 
 export default function NewSalesOrderPage() {
@@ -46,21 +48,34 @@ export default function NewSalesOrderPage() {
         api.getCurrentUser().then(setCurrentUser).catch(() => {});
     }, []);
 
-    // A sales order stores only a total, so the subtotal is the total. The
-    // adjustment rows are hidden for the same reason (see TotalsFooter).
-    const totals = useMemo(() => {
-        const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-        return {
-            subtotal,
-            discount: 0,
-            discountPercent: 0,
-            vat: 0,
-            transportCost: 0,
-            laborCost: 0,
-            rounding: 0,
-            total: subtotal,
-        };
-    }, [items]);
+    // A sales order stores its lines and total, with no discount or other
+    // adjustment rows (hidden for that reason — see TotalsFooter). A shop that
+    // prices before VAT adds it on top here too; the VAT is stored with the
+    // document and is part of its total. Prices that include VAT add nothing.
+    const taxPricing = useTaxPricing();
+    const pricing = useMemo(
+        () => documentPricing(taxPricing.pricesIncludeVat, taxPricing.defaultVatRate),
+        [taxPricing.pricesIncludeVat, taxPricing.defaultVatRate],
+    );
+    const docTotals = useMemo(
+        () => documentVatTotals(
+            items.map((item) => ({ quantity: item.quantity, unitPrice: item.price, vatRate: item.vatRate, sdRate: item.sdRate })),
+            pricing,
+        ),
+        [items, pricing],
+    );
+    const totals = {
+        subtotal: docTotals.subtotal,
+        discount: 0,
+        discountPercent: 0,
+        vat: docTotals.vatAmount,
+        vatIncluded: false,
+        vatRate: docTotals.vatRate,
+        transportCost: 0,
+        laborCost: 0,
+        rounding: 0,
+        total: docTotals.total,
+    };
 
     const handleAddItem = (
         product: any,
@@ -74,6 +89,7 @@ export default function NewSalesOrderPage() {
             subgroup: product.subgroup?.name,
             quantity: options?.quantity ?? 1,
             discount: 0,
+            ...productTaxRates(product),
             availableQty: options?.availableQty,
         });
     };
@@ -119,6 +135,8 @@ export default function NewSalesOrderPage() {
                     priceAtOrder: item.price,
                 })),
                 totalAmount: totals.total,
+                pricesIncludeVat: pricing.pricesIncludeVat,
+                vatAmount: totals.vat,
                 status: 'DRAFT',
                 deliveryDate: deliveryDate || undefined,
             });
@@ -183,7 +201,7 @@ export default function NewSalesOrderPage() {
                 <TotalsFooter
                     totals={totals}
                     onTotalsChange={() => {}}
-                    tenantVatRate={0}
+                    tenantVatRate={pricing.defaultVatRate}
                     showAdjustments={false}
                 />
             }

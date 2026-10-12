@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, CheckCircle2, Loader2, Lock, Mail, Phone, User, UserPlus, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { fetchMe } from '@/hooks/use-me';
+import { clearQueryCache } from '@/lib/query-client';
 import { formatDate } from '@/lib/format';
 import { syncLocalePreferenceFromSession } from '@/lib/localization/preference';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -52,7 +54,7 @@ function AcceptInvitationContent() {
         setIsLoggedIn(Boolean(accessToken));
 
         if (accessToken) {
-            api.getMe()
+            fetchMe()
                 .then((me) => setCurrentEmail(me.email))
                 .catch(() => setIsLoggedIn(false));
         }
@@ -75,7 +77,11 @@ function AcceptInvitationContent() {
     // Loads the fresh session, selects the joined tenant/store, and redirects.
     // Runs after membership has already been granted (accept or accept-signup).
     const finalizeSession = async () => {
-        const me = await api.getMe();
+        // The membership list just grew, and on the sign-in paths the session
+        // itself is new — possibly a different person from whoever this tab
+        // last cached. Start from an empty cache so the answer is this one.
+        clearQueryCache();
+        const me = await fetchMe();
         syncLocalePreferenceFromSession(me, { overwrite: true });
 
         const matchedTenant = me.tenants?.find((tenant: any) => tenant.name === info?.tenantName)

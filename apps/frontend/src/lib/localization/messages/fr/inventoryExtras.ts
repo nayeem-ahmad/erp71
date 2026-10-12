@@ -395,6 +395,7 @@ export const inventoryExtrasMessages = {
             "warehousesCounted": "Entrepôts",
             "valuationBasisNote": "Valorisé au coût d'achat moyen pondéré, net des retours fournisseurs. Les produits jamais achetés via le grand livre sont valorisés à leur dernier coût enregistré.",
             "uncostedWarning": "{count} produit(s) détenant {quantity} unité(s) n'ont aucun coût d'achat enregistré et sont valorisés à zéro — le total ci-dessous est sous-évalué.",
+            "setCostsLink": "Saisir les coûts manquants",
             "costBasis": {
                 "WEIGHTED_AVERAGE": "Coût moyen pondéré",
                 "LATEST_COST": "Dernier coût enregistré",
@@ -586,6 +587,96 @@ export const inventoryExtrasMessages = {
         "variance": "Écart {value}",
         "note": "Note"
     },
+    "productCosts": {
+        "title": "Coûts des produits",
+        "subtitle": "Ce qu'a coûté le stock de chaque produit. Les ventes sont valorisées à ces montants — un produit sans coût n'enregistre aucun coût des ventes.",
+        "stats": {
+            "products": "Produits stockés",
+            "uncosted": "Aucun coût enregistré",
+            "uncostedInStock": "Sans coût, avec du stock",
+            "costingMethod": "Méthode de valorisation"
+        },
+        "costingMethods": {
+            "WEIGHTED_AVERAGE": "Coût moyen pondéré",
+            "LATEST_COST": "Dernier coût"
+        },
+        "uncostedBanner": "{count} produit(s) en stock n'ont aucun coût enregistré. Leurs ventes n'enregistrent aucun coût des ventes, leur marge brute ne peut donc pas être mesurée, et la valorisation du stock les compte à zéro. Saisissez un coût ci-dessous ou complétez les vides avec le dernier prix d'achat.",
+        "readOnlyNotice": "Vous pouvez consulter les coûts des produits. Pour les définir, il faut l'autorisation « Définir et corriger les coûts des produits ».",
+        "loadError": "Impossible de charger les coûts des produits : {message}",
+        "loadErrorEmpty": "Les coûts des produits n’ont pas pu être chargés.",
+        "emptyMessage": "Aucun produit ne correspond à ces filtres.",
+        "invalidCost": "Un coût doit être un nombre supérieur ou égal à zéro. Corrigez les cases signalées avant d’enregistrer.",
+        "searchPlaceholder": "Rechercher un nom ou un SKU",
+        "statusLabel": "Statut du coût",
+        "statusFilter": {
+            "ALL": "Tous les produits",
+            "UNCOSTED": "Aucun coût enregistré",
+            "COSTED": "Avec coût"
+        },
+        "inStockOnly": "Uniquement les produits en stock",
+        "columns": {
+            "product": "Produit",
+            "onHand": "En stock",
+            "currentCost": "Coût actuel",
+            "lastPurchase": "Dernier prix d'achat",
+            "newCost": "Nouveau coût",
+            "stockValue": "Valeur du stock"
+        },
+        "basis": {
+            "WEIGHTED_AVERAGE": "Coût moyen",
+            "LATEST_COST": "Liste de prix",
+            "UNCOSTED": "Aucun coût enregistré"
+        },
+        "useLastPurchase": "Utiliser",
+        "useLastPurchaseFor": "Utiliser le dernier prix d'achat pour {product}",
+        "newCostFor": "Nouveau coût pour {product}",
+        "newCostPlaceholder": "Saisir le coût",
+        "fillFromLastPurchase": "Compléter avec le dernier achat",
+        "saveCosts": "Enregistrer {count} coût(s)",
+        "saved": "{count} coût(s) de produit enregistré(s).",
+        "previousPage": "Précédent",
+        "nextPage": "Suivant",
+        "pageOf": "Page {page} sur {pages}",
+        "reasons": {
+            "OPENING_COST": "Coût d'ouverture",
+            "CORRECTION": "Correction",
+            "WRITE_DOWN": "Dépréciation"
+        },
+        "history": {
+            "title": "Modifications de coût",
+            "subtitle": "Chaque coût défini manuellement, avec sa valeur précédente et le stock concerné.",
+            "empty": "Aucun coût n'a encore été défini manuellement.",
+            "loadMore": "Charger plus",
+            "columns": {
+                "date": "Date",
+                "product": "Produit",
+                "reason": "Motif",
+                "change": "Coût",
+                "quantity": "Qté",
+                "valueChange": "Variation de valeur",
+                "by": "Par",
+                "note": "Note"
+            }
+        },
+        "confirm": {
+            "title": "Enregistrer les coûts des produits",
+            "intro": "{count} produit(s) seront valorisés aux montants saisis.",
+            "openingCount": "{count} n'ont pas encore de coût. Le leur est enregistré comme coût d'ouverture.",
+            "changeCount": "{count} ont déjà un coût. Pourquoi change-t-il ?",
+            "reasonPlaceholder": "Choisir un motif",
+            "reasonCorrection": "Correction — le coût enregistré était erroné",
+            "reasonWriteDown": "Dépréciation — le stock vaut désormais moins que son coût (endommagé, périmé, obsolète, baisse de prix)",
+            "reasonRequired": "Indiquez pourquoi les coûts existants changent.",
+            "writeDownHint": "Une dépréciation ne peut que baisser un coût. Si le coût enregistré était simplement faux, utilisez une correction.",
+            "noteLabel": "Note (facultatif)",
+            "notePlaceholder": "ex. Inventaire d'ouverture, facture fournisseur revérifiée",
+            "accountingTitle": "Comment c’est comptabilisé",
+            "accountingNote": "Aucune écriture comptable n'est passée. Votre comptabilité utilise l'inventaire intermittent : le stock a été passé en charge à l'achat, le coût d'un produit sert donc de base au coût des ventes et à la valorisation du stock, et n'est pas un solde de compte. Le nouveau coût s'applique aux ventes à partir de maintenant ; les ventes passées gardent le coût enregistré. Chaque modification est journalisée avec son auteur.",
+            "save": "Enregistrer les coûts",
+            "saving": "Enregistrement...",
+            "cancel": "Annuler"
+        }
+    },
     "addProductModal": {
         "editTitle": "Modifier le produit",
         "addTitle": "Ajouter un nouveau produit",
@@ -597,6 +688,8 @@ export const inventoryExtrasMessages = {
         "salePrice": "Prix de vente (৳)",
         "featuredLabel": "Marquer le produit comme mis en avant (apparaît dans Tendances)",
         "initialStock": "Stock initial",
+        "unitCost": "Coût unitaire",
+        "unitCostHint": "Ce qu'une unité vous coûte à l'achat. Les ventes sont valorisées à ce coût jusqu'à ce que la première facture d'achat le remplace. Laissez vide si vous ne le savez pas.",
         "warrantyEnabled": "Garantie activée",
         "warrantyDuration": "Durée de garantie (jours)",
         "reorderLevel": "Seuil de réapprovisionnement",
@@ -622,6 +715,7 @@ export const inventoryExtrasMessages = {
             "sku": 'WH-KB-1032',
             "price": '120.00',
             "initialStock": '50',
+            "unitCost": "ex. 85.00",
             "warrantyDays": "par ex. 365",
             "vatRate": "ex. 15",
             "sdRate": "ex. 25"

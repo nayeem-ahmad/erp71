@@ -32,6 +32,14 @@ describe('ShareModal', () => {
         expect(whatsapp.getAttribute('href')).toContain(encodeURIComponent(`${original}/s/aB3xK9m`));
     });
 
+    it('offers a print-ready link to the same URL only when asked', () => {
+        const { rerender } = render(<ShareModal subject="Q" shortPath="/s/aB3xK9m" onClose={() => {}} />);
+        expect(screen.queryByRole('link', { name: m.openPrint })).not.toBeInTheDocument();
+
+        rerender(<ShareModal subject="Q" shortPath="/s/aB3xK9m" showPrintLink onClose={() => {}} />);
+        expect(screen.getByRole('link', { name: m.openPrint })).toHaveAttribute('href', `${original}/s/aB3xK9m`);
+    });
+
     describe('localization', () => {
         // The regression guard for the whole point of routing this modal through
         // i18n: every visible string must come from the catalog. A hardcoded

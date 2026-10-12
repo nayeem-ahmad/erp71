@@ -17,6 +17,7 @@ describe('CustomFieldsService', () => {
         upsert: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({}),
       },
+      $executeRaw: jest.fn().mockResolvedValue(0),
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +45,40 @@ describe('CustomFieldsService', () => {
     });
     expect(result[0].key).toBe('cf_1');
     expect(result[0].label).toBe('Region');
+  });
+
+  it('clears the old field\'s lead values from a slot reused by a new field', async () => {
+    db.customFieldDefinition.findMany.mockResolvedValue([
+      { key: 'cf_1', label: 'Old', order: 0, is_active: false },
+    ]);
+    await service.saveDefinitions(tenantId, CustomFieldEntity.LEAD, {
+      fields: [{ label: 'Region' }],
+    });
+
+    expect(db.$executeRaw).toHaveBeenCalledTimes(1);
+    const [sql, ...values] = db.$executeRaw.mock.calls[0];
+    expect(sql.join('?')).toContain('UPDATE "Lead"');
+    expect(values).toContainEqual(['cf_1']);
+    expect(values).toContain(tenantId);
+    // Wiped before the slot goes live, so no read ever sees old values under the new label.
+    expect(db.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      db.customFieldDefinition.upsert.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('keeps lead values when existing fields are only renamed or reordered', async () => {
+    db.customFieldDefinition.findMany.mockResolvedValue([
+      { key: 'cf_1', label: 'Region', order: 0, is_active: true },
+      { key: 'cf_2', label: 'Budget', order: 1, is_active: true },
+    ]);
+    await service.saveDefinitions(tenantId, CustomFieldEntity.LEAD, {
+      fields: [
+        { key: 'cf_2', label: 'Budget (BDT)' },
+        { key: 'cf_1', label: 'Region' },
+      ],
+    });
+
+    expect(db.$executeRaw).not.toHaveBeenCalled();
   });
 
   it('sanitizeValues keeps only active keys and coerces to string', async () => {

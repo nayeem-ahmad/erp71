@@ -5,12 +5,19 @@ import { DatabaseService } from '../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { JobTrackerService } from '../system-health/jobs/job-tracker.service';
+import { PushService } from '../push/push.service';
+import { AlertPolicy } from './alert-policy';
+
+/** Lets the fire-and-forget delivery after `create` run to the end. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let db: any;
   let email: any;
   let sms: any;
+  let push: any;
+  let alertPolicy: any;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -66,6 +73,13 @@ describe('NotificationsService', () => {
       sendLowStockAlert: jest.fn(),
     };
 
+    push = { enabled: true, sendToUsers: jest.fn().mockResolvedValue(1) };
+    alertPolicy = {
+      recentDuplicate: jest.fn().mockResolvedValue(null),
+      decide: jest.fn().mockResolvedValue('push'),
+      isQuietFor: jest.fn().mockResolvedValue(false),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
@@ -73,10 +87,36 @@ describe('NotificationsService', () => {
         { provide: EmailService, useValue: email },
         { provide: SmsService, useValue: sms },
         { provide: JobTrackerService, useValue: { track: (_n: string, fn: () => any) => fn(), purgeOlderThan: jest.fn().mockResolvedValue(0) } },
+        { provide: PushService, useValue: push },
+        { provide: AlertPolicy, useValue: alertPolicy },
       ],
     }).compile();
 
     service = module.get<NotificationsService>(NotificationsService);
+  });
+
+  describe('sendHeldAlertsImpl', () => {
+    it('sends one summary per person once their quiet hours end, and releases the rows', async () => {
+      db.notification.findMany.mockResolvedValue([
+        { id: 'a', tenant_id: 't-1', user_id: 'u-1', title: 'Till short', created_at: new Date() },
+        { id: 'b', tenant_id: 't-1', user_id: 'u-1', title: 'Large refund', created_at: new Date() },
+        { id: 'c', tenant_id: 't-1', user_id: 'u-2', title: 'Still asleep', created_at: new Date() },
+      ]);
+      alertPolicy.isQuietFor.mockImplementation(async (_t: string, userId: string) => userId === 'u-2');
+      db.notification.updateMany = jest.fn().mockResolvedValue({ count: 2 });
+
+      await service.sendHeldAlertsImpl(new Date('2026-10-08T02:30:00Z'));
+
+      expect(push.sendToUsers).toHaveBeenCalledTimes(1);
+      expect(push.sendToUsers).toHaveBeenCalledWith(['u-1'], expect.objectContaining({
+        title: '2 alerts while you were away',
+        body: 'Till short · Large refund',
+      }));
+      expect(db.notification.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['a', 'b'] } },
+        data: { push_held: false, pushed_at: new Date('2026-10-08T02:30:00Z') },
+      });
+    });
   });
 
   /* ------------------------------------------------------------------ */
@@ -107,8 +147,64 @@ describe('NotificationsService', () => {
           title: 'Hello',
           body: 'World',
           link: '/dashboard',
+          dedupe_key: null,
         },
       });
+    });
+
+    const row = (over: Record<string, unknown> = {}) => ({
+      id: 'n-1', tenant_id: 't-1', user_id: 'u-1', type: 'LOW_STOCK', title: 'Low stock', body: '3 items', link: '/inventory',
+      ...over,
+    });
+
+    it("pushes the notification to the person's phones, carrying its workspace, and stamps it", async () => {
+      db.notification.create.mockResolvedValue(row());
+
+      await service.create('t-1', 'u-1', 'LOW_STOCK', 'Low stock', '3 items', '/inventory');
+      await settle();
+
+      expect(alertPolicy.decide).toHaveBeenCalledWith('t-1', 'u-1', 'LOW_STOCK');
+      expect(push.sendToUsers).toHaveBeenCalledWith(['u-1'], {
+        title: 'Low stock',
+        body: '3 items',
+        data: { notification_id: 'n-1', tenant_id: 't-1', type: 'LOW_STOCK', link: '/inventory' },
+      });
+      expect(db.notification.update).toHaveBeenCalledWith({ where: { id: 'n-1' }, data: { pushed_at: expect.any(Date) } });
+    });
+
+    it('holds the push during quiet hours, and leaves a muted or capped one to the bell', async () => {
+      db.notification.create.mockResolvedValue(row());
+
+      alertPolicy.decide.mockResolvedValue('hold');
+      await service.create('t-1', 'u-1', 'LOW_STOCK', 'Low stock', '3 items');
+      await settle();
+      expect(db.notification.update).toHaveBeenCalledWith({ where: { id: 'n-1' }, data: { push_held: true } });
+
+      alertPolicy.decide.mockResolvedValue('skip');
+      db.notification.update.mockClear();
+      await service.create('t-1', 'u-1', 'LOW_STOCK', 'Low stock', '3 items');
+      await settle();
+      expect(push.sendToUsers).not.toHaveBeenCalled();
+      expect(db.notification.update).not.toHaveBeenCalled();
+    });
+
+    it('collapses a repeat of the same alert inside the window into the first', async () => {
+      const first = row({ id: 'n-first' });
+      alertPolicy.recentDuplicate.mockResolvedValue(first);
+
+      const result = await service.create('t-1', 'u-1', 'TILL_SHORTFALL', 'Short', 'x', undefined, { dedupeKey: 'till:s1' });
+
+      expect(result).toBe(first);
+      expect(db.notification.create).not.toHaveBeenCalled();
+      expect(alertPolicy.recentDuplicate).toHaveBeenCalledWith('t-1', 'u-1', 'TILL_SHORTFALL', 'till:s1');
+    });
+
+    it('asks nothing of the policy when push is not set up', async () => {
+      push.enabled = false;
+      db.notification.create.mockResolvedValue(row());
+      await service.create('t-1', 'u-1', 'LOW_STOCK', 'Low stock', '3 items');
+      await settle();
+      expect(alertPolicy.decide).not.toHaveBeenCalled();
     });
 
     it('creates a notification without a link', async () => {
@@ -124,6 +220,7 @@ describe('NotificationsService', () => {
           title: 'Title',
           body: 'Body',
           link: undefined,
+          dedupe_key: null,
         },
       });
     });

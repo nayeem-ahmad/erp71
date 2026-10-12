@@ -37,6 +37,13 @@ type ProductStockRow = {
     stocks: Array<{ quantity: number }>;
 };
 
+type InBranch = { warehouse?: { store_id: string } };
+
+/** Rows whose warehouse is in the branch, or nothing for the whole tenant. */
+function inBranchWarehouse(storeId: string | undefined): InBranch {
+    return storeId ? { warehouse: { store_id: storeId } } : {};
+}
+
 function onHandOf(product: { stocks: Array<{ quantity: number }> }): number {
     return product.stocks.reduce((sum, stock) => sum + stock.quantity, 0);
 }
@@ -56,8 +63,17 @@ export class InventoryDashboardService {
         private readonly entitlements: PlanEntitlementsService,
     ) {}
 
+    /**
+     * `query.storeId` is the branch the controller resolved (`undefined` = the
+     * whole tenant). Every figure reaches the branch through the warehouse:
+     * stock on hand counts only that branch's warehouses, movements, shrinkage
+     * and stock takes are the ones in them, and a transfer counts when either
+     * end is in the branch.
+     */
     async getOverview(tenantId: string, query: InventoryDashboardQueryDto, timezone: string) {
         const window = resolveDateWindow(query, timezone);
+        const storeId = query.storeId;
+        const inBranch = inBranchWarehouse(storeId);
 
         const [features, settings, products] = await Promise.all([
             this.entitlements.getFeaturesForTenant(tenantId),
@@ -72,7 +88,7 @@ export class InventoryDashboardService {
                     reorder_level: true,
                     group_id: true,
                     group: { select: { id: true, name: true } },
-                    stocks: { select: { quantity: true } },
+                    stocks: { ...(storeId ? { where: inBranch } : {}), select: { quantity: true } },
                 },
             }),
         ]);
@@ -83,11 +99,11 @@ export class InventoryDashboardService {
         const defaultReorderLevel = settings?.default_reorder_level ?? null;
 
         const [movement, shrinkage, stockTakes, inTransit, aging] = await Promise.all([
-            this.getMovement(tenantId, window),
-            this.getShrinkage(tenantId, window),
-            this.getStockTakes(tenantId, window),
-            this.getInTransit(tenantId),
-            canValue ? this.getAging(tenantId, products as ProductStockRow[]) : Promise.resolve(null),
+            this.getMovement(tenantId, window, inBranch),
+            this.getShrinkage(tenantId, window, inBranch),
+            this.getStockTakes(tenantId, window, inBranch),
+            this.getInTransit(tenantId, storeId),
+            canValue ? this.getAging(tenantId, products as ProductStockRow[], inBranch) : Promise.resolve(null),
         ]);
 
         return {
@@ -141,10 +157,11 @@ export class InventoryDashboardService {
         };
     }
 
-    private async getMovement(tenantId: string, window: DateWindow) {
+    private async getMovement(tenantId: string, window: DateWindow, inBranch: InBranch) {
         const movements = await this.db.inventoryMovement.findMany({
             where: {
                 tenant_id: tenantId,
+                ...inBranch,
                 created_at: { gte: window.fromDate, lte: window.toDate },
             },
             select: { product_id: true, quantity_delta: true },
@@ -172,10 +189,11 @@ export class InventoryDashboardService {
      * book (`direction = FOUND`), and counting those here would let a warehouse
      * that found ten cartons report ten cartons of shrinkage.
      */
-    private async getShrinkage(tenantId: string, window: DateWindow) {
+    private async getShrinkage(tenantId: string, window: DateWindow, inBranch: InBranch) {
         const rows = await this.db.inventoryShrinkage.findMany({
             where: {
                 tenant_id: tenantId,
+                ...inBranch,
                 direction: 'LOSS',
                 created_at: { gte: window.fromDate, lte: window.toDate },
             },
@@ -194,14 +212,15 @@ export class InventoryDashboardService {
         return { events: rows.length, units, value: money(value) };
     }
 
-    private async getStockTakes(tenantId: string, window: DateWindow) {
+    private async getStockTakes(tenantId: string, window: DateWindow, inBranch: InBranch) {
         const [open, posted] = await Promise.all([
             this.db.stockTakeSession.count({
-                where: { tenant_id: tenantId, status: { in: ['DRAFT', 'COUNTING'] } },
+                where: { tenant_id: tenantId, ...inBranch, status: { in: ['DRAFT', 'COUNTING'] } },
             }),
             this.db.stockTakeSession.count({
                 where: {
                     tenant_id: tenantId,
+                    ...inBranch,
                     posted_at: { gte: window.fromDate, lte: window.toDate },
                 },
             }),
@@ -210,12 +229,20 @@ export class InventoryDashboardService {
     }
 
     /** Units sent but not yet received — stock the shelf count cannot see. */
-    private async getInTransit(tenantId: string) {
+    private async getInTransit(tenantId: string, storeId?: string) {
         const items = await this.db.warehouseTransferItem.findMany({
             where: {
                 transfer: {
                     tenant_id: tenantId,
                     status: { in: ['SENT', 'PARTIALLY_RECEIVED'] },
+                    ...(storeId
+                        ? {
+                              OR: [
+                                  { sourceWarehouse: { store_id: storeId } },
+                                  { destinationWarehouse: { store_id: storeId } },
+                              ],
+                          }
+                        : {}),
                 },
             },
             select: { quantity_sent: true, quantity_received: true },
@@ -229,10 +256,10 @@ export class InventoryDashboardService {
      * never moved is aged from the oldest bucket — it has been sitting there
      * since before the ledger started, which is not "fresh".
      */
-    private async getAging(tenantId: string, products: ProductStockRow[]) {
+    private async getAging(tenantId: string, products: ProductStockRow[], inBranch: InBranch) {
         const lastMoved = await this.db.inventoryMovement.groupBy({
             by: ['product_id'],
-            where: { tenant_id: tenantId },
+            where: { tenant_id: tenantId, ...inBranch },
             _max: { created_at: true },
         });
         const lastMovedAt = new Map(lastMoved.map((row) => [row.product_id, row._max.created_at]));
@@ -327,6 +354,7 @@ export class InventoryDashboardService {
         const movements = await this.db.inventoryMovement.findMany({
             where: {
                 tenant_id: tenantId,
+                ...inBranchWarehouse(query.storeId),
                 created_at: { gte: window.fromDate, lte: window.toDate },
             },
             select: { created_at: true, quantity_delta: true },

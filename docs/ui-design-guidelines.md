@@ -154,7 +154,7 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
 
 **Rule: no feature is reachable *only* via a floating button.**
 
-- **FeedbackWidget: remove the floating dock.** Move Feedback into the header (icon button next to the notification bell) and/or the sidebar footer. `FloatingAssistDock` goes away.
+- **FeedbackWidget: remove the floating dock.** `FloatingAssistDock` is gone. Feedback first moved to a header icon; since 2026-10-07 it is the **Support** item of the avatar menu (`SupportDialog`), with the sidebar's Support page for the conversation list — see §2.12.
 - Allowed fixed-position elements, exhaustively: toasts (`z-70`), the mobile sidebar drawer + backdrop, ModalShell overlays, header-anchored dropdowns, and `FloatingPanel` (`z-20`).
 - **`FloatingPanel`** is the one sanctioned floating *surface*, and the time tracker is its only current use. What earns it the exception: it holds a form — choosing a task, a note, tags, manual logging — that is too big for a header and needs to be reachable from any page. **It is no longer what keeps a running clock visible**: that is `TimerChip` in the app header, which is on every `(app)` page, always in the same place, and covers nothing. The earlier version of this rule said no header could do that job; it was wrong, because the header lives in the `(app)` layout and survives client-side navigation exactly as the panel does. What the panel must obey — every one of these, or it is a FAB with extra steps:
   - it never replaces an inline entry point (the hour log's own header still opens it, a task card still starts a timer, and the board card has a play button);
@@ -198,6 +198,37 @@ Build the missing primitives in `src/components/ui/` — `Input`, `Select`, `Tex
     than merely looking wrong. Everything else, including every BDT-denominated
     document, stays on `formatBDT()`.
 - Layouts must tolerate Bangla text expansion (~20% longer than English) — no fixed-width labels.
+
+### 2.12 App header (top bar)
+
+**Rule: a header control has to show live state.** The header grew one icon per feature until it held nine controls and two dividers — a `?` that read as Help but was voice-command examples, a language pill, a support bubble beside two other chat bubbles — and on a phone it left no room for the shop name. It is now held to this, in this order (2026-10-07):
+
+| Control | Why it earns the header |
+|---|---|
+| Voice mic (premium voice) | Listening state. **One button**: the examples show in a popover while it listens, not behind a `?` of their own |
+| `TimerChip` (projects + `LOG_PROJECT_TIME`) | The running clock, and the tracker's anchor (§2.8) |
+| AI assistant (premium AI) | Opens a docked panel that keeps a conversation going across pages |
+| Notifications | Unread count |
+| Avatar menu | Who you are, and everything below |
+
+- **Preferences and help go in the avatar menu**: switch account, profile, language (`LanguageSwitcher` is a menu row), Support (`SupportDialog`, the composer that captures the current page), sign out.
+- **Anything with a page of its own goes in the sidebar**, not the header — Help, Support, Chat all have sidebar entries already. A page's live count rides on its sidebar link instead: team chat's unread count is a blue `NavCountBadge` on the Chat link (a dot on the icon when the sidebar is collapsed), the way the voucher approval queue is an amber one on Vouchers. On a phone the sidebar is a drawer, so the menu button carries a dot while chat has unread messages (`useChatUnreadCount`, polled by the shell and passed to the sidebar). Team chat had its own header icon until 2026-10-07.
+- Header icon buttons are `min-h-touch min-w-touch`, `h-5 w-5` icons, `text-gray-500` idle. No accent colour and no idle animation: a control pulses only while something is happening (listening, a running timer).
+- No `⋯` overflow menu in the header. If the header does not fit at 360px, the fix is to take a control out (into the avatar menu or the sidebar), not to fold it away.
+- Adding a header control is a design decision, not a feature's default: say which live state it shows, and what leaves to make room.
+
+
+### 2.13 App shell (rail of apps)
+
+Behind the `appShell` platform switch (default off; pilot per tenant through its override), a shop's sidebar is a **rail of apps** beside **the menu of the app you are in**. Spec: `docs/superpowers/specs/2026-10-08-app-shell-rail-design.md`.
+
+- **An app is a top-level module of the nav layout.** Its subgroups and links are its menu; nothing about the layout changes. Every top-level module must have an `APP_REGISTRY` entry in `packages/shared-types/apps.ts` (a test fails otherwise) — that entry, through `resolveAppStates`, is the module's one gate: plan entitlement, platform switch, accounting-only, owner-hidden, and the module-level permission where the shell holds it.
+- **The rail** (56px): brand mark and Home at the top, business apps in layout order, then Chat, Help (Help, Support and What's New share one entry) and Settings, then the collapse toggle. Icons only, 44px targets, the app's name as tooltip and accessible name. The active app is `bg-blue-50 text-blue-600` with a `blue-600` bar at the inline start. A dot is the only decoration: blue for unread chat, amber for work waiting in a link (the voucher approval queue).
+- **The panel** holds the business name, a search that spans **every** app (`Ctrl/⌘+K` reaches it from anywhere), and the open app's menu drawn by `NavModuleChildren` — the same markup the classic sidebar uses. On Home, or before any app is opened, it lists the apps. A page no app owns keeps the last app's menu.
+- **On a phone** the drawer holds rail and panel together; tapping an app switches the menu without navigating, and a back arrow returns to the app list.
+- **Home** leads, under the greeting, with one tile per app carrying the single count from `GET /home/pulse` that says what is waiting in it, then — for owners and billing managers — the apps the plan lacks, each opening a sheet that points at Billing. A member who can open exactly one app lands in it instead of on Home; the owner never does.
+- **Hiding an app** (Settings › Apps, owner or manager) tidies the rail and Home for everyone. It is presentation only: no page or endpoint closes. Say so wherever hiding is offered.
+- **Nothing goes in the header** for this (§2.12). A new module gets a rail icon by being a top-level layout module with a registry entry — not a header control, not a floating button.
 
 ---
 

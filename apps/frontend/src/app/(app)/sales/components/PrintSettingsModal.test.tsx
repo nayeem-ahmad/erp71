@@ -110,6 +110,17 @@ describe('PrintSettingsModal — invoice layout', () => {
         expect(onSave).toHaveBeenCalledWith({ paperSize: 'A4', skipPreview: false, density: 'normal' });
     });
 
+    it('saves the detailed design\u2019s table borders', async () => {
+        const { save, onClose } = renderWithLayout();
+        expect(screen.getByLabelText('Table borders (detailed design)')).toHaveValue('none');
+
+        fireEvent.change(screen.getByLabelText('Table borders (detailed design)'), { target: { value: 'columns' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(save).toHaveBeenCalledWith({ table_borders: 'columns' });
+    });
+
     it('does not call the server when the layout is unchanged', async () => {
         const { save, onClose } = renderWithLayout();
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));

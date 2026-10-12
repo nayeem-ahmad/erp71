@@ -6,6 +6,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell, Button } from '@/components/ui';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { fetchWithAuth } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { toast } from '@/lib/toast';
@@ -66,11 +67,7 @@ export default function ProductionDeployPage() {
     }, [load]);
 
     // Poll while a deploy run is in flight so the card reflects the live outcome.
-    useEffect(() => {
-        if (!isRunActive(status?.lastRun ?? null)) return;
-        const id = setInterval(load, 8000);
-        return () => clearInterval(id);
-    }, [status?.lastRun, load]);
+    useVisibleInterval(() => void load(), isRunActive(status?.lastRun ?? null) ? 8000 : null);
 
     async function handleDeploy() {
         const ahead = status?.aheadBy;

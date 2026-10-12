@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import CompactSection from '@/components/ui/compact/CompactSection';
 import { PageShell, Button, Field, Input, Select, Checkbox, Alert, StatusBadge, ConfirmDialog } from '@/components/ui';
 import { ImportWizardFrame } from '@/components/external-sync/ImportStepper';
+import { SkippedRecordsPanel, skippedRecordsOf } from '@/components/external-sync/SkippedRecords';
 import {
     SnapshotImportPanel,
     type SnapshotImportAdapter,
@@ -26,6 +27,7 @@ import {
     type ExternalSyncStep,
     type ExternalSyncWarning,
 } from '@/lib/api';
+import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
 import { buildBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -39,9 +41,11 @@ const STEPS: Array<{ key: ExternalSyncStep; label: string; hint: string }> = [
     { key: 'MASTERS', label: 'Products, customers, suppliers', hint: 'Everything else references these' },
     { key: 'PURCHASES', label: 'Purchases', hint: 'Stock must exist before it is sold' },
     { key: 'SALES', label: 'Sales', hint: 'Needs products, customers and their stock' },
+    { key: 'QUOTATIONS', label: 'Quotations', hint: 'Needs products and customers' },
     { key: 'CUSTOMER_PAYMENTS', label: 'Customer payments', hint: 'Needs customers' },
     { key: 'SUPPLIER_PAYMENTS', label: 'Supplier payments', hint: 'Needs suppliers' },
     { key: 'SALE_RETURNS', label: 'Sale returns', hint: 'Needs the parent sales already imported' },
+    { key: 'PURCHASE_RETURNS', label: 'Purchase returns', hint: 'Needs the parent purchases already imported' },
 ];
 
 /**
@@ -236,11 +240,7 @@ export default function TenantExternalSyncPage() {
     }
 
     // While an import is in flight the run row is the only progress channel.
-    useEffect(() => {
-        if (!activeRun) return;
-        const timer = setInterval(() => void loadRuns(), RUN_POLL_MS);
-        return () => clearInterval(timer);
-    }, [activeRun, loadRuns]);
+    useVisibleInterval(() => void loadRuns(), activeRun ? RUN_POLL_MS : null);
 
     function validate(): boolean {
         const errors: Record<string, string> = {};
@@ -405,7 +405,7 @@ export default function TenantExternalSyncPage() {
                             placeholder="https://…"
                         />
                     </Field>
-                    <Field label="Store for imported documents" required error={fieldErrors.storeId}>
+                    <Field label="Store for imported documents" required error={fieldErrors.storeId} hint="Customers and suppliers this import brings in belong to it too; ones that already exist keep their own.">
                         <Select value={form.storeId} onChange={(e) => setForm({ ...form, storeId: e.target.value })}>
                             <option value="">Select a store…</option>
                             {stores.map((store) => (
@@ -653,8 +653,10 @@ export default function TenantExternalSyncPage() {
                                     <th className="py-2 pe-3 font-medium">Status</th>
                                     <th className="py-2 pe-3 font-medium">Window</th>
                                     <th className="py-2 pe-3 font-medium">Sales</th>
+                                    <th className="py-2 pe-3 font-medium">Quotations</th>
                                     <th className="py-2 pe-3 font-medium">Purchases</th>
-                                    <th className="py-2 pe-3 font-medium">Returns</th>
+                                    <th className="py-2 pe-3 font-medium">Sale returns</th>
+                                    <th className="py-2 pe-3 font-medium">Purchase returns</th>
                                     <th className="py-2 pe-3 font-medium">Payments</th>
                                     <th className="py-2 pe-3 font-medium">Masters</th>
                                     <th className="py-2 font-medium">Notes</th>
@@ -689,8 +691,12 @@ export default function TenantExternalSyncPage() {
 }
 
 function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
-    const [showWarnings, setShowWarnings] = useState(false);
+    const [open, setOpen] = useState<'warnings' | 'skipped' | null>(null);
     const warnings = run.warnings ?? [];
+    const skipped = skippedRecordsOf(run);
+    // The run stores at most 500 notes; progress counts every one raised.
+    const warningCount = Math.max(run.progress?.warnings ?? 0, warnings.length);
+    const toggle = (panel: 'warnings' | 'skipped') => setOpen((current) => (current === panel ? null : panel));
 
     return (
         <>
@@ -706,8 +712,10 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                     {run.window_from.slice(0, 10)} → {run.window_to.slice(0, 10)}
                 </td>
                 <td className="py-2 pe-3">{formatTally(run, 'sales')}</td>
+                <td className="py-2 pe-3">{formatTally(run, 'quotations')}</td>
                 <td className="py-2 pe-3">{formatTally(run, 'purchases')}</td>
                 <td className="py-2 pe-3">{formatTally(run, 'saleReturns')}</td>
+                <td className="py-2 pe-3">{formatTally(run, 'purchaseReturns')}</td>
                 <td className="py-2 pe-3 text-gray-500">{formatPaymentTally(run)}</td>
                 <td className="py-2 pe-3 text-gray-500">
                     {run.stats
@@ -717,16 +725,31 @@ function RunRow({ run }: Readonly<{ run: ExternalSyncRun }>) {
                         : '—'}
                 </td>
                 <td className="py-2">
-                    <RunNote
-                        run={run}
-                        warningCount={warnings.length}
-                        onToggleWarnings={() => setShowWarnings((open) => !open)}
-                    />
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {skipped.length > 0 ? (
+                            <button type="button" className="text-danger hover:underline" onClick={() => toggle('skipped')}>
+                                {skipped.length} skipped
+                            </button>
+                        ) : null}
+                        <RunNote run={run} warningCount={warningCount} onToggleWarnings={() => toggle('warnings')} />
+                    </div>
                 </td>
             </tr>
-            {showWarnings ? (
+            {open === 'skipped' ? (
                 <tr>
-                    <td colSpan={9} className="py-2">
+                    <td colSpan={11} className="py-2">
+                        <SkippedRecordsPanel run={run} />
+                    </td>
+                </tr>
+            ) : null}
+            {open === 'warnings' ? (
+                <tr>
+                    <td colSpan={11} className="py-2">
+                        {warningCount > warnings.length ? (
+                            <p className="mb-1 text-xs text-gray-500">
+                                Showing the first {warnings.length} of {warningCount} warnings.
+                            </p>
+                        ) : null}
                         <ul className="space-y-1 text-xs text-gray-600 bg-gray-50 rounded-md p-3">
                             {warnings.map((warning: ExternalSyncWarning, index: number) => (
                                 <li key={`${warning.entity}-${warning.externalId}-${index}`}>
@@ -810,7 +833,9 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
                             ['Suppliers', 'suppliers'],
                             ['Sales', 'sales'],
                             ['Purchases', 'purchases'],
-                            ['Returns', 'saleReturns'],
+                            ['Sale returns', 'saleReturns'],
+                            ['Purchase returns', 'purchaseReturns'],
+                            ['Quotations', 'quotations'],
                             ['Cust. payments', 'customerPayments'],
                             ['Supp. payments', 'supplierPayments'],
                         ] as const
@@ -832,7 +857,7 @@ function RunProgress({ run }: { run: ExternalSyncRun }) {
     );
 }
 
-function formatTally(run: ExternalSyncRun, key: 'sales' | 'purchases' | 'saleReturns') {
+function formatTally(run: ExternalSyncRun, key: 'sales' | 'quotations' | 'purchases' | 'saleReturns' | 'purchaseReturns') {
     const tally = run.stats?.[key];
     if (!tally) return '—';
     const parts = [`${tally.created} new`, `${tally.updated} updated`];

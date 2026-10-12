@@ -112,7 +112,7 @@ test.describe('Mobile responsiveness @mobile', () => {
         await expect(page.getByRole('button', { name: /add to cart/i }).first()).toBeVisible();
     });
 
-    test('app header overflow menu when authenticated', async ({ page }) => {
+    test('app header user menu when authenticated', async ({ page }) => {
         try {
             await fetchE2ESession();
         } catch {
@@ -123,10 +123,10 @@ test.describe('Mobile responsiveness @mobile', () => {
         await page.goto('/sales/customers');
         await expect(page.getByRole('button', { name: /open navigation/i })).toBeVisible();
 
-        const overflow = page.getByRole('button', { name: /more options/i });
-        if (await overflow.isVisible()) {
-            await overflow.click();
-            await expect(page.getByLabel(/select branch/i)).toBeVisible();
-        }
+        // Language and support moved out of the header into this menu; there
+        // is no "More options" overflow any more.
+        await expect(page.getByRole('button', { name: /more options/i })).toHaveCount(0);
+        await page.getByRole('button', { name: /user menu/i }).click();
+        await expect(page.getByRole('button', { name: /my profile/i })).toBeVisible();
     });
 });

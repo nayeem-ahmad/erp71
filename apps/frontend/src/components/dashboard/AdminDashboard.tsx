@@ -73,10 +73,12 @@ export default function AdminDashboard({
         previous: prev,
         trends,
         loading,
+        refreshing,
         error,
         deltaContext,
         compare,
     } = useModuleDashboard<OverviewResponse, TrendPoint>({
+        cacheKey: 'admin',
         fetchOverview: (window) => api.getAdminDashboardOverview(window),
         fetchTrends: (window) => api.getAdminDashboardTrends(window),
         unavailableMessage: adm.overviewUnavailable,
@@ -221,6 +223,7 @@ export default function AdminDashboard({
             range={range}
             onRangeChange={setRange}
             error={error}
+            refreshing={refreshing}
         >
             <AttentionSection
                 items={attentionItems}

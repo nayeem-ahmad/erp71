@@ -1,6 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithQueryClient } from '@/test-utils/query-client';
 import DashboardPage from './page';
 import { api } from '@/lib/api';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 jest.mock('next/link', () => ({
     __esModule: true,
@@ -102,6 +106,7 @@ const ACCOUNTING_OVERVIEW = {
 describe('DashboardPage — Business Monitor v2', () => {
     beforeEach(() => {
         jest.resetAllMocks();
+        mockBranchScope();
         (api.getMe as jest.Mock).mockResolvedValue({
             name: 'Ada',
             tenants: [{ name: 'Northwind Retail' }],
@@ -168,7 +173,7 @@ describe('DashboardPage — Business Monitor v2', () => {
     });
 
     it('renders the v2 dashboard sections', async () => {
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
         expect(await screen.findByText('Business health')).toBeInTheDocument();
         expect(await screen.findByText('Needs your attention')).toBeInTheDocument();
         expect(await screen.findByText('Sales by category')).toBeInTheDocument();
@@ -178,7 +183,7 @@ describe('DashboardPage — Business Monitor v2', () => {
     });
 
     it('renders the greeting and range toggle and fetches financial data', async () => {
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText(/Northwind Retail/)).toBeInTheDocument();
         // Health KPI titles
@@ -236,10 +241,132 @@ describe('DashboardPage — Business Monitor v2', () => {
             },
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('No accounting movement')).toBeInTheDocument();
         expect(screen.getByText('Business health')).toBeInTheDocument();
+    });
+
+    it('asks every panel for the branch filter\'s choice, and again when it changes', async () => {
+        renderWithQueryClient(<DashboardPage />);
+
+        const branchCalls = [
+            api.getFinancialKpis,
+            api.getFinancialTrends,
+            api.getSalesByCategory,
+            api.getSalesByProduct,
+            api.getSalesByCustomer,
+            api.getLowStockCount,
+            api.getSalesList,
+        ] as jest.Mock[];
+        // Opens on the header branch.
+        await waitFor(() => {
+            for (const call of branchCalls) {
+                expect(call).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-1' }));
+            }
+        });
+        // The comparison window as well as the current one.
+        expect((api.getFinancialKpis as jest.Mock).mock.calls.filter(([params]) => params.storeId === 'store-1')).toHaveLength(2);
+
+        fireEvent.change(await screen.findByRole('combobox', { name: 'Branch' }), { target: { value: 'store-2' } });
+
+        await waitFor(() => {
+            for (const call of branchCalls) {
+                expect(call).toHaveBeenCalledWith(expect.objectContaining({ storeId: 'store-2' }));
+            }
+        });
+        expect((api.getSalesList as jest.Mock).mock.calls.filter(([params]) => params.storeId === 'store-2')).toHaveLength(2);
+    });
+});
+
+describe('DashboardPage — progressive loading', () => {
+    /** A request that never answers, so a panel can be held in flight for the whole test. */
+    const pending = () => new Promise<never>(() => undefined);
+
+    const KPIS = {
+        filters: { from: '2026-03-01', to: '2026-03-31' },
+        kpis: {
+            cash_inflow: 300, cash_outflow: 125, net_cash_movement: 175, gross_revenue: 300,
+            operating_expense: 125, accounts_receivable: 90, accounts_payable: 20, tax_liability: 15,
+        },
+    };
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+        (api.getMe as jest.Mock).mockResolvedValue({
+            id: 'user-1',
+            name: 'Ada',
+            tenants: [{ id: 't1', name: 'Northwind Retail' }],
+        });
+        (api.getFinancialKpis as jest.Mock).mockResolvedValue(KPIS);
+        // Everything else is still on its way.
+        (api.getFinancialTrends as jest.Mock).mockImplementation(pending);
+        (api.getSalesByCategory as jest.Mock).mockImplementation(pending);
+        (api.getSalesByProduct as jest.Mock).mockImplementation(pending);
+        (api.getSalesByCustomer as jest.Mock).mockImplementation(pending);
+        (api.getLowStockCount as jest.Mock).mockImplementation(pending);
+        (api.getSalesList as jest.Mock).mockImplementation(pending);
+    });
+
+    it('paints the health tiles as soon as their own request lands, while the rest are still out', async () => {
+        renderWithQueryClient(<DashboardPage />);
+
+        // The tiles carry their titles only once they have figures to show.
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('kpi-tile-skeleton')).toHaveLength(0);
+
+        // The slow panels keep their own skeletons rather than holding the page.
+        expect(screen.getByTestId('cash-flow-skeleton')).toBeInTheDocument();
+        expect(screen.getByTestId('category-skeleton')).toBeInTheDocument();
+        expect(screen.getAllByTestId('ranked-list-skeleton')).toHaveLength(2);
+    });
+
+    it('does not hold the headline figures for the comparison window', async () => {
+        // Current window answers; the window before it (the delta arrows) never does.
+        (api.getFinancialKpis as jest.Mock).mockImplementation(
+            (window: { from: string; to: string }) => (Date.parse(window.to) > Date.now() - 60_000 ? Promise.resolve(KPIS) : pending()),
+        );
+
+        renderWithQueryClient(<DashboardPage />);
+
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+        expect(api.getFinancialKpis).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the last range on screen while the next one loads', async () => {
+        renderWithQueryClient(<DashboardPage />);
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+
+        // The next range's figures never arrive.
+        (api.getFinancialKpis as jest.Mock).mockImplementation(pending);
+        fireEvent.click(screen.getByText('Month'));
+
+        await waitFor(() => expect(api.getFinancialKpis).toHaveBeenCalledTimes(4));
+        // Still the week's tiles, dimmed — not a band of skeletons.
+        expect(screen.getByText('Cash in hand')).toBeInTheDocument();
+        expect(screen.queryAllByTestId('kpi-tile-skeleton')).toHaveLength(0);
+        const band = screen.getByText('Cash in hand').closest('[aria-busy]');
+        expect(band).toHaveAttribute('aria-busy', 'true');
+        expect(within(band as HTMLElement).getByText('Net profit')).toBeInTheDocument();
+    });
+
+    it('asks for /auth/me once, however many readers mount together', async () => {
+        renderWithQueryClient(<DashboardPage />);
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+
+        expect(api.getMe).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders straight from the cache on a return visit, without asking for /auth/me', async () => {
+        const first = renderWithQueryClient(<DashboardPage />);
+        expect(await screen.findByText('Cash in hand')).toBeInTheDocument();
+        first.unmount();
+
+        renderWithQueryClient(<DashboardPage />);
+
+        // No skeleton pass: the variant and the tiles are both in memory.
+        expect(screen.getByText('Cash in hand')).toBeInTheDocument();
+        expect(api.getMe).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -281,7 +408,7 @@ describe('DashboardPage — variant selection', () => {
     it('renders the accounting dashboard for an accounting-only plan', async () => {
         (api.getMe as jest.Mock).mockResolvedValue(accountingTenant());
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Where the money sits')).toBeInTheDocument();
         expect(screen.getByText('Health of your books')).toBeInTheDocument();
@@ -310,7 +437,7 @@ describe('DashboardPage — variant selection', () => {
             }],
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Where the money sits')).toBeInTheDocument();
         expect(screen.queryByText('Top selling products')).not.toBeInTheDocument();
@@ -328,7 +455,7 @@ describe('DashboardPage — variant selection', () => {
             }],
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Business health')).toBeInTheDocument();
         expect(screen.queryByText('Where the money sits')).not.toBeInTheDocument();
@@ -346,7 +473,7 @@ describe('DashboardPage — variant selection', () => {
             }],
         });
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('Business health')).toBeInTheDocument();
         expect(screen.queryByText('Where the money sits')).not.toBeInTheDocument();
@@ -371,7 +498,7 @@ describe('DashboardPage — variant selection', () => {
         (api.getProjects as jest.Mock).mockResolvedValue({ items: [], total: 0 });
         (api.getProjectTimer as jest.Mock).mockResolvedValue(null);
 
-        render(<DashboardPage />);
+        renderWithQueryClient(<DashboardPage />);
 
         expect(await screen.findByText('My Open Tasks')).toBeInTheDocument();
         expect(screen.getByText('Hours This Week')).toBeInTheDocument();
@@ -379,5 +506,8 @@ describe('DashboardPage — variant selection', () => {
         // Not the retail dashboard, and none of its endpoints are touched.
         expect(api.getLowStockCount).not.toHaveBeenCalled();
         expect(api.getSalesList).not.toHaveBeenCalled();
+        // The page and the projects variant both need the member; they used to
+        // ask for `/auth/me` once each. Now they share one answer.
+        expect(api.getMe).toHaveBeenCalledTimes(1);
     });
 });

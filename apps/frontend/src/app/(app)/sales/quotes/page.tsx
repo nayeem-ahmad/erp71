@@ -16,9 +16,11 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
+import ConvertToSalesModal from './ConvertToSalesModal';
 
 interface Quotation {
     id: string;
@@ -26,12 +28,16 @@ interface Quotation {
     created_at: string;
     valid_until?: string | null;
     total_amount: string;
+    /** VAT added on top of the lines; part of `total_amount`. */
+    vat_amount?: string | null;
     status: string;
     version: number;
     doc_kind?: string;
     currency?: string;
+    exchange_rate?: string | null;
     notes?: string | null;
     items: any[];
+    customer_id?: string | null;
     customer?: { name: string; phone?: string };
     store_id?: string;
 }
@@ -60,6 +66,7 @@ const columnHelper = createColumnHelper<Quotation>();
 
 export default function QuotesPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const printHeader = usePrintHeader('QUOTE');
     const [quotes, setQuotes] = useState<Quotation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -67,17 +74,24 @@ export default function QuotesPage() {
     // Same endpoint and same modal the detail page uses, so a link minted from a
     // row and one minted from the quotation itself are the one link.
     const { share, sharingId, openShare, revokeShare, closeShare } = useQuotationShare();
+    // The rows "Convert to sales" was pressed on. Captured when the modal opens,
+    // so reloading the list behind it once sales exist cannot change what the
+    // open modal is reporting on.
+    const [converting, setConverting] = useState<Quotation[] | null>(null);
+    const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
 
     useEffect(() => {
+        if (!branch.ready) return;
         loadQuotes();
-    }, [createdRange]);
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const loadQuotes = async () => {
         setLoading(true);
         try {
-            const data = await api.getQuotations(applyCreatedRangeQuery(createdRange));
+            const data = await api.getQuotations({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setQuotes(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load quotes', error);
         } finally {
             setLoading(false);
@@ -125,6 +139,7 @@ export default function QuotesPage() {
                     <thead><tr><th>${t.shared.print.product}</th><th>${t.shared.print.qty}</th><th>${t.shared.print.unitPrice}</th><th>${t.shared.print.subtotal}</th></tr></thead>
                     <tbody>
                         ${quote.items.map((item: any) => `<tr><td>${item.product?.name || t.shared.item}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.unit_price), { locale })}</td><td>${formatBDT(item.quantity * Number(item.unit_price), { locale })}</td></tr>`).join('')}
+                        ${Number(quote.vat_amount ?? 0) > 0.005 ? `<tr><td colspan="3">${t.sales.invoice.vat}</td><td>${formatBDT(Number(quote.vat_amount), { locale })}</td></tr>` : ''}
                         <tr class="total-row"><td colspan="3">${t.shared.print.total}</td><td>${formatBDT(Number(quote.total_amount), { locale })}</td></tr>
                     </tbody>
                 </table>
@@ -230,7 +245,7 @@ export default function QuotesPage() {
                                 <Eye className="w-4 h-4" />
                             </Link>
                             <Link
-                                href={`/sales/quotes/${quote.id}?edit=true`}
+                                href={routes.sales.quoteEdit(quote.id)}
                                 className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
                                 title={t.common.edit}
                             >
@@ -287,6 +302,17 @@ export default function QuotesPage() {
         [t, locale, openShare, sharingId],
     );
 
+    const bulkActions = useMemo(
+        () => [
+            {
+                label: t.quotes.bulkConvert.action,
+                icon: <ReceiptText className="w-4 h-4" />,
+                onClick: (rows: Quotation[]) => setConverting(rows),
+            },
+        ],
+        [t],
+    );
+
     const filterPresets = useMemo(
         () => [
             { label: t.quotes.filterPresets.draft, filters: [{ id: 'status', value: 'DRAFT' }] },
@@ -312,6 +338,7 @@ export default function QuotesPage() {
                     )}
                     actions={
                         <div className="flex flex-wrap items-center gap-2">
+                            <BranchFilter scope={branch} />
                             <Link
                                 href={`${routes.sales.quoteNew}?kind=PROFORMA`}
                                 className={`${compactDensity.btnSecondary}`}
@@ -342,13 +369,29 @@ export default function QuotesPage() {
                     emptyIcon={<FileText className="w-16 h-16 text-gray-200" />}
                     searchPlaceholder={t.quotes.dataTable.searchPlaceholder}
                     filterPresets={filterPresets}
+                    enableRowSelection
+                    getRowId={(quote) => quote.id}
+                    bulkActions={bulkActions}
+                    clearSelectionSignal={clearSelectionSignal}
                 />
+
+                {converting && (
+                    <ConvertToSalesModal
+                        quotes={converting}
+                        onClose={() => setConverting(null)}
+                        onConverted={() => {
+                            setClearSelectionSignal((signal) => signal + 1);
+                            void loadQuotes();
+                        }}
+                    />
+                )}
 
                 {share && (
                     <ShareModal
                         subject={share.subject}
                         shortPath={share.path}
                         onRevoke={revokeShare}
+                        showPrintLink
                         onClose={closeShare}
                     />
                 )}

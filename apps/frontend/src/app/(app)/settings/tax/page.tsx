@@ -7,12 +7,15 @@ import { fetchWithAuth } from '@/lib/api';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
-import { Alert, Button, Checkbox, Field, Input, PageShell, Textarea } from '@/components/ui';
+import { Alert, Button, Checkbox, Field, Input, PageShell, Select, Textarea } from '@/components/ui';
 
 export default function TaxSettingsPage() {
     const { t } = useI18n();
     const m = t.settingsExtras.tax;
     const [vatRate, setVatRate] = useState('');
+    // How prices are entered: with VAT in them (the default) or before VAT,
+    // with the sales screens adding it on top.
+    const [pricesIncludeVat, setPricesIncludeVat] = useState(true);
     const [vatRegNo, setVatRegNo] = useState('');
     const [businessTin, setBusinessTin] = useState('');
     // The Mushak issuer block. Kept on this screen rather than its own: a shop
@@ -34,6 +37,7 @@ export default function TaxSettingsPage() {
         fetchWithAuth('/tenants/tax-settings')
             .then(d => {
                 setVatRate(d?.default_vat_rate != null ? String(d.default_vat_rate) : '');
+                setPricesIncludeVat(d?.prices_include_vat !== false);
                 setVatRegNo(d?.vat_registration_no ?? '');
                 setBusinessTin(d?.business_tin ?? '');
                 setMushakEnabled(d?.mushak_enabled ?? false);
@@ -62,6 +66,7 @@ export default function TaxSettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     default_vat_rate: rate,
+                    prices_include_vat: pricesIncludeVat,
                     vat_registration_no: vatRegNo || null,
                     business_tin: businessTin || null,
                     mushak_enabled: mushakEnabled,
@@ -123,6 +128,18 @@ export default function TaxSettingsPage() {
                             <span className="text-gray-500 text-sm">%</span>
                         </div>
                     </Field>
+
+                    <Field label={m.pricing.label} hint={m.pricing.hint} htmlFor="prices-include-vat" className="max-w-xl">
+                        <Select
+                            id="prices-include-vat"
+                            value={pricesIncludeVat ? 'included' : 'added'}
+                            onChange={e => setPricesIncludeVat(e.target.value === 'included')}
+                        >
+                            <option value="included">{m.pricing.included}</option>
+                            <option value="added">{m.pricing.addedOnTop}</option>
+                        </Select>
+                    </Field>
+                    {!pricesIncludeVat && <Alert tone="warning">{m.pricing.posWarning}</Alert>}
 
                     <Field label={m.vatReg.label} hint={m.vatReg.hint} className="max-w-sm">
                         <Input

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 // `@testing-library/user-event` is NOT installed in this repo — the house pattern
 // is fireEvent from @testing-library/react. See ShortLinkManager.test.tsx.
@@ -18,6 +18,7 @@ jest.mock('@/lib/api', () => ({
         createSprint: jest.fn(),
         startSprint: jest.fn(),
         completeSprint: jest.fn(),
+        getSprintBurndown: jest.fn(),
         deleteSprint: jest.fn(),
     },
 }));
@@ -164,5 +165,26 @@ describe('Sprints page', () => {
             ),
         );
         expect(api.getSprints).toHaveBeenCalledTimes(2);
+    });
+
+    it('asks where the unfinished work goes before completing, rather than completing on the click', async () => {
+        (api.getSprints as jest.Mock).mockResolvedValue([sprint({ status: 'ACTIVE' })]);
+        (api.getSprintBurndown as jest.Mock).mockResolvedValue({
+            current: { remaining_hours: 9, committed_hours: 40, task_count: 6, done_task_count: 4 },
+        });
+        (api.completeSprint as jest.Mock).mockResolvedValue({ carried_over: 2, carried_to: { id: 'n', name: 'Sprint 13' } });
+        render(<SprintsPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Complete sprint' }));
+        expect(api.completeSprint).not.toHaveBeenCalled();
+
+        expect(await screen.findByText('4 done · 2 unfinished (9h remaining)')).toBeInTheDocument();
+        expect(screen.getByLabelText(/Sprint name/)).toHaveValue('Sprint 13');
+        const dialog = screen.getByText('Complete Sprint 12').closest('[role="dialog"]') ?? document.body;
+        fireEvent.click(within(dialog as HTMLElement).getAllByRole('button', { name: 'Complete sprint' }).at(-1)!);
+
+        await waitFor(() =>
+            expect(api.completeSprint).toHaveBeenCalledWith('s1', expect.objectContaining({ kind: 'new', name: 'Sprint 13' })),
+        );
     });
 });

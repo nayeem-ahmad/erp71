@@ -122,6 +122,30 @@ describe('ExternalSyncSnapshotService', () => {
         expect(withProgress?.[0].data.progress).toEqual({ done: 1, total: 8 });
     });
 
+    it('extracts quotations when the provider offers them', async () => {
+        client = makeClient({ fetchQuotationDocuments: jest.fn().mockResolvedValue([{ header: { Id: 'q-1' } }]) });
+        await service.executeExtract('snap-1');
+        const doc = await readSnapshotFile(path.join(tmp, 'tenant-1', 'snap-1.json.gz'));
+        expect(doc.quotations).toEqual([{ header: { Id: 'q-1' } }]);
+        expect(doc.manifest.counts.quotations).toBe(1);
+        expect(doc.quotationsError).toBeUndefined();
+        const ready = db.externalSyncSnapshot.update.mock.calls.find((call) => call[0].data.status === 'READY');
+        expect(ready?.[0].data.error_message).toBeNull();
+    });
+
+    it('keeps the snapshot when only quotations fail, and records why', async () => {
+        client = makeClient({ fetchQuotationDocuments: jest.fn().mockRejectedValue(new Error('quotation list not found')) });
+        await service.executeExtract('snap-1');
+        const doc = await readSnapshotFile(path.join(tmp, 'tenant-1', 'snap-1.json.gz'));
+        expect(doc.products).toEqual([{ id: 1 }]);
+        expect(doc.quotations).toEqual([]);
+        expect(doc.quotationsError).toBe('quotation list not found');
+        // The row says so too, or the snapshot list would read "0 quotations"
+        // as if the provider had none.
+        const ready = db.externalSyncSnapshot.update.mock.calls.find((call) => call[0].data.status === 'READY');
+        expect(ready?.[0].data.error_message).toBe('Quotations not extracted: quotation list not found');
+    });
+
     it('marks FAILED and deletes the file when fetchProducts throws', async () => {
         client.fetchProducts.mockRejectedValue(new Error('provider down'));
         await expect(service.executeExtract('snap-1')).rejects.toThrow(/provider down/);
@@ -254,6 +278,15 @@ describe('ExternalSyncSnapshotService upload/download/delete', () => {
         expect(db.externalSyncSnapshot.create).toHaveBeenCalled();
         const stored = await readSnapshotFile(path.join(tmp, 'tenant-1', 'snap-up-1.json.gz'));
         expect(stored.products).toEqual([{ id: 1 }]);
+        expect(db.externalSyncSnapshot.create.mock.calls[0][0].data.error_message).toBeNull();
+    });
+
+    it('carries an uploaded snapshot\'s quotation failure onto the row', async () => {
+        const buf = await gzipOf({ ...sampleDoc(), quotations: [], quotationsError: 'quotation list not found' });
+        await service.uploadSnapshot('tenant-1', undefined, buf);
+        expect(db.externalSyncSnapshot.create.mock.calls[0][0].data.error_message).toBe(
+            'Quotations not extracted: quotation list not found',
+        );
     });
 
     it('deletes the READY row when the gzip cannot be stored on the snapshot volume', async () => {

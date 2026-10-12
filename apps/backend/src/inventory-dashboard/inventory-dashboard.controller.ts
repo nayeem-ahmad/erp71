@@ -2,6 +2,7 @@ import { Controller, Get, Query, UseGuards, UseInterceptors } from '@nestjs/comm
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
+import { BranchScopeService } from '../database/branch-scope.service';
 import { InventoryDashboardService } from './inventory-dashboard.service';
 import { InventoryDashboardQueryDto } from './inventory-dashboard.dto';
 
@@ -20,17 +21,22 @@ import { INVENTORY_REPORT_READ } from '../auth/permission-sets';
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class InventoryDashboardController {
-    constructor(private readonly service: InventoryDashboardService) {}
+    constructor(
+        private readonly service: InventoryDashboardService,
+        private readonly branchScope: BranchScopeService,
+    ) {}
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('overview')
-    getOverview(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
-        return this.service.getOverview(tenant.tenantId, query, tenant.timezone);
+    async getOverview(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: INVENTORY_REPORT_READ });
+        return this.service.getOverview(tenant.tenantId, { ...query, storeId }, tenant.timezone);
     }
 
     @RequireAnyStorePermission(...INVENTORY_REPORT_READ)
     @Get('trends')
-    getTrends(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
-        return this.service.getTrends(tenant.tenantId, query, tenant.timezone);
+    async getTrends(@Tenant() tenant: TenantContext, @Query() query: InventoryDashboardQueryDto) {
+        const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: INVENTORY_REPORT_READ });
+        return this.service.getTrends(tenant.tenantId, { ...query, storeId }, tenant.timezone);
     }
 }

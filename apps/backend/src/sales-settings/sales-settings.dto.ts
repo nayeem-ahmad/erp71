@@ -2,11 +2,17 @@ import { IsString, IsOptional, IsEnum, IsBoolean, IsIn, MaxLength } from 'class-
 import {
   INVOICE_BALANCE_MODES,
   INVOICE_FOOTER_MAX_LENGTH,
+  INVOICE_LAYOUTS,
   INVOICE_PADDINGS,
+  INVOICE_TABLE_BORDERS,
   INVOICE_TABLE_STYLES,
+  INVOICE_WARRANTY_COLUMNS,
   type InvoiceBalanceMode,
+  type InvoiceLayout,
   type InvoicePadding,
+  type InvoiceTableBorders,
   type InvoiceTableStyle,
+  type InvoiceWarrantyColumn,
 } from '@erp71/shared-types';
 
 export enum PaperSize {
@@ -33,6 +39,10 @@ export class UpdateSalesSettingsDto {
   @IsOptional()
   @IsBoolean()
   require_cashier_session?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  show_customer_credit?: boolean;
 }
 
 export class SalesSettingsResponseDto {
@@ -42,6 +52,7 @@ export class SalesSettingsResponseDto {
   reference_number_format: string;
   pos_enabled: boolean;
   require_cashier_session: boolean;
+  show_customer_credit: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -52,6 +63,10 @@ export class SalesSettingsResponseDto {
  * settings modal can send one switch without restating the rest.
  */
 export class UpdateMemberInvoicePrintDto {
+  @IsOptional()
+  @IsIn(INVOICE_LAYOUTS)
+  layout?: InvoiceLayout;
+
   @IsOptional()
   @IsIn(INVOICE_PADDINGS)
   padding?: InvoicePadding;
@@ -79,6 +94,14 @@ export class UpdateMemberInvoicePrintDto {
   @IsOptional()
   @IsBoolean()
   hide_empty_discount?: boolean;
+
+  @IsOptional()
+  @IsIn(INVOICE_WARRANTY_COLUMNS)
+  warranty_column?: InvoiceWarrantyColumn;
+
+  @IsOptional()
+  @IsIn(INVOICE_TABLE_BORDERS)
+  table_borders?: InvoiceTableBorders;
 
   /**
    * `null` goes back to the built-in thank-you; `''` prints no footer.

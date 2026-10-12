@@ -25,6 +25,10 @@ RUN npm run build --workspace=@erp71/shared-types
 # Generate Prisma client
 RUN npm run generate --workspace=@erp71/database
 # Build the frontend with debug info
+# Where the browser sends API calls. Production passes the app's own origin
+# (https://app.erp71.com), which Caddy routes to the backend under /api/v1, so
+# calls are same-origin and skip the CORS preflight. Unset means /api/v1 on the
+# page's origin — see browserApiBase in src/lib/api-base.ts.
 ARG NEXT_PUBLIC_API_BASE
 ARG NEXT_PUBLIC_API_URL
 # Two-domain routing. NEXT_PUBLIC_MARKETING_URL is the switch that turns it on

@@ -49,7 +49,7 @@ export class HealthAlertService {
         return parseInt(process.env.HEALTH_ALERT_COOLDOWN_MIN ?? '30', 10) * 60 * 1000;
     }
 
-    @Cron('*/5 * * * *')
+    @Cron('*/5 * * * *', { timeZone: 'Asia/Dhaka' })
     async evaluate(): Promise<void> {
         await this.jobTracker.track(JOB_NAMES.HEALTH_ALERTS, () => this.evaluateImpl());
     }

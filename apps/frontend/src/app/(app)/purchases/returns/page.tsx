@@ -7,6 +7,8 @@ import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
+import { BranchFilter } from '@/components/ui';
+import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import CreatePurchaseReturnModal from './CreatePurchaseReturnModal';
 import { PostingBadge } from '@/components/PostingBadge';
 import { formatBDT } from '@/lib/format';
@@ -37,6 +39,7 @@ const columnHelper = createColumnHelper<PurchaseReturnRecord>();
 
 export default function PurchaseReturnsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const [purchaseReturns, setPurchaseReturns] = useState<PurchaseReturnRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,15 +47,17 @@ export default function PurchaseReturnsPage() {
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
+        if (!branch.ready) return;
         loadPurchaseReturns();
-    }, [createdRange]);
+    }, [createdRange, branch.ready, branch.apiStoreId]);
 
     const loadPurchaseReturns = async () => {
         setLoading(true);
         try {
-            const data = await api.getPurchaseReturns(applyCreatedRangeQuery(createdRange));
+            const data = await api.getPurchaseReturns({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
             setPurchaseReturns(data);
         } catch (error) {
+            if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
             console.error('Failed to load purchase returns', error);
         } finally {
             setLoading(false);
@@ -199,13 +204,16 @@ export default function PurchaseReturnsPage() {
                         'purchases',
                     )}
                     actions={(
-                        <button
-                            onClick={() => openCreateModal()}
-                            className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
-                        >
-                            <Plus className="w-4 h-4 me-2" />
-                            New Return
-                        </button>
+                        <>
+                            <BranchFilter scope={branch} />
+                            <button
+                                onClick={() => openCreateModal()}
+                                className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center shadow-lg transition-all"
+                            >
+                                <Plus className="w-4 h-4 me-2" />
+                                New Return
+                            </button>
+                        </>
                     )}
                 />
 

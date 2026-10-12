@@ -26,7 +26,7 @@ describe('choosing a project code', () => {
 
     beforeEach(() => {
         db = makeDb();
-        service = new ProjectsService(db as never, {} as never, {} as never);
+        service = new ProjectsService(db as never, {} as never, {} as never, {} as never, {} as never);
     });
 
     it('refuses a code another project already holds', async () => {
@@ -69,7 +69,7 @@ describe('retiring a project code', () => {
 
     beforeEach(() => {
         db = makeDb();
-        service = new ProjectsService(db as never, {} as never, {} as never);
+        service = new ProjectsService(db as never, {} as never, {} as never, {} as never, {} as never);
     });
 
     it('writes the old code to history when it changes', async () => {
@@ -101,7 +101,7 @@ describe('proposing a project code', () => {
     beforeEach(() => {
         const base = makeDb();
         db = { ...base, project: { ...base.project, findMany: jest.fn().mockResolvedValue([]) } };
-        service = new ProjectsService(db as never, {} as never, {} as never);
+        service = new ProjectsService(db as never, {} as never, {} as never, {} as never, {} as never);
     });
 
     it('abbreviates the name when the abbreviation is free', async () => {

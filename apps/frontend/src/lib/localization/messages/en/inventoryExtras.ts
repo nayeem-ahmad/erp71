@@ -395,6 +395,7 @@ export const inventoryExtrasMessages = {
             "warehousesCounted": "Warehouses",
             "valuationBasisNote": "Valued at weighted average purchase cost, net of purchase returns. Products never purchased through the ledger fall back to their last recorded cost.",
             "uncostedWarning": "{count} product(s) holding {quantity} unit(s) have no purchase cost on file and are valued at zero — the total below is understated.",
+            "setCostsLink": "Set missing costs",
             "costBasis": {
                 "WEIGHTED_AVERAGE": "Weighted average",
                 "LATEST_COST": "Last recorded cost",
@@ -586,6 +587,96 @@ export const inventoryExtrasMessages = {
         "variance": "Variance {value}",
         "note": "Note"
     },
+    "productCosts": {
+        "title": "Product Costs",
+        "subtitle": "What each product's stock cost. Sales are costed at these figures — a product with no cost records no cost of goods sold.",
+        "stats": {
+            "products": "Stock products",
+            "uncosted": "No cost on file",
+            "uncostedInStock": "No cost, holding stock",
+            "costingMethod": "Costing method"
+        },
+        "costingMethods": {
+            "WEIGHTED_AVERAGE": "Weighted average",
+            "LATEST_COST": "Latest cost"
+        },
+        "uncostedBanner": "{count} product(s) holding stock have no cost on file. Their sales record no cost of goods sold, so gross profit on them cannot be measured, and stock valuation counts them at zero. Enter a cost below, or fill the blanks from the last purchase price.",
+        "readOnlyNotice": "You can view product costs. Setting them needs the “Set & correct product costs” permission.",
+        "loadError": "Could not load product costs: {message}",
+        "loadErrorEmpty": "Product costs could not be loaded.",
+        "emptyMessage": "No products match these filters.",
+        "invalidCost": "A cost must be a number of zero or more. Fix the highlighted boxes before saving.",
+        "searchPlaceholder": "Search name or SKU",
+        "statusLabel": "Cost status",
+        "statusFilter": {
+            "ALL": "All products",
+            "UNCOSTED": "No cost on file",
+            "COSTED": "Costed"
+        },
+        "inStockOnly": "Only products holding stock",
+        "columns": {
+            "product": "Product",
+            "onHand": "On hand",
+            "currentCost": "Current cost",
+            "lastPurchase": "Last purchase price",
+            "newCost": "New cost",
+            "stockValue": "Stock value"
+        },
+        "basis": {
+            "WEIGHTED_AVERAGE": "Average cost",
+            "LATEST_COST": "Price list",
+            "UNCOSTED": "No cost on file"
+        },
+        "useLastPurchase": "Use",
+        "useLastPurchaseFor": "Use the last purchase price for {product}",
+        "newCostFor": "New cost for {product}",
+        "newCostPlaceholder": "Enter cost",
+        "fillFromLastPurchase": "Fill blanks from last purchase",
+        "saveCosts": "Save {count} cost(s)",
+        "saved": "{count} product cost(s) saved.",
+        "previousPage": "Previous",
+        "nextPage": "Next",
+        "pageOf": "Page {page} of {pages}",
+        "reasons": {
+            "OPENING_COST": "Opening cost",
+            "CORRECTION": "Correction",
+            "WRITE_DOWN": "Write-down"
+        },
+        "history": {
+            "title": "Cost changes",
+            "subtitle": "Every cost set by hand, with what it was before and the stock it applied to.",
+            "empty": "No costs have been set by hand yet.",
+            "loadMore": "Load more",
+            "columns": {
+                "date": "Date",
+                "product": "Product",
+                "reason": "Reason",
+                "change": "Cost",
+                "quantity": "Qty",
+                "valueChange": "Value change",
+                "by": "By",
+                "note": "Note"
+            }
+        },
+        "confirm": {
+            "title": "Save product costs",
+            "intro": "{count} product(s) will be costed at the figures you entered.",
+            "openingCount": "{count} have no cost on file yet. Theirs is recorded as an opening cost.",
+            "changeCount": "{count} already have a cost. Why is it changing?",
+            "reasonPlaceholder": "Choose a reason",
+            "reasonCorrection": "Correction — the cost on file was wrong",
+            "reasonWriteDown": "Write-down — the stock is now worth less than it cost (damaged, expired, obsolete, price fell)",
+            "reasonRequired": "Choose why the existing costs are changing.",
+            "writeDownHint": "A write-down can only lower a cost. If the cost on file was simply wrong, use a correction.",
+            "noteLabel": "Note (optional)",
+            "notePlaceholder": "e.g. Opening stock count, supplier invoice re-checked",
+            "accountingTitle": "How this is booked",
+            "accountingNote": "No journal voucher is posted. Your books use periodic inventory: stock was expensed when it was bought, so a product's cost is the basis for cost of goods sold and stock valuation rather than a ledger balance. The new cost applies to sales from now on; past sales keep the cost they were recorded at. Every change is logged with who made it.",
+            "save": "Save costs",
+            "saving": "Saving...",
+            "cancel": "Cancel"
+        }
+    },
     "addProductModal": {
         "editTitle": "Edit Product",
         "addTitle": "Add New Product",
@@ -597,6 +688,8 @@ export const inventoryExtrasMessages = {
         "salePrice": "Sale Price ($)",
         "featuredLabel": "Mark product as Featured (shows in Trending)",
         "initialStock": "Initial Stock Level",
+        "unitCost": "Unit Cost",
+        "unitCostHint": "What one unit costs you to buy. Sales are costed at it until the first purchase bill replaces it. Leave blank if you don't know.",
         "warrantyEnabled": "Warranty Enabled",
         "warrantyDuration": "Warranty Duration (Days)",
         "reorderLevel": "Reorder Level",
@@ -622,6 +715,7 @@ export const inventoryExtrasMessages = {
             "sku": "WH-KB-1032",
             "price": "120.00",
             "initialStock": "50",
+            "unitCost": "e.g. 85.00",
             "warrantyDays": "e.g. 365",
             "vatRate": "e.g. 15",
             "sdRate": "e.g. 25"

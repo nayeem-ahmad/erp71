@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { DashboardRange } from '@/components/dashboard/DashboardHeader';
+import { dashboardQueryKey } from '@/components/dashboard/dashboard-query';
 import { periodDelta, type Delta } from './dashboard-delta';
 import { previousDateWindow, previousWindow, rangeToDateWindow, rangeToWindow } from './dashboard-range';
 import { useI18n } from './i18n';
+import { useBranchForbiddenReset, type UseBranchScope } from './branch-scope';
 
-export type DateWindow = { from: string; to: string };
+/** The window a fetcher is asked for, plus the branch filter's `storeId` when the dashboard has one. */
+export type DateWindow = { from: string; to: string; storeId?: string };
 
 const NO_COMPARISON: Delta = { label: '—', positive: true };
 
@@ -17,7 +21,14 @@ export type ModuleDashboardState<TOverview, TTrend> = {
     /** The equally long window before this one. Feeds the deltas and nothing else. */
     previous: TOverview | null;
     trends: TTrend[];
+    /** Nothing to show yet for this window: the band's skeleton. */
     loading: boolean;
+    /**
+     * The figures on screen are the previous range's (or scope's) while the new
+     * one loads. Feeds `ModuleDashboard`'s `refreshing`, which dims rather than
+     * blanks them.
+     */
+    refreshing: boolean;
     error: string;
     /** "vs last week" — the phrase that makes a delta mean something. */
     deltaContext: string;
@@ -35,11 +46,19 @@ export type ModuleDashboardState<TOverview, TTrend> = {
  * losing the overview itself costs the page. That rule was written out three
  * times in three dashboards before it lived here.
  *
- * The fetchers are held in a ref rather than depended on, because callers pass
- * inline arrows; putting them in the dependency array would reload on every
- * render.
+ * The three are separate cached queries rather than one `Promise.allSettled`:
+ * the headline figures paint the moment the current window answers, and the
+ * comparison window — which only feeds the delta arrows — fills in behind them
+ * instead of holding the page. Each answer is kept per workspace, day, range and
+ * `reloadKey`, so a return visit paints from memory, and a range switch keeps the
+ * last range on screen (`keepPreviousData`) until the next one lands.
+ *
+ * The fetchers are held in a ref rather than put in the query key, because
+ * callers pass inline arrows that are new on every render; `cacheKey` is what
+ * names the endpoint instead.
  */
 export function useModuleDashboard<TOverview, TTrend = never>({
+    cacheKey,
     fetchOverview,
     fetchTrends,
     initialRange = 'month',
@@ -47,7 +66,13 @@ export function useModuleDashboard<TOverview, TTrend = never>({
     windowKind = 'date',
     reloadKey,
     enabled = true,
+    branch,
 }: {
+    /**
+     * Names this dashboard's endpoint in the cache. Required, and unique per
+     * dashboard: two dashboards sharing one would answer for each other.
+     */
+    cacheKey: string;
     fetchOverview: (window: DateWindow) => Promise<TOverview>;
     fetchTrends?: (window: DateWindow) => Promise<{ points?: TTrend[] } | null>;
     initialRange?: DashboardRange;
@@ -78,58 +103,81 @@ export function useModuleDashboard<TOverview, TTrend = never>({
      * every Dhaka day boundary six hours and silently re-date the figures.
      */
     windowKind?: 'date' | 'instant';
+    /**
+     * The page's branch filter (`useBranchScope()`), for the dashboards whose
+     * endpoint takes `storeId`. Its `apiStoreId` goes into every window handed
+     * to the fetchers and into the cache key; nothing is asked until it is
+     * `ready`; and a 403 for a branch other than the header's resets the filter
+     * with a toast. Left out, the dashboard is not branch-aware (CRM, HR).
+     */
+    branch?: UseBranchScope;
 }): ModuleDashboardState<TOverview, TTrend> {
     const { t } = useI18n();
     const copy = t.dashboardHome;
+    const storeId = branch?.apiStoreId;
+    const ready = enabled && (branch ? branch.ready : true);
 
     const [range, setRange] = useState<DashboardRange>(initialRange);
-    const [overview, setOverview] = useState<TOverview | null>(null);
-    const [previous, setPrevious] = useState<TOverview | null>(null);
-    const [trends, setTrends] = useState<TTrend[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
 
     const fetchers = useRef({ fetchOverview, fetchTrends });
     fetchers.current = { fetchOverview, fetchTrends };
+    const hasTrends = Boolean(fetchTrends);
 
-    useEffect(() => {
-        if (!enabled) return;
-        let cancelled = false;
+    // Worked out when each request is made, not put in the key: an `instant`
+    // window ends "now", which would make every render a new query.
+    const withBranch = (window: { from: string; to: string }): DateWindow =>
+        storeId ? { ...window, storeId } : window;
+    const baseWindow = () => (windowKind === 'date' ? rangeToDateWindow(range) : rangeToWindow(range));
+    const currentWindow = () => withBranch(baseWindow());
+    const priorWindow = () => {
+        const window = baseWindow();
+        return withBranch(windowKind === 'date' ? previousDateWindow(window) : previousWindow(window));
+    };
+    const keyFor = (part: 'overview' | 'previous' | 'trends') =>
+        dashboardQueryKey('module', cacheKey, part, windowKind, range, reloadKey ?? null, storeId ?? null);
 
-        const load = async () => {
-            setLoading(true);
-            setError('');
+    const overviewQuery = useQuery({
+        queryKey: keyFor('overview'),
+        queryFn: () => fetchers.current.fetchOverview(currentWindow()),
+        enabled: ready,
+        placeholderData: keepPreviousData,
+    });
+    const previousQuery = useQuery({
+        queryKey: keyFor('previous'),
+        queryFn: () => fetchers.current.fetchOverview(priorWindow()),
+        enabled: ready,
+        placeholderData: keepPreviousData,
+    });
+    const trendQuery = useQuery({
+        queryKey: keyFor('trends'),
+        queryFn: async () => {
+            const loadTrends = fetchers.current.fetchTrends;
+            return loadTrends ? loadTrends(currentWindow()) : null;
+        },
+        enabled: ready && hasTrends,
+        placeholderData: keepPreviousData,
+    });
 
-            const window = windowKind === 'date' ? rangeToDateWindow(range) : rangeToWindow(range);
-            const prevWindow = windowKind === 'date' ? previousDateWindow(window) : previousWindow(window);
-            const { fetchOverview: loadOverview, fetchTrends: loadTrends } = fetchers.current;
+    // The server refusing the filter's branch is the filter's problem, not the
+    // page's: back to the header branch, with a toast.
+    useBranchForbiddenReset(overviewQuery.error, branch, t.dashboardLayout.branchFilterForbidden);
 
-            const [overviewRes, prevRes, trendRes] = await Promise.allSettled([
-                loadOverview(window),
-                loadOverview(prevWindow),
-                loadTrends ? loadTrends(window) : Promise.resolve(null),
-            ]);
-
-            if (cancelled) return;
-
-            if (overviewRes.status === 'fulfilled') {
-                setOverview(overviewRes.value);
-            } else {
-                setOverview(null);
-                setError(overviewRes.reason instanceof Error ? overviewRes.reason.message : unavailableMessage);
-            }
-
-            setPrevious(prevRes.status === 'fulfilled' ? prevRes.value : null);
-            setTrends(trendRes.status === 'fulfilled' ? (trendRes.value?.points ?? []) : []);
-            setLoading(false);
-        };
-
-        void load();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [range, unavailableMessage, windowKind, reloadKey, enabled]);
+    // Losing the overview costs the page; losing the comparison window costs a
+    // "—"; losing the trend costs the sparklines.
+    const overview = overviewQuery.data ?? null;
+    const error = overviewQuery.isError
+        ? (overviewQuery.error instanceof Error ? overviewQuery.error.message : unavailableMessage)
+        : '';
+    // Only paired with the figures it belongs to: while a switch is in flight one
+    // of the two can still be the old range's, and an arrow comparing this week
+    // against the month before is worse than no arrow.
+    const previous = previousQuery.data !== undefined
+        && previousQuery.isPlaceholderData === overviewQuery.isPlaceholderData
+        ? previousQuery.data
+        : null;
+    // The sparkline is a shape, not a figure, so the last range's may stand in
+    // for a moment rather than the tile collapsing and regrowing.
+    const trends = trendQuery.data?.points ?? [];
 
     const DELTA_CONTEXT: Record<DashboardRange, string> = {
         today: copy.vsPreviousToday,
@@ -147,7 +195,10 @@ export function useModuleDashboard<TOverview, TTrend = never>({
         overview,
         previous,
         trends,
-        loading,
+        // `isPending` holds while disabled too, which is what `enabled` promises:
+        // the skeleton the user would have seen anyway, never a flicker.
+        loading: overviewQuery.isPending,
+        refreshing: overviewQuery.isPlaceholderData,
         error,
         deltaContext: DELTA_CONTEXT[range],
         compare,

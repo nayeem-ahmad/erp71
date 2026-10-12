@@ -7,6 +7,7 @@ import {
     mapDiziSale,
     mapDiziSaleReturn,
     mapDiziSupplier,
+    diziOpeningPositions,
 } from './dizi-cashier.mapper';
 
 describe('mapDiziProduct', () => {
@@ -42,12 +43,12 @@ describe('mapDiziProduct', () => {
         expect(mapped.externalUpdatedAt).toEqual(new Date('2026-07-08T07:55:15.537'));
     });
 
-    it('falls back to an EXT- code when both SKU and barcode are missing', () => {
+    it('leaves the SKU for the import to number when both SKU and barcode are missing', () => {
         const mapped = mapDiziProduct(
-            { Id: 'item-2', Name: 'X', SKU: null, Barcode: null } as any,
+            { Id: '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b', Name: 'X', SKU: null, Barcode: null } as any,
             new Set<string>(),
         );
-        expect(mapped.sku).toBe('EXT-item-2');
+        expect(mapped.sku).toBeNull();
     });
 
     it('uses the weighted average cost when no buying price is set', () => {
@@ -74,7 +75,7 @@ describe('mapDiziCustomer / mapDiziSupplier', () => {
             } as any,
             new Set<string>(),
         );
-        expect(mapped.customerCode).toBe('EXT-c1');
+        expect(mapped.customerCode).toBeNull();
         expect(mapped.phone).toBe('5252');
         expect(mapped.ownerName).toBe('Mr Z');
         expect(mapped.address).toBe('Dhaka');
@@ -84,12 +85,18 @@ describe('mapDiziCustomer / mapDiziSupplier', () => {
         expect(mapped.creditLimit).toBeNull();
     });
 
-    it('disambiguates a duplicate supplier name with the external id', () => {
+    it('numbers a duplicate supplier name rather than adding the GUID', () => {
         const claimed = new Set<string>();
-        const a = mapDiziSupplier({ Id: 's1', Name: 'ACME', Balance: 0 } as any, claimed);
-        const b = mapDiziSupplier({ Id: 's2', Name: 'ACME', Balance: 0 } as any, claimed);
+        const a = mapDiziSupplier({ Id: '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b', Name: 'ACME', Balance: 0 } as any, claimed);
+        const b = mapDiziSupplier({ Id: '9a0b1c2d-3e4f-4a6b-8c7d-5e6f7a8b9c0d', Name: 'ACME', Balance: 0 } as any, claimed);
         expect(a.name).toBe('ACME');
-        expect(b.name).toBe('ACME-s2');
+        expect(b.name).toBe('ACME (2)');
+    });
+
+    it("takes a trader's readable code as the supplier code", () => {
+        const codes = new Set<string>();
+        expect(mapDiziSupplier({ Id: 's1', Name: 'A', Code: 'SUP-7' } as any, new Set(), codes).supplierCode).toBe('SUP-7');
+        expect(mapDiziSupplier({ Id: 's2', Name: 'B', Code: null } as any, new Set(), codes).supplierCode).toBeNull();
     });
 });
 
@@ -190,6 +197,21 @@ describe('mapDiziPurchase', () => {
         expect(mapped.paymentStatus).toBe('PARTIAL');
         expect(mapped.items[0]).toEqual({ externalProductId: 'item-1', quantity: 3, unitCost: 300, lineTotal: 900 });
     });
+
+    it("does not count the detail's paid-so-far as paid at purchase", () => {
+        // Dizi records every payment, even cash handed over with the goods, as
+        // a payment of its own; the detail's PaidAmount is what those payments
+        // add up to. Counting it here as well paid each bill twice.
+        const mapped = mapDiziPurchase(
+            { Id: 'p2', SlipNo: 'P-26182', TransactionDate: '2026-09-05T20:03:02', TraderId: 's1', TotalAmount: 2120, ReceivedAmount: 0 } as any,
+            { Id: 'p2', SupplierId: 's1', BasePriceAmount: 2120, PaidAmount: 2120, InitialPaidAmount: 0, PurchaseItems: [] } as any,
+            'DZ-',
+            [],
+        );
+
+        expect(mapped.paidAmount).toBe(0);
+        expect(mapped.paymentStatus).toBe('UNPAID');
+    });
 });
 
 describe('mapDiziPayment', () => {
@@ -277,6 +299,18 @@ describe('mapDiziSaleReturn', () => {
         expect(mapped.items).toEqual([{ externalProductId: 'item-1', quantity: 1, refundAmount: 250 }]);
     });
 
+    it("credits the whole return to the customer's due, as Dizi does", () => {
+        // Cash handed back arrives separately, as a negative customer payment.
+        const mapped = mapDiziSaleReturn(
+            { Id: 'r1', ReturnSlipNo: 'SR-1', ReturnDate: '2026-09-26T23:44:00', SalesId: 'sale-1', TraderId: 'c1', GrossAmount: 1660, TotalAmount: 1660, PaidAmount: 1660, ReturnItems: [] } as any,
+            'DZ-',
+            [],
+        );
+
+        expect(mapped.externalCustomerId).toBe('c1');
+        expect(mapped.dueCredit).toBe(1660);
+    });
+
     it('falls back to unit price × quantity when a line has no total', () => {
         const mapped = mapDiziSaleReturn(
             {
@@ -339,5 +373,76 @@ describe('Dizi opening balances are not carried over', () => {
         );
         expect(mapped.name).toBe('Someone');
         expect(mapped.phone).toBe('01712345678');
+    });
+});
+
+describe('diziOpeningPositions', () => {
+    const records = (over: Record<string, unknown> = {}) => ({
+        products: [
+            { Id: 'item-1', Name: 'Belt', StockInHand: 12, IsService: false },
+            { Id: 'item-2', Name: 'Fitting', StockInHand: 5, IsService: true },
+        ],
+        customers: [
+            { Id: 'c1', Name: 'Raymart', Balance: 1000 },
+            { Id: 'c2', Name: 'Quiet', Balance: 0 },
+        ],
+        suppliers: [{ Id: 's1', Name: 'OM Surgical', Balance: 0 }],
+        sales: [
+            {
+                header: { Id: 'sale-1', SlipNo: 'S-1', TransactionDate: '2026-07-01T10:00:00', TraderId: 'c1', TotalAmount: 700, ReceivedAmount: 0 },
+                detail: { Id: 'sale-1', SalesItems: [{ ItemId: 'item-1', Quantity: 3 }] },
+            },
+        ],
+        purchases: [
+            {
+                header: { Id: 'p1', SlipNo: 'P-1', TransactionDate: '2026-06-20T10:00:00', TraderId: 's1', TotalAmount: 5300, ReceivedAmount: 0 },
+                detail: { Id: 'p1', PaidAmount: 5300, PurchaseItems: [{ ItemId: 'item-1', Quantity: 5, PricePerUnit: 1060 }] },
+            },
+        ],
+        customerPayments: [{ Id: 'cp1', TraderId: 'c1', Amount: 200, Date: '2026-07-02T10:00:00' }],
+        supplierPayments: [{ Id: 'sp1', TraderId: 's1', Amount: 5300, Date: '2026-06-21T10:00:00' }],
+        saleReturns: [
+            { Id: 'r1', ReturnSlipNo: 'SR-1', ReturnDate: '2026-07-03T10:00:00', SalesId: 'sale-1', TraderId: 'c1', GrossAmount: 100, TotalAmount: 100, ReturnItems: [{ ItemId: 'item-1', Quantity: 1, TotalAmount: 100 }] },
+        ],
+        ...over,
+    });
+
+    it("takes what each customer owes beyond the documents' own effect as their opening due", () => {
+        // 700 sold − 200 paid − 100 returned = 400 from the documents; Dizi says 1000.
+        const openings = diziOpeningPositions(records() as any);
+
+        expect(openings.customers.get('c1')).toBe(600);
+        expect(openings.customers.has('c2')).toBe(false);
+    });
+
+    it('leaves a supplier the documents fully explain with no opening', () => {
+        const openings = diziOpeningPositions(records() as any);
+
+        expect(openings.suppliers.has('s1')).toBe(false);
+    });
+
+    it('gives a supplier with a return the import cannot read a negative opening', () => {
+        // Dizi took 5,300 back off OM Surgical's account for goods returned.
+        const openings = diziOpeningPositions(records({ suppliers: [{ Id: 's1', Name: 'OM Surgical', Balance: -5300 }] }) as any);
+
+        expect(openings.suppliers.get('s1')).toBe(-5300);
+    });
+
+    it("takes stock on hand beyond the documents' movements as opening stock, skipping services", () => {
+        // +5 bought, −3 sold, +1 returned = 3 from the documents; Dizi holds 12.
+        const openings = diziOpeningPositions(records() as any);
+
+        expect(openings.stock.get('item-1')).toBe(9);
+        expect(openings.stock.has('item-2')).toBe(false);
+    });
+
+    it("credits a return to its sale's customer when the return names no one", () => {
+        const openings = diziOpeningPositions(
+            records({
+                saleReturns: [{ Id: 'r1', ReturnSlipNo: 'SR-1', ReturnDate: '2026-07-03T10:00:00', SalesId: 'sale-1', TraderId: null, GrossAmount: 100, ReturnItems: [] }],
+            }) as any,
+        );
+
+        expect(openings.customers.get('c1')).toBe(600);
     });
 });

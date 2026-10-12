@@ -13,7 +13,8 @@ import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell, Checkbox, Input, Select } from '@/components/ui';
+import { BranchFilter, PageShell, Checkbox, Input, Select } from '@/components/ui';
+import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 
 interface Shipment {
     id: string;
@@ -61,6 +62,7 @@ const columnHelper = createColumnHelper<Shipment>();
 
 export default function ImportShipmentsPage() {
     const { t, locale } = useI18n();
+    const branch = useBranchScope();
     const copy = t.imports;
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -82,11 +84,13 @@ export default function ImportShipmentsPage() {
     const {
         items: shipments,
         loading,
+        error: listError,
         serverPagination,
     } = useServerList<Shipment>({
         tableId: 'import-shipments',
         initialSort: { id: 'created_at', desc: true },
-        deps: [debouncedSearch, statusFilter, openOnly],
+        deps: [debouncedSearch, statusFilter, openOnly, branch.apiStoreId],
+        enabled: branch.ready,
         fetch: (params) =>
             api.getImportShipments({
                 ...params,
@@ -94,8 +98,10 @@ export default function ImportShipmentsPage() {
                 search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
                 openOnly: openOnly || undefined,
+                storeId: branch.apiStoreId,
             }),
     });
+    useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
     const columns: ColumnDef<Shipment, any>[] = useMemo(
         () => [
@@ -220,13 +226,16 @@ export default function ImportShipmentsPage() {
                     'purchases',
                 )}
                 actions={
-                    <Link
-                        href={routes.purchases.imports.shipmentNew}
-                        className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
-                    >
-                        <Plus className="w-4 h-4" />
-                        {copy.newShipment}
-                    </Link>
+                    <>
+                        <BranchFilter scope={branch} />
+                        <Link
+                            href={routes.purchases.imports.shipmentNew}
+                            className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
+                        >
+                            <Plus className="w-4 h-4" />
+                            {copy.newShipment}
+                        </Link>
+                    </>
                 }
             />
 

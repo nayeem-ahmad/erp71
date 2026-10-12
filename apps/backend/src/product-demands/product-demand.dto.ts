@@ -11,6 +11,7 @@ import {
     Min,
     ValidateNested,
 } from 'class-validator';
+import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 
 export const DEMAND_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 export type DemandPriority = (typeof DEMAND_PRIORITIES)[number];
@@ -136,6 +137,11 @@ export class FulfilProductDemandDto {
 }
 
 export class ListProductDemandsQueryDto {
+    /** Demands raised for a warehouse in this branch, or `all`. Resolved against the caller's access. */
+    @IsOptional()
+    @IsStoreIdOrAll()
+    storeId?: string;
+
     @IsOptional()
     @IsIn(DEMAND_STATUSES)
     status?: DemandStatus;

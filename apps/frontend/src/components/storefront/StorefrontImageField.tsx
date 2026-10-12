@@ -6,6 +6,7 @@ import ImageCropModal, { type CropRatioOption } from '@/components/ImageCropModa
 import Button from '@/components/ui/compact/Button';
 import { Input } from '@/components/ui/Input';
 import { api } from '@/lib/api';
+import { directUpload, withServerFallback } from '@/lib/uploads/direct-upload';
 
 /** Matches the hint text and the backend's own base64 ceiling. */
 export const MAX_STOREFRONT_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -123,14 +124,21 @@ export default function StorefrontImageField({
     const handleCropConfirm = async (file: File) => {
         setUploading(true);
         try {
-            const imageBase64 = await readAsDataUrl(file);
-            const result = await api.uploadStorefrontImage({
-                imageBase64,
-                mimeType: file.type,
-                fileName: file.name,
-                kind,
-            });
-            onChange(result.url);
+            // Straight to Cloudinary; the base64 route only if that fails.
+            const url = await withServerFallback(
+                async () => (await directUpload(file, 'storefront-image')).secure_url,
+                async () => {
+                    const imageBase64 = await readAsDataUrl(file);
+                    const result = await api.uploadStorefrontImage({
+                        imageBase64,
+                        mimeType: file.type,
+                        fileName: file.name,
+                        kind,
+                    });
+                    return result.url;
+                },
+            );
+            onChange(url);
             setError(null);
         } catch (err: unknown) {
             // Inline, not a toast: the rest of the form stays usable, and an

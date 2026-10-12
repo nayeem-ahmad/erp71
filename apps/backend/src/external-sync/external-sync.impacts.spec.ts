@@ -1,8 +1,13 @@
 import {
     applyOpeningBalance,
+    applyOpeningStock,
     applyPaymentImpacts,
     applyPurchaseImpacts,
+    applyPurchaseReturnCredit,
+    applyPurchaseReturnImpacts,
     applySaleImpacts,
+    applySaleOverpayment,
+    applySaleReturnCredit,
     applySaleReturnImpacts,
     isAlreadyPosted,
 } from './external-sync.impacts';
@@ -29,8 +34,8 @@ function makeTx(overrides: any = {}) {
     return {
         customer: { findUnique: jest.fn(async () => ({ due_balance: 1000 })), update: jest.fn() },
         supplier: { findUnique: jest.fn(async () => ({ due_balance: 500 })), update: jest.fn() },
-        customerCreditTransaction: { create: jest.fn(), update: jest.fn() },
-        supplierCreditTransaction: { create: jest.fn(), update: jest.fn() },
+        customerCreditTransaction: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn(async () => null) },
+        supplierCreditTransaction: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn(async () => null) },
         ...overrides,
     } as any;
 }
@@ -106,6 +111,40 @@ describe('external-sync impacts', () => {
             expect(paid.amount).toBe(40);
         });
 
+        it("books what was paid above the total as a payment off the customer's due", async () => {
+            // Express sale 2500778: total 54,850, paid 113,065 — the rest settled older dues.
+            const tx = makeTx();
+            await applySaleImpacts({ tx, ...base, totalAmount: 54850, amountPaid: 113065 });
+
+            const row = tx.customerCreditTransaction.create.mock.calls[0][0].data;
+            expect(row).toMatchObject({
+                customer_id: 'cust-1',
+                type: 'PAYMENT',
+                amount: 58215,
+                balance_after: 1000 - 58215,
+                reference_type: 'SALE',
+                reference_id: 'sale-1',
+                created_at: SALE_DATE,
+            });
+            const receipt = autoPostFromRules.mock.calls.find(([input]) => input.eventType === 'customer_payment')[0];
+            expect(receipt).toMatchObject({ conditionValue: 'receive', amount: 58215, legKey: 'overpaid', partyId: 'cust-1' });
+            // The sale itself still posts its own total.
+            expect(autoPostFromRules.mock.calls.find(([input]) => input.eventType === 'sale')[0].amount).toBe(54850);
+        });
+
+        it('books an overpayment once, however often the sale is imported', async () => {
+            const tx = makeTx();
+            tx.customerCreditTransaction.findFirst.mockResolvedValue({ id: 'row-1' });
+
+            const wrote = await applySaleOverpayment({
+                tx, tenantId: 't1', storeId: 's1', saleId: 'sale-1', serialNumber: 'XR-2500778',
+                customerId: 'cust-1', excess: 58215, paymentMode: 'cash', saleDate: SALE_DATE,
+            });
+
+            expect(wrote).toBe(false);
+            expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+        });
+
         it('does not touch customer balances for a walk-in credit sale', async () => {
             const tx = makeTx();
             await applySaleImpacts({ tx, ...base, customerId: null, totalAmount: 100, amountPaid: 0 });
@@ -173,9 +212,12 @@ describe('external-sync impacts', () => {
             expect(row.type).toBe('ADJUSTMENT');
             expect(row.amount).toBe(8685);
             expect(row.created_at).toBe(SALE_DATE);
+            // Added to what the customer already owes (1000 here), not written
+            // over it: a party that already has documents keeps their effect.
+            expect(row.balance_after).toBe(9685);
             expect(tx.customer.update).toHaveBeenCalledWith({
                 where: { id: 'cust-1' },
-                data: { due_balance: 8685 },
+                data: { due_balance: 9685 },
             });
             // An opening position is not our economic event, so it must not post.
             expect(autoPostFromRules).not.toHaveBeenCalled();
@@ -251,6 +293,7 @@ describe('external-sync impacts', () => {
                 tenantId: 't1',
                 party: 'CUSTOMER',
                 partyId: 'cust-1',
+                storeId: 'store-1',
                 transactionId: 'ct-1',
                 paymentNumber: 'XR-TR02071',
                 type: 'PAYMENT',
@@ -271,6 +314,8 @@ describe('external-sync impacts', () => {
             });
             expect(autoPostFromRules.mock.calls[0][0].eventType).toBe('customer_payment');
             expect(autoPostFromRules.mock.calls[0][0].conditionValue).toBe('receive');
+            // The voucher sits at the party's branch, like a payment taken on the payments screen.
+            expect(autoPostFromRules.mock.calls[0][0].storeId).toBe('store-1');
         });
 
         it('moves the balance the other way for a refund', async () => {
@@ -280,6 +325,7 @@ describe('external-sync impacts', () => {
                 tenantId: 't1',
                 party: 'CUSTOMER',
                 partyId: 'cust-1',
+                storeId: 'store-1',
                 transactionId: 'ct-1',
                 paymentNumber: 'XR-TR1',
                 type: 'PAYOUT',
@@ -302,6 +348,7 @@ describe('external-sync impacts', () => {
                 tenantId: 't1',
                 party: 'SUPPLIER',
                 partyId: 'sup-1',
+                storeId: 'store-1',
                 transactionId: 'st-1',
                 paymentNumber: 'XR-TR00186',
                 type: 'PAYMENT',
@@ -335,6 +382,7 @@ describe('external-sync impacts', () => {
                     tenantId: 't1',
                     party,
                     partyId: 'p-1',
+                    storeId: 'store-1',
                     transactionId: 'tx-1',
                     paymentNumber: 'XR-1',
                     type,
@@ -374,6 +422,208 @@ describe('external-sync impacts', () => {
             expect(params.movementType).toBe('SALES_RETURN');
             expect(autoPostFromRules.mock.calls[0][0].eventType).toBe('sale_return');
             expect(autoPostFromRules.mock.calls[0][0].amount).toBe(440);
+            // A provider that does not credit returns to the due leaves the ledger alone.
+            expect(autoPostFromRules.mock.calls[0][0].conditionKey).toBeUndefined();
+        });
+
+        const credited = {
+            tenantId: 't1',
+            storeId: 's1',
+            returnId: 'ret-1',
+            returnNumber: 'DZ-SR-26060',
+            totalRefund: 440,
+            returnDate: SALE_DATE,
+            items: [{ product_id: 'p1', quantity: 2 }],
+            customerId: 'cust-1',
+            dueCredit: 440,
+        };
+
+        it("takes a credited return off the customer's due and posts it as a credit return", async () => {
+            const tx = makeTx();
+            await applySaleReturnImpacts({ tx, ...credited });
+
+            const row = tx.customerCreditTransaction.create.mock.calls[0][0].data;
+            expect(row).toMatchObject({
+                customer_id: 'cust-1',
+                type: 'ADJUSTMENT',
+                amount: -440,
+                balance_after: 560,
+                reference_type: 'SALES_RETURN',
+                reference_id: 'ret-1',
+                created_at: SALE_DATE,
+            });
+            expect(tx.customer.update).toHaveBeenCalledWith({ where: { id: 'cust-1' }, data: { due_balance: 560 } });
+            expect(autoPostFromRules.mock.calls[0][0]).toMatchObject({
+                eventType: 'sale_return',
+                conditionKey: 'payment_mode',
+                conditionValue: 'credit',
+                partyType: 'CUSTOMER',
+                partyId: 'cust-1',
+                amount: 440,
+            });
+        });
+
+        it('credits past zero: cash handed back arrives as its own payment and raises the due again', async () => {
+            const tx = makeTx({ customer: { findUnique: jest.fn(async () => ({ due_balance: 100 })), update: jest.fn() } });
+            await applySaleReturnImpacts({ tx, ...credited });
+
+            expect(tx.customer.update).toHaveBeenCalledWith({ where: { id: 'cust-1' }, data: { due_balance: -340 } });
+        });
+
+        it('credits a return once, however often it is imported', async () => {
+            const tx = makeTx();
+            tx.customerCreditTransaction.findFirst.mockResolvedValue({ id: 'row-1' });
+
+            const wrote = await applySaleReturnCredit({ tx, ...credited });
+
+            expect(wrote).toBe(false);
+            expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+            expect(tx.customer.update).not.toHaveBeenCalled();
+            // Posting is idempotent on its own, so a return that never posted gets its voucher.
+            expect(autoPostFromRules).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('opening stock', () => {
+        it('brings stock in at the start of the range, at the buying rate, tagged to the connection', async () => {
+            await applyOpeningStock({
+                tx: makeTx(), tenantId: 't1', storeId: 's1', connectionId: 'conn-1', productId: 'p1',
+                quantity: 9, unitCost: 820, asOf: SALE_DATE, label: 'DIZI_CASHIER',
+            });
+
+            const [, params] = applyInventoryMovement.mock.calls[0];
+            expect(params).toMatchObject({
+                productId: 'p1',
+                warehouseId: 'wh-1',
+                quantityDelta: 9,
+                movementType: 'INITIAL_STOCK',
+                referenceType: 'EXTERNAL_SYNC_OPENING',
+                referenceId: 'conn-1',
+                unitCost: 820,
+                occurredAt: SALE_DATE,
+            });
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+        });
+
+        it('takes a negative opening out without a cost, and lets it go below zero', async () => {
+            await applyOpeningStock({
+                tx: makeTx(), tenantId: 't1', storeId: 's1', connectionId: 'conn-1', productId: 'p1',
+                quantity: -5, unitCost: 1060, asOf: SALE_DATE, label: 'DIZI_CASHIER',
+            });
+
+            const [, params] = applyInventoryMovement.mock.calls[0];
+            expect(params.quantityDelta).toBe(-5);
+            expect(params.unitCost).toBeUndefined();
+            expect(params.allowNegative).toBe(true);
+        });
+    });
+
+    describe('purchase returns', () => {
+        const input = (tx: any, supplierId: string | null = 'sup-1') => ({
+            tx,
+            tenantId: 't1',
+            storeId: 's1',
+            returnId: 'ret-1',
+            returnNumber: 'XR-2601323',
+            supplierId,
+            totalAmount: 900,
+            returnDate: SALE_DATE,
+            items: [{ product_id: 'p1', quantity: 2, unit_cost: 450 }],
+        });
+
+        it('takes the goods out of stock, lowers what is owed the supplier and posts the return', async () => {
+            const tx = makeTx({ supplier: { findUnique: jest.fn(async () => ({ due_balance: 500, store_id: 's9' })), update: jest.fn() } });
+            await applyPurchaseReturnImpacts(input(tx));
+
+            const [, movement] = applyInventoryMovement.mock.calls[0];
+            expect(movement).toMatchObject({ quantityDelta: -2, movementType: 'PURCHASE_RETURN', referenceId: 'ret-1', unitCost: 450, allowNegative: true });
+
+            // Like a return entered by hand: the due comes down, never below 0.
+            const credit = tx.supplierCreditTransaction.create.mock.calls[0][0].data;
+            expect(credit).toMatchObject({ type: 'ADJUSTMENT', amount: -500, balance_after: 0, store_id: 's9', reference_type: 'PURCHASE_RETURN' });
+            expect(tx.supplier.update.mock.calls[0][0].data).toEqual({ due_balance: 0 });
+
+            const posted = autoPostFromRules.mock.calls[0][0];
+            expect(posted).toMatchObject({ eventType: 'purchase_return', conditionKey: 'none', amount: 900, partyType: 'SUPPLIER', partyId: 'sup-1' });
+        });
+
+        it("leaves a cash supplier's return off the supplier ledger", async () => {
+            const tx = makeTx();
+            await applyPurchaseReturnImpacts(input(tx, null));
+
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+            expect(autoPostFromRules.mock.calls[0][0].partyType).toBeUndefined();
+        });
+    });
+
+    describe('what was paid with the goods', () => {
+        const purchase = {
+            tenantId: 't1', storeId: 's1', purchaseId: 'pur-1', purchaseNumber: 'XR-2600183',
+            supplierId: 'sup-1', totalAmount: 254160, purchaseDate: SALE_DATE, items: [],
+        };
+
+        it('posts as a payment to the supplier, after the purchase posts its whole total', async () => {
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, paidAmount: 254160 });
+
+            const [credit, paid] = autoPostFromRules.mock.calls.map(([input]) => input);
+            expect(credit).toMatchObject({ eventType: 'purchase', conditionValue: 'credit', amount: 254160 });
+            expect(paid).toMatchObject({
+                eventType: 'supplier_payment',
+                conditionValue: 'pay',
+                legKey: 'paid',
+                amount: 254160,
+                partyId: 'sup-1',
+                overrideCreditAccountId: 'acct-cash',
+            });
+        });
+
+        it('posts no more than the total when more was paid', async () => {
+            // China supplier: 9,361,240 paid on a 5,460,000 purchase; Express ignores the rest.
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, totalAmount: 5460000, paidAmount: 9361240 });
+
+            expect(autoPostFromRules.mock.calls[1][0].amount).toBe(5460000);
+        });
+
+        it('posts nothing for an unpaid purchase, or one whose own posting was skipped', async () => {
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, paidAmount: 0 });
+            autoPostFromRules.mockResolvedValueOnce({ postingStatus: 'skipped' });
+            await applyPurchaseImpacts({ tx: makeTx(), ...purchase, paidAmount: 254160 });
+
+            expect(autoPostFromRules.mock.calls.map(([input]) => input.eventType)).toEqual(['purchase', 'purchase']);
+        });
+    });
+
+    describe('a purchase return credited in full', () => {
+        const ret = {
+            tenantId: 't1', storeId: 's1', returnId: 'pr-1', returnNumber: 'XR-2600628',
+            supplierId: 'sup-1', totalAmount: 13000, returnDate: SALE_DATE, items: [],
+        };
+
+        it("takes the whole return off, leaving a supplier owed nothing owing the shop", async () => {
+            const tx = makeTx({ supplier: { findUnique: jest.fn(async () => ({ due_balance: 0 })), update: jest.fn() } });
+            await applyPurchaseReturnImpacts({ tx, ...ret, dueCredit: 13000 });
+
+            expect(tx.supplierCreditTransaction.create.mock.calls[0][0].data).toMatchObject({ type: 'ADJUSTMENT', amount: -13000, balance_after: -13000, reference_id: 'pr-1' });
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: -13000 } });
+        });
+
+        it('gives a return imported under the old cap the rest of its credit', async () => {
+            const tx = makeTx({ supplier: { findUnique: jest.fn(async () => ({ due_balance: 0 })), update: jest.fn() } });
+            tx.supplierCreditTransaction.findFirst.mockResolvedValue({ id: 'row-1', amount: -3000 });
+
+            const changed = await applyPurchaseReturnCredit({ tx, tenantId: 't1', supplierId: 'sup-1', returnId: 'pr-1', returnNumber: 'XR-2600628', returnDate: SALE_DATE, dueCredit: 13000 });
+
+            expect(changed).toBe(true);
+            expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith({ where: { id: 'row-1' }, data: { amount: -13000 } });
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: -10000 } });
+        });
+
+        it('changes nothing once the credit is in full', async () => {
+            const tx = makeTx();
+            tx.supplierCreditTransaction.findFirst.mockResolvedValue({ id: 'row-1', amount: -13000 });
+
+            expect(await applyPurchaseReturnCredit({ tx, tenantId: 't1', supplierId: 'sup-1', returnId: 'pr-1', returnNumber: 'XR-2600628', returnDate: SALE_DATE, dueCredit: 13000 })).toBe(false);
+            expect(tx.supplier.update).not.toHaveBeenCalled();
         });
     });
 

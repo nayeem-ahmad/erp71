@@ -19,6 +19,8 @@ jest.mock('@/lib/i18n', () => {
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import OrdersPage from './page';
 
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
     usePathname: () => '/sales/orders',

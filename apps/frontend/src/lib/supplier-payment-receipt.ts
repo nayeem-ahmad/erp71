@@ -17,8 +17,11 @@ export interface SupplierPaymentReceiptData {
     discount?: number;
     balanceAfter?: number;
     notes?: string;
+    /** The tender, when the payment recorded one. */
+    method?: string | null;
     recordedBy?: string;
     labels: {
+        method?: string;
         paymentVoucher: string;
         moneyReceipt: string;
         serial: string;
@@ -55,6 +58,7 @@ export function printSupplierPaymentReceipt(
     <table class="info-table">
         <tr><td>${escHtml(data.labels.serial)}</td><td>${escHtml(data.paymentNumber)}</td></tr>
         <tr><td>${escHtml(data.labels.date)}</td><td>${escHtml(data.date)}</td></tr>
+        ${data.method ? `<tr><td>${escHtml(data.labels.method ?? 'Method')}</td><td>${escHtml(data.method)}</td></tr>` : ''}
         <tr><td>${escHtml(data.labels.supplier)}</td><td>${escHtml(data.supplierName)}${data.supplierPhone ? `<br>${escHtml(data.supplierPhone)}` : ''}</td></tr>
         ${data.recordedBy ? `<tr><td>${escHtml(data.labels.recordedBy)}</td><td>${escHtml(data.recordedBy)}</td></tr>` : ''}
     </table>

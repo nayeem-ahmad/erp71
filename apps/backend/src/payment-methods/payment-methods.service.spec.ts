@@ -42,6 +42,7 @@ describe('PaymentMethodsService', () => {
     db = {
       paymentMethod: {
         findFirst: findFirstMock,
+        findMany: jest.fn().mockResolvedValue([]),
         create: createMock,
         update: updateMock,
       },
@@ -128,6 +129,53 @@ describe('PaymentMethodsService', () => {
       );
       await service.update('pm-1', tenantId, { account_id: null } as any);
       expect(updateMock.mock.calls[0][0].data.account_id).toBeNull();
+    });
+  });
+
+  // Entry screens say where a tender's money lands before it is saved.
+  describe('findAll()', () => {
+    const row = (over: Record<string, unknown>) => ({
+      tenant_id: tenantId, type: PaymentMethodType.CASH, is_active: true, sort_order: 0,
+      show_on_entry: true, created_at: new Date(), updated_at: new Date(), ...over,
+    });
+
+    it('carries each method\'s linked account, looked up in one tenant-scoped query', async () => {
+      db.paymentMethod.findMany.mockResolvedValue([
+        row({ id: 'pm-cash', name: 'Cash', account_id: 'acc-cash' }),
+        row({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' }),
+        row({ id: 'pm-card', name: 'Card', account_id: null }),
+      ]);
+      db.account.findMany.mockResolvedValue([
+        { id: 'acc-cash', name: 'Cash in Hand', code: '110101' },
+        { id: 'acc-bkash', name: 'bKash Account', code: '110103' },
+      ]);
+
+      const result = await service.findAll(tenantId);
+
+      expect(db.account.findMany).toHaveBeenCalledTimes(1);
+      expect(db.account.findMany.mock.calls[0][0].where).toEqual({ tenant_id: tenantId, id: { in: ['acc-cash', 'acc-bkash'] } });
+      expect(result.map((m) => m.account)).toEqual([
+        { id: 'acc-cash', name: 'Cash in Hand', code: '110101' },
+        { id: 'acc-bkash', name: 'bKash Account', code: '110103' },
+        null,
+      ]);
+    });
+
+    it('reads a link to an account that no longer exists as no account', async () => {
+      db.paymentMethod.findMany.mockResolvedValue([row({ id: 'pm-bank', name: 'Bank', account_id: 'acc-gone' })]);
+      db.account.findMany.mockResolvedValue([]);
+
+      const [method] = await service.findAll(tenantId);
+
+      expect(method.account).toBeNull();
+    });
+
+    it('skips the account lookup when nothing is linked', async () => {
+      db.paymentMethod.findMany.mockResolvedValue([row({ id: 'pm-cash', name: 'Cash', account_id: null })]);
+
+      await service.findAll(tenantId);
+
+      expect(db.account.findMany).not.toHaveBeenCalled();
     });
   });
 

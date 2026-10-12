@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { setActiveTimeZone } from '@/lib/format';
 import { defaultLineItemWindow, useLineItemFilters } from './useLineItemFilters';
+import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
 
 const searchParams = new Map<string, string>();
 
@@ -8,9 +9,7 @@ jest.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: (key: string) => searchParams.get(key) ?? null }),
 }));
 
-jest.mock('@/lib/api', () => ({
-    api: { getStores: jest.fn().mockResolvedValue([]) },
-}));
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
 describe('defaultLineItemWindow', () => {
     afterEach(() => setActiveTimeZone(null));
@@ -34,14 +33,17 @@ describe('defaultLineItemWindow', () => {
 });
 
 describe('useLineItemFilters', () => {
-    beforeEach(() => searchParams.clear());
+    beforeEach(() => {
+        searchParams.clear();
+        mockBranchScope();
+    });
 
-    it('opens on the default window with nothing narrowed', () => {
+    it('opens on the default window and the header branch, with nothing else narrowed', () => {
         const { result } = renderHook(() => useLineItemFilters('customerId'));
 
         expect(result.current.query).toEqual({
             ...defaultLineItemWindow(),
-            storeId: undefined,
+            storeId: 'store-1',
             productId: undefined,
             customerId: undefined,
             search: undefined,
@@ -84,11 +86,11 @@ describe('useLineItemFilters', () => {
         expect(result.current.party).toEqual({ id: 'c2', name: 'Karim Ahmed' });
     });
 
-    it('resets to the opening window', () => {
+    it('resets to the opening window and the header branch', () => {
         const { result } = renderHook(() => useLineItemFilters('customerId'));
         act(() => {
             result.current.setFrom('2025-01-01');
-            result.current.setStoreId('store-1');
+            result.current.branch.setValue('all');
             result.current.setParty({ id: 'c1', name: 'Rahim Uddin' });
             result.current.setSearch('rice');
         });
@@ -97,11 +99,18 @@ describe('useLineItemFilters', () => {
 
         expect(result.current.query).toEqual({
             ...defaultLineItemWindow(),
-            storeId: undefined,
+            storeId: 'store-1',
             productId: undefined,
             customerId: undefined,
             search: undefined,
         });
         expect(result.current.search).toBe('');
+        expect(resetToHeaderSpy).toHaveBeenCalled();
+    });
+
+    it('sends the branch filter as storeId', () => {
+        const { result } = renderHook(() => useLineItemFilters('customerId'));
+        act(() => result.current.branch.setValue('store-2'));
+        expect(result.current.query.storeId).toBe('store-2');
     });
 });

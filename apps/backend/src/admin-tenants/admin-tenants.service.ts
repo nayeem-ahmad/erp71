@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import { BillingService } from '../billing/billing.service';
 import { DatabaseService } from '../database/database.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
@@ -32,6 +33,7 @@ import { SmsCreditService } from '../sms/sms-credit.service';
 import { DemoDataService } from '../demo-data/demo-data.service';
 import type { DemoDataOptionsInput } from '../demo-data/generator/options';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
+import { clearTenantData } from '../tenants/clear-tenant-data';
 import {
     isEditableLedgerEvent,
     ledgerEventDelta,
@@ -39,11 +41,13 @@ import {
 } from './ledger-balance.util';
 import { REMINDER_EVENT_TYPES } from './reminder-event-types';
 import { applySubscriptionDiscount } from '../billing/discount.util';
+import { FIRST_STORE_CODE } from '../stores/store-code.util';
 import {
     ListAdminTenantsQueryDto,
     ListAdminUsersQueryDto,
     SuspendTenantDto,
     DeleteTenantDto,
+    ClearTenantDataDto,
     UpdateAdminTenantSubscriptionDto,
     UpdateAdminTenantLocalizationDto,
     UpdateAdminTenantFeaturesDto,
@@ -103,6 +107,7 @@ export class AdminTenantsService {
         private readonly platformSettings: PlatformSettingsService,
         private readonly addonModules: AddonModulesService,
         private readonly passwordPolicy: PasswordPolicyService,
+        private readonly authCache: AuthCacheService,
     ) {}
 
     private resolveMobileFields(
@@ -734,6 +739,10 @@ export class AdminTenantsService {
                 });
             }
         });
+        // Every member's cached membership still says `deleted_at: null`;
+        // `TenantInterceptor` refuses a deleted workspace only once it sees the
+        // new value.
+        this.authCache.invalidateTenant(tenantId);
 
         await this.auditService.log('tenant.delete', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
             reason: dto.reason ?? null,
@@ -742,6 +751,53 @@ export class AdminTenantsService {
         });
 
         return { success: true, deleted_at: deletedAt };
+    }
+
+    /**
+     * The shop owner's Settings > Data clear, run by a platform admin: the
+     * tenant's or one branch's transactions, or (`all`) those and its master
+     * data less the groups in `keep`. A suspended tenant can be cleared — that
+     * is the usual state to tidy one up in before it comes back.
+     */
+    async clearData(
+        tenantId: string,
+        mode: 'transactions' | 'all',
+        storeId: string | undefined,
+        keep: string[],
+        dto: ClearTenantDataDto,
+        adminUserId: string,
+    ) {
+        const tenant = await this.db.tenant.findFirst({
+            where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
+            select: { id: true, name: true },
+        });
+        if (!tenant) {
+            throw new NotFoundException('Tenant not found');
+        }
+
+        // A running load would go on inserting into the half-wiped store, and
+        // the wipe deletes the batch row it reports its progress to.
+        const loading = await this.db.demoDataBatch.findFirst({
+            where: { tenant_id: tenantId, status: { in: ['RUNNING', 'PENDING'] } },
+            select: { id: true },
+        });
+        if (loading) {
+            throw new ConflictException('A demo-data load is running for this tenant. Wait for it to finish, then clear.');
+        }
+
+        const result = await clearTenantData(this.db, tenantId, mode, storeId, keep);
+
+        await this.auditService.log('tenant.data.clear', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
+            mode,
+            store_id: result.storeId ?? null,
+            store_name: result.storeName ?? null,
+            kept_groups: mode === 'all' ? keep : [],
+            kept_parties: result.kept ?? null,
+            reason: dto.reason ?? null,
+            tenant_name: tenant.name,
+        });
+
+        return result;
     }
 
     async lookupUserByEmail(email: string) {
@@ -833,7 +889,7 @@ export class AdminTenantsService {
             });
 
             const store = await tx.store.create({
-                data: { tenant_id: tenant.id, name: dto.storeName, address: dto.address ?? null },
+                data: { tenant_id: tenant.id, name: dto.storeName, address: dto.address ?? null, code: FIRST_STORE_CODE },
             });
 
             // Resolved before the subscription row so the dunning clock below can
@@ -1046,6 +1102,8 @@ export class AdminTenantsService {
             where: { id: userId },
             data: { is_platform_admin: true },
         });
+        // `request.user.isPlatformAdmin` comes from the row `JwtStrategy` caches.
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.promote', 'User', { userId: adminUserId }, userId, {
             target_email: user.email,
@@ -1079,6 +1137,9 @@ export class AdminTenantsService {
             where: { id: userId },
             data: { is_platform_admin: false },
         });
+        // Without this the demoted admin keeps `isPlatformAdmin` — and every
+        // admin route — until the cached row expires.
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.demote', 'User', { userId: adminUserId }, userId, {
             target_email: user.email,
@@ -1178,6 +1239,9 @@ export class AdminTenantsService {
                 created_at: true,
             },
         });
+        // The email may have changed, and `request.user.email` is read off the
+        // row `JwtStrategy` caches.
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.platform.update', 'User', { userId: adminUserId }, userId, {
             email: updated.email,
@@ -1223,6 +1287,9 @@ export class AdminTenantsService {
         }
 
         await this.db.user.delete({ where: { id: userId } });
+        // A deleted account's token must stop working now, not when the cached
+        // row expires.
+        this.authCache.invalidateUser(userId);
         await this.auditService.log('user.platform.delete', 'User', { userId: adminUserId }, userId, {
             email: user.email,
         });
@@ -1248,6 +1315,7 @@ export class AdminTenantsService {
             where: { id: userId },
             data: { passwordHash, token_version: { increment: 1 } },
         });
+        this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.platform.reset_password', 'User', { userId: adminUserId }, userId, {
             email: user.email,

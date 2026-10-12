@@ -41,6 +41,12 @@ interface ProductSearchProps {
      * unset, it is the total across every warehouse.
      */
     warehouseId?: string;
+    /**
+     * Flag a quantity above the stock on hand. On by default for documents
+     * that draw stock down; a purchase brings goods in, so buying more than is
+     * held is the normal case and it turns this off.
+     */
+    warnOverStock?: boolean;
 }
 
 /**
@@ -78,6 +84,7 @@ export default function ProductSearch({
     historyPartyId,
     historyPartyName,
     warehouseId,
+    warnOverStock = true,
 }: ProductSearchProps) {
     const [query, setQuery] = useState('');
     const [products, setProducts] = useState<any[]>([]);
@@ -122,11 +129,14 @@ export default function ProductSearch({
     useEffect(() => {
         if (!showDropdown) return;
 
+        // Mark the list as loading now, not when the debounce fires: otherwise
+        // the previous results (often an empty list) render under the new term
+        // for 300ms, flashing "No products found" for a product that exists.
+        setLoading(true);
         const controller = new AbortController();
         const timer = setTimeout(async () => {
             const term = query.trim();
             try {
-                setLoading(true);
                 // Empty term → backend returns the most-sold products so the list can
                 // be browsed without typing. Use a larger limit when browsing.
                 const data = await api.searchProductsByQuantity(term, term ? 20 : 50);
@@ -229,6 +239,7 @@ export default function ProductSearch({
 
     const stagedAvailable = staged ? availableQtyOf(staged, warehouseId) : 0;
     const stagedQtyNum = parseFloat(stagedQty) || 0;
+    const overStock = warnOverStock && stagedQtyNum > stagedAvailable;
     const numberInput = 'px-2 py-1 border rounded text-sm text-end min-h-touch sm:min-h-0';
 
     return (
@@ -286,10 +297,13 @@ export default function ProductSearch({
                         {/* Results Dropdown */}
                         {showDropdown && !staged && (
                             <AnchoredDropdown anchorRef={inputRef} panelRef={dropdownRef} maxHeight={320}>
-                                {loading ? (
-                                    <div className="p-3 text-center text-gray-500 text-sm">Searching...</div>
-                                ) : products.length === 0 ? (
-                                    <div className="p-3 text-center text-gray-500 text-sm">No products found</div>
+                                {/* Results already on screen stay while a refined
+                                    search runs, so typing doesn't flicker; the
+                                    empty message waits for a settled answer. */}
+                                {products.length === 0 ? (
+                                    <div className="p-3 text-center text-gray-500 text-sm">
+                                        {loading ? 'Searching...' : 'No products found'}
+                                    </div>
                                 ) : (
                                     <>
                                         {!query.trim() && (
@@ -385,7 +399,7 @@ export default function ProductSearch({
                             onChange={(e) => setStagedQty(e.target.value)}
                             onKeyDown={handleStagedKeyDown}
                             aria-label="Qty"
-                            className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && stagedQtyNum > stagedAvailable ? 'border-amber-400 text-amber-700' : ''}`}
+                            className={`${numberInput} w-20 disabled:bg-gray-50 disabled:text-gray-400 ${staged && overStock ? 'border-amber-400 text-amber-700' : ''}`}
                         />
                     </label>
 
@@ -449,7 +463,7 @@ export default function ProductSearch({
                     <span className={stagedAvailable > 0 ? '' : 'text-red-600'}>
                         Available {stagedAvailable}
                     </span>
-                    {stagedQtyNum > stagedAvailable && (
+                    {overStock && (
                         <span className="ms-1.5 text-amber-600">
                             — entering more than is in stock
                         </span>

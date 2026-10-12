@@ -3,6 +3,8 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 import InventoryShrinkagePage from './page';
 import { pickSearchOption } from '@/test-utils/id-search-select';
 
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/api', () => ({
     api: {
         getInventoryShrinkage: jest.fn(),

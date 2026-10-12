@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { api } from '@/lib/api';
+import { useBranchScope } from '@/lib/branch-scope';
 import { tenantDateOnly } from '@/lib/created-range';
 import type { FilterOption } from './SearchFilterPicker';
 
@@ -33,6 +33,10 @@ type NamedFilters = {
  * Filter state for a line-item search: period, branch, counterparty, product
  * and free text.
  *
+ * The branch is the page-level `useBranchScope` (rendered as `BranchFilter` in
+ * the page header); an older `?storeId=` deep link is read by it as an alias
+ * of `?branch=`.
+ *
  * `partyParam` is the query key the counterparty travels under — `customerId`
  * on the sales side, `supplierId` on the purchase side — both in the page's
  * own URL (so a customer or product screen can deep-link into the report) and
@@ -40,6 +44,7 @@ type NamedFilters = {
  */
 export function useLineItemFilters(partyParam: 'customerId' | 'supplierId') {
     const searchParams = useSearchParams();
+    const branch = useBranchScope();
 
     // Read once: the URL seeds the filters, it does not follow them.
     const [initial] = useState(() => {
@@ -49,7 +54,6 @@ export function useLineItemFilters(partyParam: 'customerId' | 'supplierId') {
         return {
             from: searchParams.get('from') ?? fallback.from,
             to: searchParams.get('to') ?? fallback.to,
-            storeId: searchParams.get('storeId') ?? '',
             // Named by the first response, which echoes what it was narrowed by.
             party: partyId ? { id: partyId, name: '' } : null,
             product: productId ? { id: productId, name: '' } : null,
@@ -58,12 +62,10 @@ export function useLineItemFilters(partyParam: 'customerId' | 'supplierId') {
 
     const [from, setFrom] = useState(initial.from);
     const [to, setTo] = useState(initial.to);
-    const [storeId, setStoreId] = useState(initial.storeId);
     const [party, setParty] = useState<FilterOption | null>(initial.party);
     const [product, setProduct] = useState<FilterOption | null>(initial.product);
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
 
     // Typing must not fire a request per keystroke.
     useEffect(() => {
@@ -71,29 +73,19 @@ export function useLineItemFilters(partyParam: 'customerId' | 'supplierId') {
         return () => clearTimeout(timer);
     }, [search]);
 
-    useEffect(() => {
-        let cancelled = false;
-        api.getStores()
-            .then((data: unknown) => {
-                if (!cancelled) setStores(Array.isArray(data) ? (data as Array<{ id: string; name: string }>) : []);
-            })
-            .catch((err: unknown) => console.error('Failed to load branches', err));
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+    const { resetToHeader } = branch;
 
-    /** Back to the opening window with nothing narrowed. */
+    /** Back to the opening window and the header branch, with nothing narrowed. */
     const reset = useCallback(() => {
         const fallback = defaultLineItemWindow();
         setFrom(fallback.from);
         setTo(fallback.to);
-        setStoreId('');
+        resetToHeader();
         setParty(null);
         setProduct(null);
         setSearch('');
         setDebouncedSearch('');
-    }, []);
+    }, [resetToHeader]);
 
     /** Fills in the names of pickers seeded from the URL with an id alone. */
     const nameFromResponse = useCallback((named: NamedFilters) => {
@@ -113,12 +105,12 @@ export function useLineItemFilters(partyParam: 'customerId' | 'supplierId') {
         () => ({
             from: from || undefined,
             to: to || undefined,
-            storeId: storeId || undefined,
+            storeId: branch.apiStoreId,
             productId: product?.id,
             [partyParam]: party?.id,
             search: debouncedSearch || undefined,
         }),
-        [from, to, storeId, product?.id, party?.id, debouncedSearch, partyParam],
+        [from, to, branch.apiStoreId, product?.id, party?.id, debouncedSearch, partyParam],
     );
 
     return {
@@ -126,19 +118,18 @@ export function useLineItemFilters(partyParam: 'customerId' | 'supplierId') {
         setFrom,
         to,
         setTo,
-        storeId,
-        setStoreId,
+        /** The page's branch filter — render it with `<BranchFilter scope={branch} />`. */
+        branch,
         party,
         setParty,
         product,
         setProduct,
         search,
         setSearch,
-        stores,
         reset,
         nameFromResponse,
         query,
         /** Changes whenever the request would — for `useServerList`'s `deps`. */
-        deps: [from, to, storeId, product?.id, party?.id, debouncedSearch],
+        deps: [from, to, branch.apiStoreId, product?.id, party?.id, debouncedSearch],
     };
 }

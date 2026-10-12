@@ -231,3 +231,27 @@ describe('LineItemsTable — resizable columns', () => {
         expect(screen.queryByRole('button', { name: /reset widths/i })).not.toBeInTheDocument();
     });
 });
+
+describe('LineItemsTable — stock warning', () => {
+    const OVER_STOCK: LineItem = { ...ITEM, quantity: 10 };
+
+    it('flags a line asking for more than is in stock', () => {
+        render(<LineItemsTable items={[OVER_STOCK]} onUpdateItem={jest.fn()} onRemoveItem={jest.fn()} />);
+
+        expect(screen.getByTestId('line-available')).toHaveClass('text-amber-600');
+    });
+
+    it('does not flag it on a document that brings goods in', () => {
+        render(
+            <LineItemsTable
+                items={[OVER_STOCK]}
+                onUpdateItem={jest.fn()}
+                onRemoveItem={jest.fn()}
+                warnOverStock={false}
+            />,
+        );
+
+        expect(screen.getByTestId('line-available')).toHaveTextContent('6');
+        expect(screen.getByTestId('line-available')).not.toHaveClass('text-amber-600');
+    });
+});

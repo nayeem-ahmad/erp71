@@ -6,6 +6,7 @@ import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { AuditService } from '../audit/audit.service';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
+import { AuthCacheService } from '../database/auth-cache.service';
 import { DEFAULT_PASSWORD_POLICY } from '@erp71/shared-types';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -37,6 +38,7 @@ const auditService = {
 
 describe('PasswordResetService', () => {
     let service: PasswordResetService;
+    let authCache: AuthCacheService;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -57,9 +59,11 @@ describe('PasswordResetService', () => {
                 // The real service over the same db mock, so a reset is checked
                 // against the workspace policy rather than waved through.
                 PasswordPolicyService,
+                AuthCacheService,
             ],
         }).compile();
         service = mod.get(PasswordResetService);
+        authCache = mod.get(AuthCacheService);
     });
 
     it('silently succeeds for unknown email (prevents enumeration)', async () => {
@@ -124,6 +128,34 @@ describe('PasswordResetService', () => {
         expect(db.emailVerificationToken.deleteMany).toHaveBeenCalledWith({
             where: { user_id: 'u1' },
         });
+    });
+
+    // The reset bumps every token version; `JwtStrategy` sees that only once the
+    // cached row is dropped, and dropping it inside the transaction would let a
+    // request in between cache the old row again.
+    it('drops the cached user row once the reset has committed', async () => {
+        const hash = crypto.createHash('sha256').update('valid-token').digest('hex');
+        db.passwordResetToken.findUnique.mockResolvedValue({
+            id: 'tok1',
+            user_id: 'u1',
+            token_hash: hash,
+            expires_at: new Date(Date.now() + 3600_000),
+            used_at: null,
+        });
+        db.user.findUnique.mockResolvedValue({ email_verified_at: new Date() });
+        db.user.update.mockResolvedValue({});
+        db.passwordResetToken.update.mockResolvedValue({});
+        const invalidate = jest.spyOn(authCache, 'invalidateUser');
+
+        await service.resetPassword('valid-token', 'newpassword123');
+
+        expect(invalidate).toHaveBeenCalledWith('u1');
+        expect(invalidate.mock.invocationCallOrder[0]).toBeGreaterThan(
+            db.$transaction.mock.invocationCallOrder[0],
+        );
+        expect(invalidate.mock.invocationCallOrder[0]).toBeGreaterThan(
+            db.refreshToken.updateMany.mock.invocationCallOrder[0],
+        );
     });
 
     // --- Referral partner invites ------------------------------------------------
