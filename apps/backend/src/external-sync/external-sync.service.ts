@@ -1851,21 +1851,31 @@ export class ExternalSyncService {
         returnMap: Map<string, string>,
         warnings: SyncWarning[],
     ): Promise<boolean | null> {
-        // Each return line names a line of the parent sale where there is one.
-        // Match on product, consuming each sale line once so two return lines
-        // for the same product cannot both claim it.
+        // Each return line names a line of the parent sale where there is one,
+        // matched on product and drawn down by quantity. Dizi can split what
+        // comes back from one sale line over several return lines (6 and then
+        // 1 of the same nebulizer), and pairing line to line dropped the whole
+        // return when the second found its sale line taken.
         const saleItems = saleId
             ? await this.db.saleItem.findMany({
                   where: { sale_id: saleId },
-                  select: { id: true, product_id: true },
+                  select: { id: true, product_id: true, quantity: true },
               })
             : [];
-        const availableByProduct = new Map<string, string[]>();
+        const remainingByProduct = new Map<string, Array<{ id: string; left: number }>>();
         for (const item of saleItems) {
-            const list = availableByProduct.get(item.product_id) ?? [];
-            list.push(item.id);
-            availableByProduct.set(item.product_id, list);
+            const list = remainingByProduct.get(item.product_id) ?? [];
+            list.push({ id: item.id, left: Number(item.quantity) });
+            remainingByProduct.set(item.product_id, list);
         }
+        // The first line with room for the whole quantity, else the one with most left.
+        const takeSaleLine = (productId: string, quantity: number): string | null => {
+            const lines = remainingByProduct.get(productId);
+            if (!lines?.length) return null;
+            const line = lines.find((l) => l.left >= quantity) ?? lines.reduce((a, b) => (b.left > a.left ? b : a));
+            line.left -= quantity;
+            return line.id;
+        };
 
         const items: Array<{ sale_item_id: string | null; product_id: string; quantity: number; refund_amount: number }> = [];
         for (const line of mapped.items) {
@@ -1882,7 +1892,7 @@ export class ExternalSyncService {
                 return null;
             }
 
-            const saleItemId = saleId ? availableByProduct.get(productId)?.shift() ?? null : null;
+            const saleItemId = saleId ? takeSaleLine(productId, line.quantity) : null;
             if (saleId && !saleItemId) {
                 warnings.push({
                     entity: 'SALE_RETURN',

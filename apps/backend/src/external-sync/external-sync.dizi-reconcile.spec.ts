@@ -457,3 +457,38 @@ describe('a customer recreated with a phone number that is not one', () => {
         expect(warnings.filter((w) => w.code === 'WRITE_FAILED')).toEqual([]);
     });
 });
+
+describe('a return split over several lines of the same product', () => {
+    it('is imported, both lines on the one sale line they came back from', async () => {
+        // Dizi SR-26044: 6 and then 1 W302 Mesh Nebulizer back from one sale line of 7.
+        const db = makeDb();
+        db.saleItem.findMany.mockResolvedValue([{ id: 'si-1', product_id: 'prod-1', quantity: 7 }]);
+        db.salesReturn = { create: jest.fn(async () => ({ id: 'ret-new' })) };
+        db.customer.findUnique.mockResolvedValue({ store_id: 'store-1', due_balance: 1260 });
+        const warnings: any[] = [];
+
+        const created = await service(db).writeSaleReturn(
+            CONNECTION,
+            MAPPERS.saleReturn(
+                {
+                    Id: 'r-44', ReturnSlipNo: 'SR-26044', ReturnDate: '2026-08-10T00:00:00', SalesId: 's-1084', TraderId: 'c-lazz', GrossAmount: 1260, TotalAmount: 1260,
+                    ReturnItems: [{ ItemId: 'item-w302', Quantity: 6, TotalAmount: 1080 }, { ItemId: 'item-w302', Quantity: 1, TotalAmount: 180 }],
+                },
+                'DZ-',
+                [],
+            ),
+            'sale-1084',
+            'cust-1',
+            new Map([['item-w302', 'prod-1']]),
+            new Map(),
+            warnings,
+        );
+
+        expect(created).toBe(true);
+        expect(warnings).toEqual([]);
+        expect(db.salesReturn.create.mock.calls[0][0].data.items.create).toEqual([
+            { sale_item_id: 'si-1', product_id: 'prod-1', quantity: 6, refund_amount: 1080 },
+            { sale_item_id: 'si-1', product_id: 'prod-1', quantity: 1, refund_amount: 180 },
+        ]);
+    });
+});
