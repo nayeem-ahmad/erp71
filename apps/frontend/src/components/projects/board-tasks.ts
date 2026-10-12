@@ -77,7 +77,7 @@ export interface BoardTask {
     remaining_hours?: string | null;
     estimate_hours?: string | null;
     logged_hours?: number;
-    assignee?: { id: string; name?: string | null; email: string } | null;
+    assignee?: { id: string; name?: string | null; email: string; avatar_url?: string | null } | null;
     // Phase 2 made an employee without a login assignable. Everything that asks
     // "who is this for" has to read both or those tasks look unassigned.
     assigneeEmployee?: { id: string; name?: string | null } | null;

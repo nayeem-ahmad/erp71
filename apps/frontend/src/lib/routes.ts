@@ -331,6 +331,7 @@ export const routes = {
         support: '/admin/support',
         systemHealth: '/admin/system-health',
         auditLogs: '/admin/audit-logs',
+        recordHistory: '/admin/record-history',
         platformSettings: {
             root: '/admin/platform-settings',
             general: '/admin/platform-settings/general',

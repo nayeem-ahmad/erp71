@@ -114,7 +114,7 @@ const TREND_POINTS = 10;
 const TASK_INCLUDE = {
     project: { select: { id: true, code: true, name: true, short_name: true } },
     status: { select: { id: true, name: true, category: true, sort_order: true } },
-    assignee: { select: { id: true, name: true, email: true } },
+    assignee: { select: { id: true, name: true, email: true, avatar_url: true } },
     assigneeEmployee: { select: { id: true, name: true } },
     milestone: { select: { id: true, name: true } },
     userStory: { select: { id: true, reference: true, code: true, title: true, status: true } },

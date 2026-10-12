@@ -7,6 +7,7 @@ import type {
     PasswordPolicy,
     PlatformFeatureKey,
     PlatformFeatures,
+    PlatformRole,
     SupportedLocaleCode,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
@@ -1339,6 +1340,18 @@ export interface PaymentMethodAccount {
     type: string;
     category: string;
 }
+
+/** What `POST /admin/tenants/:id/restore` reports back. */
+export type AdminTenantRestoreSummary = {
+    backup_created_at: string;
+    tables: number;
+    rows_deleted: number;
+    rows_restored: number;
+    rows_skipped: Record<string, number>;
+    references_cleared: Record<string, number>;
+    unknown_tables: string[];
+    unknown_columns: string[];
+};
 
 export const api = {
     /**
@@ -3979,6 +3992,19 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
         });
     },
+    /** The whole workspace as one gzipped JSON file (`TenantBackupService`). */
+    downloadAdminTenantBackup: (tenantId: string) => fetchBlobWithAuth(`/admin/tenants/${tenantId}/backup`),
+    /**
+     * Replace the workspace's data with a backup of the same workspace. `confirm`
+     * is the workspace name as typed by the admin; the server checks it again.
+     */
+    restoreAdminTenantBackup: (tenantId: string, file: File, confirm: string): Promise<AdminTenantRestoreSummary> => {
+        const body = new FormData();
+        body.append('file', file);
+        body.append('confirm', confirm);
+        body.append('reason', 'Restored by platform admin');
+        return fetchWithAuth(`/admin/tenants/${tenantId}/restore`, { method: 'POST', body });
+    },
     createAdminTenant: (data: {
         ownerMode: 'new' | 'existing';
         ownerEmail?: string;
@@ -4211,6 +4237,32 @@ export const api = {
         const query = q.toString();
         return fetchWithAuth(`/admin/audit-logs${query ? `?${query}` : ''}`);
     },
+    getAdminRecordHistory: (params?: {
+        tenant_id?: string;
+        entity_type?: string;
+        entity_id?: string;
+        action?: string;
+        q?: string;
+        from?: string;
+        to?: string;
+        limit?: number;
+        offset?: number;
+    }) => {
+        const q = new URLSearchParams();
+        for (const [key, value] of Object.entries(params ?? {})) {
+            if (value !== undefined && value !== '') q.set(key, String(value));
+        }
+        const query = q.toString();
+        return fetchWithAuth(`/admin/record-history${query ? `?${query}` : ''}`);
+    },
+    getAdminRecordHistoryEntry: (id: string) => fetchWithAuth(`/admin/record-history/${id}`),
+    getRecordHistorySettings: () => fetchWithAuth('/admin/platform-settings/record_history'),
+    updateRecordHistorySettings: (settings: Record<string, string>) =>
+        fetchWithAuth('/admin/platform-settings/record_history', {
+            method: 'PATCH',
+            body: JSON.stringify({ settings }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     getSystemHealthJobs: () => fetchWithAuth('/admin/system-health/jobs'),
     getAdminUsers: (params?: { search?: string; isAdmin?: boolean }) => {
         const query = new URLSearchParams();
@@ -4226,6 +4278,7 @@ export const api = {
         name?: string;
         mobile?: string;
         mobile_country_code?: string;
+        platform_role?: PlatformRole;
     }) => fetchWithAuth('/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4236,6 +4289,7 @@ export const api = {
         name?: string;
         mobile?: string;
         mobile_country_code?: string;
+        platform_role?: PlatformRole;
     }) => fetchWithAuth(`/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

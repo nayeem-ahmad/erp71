@@ -5,7 +5,8 @@ import { Loader2 } from 'lucide-react';
 import PhoneNumberField from '@/components/PhoneNumberField';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { DEFAULT_MOBILE_COUNTRY_CODE, getMobileCountryOption } from '@erp71/shared-types';
+import { DEFAULT_MOBILE_COUNTRY_CODE, getMobileCountryOption, PLATFORM_ROLES, PlatformRole } from '@erp71/shared-types';
+import { Select } from '@/components/ui';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 
 function nationalMobileFromE164(e164: string | null | undefined, countryCode: string): string {
@@ -23,17 +24,24 @@ export type PlatformAdminUser = {
     name: string | null;
     mobile: string | null;
     mobile_country_code: string;
+    /** The console seat; absent on a row from before roles existed (an admin). */
+    platform_role?: PlatformRole | null;
 };
 
 type Props = {
     open: boolean;
     mode: 'create' | 'edit';
     user: PlatformAdminUser | null;
+    /**
+     * Whether the role may be changed here. Off for your own account — the
+     * server refuses that, since it could lock the last admin out.
+     */
+    canChangeRole?: boolean;
     onClose: () => void;
     onSaved: () => void;
 };
 
-export default function PlatformUserFormModal({ open, mode, user, onClose, onSaved }: Props) {
+export default function PlatformUserFormModal({ open, mode, user, canChangeRole = true, onClose, onSaved }: Props) {
     const { t } = useI18n();
     const m = t.admin.users.form;
     const [email, setEmail] = useState('');
@@ -41,6 +49,7 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
     const [password, setPassword] = useState('');
     const [mobileCountryCode, setMobileCountryCode] = useState(DEFAULT_MOBILE_COUNTRY_CODE);
     const [mobile, setMobile] = useState('');
+    const [role, setRole] = useState<PlatformRole>(PlatformRole.ADMIN);
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -51,6 +60,7 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
         setPassword('');
         setMobileCountryCode(user?.mobile_country_code ?? DEFAULT_MOBILE_COUNTRY_CODE);
         setMobile(nationalMobileFromE164(user?.mobile, user?.mobile_country_code ?? DEFAULT_MOBILE_COUNTRY_CODE));
+        setRole(user?.platform_role ?? PlatformRole.ADMIN);
         setError('');
     }, [open, user]);
 
@@ -67,6 +77,7 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
                     password,
                     mobile: mobile || undefined,
                     mobile_country_code: mobileCountryCode,
+                    platform_role: role,
                 });
             } else if (user) {
                 await api.updatePlatformAdminUser(user.id, {
@@ -74,6 +85,7 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
                     name: name || undefined,
                     mobile,
                     mobile_country_code: mobileCountryCode,
+                    ...(canChangeRole ? { platform_role: role } : {}),
                 });
             }
             onSaved();
@@ -113,6 +125,22 @@ export default function PlatformUserFormModal({ open, mode, user, onClose, onSav
                             onChange={(e) => setName(e.target.value)}
                             className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
                         />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label htmlFor="platform-user-role" className="text-xs font-medium text-gray-500">{m.roleLabel}</label>
+                        <Select
+                            id="platform-user-role"
+                            value={role}
+                            onChange={(e) => setRole(e.target.value as PlatformRole)}
+                            disabled={!canChangeRole}
+                            className="w-full"
+                        >
+                            {PLATFORM_ROLES.map((value) => (
+                                <option key={value} value={value}>{t.admin.users.roles[value]}</option>
+                            ))}
+                        </Select>
+                        <p className="text-xs text-gray-500">{m.roleHints[role]}</p>
                     </div>
 
                     {mode === 'create' && (

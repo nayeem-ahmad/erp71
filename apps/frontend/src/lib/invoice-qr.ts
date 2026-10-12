@@ -19,8 +19,20 @@ export function invoiceUrl(saleId: string, origin: string = window.location.orig
  * leaves the code off the page.
  */
 export async function invoiceQrDataUrl(saleId: string): Promise<string | undefined> {
+    return qrDataUrl(invoiceUrl(saleId));
+}
+
+/**
+ * The same for a printed quotation: a code that opens the quotation's page in
+ * the app, on the same terms — sign in, and see it only if allowed to.
+ */
+export async function quotationQrDataUrl(quoteId: string): Promise<string | undefined> {
+    return qrDataUrl(`${window.location.origin}${routes.sales.quoteDetail(quoteId)}`);
+}
+
+async function qrDataUrl(url: string): Promise<string | undefined> {
     try {
-        return await QRCode.toDataURL(invoiceUrl(saleId), { margin: 1, width: 240 });
+        return await QRCode.toDataURL(url, { margin: 1, width: 240 });
     } catch {
         return undefined;
     }

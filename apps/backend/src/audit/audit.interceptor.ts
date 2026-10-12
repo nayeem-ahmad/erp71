@@ -26,8 +26,9 @@ import {
  *  - `TenantInterceptor` is controller-scoped and therefore runs inside this
  *    one, so `request.tenantId` is only populated by the time `tap` fires.
  *    Every field is read there, never before `next.handle()`.
- *  - Guards run before any interceptor, so `request.isPlatformAdmin` — set by
- *    `PlatformAdminGuard` — is already there when `tap` fires.
+ *  - Guards run before any interceptor, so `request.isPlatformAdmin` and
+ *    `request.platformRole` — set by `PlatformAdminGuard` — are already there
+ *    when `tap` fires.
  */
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
@@ -74,7 +75,7 @@ export class AuditInterceptor implements NestInterceptor {
             // storefront customers and portal users are authenticated and
             // tenant-less too, and their order placements are not platform
             // administration.
-            const isPlatformAction = request?.isPlatformAdmin === true;
+            const isPlatformAction = request?.isPlatformAdmin === true || Boolean(request?.platformRole);
             if (!tenantId && !isPlatformAction) return;
 
             const target = resolveAuditTarget({

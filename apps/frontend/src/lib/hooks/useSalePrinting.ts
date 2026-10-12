@@ -187,7 +187,7 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
  * the cached profile, so it costs no request after the first; a print never
  * waits on it failing — the line just goes without a name.
  */
-async function printedByName(): Promise<string | undefined> {
+export async function printedByName(): Promise<string | undefined> {
     try {
         const me: any = await api.getCurrentUser();
         return me?.name?.trim() || me?.email || undefined;

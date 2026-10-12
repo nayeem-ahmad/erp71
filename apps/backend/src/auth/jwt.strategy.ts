@@ -23,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         // Every authenticated request on every surface starts here, so the row
         // is kept in `AuthCacheService` rather than read each time. Every column
         // below is one a write must invalidate on — the three token versions
-        // (sign-out, password change), the email, the platform-admin flag and
+        // (sign-out, password change), the email, the platform-admin flag and role and
         // the admin-set-password hold — and those writes call `invalidateUser`,
         // which is what makes a sign-out or a demotion take effect on the very
         // next request rather than after the TTL.
@@ -37,6 +37,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                     storefront_token_version: true,
                     applicant_token_version: true,
                     is_platform_admin: true,
+                    platform_role: true,
                     must_change_password: true,
                 },
             }),
@@ -65,6 +66,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             userId: user.id,
             email: user.email,
             isPlatformAdmin: user.is_platform_admin,
+            // A console seat below admin (support engineer); `PlatformAdminGuard`
+            // decides what it opens.
+            platformRole: user.platform_role,
             // An admin-set password the holder has not replaced yet. `JwtAuthGuard`
             // reduces such a session to the handful of endpoints that let them
             // replace it; read here because the row is already loaded.

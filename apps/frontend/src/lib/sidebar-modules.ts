@@ -1,4 +1,4 @@
-import type { AppState, NavLayoutNode } from '@erp71/shared-types';
+import { canPlatformRoleOpenPath, PlatformRole, type AppState, type NavLayoutNode } from '@erp71/shared-types';
 import { isItemVisible } from '@/lib/nav-visibility';
 import { filterNavByPermissions } from '@/lib/nav-permission-filter';
 import { buildNavModulesFromLayout, type ResolvedNavChild, type ResolvedNavModule } from '@/lib/nav-resolver';
@@ -46,6 +46,32 @@ function stripPosNavLink(children: ResolvedNavChild[], posEnabled: boolean): Res
             const filteredLinks = child.children.filter((link) => link.href !== routes.sales.pos);
             if (filteredLinks.length === 0) return null;
             return { ...child, children: filteredLinks };
+        })
+        .filter((child): child is ResolvedNavChild => child !== null);
+}
+
+/**
+ * The admin console's own menu. One subgroup sits behind a platform switch, and
+ * a role below full admin (support engineer) keeps only the links its role can
+ * open — the same rule the layout redirects on and the API guard enforces.
+ */
+function filterAdminConsoleChildren(
+    children: ResolvedNavChild[],
+    canAccessPlatformAccounting: boolean,
+    platformRole: PlatformRole | null | undefined,
+): ResolvedNavChild[] {
+    const restrictedRole = platformRole && platformRole !== PlatformRole.ADMIN ? platformRole : null;
+    const canOpen = (href: string) => !restrictedRole || canPlatformRoleOpenPath(restrictedRole, href);
+    return children
+        .map((child) => {
+            if (!isNavSubgroup(child)) return canOpen(child.href) ? child : null;
+            // `key` is the registry id's last segment — see
+            // buildNavModulesFromLayout — so this matches the
+            // `admin.platform-accounting` subgroup.
+            if (child.key === 'platform-accounting' && !canAccessPlatformAccounting) return null;
+            const links = child.children.filter((link) => canOpen(link.href));
+            if (links.length === 0) return null;
+            return links.length === child.children.length ? child : { ...child, children: links };
         })
         .filter((child): child is ResolvedNavChild => child !== null);
 }
@@ -103,6 +129,11 @@ export interface SidebarModulesInput {
     canAccessProjects?: boolean;
     canAccessPlatformAccounting?: boolean;
     canAccessAdmin?: boolean;
+    /**
+     * The viewer's seat in the admin console. A role below `ADMIN` trims the
+     * console menu to its own pages; absent means a full admin.
+     */
+    platformRole?: PlatformRole | null;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
     canManageShortLinks?: boolean;
@@ -213,17 +244,15 @@ export function resolveSidebarModules(input: SidebarModulesInput): ResolvedNavMo
                 };
             }
 
-            // The admin console carries one subgroup behind a platform
-            // switch. Filtered here rather than by the generic entitlement
-            // path, which reads a tenant's plan — the platform has none.
-            if (module.key === 'admin' && !canAccessPlatformAccounting) {
+            // Filtered here rather than by the generic entitlement path, which
+            // reads a tenant's plan — the platform has none.
+            if (module.key === 'admin') {
                 return {
                     ...module,
-                    children: module.children.filter(
-                        // `key` is the registry id's last segment — see
-                        // buildNavModulesFromLayout — so this matches the
-                        // `admin.platform-accounting` subgroup.
-                        (child) => !(isNavSubgroup(child) && child.key === 'platform-accounting'),
+                    children: filterAdminConsoleChildren(
+                        module.children,
+                        canAccessPlatformAccounting,
+                        input.platformRole,
                     ),
                 };
             }

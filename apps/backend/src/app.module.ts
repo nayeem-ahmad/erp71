@@ -13,6 +13,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 import { AuditModule } from './audit/audit.module';
+import { RecordHistoryModule } from './record-history/record-history.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { HealthModule } from './health/health.module';
 import { SystemHealthModule } from './system-health/system-health.module';
@@ -63,6 +64,7 @@ import { PurchaseReportsModule } from './purchase-reports/purchase-reports.modul
 import { BillingModule } from './billing/billing.module';
 import { ActivationModule } from './activation/activation.module';
 import { AdminTenantsModule } from './admin-tenants/admin-tenants.module';
+import { TenantBackupModule } from './tenant-backup/tenant-backup.module';
 import { ExternalSyncModule } from './external-sync/external-sync.module';
 import { WarrantyClaimsModule } from './warranty-claims/warranty-claims.module';
 import { AccountModule } from './account/account.module';
@@ -166,6 +168,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         SmsModule,
         WhatsAppModule,
         AuditModule,
+        RecordHistoryModule,
         HealthModule,
         JobsModule,
         CircuitBreakerModule,
@@ -214,6 +217,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         BillingModule,
         ActivationModule,
         AdminTenantsModule,
+        TenantBackupModule,
         ExternalSyncModule,
         WarrantyClaimsModule,
         AccountModule,

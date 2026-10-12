@@ -429,6 +429,7 @@ export const coreMessages = {
             adminSupport: 'سپورٹ',
             systemHealth: 'سسٹم کی صحت',
             adminAuditLogs: 'آڈٹ ٹریل',
+            adminRecordHistory: 'ریکارڈ کی تاریخ',
             platformStatus: 'عوامی حیثیت',
             platformSettingsSms: 'ایس ایم ایس گیٹ وے',
             platformSettingsEmail: 'ای میل / ایس ایم ٹی پی',

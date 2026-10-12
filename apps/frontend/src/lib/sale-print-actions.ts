@@ -107,7 +107,7 @@ function unitPrice(item: PrintableSale['items'][number]): number {
 }
 
 /** "6 months" for a product's warranty period; empty when it carries none. */
-function warrantyLabel(product: PrintableSale['items'][number]['product']): string | undefined {
+export function warrantyLabel(product: PrintableSale['items'][number]['product']): string | undefined {
     const days = product?.warranty_duration_days;
     if (!product?.warranty_enabled || !days || days <= 0) return undefined;
     const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;

@@ -242,6 +242,15 @@ describe('BoardsService', () => {
         expect(board.unsorted).toEqual([]);
     });
 
+    it('sends each card\'s assignee photo, which the card draws in place of initials', async () => {
+        db.boardTask.findMany.mockResolvedValue([card('k1', 'p1', 's1')]);
+
+        await service.findOne(owner, 'b1');
+
+        const [{ include }] = db.boardTask.findMany.mock.calls.at(-1);
+        expect(include.task.include.assignee.select).toMatchObject({ avatar_url: true });
+    });
+
     it('puts a card whose status is bound to nothing into unsorted', async () => {
         db.boardTask.findMany.mockResolvedValue([card('k3', 'p3', 's-loose')]);
 

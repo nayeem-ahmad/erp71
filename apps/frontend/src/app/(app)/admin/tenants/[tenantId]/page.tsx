@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, LogIn } from 'lucide-react';
-import { TENANT_OVERRIDABLE_FEATURE_KEYS } from '@erp71/shared-types';
+import { PlatformRole, TENANT_OVERRIDABLE_FEATURE_KEYS } from '@erp71/shared-types';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell, Button, Alert, ConfirmDialog } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -13,6 +13,8 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { setCredentials, setWorkspaceItem } from '@/lib/session-store';
+import { useMe } from '@/hooks/use-me';
+import { platformRoleOf } from '@/lib/platform-admin-paths';
 import { useTenantDetail, type DemoBatch } from '@/components/admin/tenants/use-tenant-detail';
 import OverviewPanel from '@/components/admin/tenants/panels/OverviewPanel';
 import SubscriptionPanel from '@/components/admin/tenants/panels/SubscriptionPanel';
@@ -22,6 +24,7 @@ import DangerZonePanel, {
     type ClearDataBranch,
     type ClearDataMode,
 } from '@/components/admin/tenants/panels/DangerZonePanel';
+import BackupRestorePanel from '@/components/admin/tenants/panels/BackupRestorePanel';
 import ClearDataGroups, { allGroups, keptGroups, type DataGroup } from '@/components/data-clear/ClearDataGroups';
 import type { DiscountType, SecondaryLocale } from '@/components/admin/tenants/types';
 
@@ -64,8 +67,13 @@ export default function AdminTenantDetailPage() {
     const detail = useTenantDetail(tenantId);
     const { tenant, error, setError } = detail;
 
+    // A support engineer reads a tenant and signs in as it; every other tab
+    // edits plan, configuration or data, which the API keeps for full admins.
+    const { data: me } = useMe();
+    const readOnly = platformRoleOf(me) !== PlatformRole.ADMIN;
+
     const tabParam = searchParams?.get('tab');
-    const activeTab: TabId = TAB_IDS.includes(tabParam as TabId) ? (tabParam as TabId) : 'overview';
+    const activeTab: TabId = !readOnly && TAB_IDS.includes(tabParam as TabId) ? (tabParam as TabId) : 'overview';
 
     const setTab = useCallback((tab: TabId) => {
         const query = tab === 'overview' ? '' : `?tab=${tab}`;
@@ -453,13 +461,15 @@ export default function AdminTenantDetailPage() {
     }, [pending, tenant, m, bt, nc, dd, ac, cd, dp.typeToConfirm, isSuspending, isDeleting, clearing, clearGroups,
         isImportingCatalog, isResettingNav, isStartingDemo, revokingAddonCode]);
 
-    const tabs: Array<{ id: TabId; label: string; danger?: boolean }> = [
-        { id: 'overview', label: dp.tabs.overview },
-        { id: 'subscription', label: dp.tabs.subscription },
-        { id: 'configuration', label: dp.tabs.configuration },
-        { id: 'integrations', label: dp.tabs.integrations },
-        { id: 'danger', label: dp.tabs.danger, danger: true },
-    ];
+    const tabs: Array<{ id: TabId; label: string; danger?: boolean }> = readOnly
+        ? [{ id: 'overview', label: dp.tabs.overview }]
+        : [
+            { id: 'overview', label: dp.tabs.overview },
+            { id: 'subscription', label: dp.tabs.subscription },
+            { id: 'configuration', label: dp.tabs.configuration },
+            { id: 'integrations', label: dp.tabs.integrations },
+            { id: 'danger', label: dp.tabs.danger, danger: true },
+        ];
 
     const breadcrumbs = nestedPageBreadcrumbs(
         t.dashboardHome.breadcrumbHome,
@@ -576,36 +586,42 @@ export default function AdminTenantDetailPage() {
             )}
 
             {activeTab === 'danger' && (
-                <DangerZonePanel
-                    tenant={tenant}
-                    demoBatch={detail.demoBatch}
-                    isStartingDemo={isStartingDemo}
-                    onStartDemoData={() => {
-                        const completedLoads = detail.demoBatch
-                            ? (detail.demoBatch.status === 'COMPLETED'
-                                ? detail.demoBatch.batch_number
-                                : detail.demoBatch.batch_number - 1)
-                            : 0;
-                        setPending({
-                            kind: 'demoData',
-                            prompt: completedLoads > 0
-                                ? formatMessage(dd.confirmAppend, {
-                                    name: tenant.name,
-                                    count: String(completedLoads),
-                                })
-                                : formatMessage(dd.confirmFirst, { name: tenant.name }),
-                        });
-                    }}
-                    isSuspending={isSuspending}
-                    onSuspend={() => setPending({ kind: 'suspend' })}
-                    clearing={clearing}
-                    onClearData={(mode, branch) => {
-                        setClearGroups(allGroups(branch ? 'branch' : 'tenant'));
-                        setPending({ kind: 'clearData', mode, branch });
-                    }}
-                    isDeleting={isDeleting}
-                    onDelete={() => setPending({ kind: 'delete' })}
-                />
+                <div className="space-y-4">
+                    <BackupRestorePanel
+                        tenant={tenant}
+                        onRestored={() => void detail.load(tenant.id, { quiet: true })}
+                    />
+                    <DangerZonePanel
+                        tenant={tenant}
+                        demoBatch={detail.demoBatch}
+                        isStartingDemo={isStartingDemo}
+                        onStartDemoData={() => {
+                            const completedLoads = detail.demoBatch
+                                ? (detail.demoBatch.status === 'COMPLETED'
+                                    ? detail.demoBatch.batch_number
+                                    : detail.demoBatch.batch_number - 1)
+                                : 0;
+                            setPending({
+                                kind: 'demoData',
+                                prompt: completedLoads > 0
+                                    ? formatMessage(dd.confirmAppend, {
+                                        name: tenant.name,
+                                        count: String(completedLoads),
+                                    })
+                                    : formatMessage(dd.confirmFirst, { name: tenant.name }),
+                            });
+                        }}
+                        isSuspending={isSuspending}
+                        onSuspend={() => setPending({ kind: 'suspend' })}
+                        clearing={clearing}
+                        onClearData={(mode, branch) => {
+                            setClearGroups(allGroups(branch ? 'branch' : 'tenant'));
+                            setPending({ kind: 'clearData', mode, branch });
+                        }}
+                        isDeleting={isDeleting}
+                        onDelete={() => setPending({ kind: 'delete' })}
+                    />
+                </div>
             )}
 
             {detail.dirtyCount > 0 && (

@@ -4,7 +4,7 @@ import type { InvoiceDues } from './customer-credit';
 import { formatBDT, getActiveTimeZone } from './format';
 import { paymentMethodLabel } from './payment-method-label';
 import { COMPACT_SCOPE, escapeHtml as esc } from './print';
-import type { InvoiceData } from './sales-invoice-printer';
+import type { InvoiceData, InvoiceItem } from './sales-invoice-printer';
 
 /**
  * The detailed invoice: the full trade layout a business hands a trade
@@ -16,6 +16,10 @@ import type { InvoiceData } from './sales-invoice-printer';
  * invoice — the letterhead, the footer pinning, density, the batch job — so
  * `sales-invoice-printer.ts` only swaps the body, the stylesheet and the footer.
  *
+ * The box, the item table and the closing block are exported on their own, so
+ * the sales quotation prints on the same design with its own lines in them —
+ * see `sales-quotation-printer.ts`.
+ *
  * The figures are the standard invoice's own, never re-derived: this file only
  * decides where each one is written. In particular the tax is *read* from the
  * sale (see `InvoiceData.taxIncluded`), never recomputed from a rate.
@@ -25,6 +29,19 @@ import type { InvoiceData } from './sales-invoice-printer';
 function amount(value: number): string {
     return formatBDT(value).replace(/^\S+\s*/, '');
 }
+
+/**
+ * How a document's money is written: the unit its column headers name, and a
+ * figure as it stands in a cell — the number alone, since the header says the
+ * unit. Every invoice is in taka; a proforma invoice may be in another currency.
+ */
+export interface DetailedMoney {
+    /** "৳", or the currency code of a document written in another currency. */
+    unit: string;
+    format: (value: number) => string;
+}
+
+export const TAKA: DetailedMoney = { unit: '৳', format: amount };
 
 const toPaisa = (value: number) => Math.round(value * 100) / 100;
 
@@ -51,6 +68,7 @@ export function formatPrintStamp(now: Date = new Date()): string {
 function row(label: string, value: string, className = ''): string {
     return `<tr${className ? ` class="${className}"` : ''}><td>${label}</td><td>${value}</td></tr>`;
 }
+export { row as detailedRow };
 
 /**
  * The block on the right: the invoice's own money, top to bottom.
@@ -130,38 +148,139 @@ function accountRows(data: InvoiceData, dues: InvoiceDues): string {
     ].join('');
 }
 
+/** One line of the box under the letterhead: its label and what it says. */
+export type DetailedField = [label: string, value: string | undefined];
+
+/** The customer's side of the box, which every detailed document prints alike. */
+export function detailedCustomerFields(customer: {
+    code?: string;
+    name?: string;
+    address?: string;
+    phone?: string;
+}): DetailedField[] {
+    return [
+        ['Customer ID', customer.code],
+        ['Name', customer.name || 'Walk-in Customer'],
+        ['Address', customer.address],
+        ['Mobile', customer.phone],
+    ];
+}
+
 /**
  * The boxed block under the letterhead: who the customer is on the left, with
- * the labels' colons in one column, and the invoice on the right — its number,
- * order and date, the employee it is credited to and who entered it.
+ * the labels' colons in one column, and the document on the right — for an
+ * invoice its number, order and date, the employee it is credited to and who
+ * entered it.
  *
  * A line with nothing to say is left out rather than printed blank, so a
- * walk-in's box is their name and the invoice's own lines.
+ * walk-in's box is their name and the document's own lines.
  */
-function infoBoxHtml(data: InvoiceData): string {
-    const customer: [string, string | undefined][] = [
-        ['Customer ID', data.customerCode],
-        ['Name', data.customerName || 'Walk-in Customer'],
-        ['Address', data.shippingAddress || data.customerAddress],
-        ['Mobile', data.customerPhone],
-    ];
-    const invoice: [string, string | undefined][] = [
-        ['Invoice No.', data.referenceNumber],
-        ['Order No.', data.orderNumber],
-        ['Invoice Date', data.date],
-        ['Sales By', data.salesBy],
-        ['Entry By', data.preparedBy],
-    ];
-    const present = (lines: [string, string | undefined][]) =>
+export function detailedInfoBoxHtml(customer: DetailedField[], document: DetailedField[]): string {
+    const present = (lines: DetailedField[]) =>
         lines.filter((line): line is [string, string] => !!line[1]);
 
     return `<div class="d-info">
         <div class="d-info-l">${present(customer).map(([label, value]) =>
             `<span class="d-info-k">${label}</span><span class="d-info-c">:</span><span>${esc(value)}</span>`,
         ).join('')}</div>
-        <div class="d-info-r">${present(invoice).map(([label, value]) =>
+        <div class="d-info-r">${present(document).map(([label, value]) =>
             `<div><strong>${label}:</strong> ${esc(value)}</div>`,
         ).join('')}</div>
+    </div>`;
+}
+
+/**
+ * The item table, headed by the box — the part of a detailed document that
+ * runs over as many pages as its items need.
+ */
+export function detailedItemsHtml(
+    items: InvoiceItem[],
+    layout: InvoicePrintPrefs,
+    infoBox: string,
+    money: DetailedMoney = TAKA,
+): string {
+    const showDiscount = items.some((item) => !!item.discount);
+    const showWarranty = layout.warranty_column === 'always'
+        || (layout.warranty_column === 'when-used' && items.some((item) => !!item.warranty));
+
+    const itemRows = items.map((item, index) => {
+        const lineTotal = item.quantity * item.unitPrice - (item.discount ?? 0);
+        return `<tr>
+            <td class="d-sl">${index + 1}</td>
+            <td class="d-item">${esc(item.name)}</td>
+            ${showWarranty ? `<td class="d-warranty">${item.warranty ? esc(item.warranty) : ''}</td>` : ''}
+            <td class="d-num">${item.quantity}</td>
+            <td class="d-num">${money.format(item.unitPrice)}</td>
+            ${showDiscount ? `<td class="d-num">${item.discount ? money.format(item.discount) : ''}</td>` : ''}
+            <td class="d-num">${money.format(lineTotal)}</td>
+        </tr>`;
+    }).join('');
+
+    // SL, item, quantity, unit price and total, and the two optional columns.
+    const columns = 5 + (showWarranty ? 1 : 0) + (showDiscount ? 1 : 0);
+    const ruled = layout.table_borders === 'columns';
+    const unit = esc(money.unit);
+
+    // The box is the first row of the item table's head, so it repeats with
+    // the column headings at the top of every page a long document runs to.
+    // Not in the letterhead's head with the strip it replaced: Chrome repeats
+    // no table head taller than about a quarter of the page, and letterhead
+    // and box together are — the whole head then printed on page one only.
+    // Apart, each is under the limit and both repeat.
+    return `
+    <div class="invoice-body inv-d inv-d--top">
+    <table class="d-table${ruled ? ' d-table--ruled' : ''}">
+        <thead>
+            <tr class="d-info-row"><td colspan="${columns}">${infoBox}</td></tr>
+            <tr>
+                <th class="d-sl">SL</th>
+                <th class="d-item">Item</th>
+                ${showWarranty ? '<th class="d-warranty">Warranty</th>' : ''}
+                <th class="d-num">Quantity</th>
+                <th class="d-num">Unit Price (${unit})</th>
+                ${showDiscount ? `<th class="d-num">Discount (${unit})</th>` : ''}
+                <th class="d-num">Total (${unit})</th>
+            </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+        ${ruled ? `<tfoot><tr class="d-close"><td colspan="${columns}"></td></tr></tfoot>` : ''}
+    </table>
+    </div>`;
+}
+
+/**
+ * The closing block of a detailed document: the total in words across the
+ * full width, then two blocks side by side — `left` (an invoice's account, a
+ * proforma's terms) and `right` (the money) — then the note and signatures.
+ * It stays together and, see `PrintSheet.endHtml`, travels with the
+ * page-bottom footer.
+ */
+export function detailedEndHtml(parts: {
+    /** The total spelled out, or nothing when the member did not ask for it. */
+    words?: string;
+    left: string;
+    right: string;
+    note?: string;
+    signatures: boolean;
+}): string {
+    return `
+    <div class="invoice-body inv-d inv-d--end">
+    ${parts.words ? `<p class="d-words"><strong>In Word:</strong> ${parts.words}</p>` : ''}
+    <div class="d-sums">
+        <div class="d-left">
+            ${parts.left}
+        </div>
+        <div class="d-right">
+            ${parts.right}
+        </div>
+    </div>
+
+    ${parts.note ? `<div class="note-box"><strong>Note:</strong> ${esc(parts.note)}</div>` : ''}
+    ${parts.signatures ? `
+    <div class="signatures">
+        <div class="signature">Customer's Signature</div>
+        <div class="signature">Authorised Signature</div>
+    </div>` : ''}
     </div>`;
 }
 
@@ -177,22 +296,21 @@ export function detailedBodyHtml(
     paid: number,
     dues: InvoiceDues | null,
 ): { body: string; end: string } {
-    const showDiscount = data.items.some((item) => !!item.discount);
-    const showWarranty = layout.warranty_column === 'always'
-        || (layout.warranty_column === 'when-used' && data.items.some((item) => !!item.warranty));
-
-    const itemRows = data.items.map((item, index) => {
-        const lineTotal = item.quantity * item.unitPrice - (item.discount ?? 0);
-        return `<tr>
-            <td class="d-sl">${index + 1}</td>
-            <td class="d-item">${esc(item.name)}</td>
-            ${showWarranty ? `<td class="d-warranty">${item.warranty ? esc(item.warranty) : ''}</td>` : ''}
-            <td class="d-num">${item.quantity}</td>
-            <td class="d-num">${amount(item.unitPrice)}</td>
-            ${showDiscount ? `<td class="d-num">${item.discount ? amount(item.discount) : ''}</td>` : ''}
-            <td class="d-num">${amount(lineTotal)}</td>
-        </tr>`;
-    }).join('');
+    const infoBox = detailedInfoBoxHtml(
+        detailedCustomerFields({
+            code: data.customerCode,
+            name: data.customerName,
+            address: data.shippingAddress || data.customerAddress,
+            phone: data.customerPhone,
+        }),
+        [
+            ['Invoice No.', data.referenceNumber],
+            ['Order No.', data.orderNumber],
+            ['Invoice Date', data.date],
+            ['Sales By', data.salesBy],
+            ['Entry By', data.preparedBy],
+        ],
+    );
 
     const payments = data.payments.length > 0
         ? `<p class="d-paid-by">Paid by: ${data.payments.map((p) =>
@@ -200,58 +318,16 @@ export function detailedBodyHtml(
         ).join(' · ')}</p>`
         : '';
 
-    // SL, item, quantity, unit price and total, and the two optional columns.
-    const columns = 5 + (showWarranty ? 1 : 0) + (showDiscount ? 1 : 0);
-    const ruled = layout.table_borders === 'columns';
-
-    // The box is the first row of the item table's head, so it repeats with
-    // the column headings at the top of every page a long invoice runs to.
-    // Not in the letterhead's head with the strip it replaced: Chrome repeats
-    // no table head taller than about a quarter of the page, and letterhead
-    // and box together are — the whole head then printed on page one only.
-    // Apart, each is under the limit and both repeat.
-    const body = `
-    <div class="invoice-body inv-d inv-d--top">
-    <table class="d-table${ruled ? ' d-table--ruled' : ''}">
-        <thead>
-            <tr class="d-info-row"><td colspan="${columns}">${infoBoxHtml(data)}</td></tr>
-            <tr>
-                <th class="d-sl">SL</th>
-                <th class="d-item">Item</th>
-                ${showWarranty ? '<th class="d-warranty">Warranty</th>' : ''}
-                <th class="d-num">Quantity</th>
-                <th class="d-num">Unit Price (৳)</th>
-                ${showDiscount ? '<th class="d-num">Discount (৳)</th>' : ''}
-                <th class="d-num">Total (৳)</th>
-            </tr>
-        </thead>
-        <tbody>${itemRows}</tbody>
-        ${ruled ? `<tfoot><tr class="d-close"><td colspan="${columns}"></td></tr></tfoot>` : ''}
-    </table>
-    </div>`;
-
-    const end = `
-    <div class="invoice-body inv-d inv-d--end">
-    ${layout.amount_in_words ? `<p class="d-words"><strong>In Word:</strong> ${takaInWords(data.total)}</p>` : ''}
-    <div class="d-sums">
-        <div class="d-left">
-            ${dues && layout.balance !== 'never' ? `<table class="d-block">${accountRows(data, dues)}</table>` : ''}
-            ${payments}
-        </div>
-        <div class="d-right">
-            <table class="d-block">${invoiceTotalsRows(data, paid)}</table>
-        </div>
-    </div>
-
-    ${data.note ? `<div class="note-box"><strong>Note:</strong> ${esc(data.note)}</div>` : ''}
-    ${layout.signature_lines ? `
-    <div class="signatures">
-        <div class="signature">Customer's Signature</div>
-        <div class="signature">Authorised Signature</div>
-    </div>` : ''}
-    </div>`;
-
-    return { body, end };
+    return {
+        body: detailedItemsHtml(data.items, layout, infoBox),
+        end: detailedEndHtml({
+            words: layout.amount_in_words ? takaInWords(data.total) : undefined,
+            left: `${dues && layout.balance !== 'never' ? `<table class="d-block">${accountRows(data, dues)}</table>` : ''}${payments}`,
+            right: `<table class="d-block">${invoiceTotalsRows(data, paid)}</table>`,
+            note: data.note,
+            signatures: layout.signature_lines,
+        }),
+    };
 }
 
 /**

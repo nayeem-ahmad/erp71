@@ -428,6 +428,7 @@ export const coreMessages = {
                 adminSupport: "Sokongan",
                 systemHealth: "Kesihatan Sistem",
                 adminAuditLogs: "Jejak Audit",
+                adminRecordHistory: 'Sejarah Rekod',
                 platformStatus: "Status awam",
                 platformSettingsSms: "SMS Gateway",
                 platformSettingsEmail: "Emel / SMTP",

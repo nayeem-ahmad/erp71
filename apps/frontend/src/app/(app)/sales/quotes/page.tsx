@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { FileText, Plus, Eye, Edit2, Printer, Trash2, ReceiptText, Link2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
@@ -13,9 +13,7 @@ import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
-import type { HeaderContext } from '@/lib/print';
-import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useQuotationPrinting } from '@/lib/hooks/useQuotationPrinting';
 import { BranchFilter, PageShell } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ShareModal from '@/components/share/ShareModal';
@@ -67,7 +65,7 @@ const columnHelper = createColumnHelper<Quotation>();
 export default function QuotesPage() {
     const { t, locale } = useI18n();
     const branch = useBranchScope();
-    const printHeader = usePrintHeader('QUOTE');
+    const { printQuotation, printingId } = useQuotationPrinting();
     const [quotes, setQuotes] = useState<Quotation[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
@@ -106,46 +104,6 @@ export default function QuotesPage() {
         } catch (error: any) {
             alert(error.message || t.shared.errors.deleteQuotation);
         }
-    };
-
-    const handlePrint = async (quote: Quotation) => {
-        // The quote's own branch letterhead, not the one resolved on mount.
-        const header = await printHeader.resolve(quote.store_id);
-        const headerContext: HeaderContext = {
-            docTitle: t.shared.print.salesQuotation,
-            docNumber: quote.quote_number,
-            docDate: formatDate(quote.created_at, locale),
-            companyName: header.companyName,
-        };
-
-        openPrintWindow({
-            context: headerContext,
-            title: quote.quote_number,
-            paperSize: 'A4',
-            headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
-            styles: SIMPLE_DOC_STYLES,
-            compactable: true,
-            repeatHeader: true,
-            bodyHtml: `
-                <h1>${quote.quote_number} (${formatMessage(t.shared.version, { version: quote.version })})</h1>
-                <div class="subtitle">${formatMessage(t.shared.print.createdMeta, {
-                    date: formatDateTime(quote.created_at, locale),
-                    status: t.shared.statuses.quote[quote.status as keyof typeof t.shared.statuses.quote] ?? quote.status,
-                    validUntil: quote.valid_until ? formatDate(quote.valid_until, locale) : t.shared.open,
-                })}</div>
-                <p><strong>${t.shared.print.customer}</strong> ${quote.customer?.name || t.shared.walkIn}</p>
-                <table>
-                    <thead><tr><th>${t.shared.print.product}</th><th>${t.shared.print.qty}</th><th>${t.shared.print.unitPrice}</th><th>${t.shared.print.subtotal}</th></tr></thead>
-                    <tbody>
-                        ${quote.items.map((item: any) => `<tr><td>${item.product?.name || t.shared.item}</td><td>${item.quantity}</td><td>${formatBDT(Number(item.unit_price), { locale })}</td><td>${formatBDT(item.quantity * Number(item.unit_price), { locale })}</td></tr>`).join('')}
-                        ${Number(quote.vat_amount ?? 0) > 0.005 ? `<tr><td colspan="3">${t.sales.invoice.vat}</td><td>${formatBDT(Number(quote.vat_amount), { locale })}</td></tr>` : ''}
-                        <tr class="total-row"><td colspan="3">${t.shared.print.total}</td><td>${formatBDT(Number(quote.total_amount), { locale })}</td></tr>
-                    </tbody>
-                </table>
-                ${quote.notes ? `<p><strong>${t.shared.print.notes}</strong> ${quote.notes}</p>` : ''}`,
-            footerHtml: `<div class="footer">${t.shared.print.salesQuotation}</div>`,
-        });
     };
 
     const columns: ColumnDef<Quotation, any>[] = useMemo(
@@ -277,9 +235,11 @@ export default function QuotesPage() {
                                 <Link2 className="w-4 h-4" />
                             </button>
                             <button
-                                onClick={() => void handlePrint(quote)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                                onClick={() => void printQuotation(quote)}
+                                disabled={printingId === quote.id}
+                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors disabled:opacity-50"
                                 title={t.common.print}
+                                aria-label={t.common.print}
                             >
                                 <Printer className="w-4 h-4" />
                             </button>
@@ -299,7 +259,7 @@ export default function QuotesPage() {
                 size: 230,
             }),
         ],
-        [t, locale, openShare, sharingId],
+        [t, locale, openShare, sharingId, printQuotation, printingId],
     );
 
     const bulkActions = useMemo(

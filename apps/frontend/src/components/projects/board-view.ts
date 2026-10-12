@@ -238,7 +238,7 @@ export const DENSITY: Record<BoardDensity, DensityTokens> = {
         columnPad: 'p-2',
         title: 'text-sm font-medium leading-snug',
         row: 'mt-1.5',
-        avatar: 'h-6 w-6 text-[10px]',
+        avatar: 'h-7 w-7 text-[11px]',
     },
     compact: {
         cardPad: 'px-2 py-1.5',
@@ -246,7 +246,7 @@ export const DENSITY: Record<BoardDensity, DensityTokens> = {
         columnPad: 'p-1.5',
         title: 'text-xs font-medium leading-snug',
         row: 'mt-1',
-        avatar: 'h-5 w-5 text-[9px]',
+        avatar: 'h-6 w-6 text-[10px]',
     },
 };
 

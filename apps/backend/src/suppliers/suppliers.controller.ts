@@ -21,6 +21,21 @@ import { ImportRowsDto } from '../common/import.dto';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { SUPPLIER_CREDIT_READ, SUPPLIER_CREDIT_WRITE, SUPPLIER_READ, SUPPLIER_WRITE } from '../auth/permission-sets';
+import { TrackHistory } from '../record-history/track-history.decorator';
+import type { TrackHistoryOptions } from '../record-history/track-history.metadata';
+
+/**
+ * Removing an allocation changes the payment it belonged to, but the route
+ * names the allocation — so the history is filed under its payment.
+ */
+const paymentOfAllocation: TrackHistoryOptions['resolveId'] = async (db, request) => {
+    const allocation = await db.supplierPaymentAllocation.findUnique({
+        where: { id: request.params.allocationId },
+        select: { transaction_id: true },
+    });
+    return allocation?.transaction_id;
+};
+
 // Every route reads and writes only the suppliers the member may see — see
 // `supplier-visibility.ts`. A supplier outside that is a 404, never a 403, so
 // another branch's supplier cannot be told from no supplier.
@@ -39,6 +54,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_WRITE)
+    @TrackHistory('SUPPLIER', { action: 'CREATE' })
     @Post()
     async create(@Tenant() tenant: TenantContext, @Body() dto: CreateSupplierDto) {
         return this.suppliersService.create(tenant.tenantId, dto, {
@@ -105,6 +121,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_CREDIT_WRITE)
+    @TrackHistory('SUPPLIER_PAYMENT', { action: 'UPDATE', idParam: 'paymentId' })
     @Patch('credit/payments/:paymentId')
     async updateCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -115,6 +132,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_CREDIT_WRITE)
+    @TrackHistory('SUPPLIER_PAYMENT', { action: 'DELETE', idParam: 'paymentId' })
     @Delete('credit/payments/:paymentId')
     async deleteCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -124,6 +142,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_CREDIT_WRITE)
+    @TrackHistory('SUPPLIER_PAYMENT', { action: 'ALLOCATE', idParam: 'paymentId' })
     @Post('credit/payments/:paymentId/allocate')
     async allocatePayment(
         @Tenant() tenant: TenantContext,
@@ -134,6 +153,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_CREDIT_WRITE)
+    @TrackHistory('SUPPLIER_PAYMENT', { action: 'UNALLOCATE', resolveId: paymentOfAllocation })
     @Delete('credit/allocations/:allocationId')
     async removeAllocation(
         @Tenant() tenant: TenantContext,
@@ -177,6 +197,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_CREDIT_WRITE)
+    @TrackHistory('SUPPLIER_PAYMENT', { action: 'CREATE' })
     @Post(':id/credit/payment')
     async recordCreditPayment(
         @Tenant() tenant: TenantContext,
@@ -193,6 +214,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_WRITE)
+    @TrackHistory('SUPPLIER', { action: 'UPDATE' })
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSupplierDto) {
         return this.suppliersService.update(tenant.tenantId, id, dto, {
@@ -203,6 +225,7 @@ export class SuppliersController {
     }
 
     @RequireAnyStorePermission(...SUPPLIER_WRITE)
+    @TrackHistory('SUPPLIER', { action: 'DELETE' })
     @Delete(':id')
     async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.suppliersService.remove(tenant.tenantId, id, await this.scope(tenant));

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from 'react';
 import { FolderKanban, GitBranch, GripVertical, MessageSquare, Play, Undo2 } from 'lucide-react';
+import Avatar from '@/components/Avatar';
 import { StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
@@ -22,7 +23,6 @@ import {
 import {
     coverClass,
     dueStateOf,
-    initialsOf,
     labelClass,
     projectLabelOf,
     type DueState,
@@ -573,12 +573,8 @@ function SprintCard({
                         {startButton}
                         {show.assignee &&
                             (assigneeName ? (
-                                <span
-                                    title={assigneeName}
-                                    aria-label={assigneeName}
-                                    className={`ms-auto inline-flex items-center justify-center rounded-full bg-blue-100 font-medium text-blue-700 ${d.avatar}`}
-                                >
-                                    {initialsOf(assigneeName)}
+                                <span title={assigneeName} aria-label={assigneeName} className="ms-auto inline-flex">
+                                    <Avatar src={task.assignee?.avatar_url} name={assigneeName} sizeClass={d.avatar} />
                                 </span>
                             ) : (
                                 <span className="ms-auto text-gray-400">{c.unassigned}</span>

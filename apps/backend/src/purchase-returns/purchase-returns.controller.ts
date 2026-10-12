@@ -10,6 +10,7 @@ import { PurchaseReturnsService } from './purchase-returns.service';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { PURCHASE_READ, PURCHASE_RETURN_WRITE } from '../auth/permission-sets';
+import { TrackHistory } from '../record-history/track-history.decorator';
 @Controller('purchase-returns')
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
@@ -20,6 +21,7 @@ export class PurchaseReturnsController {
     ) {}
 
     @RequireAnyStorePermission(...PURCHASE_RETURN_WRITE)
+    @TrackHistory('PURCHASE_RETURN', { action: 'CREATE' })
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreatePurchaseReturnDto) {
         return this.purchaseReturnsService.create(tenant.tenantId, tenant.userId, dto);
@@ -46,12 +48,14 @@ export class PurchaseReturnsController {
     }
 
     @RequireAnyStorePermission(...PURCHASE_RETURN_WRITE)
+    @TrackHistory('PURCHASE_RETURN', { action: 'UPDATE' })
     @Patch(':id')
     update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdatePurchaseReturnDto) {
         return this.purchaseReturnsService.update(tenant.tenantId, id, dto);
     }
 
     @RequireAnyStorePermission(...PURCHASE_RETURN_WRITE)
+    @TrackHistory('PURCHASE_RETURN', { action: 'DELETE' })
     @Delete(':id')
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.purchaseReturnsService.remove(tenant.tenantId, id);

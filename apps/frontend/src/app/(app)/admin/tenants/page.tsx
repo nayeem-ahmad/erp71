@@ -17,6 +17,9 @@ import { formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
+import { useMe } from '@/hooks/use-me';
+import { platformRoleOf } from '@/lib/platform-admin-paths';
+import { PlatformRole } from '@erp71/shared-types';
 
 const columnHelper = createColumnHelper<TenantRecord>();
 
@@ -24,6 +27,10 @@ export default function AdminTenantsPage() {
     const router = useRouter();
     const { t } = useI18n();
     const m = t.admin.tenants;
+    // Creating a tenant and selling credits post money; a support engineer
+    // only looks tenants up, so the list is read-only for them.
+    const { data: me } = useMe();
+    const canManage = platformRoleOf(me) === PlatformRole.ADMIN;
     const [tenants, setTenants] = useState<TenantRecord[]>([]);
     const [search, setSearch] = useState('');
     const [planCode, setPlanCode] = useState('');
@@ -123,29 +130,33 @@ export default function AdminTenantsPage() {
                         >
                             <Pencil className="w-4 h-4" />
                         </Link>
-                        <button
-                            type="button"
-                            onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('sms'); }}
-                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-primary-border hover:text-blue-700"
-                            title={m.actions.sellSmsCredits}
-                            aria-label={m.actions.sellSmsCredits}
-                        >
-                            <MessageSquare className="w-4 h-4" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('ai'); }}
-                            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-primary-border hover:text-blue-700"
-                            title={m.actions.sellAiCredits}
-                            aria-label={m.actions.sellAiCredits}
-                        >
-                            <Sparkles className="w-4 h-4" />
-                        </button>
+                        {canManage && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('sms'); }}
+                                    className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-primary-border hover:text-blue-700"
+                                    title={m.actions.sellSmsCredits}
+                                    aria-label={m.actions.sellSmsCredits}
+                                >
+                                    <MessageSquare className="w-4 h-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSellCreditsTenant(tenant); setSellCreditsKind('ai'); }}
+                                    className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-600 hover:border-primary-border hover:text-blue-700"
+                                    title={m.actions.sellAiCredits}
+                                    aria-label={m.actions.sellAiCredits}
+                                >
+                                    <Sparkles className="w-4 h-4" />
+                                </button>
+                            </>
+                        )}
                     </div>
                 );
             },
         }),
-    ], [m]);
+    ], [canManage, m]);
 
     return (
         <PageShell>
@@ -159,7 +170,7 @@ export default function AdminTenantsPage() {
                         [{ label: m.title, href: '/admin/tenants' }],
                         m.listTitle,
                     )}
-                    actions={(
+                    actions={canManage ? (
                         <Button
                             onClick={() => setShowCreateModal(true)}
                             icon={<Plus className="w-4 h-4" />}
@@ -167,7 +178,7 @@ export default function AdminTenantsPage() {
                         >
                             {m.createModal.trigger}
                         </Button>
-                    )}
+                    ) : undefined}
                 />
 
                 {error && (

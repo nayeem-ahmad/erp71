@@ -12,6 +12,7 @@ import { CreatePurchaseDto, UpdatePurchaseDto } from './purchase.dto';
 import { PurchasesService } from './purchases.service';
 
 import { PURCHASE_READ, PURCHASE_WRITE } from '../auth/permission-sets';
+import { TrackHistory } from '../record-history/track-history.decorator';
 // `StorePermissionGuard` is class-wide but only the cancel route names a
 // permission; the guard is a no-op for a handler that requires none, so every
 // other route keeps the access it had.
@@ -25,6 +26,7 @@ export class PurchasesController {
     ) {}
 
     @RequireAnyStorePermission(...PURCHASE_WRITE)
+    @TrackHistory('PURCHASE', { action: 'CREATE' })
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreatePurchaseDto) {
         return this.purchasesService.create(tenant.tenantId, tenant.userId, dto);
@@ -53,6 +55,7 @@ export class PurchasesController {
      * account and the books, and refuses what `cancel` refuses.
      */
     @RequireAnyStorePermission(...PURCHASE_WRITE)
+    @TrackHistory('PURCHASE', { action: 'UPDATE' })
     @Patch(':id')
     update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdatePurchaseDto) {
         return this.purchasesService.update(tenant.tenantId, tenant.userId, id, dto);
@@ -62,6 +65,7 @@ export class PurchasesController {
      * Cancel a posted purchase and reverse its impacts. Tenant-admin only: only
      * OWNER and the Tenant Admin role hold `CANCEL_ENTRY`.
      */
+    @TrackHistory('PURCHASE', { action: 'CANCEL' })
     @Post(':id/cancel')
     @RequireStorePermission(StorePermission.CANCEL_ENTRY)
     cancel(

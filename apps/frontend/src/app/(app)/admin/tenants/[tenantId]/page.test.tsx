@@ -31,6 +31,12 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+let mockMe: { is_platform_admin: boolean; platform_role: string | null } = {
+    is_platform_admin: true,
+    platform_role: 'ADMIN',
+};
+jest.mock('@/hooks/use-me', () => ({ useMe: () => ({ data: mockMe }) }));
+
 jest.mock('@/lib/format', () => ({
     formatDate: (d: string) => d,
     formatBDT: (n: number) => `৳${n}`,
@@ -79,6 +85,7 @@ describe('AdminTenantDetailPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         tabParam = null;
+        mockMe = { is_platform_admin: true, platform_role: 'ADMIN' };
         const { api } = require('@/lib/api');
         api.getAdminTenant.mockResolvedValue(mockTenant);
         api.getAdminTenantNavOverride.mockResolvedValue(null);
@@ -129,6 +136,18 @@ describe('AdminTenantDetailPage', () => {
         await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
 
         expect(screen.getByText('Feature access')).toBeInTheDocument();
+    });
+
+    it('shows a support engineer the overview and sign-in only', async () => {
+        mockMe = { is_platform_admin: false, platform_role: 'SUPPORT_ENGINEER' };
+        tabParam = 'danger';
+        render(<AdminTenantDetailPage />);
+        await waitFor(() => screen.getByRole('heading', { name: 'Acme Corp' }));
+
+        expect(screen.getAllByRole('tab')).toHaveLength(1);
+        expect(screen.getByText('Main Store')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /delete tenant/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /impersonate|sign in/i })).toBeInTheDocument();
     });
 
     it('shows no save bar until something is edited', async () => {

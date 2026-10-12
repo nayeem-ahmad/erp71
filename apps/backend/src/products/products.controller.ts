@@ -24,6 +24,7 @@ import { BranchScopeService } from '../database/branch-scope.service';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
 import { CATALOG_READ, PRODUCT_MERGE, PRODUCT_WRITE } from '../auth/permission-sets';
+import { TrackHistory } from '../record-history/track-history.decorator';
 /**
  * Minimal CSV line parser that handles double-quoted fields (including commas
  * inside quotes) and trims surrounding whitespace from unquoted values.
@@ -140,6 +141,7 @@ export class ProductsController {
     }
 
     @RequireAnyStorePermission(...PRODUCT_WRITE)
+    @TrackHistory('PRODUCT', { action: 'CREATE' })
     @Post()
     create(@Tenant() tenant: TenantContext, @Body() dto: CreateProductDto) {
         return this.productsService.create(tenant.tenantId, dto, tenant.userId);
@@ -242,6 +244,7 @@ export class ProductsController {
     }
 
     @RequireAnyStorePermission(...PRODUCT_MERGE)
+    @TrackHistory('PRODUCT', { action: 'MERGE', idParam: 'sourceId' })
     @Post(':sourceId/merge')
     mergeProduct(@Tenant() tenant: TenantContext, @Param('sourceId') sourceId: string, @Body() dto: MergeProductDto) {
         return this.productsService.mergeProduct(tenant.tenantId, sourceId, dto);
@@ -254,6 +257,7 @@ export class ProductsController {
     }
 
     @RequireAnyStorePermission(...PRODUCT_WRITE)
+    @TrackHistory('PRODUCT', { action: 'UPDATE' })
     @Patch(':id')
     update(
         @Tenant() tenant: TenantContext,
@@ -264,6 +268,7 @@ export class ProductsController {
     }
 
     @RequireAnyStorePermission(...PRODUCT_WRITE)
+    @TrackHistory('PRODUCT', { action: 'DELETE' })
     @Delete(':id')
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
         return this.productsService.remove(tenant.tenantId, id);

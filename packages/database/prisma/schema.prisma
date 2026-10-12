@@ -9,6 +9,12 @@ generator client {
   output   = "../../../node_modules/.prisma/client"
 }
 
+/// Platform-team seats below full platform admin. Full admins stay on
+/// `User.is_platform_admin`; this only names the restricted ones.
+enum PlatformRole {
+  SUPPORT_ENGINEER
+}
+
 enum UserRole {
   OWNER
   MANAGER
@@ -386,6 +392,12 @@ model User {
   // application in progress. A password change bumps all three.
   applicant_token_version  Int       @default(0)
   is_platform_admin        Boolean   @default(false)
+  /// A narrower seat in the platform admin console than `is_platform_admin`.
+  /// Null for everyone outside the platform team. Ignored when
+  /// `is_platform_admin` is set: an admin already has every console route, and
+  /// `PlatformAdminGuard` lets this role through only on the routes that
+  /// declare it with `@AllowPlatformRoles`.
+  platform_role            PlatformRole?
   /// Set when an admin provisions the password rather than the owner choosing
   /// it — today only `EmployeeLoginService`, which hands a generated password to
   /// HR to pass on. While it is true the person may sign in but may do nothing
@@ -428,6 +440,7 @@ model User {
   fundTransfersInitiated            FundTransfer[]              @relation("FundTransferInitiator")
   fundTransfersReceived             FundTransfer[]              @relation("FundTransferReceiver")
   auditLogs                         AuditLog[]
+  recordHistory                     RecordHistory[]
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   termsAcceptances                  TermsAcceptance[]
@@ -688,6 +701,51 @@ model AuditLog {
   @@index([tenant_id, entity, created_at])
   @@index([user_id, created_at])
   @@index([entity, entity_id])
+}
+
+/// A before/after snapshot of one business record each time someone creates,
+/// edits, cancels or deletes it — the "what did this invoice say before the
+/// edit" answer `AuditLog` cannot give, since that keeps only the request body.
+///
+/// Written by `RecordHistoryInterceptor` for the routes marked `@TrackHistory`,
+/// and only for entity types switched on in the `record_history` platform
+/// settings group. Read by platform admins only (`GET /admin/record-history`).
+///
+/// Snapshots are denormalised on purpose — names next to ids, items inline —
+/// so a row still reads correctly after the customer is renamed or the
+/// product deleted.
+model RecordHistory {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  /// CUSTOMER | SUPPLIER | PRODUCT | SALE | SALES_RETURN | PURCHASE |
+  /// PURCHASE_RETURN | CUSTOMER_PAYMENT | SUPPLIER_PAYMENT
+  entity_type  String
+  entity_id    String
+  /// What the record was called at the time — invoice number, customer name —
+  /// so a deleted record stays findable by the name people remember.
+  entity_label String?
+  /// CREATE | UPDATE | DELETE | CANCEL | FINALIZE | MERGE | ALLOCATE | UNALLOCATE
+  action       String
+  /// Null on a create.
+  before       Json?
+  /// Null when the row is gone after a hard delete.
+  after        Json?
+  /// Field-level differences between `before` and `after`:
+  /// `[{ path, from, to }]`. Null on a create or a hard delete.
+  changes      Json?
+  change_count Int      @default(0)
+  user_id      String?
+  ip_address   String?
+  user_agent   String?
+  created_at   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, created_at])
+  @@index([entity_type, created_at])
+  @@index([entity_type, entity_id, created_at])
+  @@index([created_at])
 }
 
 /// Execution record for scheduled (cron) jobs — platform-scoped, not
@@ -1088,6 +1146,7 @@ model Tenant {
   chatConversations          ChatConversation[]
   termsAcceptances           TermsAcceptance[]
   activationRequests         ActivationRequest[]
+  recordHistory              RecordHistory[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])

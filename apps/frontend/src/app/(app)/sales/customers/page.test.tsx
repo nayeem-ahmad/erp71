@@ -1,6 +1,7 @@
 'use client';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CustomersPage from './page';
+import { formatBDT } from '@/lib/format';
 import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
@@ -45,6 +46,7 @@ const mockCustomers = [
         customer_group_id: 'grp-1',
         territory_id: 'ter-1',
         credit_limit: '5000.00',
+        due_balance: '1500.00',
         default_discount_pct: '2.50',
         birthday: '1990-04-12T00:00:00.000Z',
         total_spent: '250.00',
@@ -478,18 +480,20 @@ describe('CustomersPage — Customer Management', () => {
         });
     });
 
-    it('hides the Credit column while the Sales Settings switch is off', async () => {
+    it('shows the Due column with the Sales Settings switch off, without credit limits', async () => {
         render(<CustomersPage />);
-        await waitFor(() => screen.getAllByRole('button', { name: /^edit$/i }));
-        expect(screen.queryByRole('columnheader', { name: /^credit$/i })).not.toBeInTheDocument();
+        await waitFor(() => screen.getByText('Alice Smith'));
+        expect(screen.getByRole('columnheader', { name: /^due$/i })).toBeInTheDocument();
+        expect(screen.getByText(formatBDT(1500))).toBeInTheDocument();
+        expect(screen.queryByText(`/ ${formatBDT(5000)}`)).not.toBeInTheDocument();
     });
 
-    it('shows the Credit column once the Sales Settings switch is on', async () => {
+    it('adds the credit limit under the due once the Sales Settings switch is on', async () => {
         const { api } = require('@/lib/api');
         api.getSalesSettings.mockResolvedValue({ show_customer_credit: true });
         render(<CustomersPage />);
         await waitFor(() => {
-            expect(screen.getByRole('columnheader', { name: /^credit$/i })).toBeInTheDocument();
+            expect(screen.getByText(`/ ${formatBDT(5000)}`)).toBeInTheDocument();
         });
     });
 });

@@ -22,6 +22,8 @@ import {
     resolveTenantFeatures,
     SubscriptionPlanCode,
     DEFAULT_PASSWORD_POLICY,
+    PlatformRole,
+    resolvePlatformRole,
     type TenantFeatureOverrides,
 } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
@@ -78,6 +80,19 @@ const ACTIVE_TENANT_FILTER = { deleted_at: null, platform_workspace_key: null } 
  * clock skew between the admin's browser and the server.
  */
 const MAX_LEDGER_DATE_SKEW_MS = 24 * 60 * 60 * 1000;
+
+/** A platform-team member as the staff screen lists them. */
+const PLATFORM_STAFF_SELECT = {
+    id: true,
+    email: true,
+    name: true,
+    mobile: true,
+    mobile_country_code: true,
+    is_platform_admin: true,
+    platform_role: true,
+    email_verified_at: true,
+    created_at: true,
+} satisfies Prisma.UserSelect;
 
 function resolveLedgerDate(occurredAt: string | undefined): Date | undefined {
     if (!occurredAt) return undefined;
@@ -148,6 +163,58 @@ export class AdminTenantsService {
     /** DB flag or PLATFORM_ADMIN_EMAILS whitelist (bootstrap / legacy admins). */
     private isEffectivePlatformAdmin(user: { is_platform_admin?: boolean | null; email?: string | null }) {
         return user.is_platform_admin === true || isPlatformAdminEmail(user.email);
+    }
+
+    /** The console seat a user holds — `ADMIN`, a narrower role, or null. */
+    private effectivePlatformRole(user: {
+        is_platform_admin?: boolean | null;
+        platform_role?: string | null;
+        email?: string | null;
+    }) {
+        return resolvePlatformRole({
+            isPlatformAdmin: this.isEffectivePlatformAdmin(user),
+            platformRole: user.platform_role,
+        });
+    }
+
+    /** Everyone on the platform team: admins plus every narrower role. */
+    private buildPlatformStaffWhere() {
+        return {
+            OR: [
+                ...this.buildPlatformAdminWhere().OR,
+                { platform_role: { not: null } },
+            ],
+        };
+    }
+
+    /**
+     * Refuses a change that would leave the platform without a full admin.
+     * Counts whitelisted emails too, as `PlatformAdminGuard` does.
+     */
+    private async assertAnotherAdminRemains(userId: string, message: string) {
+        const remainingAdmins = await this.db.user.count({
+            where: { AND: [this.buildPlatformAdminWhere(), { id: { not: userId } }] },
+        });
+        if (remainingAdmins === 0) {
+            throw new BadRequestException(message);
+        }
+    }
+
+    /** The two columns that together store a console role. */
+    private platformRoleColumns(role: PlatformRole) {
+        return role === PlatformRole.ADMIN
+            ? { is_platform_admin: true, platform_role: null }
+            : { is_platform_admin: false, platform_role: role };
+    }
+
+    private toPlatformStaffRow(user: Prisma.UserGetPayload<{ select: typeof PLATFORM_STAFF_SELECT }>) {
+        const { email_verified_at, ...rest } = user;
+        return {
+            ...rest,
+            is_platform_admin: this.isEffectivePlatformAdmin(user),
+            platform_role: this.effectivePlatformRole(user),
+            email_verified: !!email_verified_at,
+        };
     }
 
     private buildPlatformAdminWhere() {
@@ -1041,7 +1108,7 @@ export class AdminTenantsService {
         const limit = Math.min(100, Math.max(1, query.limit ?? 20));
         const skip = (page - 1) * limit;
 
-        const adminFilter = this.buildPlatformAdminWhere();
+        const adminFilter = this.buildPlatformStaffWhere();
         const where: any = query.search
             ? {
                 AND: [
@@ -1067,6 +1134,7 @@ export class AdminTenantsService {
                     mobile: true,
                     mobile_country_code: true,
                     is_platform_admin: true,
+                    platform_role: true,
                     email_verified_at: true,
                     created_at: true,
                 },
@@ -1085,6 +1153,7 @@ export class AdminTenantsService {
                 mobile: u.mobile,
                 mobile_country_code: u.mobile_country_code,
                 is_platform_admin: this.isEffectivePlatformAdmin(u),
+                platform_role: this.effectivePlatformRole(u),
                 email_verified: !!u.email_verified_at,
                 created_at: u.created_at,
             })),
@@ -1100,7 +1169,8 @@ export class AdminTenantsService {
 
         await this.db.user.update({
             where: { id: userId },
-            data: { is_platform_admin: true },
+            // A promoted support engineer is an admin now, not both.
+            data: { is_platform_admin: true, platform_role: null },
         });
         // `request.user.isPlatformAdmin` comes from the row `JwtStrategy` caches.
         this.authCache.invalidateUser(userId);
@@ -1164,44 +1234,53 @@ export class AdminTenantsService {
         this.passwordPolicy.assertValid(dto.password, DEFAULT_PASSWORD_POLICY);
 
         const passwordHash = await bcrypt.hash(dto.password, 10);
+        const role = dto.platform_role ?? PlatformRole.ADMIN;
         const user = await this.db.user.create({
             data: {
                 email: dto.email,
                 passwordHash,
                 name: dto.name?.trim() || null,
-                is_platform_admin: true,
+                ...this.platformRoleColumns(role),
                 mobile: mobileFields.mobile,
                 mobile_country_code: mobileFields.mobile_country_code,
             },
-            select: {
-                id: true,
-                email: true,
-                name: true,
-                mobile: true,
-                mobile_country_code: true,
-                is_platform_admin: true,
-                email_verified_at: true,
-                created_at: true,
-            },
+            select: PLATFORM_STAFF_SELECT,
         });
 
         await this.auditService.log('user.platform.create', 'User', { userId: adminUserId }, user.id, {
             email: user.email,
+            platform_role: role,
         });
 
-        return {
-            ...user,
-            email_verified: !!user.email_verified_at,
-        };
+        return this.toPlatformStaffRow(user);
     }
 
     async updatePlatformAdminUser(userId: string, dto: UpdatePlatformAdminUserDto, adminUserId: string) {
         const user = await this.db.user.findUnique({ where: { id: userId } });
-        if (!user || !this.isEffectivePlatformAdmin(user)) {
+        const currentRole = user ? this.effectivePlatformRole(user) : null;
+        if (!user || !currentRole) {
             throw new NotFoundException('Platform admin user not found');
         }
 
         const data: Record<string, unknown> = {};
+        const nextRole = dto.platform_role && dto.platform_role !== currentRole ? dto.platform_role : null;
+        if (nextRole) {
+            if (userId === adminUserId) {
+                throw new BadRequestException('You cannot change your own platform role');
+            }
+            if (currentRole === PlatformRole.ADMIN) {
+                if (isPlatformAdminEmail(user.email)) {
+                    throw new BadRequestException(
+                        'This admin is set by PLATFORM_ADMIN_EMAILS and cannot be given another role here',
+                    );
+                }
+                await this.assertAnotherAdminRemains(
+                    userId,
+                    'Cannot change the role of the last platform admin — promote another user first',
+                );
+            }
+            Object.assign(data, this.platformRoleColumns(nextRole));
+        }
         if (dto.name !== undefined) data.name = dto.name?.trim() || null;
         if (dto.email !== undefined && dto.email !== user.email) {
             const taken = await this.db.user.findUnique({ where: { email: dto.email } });
@@ -1228,29 +1307,19 @@ export class AdminTenantsService {
         const updated = await this.db.user.update({
             where: { id: userId },
             data,
-            select: {
-                id: true,
-                email: true,
-                name: true,
-                mobile: true,
-                mobile_country_code: true,
-                is_platform_admin: true,
-                email_verified_at: true,
-                created_at: true,
-            },
+            select: PLATFORM_STAFF_SELECT,
         });
-        // The email may have changed, and `request.user.email` is read off the
-        // row `JwtStrategy` caches.
+        // The email or role may have changed, and `request.user.email` and the
+        // role flags are read off the row `JwtStrategy` caches — without this a
+        // former admin keeps every console route until the cached row expires.
         this.authCache.invalidateUser(userId);
 
         await this.auditService.log('user.platform.update', 'User', { userId: adminUserId }, userId, {
             email: updated.email,
+            ...(nextRole ? { platform_role_from: currentRole, platform_role_to: nextRole } : {}),
         });
 
-        return {
-            ...updated,
-            email_verified: !!updated.email_verified_at,
-        };
+        return this.toPlatformStaffRow(updated);
     }
 
     async deletePlatformAdminUser(userId: string, adminUserId: string) {
@@ -1269,15 +1338,13 @@ export class AdminTenantsService {
                 },
             },
         });
-        if (!user || !this.isEffectivePlatformAdmin(user)) {
+        const role = user ? this.effectivePlatformRole(user) : null;
+        if (!user || !role) {
             throw new NotFoundException('Platform admin user not found');
         }
 
-        const remainingAdmins = await this.db.user.count({
-            where: { AND: [this.buildPlatformAdminWhere(), { id: { not: userId } }] },
-        });
-        if (remainingAdmins === 0) {
-            throw new BadRequestException('Cannot delete the last platform admin');
+        if (role === PlatformRole.ADMIN) {
+            await this.assertAnotherAdminRemains(userId, 'Cannot delete the last platform admin');
         }
 
         if (user._count.tenantsOwned > 0 || user._count.tenantMembers > 0) {
@@ -1303,7 +1370,7 @@ export class AdminTenantsService {
         adminUserId: string,
     ) {
         const user = await this.db.user.findUnique({ where: { id: userId } });
-        if (!user || !this.isEffectivePlatformAdmin(user)) {
+        if (!user || !this.effectivePlatformRole(user)) {
             throw new NotFoundException('Platform admin user not found');
         }
 
@@ -1326,7 +1393,7 @@ export class AdminTenantsService {
 
     async sendPlatformAdminUserResetEmail(userId: string, adminUserId: string) {
         const user = await this.db.user.findUnique({ where: { id: userId } });
-        if (!user || !this.isEffectivePlatformAdmin(user)) {
+        if (!user || !this.effectivePlatformRole(user)) {
             throw new NotFoundException('Platform admin user not found');
         }
 

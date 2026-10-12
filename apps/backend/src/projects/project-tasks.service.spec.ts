@@ -1374,6 +1374,13 @@ describe('ProjectTasksService', () => {
             });
         });
 
+        it('sends the assignee\'s photo, which the sprint cards draw in place of initials', async () => {
+            await service.list(OWNER, {} as never);
+
+            const [{ include }] = db.projectTask.findMany.mock.calls.at(-1);
+            expect(include.assignee.select).toMatchObject({ avatar_url: true });
+        });
+
         it('filters on priority', async () => {
             await service.list(OWNER, { priority: 'URGENT' } as never);
 

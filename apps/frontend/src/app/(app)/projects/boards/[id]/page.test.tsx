@@ -199,6 +199,45 @@ describe('BoardPage', () => {
         expect(within(card('Ship docs')).getByText('BET')).toBeInTheDocument();
     });
 
+    it('shows the assignee’s photo on a card, and their initials when there is none', async () => {
+        (api.getBoard as jest.Mock).mockResolvedValue({
+            id: 'b1',
+            name: 'Release 4',
+            columns: [
+                {
+                    id: 'c1',
+                    name: 'To Do',
+                    category: 'TODO',
+                    wip_limit: null,
+                    tasks: [
+                        {
+                            ...task('k1', 'Fix login', { id: 'p1', code: 'ALP' }),
+                            assignee: {
+                                id: 'u-rafi',
+                                name: 'Rafi Hasan',
+                                email: 'rafi@erp71.com',
+                                avatar_url: 'https://cdn.example/rafi.jpg',
+                            },
+                        },
+                        {
+                            ...task('k2', 'Ship docs', { id: 'p1', code: 'ALP' }),
+                            assignee: { id: 'u-mim', name: 'Mim Akter', email: 'mim@erp71.com', avatar_url: null },
+                        },
+                    ],
+                },
+            ],
+            unsorted: [],
+        });
+        render(<BoardPage />);
+        await screen.findByText('Fix login');
+        const card = (title: string) => screen.getByRole('button', { name: `Open task: ${title}` });
+        expect(within(card('Fix login')).getByRole('img', { name: 'Rafi Hasan' })).toHaveAttribute(
+            'src',
+            'https://cdn.example/rafi.jpg',
+        );
+        expect(within(card('Ship docs')).getByText('MA')).toBeInTheDocument();
+    });
+
     it('does not render the Unsorted column when nothing is unbound', async () => {
         render(<BoardPage />);
         await screen.findByText('Fix login');
