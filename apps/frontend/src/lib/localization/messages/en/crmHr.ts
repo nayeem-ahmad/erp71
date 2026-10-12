@@ -215,6 +215,37 @@ export const crmHrMessages = {
                 done: 'Template deleted.',
                 failed: 'Could not delete the template.',
             },
+            examples: {
+                action: 'Start from examples',
+                hint: 'Adds five common messages in your language, to edit or delete like any other template.',
+                added: 'Example templates added.',
+                failed: 'Could not add the examples.',
+                items: {
+                    paymentReminder: {
+                        name: 'Payment reminder',
+                        subject: 'Remind {{name}} about the outstanding payment',
+                        body: 'Dear {{name}}, this is a friendly reminder that your payment to {{business}} is still outstanding. Please let us know when we can expect it. Thank you. — {{user}}',
+                    },
+                    thankYou: {
+                        name: 'Thank you for your purchase',
+                        body: 'Dear {{name}}, thank you for shopping with {{business}}. We look forward to serving you again. — {{user}}',
+                    },
+                    visitFollowUp: {
+                        name: 'Follow-up after a visit',
+                        subject: 'Follow up with {{name}} after the visit',
+                        body: 'Dear {{name}}, thank you for your time today. If you have any questions about what we discussed, please get in touch. — {{user}}, {{business}}',
+                    },
+                    missedCall: {
+                        name: 'Missed call',
+                        body: 'Dear {{name}}, I tried to call you on {{date}} but could not reach you. Please call back when it suits you. — {{user}}, {{business}}',
+                    },
+                    quoteFollowUp: {
+                        name: 'Quotation follow-up',
+                        subject: 'Follow up on the quotation sent to {{name}}',
+                        body: 'Dear {{name}}, have you had a chance to look at our quotation? I am happy to answer any questions. — {{user}}, {{business}}',
+                    },
+                },
+            },
         },
         leadTaxonomy: {
             addSource: 'Add source',

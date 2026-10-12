@@ -56,6 +56,14 @@ export function canChooseAccountingDashboard(
     return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'premiumAccounting');
 }
 
+/** Leads, activities and everything that feeds them — message templates included. */
+export function canUsePremiumCrm(
+    planCode: string | null | undefined,
+    featuresJson: Record<string, unknown> | null | undefined,
+) {
+    return hasPlanEntitlement(resolveTenantPlanFeatures(planCode, featuresJson), 'premiumCrm');
+}
+
 /**
  * True when the plan or an admin could put this tenant on the CRM dashboard.
  * The pipeline panels all read `/crm/dashboard/*`, which is `premiumCrm`-gated,

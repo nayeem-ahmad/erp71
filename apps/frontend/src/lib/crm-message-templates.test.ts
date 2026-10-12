@@ -1,4 +1,10 @@
-import { fillTemplate, TEMPLATE_TOKENS, unknownTemplateTokens } from './crm-message-templates';
+import { messageCatalog } from '@/test-utils/message-catalog';
+import {
+    EXAMPLE_TEMPLATES,
+    fillTemplate,
+    TEMPLATE_TOKENS,
+    unknownTemplateTokens,
+} from './crm-message-templates';
 
 describe('fillTemplate', () => {
     const vars = {
@@ -76,4 +82,29 @@ describe('unknownTemplateTokens', () => {
     it('leaves single braces and plain text alone', () => {
         expect(unknownTemplateTokens('Price {500} — call us.')).toEqual([]);
     });
+});
+
+/**
+ * The examples are saved in whatever language the admin is using, and a
+ * translated `{{নাম}}` would go out to customers exactly as typed. So every
+ * language's copy is held to the same rule the Setup warning applies.
+ */
+describe('example templates', () => {
+    for (const [locale, messages] of Object.entries(messageCatalog)) {
+        it(`${locale}: uses only placeholders that fill, and greets by name`, () => {
+            const items = messages.crm.messageTemplates.examples.items as Record<
+                string,
+                { name: string; body: string; subject?: string }
+            >;
+            for (const { key, usage } of EXAMPLE_TEMPLATES) {
+                const item = items[key];
+                expect(item.name.trim()).not.toBe('');
+                expect(unknownTemplateTokens(`${item.name} ${item.subject ?? ''} ${item.body}`)).toEqual([]);
+                expect(item.body).toContain('{{name}}');
+                // A subject only fills the Schedule form; the log form has no such field.
+                if (usage === 'LOG') expect(item.subject).toBeUndefined();
+                else expect(item.subject?.trim()).toBeTruthy();
+            }
+        });
+    }
 });

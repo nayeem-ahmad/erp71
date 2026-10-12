@@ -54,6 +54,7 @@ jest.mock('@/lib/hooks/useQuotationPrinting', () => ({
 }));
 
 jest.mock('@/lib/format', () => ({
+    ...jest.requireActual('@/lib/format'),
     formatBDT: (v: number) => `BDT ${v}`,
     formatDate: (v: string) => `DATE:${v}`,
 }));
@@ -135,6 +136,68 @@ describe('QuoteDetailsPage', () => {
         });
         expect(screen.getByText('Test Customer')).toBeInTheDocument();
         expect(screen.getByText('Product Alpha')).toBeInTheDocument();
+    });
+
+    it('shows the quotation on the entry screen layout, read-only', async () => {
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByText('Product Alpha'));
+
+        // Meta strip, as on the entry screen.
+        expect(screen.getByText('Quotation #')).toBeInTheDocument();
+        expect(screen.getByText('DATE:2026-12-31T00:00:00.000Z')).toBeInTheDocument();
+        // Nothing to type into: no product search, no editable price or quantity.
+        expect(screen.queryByPlaceholderText(/search/i)).not.toBeInTheDocument();
+        expect(screen.queryAllByRole('spinbutton')).toHaveLength(0);
+        // The stored total, in the totals panel.
+        expect(screen.getAllByText('৳1500.00').some((el) => el.className.includes('text-blue-600'))).toBe(true);
+    });
+
+    it('labels a proforma as such and shows its filled-in terms', async () => {
+        const api = getApi();
+        api.getQuotation.mockResolvedValue({
+            ...mockQuote,
+            doc_kind: 'PROFORMA',
+            currency: 'USD',
+            incoterm: 'FOB',
+            port_of_loading: '',
+        });
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByText('Proforma #'));
+        expect(screen.getByText(enMessages.quotes.detail.terms.heading)).toBeInTheDocument();
+        expect(screen.getByText('FOB')).toBeInTheDocument();
+        expect(screen.queryByText(enMessages.quotes.detail.terms.portOfLoading)).not.toBeInTheDocument();
+    });
+
+    it('shows VAT added on top as part of the total', async () => {
+        const api = getApi();
+        api.getQuotation.mockResolvedValue({ ...mockQuote, vat_amount: '225', total_amount: '1725' });
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByText('Product Alpha'));
+        expect(screen.getByText('৳225.00')).toBeInTheDocument();
+        expect(screen.getByText('৳1725.00')).toBeInTheDocument();
+    });
+
+    it('does not offer Delete on a converted quotation', async () => {
+        const api = getApi();
+        api.getQuotation.mockResolvedValue({ ...mockQuote, status: 'CONVERTED' });
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByText('Product Alpha'));
+        expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+    });
+
+    it('toasts instead of alerting when a status change fails', async () => {
+        const { toast } = require('@/lib/toast');
+        const toastErrorSpy = jest.spyOn(toast, 'error').mockImplementation(() => '');
+        const api = getApi();
+        api.updateQuotationStatus.mockRejectedValue(new Error('Nope'));
+
+        render(<QuoteDetailsPage />);
+        await waitFor(() => screen.getByRole('button', { name: enMessages.quotes.detail.markSent }));
+        fireEvent.click(screen.getByRole('button', { name: enMessages.quotes.detail.markSent }));
+
+        await waitFor(() => expect(toastErrorSpy).toHaveBeenCalled());
+        expect(window.alert).not.toHaveBeenCalled();
+        toastErrorSpy.mockRestore();
     });
 
     it('shows "Quote not found" when API returns null', async () => {

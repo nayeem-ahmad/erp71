@@ -14,6 +14,8 @@ jest.mock('@/lib/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() 
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { api } = require('@/lib/api');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { toast } = require('@/lib/toast');
 
 const CHANNELS = [{ id: 'ch-wa', code: 'WHATSAPP', name: 'WhatsApp', sort_order: 1, is_system: true, is_active: true }];
 const PURPOSES = [{ id: 'p-col', code: 'COLLECTION', name: 'Collection', sort_order: 1, is_system: true, is_active: true }];
@@ -181,6 +183,84 @@ describe('CrmMessageTemplatesPanel', () => {
         ).toBeInTheDocument();
         // The template that only uses known tokens carries no warning.
         expect(screen.getAllByText(/Not a placeholder/)).toHaveLength(1);
+    });
+
+    describe('starting from examples', () => {
+        beforeEach(() => {
+            api.getCrmMessageTemplates.mockResolvedValue([]);
+        });
+
+        it('is offered on an empty list to someone who manages templates', async () => {
+            render(<CrmMessageTemplatesPanel canManage />);
+
+            expect(await screen.findByRole('button', { name: 'Start from examples' })).toBeInTheDocument();
+        });
+
+        it('is not offered to someone who cannot manage templates', async () => {
+            render(<CrmMessageTemplatesPanel canManage={false} />);
+
+            await screen.findByText('No templates yet.');
+            expect(screen.queryByRole('button', { name: 'Start from examples' })).not.toBeInTheDocument();
+        });
+
+        /** Once a tenant has written anything, examples would only be clutter beside it. */
+        it('is not offered once the tenant has a template', async () => {
+            api.getCrmMessageTemplates.mockResolvedValue([REMINDER]);
+            render(<CrmMessageTemplatesPanel canManage />);
+
+            await screen.findByText('Payment reminder');
+            expect(screen.queryByRole('button', { name: 'Start from examples' })).not.toBeInTheDocument();
+        });
+
+        it('adds the five examples in order, on every channel and with no purpose', async () => {
+            render(<CrmMessageTemplatesPanel canManage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'Start from examples' }));
+
+            await waitFor(() => expect(api.createCrmMessageTemplate).toHaveBeenCalledTimes(5));
+            const payloads = api.createCrmMessageTemplate.mock.calls.map(([p]: [Record<string, unknown>]) => p);
+            expect(payloads.map((p: Record<string, unknown>) => [p.name, p.usage])).toEqual([
+                ['Payment reminder', 'BOTH'],
+                ['Thank you for your purchase', 'LOG'],
+                ['Follow-up after a visit', 'BOTH'],
+                ['Missed call', 'LOG'],
+                ['Quotation follow-up', 'SCHEDULE'],
+            ]);
+            for (const p of payloads) {
+                expect(p).toMatchObject({ channel_id: null, purpose_id: null });
+                expect(p.body).toContain('{{name}}');
+            }
+            // The log form has no subject field, so a log-only example carries none.
+            expect(payloads[1].subject).toBe('');
+            expect(payloads[0].subject).not.toBe('');
+
+            await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Example templates added.'));
+            expect(api.getCrmMessageTemplates).toHaveBeenCalledTimes(2);
+        });
+
+        /** Someone else may have added one with the same name in the meantime; that one stays. */
+        it('skips an example whose name is already taken', async () => {
+            api.createCrmMessageTemplate
+                .mockResolvedValueOnce({ id: 'a' })
+                .mockRejectedValueOnce(new Error('Message template "Thank you for your purchase" already exists.'));
+            render(<CrmMessageTemplatesPanel canManage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'Start from examples' }));
+
+            await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Example templates added.'));
+            expect(api.createCrmMessageTemplate).toHaveBeenCalledTimes(5);
+            expect(toast.error).not.toHaveBeenCalled();
+        });
+
+        it('stops and says so when an example cannot be saved', async () => {
+            api.createCrmMessageTemplate.mockRejectedValue(new Error('Network down'));
+            render(<CrmMessageTemplatesPanel canManage />);
+            fireEvent.click(await screen.findByRole('button', { name: 'Start from examples' }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not add the examples.'));
+            expect(api.createCrmMessageTemplate).toHaveBeenCalledTimes(1);
+            expect(toast.success).not.toHaveBeenCalled();
+            // Whatever did land before the failure is shown.
+            await waitFor(() => expect(api.getCrmMessageTemplates).toHaveBeenCalledTimes(2));
+        });
     });
 
     it('confirms before deleting one', async () => {

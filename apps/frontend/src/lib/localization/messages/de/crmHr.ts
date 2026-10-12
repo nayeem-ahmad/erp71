@@ -211,6 +211,37 @@ export const crmHrMessages = {
                 done: "Vorlage gelöscht.",
                 failed: "Vorlage konnte nicht gelöscht werden.",
             },
+            examples: {
+                action: "Mit Beispielen beginnen",
+                hint: "Fügt fünf gängige Nachrichten in Ihrer Sprache hinzu, die Sie wie jede andere Vorlage bearbeiten oder löschen können.",
+                added: "Beispielvorlagen hinzugefügt.",
+                failed: "Die Beispiele konnten nicht hinzugefügt werden.",
+                items: {
+                    paymentReminder: {
+                        name: "Zahlungserinnerung",
+                        subject: "{{name}} an die offene Zahlung erinnern",
+                        body: "Guten Tag {{name}}, wir möchten Sie freundlich daran erinnern, dass Ihre Zahlung an {{business}} noch offen ist. Bitte teilen Sie uns mit, wann wir damit rechnen können. Vielen Dank. — {{user}}",
+                    },
+                    thankYou: {
+                        name: "Danke für Ihren Einkauf",
+                        body: "Guten Tag {{name}}, vielen Dank für Ihren Einkauf bei {{business}}. Wir freuen uns darauf, Sie wieder zu bedienen. — {{user}}",
+                    },
+                    visitFollowUp: {
+                        name: "Nachfassen nach einem Besuch",
+                        subject: "Bei {{name}} nach dem Besuch nachfassen",
+                        body: "Guten Tag {{name}}, vielen Dank für Ihre Zeit heute. Wenn Sie Fragen zu unserem Gespräch haben, melden Sie sich gern. — {{user}}, {{business}}",
+                    },
+                    missedCall: {
+                        name: "Verpasster Anruf",
+                        body: "Guten Tag {{name}}, ich habe am {{date}} versucht, Sie anzurufen, Sie aber nicht erreicht. Bitte rufen Sie zurück, wann es Ihnen passt. — {{user}}, {{business}}",
+                    },
+                    quoteFollowUp: {
+                        name: "Nachfassen zum Angebot",
+                        subject: "Bei {{name}} zum gesendeten Angebot nachfassen",
+                        body: "Guten Tag {{name}}, hatten Sie schon Gelegenheit, sich unser Angebot anzusehen? Ich beantworte gern Ihre Fragen. — {{user}}, {{business}}",
+                    },
+                },
+            },
         },
         leadTaxonomy: {
             addSource: "Quelle hinzufügen",
