@@ -50,7 +50,8 @@ next-env.d.ts
 # Project specific
 .bmad-core/
 .gemini/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 
 /src/generated/prisma
 .getaibd/
