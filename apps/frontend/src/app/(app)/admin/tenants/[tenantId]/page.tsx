@@ -24,6 +24,7 @@ import DangerZonePanel, {
     type ClearDataBranch,
     type ClearDataMode,
 } from '@/components/admin/tenants/panels/DangerZonePanel';
+import BackupRestorePanel from '@/components/admin/tenants/panels/BackupRestorePanel';
 import ClearDataGroups, { allGroups, keptGroups, type DataGroup } from '@/components/data-clear/ClearDataGroups';
 import type { DiscountType, SecondaryLocale } from '@/components/admin/tenants/types';
 
@@ -585,36 +586,42 @@ export default function AdminTenantDetailPage() {
             )}
 
             {activeTab === 'danger' && (
-                <DangerZonePanel
-                    tenant={tenant}
-                    demoBatch={detail.demoBatch}
-                    isStartingDemo={isStartingDemo}
-                    onStartDemoData={() => {
-                        const completedLoads = detail.demoBatch
-                            ? (detail.demoBatch.status === 'COMPLETED'
-                                ? detail.demoBatch.batch_number
-                                : detail.demoBatch.batch_number - 1)
-                            : 0;
-                        setPending({
-                            kind: 'demoData',
-                            prompt: completedLoads > 0
-                                ? formatMessage(dd.confirmAppend, {
-                                    name: tenant.name,
-                                    count: String(completedLoads),
-                                })
-                                : formatMessage(dd.confirmFirst, { name: tenant.name }),
-                        });
-                    }}
-                    isSuspending={isSuspending}
-                    onSuspend={() => setPending({ kind: 'suspend' })}
-                    clearing={clearing}
-                    onClearData={(mode, branch) => {
-                        setClearGroups(allGroups(branch ? 'branch' : 'tenant'));
-                        setPending({ kind: 'clearData', mode, branch });
-                    }}
-                    isDeleting={isDeleting}
-                    onDelete={() => setPending({ kind: 'delete' })}
-                />
+                <div className="space-y-4">
+                    <BackupRestorePanel
+                        tenant={tenant}
+                        onRestored={() => void detail.load(tenant.id, { quiet: true })}
+                    />
+                    <DangerZonePanel
+                        tenant={tenant}
+                        demoBatch={detail.demoBatch}
+                        isStartingDemo={isStartingDemo}
+                        onStartDemoData={() => {
+                            const completedLoads = detail.demoBatch
+                                ? (detail.demoBatch.status === 'COMPLETED'
+                                    ? detail.demoBatch.batch_number
+                                    : detail.demoBatch.batch_number - 1)
+                                : 0;
+                            setPending({
+                                kind: 'demoData',
+                                prompt: completedLoads > 0
+                                    ? formatMessage(dd.confirmAppend, {
+                                        name: tenant.name,
+                                        count: String(completedLoads),
+                                    })
+                                    : formatMessage(dd.confirmFirst, { name: tenant.name }),
+                            });
+                        }}
+                        isSuspending={isSuspending}
+                        onSuspend={() => setPending({ kind: 'suspend' })}
+                        clearing={clearing}
+                        onClearData={(mode, branch) => {
+                            setClearGroups(allGroups(branch ? 'branch' : 'tenant'));
+                            setPending({ kind: 'clearData', mode, branch });
+                        }}
+                        isDeleting={isDeleting}
+                        onDelete={() => setPending({ kind: 'delete' })}
+                    />
+                </div>
             )}
 
             {detail.dirtyCount > 0 && (

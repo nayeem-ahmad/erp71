@@ -1341,6 +1341,18 @@ export interface PaymentMethodAccount {
     category: string;
 }
 
+/** What `POST /admin/tenants/:id/restore` reports back. */
+export type AdminTenantRestoreSummary = {
+    backup_created_at: string;
+    tables: number;
+    rows_deleted: number;
+    rows_restored: number;
+    rows_skipped: Record<string, number>;
+    references_cleared: Record<string, number>;
+    unknown_tables: string[];
+    unknown_columns: string[];
+};
+
 export const api = {
     /**
      * Every product as a flat array — for pickers, POS and id→product maps.
@@ -3979,6 +3991,19 @@ export const api = {
             body: JSON.stringify({ reason: 'Cleared by platform admin' }),
             headers: { 'Content-Type': 'application/json' },
         });
+    },
+    /** The whole workspace as one gzipped JSON file (`TenantBackupService`). */
+    downloadAdminTenantBackup: (tenantId: string) => fetchBlobWithAuth(`/admin/tenants/${tenantId}/backup`),
+    /**
+     * Replace the workspace's data with a backup of the same workspace. `confirm`
+     * is the workspace name as typed by the admin; the server checks it again.
+     */
+    restoreAdminTenantBackup: (tenantId: string, file: File, confirm: string): Promise<AdminTenantRestoreSummary> => {
+        const body = new FormData();
+        body.append('file', file);
+        body.append('confirm', confirm);
+        body.append('reason', 'Restored by platform admin');
+        return fetchWithAuth(`/admin/tenants/${tenantId}/restore`, { method: 'POST', body });
     },
     createAdminTenant: (data: {
         ownerMode: 'new' | 'existing';
