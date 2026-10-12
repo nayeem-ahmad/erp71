@@ -396,7 +396,14 @@ export class InventoryReportsService {
                 SUM(quantity_delta::float8)                     AS quantity_total
             FROM "InventoryMovement"
             WHERE tenant_id = ${tenantId}
-              AND movement_type IN ('PURCHASE', 'PURCHASE_RECEIPT', 'PURCHASE_RETURN')
+              AND movement_type IN (
+                  'PURCHASE', 'PURCHASE_RECEIPT', 'PURCHASE_RETURN',
+                  -- An edited or cancelled bill's reversal has to net its
+                  -- receipt out, or the goods are counted at both costs.
+                  'PURCHASE_EDIT', 'PURCHASE_EDIT_UNCOSTED',
+                  'PURCHASE_EDIT_REVERSAL', 'PURCHASE_EDIT_REVERSAL_UNCOSTED',
+                  'PURCHASE_CANCELLED', 'PURCHASE_CANCELLED_UNCOSTED'
+              )
               AND unit_cost IS NOT NULL
               ${warehouseFilter}
               ${storeFilter}

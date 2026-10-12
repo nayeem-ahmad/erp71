@@ -59,10 +59,12 @@ export class CreatePurchasePaymentDto extends PaymentInstrumentDto {
     accountId?: string;
 }
 
-export class CreatePurchaseDto {
-    @IsString()
-    storeId: string;
-
+/**
+ * Everything a purchase bill says, shared by recording one and editing one. An
+ * edit sends the whole bill again — lines, charges, supplier and tenders — and
+ * the service works out what changed, the way the entry screen holds it.
+ */
+export class PurchaseBillDto {
     @IsOptional()
     @IsString()
     warehouseId?: string;
@@ -115,3 +117,15 @@ export class CreatePurchaseDto {
     @Type(() => CreatePurchasePaymentDto)
     payments?: CreatePurchasePaymentDto[];
 }
+
+export class CreatePurchaseDto extends PurchaseBillDto {
+    @IsString()
+    storeId: string;
+}
+
+/**
+ * A recorded purchase, corrected. No `storeId`: a bill stays on the branch it
+ * was recorded at. Leaving `supplierId` out takes the bill off any supplier's
+ * account, exactly as recording it without one would have.
+ */
+export class UpdatePurchaseDto extends PurchaseBillDto {}

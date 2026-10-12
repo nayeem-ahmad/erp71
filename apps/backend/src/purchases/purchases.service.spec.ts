@@ -47,6 +47,7 @@ function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn(),
     voidAutoPostedVoucher: jest.fn(),
+    postingIdempotencyKey: jest.requireActual('../accounting/posting.utils').postingIdempotencyKey,
 }));
 
 describe('PurchasesService', () => {
@@ -72,11 +73,18 @@ describe('PurchasesService', () => {
             },
             supplierCreditTransaction: {
                 create: jest.fn(),
+                update: jest.fn(),
+                delete: jest.fn(),
                 findFirst: jest.fn().mockResolvedValue(null),
             },
             supplierPaymentAllocation: {
                 create: jest.fn(),
+                update: jest.fn(),
                 delete: jest.fn(),
+            },
+            postingEvent: {
+                // No voucher on file: an edit re-posts on the bill's own date.
+                findUnique: jest.fn().mockResolvedValue(null),
             },
             paymentMethod: {
                 // No tenant-configured GL account for the method, so the
@@ -91,9 +99,11 @@ describe('PurchasesService', () => {
             },
             purchaseItem: {
                 create: jest.fn(),
+                deleteMany: jest.fn(),
             },
             purchasePayment: {
                 createMany: jest.fn(),
+                deleteMany: jest.fn(),
             },
             inventoryMovement: {
                 findMany: jest.fn().mockResolvedValue([]),
@@ -863,6 +873,389 @@ describe('PurchasesService', () => {
             await expect(
                 service.cancel('tenant-1', 'user-1', 'nope', 'Recorded in error'),
             ).rejects.toBeInstanceOf(NotFoundException);
+        });
+    });
+
+    describe('update', () => {
+        const recorded = (overrides: Record<string, unknown> = {}) => ({
+            id: 'purchase-1',
+            tenant_id: 'tenant-1',
+            store_id: 'store-1',
+            warehouse_id: 'wh-1',
+            purchase_number: 'PUR-00001',
+            supplier_id: 'sup-1',
+            subtotal_amount: 1400,
+            total_amount: 1400,
+            paid_amount: 0,
+            status: 'RECORDED',
+            notes: null,
+            created_at: new Date('2026-10-01T04:00:00Z'),
+            items: [{ id: 'line-1', jobCosts: [] }],
+            returns: [],
+            payments: [],
+            paymentAllocations: [],
+            importShipment: null,
+            ...overrides,
+        });
+        // 10 × 140 into wh-1, as `create` would have received it.
+        const receipt = { product_id: 'prod-1', warehouse_id: 'wh-1', quantity_delta: 10, unit_cost: 140, movement_type: 'PURCHASE_RECEIPT' };
+        const edit = (overrides: Record<string, unknown> = {}) => ({
+            supplierId: 'sup-1',
+            items: [{ productId: 'prod-1', quantity: 10, unitCost: 140 }],
+            ...overrides,
+        });
+        const entryPayment = (amount: number, transactionAmount = amount) => ({
+            id: 'alloc-1',
+            amount,
+            transaction: {
+                id: 'txn-1',
+                type: 'PAYMENT',
+                amount: transactionAmount,
+                payment_number: 'SPY-00003',
+                reference_type: 'PURCHASE',
+                reference_id: 'purchase-1',
+            },
+        });
+
+        beforeEach(() => {
+            tx.supplierCreditTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'txn-new', ...data }));
+            db.product.findMany.mockResolvedValue([{ id: 'prod-1', type: 'STANDARD' }]);
+            tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Rahim Traders', due_balance: 1400, store_id: 'store-1' });
+            tx.inventoryMovement.findMany.mockResolvedValue([receipt]);
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1' });
+            tx.purchase.findFirst.mockResolvedValueOnce(recorded()).mockResolvedValue({ id: 'purchase-1', items: [] });
+        });
+
+        it('receives the corrected lines, then takes the old receipt back out at the cost it came in at', async () => {
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                items: [{ productId: 'prod-1', quantity: 12, unitCost: 140 }],
+            }));
+
+            const movements = (applyInventoryMovement as jest.Mock).mock.calls.map(([, params]) => params);
+            // New goods first, so a bill whose stock has partly sold does not
+            // dip below zero halfway through its own edit.
+            expect(movements).toEqual([
+                expect.objectContaining({ productId: 'prod-1', warehouseId: 'wh-1', quantityDelta: 12, movementType: 'PURCHASE_EDIT', unitCost: 140, referenceId: 'purchase-1' }),
+                expect.objectContaining({ productId: 'prod-1', warehouseId: 'wh-1', quantityDelta: -10, movementType: 'PURCHASE_EDIT_REVERSAL', unitCost: 140, referenceId: 'purchase-1' }),
+            ]);
+            expect(costBehaviourFor('PURCHASE_EDIT')).toBe('REVALUE');
+            expect(costBehaviourFor('PURCHASE_EDIT_REVERSAL')).toBe('REVERSE_RECEIPT');
+            expect(tx.purchaseItem.deleteMany).toHaveBeenCalledWith({ where: { purchase_id: 'purchase-1' } });
+            expect(tx.purchaseItem.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ purchase_id: 'purchase-1', product_id: 'prod-1', quantity: 12, unit_cost: 140, line_total: 1680 }),
+            });
+        });
+
+        it('puts the difference on the supplier\'s account as one line, not a rewritten bill', async () => {
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                items: [{ productId: 'prod-1', quantity: 12, unitCost: 140 }],
+            }));
+
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledTimes(1);
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    supplier_id: 'sup-1',
+                    type: 'ADJUSTMENT',
+                    amount: 280,
+                    balance_after: 1680,
+                    reference_type: 'PURCHASE',
+                    reference_id: 'purchase-1',
+                    notes: 'Purchase PUR-00001 edited: 1400.00 → 1680.00',
+                }),
+            });
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: 1680 } });
+            expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                where: { id: 'purchase-1' },
+                data: expect.objectContaining({ subtotal_amount: 1680, total_amount: 1680, paid_amount: 0, payment_status: 'UNPAID' }),
+            }));
+        });
+
+        it('re-posts the bill voucher on the date it was first posted', async () => {
+            const postedOn = new Date('2026-09-30T10:00:00Z');
+            tx.postingEvent.findUnique.mockResolvedValue({ voucher: { date: postedOn } });
+
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                items: [{ productId: 'prod-1', quantity: 12, unitCost: 140 }],
+            }));
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'purchase', 'purchase-1');
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+                eventType: 'purchase',
+                sourceId: 'purchase-1',
+                amount: 1680,
+                date: postedOn,
+                partyId: 'sup-1',
+            }));
+            // Nothing was paid before or after, so there is no cash leg to touch.
+            expect(voidAutoPostedVoucher).not.toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
+        });
+
+        it('touches neither stock, nor the account, nor the books when only the note changed', async () => {
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({ notes: 'Delivered late' }));
+
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+            expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ notes: 'Delivered late' }),
+            }));
+        });
+
+        it('reverses only what is still live after an earlier edit', async () => {
+            // Received 10, edited to 12: the first receipt has already been
+            // taken back out, so only the 12 are still on the shelf.
+            tx.inventoryMovement.findMany.mockResolvedValue([
+                receipt,
+                { product_id: 'prod-1', warehouse_id: 'wh-1', quantity_delta: 12, unit_cost: 140, movement_type: 'PURCHASE_EDIT' },
+                { product_id: 'prod-1', warehouse_id: 'wh-1', quantity_delta: -10, unit_cost: 140, movement_type: 'PURCHASE_EDIT_REVERSAL' },
+            ]);
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst.mockResolvedValueOnce(recorded({ total_amount: 1680, subtotal_amount: 1680 })).mockResolvedValue({ id: 'purchase-1', items: [] });
+
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                items: [{ productId: 'prod-1', quantity: 11, unitCost: 140 }],
+            }));
+
+            expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({ quantityDelta: -12, movementType: 'PURCHASE_EDIT_REVERSAL' }));
+            expect(applyInventoryMovement).not.toHaveBeenCalledWith(tx, expect.objectContaining({ quantityDelta: -10 }));
+        });
+
+        it('keeps an imported bill\'s stock out of the average, as it was received', async () => {
+            tx.inventoryMovement.findMany.mockResolvedValue([{ ...receipt, movement_type: 'PURCHASE' }]);
+
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                items: [{ productId: 'prod-1', quantity: 8, unitCost: 140 }],
+            }));
+
+            expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({ quantityDelta: 8, movementType: 'PURCHASE_EDIT_UNCOSTED' }));
+            expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({ quantityDelta: -10, movementType: 'PURCHASE_EDIT_REVERSAL_UNCOSTED' }));
+            expect(costBehaviourFor('PURCHASE_EDIT_UNCOSTED')).toBe('QUANTITY_ONLY');
+            expect(costBehaviourFor('PURCHASE_EDIT_REVERSAL_UNCOSTED')).toBe('QUANTITY_ONLY');
+        });
+
+        describe('the payment made with the bill', () => {
+            const paidBill = (paid: number) => {
+                tx.purchase.findFirst.mockReset();
+                tx.purchase.findFirst
+                    .mockResolvedValueOnce(recorded({
+                        paid_amount: paid,
+                        payment_status: 'PARTIAL',
+                        payments: [{ payment_method: 'Cash', amount: paid }],
+                        paymentAllocations: [entryPayment(paid)],
+                    }))
+                    .mockResolvedValue({ id: 'purchase-1', items: [] });
+                tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Rahim Traders', due_balance: 1400 - paid, store_id: 'store-1' });
+            };
+
+            it('is changed in place, with its allocation and its cash voucher', async () => {
+                paidBill(400);
+
+                await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                    payments: [{ paymentMethod: 'Cash', amount: 600 }],
+                }));
+
+                expect(tx.supplierCreditTransaction.update).toHaveBeenCalledWith({
+                    where: { id: 'txn-1' },
+                    data: expect.objectContaining({ amount: 600, balance_after: 800 }),
+                });
+                expect(tx.supplierPaymentAllocation.update).toHaveBeenCalledWith({ where: { id: 'alloc-1' }, data: { amount: 600 } });
+                expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: 800 } });
+                expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
+                expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'supplier_payment', legKey: 'paid', amount: 600 }));
+                // The bill itself did not change, so its voucher stands.
+                expect(voidAutoPostedVoucher).not.toHaveBeenCalledWith(tx, 'tenant-1', 'purchase', 'purchase-1');
+                expect(tx.purchasePayment.deleteMany).toHaveBeenCalledWith({ where: { purchase_id: 'purchase-1' } });
+                expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
+                    data: [expect.objectContaining({ purchase_id: 'purchase-1', payment_method: 'Cash', amount: 600 })],
+                });
+                expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                    data: expect.objectContaining({ paid_amount: 600, payment_status: 'PARTIAL' }),
+                }));
+            });
+
+            it('is removed, allocation and all, when the edit pays nothing', async () => {
+                paidBill(400);
+
+                await service.update('tenant-1', 'user-1', 'purchase-1', edit({ payments: [] }));
+
+                expect(tx.supplierPaymentAllocation.delete).toHaveBeenCalledWith({ where: { id: 'alloc-1' } });
+                expect(tx.supplierCreditTransaction.delete).toHaveBeenCalledWith({ where: { id: 'txn-1' } });
+                expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: 1400 } });
+                expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
+                expect(autoPostFromRules).not.toHaveBeenCalled();
+                expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                    data: expect.objectContaining({ paid_amount: 0, payment_status: 'UNPAID' }),
+                }));
+            });
+
+            it('is left alone when it did not change', async () => {
+                paidBill(400);
+
+                await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                    payments: [{ paymentMethod: 'Cash', amount: 400 }],
+                }));
+
+                expect(tx.supplierCreditTransaction.update).not.toHaveBeenCalled();
+                expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+                expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                    data: expect.objectContaining({ paid_amount: 400 }),
+                }));
+            });
+
+            it('is recorded as a new payment when an unpaid bill is paid on edit', async () => {
+                await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                    payments: [{ paymentMethod: 'Cash', amount: 500 }],
+                }));
+
+                expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                    data: expect.objectContaining({
+                        type: 'PAYMENT',
+                        amount: 500,
+                        balance_after: 900,
+                        reference_type: 'PURCHASE',
+                        reference_id: 'purchase-1',
+                        payment_number: 'SPY-00001',
+                    }),
+                });
+                expect(tx.supplierPaymentAllocation.create).toHaveBeenCalledWith({
+                    data: expect.objectContaining({ purchase_id: 'purchase-1', amount: 500 }),
+                });
+                expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'supplier_payment', legKey: 'paid', amount: 500 }));
+            });
+
+            it('is refused once it was moved onto another bill', async () => {
+                tx.purchase.findFirst.mockReset();
+                tx.purchase.findFirst.mockResolvedValueOnce(recorded({
+                    paid_amount: 500,
+                    payments: [{ payment_method: 'Cash', amount: 1000 }],
+                    paymentAllocations: [entryPayment(500, 1000)],
+                }));
+
+                await expect(service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                    payments: [{ paymentMethod: 'Cash', amount: 700 }],
+                }))).rejects.toBeInstanceOf(BadRequestException);
+                expect(tx.purchase.update).not.toHaveBeenCalled();
+            });
+
+            it('changes an imported bill\'s paid-with-the-goods by the difference', async () => {
+                // Imported: the account carries the bill net of what was paid,
+                // and no payment row or allocation exists.
+                tx.purchase.findFirst.mockReset();
+                tx.purchase.findFirst
+                    .mockResolvedValueOnce(recorded({ paid_amount: 400 }))
+                    .mockResolvedValue({ id: 'purchase-1', items: [] });
+                tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Rahim Traders', due_balance: 1000, store_id: 'store-1' });
+
+                await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                    payments: [{ paymentMethod: 'Cash', amount: 300 }],
+                }));
+
+                expect(tx.supplierCreditTransaction.create).toHaveBeenCalledTimes(1);
+                expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                    data: expect.objectContaining({ type: 'ADJUSTMENT', amount: 100, balance_after: 1100 }),
+                });
+                expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                    data: expect.objectContaining({ paid_amount: 300 }),
+                }));
+            });
+        });
+
+        it('moves the bill and its payment to the supplier it should have been on', async () => {
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst
+                .mockResolvedValueOnce(recorded({
+                    paid_amount: 400,
+                    payments: [{ payment_method: 'Cash', amount: 400 }],
+                    paymentAllocations: [entryPayment(400)],
+                }))
+                .mockResolvedValue({ id: 'purchase-1', items: [] });
+            tx.supplier.findFirst.mockImplementation(async ({ where }: any) => (where.id === 'sup-1'
+                ? { id: 'sup-1', name: 'Rahim Traders', due_balance: 1000, store_id: 'store-1' }
+                : { id: 'sup-2', name: 'Karim & Sons', due_balance: 0, store_id: 'store-1' }));
+
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                supplierId: 'sup-2',
+                payments: [{ paymentMethod: 'Cash', amount: 400 }],
+            }));
+
+            // Off the old account entirely: the bill reversed, its payment gone.
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ supplier_id: 'sup-1', type: 'ADJUSTMENT', amount: -1400 }),
+            });
+            expect(tx.supplierPaymentAllocation.delete).toHaveBeenCalledWith({ where: { id: 'alloc-1' } });
+            expect(tx.supplierCreditTransaction.delete).toHaveBeenCalledWith({ where: { id: 'txn-1' } });
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-1' }, data: { due_balance: 0 } });
+            // Onto the new one exactly as create would have written it.
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ supplier_id: 'sup-2', type: 'CREDIT_PURCHASE', amount: 1400, balance_after: 1400 }),
+            });
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ supplier_id: 'sup-2', type: 'PAYMENT', amount: 400, balance_after: 1000 }),
+            });
+            expect(tx.supplier.update).toHaveBeenCalledWith({ where: { id: 'sup-2' }, data: { due_balance: 1000 } });
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'purchase', 'purchase-1');
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'purchase', partyId: 'sup-2' }));
+            expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'supplier_payment', partyId: 'sup-2' }));
+            expect(tx.purchase.update).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ supplier_id: 'sup-2' }),
+            }));
+        });
+
+        it('refuses to drop the total below what later supplier payments already settled', async () => {
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst.mockResolvedValueOnce(recorded({
+                paid_amount: 1000,
+                paymentAllocations: [{
+                    id: 'alloc-9',
+                    amount: 1000,
+                    transaction: { id: 'txn-9', type: 'PAYMENT', amount: 1000, payment_number: 'SPY-00009', reference_type: null, reference_id: null },
+                }],
+            }));
+
+            await expect(service.update('tenant-1', 'user-1', 'purchase-1', edit({
+                items: [{ productId: 'prod-1', quantity: 5, unitCost: 140 }],
+            }))).rejects.toBeInstanceOf(BadRequestException);
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['cancelled', { status: 'CANCELLED' }],
+            ['returned against', { returns: [{ id: 'ret-1' }] }],
+            ['raised from an import shipment', { importShipment: { id: 'ship-1' } }],
+            ['costed into a production job', { items: [{ id: 'line-1', jobCosts: [{ id: 'cost-1' }] }] }],
+        ])('refuses a purchase that has been %s', async (_label, overrides) => {
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst.mockResolvedValueOnce(recorded(overrides));
+
+            await expect(service.update('tenant-1', 'user-1', 'purchase-1', edit())).rejects.toBeInstanceOf(BadRequestException);
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+            expect(tx.purchase.update).not.toHaveBeenCalled();
+        });
+
+        it('404s an unknown purchase', async () => {
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst.mockResolvedValue(null);
+
+            await expect(service.update('tenant-1', 'user-1', 'nope', edit())).rejects.toBeInstanceOf(NotFoundException);
+        });
+
+        it('lets cancel take back only the stock the edit left behind', async () => {
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst.mockResolvedValue({
+                ...recorded({ supplier_id: null }),
+                items: [{ id: 'line-1', jobCosts: [] }],
+            });
+            tx.inventoryMovement.findMany.mockResolvedValue([
+                receipt,
+                { product_id: 'prod-1', warehouse_id: 'wh-1', quantity_delta: 12, unit_cost: 140, movement_type: 'PURCHASE_EDIT' },
+                { product_id: 'prod-1', warehouse_id: 'wh-1', quantity_delta: -10, unit_cost: 140, movement_type: 'PURCHASE_EDIT_REVERSAL' },
+            ]);
+
+            await service.cancel('tenant-1', 'user-1', 'purchase-1', 'Recorded in error');
+
+            expect(applyInventoryMovement).toHaveBeenCalledTimes(1);
+            expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({ quantityDelta: -12, movementType: 'PURCHASE_CANCELLED', unitCost: 140 }));
         });
     });
 });
