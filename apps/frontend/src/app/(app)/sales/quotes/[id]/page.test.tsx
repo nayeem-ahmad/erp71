@@ -48,6 +48,11 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+const mockPrintQuotation = jest.fn();
+jest.mock('@/lib/hooks/useQuotationPrinting', () => ({
+    useQuotationPrinting: () => ({ printQuotation: mockPrintQuotation, printingId: null }),
+}));
+
 jest.mock('@/lib/format', () => ({
     formatBDT: (v: number) => `BDT ${v}`,
     formatDate: (v: string) => `DATE:${v}`,
@@ -244,11 +249,12 @@ describe('QuoteDetailsPage', () => {
         expect(pushMock).toHaveBeenCalledWith('/sales/quotes/quote-1/edit');
     });
 
-    it('prints when Print PDF is clicked', async () => {
+    it('prints the quotation document, not the screen, when Print PDF is clicked', async () => {
         render(<QuoteDetailsPage />);
         await waitFor(() => screen.getByRole('button', { name: /print pdf/i }));
         fireEvent.click(screen.getByRole('button', { name: /print pdf/i }));
-        expect(window.print).toHaveBeenCalled();
+        expect(mockPrintQuotation).toHaveBeenCalledWith(expect.objectContaining({ id: 'quote-1', quote_number: 'QUO-00001' }));
+        expect(window.print).not.toHaveBeenCalled();
     });
 
     it('opens the share modal with the absolute short link when Share is clicked', async () => {

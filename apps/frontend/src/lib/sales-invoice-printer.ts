@@ -125,7 +125,7 @@ function esc(str: string): string {
         .replaceAll('"', '&quot;');
 }
 
-const THANK_YOU = 'Thank you for your business!';
+export const THANK_YOU = 'Thank you for your business!';
 
 /** The member's padding choice, vertical then horizontal. */
 const BODY_PADDING: Record<InvoicePadding, string> = {
@@ -242,6 +242,14 @@ function buildStyles(isThermal: boolean, layout: InvoicePrintPrefs): string {
         ${isThermal ? '' : compactStyles()}
         ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles()}
     `;
+}
+
+/**
+ * The stylesheet of a detailed sheet, with the member's padding — for another
+ * document printed on the detailed design (see `sales-quotation-printer.ts`).
+ */
+export function detailedSheetStyles(layout: InvoicePrintPrefs): string {
+    return buildStyles(false, { ...layout, layout: 'detailed' });
 }
 
 /**

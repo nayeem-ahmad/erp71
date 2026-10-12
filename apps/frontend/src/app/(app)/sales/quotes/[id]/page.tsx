@@ -12,6 +12,7 @@ import { useI18n, formatMessage } from '@/lib/i18n';
 import { PageShell } from '@/components/ui';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
+import { useQuotationPrinting } from '@/lib/hooks/useQuotationPrinting';
 
 /** One term of a proforma, omitted entirely when it was never filled in. */
 function ReadOnlyTerm({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -40,6 +41,8 @@ function QuoteDetailsPageContent() {
      * Reloading after a revoke keeps the page honest about the share state.
      */
     const { share, sharingId, openShare, revokeShare, closeShare } = useQuotationShare(() => loadQuote());
+    // The same detailed paper the quotations list prints, not this screen.
+    const { printQuotation, printingId } = useQuotationPrinting();
 
     useEffect(() => {
         loadQuote();
@@ -171,7 +174,11 @@ function QuoteDetailsPageContent() {
                         )}
                         actions={
                             <>
-                                <button onClick={() => window.print()} className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all">
+                                <button
+                                    onClick={() => void printQuotation(quote)}
+                                    disabled={printingId === quote.id}
+                                    className="bg-white border border-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center hover:bg-gray-50 shadow-sm transition-all disabled:opacity-50"
+                                >
                                     <Printer className="w-4 h-4 me-2 text-gray-400" />
                                     {t.quotes.detail.printPdf}
                                 </button>
