@@ -24,7 +24,7 @@ import { BRAND_NAME } from '@/lib/brand';
 import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
-import type { AppState } from '@erp71/shared-types';
+import type { AppState, PlatformRole } from '@erp71/shared-types';
 import type { ResolvedNavChild, ResolvedNavModule } from '@/lib/nav-resolver';
 import { isNavSubgroup, resolveSidebarModules } from '@/lib/sidebar-modules';
 import NavCountBadge from '@/components/sidebar/NavCountBadge';
@@ -69,6 +69,7 @@ export default function Sidebar({
     canAccessProjects = false,
     canAccessPlatformAccounting = false,
     canAccessAdmin = false,
+    platformRole = null,
     canManageBilling = false,
     canManageTeam = false,
     canManageShortLinks = false,
@@ -98,6 +99,8 @@ export default function Sidebar({
     /** The platform's own books in the admin console — its own platform switch. */
     canAccessPlatformAccounting?: boolean;
     canAccessAdmin?: boolean;
+    /** The viewer's admin-console seat; a support engineer sees only their pages. */
+    platformRole?: PlatformRole | null;
     canManageBilling?: boolean;
     canManageTeam?: boolean;
     /** Owner or MANAGE_SHORT_LINKS. The plan half is the link's `urlShortener` entitlement. */
@@ -228,6 +231,7 @@ export default function Sidebar({
             canAccessProjects,
             canAccessPlatformAccounting,
             canAccessAdmin,
+            platformRole,
             canManageBilling,
             canManageTeam,
             canManageShortLinks,
@@ -259,6 +263,7 @@ export default function Sidebar({
         canAccessProjects,
         canAccessPlatformAccounting,
         canAccessAdmin,
+        platformRole,
         canManageBilling,
         canManageTeam,
         canManageShortLinks,

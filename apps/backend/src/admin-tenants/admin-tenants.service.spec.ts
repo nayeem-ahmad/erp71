@@ -973,7 +973,7 @@ describe('AdminTenantsService', () => {
       expect(result.is_platform_admin).toBe(true);
       expect(db.user.update).toHaveBeenCalledWith({
         where: { id: 'u-1' },
-        data: { is_platform_admin: true },
+        data: { is_platform_admin: true, platform_role: null },
       });
       expect(authCache.invalidateUser).toHaveBeenCalledWith('u-1');
     });
@@ -1844,6 +1844,127 @@ describe('AdminTenantsService', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(db.user.update).not.toHaveBeenCalled();
+    });
+  });
+  describe('platform roles (support engineers)', () => {
+    const staffRow = (overrides: any = {}) => ({
+      id: 'u-2',
+      email: 'help@erp71.com',
+      name: null,
+      mobile: null,
+      mobile_country_code: '+880',
+      is_platform_admin: false,
+      platform_role: 'SUPPORT_ENGINEER',
+      email_verified_at: null,
+      created_at: new Date(),
+      ...overrides,
+    });
+
+    it('creates a support engineer without the admin flag', async () => {
+      db.user.findUnique.mockResolvedValue(null);
+      db.user.create.mockResolvedValue(staffRow());
+
+      const result = await service.createPlatformAdminUser(
+        { email: 'help@erp71.com', password: 'Dhaka-Ops-2026', platform_role: 'SUPPORT_ENGINEER' } as any,
+        'admin-1',
+      );
+
+      expect(db.user.create.mock.calls[0][0].data).toEqual(
+        expect.objectContaining({ is_platform_admin: false, platform_role: 'SUPPORT_ENGINEER' }),
+      );
+      expect(result.platform_role).toBe('SUPPORT_ENGINEER');
+      expect(result.is_platform_admin).toBe(false);
+    });
+
+    it('still creates a full admin when no role is given', async () => {
+      db.user.findUnique.mockResolvedValue(null);
+      db.user.create.mockResolvedValue(staffRow({ is_platform_admin: true, platform_role: null }));
+
+      const result = await service.createPlatformAdminUser(
+        { email: 'ops@erp71.com', password: 'Dhaka-Ops-2026' } as any,
+        'admin-1',
+      );
+
+      expect(db.user.create.mock.calls[0][0].data).toEqual(
+        expect.objectContaining({ is_platform_admin: true, platform_role: null }),
+      );
+      expect(result.platform_role).toBe('ADMIN');
+    });
+
+    it('lists support engineers alongside admins', async () => {
+      db.user.findMany.mockResolvedValue([staffRow()]);
+      db.user.count.mockResolvedValue(1);
+
+      const result = await service.listUsers({} as any);
+
+      expect(db.user.findMany.mock.calls[0][0].where.OR).toEqual(
+        expect.arrayContaining([{ is_platform_admin: true }, { platform_role: { not: null } }]),
+      );
+      expect(result.data[0]).toEqual(expect.objectContaining({ platform_role: 'SUPPORT_ENGINEER', is_platform_admin: false }));
+    });
+
+    it('moves an admin to support engineer and drops their cached session row', async () => {
+      db.user.findUnique.mockResolvedValue(staffRow({ is_platform_admin: true, platform_role: null }));
+      db.user.count.mockResolvedValue(1);
+      db.user.update.mockResolvedValue(staffRow());
+
+      await service.updatePlatformAdminUser('u-2', { platform_role: 'SUPPORT_ENGINEER' } as any, 'admin-1');
+
+      expect(db.user.update.mock.calls[0][0].data).toEqual(
+        expect.objectContaining({ is_platform_admin: false, platform_role: 'SUPPORT_ENGINEER' }),
+      );
+      expect(authCache.invalidateUser).toHaveBeenCalledWith('u-2');
+    });
+
+    it('promotes a support engineer to admin', async () => {
+      db.user.findUnique.mockResolvedValue(staffRow());
+      db.user.update.mockResolvedValue(staffRow({ is_platform_admin: true, platform_role: null }));
+
+      await service.updatePlatformAdminUser('u-2', { platform_role: 'ADMIN' } as any, 'admin-1');
+
+      expect(db.user.update.mock.calls[0][0].data).toEqual(
+        expect.objectContaining({ is_platform_admin: true, platform_role: null }),
+      );
+      expect(db.user.count).not.toHaveBeenCalled();
+    });
+
+    it('refuses to change your own role', async () => {
+      db.user.findUnique.mockResolvedValue(staffRow({ id: 'admin-1', is_platform_admin: true, platform_role: null }));
+
+      await expect(
+        service.updatePlatformAdminUser('admin-1', { platform_role: 'SUPPORT_ENGINEER' } as any, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.user.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to move the last admin to a narrower role', async () => {
+      db.user.findUnique.mockResolvedValue(staffRow({ is_platform_admin: true, platform_role: null }));
+      db.user.count.mockResolvedValue(0);
+
+      await expect(
+        service.updatePlatformAdminUser('u-2', { platform_role: 'SUPPORT_ENGINEER' } as any, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(db.user.update).not.toHaveBeenCalled();
+    });
+
+    it('deletes a support engineer without the last-admin check', async () => {
+      db.user.findUnique.mockResolvedValue({
+        ...staffRow(),
+        _count: { tenantsOwned: 0, tenantMembers: 0 },
+      });
+
+      await service.deletePlatformAdminUser('u-2', 'admin-1');
+
+      expect(db.user.count).not.toHaveBeenCalled();
+      expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'u-2' } });
+    });
+
+    it('does not treat an ordinary user as platform staff', async () => {
+      db.user.findUnique.mockResolvedValue(staffRow({ platform_role: null }));
+
+      await expect(
+        service.updatePlatformAdminUser('u-2', { name: 'X' } as any, 'admin-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -1,5 +1,11 @@
 export const adminMessages = {
         overview: {
+            supportConsole: {
+                description: "Konsol sokongan — bantu pelanggan, cari penyewa dan pantau kesihatan sistem.",
+                support: { title: "Peti Masuk Sokongan", description: "Jawab perbualan sokongan penyewa." },
+                feedback: { title: "Maklum Balas", description: "Baca apa yang dilaporkan pengguna dari dalam aplikasi." },
+                tenants: { title: "Penyewa", description: "Cari penyewa dan log masuk sebagai pemiliknya untuk menghasilkan semula isu." },
+            },
             badge: 'Pentadbir Platform',
             title: 'Gambaran Keseluruhan',
             description: 'Metrik seluruh platform dan akses pantas ke alatan pentadbir.',
@@ -637,7 +643,12 @@ export const adminMessages = {
             prev: 'Sebelum',
             next: 'Seterusnya',
             addUser: 'Tambah Pengguna',
+            roles: {
+                ADMIN: "Pentadbir",
+                SUPPORT_ENGINEER: "Jurutera Sokongan",
+            },
             columns: {
+                role: "Peranan",
                 name: 'Nama',
                 email: 'E-mel',
                 mobile: 'Mudah alih',
@@ -651,6 +662,11 @@ export const adminMessages = {
                 sendResetEmail: 'Hantar e-mel tetapan semula',
             },
             form: {
+                roleLabel: "Peranan",
+                roleHints: {
+                    ADMIN: "Akses penuh ke konsol pentadbir.",
+                    SUPPORT_ENGINEER: "Peti masuk sokongan, maklum balas, carian penyewa dan log masuk sebagai penyewa, kesihatan sistem. Tiada pengebilan, tetapan atau pengurusan kakitangan.",
+                },
                 createTitle: 'Tambah Pengguna Platform',
                 editTitle: 'Edit Pengguna Platform',
                 emailLabel: 'E-mel',

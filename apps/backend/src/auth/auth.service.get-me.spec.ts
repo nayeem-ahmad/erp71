@@ -308,6 +308,7 @@ function karim() {
         storefront_token_version: 1,
         applicant_token_version: 0,
         is_platform_admin: false,
+        platform_role: null,
         must_change_password: false,
         blog_last_seen_at: day(-2),
         firebase_uid: null,
@@ -444,6 +445,7 @@ function expectedKarim() {
         name: 'Karim',
         preferred_locale: 'bn',
         is_platform_admin: false,
+        platform_role: null,
         is_demo: false,
         email_verified: true,
         two_factor_enabled: true,
@@ -613,6 +615,16 @@ describe('AuthService.getMe — the response the app shell reads', () => {
         await expect(service.getMe('user-1')).resolves.toMatchObject({ referee: null });
     });
 
+    it('gives a support engineer their console role but not the admin flag', async () => {
+        const support = { ...karim(), id: 'support-1', email: 'help@example.com', platform_role: 'SUPPORT_ENGINEER' };
+        const { service } = harness({ users: [support] });
+
+        await expect(service.getMe('support-1')).resolves.toMatchObject({
+            is_platform_admin: false,
+            platform_role: 'SUPPORT_ENGINEER',
+        });
+    });
+
     it('returns exactly this for a platform admin with no shop of their own', async () => {
         const admin = {
             ...karim(),
@@ -640,6 +652,7 @@ describe('AuthService.getMe — the response the app shell reads', () => {
             name: null,
             preferred_locale: 'bn',
             is_platform_admin: true,
+            platform_role: 'ADMIN',
             is_demo: false,
             email_verified: false,
             two_factor_enabled: false,

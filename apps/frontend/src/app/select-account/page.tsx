@@ -37,7 +37,7 @@ function SelectAccountContent() {
     useEffect(() => {
         fetchMe()
             .then((data: any) => {
-                const { isPlatformAdmin, isReferee, isEmployee, tenants, count } = getLoginContexts(data);
+                const { hasPlatformConsole, isReferee, isEmployee, tenants, count } = getLoginContexts(data);
 
                 // The URL already said which shop. Honour it whatever else is
                 // on offer — naming a workspace is a choice, not a preference.
@@ -60,7 +60,7 @@ function SelectAccountContent() {
                     } else if (isReferee) {
                         applyRefereeContext();
                         router.replace('/referrals');
-                    } else if (isPlatformAdmin) {
+                    } else if (hasPlatformConsole) {
                         applyPlatformAdminContext();
                         router.replace('/admin');
                     } else {
@@ -111,7 +111,7 @@ function SelectAccountContent() {
         );
     }
 
-    const { isPlatformAdmin, isReferee, isEmployee, tenants } = getLoginContexts(me);
+    const { hasPlatformConsole, isReferee, isEmployee, tenants } = getLoginContexts(me);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-canvas p-4 font-sans text-gray-900">
@@ -173,7 +173,7 @@ function SelectAccountContent() {
                             </button>
                         )}
 
-                        {isPlatformAdmin && (
+                        {hasPlatformConsole && (
                             <button
                                 type="button"
                                 onClick={chooseAdmin}

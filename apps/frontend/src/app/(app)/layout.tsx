@@ -32,7 +32,8 @@ import {
 } from '@erp71/shared-types';
 import { isAccountingOnlyBlockedPath } from '@/lib/accounting-only-paths';
 import { isAccountingAdvancedReportPath } from '@/lib/plan-gated-paths';
-import { isPlatformAdminOnlyPath } from '@/lib/platform-admin-paths';
+import { canViewPlatformPath, isPlatformAdminOnlyPath, platformRoleOf } from '@/lib/platform-admin-paths';
+import { canPlatformRoleOpenPath, PlatformRole } from '@erp71/shared-types';
 import { NavLayoutProvider } from '@/contexts/NavLayoutContext';
 import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
 import TenantLocaleSync from '@/components/TenantLocaleSync';
@@ -191,7 +192,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         if (!hasResolvedUser || !user) return;
         if (getWorkspaceItem('active_context')) return;
 
-        const { isReferee, isPlatformAdmin, isEmployee, tenants, count } = getLoginContexts(user);
+        const { isReferee, hasPlatformConsole, isEmployee, tenants, count } = getLoginContexts(user);
         if (count !== 1) {
             // Several workspaces to choose from and this tab is in none of them
             // — a resumed shop that turned out to be stale, or a fresh tab with
@@ -222,7 +223,7 @@ function AppShell({ children }: DashboardLayoutProps) {
             }
             return;
         }
-        if (isPlatformAdmin) {
+        if (hasPlatformConsole) {
             applyPlatformAdminContext();
             setWorkspaceEpoch((epoch) => epoch + 1);
             if (pathname === routes.home) {
@@ -268,8 +269,11 @@ function AppShell({ children }: DashboardLayoutProps) {
     // after hydration and `/auth/me`, so without this gate a tenant user — or a
     // signed-out visitor — sees the whole platform console, and its panels fire
     // their (403ing) admin API calls, for as long as that round trip takes.
+    // A support engineer holds a console seat too, but only some of its pages:
+    // the role decides here as well, so a page outside their role is never drawn.
+    const platformRole = platformRoleOf(user);
     const canRenderChildrenForRole = !isPlatformAdminOnlyPath(pathname)
-        || (hasResolvedUser && Boolean(user?.is_platform_admin));
+        || (hasResolvedUser && canViewPlatformPath(platformRole, pathname));
     // workspaceEpoch bumps after we restore this tab's shop context.
     void workspaceEpoch;
     const activeContext = globalThis.window === undefined ? null : getWorkspaceItem('active_context');
@@ -277,7 +281,10 @@ function AppShell({ children }: DashboardLayoutProps) {
     // Platform admins choose between the admin console and any shop they belong
     // to. In admin-console mode we never resolve a shop/tenant so the dashboard
     // shows only platform-admin options.
-    const inPlatformAdminMode = Boolean(user?.is_platform_admin) && activeContext === 'platform-admin';
+    const inPlatformAdminMode = platformRole !== null && activeContext === 'platform-admin';
+    // Full admin in the console — the platform's own projects and books are not
+    // support work, so a support engineer's console carries neither.
+    const inFullPlatformAdminMode = inPlatformAdminMode && platformRole === PlatformRole.ADMIN;
     const inRefereeMode = Boolean(user?.referee?.is_active) && activeContext === 'referee';
     // `activeContext` alone is not enough: it is a stored value a user can
     // set by hand. Pairing it with `user.employee` — which only the server can
@@ -286,7 +293,7 @@ function AppShell({ children }: DashboardLayoutProps) {
     const inEmployeeMode = Boolean(user?.employee?.id) && activeContext === 'employee';
     const loginContexts = user
         ? getLoginContexts(user)
-        : { isPlatformAdmin: false, isReferee: false, isEmployee: false, tenants: [], count: 0 };
+        : { hasPlatformConsole: false, isReferee: false, isEmployee: false, tenants: [], count: 0 };
     const canSwitchAccount = loginContexts.count > 1;
     const activeTenant = (inPlatformAdminMode || inRefereeMode)
         ? null
@@ -413,12 +420,12 @@ function AppShell({ children }: DashboardLayoutProps) {
     // `projects`: that one decides what shops are sold, this one whether the
     // operator's staff have somewhere to run their own work.
     const canAccessPlatformProjects =
-        inPlatformAdminMode && Boolean(accountPlatformFeatures.platformProjects);
+        inFullPlatformAdminMode && Boolean(accountPlatformFeatures.platformProjects);
     // The platform's own books. Same shape as the line above and for the same
     // reason: a platform-scoped switch, not a shop entitlement, so it is read
     // off the account's platform features rather than the active tenant's plan.
     const canAccessPlatformAccounting =
-        inPlatformAdminMode && Boolean(accountPlatformFeatures.platformAccounting);
+        inFullPlatformAdminMode && Boolean(accountPlatformFeatures.platformAccounting);
     const perms = activeTenant?.permissions ?? [];
     // Off by default platform-wide; a tenant override switches it on for one
     // workspace without exposing it to everyone else. Gated on the permission as
@@ -591,8 +598,10 @@ function AppShell({ children }: DashboardLayoutProps) {
         if (!canAccessAccountingAdvanced && isAccountingAdvancedReportPath(pathname)) {
             router.replace(routes.accounting.reports.pl);
         }
-        if (!isPlatformAdmin && pathname.startsWith(routes.admin.root)) {
-            router.replace(routes.home);
+        if (pathname.startsWith(routes.admin.root) && !(isPlatformAdmin && canPlatformRoleOpenPath(platformRole, pathname))) {
+            // In the console but outside this role's pages → back to its overview,
+            // which every role can open; not in the console at all → home.
+            router.replace(isPlatformAdmin ? routes.admin.root : routes.home);
         }
         if (!user?.referee?.is_active && pathname.startsWith(routes.referralsPortal.root)) {
             router.replace(routes.home);
@@ -659,7 +668,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         if (!posEnabled && pathname.startsWith(routes.sales.pos)) {
             router.replace(routes.sales.list);
         }
-    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessPlatformAccounting, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
+    }, [accountingOnlyMode, activeContext, canAccessAccounting, canAccessAccountingAdvanced, canAccessInventoryReports, canAccessPlatformAccounting, canAccessProjects, canManageTeam, canViewAudit, hasPremiumCrm, hasResolvedUser, isPlatformAdmin, pathname, platformRole, platformFeatures.help, platformFeatures.support, platformFeatures.feedback, posEnabled, router, user]);
 
     const activeStore =
         tenantStores.find((store: { id: string }) => store.id === activeStoreId) ?? tenantStores[0];
@@ -699,6 +708,7 @@ function AppShell({ children }: DashboardLayoutProps) {
         canAccessProjects,
         canAccessPlatformAccounting,
         canAccessAdmin: isPlatformAdmin,
+        platformRole: inPlatformAdminMode ? platformRole : null,
         canManageBilling,
         canManageTeam,
         canManageShortLinks,

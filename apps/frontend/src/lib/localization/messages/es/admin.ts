@@ -1,5 +1,11 @@
 export const adminMessages = {
     overview: {
+        supportConsole: {
+            description: "Consola de soporte: ayude a los clientes, busque inquilinos y vigile el estado del sistema.",
+            support: { title: "Bandeja de soporte", description: "Responda las conversaciones de soporte de los inquilinos." },
+            feedback: { title: "Comentarios", description: "Lea lo que los usuarios reportan desde la aplicación." },
+            tenants: { title: "Inquilinos", description: "Busque un inquilino e inicie sesión como su propietario para reproducir un problema." },
+        },
         badge: "Administración de la plataforma",
         title: "Resumen",
         description: "Métricas de toda la plataforma y acceso rápido a las herramientas de administración.",
@@ -637,7 +643,12 @@ export const adminMessages = {
         prev: "Anterior",
         next: "Siguiente",
         addUser: "Añadir usuario",
+        roles: {
+            ADMIN: "Administrador",
+            SUPPORT_ENGINEER: "Ingeniero de soporte",
+        },
         columns: {
+            role: "Rol",
             name: "Nombre",
             email: "Correo electrónico",
             mobile: "Móvil",
@@ -651,6 +662,11 @@ export const adminMessages = {
             sendResetEmail: "Enviar correo de restablecimiento",
         },
         form: {
+            roleLabel: "Rol",
+            roleHints: {
+                ADMIN: "Acceso completo a la consola de administración.",
+                SUPPORT_ENGINEER: "Bandeja de soporte, comentarios, búsqueda de inquilinos e inicio de sesión como inquilino, estado del sistema. Sin facturación, ajustes ni gestión del personal.",
+            },
             createTitle: "Añadir usuario de la plataforma",
             editTitle: "Editar usuario de la plataforma",
             emailLabel: "Correo electrónico",

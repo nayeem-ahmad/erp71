@@ -1,5 +1,11 @@
 export const adminMessages = {
     overview: {
+        supportConsole: {
+            description: "Support console — help customers, look up tenants and keep an eye on system health.",
+            support: { title: "Support Inbox", description: "Answer tenant support conversations." },
+            feedback: { title: "Feedback", description: "Read what users report from inside the app." },
+            tenants: { title: "Tenants", description: "Look up a tenant and sign in as its owner to reproduce an issue." },
+        },
         badge: 'Platform Admin',
         title: 'Overview',
         description: 'Platform-wide metrics and quick access to admin tools.',
@@ -637,7 +643,12 @@ export const adminMessages = {
         prev: 'Prev',
         next: 'Next',
         addUser: 'Add User',
+        roles: {
+            ADMIN: "Admin",
+            SUPPORT_ENGINEER: "Support Engineer",
+        },
         columns: {
+            role: "Role",
             name: 'Name',
             email: 'Email',
             mobile: 'Mobile',
@@ -651,6 +662,11 @@ export const adminMessages = {
             sendResetEmail: 'Send reset email',
         },
         form: {
+            roleLabel: "Role",
+            roleHints: {
+                ADMIN: "Full access to the admin console.",
+                SUPPORT_ENGINEER: "Support inbox, feedback, tenant lookup and sign-in as a tenant, system health. No billing, settings or staff management.",
+            },
             createTitle: 'Add Platform User',
             editTitle: 'Edit Platform User',
             emailLabel: 'Email',

@@ -13,6 +13,8 @@ import {
 import { IsString, MinLength, IsIn, IsOptional } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
+import { AllowPlatformRoles } from '../auth/platform-roles.decorator';
+import { PlatformRole } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { parseTicketNumberQuery, threadCategoryWhere } from './support.util';
 import { SupportEventsService } from './support-events.service';
@@ -31,6 +33,7 @@ class UpdateThreadDto {
 }
 
 @Controller('admin/support')
+@AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class AdminSupportController {
     constructor(
