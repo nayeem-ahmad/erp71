@@ -19,6 +19,7 @@ import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import ShareModal from '@/components/share/ShareModal';
 import { useQuotationShare } from '@/components/share/use-quotation-share';
 import ConvertToSalesModal from './ConvertToSalesModal';
+import { quoteDocKindColors, quoteStatusColors } from './quote-badges';
 
 interface Quotation {
     id: string;
@@ -39,26 +40,6 @@ interface Quotation {
     customer?: { name: string; phone?: string };
     store_id?: string;
 }
-
-const statusColors: Record<string, string> = {
-    DRAFT: 'bg-gray-50 text-gray-600 border-gray-200',
-    SENT: 'bg-blue-50 text-blue-700 border-blue-200',
-    ACCEPTED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    REJECTED: 'bg-red-50 text-red-700 border-red-200',
-    CONVERTED: 'bg-success-light text-success-text border-emerald-200',
-    REVISED: 'bg-amber-50 text-amber-700 border-amber-200',
-    EXPIRED: 'bg-gray-100 text-gray-500 border-gray-200',
-};
-
-/**
- * Deliberately the same neutral/blue pair the status badges use rather than a
- * new accent: the document kind is a classification, not a state, and giving it
- * its own colour would compete with the status badge beside it.
- */
-const docKindColors: Record<string, string> = {
-    QUOTE: 'bg-gray-50 text-gray-600 border-gray-200',
-    PROFORMA: 'bg-blue-50 text-blue-700 border-blue-200',
-};
 
 const columnHelper = createColumnHelper<Quotation>();
 
@@ -127,7 +108,7 @@ export default function QuotesPage() {
                     const kind = info.getValue();
                     return (
                         <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${docKindColors[kind] ?? docKindColors.QUOTE}`}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${quoteDocKindColors[kind] ?? quoteDocKindColors.QUOTE}`}
                         >
                             {t.quotes.detail.docKind[kind as keyof typeof t.quotes.detail.docKind] ?? kind}
                         </span>
@@ -181,7 +162,7 @@ export default function QuotesPage() {
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${quoteStatusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
                             {t.shared.statuses.quote[status as keyof typeof t.shared.statuses.quote] ?? status}
                         </span>
                     );
