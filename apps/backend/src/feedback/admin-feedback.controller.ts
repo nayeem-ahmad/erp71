@@ -1,9 +1,12 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
+import { AllowPlatformRoles } from '../auth/platform-roles.decorator';
+import { PlatformRole } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 
 @Controller('admin/feedback')
+@AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class AdminFeedbackController {
     constructor(private readonly db: DatabaseService) {}

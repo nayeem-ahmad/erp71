@@ -46,6 +46,8 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+jest.mock('@/hooks/use-me', () => ({ useMe: () => ({ data: { is_platform_admin: true, platform_role: 'ADMIN' } }) }));
+
 jest.mock('@/lib/format', () => ({
     formatDate: (d: string) => d,
     formatBDT: (n: number) => `৳${n}`,

@@ -9,6 +9,12 @@ generator client {
   output   = "../../../node_modules/.prisma/client"
 }
 
+/// Platform-team seats below full platform admin. Full admins stay on
+/// `User.is_platform_admin`; this only names the restricted ones.
+enum PlatformRole {
+  SUPPORT_ENGINEER
+}
+
 enum UserRole {
   OWNER
   MANAGER
@@ -386,6 +392,12 @@ model User {
   // application in progress. A password change bumps all three.
   applicant_token_version  Int       @default(0)
   is_platform_admin        Boolean   @default(false)
+  /// A narrower seat in the platform admin console than `is_platform_admin`.
+  /// Null for everyone outside the platform team. Ignored when
+  /// `is_platform_admin` is set: an admin already has every console route, and
+  /// `PlatformAdminGuard` lets this role through only on the routes that
+  /// declare it with `@AllowPlatformRoles`.
+  platform_role            PlatformRole?
   /// Set when an admin provisions the password rather than the owner choosing
   /// it — today only `EmployeeLoginService`, which hands a generated password to
   /// HR to pass on. While it is true the person may sign in but may do nothing

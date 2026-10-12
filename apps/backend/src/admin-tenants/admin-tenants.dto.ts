@@ -4,6 +4,8 @@ import {
     BUSINESS_TYPE_VALUES,
     SECONDARY_LOCALE_CODES,
     type SupportedLocaleCode,
+    PLATFORM_ROLES,
+    type PlatformRole,
 } from '@erp71/shared-types';
 
 export class ListAdminTenantsQueryDto {
@@ -232,6 +234,11 @@ export class CreatePlatformAdminUserDto {
     @IsOptional()
     @IsString()
     mobile?: string;
+
+    /** The console seat. Defaults to `ADMIN`, which is what this always created. */
+    @IsOptional()
+    @IsIn(PLATFORM_ROLES)
+    platform_role?: PlatformRole;
 }
 
 export class UpdatePlatformAdminUserDto {
@@ -250,6 +257,10 @@ export class UpdatePlatformAdminUserDto {
     @IsOptional()
     @IsString()
     mobile?: string;
+
+    @IsOptional()
+    @IsIn(PLATFORM_ROLES)
+    platform_role?: PlatformRole;
 }
 
 export class AdminResetPlatformUserPasswordDto {

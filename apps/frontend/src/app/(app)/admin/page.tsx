@@ -1,22 +1,57 @@
 'use client';
 
 import Link from 'next/link';
-import { Building2, Users, ArrowRight, Settings, Activity, ScrollText, Calculator } from 'lucide-react';
+import { Building2, Users, ArrowRight, Settings, Activity, ScrollText, Calculator, Headset, MessageSquare } from 'lucide-react';
+import { PlatformRole } from '@erp71/shared-types';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { PageShell } from '@/components/ui';
 import AdminDashboard from '@/components/dashboard/AdminDashboard';
 import { useI18n } from '@/lib/i18n';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { useMe } from '@/hooks/use-me';
+import { platformRoleOf } from '@/lib/platform-admin-paths';
 
 /**
  * Admin > Overview. The four stat tiles and the status badge row that used to
  * live here are now the platform dashboard's attention strip and KPI band —
  * same figures, plus deltas, which the tiles never had. The quick links stay
  * below it, the way every module Overview keeps its hub.
+ *
+ * A support engineer lands here too, but gets their own hub: the platform
+ * dashboard is business figures their role cannot read, and every other quick
+ * link leads somewhere their role cannot open.
  */
 export default function PlatformAdminPage() {
     const { t } = useI18n();
     const m = t.admin.overview;
+    const { data: me } = useMe();
+    const role = platformRoleOf(me);
+
+    if (role && role !== PlatformRole.ADMIN) {
+        const s = m.supportConsole;
+        return (
+            <PageShell>
+                <div className="space-y-4">
+                    <PageHeader
+                        title={m.title}
+                        subtitle={s.description}
+                        breadcrumbs={modulePageBreadcrumbs(
+                            t.dashboardHome.breadcrumbHome,
+                            t.sidebar.modules.admin,
+                            m.title,
+                            'admin',
+                        )}
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <QuickLink href="/admin/support" icon={Headset} title={s.support.title} description={s.support.description} />
+                        <QuickLink href="/admin/tenants" icon={Building2} title={s.tenants.title} description={s.tenants.description} />
+                        <QuickLink href="/admin/feedback" icon={MessageSquare} title={s.feedback.title} description={s.feedback.description} />
+                        <QuickLink href="/admin/system-health" icon={Activity} title={t.admin.systemHealth.quickLink.title} description={t.admin.systemHealth.quickLink.description} />
+                    </div>
+                </div>
+            </PageShell>
+        );
+    }
 
     return (
         <PageShell>

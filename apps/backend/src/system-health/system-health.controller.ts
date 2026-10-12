@@ -1,6 +1,8 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
+import { AllowPlatformRoles } from '../auth/platform-roles.decorator';
+import { PlatformRole } from '@erp71/shared-types';
 import { SystemHealthService } from './system-health.service';
 
 /**
@@ -9,6 +11,7 @@ import { SystemHealthService } from './system-health.service';
  * are restricted to platform admins.
  */
 @Controller('admin/system-health')
+@AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class SystemHealthController {
     constructor(private readonly systemHealth: SystemHealthService) {}

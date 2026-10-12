@@ -7,6 +7,7 @@ import type {
     PasswordPolicy,
     PlatformFeatureKey,
     PlatformFeatures,
+    PlatformRole,
     SupportedLocaleCode,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
@@ -4251,6 +4252,7 @@ export const api = {
         name?: string;
         mobile?: string;
         mobile_country_code?: string;
+        platform_role?: PlatformRole;
     }) => fetchWithAuth('/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4261,6 +4263,7 @@ export const api = {
         name?: string;
         mobile?: string;
         mobile_country_code?: string;
+        platform_role?: PlatformRole;
     }) => fetchWithAuth(`/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

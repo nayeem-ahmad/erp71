@@ -1,5 +1,11 @@
 export const adminMessages = {
     overview: {
+        supportConsole: {
+            description: "سپورٹ کنسول — صارفین کی مدد کریں، ٹیننٹ تلاش کریں اور سسٹم ہیلتھ پر نظر رکھیں۔",
+            support: { title: "سپورٹ ان باکس", description: "ٹیننٹ کی سپورٹ گفتگو کا جواب دیں۔" },
+            feedback: { title: "فیڈبیک", description: "پڑھیں کہ صارفین ایپ سے کیا رپورٹ کرتے ہیں۔" },
+            tenants: { title: "ٹیننٹس", description: "کسی ٹیننٹ کو تلاش کریں اور مسئلہ دہرانے کے لیے مالک کے طور پر سائن اِن کریں۔" },
+        },
         badge: 'پلیٹ فارم ایڈمن',
         title: 'مجموعی جائزہ',
         description: 'پورے پلیٹ فارم کے اعداد و شمار اور ایڈمن ٹولز تک فوری رسائی۔',
@@ -660,7 +666,12 @@ export const adminMessages = {
         prev: 'پچھلا',
         next: 'اگلا',
         addUser: 'صارف شامل کریں',
+        roles: {
+            ADMIN: "ایڈمن",
+            SUPPORT_ENGINEER: "سپورٹ انجینئر",
+        },
         columns: {
+            role: "کردار",
             name: 'نام',
             email: 'ای میل',
             mobile: 'موبائل',
@@ -674,6 +685,11 @@ export const adminMessages = {
             sendResetEmail: 'ری سیٹ ای میل بھیجیں',
         },
         form: {
+            roleLabel: "کردار",
+            roleHints: {
+                ADMIN: "ایڈمن کنسول تک مکمل رسائی۔",
+                SUPPORT_ENGINEER: "سپورٹ ان باکس، فیڈبیک، ٹیننٹ تلاش اور ٹیننٹ کے طور پر سائن اِن، سسٹم ہیلتھ۔ بلنگ، سیٹنگز یا اسٹاف مینجمنٹ نہیں۔",
+            },
             createTitle: 'پلیٹ فارم صارف شامل کریں',
             editTitle: 'پلیٹ فارم صارف میں ترمیم',
             emailLabel: 'ای میل',

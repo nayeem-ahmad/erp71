@@ -1,5 +1,11 @@
 export const adminMessages = {
     overview: {
+        supportConsole: {
+            description: "Console support — aidez les clients, recherchez des locataires et surveillez la santé du système.",
+            support: { title: "Boîte de support", description: "Répondez aux conversations de support des locataires." },
+            feedback: { title: "Retours", description: "Lisez ce que les utilisateurs signalent depuis l’application." },
+            tenants: { title: "Locataires", description: "Recherchez un locataire et connectez-vous en tant que propriétaire pour reproduire un problème." },
+        },
         badge: "Administration de la plateforme",
         title: "Vue d'ensemble",
         description: "Indicateurs à l'échelle de la plateforme et accès rapide aux outils d'administration.",
@@ -660,7 +666,12 @@ export const adminMessages = {
         prev: "Précédent",
         next: "Suivant",
         addUser: "Ajouter un utilisateur",
+        roles: {
+            ADMIN: "Administrateur",
+            SUPPORT_ENGINEER: "Ingénieur support",
+        },
         columns: {
+            role: "Rôle",
             name: "Nom",
             email: "E-mail",
             mobile: "Mobile",
@@ -674,6 +685,11 @@ export const adminMessages = {
             sendResetEmail: "Envoyer l'e-mail de réinitialisation",
         },
         form: {
+            roleLabel: "Rôle",
+            roleHints: {
+                ADMIN: "Accès complet à la console d’administration.",
+                SUPPORT_ENGINEER: "Boîte de support, retours, recherche de locataires et connexion en tant que locataire, santé du système. Pas de facturation, de paramètres ni de gestion de l’équipe.",
+            },
             createTitle: "Ajouter un utilisateur de la plateforme",
             editTitle: "Modifier un utilisateur de la plateforme",
             emailLabel: "E-mail",

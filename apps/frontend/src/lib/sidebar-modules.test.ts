@@ -148,3 +148,29 @@ describe('resolveSidebarModules — app states match the legacy gates', () => {
         }
     }
 });
+
+describe('resolveSidebarModules — admin console by platform role', () => {
+    const hrefsOf = (modules: ReturnType<typeof resolveSidebarModules>) => {
+        const admin = modules.find((module) => module.key === 'admin');
+        return (admin?.children ?? []).flatMap((child) =>
+            'type' in child && child.type === 'subgroup'
+                ? child.children.map((link) => link.href)
+                : [(child as { href: string }).href],
+        );
+    };
+
+    it('keeps the whole console for a full admin', () => {
+        const hrefs = hrefsOf(resolveSidebarModules(input({ platformAdminMode: true, platformRole: 'ADMIN' })));
+
+        expect(hrefs).toEqual(expect.arrayContaining(['/admin/users', '/admin/platform-settings/general', '/admin/audit-logs']));
+    });
+
+    it('trims the console to the support pages for a support engineer', () => {
+        const hrefs = hrefsOf(resolveSidebarModules(input({ platformAdminMode: true, platformRole: 'SUPPORT_ENGINEER' })));
+
+        expect(hrefs).toEqual(expect.arrayContaining(['/admin', '/admin/tenants', '/admin/support', '/admin/system-health']));
+        for (const hidden of ['/admin/users', '/admin/tenants/ledger', '/admin/activation-requests', '/admin/platform-settings/general', '/admin/audit-logs', '/status']) {
+            expect(hrefs).not.toContain(hidden);
+        }
+    });
+});

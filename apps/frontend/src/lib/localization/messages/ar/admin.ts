@@ -1,5 +1,11 @@
 export const adminMessages = {
     overview: {
+        supportConsole: {
+            description: "لوحة الدعم — ساعد العملاء، وابحث عن المستأجرين، وراقب صحة النظام.",
+            support: { title: "صندوق الدعم", description: "الرد على محادثات الدعم من المستأجرين." },
+            feedback: { title: "الملاحظات", description: "اقرأ ما يبلغ عنه المستخدمون من داخل التطبيق." },
+            tenants: { title: "المستأجرون", description: "ابحث عن مستأجر وسجّل الدخول كمالكه لإعادة إنتاج مشكلة." },
+        },
         badge: 'مسؤول المنصة',
         title: 'نظرة عامة',
         description: 'مؤشرات على مستوى المنصة ووصول سريع إلى أدوات الإدارة.',
@@ -660,7 +666,12 @@ export const adminMessages = {
         prev: 'السابق',
         next: 'التالي',
         addUser: 'إضافة مستخدم',
+        roles: {
+            ADMIN: "مسؤول",
+            SUPPORT_ENGINEER: "مهندس دعم",
+        },
         columns: {
+            role: "الدور",
             name: 'الاسم',
             email: 'البريد الإلكتروني',
             mobile: 'الجوال',
@@ -674,6 +685,11 @@ export const adminMessages = {
             sendResetEmail: 'إرسال بريد إعادة التعيين',
         },
         form: {
+            roleLabel: "الدور",
+            roleHints: {
+                ADMIN: "وصول كامل إلى لوحة الإدارة.",
+                SUPPORT_ENGINEER: "صندوق الدعم، الملاحظات، البحث عن المستأجرين وتسجيل الدخول كمستأجر، صحة النظام. بدون الفوترة أو الإعدادات أو إدارة الموظفين.",
+            },
             createTitle: 'إضافة مستخدم منصة',
             editTitle: 'تحرير مستخدم منصة',
             emailLabel: 'البريد الإلكتروني',

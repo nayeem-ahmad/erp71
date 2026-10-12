@@ -1,5 +1,11 @@
 export const adminMessages = {
     overview: {
+        supportConsole: {
+            description: "Support-Konsole — Kunden helfen, Mandanten nachschlagen und den Systemzustand im Blick behalten.",
+            support: { title: "Support-Posteingang", description: "Support-Unterhaltungen von Mandanten beantworten." },
+            feedback: { title: "Feedback", description: "Lesen, was Nutzer aus der App melden." },
+            tenants: { title: "Mandanten", description: "Einen Mandanten nachschlagen und sich als Inhaber anmelden, um ein Problem nachzustellen." },
+        },
         badge: "Plattform-Admin",
         title: "Übersicht",
         description: "Plattformweite Kennzahlen und Schnellzugriff auf die Admin-Werkzeuge.",
@@ -660,7 +666,12 @@ export const adminMessages = {
         prev: "Zurück",
         next: "Weiter",
         addUser: "Benutzer hinzufügen",
+        roles: {
+            ADMIN: "Admin",
+            SUPPORT_ENGINEER: "Support-Engineer",
+        },
         columns: {
+            role: "Rolle",
             name: "Name",
             email: "E-Mail",
             mobile: "Mobil",
@@ -674,6 +685,11 @@ export const adminMessages = {
             sendResetEmail: "Zurücksetz-E-Mail senden",
         },
         form: {
+            roleLabel: "Rolle",
+            roleHints: {
+                ADMIN: "Vollzugriff auf die Admin-Konsole.",
+                SUPPORT_ENGINEER: "Support-Posteingang, Feedback, Mandantensuche und Anmeldung als Mandant, Systemzustand. Keine Abrechnung, Einstellungen oder Mitarbeiterverwaltung.",
+            },
             createTitle: "Plattformbenutzer hinzufügen",
             editTitle: "Plattformbenutzer bearbeiten",
             emailLabel: "E-Mail",

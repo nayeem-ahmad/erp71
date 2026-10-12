@@ -1,4 +1,5 @@
 import { api } from './api';
+import { platformRoleOf } from './platform-admin-paths';
 import { syncLocalePreferenceFromSession } from './localization/preference';
 import { clearQueryCache, getQueryClient, ME_QUERY_KEY, resetWorkspaceQueries } from './query-client';
 import { routes } from './routes';
@@ -16,7 +17,8 @@ import {
 
 /**
  * A "login context" is one of the workspaces a signed-in identity can act as:
- *  - the Platform Admin console (only when the user is a platform admin), or
+ *  - the Platform Admin console (when the user holds a platform role — a full
+ *    admin or a support engineer), or
  *  - the Referral Partner portal (when the user is a linked referee), or
  *  - the Employee self-service portal (when the user is a linked employee), or
  *  - a specific shop/tenant the user belongs to.
@@ -25,7 +27,8 @@ import {
  * they want to log into instead of silently defaulting to the first.
  */
 export type LoginContexts = {
-    isPlatformAdmin: boolean;
+    /** Holds a seat in the admin console — a full admin or a narrower role. */
+    hasPlatformConsole: boolean;
     isReferee: boolean;
     isEmployee: boolean;
     tenants: any[];
@@ -35,15 +38,15 @@ export type LoginContexts = {
 
 export function getLoginContexts(me: any): LoginContexts {
     const tenants = Array.isArray(me?.tenants) ? me.tenants : [];
-    const isPlatformAdmin = Boolean(me?.is_platform_admin);
+    const hasPlatformConsole = platformRoleOf(me) !== null;
     const isReferee = Boolean(me?.referee?.is_active);
     const isEmployee = Boolean(me?.employee?.id);
     return {
-        isPlatformAdmin,
+        hasPlatformConsole,
         isReferee,
         isEmployee,
         tenants,
-        count: (isPlatformAdmin ? 1 : 0) + (isReferee ? 1 : 0) + (isEmployee ? 1 : 0) + tenants.length,
+        count: (hasPlatformConsole ? 1 : 0) + (isReferee ? 1 : 0) + (isEmployee ? 1 : 0) + tenants.length,
     };
 }
 
@@ -225,7 +228,7 @@ export async function storeAuthResponse(
 
 /** Where a fresh session lands, given who it turned out to be. */
 function enterWorkspaceAfterSignIn(meRes: any, options: StoreAuthOptions): StoreAuthResult {
-    const { isPlatformAdmin, isReferee, tenants, count } = getLoginContexts(meRes);
+    const { hasPlatformConsole, isReferee, tenants, count } = getLoginContexts(meRes);
 
     // More than one workspace available → let the user choose which to enter,
     // unless the URL they arrived on already said which one they meant.
@@ -253,8 +256,8 @@ function enterWorkspaceAfterSignIn(meRes: any, options: StoreAuthOptions): Store
         return { redirectTo: routes.referralsPortal.root };
     }
 
-    // Platform admin with no shop of their own → straight to the admin console.
-    if (isPlatformAdmin) {
+    // Platform staff with no shop of their own → straight to the admin console.
+    if (hasPlatformConsole) {
         applyPlatformAdminContext();
         return { redirectTo: routes.admin.root };
     }

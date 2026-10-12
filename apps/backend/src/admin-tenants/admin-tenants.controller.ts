@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../auth/platform-admin.guard';
+import { AllowPlatformRoles } from '../auth/platform-roles.decorator';
+import { PlatformRole } from '@erp71/shared-types';
 import { AdminTenantsService } from './admin-tenants.service';
 import { LoadDemoDataDto } from '../demo-data/demo-data.dto';
 import { parseDataGroups } from '../tenants/clear-tenant-data';
@@ -25,11 +27,17 @@ import {
     SetAdminTenantBusinessTypeDto,
 } from './admin-tenants.dto';
 
+/**
+ * Support engineers reach the read side of a tenant (list, detail, features,
+ * add-ons) and impersonation, so they can find a customer and see what the
+ * customer sees. Everything that changes billing, plan or data stays admin-only.
+ */
 @Controller('admin/tenants')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class AdminTenantsController {
     constructor(private readonly adminTenantsService: AdminTenantsService) {}
 
+    @AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
     @Get()
     listTenants(@Query() query: ListAdminTenantsQueryDto) {
         return this.adminTenantsService.listTenants(query);
@@ -72,6 +80,7 @@ export class AdminTenantsController {
         return this.adminTenantsService.deleteLedgerEntry(eventId, req.user.userId);
     }
 
+    @AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
     @Get(':tenantId')
     getTenant(@Param('tenantId') tenantId: string) {
         return this.adminTenantsService.getTenant(tenantId);
@@ -94,6 +103,7 @@ export class AdminTenantsController {
         return this.adminTenantsService.updateLocalization(tenantId, dto, req.user.userId);
     }
 
+    @AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
     @Get(':tenantId/features')
     getFeatures(@Param('tenantId') tenantId: string) {
         return this.adminTenantsService.getFeatures(tenantId);
@@ -135,6 +145,7 @@ export class AdminTenantsController {
         return this.adminTenantsService.loadDemoData(tenantId, req.user.userId, dto);
     }
 
+    @AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
     @Get(':tenantId/demo-data/status')
     demoDataStatus(@Param('tenantId') tenantId: string) {
         return this.adminTenantsService.getDemoDataStatus(tenantId);
@@ -149,6 +160,7 @@ export class AdminTenantsController {
         return this.adminTenantsService.suspendTenant(tenantId, dto, req.user.userId);
     }
 
+    @AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
     @Post(':tenantId/impersonate')
     impersonateTenant(
         @Param('tenantId') tenantId: string,
@@ -233,6 +245,7 @@ export class AdminTenantsController {
         return this.adminTenantsService.sellAiCredits(tenantId, dto, req.user.userId);
     }
 
+    @AllowPlatformRoles(PlatformRole.SUPPORT_ENGINEER)
     @Get(':tenantId/addons')
     listAddons(@Param('tenantId') tenantId: string) {
         return this.adminTenantsService.listAddons(tenantId);

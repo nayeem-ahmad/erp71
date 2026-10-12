@@ -39,6 +39,7 @@ import {
     CURRENT_TERMS_VERSION,
     isCurrentTermsVersion,
     DEFAULT_PASSWORD_POLICY,
+    resolvePlatformRole,
     type PlatformFeatures,
     type TermsAcceptanceSource,
 } from '@erp71/shared-types';
@@ -90,6 +91,7 @@ const ME_USER_SELECT = {
     name: true,
     preferred_locale: true,
     is_platform_admin: true,
+    platform_role: true,
     email_verified_at: true,
     // Read only as booleans (has a password, has 2FA), but Prisma cannot select
     // a column as "is it set", so the values come along.
@@ -987,6 +989,7 @@ export class AuthService {
         }
 
         const isPlatformAdmin = (user as any).is_platform_admin === true || isPlatformAdminEmail(user.email);
+        const platformRole = resolvePlatformRole({ isPlatformAdmin, platformRole: user.platform_role });
         const tenantMembers = (user.tenantMembers ?? []).filter((membership) =>
             isListedMembership(membership, isPlatformAdmin),
         );
@@ -1002,12 +1005,14 @@ export class AuthService {
             /// ahead of expiry rather than waiting for a request to 401.
             expires_in: accessTokenTtlSeconds(),
             is_platform_admin: isPlatformAdmin,
+            platform_role: platformRole,
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
                 preferred_locale: user.preferred_locale,
                 is_platform_admin: isPlatformAdmin,
+                platform_role: platformRole,
                 email_verified: !!user.email_verified_at,
             },
             tenants: await Promise.all(
@@ -1039,6 +1044,10 @@ export class AuthService {
         }
 
         const isPlatformAdmin = user.is_platform_admin === true || isPlatformAdminEmail(user.email);
+        // The console seat: `ADMIN` for the flag above, a narrower role such as
+        // `SUPPORT_ENGINEER` from `platform_role`, or null for everyone else.
+        // `is_platform_admin` stays "full admin" so nothing that reads it widens.
+        const platformRole = resolvePlatformRole({ isPlatformAdmin, platformRole: user.platform_role });
         const tenantMembers = (user.tenantMembers ?? []).filter((membership) =>
             isListedMembership(membership, isPlatformAdmin),
         );
@@ -1077,6 +1086,7 @@ export class AuthService {
             name: user.name,
             preferred_locale: user.preferred_locale,
             is_platform_admin: isPlatformAdmin,
+            platform_role: platformRole,
             is_demo: this.isDemoAccount(user.email),
             email_verified: !!user.email_verified_at,
             two_factor_enabled: twoFactorEnabled,

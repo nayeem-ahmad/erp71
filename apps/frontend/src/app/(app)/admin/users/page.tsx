@@ -11,7 +11,8 @@ import {
     Trash2,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { PageShell, Button } from '@/components/ui';
+import { PageShell, Button, StatusBadge } from '@/components/ui';
+import { PlatformRole } from '@erp71/shared-types';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { toast } from '@/lib/toast';
 import { DataTable } from '@/components/data-table';
@@ -129,6 +130,18 @@ export default function AdminUsersPage() {
             header: m.columns.email,
             cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
         }),
+        columnHelper.accessor((row) => row.platform_role ?? PlatformRole.ADMIN, {
+            id: 'role',
+            header: m.columns.role,
+            cell: (info) => {
+                const role = info.getValue();
+                return (
+                    <StatusBadge tone={role === PlatformRole.ADMIN ? 'info' : 'neutral'}>
+                        {m.roles[role]}
+                    </StatusBadge>
+                );
+            },
+        }),
         columnHelper.accessor('mobile', {
             header: m.columns.mobile,
             cell: (info) => info.getValue() || '—',
@@ -240,6 +253,7 @@ export default function AdminUsersPage() {
                 open={formOpen}
                 mode={formMode}
                 user={selectedUser}
+                canChangeRole={!selectedUser || selectedUser.id !== selfId}
                 onClose={() => setFormOpen(false)}
                 onSaved={() => void load()}
             />

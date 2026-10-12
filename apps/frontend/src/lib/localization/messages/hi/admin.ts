@@ -1,5 +1,11 @@
 export const adminMessages = {
     overview: {
+        supportConsole: {
+            description: "सपोर्ट कंसोल — ग्राहकों की मदद करें, टेनेंट खोजें और सिस्टम हेल्थ पर नज़र रखें।",
+            support: { title: "सपोर्ट इनबॉक्स", description: "टेनेंट की सपोर्ट बातचीत का जवाब दें।" },
+            feedback: { title: "फ़ीडबैक", description: "पढ़ें कि उपयोगकर्ता ऐप से क्या रिपोर्ट करते हैं।" },
+            tenants: { title: "टेनेंट", description: "किसी टेनेंट को खोजें और समस्या दोहराने के लिए मालिक के रूप में साइन-इन करें।" },
+        },
         badge: "प्लेटफ़ॉर्म एडमिन",
         title: "अवलोकन",
         description: "प्लेटफ़ॉर्म-व्यापी मेट्रिक्स और एडमिन टूल तक त्वरित पहुँच।",
@@ -660,7 +666,12 @@ export const adminMessages = {
         prev: "पिछला",
         next: "अगला",
         addUser: "उपयोगकर्ता जोड़ें",
+        roles: {
+            ADMIN: "एडमिन",
+            SUPPORT_ENGINEER: "सपोर्ट इंजीनियर",
+        },
         columns: {
+            role: "भूमिका",
             name: "नाम",
             email: "ईमेल",
             mobile: "मोबाइल",
@@ -674,6 +685,11 @@ export const adminMessages = {
             sendResetEmail: "रीसेट ईमेल भेजें",
         },
         form: {
+            roleLabel: "भूमिका",
+            roleHints: {
+                ADMIN: "एडमिन कंसोल तक पूरी पहुँच।",
+                SUPPORT_ENGINEER: "सपोर्ट इनबॉक्स, फ़ीडबैक, टेनेंट खोजना और टेनेंट के रूप में साइन-इन, सिस्टम हेल्थ। बिलिंग, सेटिंग्स या स्टाफ़ प्रबंधन नहीं।",
+            },
             createTitle: "प्लेटफ़ॉर्म उपयोगकर्ता जोड़ें",
             editTitle: "प्लेटफ़ॉर्म उपयोगकर्ता संपादित करें",
             emailLabel: "ईमेल",

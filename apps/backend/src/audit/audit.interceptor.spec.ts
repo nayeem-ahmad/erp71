@@ -118,6 +118,27 @@ describe('AuditInterceptor', () => {
         );
     });
 
+    it('records a support engineer acting in the console as a platform action', async () => {
+        await run(
+            makeRequest({
+                method: 'PATCH',
+                route: { path: '/api/v1/admin/support/threads/:id' },
+                params: { id: 'thread-3' },
+                body: { status: 'resolved' },
+                tenantId: undefined,
+                platformRole: 'SUPPORT_ENGINEER',
+            }),
+        );
+
+        expect(audit.log).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.any(String),
+            expect.objectContaining({ userId: 'user-1', tenantId: undefined }),
+            expect.anything(),
+            expect.objectContaining({ _scope: 'platform' }),
+        );
+    });
+
     it('does not treat a tenant-less storefront customer as a platform admin', async () => {
         // Storefront customers and portal users are authenticated and carry no
         // tenant either. Only the guard-set flag admits a request.

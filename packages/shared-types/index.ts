@@ -1988,3 +1988,4 @@ export * from './mushak';
 export * from './vat-pricing';
 export * from './invoice-print';
 export * from './document-numbering';
+export * from './platform-roles';
