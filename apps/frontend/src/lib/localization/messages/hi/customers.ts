@@ -20,7 +20,7 @@ export const customersMessages = {
             "group": "समूह",
             "territory": "क्षेत्र",
             "totalSpent": "कुल खर्च",
-            "credit": "क्रेडिट",
+            "due": "बकाया",
             "points": "पॉइंट",
             "pointsSuffix": "पॉ.",
             "segment": "वर्ग",

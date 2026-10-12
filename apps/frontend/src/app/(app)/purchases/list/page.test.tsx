@@ -131,6 +131,14 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
         expect(link).toHaveAttribute('href', '/purchases/new?duplicate=purchase-1');
     });
 
+    it('opens a purchase to view it, and straight into editing it', async () => {
+        renderWithQueryClient(<PurchasesPage />);
+
+        expect(await screen.findByTitle('View purchase')).toHaveAttribute('href', '/purchases/purchase-1');
+        expect(screen.getByTitle('Edit purchase')).toHaveAttribute('href', '/purchases/purchase-1?edit=true');
+        expect(screen.getByRole('link', { name: 'PUR-00001' })).toHaveAttribute('href', '/purchases/purchase-1');
+    });
+
     it('prints from the row icon without opening an invoice page', async () => {
         const { api } = require('@/lib/api');
         const { printPurchaseInvoiceFromRecord } = require('@/lib/purchase-print-actions');
@@ -238,6 +246,10 @@ describe('PurchasesPage — Epic 20: Core Purchase Transactions', () => {
             ]);
 
             renderWithQueryClient(<PurchasesPage />);
+
+            // Every impact has been reversed; the API refuses to edit it.
+            expect(await screen.findByTitle('View purchase')).toBeInTheDocument();
+            expect(screen.queryByTitle('Edit purchase')).not.toBeInTheDocument();
             await waitFor(() => expect(screen.getByText('PUR-00001')).toBeInTheDocument());
 
             expect(screen.getByText('Cancelled')).toBeInTheDocument();

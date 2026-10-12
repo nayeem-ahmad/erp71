@@ -62,6 +62,14 @@ const COST_BEHAVIOUR: Record<string, CostBehaviour> = {
     // a cancellation uses is decided by `costBehaviourFor` on the receipt it is
     // undoing, in PurchasesService.cancel.
     PURCHASE_CANCELLED: 'REVERSE_RECEIPT',
+
+    // Editing a purchase receives the corrected lines and takes the old receipt
+    // back out, the same pair as recording and cancelling it, so the pool ends
+    // where it would have been had the bill been right the first time. The
+    // _UNCOSTED pair is absent for the reason PURCHASE_CANCELLED_UNCOSTED is:
+    // it edits an imported bill whose receipt never moved the average.
+    PURCHASE_EDIT: 'REVALUE',
+    PURCHASE_EDIT_REVERSAL: 'REVERSE_RECEIPT',
 };
 
 export function costBehaviourFor(movementType: string): CostBehaviour {

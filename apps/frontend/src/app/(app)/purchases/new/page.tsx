@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Copy } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -9,25 +9,9 @@ import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { getWorkspaceItem } from '@/lib/session-store';
-import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
-import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
-import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
-import LineItemsTable from '@/components/document-entry/LineItemsTable';
-import ProductSearch, { availableQtyOf, stockByWarehouseOf } from '@/components/document-entry/ProductSearch';
-import { lastRateFrom, loadRateHistory } from '@/components/document-entry/RateHistory';
-import type { PartyOption } from '@/components/document-entry/PartySearchSelect';
-import VoiceEntryInput from '@/components/VoiceEntryInput';
 import { buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
-import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
-import { pickInstrument } from '@/lib/payment-instrument';
-import { useWarehouses } from '@/lib/hooks/useWarehouses';
-import SupplierSelection, { type NewSupplierDraft } from '../components/SupplierSelection';
-import PurchasePaymentSection from '../components/PurchasePaymentSection';
-import PurchaseTotals, {
-    computePurchaseTotals,
-    EMPTY_PURCHASE_ADJUSTMENTS,
-    type PurchaseAdjustments,
-} from '../components/PurchaseTotals';
+import PurchaseEntryLayout from '../components/PurchaseEntryLayout';
+import { usePurchaseEntry } from '../components/usePurchaseEntry';
 
 /**
  * Purchase entry, built on the same frame as sale entry: one slim meta strip,
@@ -48,97 +32,15 @@ function NewPurchasePageContent() {
     const cameFromProducts = searchParams.get('from') === 'products';
     const returnHref = cameFromProducts ? routes.inventory.products : routes.purchases.list;
 
+    const entry = usePurchaseEntry({ seedDefaultWarehouse: true });
+    const { addProductAtLastCost, loadPurchase } = entry;
     const [currentUser, setCurrentUser] = useState<any>(null);
-    const [items, setItems] = useState<LineItem[]>([]);
-    const [supplier, setSupplier] = useState<PartyOption | null>(null);
-    const [supplierDraft, setSupplierDraft] = useState<NewSupplierDraft | null>(null);
-    const [draftNameInvalid, setDraftNameInvalid] = useState(false);
-    const [adjustments, setAdjustments] = useState<PurchaseAdjustments>(EMPTY_PURCHASE_ADJUSTMENTS);
-    const [notes, setNotes] = useState('');
-    // What is being handed over at the counter. Empty is the old behaviour and
-    // still the common one — the whole bill goes on the supplier's account.
-    const [payments, setPayments] = useState<Payment[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
-
-    // Where the goods are received. `defaultWarehouseId` is what the server
-    // would have chosen anyway, so the strip shows the truth from the first
-    // render instead of a blank that quietly resolves on save.
-    const { warehouses, defaultWarehouseId } = useWarehouses('purchase');
-    const [warehouseId, setWarehouseId] = useState('');
-    const [perLineWarehouse, setPerLineWarehouse] = useState(false);
-    useEffect(() => {
-        setWarehouseId((current) => current || defaultWarehouseId);
-    }, [defaultWarehouseId]);
-
-    const entryWarehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId)?.name;
-
-    const totals = useMemo(() => computePurchaseTotals(items, adjustments), [items, adjustments]);
-    const amountPaid = useMemo(
-        () => payments.reduce((sum, payment) => sum + payment.amount, 0),
-        [payments],
-    );
-    const overpaid = amountPaid - totals.total > 0.005;
 
     useEffect(() => {
         api.getCurrentUser().then(setCurrentUser).catch(() => {});
     }, []);
-
-    const addProduct = useCallback(
-        (
-            product: any,
-            options?: { quantity?: number; price?: number; availableQty?: number },
-        ) => {
-            // Callers pass the cost; the selling price is never a stand-in for it.
-            const unitCost = options?.price ?? 0;
-            setItems((prev) => {
-                const existing = prev.find((item) => item.productId === product.id);
-                if (existing) {
-                    return prev.map((item) =>
-                        item.productId === product.id
-                            ? { ...item, quantity: item.quantity + (options?.quantity ?? 1) }
-                            : item,
-                    );
-                }
-                return [
-                    ...prev,
-                    {
-                        productId: product.id,
-                        name: product.name,
-                        // The API serializes Decimal as a string; coerce so the
-                        // line maths and the posted payload are both numbers.
-                        price: Number.isFinite(unitCost) ? unitCost : 0,
-                        group: product.group?.name,
-                        subgroup: product.subgroup?.name,
-                        quantity: options?.quantity ?? 1,
-                        discount: 0,
-                        unitType: product.unit_type ?? 'none',
-                        // Voice-matched products come without stock rows — leave
-                        // availableQty undefined rather than claiming zero stock.
-                        availableQty: options?.availableQty
-                            ?? (Array.isArray(product.stocks) ? availableQtyOf(product) : undefined),
-                        // Kept per warehouse so the line's figure follows the
-                        // warehouse picker after it is added.
-                        stockByWarehouse: stockByWarehouseOf(product),
-                    },
-                ];
-            });
-        },
-        [],
-    );
-
-    /**
-     * For paths that add a product without a price of their own (voice entry,
-     * "purchase this product" from the product page): look the last cost up
-     * first. Zero when it has never been bought, which the line shows plainly.
-     */
-    const addProductAtLastCost = useCallback(
-        async (product: any, options?: { quantity?: number }) => {
-            const history = await loadRateHistory(product.id, 'purchase', supplier?.id).catch(() => null);
-            addProduct(product, { ...options, price: lastRateFrom(history) ?? 0 });
-        },
-        [addProduct, supplier?.id],
-    );
 
     // Seed the first line when the products list linked here to restock one item.
     useEffect(() => {
@@ -156,7 +58,8 @@ function NewPurchasePageContent() {
 
     // Copy an existing purchase: supplier, lines and the three charge fields.
     // The purchase number and the posting it produced are not carried over —
-    // saving this screen records a new purchase of its own.
+    // saving this screen records a new purchase of its own — and neither is
+    // what was paid on the original: the cash for a copy has not moved.
     useEffect(() => {
         if (!duplicatePurchaseId) return;
 
@@ -165,40 +68,8 @@ function NewPurchasePageContent() {
         api.getPurchase(duplicatePurchaseId)
             .then((purchase: any) => {
                 if (cancelled || !purchase?.id) return;
-
-                setItems((purchase.items ?? []).map((item: any) => ({
-                    productId: item.product_id ?? item.product?.id ?? '',
-                    name: item.product?.name ?? '',
-                    price: Number(item.unit_cost ?? 0),
-                    group: item.product?.group?.name,
-                    subgroup: item.product?.subgroup?.name,
-                    quantity: Number(item.quantity ?? 0),
-                    discount: 0,
-                    unitType: item.product?.unit_type ?? 'none',
-                    // The purchase payload carries no stock rows, so leave
-                    // availability unknown rather than claiming zero.
-                    availableQty: undefined,
-                    warehouseId: item.warehouse_id ?? undefined,
-                })));
-                setSupplier(purchase.supplier
-                    ? { ...purchase.supplier, id: purchase.supplier_id ?? purchase.supplier.id }
-                    : null);
-                setAdjustments({
-                    taxAmount: Number(purchase.tax_amount ?? 0),
-                    discountAmount: Number(purchase.discount_amount ?? 0),
-                    freightAmount: Number(purchase.freight_amount ?? 0),
-                });
-                setNotes(purchase.notes ?? '');
-                // Deliberately not copied: what was paid on the original bill.
-                // A copy is a new purchase, and the cash for it has not moved.
-                setPayments([]);
+                loadPurchase(purchase, { withPayments: false });
                 setDuplicatedFrom(purchase.purchase_number ?? '');
-                // A copy buys the same goods into the same place unless the user
-                // says otherwise, per-line splits included.
-                if (purchase.warehouse_id) setWarehouseId(purchase.warehouse_id);
-                if ((purchase.items ?? []).some((item: any) => item.warehouse_id)) {
-                    setPerLineWarehouse(true);
-                }
             })
             .catch((error: unknown) => {
                 console.error('Failed to load the purchase to duplicate', error);
@@ -206,15 +77,7 @@ function NewPurchasePageContent() {
             });
 
         return () => { cancelled = true; };
-    }, [duplicatePurchaseId, t.purchases.duplicateLoadFailed]);
-
-    const updateItem = (productId: string, updates: Partial<LineItem>) =>
-        setItems((prev) =>
-            prev.map((item) => (item.productId === productId ? { ...item, ...updates } : item)),
-        );
-
-    const removeItem = (productId: string) =>
-        setItems((prev) => prev.filter((item) => item.productId !== productId));
+    }, [duplicatePurchaseId, loadPurchase, t.purchases.duplicateLoadFailed]);
 
     const handleVoicePurchase = (result: VoiceEntryResult) => {
         let added = 0;
@@ -224,7 +87,7 @@ function NewPurchasePageContent() {
                 added++;
             }
         }
-        if (result.note && !notes) setNotes(result.note);
+        if (result.note && !entry.notes) entry.setNotes(result.note);
 
         for (const message of buildVoiceEntryMessages(result, added)) {
             if (message.startsWith('Could not find')) toast.info(message);
@@ -235,22 +98,13 @@ function NewPurchasePageContent() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (items.length === 0) {
-            toast.error(t.purchaseShared.addOnePurchasedProduct);
-            return;
-        }
-
-        if (supplierDraft && !supplierDraft.name.trim()) {
-            setDraftNameInvalid(true);
-            toast.error(t.purchaseShared.supplierNameRequiredInline);
-            return;
-        }
-        setDraftNameInvalid(false);
-
-        // Paying more than the bill would leave the supplier holding an advance
-        // this screen has no way to record, and the service rejects it anyway.
-        if (overpaid) {
-            toast.error(t.purchaseShared.paymentExceedsTotal);
+        const problem = entry.validate({
+            noLines: t.purchaseShared.addOnePurchasedProduct,
+            supplierNameRequired: t.purchaseShared.supplierNameRequiredInline,
+            paymentExceedsTotal: t.purchaseShared.paymentExceedsTotal,
+        });
+        if (problem) {
+            toast.error(problem);
             return;
         }
 
@@ -260,39 +114,7 @@ function NewPurchasePageContent() {
                 // The active branch is persisted per workspace and sent as
                 // x-store-id on every request; the body needs the same id.
                 storeId: getWorkspaceItem('store_id') || '',
-                supplierId: supplierDraft ? undefined : supplier?.id,
-                newSupplier: supplierDraft
-                    ? {
-                          name: supplierDraft.name,
-                          phone: supplierDraft.phone || undefined,
-                          email: supplierDraft.email || undefined,
-                          address: supplierDraft.address || undefined,
-                      }
-                    : undefined,
-                warehouseId: warehouseId || undefined,
-                items: items.map((item) => ({
-                    productId: item.productId,
-                    quantity: item.quantity,
-                    unitCost: item.price,
-                    // Only sent while the per-line column is showing: a line
-                    // keeps its override in state when the column is hidden, and
-                    // posting one the user cannot see would be a trap.
-                    warehouseId: perLineWarehouse ? item.warehouseId : undefined,
-                })),
-                taxAmount: totals.taxAmount,
-                discountAmount: totals.discountAmount,
-                freightAmount: totals.freightAmount,
-                notes: notes || undefined,
-                payments: payments.length
-                    ? payments.map((payment) => ({
-                          paymentMethod: payment.method,
-                          amount: payment.amount,
-                          accountId: payment.accountId,
-                          // The cheque / transfer details typed against this
-                          // tender — only the boxes that were filled in.
-                          ...pickInstrument(payment),
-                      }))
-                    : undefined,
+                ...entry.billPayload(),
             });
 
             toast.success(
@@ -310,7 +132,8 @@ function NewPurchasePageContent() {
     };
 
     return (
-        <DocumentEntryLayout
+        <PurchaseEntryLayout
+            entry={entry}
             title={duplicatedFrom ? `${t.common.duplicate}: ${duplicatedFrom}` : t.purchases.recordPurchase}
             backHref={returnHref}
             backLabel={t.purchases.title}
@@ -321,97 +144,8 @@ function NewPurchasePageContent() {
                 </div>
             ) : undefined}
             onSubmit={handleSubmit}
-            metaBar={
-                <DocumentMetaBar
-                    docLabel={t.purchases.columns.purchaseNumber}
-                    currentUser={currentUser}
-                    showRefNumber={false}
-                    showDate={false}
-                >
-                    <WarehouseMetaFields
-                        warehouses={warehouses}
-                        value={warehouseId}
-                        onChange={setWarehouseId}
-                        perLine={perLineWarehouse}
-                        onPerLineChange={setPerLineWarehouse}
-                    />
-                </DocumentMetaBar>
-            }
-            partyPicker={
-                <SupplierSelection
-                    supplier={supplier}
-                    setSupplier={setSupplier}
-                    draft={supplierDraft}
-                    setDraft={setSupplierDraft}
-                    draftNameInvalid={draftNameInvalid}
-                />
-            }
-            picker={
-                <VoiceEntryInput entryType="purchase" onResult={handleVoicePurchase} inline>
-                    <ProductSearch
-                        onProductSelect={addProduct}
-                        priceLabel={t.purchaseShared.unitCost}
-                        placeholder={t.purchaseShared.searchProducts}
-                        historyType="purchase"
-                        // A line starts at what the stock last cost (this
-                        // supplier's rate first), never at its selling price,
-                        // and stays empty when there is no purchase history.
-                        initialPriceOf={() => null}
-                        seedPriceFromHistory
-                        historyPartyId={supplier?.id}
-                        historyPartyName={supplier?.name}
-                        warehouseId={warehouseId || undefined}
-                        // Goods are coming in: buying more than is held is normal.
-                        warnOverStock={false}
-                    />
-                </VoiceEntryInput>
-            }
-            table={
-                <LineItemsTable
-                    items={items}
-                    onUpdateItem={updateItem}
-                    onRemoveItem={removeItem}
-                    showDiscount={false}
-                    showCompoundUnits
-                    priceLabel={t.purchaseShared.unitCost}
-                    availableLabel={t.purchaseShared.inStock}
-                    emptyMessage={t.purchaseShared.noPurchaseLinesYet}
-                    historyType="purchase"
-                    historyPartyId={supplier?.id}
-                    historyPartyName={supplier?.name}
-                    warehouses={perLineWarehouse ? warehouses : []}
-                    entryWarehouseName={entryWarehouseName}
-                    entryWarehouseId={warehouseId || undefined}
-                    warehouseLabel={t.common.warehouse}
-                    warnOverStock={false}
-                />
-            }
-            note={
-                <input
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder={t.purchaseShared.purchaseNotes}
-                    aria-label={t.common.notes}
-                    className="w-full border rounded px-2 py-1.5 text-sm flex-shrink-0"
-                />
-            }
-            panel={
-                <>
-                    <PurchaseTotals
-                        totals={totals}
-                        onChange={(patch) => setAdjustments((prev) => ({ ...prev, ...patch }))}
-                        previousPayable={Number(supplier?.due_balance ?? 0)}
-                    />
-                    <div className="border-t pt-3">
-                        <PurchasePaymentSection
-                            payments={payments}
-                            total={totals.total}
-                            onPaymentChange={setPayments}
-                        />
-                    </div>
-                </>
-            }
+            currentUser={currentUser}
+            onVoiceResult={handleVoicePurchase}
             actions={
                 <>
                     <Link
@@ -422,7 +156,7 @@ function NewPurchasePageContent() {
                     </Link>
                     <button
                         type="submit"
-                        disabled={submitting || items.length === 0 || totals.total < 0 || overpaid}
+                        disabled={submitting || entry.items.length === 0 || entry.totals.total < 0 || entry.overpaid}
                         className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 text-sm font-medium"
                     >
                         {submitting ? t.purchases.modal.saving : t.purchases.modal.postPurchase}

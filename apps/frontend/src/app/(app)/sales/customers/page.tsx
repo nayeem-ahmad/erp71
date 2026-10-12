@@ -86,8 +86,9 @@ export default function CustomersPage() {
     const [runningSegmentation, setRunningSegmentation] = useState(false);
     const [evaluating, setEvaluating] = useState(false);
     const [evalMessage, setEvalMessage] = useState('');
-    // The tenant admin's Sales Settings switch. Off until it reads true, so the
-    // column never flashes in for a shop that has it off.
+    // The tenant admin's Sales Settings switch: adds each customer's credit
+    // limit under their due. Off until it reads true, so the limit never
+    // flashes in for a shop that has it off.
     const [showCredit, setShowCredit] = useState(false);
     // Customers are company-level, so a member who may see every branch starts
     // on all of them. A limited member sees only their branches' customers —
@@ -288,16 +289,15 @@ export default function CustomersPage() {
                 sortingFn: (a, b) => Number(a.getValue('total_spent') || 0) - Number(b.getValue('total_spent') || 0),
                 size: 120,
             }),
-            ...(showCredit ? [columnHelper.accessor('due_balance', {
-                id: 'credit',
-                header: t.customers.columns.credit,
+            columnHelper.accessor('due_balance', {
+                header: t.customers.columns.due,
                 cell: (info) => {
                     const due = Number(info.getValue() || 0);
                     const limit = info.row.original.credit_limit;
                     return (
                         <div className="text-sm">
                             <span className={due > 0 ? 'font-semibold text-amber-700' : 'text-gray-500'}>{formatBDT(due)}</span>
-                            {limit != null ? (
+                            {showCredit && limit != null ? (
                                 <span className="block text-xs text-gray-400">/ {formatBDT(Number(limit))}</span>
                             ) : null}
                         </div>
@@ -305,7 +305,7 @@ export default function CustomersPage() {
                 },
                 sortingFn: (a, b) => Number(a.original.due_balance || 0) - Number(b.original.due_balance || 0),
                 size: 120,
-            })] : []),
+            }),
             columnHelper.accessor('loyalty_points', {
                 header: t.customers.columns.points,
                 cell: (info) => {
