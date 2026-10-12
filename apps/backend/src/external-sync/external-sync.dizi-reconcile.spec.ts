@@ -431,3 +431,29 @@ describe('Express purchases and purchase returns already imported', () => {
         expect(db.supplierCreditTransaction.create.mock.calls[0][0].data).toMatchObject({ supplier_id: 'sup-1', type: 'ADJUSTMENT', amount: -13000, reference_id: 'pr-1' });
     });
 });
+
+describe('a customer recreated with a phone number that is not one', () => {
+    it('is created without the number, which another customer holds', async () => {
+        // Press Club: LS Trade International ("415"), whose ERP71 record had been deleted.
+        const db = makeDb({ CUSTOMER: [['c-ls', 'gone']] });
+        db.customer.updateMany.mockResolvedValue({ count: 0 });
+        db.customer.findFirst = jest.fn(async () => null);
+        db.customer.create = jest.fn(async () => ({ id: 'cust-new' }));
+        const warnings: any[] = [];
+
+        await service(db).syncCustomers(
+            CONNECTION,
+            { fetchCustomers: jest.fn(async () => [{ Id: 'c-ls', Code: 'C0415', Name: 'LS Trade International', ContactNo: '415', Balance: 9320 }]) },
+            emptyStats(),
+            warnings,
+            false,
+            OPENING,
+            MAPPERS,
+            new Map([['c-ls', 9320]]),
+        );
+
+        expect(db.customer.create.mock.calls[0][0].data).toMatchObject({ name: 'LS Trade International', phone: null });
+        expect(db.customerCreditTransaction.create.mock.calls[0][0].data).toMatchObject({ customer_id: 'cust-new', amount: 9320 });
+        expect(warnings.filter((w) => w.code === 'WRITE_FAILED')).toEqual([]);
+    });
+});

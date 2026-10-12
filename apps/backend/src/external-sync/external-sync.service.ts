@@ -1259,7 +1259,9 @@ export class ExternalSyncService {
                             customer_code: customerCode,
                             name: mapped.name,
                             owner_name: mapped.ownerName,
-                            phone: mapped.phone,
+                            // Only a real number: a phone is unique per tenant,
+                            // and two shops that both typed "01" are not one.
+                            phone: normalizePhone(mapped.phone) ? mapped.phone : null,
                             email: mapped.email,
                             address: mapped.address,
                             credit_limit: mapped.creditLimit,
