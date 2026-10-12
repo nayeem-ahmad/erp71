@@ -41,12 +41,14 @@ interface PurchaseTotalsProps {
     onChange: (patch: Partial<PurchaseAdjustments>) => void;
     /** Outstanding balance already owed to the selected supplier, if any. */
     previousPayable?: number;
+    /** Show the figures as they were posted, with no inputs. */
+    readOnly?: boolean;
 }
 
 // Dense totals summary for the right panel, matching the sale screen: each
 // adjustment input sits inline on its own row so every figure stays visible
 // without a second grid.
-export default function PurchaseTotals({ totals, onChange, previousPayable = 0 }: PurchaseTotalsProps) {
+export default function PurchaseTotals({ totals, onChange, previousPayable = 0, readOnly = false }: PurchaseTotalsProps) {
     const { t, locale } = useI18n();
     const inputClass = 'w-24 px-1.5 py-0.5 border rounded text-xs text-end';
     const amount = (value: number) => formatBDT(value, { locale });
@@ -59,15 +61,19 @@ export default function PurchaseTotals({ totals, onChange, previousPayable = 0 }
         <div className="flex justify-between items-center gap-2">
             <span className="text-gray-500 whitespace-nowrap">{label}</span>
             <div className="flex items-center gap-2">
-                <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={totals[field]}
-                    aria-label={label}
-                    onChange={(e) => onChange({ [field]: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    className={inputClass}
-                />
+                {readOnly ? (
+                    <span className="font-medium">{amount(totals[field])}</span>
+                ) : (
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={totals[field]}
+                        aria-label={label}
+                        onChange={(e) => onChange({ [field]: Math.max(0, parseFloat(e.target.value) || 0) })}
+                        className={inputClass}
+                    />
+                )}
                 {options.negative && totals[field] > 0 && (
                     <span className="font-medium w-4 text-end text-red-600">−</span>
                 )}

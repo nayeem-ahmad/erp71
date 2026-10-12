@@ -254,10 +254,14 @@ alone. It refuses to run without the upload key:
 - **Testers:** `firebase appdistribution:testers:add --project erp71-709cf --group-alias pilot a@example.com b@example.com`
   (or the console's App Distribution › Testers & Groups). Removing someone:
   `firebase appdistribution:testers:remove --project erp71-709cf a@example.com`.
-- **Google sign-in** in these builds needs the upload key's SHA-1 on the Firebase
-  Android app (`firebase apps:android:sha:list <app-id> --project erp71-709cf`);
-  it is the same Cloud project as the backend's web client, so nothing else
-  needs registering.
+- **Google sign-in** in these builds needs an **Android OAuth client** for
+  `com.erp71.app` with the upload key's SHA-1
+  (`A1:E8:0F:76:F6:AE:6C:41:5B:2A:42:BC:39:02:48:90:3E:9E:F9:F6`), created in
+  Cloud Console › APIs & Services › Credentials of `erp71-709cf` — the backend
+  web client's project. Adding the SHA to the Firebase Android app does **not**
+  create one, and no CLI can. Check which keys have a client with
+  `firebase apps:sdkconfig ANDROID 1:31523003932:android:c94a1a719dab04d3dd09d9 --project erp71-709cf`
+  (the `client_type: 1` entries carry each client's certificate hash).
 
 Without `android/key.properties` a release build signs with the debug key —
 fine for checks, never for testers.

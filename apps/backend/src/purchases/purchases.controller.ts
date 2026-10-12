@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { StorePermission } from '@erp71/shared-types';
 import { CancelEntryDto } from '../common/cancel-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -8,7 +8,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { SortableBranchListQueryDto } from '../common/branch-list-query.dto';
 import { BranchScopeService } from '../database/branch-scope.service';
-import { CreatePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto } from './purchase.dto';
 import { PurchasesService } from './purchases.service';
 
 import { PURCHASE_READ, PURCHASE_WRITE } from '../auth/permission-sets';
@@ -45,6 +45,17 @@ export class PurchasesController {
             sortBy,
             sortDir,
         });
+    }
+
+    /**
+     * Correct a recorded purchase. Same permission as recording one, as on the
+     * sales side: an edit carries its changes through stock, the supplier's
+     * account and the books, and refuses what `cancel` refuses.
+     */
+    @RequireAnyStorePermission(...PURCHASE_WRITE)
+    @Patch(':id')
+    update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdatePurchaseDto) {
+        return this.purchasesService.update(tenant.tenantId, tenant.userId, id, dto);
     }
 
     /**

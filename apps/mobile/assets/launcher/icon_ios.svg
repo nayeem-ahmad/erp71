@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<!-- iOS: full-bleed, no transparency; iOS rounds the corners itself. Glyph from apps/frontend/public/logo/icon.svg. -->
+<rect width="1024" height="1024" fill="#2563EB"/><polygon fill="#FFFFFF" points="544.97,354.15 324.51,791.33 168.54,791.33 387.5,359.4 387.5,358.28 130.29,358.28 130.29,232.67 544.97,232.67"/><polygon fill="#FFFFFF" points="893.71,791.33 743.36,791.33 743.36,368.02 742.23,368.02 618.13,445.64 618.13,316.66 752.73,232.67 893.71,232.67"/></svg>
