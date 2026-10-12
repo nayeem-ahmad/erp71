@@ -211,6 +211,37 @@ export const crmHrMessages = {
                 done: "Plantilla eliminada.",
                 failed: "No se pudo eliminar la plantilla.",
             },
+            examples: {
+                action: "Empezar con ejemplos",
+                hint: "Añade cinco mensajes habituales en su idioma, que puede editar o eliminar como cualquier otra plantilla.",
+                added: "Plantillas de ejemplo añadidas.",
+                failed: "No se pudieron añadir los ejemplos.",
+                items: {
+                    paymentReminder: {
+                        name: "Recordatorio de pago",
+                        subject: "Recordar a {{name}} el pago pendiente",
+                        body: "Estimado/a {{name}}, le recordamos amablemente que su pago a {{business}} sigue pendiente. Por favor, indíquenos cuándo podemos esperarlo. Gracias. — {{user}}",
+                    },
+                    thankYou: {
+                        name: "Gracias por su compra",
+                        body: "Estimado/a {{name}}, gracias por comprar en {{business}}. Esperamos atenderle de nuevo pronto. — {{user}}",
+                    },
+                    visitFollowUp: {
+                        name: "Seguimiento tras una visita",
+                        subject: "Hacer seguimiento a {{name}} tras la visita",
+                        body: "Estimado/a {{name}}, gracias por su tiempo hoy. Si tiene alguna pregunta sobre lo que hablamos, no dude en contactarnos. — {{user}}, {{business}}",
+                    },
+                    missedCall: {
+                        name: "Llamada perdida",
+                        body: "Estimado/a {{name}}, intenté llamarle el {{date}} pero no pude localizarle. Por favor, devuélvame la llamada cuando le venga bien. — {{user}}, {{business}}",
+                    },
+                    quoteFollowUp: {
+                        name: "Seguimiento de presupuesto",
+                        subject: "Hacer seguimiento del presupuesto enviado a {{name}}",
+                        body: "Estimado/a {{name}}, ¿ha tenido ocasión de revisar nuestro presupuesto? Con gusto responderé a cualquier pregunta. — {{user}}, {{business}}",
+                    },
+                },
+            },
         },
         leadTaxonomy: {
             addSource: "Añadir origen",

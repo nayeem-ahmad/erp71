@@ -15,6 +15,8 @@ import { StorePermission } from '@erp71/shared-types';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
+import { SubscriptionAccessGuard } from '../auth/subscription-access.guard';
+import { RequiresFeature } from '../auth/subscription-access.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { CrmMessageTemplatesService } from './crm-message-templates.service';
@@ -25,8 +27,16 @@ import {
 } from './message-template.dto';
 
 import { CRM_STAFF } from '../auth/permission-sets';
+/**
+ * Behind `premiumCrm` because every dialog that offers a template (Log, Schedule,
+ * Complete) writes to `crm/activities`, which is. Ungated, a tenant without it
+ * could write templates and never use one. Its CRM Setup siblings
+ * (`crm/lead-taxonomy`, `custom-fields`) stay ungated; the customer page, which
+ * is outside premium CRM, reads the channel list.
+ */
 @Controller('crm/message-templates')
-@UseGuards(JwtAuthGuard, StorePermissionGuard)
+@UseGuards(JwtAuthGuard, StorePermissionGuard, SubscriptionAccessGuard)
+@RequiresFeature('premiumCrm')
 @UseInterceptors(TenantInterceptor)
 export class CrmMessageTemplatesController {
     constructor(private readonly service: CrmMessageTemplatesService) {}

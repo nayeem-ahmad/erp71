@@ -211,6 +211,37 @@ export const crmHrMessages = {
                 done: 'Templat dipadam.',
                 failed: 'Templat tidak dapat dipadam.',
             },
+            examples: {
+                action: 'Mula dengan contoh',
+                hint: 'Menambah lima mesej biasa dalam bahasa anda, untuk disunting atau dipadam seperti templat lain.',
+                added: 'Templat contoh ditambah.',
+                failed: 'Contoh tidak dapat ditambah.',
+                items: {
+                    paymentReminder: {
+                        name: 'Peringatan bayaran',
+                        subject: 'Ingatkan {{name}} tentang bayaran tertunggak',
+                        body: 'Tuan/Puan {{name}}, ini peringatan mesra bahawa bayaran anda kepada {{business}} masih tertunggak. Sila maklumkan bila kami boleh menjangkakannya. Terima kasih. — {{user}}',
+                    },
+                    thankYou: {
+                        name: 'Terima kasih atas pembelian anda',
+                        body: 'Tuan/Puan {{name}}, terima kasih kerana membeli-belah di {{business}}. Kami berharap dapat berkhidmat untuk anda lagi. — {{user}}',
+                    },
+                    visitFollowUp: {
+                        name: 'Susulan selepas lawatan',
+                        subject: 'Buat susulan dengan {{name}} selepas lawatan',
+                        body: 'Tuan/Puan {{name}}, terima kasih atas masa anda hari ini. Jika ada sebarang soalan tentang perkara yang dibincangkan, sila hubungi kami. — {{user}}, {{business}}',
+                    },
+                    missedCall: {
+                        name: 'Panggilan tidak berjawab',
+                        body: 'Tuan/Puan {{name}}, saya cuba menghubungi anda pada {{date}} tetapi tidak berjaya. Sila hubungi saya semula pada masa yang sesuai. — {{user}}, {{business}}',
+                    },
+                    quoteFollowUp: {
+                        name: 'Susulan sebut harga',
+                        subject: 'Buat susulan sebut harga yang dihantar kepada {{name}}',
+                        body: 'Tuan/Puan {{name}}, adakah anda sempat meneliti sebut harga kami? Saya sedia menjawab sebarang soalan. — {{user}}, {{business}}',
+                    },
+                },
+            },
         },
         leadTaxonomy: {
             addSource: 'Tambah sumber',

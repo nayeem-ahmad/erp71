@@ -12,6 +12,8 @@ import { routes } from '@/lib/routes';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { getWorkspaceItem } from '@/lib/session-store';
+import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
+import { canUsePremiumCrm } from '@/lib/plan-entitlements';
 
 const TABS = ['channels', 'purposes', 'templates', 'statuses', 'sources', 'categories', 'customFields'] as const;
 type Tab = (typeof TABS)[number];
@@ -35,10 +37,21 @@ function CrmSetupPage() {
 
     const [canManage, setCanManage] = useState(false);
 
+    // Templates only feed the Log, Schedule and Complete dialogs, which are all
+    // premium CRM, and their endpoint is gated to match. Without the plan the tab
+    // could only show a list the tenant can neither fill nor use.
+    const plan = useTenantPlanFeatures();
+    const hasPremiumCrm = canUsePremiumCrm(plan.planCode, plan.features);
+    const tabs = hasPremiumCrm ? TABS : TABS.filter((k) => k !== 'templates');
+
     // The tab lives in the URL so a specific list can be linked to and survives a
     // reload — the CRM hub links straight at ?tab=channels.
     const param = searchParams.get('tab');
-    const tab: Tab = isTab(param) ? param : 'channels';
+    const requested: Tab = isTab(param) ? param : 'channels';
+    // A templates link opened before the plan has loaded shows nothing yet,
+    // rather than flashing Channels and then switching.
+    const waitingForPlan = requested === 'templates' && !plan.ready;
+    const tab: Tab = requested === 'templates' && !hasPremiumCrm ? 'channels' : requested;
 
     const selectTab = useCallback(
         (next: Tab) => router.replace(`${routes.crm.setup}?tab=${next}`, { scroll: false }),
@@ -72,7 +85,7 @@ function CrmSetupPage() {
             />
 
             <div className="flex flex-wrap gap-2" role="tablist">
-                {TABS.map((k) => (
+                {tabs.map((k) => (
                     <button
                         key={k}
                         type="button"
@@ -90,16 +103,20 @@ function CrmSetupPage() {
                 ))}
             </div>
 
-            <p className="text-sm text-gray-500">{m.descriptions[tab]}</p>
+            {!waitingForPlan && (
+                <>
+                    <p className="text-sm text-gray-500">{m.descriptions[tab]}</p>
 
-            {/* Keyed so switching tabs remounts the panel — otherwise a panel would
-                keep the previous list's rows on screen until its refetch lands. */}
-            {tab === 'customFields' ? (
-                <CrmCustomFieldsPanel canManage={canManage} />
-            ) : tab === 'templates' ? (
-                <CrmMessageTemplatesPanel canManage={canManage} />
-            ) : (
-                <CrmListPanel key={tab} kind={tab} canManage={canManage} />
+                    {/* Keyed so switching tabs remounts the panel — otherwise a panel would
+                        keep the previous list's rows on screen until its refetch lands. */}
+                    {tab === 'customFields' ? (
+                        <CrmCustomFieldsPanel canManage={canManage} />
+                    ) : tab === 'templates' ? (
+                        <CrmMessageTemplatesPanel canManage={canManage} />
+                    ) : (
+                        <CrmListPanel key={tab} kind={tab} canManage={canManage} />
+                    )}
+                </>
             )}
         </PageShell>
     );

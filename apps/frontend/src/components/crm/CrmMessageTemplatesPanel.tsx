@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import { Plus, Pencil, Trash2, EyeOff, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, EyeOff, Eye, ListPlus } from 'lucide-react';
 import { Button, Input, Field, Select, StatusBadge, Textarea } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { api } from '@/lib/api';
@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import {
+    EXAMPLE_TEMPLATES,
     TEMPLATE_TOKENS,
     unknownTemplateTokens,
     type CrmMessageTemplate,
@@ -66,6 +67,8 @@ export default function CrmMessageTemplatesPanel({ canManage }: Readonly<{ canMa
 
     const [deleting, setDeleting] = useState<CrmMessageTemplate | null>(null);
     const [removing, setRemoving] = useState(false);
+
+    const [addingExamples, setAddingExamples] = useState(false);
 
     // `Field` only associates its label when it is given the control's id, and
     // an unlabelled <select> in a form of six is unusable with a screen reader.
@@ -177,6 +180,41 @@ export default function CrmMessageTemplatesPanel({ canManage }: Readonly<{ canMa
         }
     };
 
+    /**
+     * Adds the starter set one at a time, so they keep their order. A name that
+     * is already taken (someone added one meanwhile) is skipped and theirs kept;
+     * any other failure stops the run, since the next example would only fail
+     * the same way, and the list then shows whatever did land.
+     */
+    const addExamples = async () => {
+        setAddingExamples(true);
+        let failed = false;
+        try {
+            for (const { key, usage } of EXAMPLE_TEMPLATES) {
+                const item = m.examples.items[key];
+                try {
+                    await api.createCrmMessageTemplate({
+                        name: item.name,
+                        body: item.body,
+                        subject: 'subject' in item ? item.subject : '',
+                        usage,
+                        channel_id: null,
+                        purpose_id: null,
+                    });
+                } catch (err: unknown) {
+                    if (err instanceof Error && /already exists/i.test(err.message)) continue;
+                    failed = true;
+                    break;
+                }
+            }
+            if (failed) toast.error(m.examples.failed);
+            else toast.success(m.examples.added);
+            await load();
+        } finally {
+            setAddingExamples(false);
+        }
+    };
+
     const confirmDelete = async () => {
         if (!deleting) return;
         setRemoving(true);
@@ -209,7 +247,22 @@ export default function CrmMessageTemplatesPanel({ canManage }: Readonly<{ canMa
             {loading ? (
                 <p className="text-sm text-gray-500">{m.loading}</p>
             ) : rows.length === 0 ? (
-                <p className="text-sm text-gray-400">{m.empty}</p>
+                <div className="space-y-2">
+                    <p className="text-sm text-gray-400">{m.empty}</p>
+                    {canManage && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                variant="secondary"
+                                onClick={addExamples}
+                                loading={addingExamples}
+                                icon={<ListPlus className="w-4 h-4" />}
+                            >
+                                {m.examples.action}
+                            </Button>
+                            <span className="text-xs text-gray-500">{m.examples.hint}</span>
+                        </div>
+                    )}
+                </div>
             ) : (
                 <div className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
                     <ul className="divide-y divide-gray-50">

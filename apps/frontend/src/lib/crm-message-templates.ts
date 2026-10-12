@@ -50,6 +50,24 @@ export const TEMPLATE_TOKENS: readonly (keyof TemplateVars)[] = [
 ];
 
 /**
+ * The starter set CRM Setup offers a tenant whose list is empty, in the order it
+ * is added. Only the shape lives here: the words are in the translation files
+ * (`crm.messageTemplates.examples.items`), so they are saved in the language of
+ * the admin who adds them. Nothing adds these on its own, because seeded text is
+ * words nobody at the business wrote, going out over their name.
+ *
+ * Every example works on any channel and carries no purpose, so it never points
+ * at a lookup row the tenant has renamed or hidden.
+ */
+export const EXAMPLE_TEMPLATES = [
+    { key: 'paymentReminder', usage: 'BOTH' },
+    { key: 'thankYou', usage: 'LOG' },
+    { key: 'visitFollowUp', usage: 'BOTH' },
+    { key: 'missedCall', usage: 'LOG' },
+    { key: 'quoteFollowUp', usage: 'SCHEDULE' },
+] as const satisfies readonly { key: string; usage: TemplateUsage }[];
+
+/**
  * Substitute `{{token}}` placeholders in a template body.
  *
  * Whitespace inside the braces is tolerated (`{{ name }}`) because people type

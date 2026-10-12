@@ -211,6 +211,37 @@ export const crmHrMessages = {
                 done: "Modèle supprimé.",
                 failed: "Impossible de supprimer le modèle.",
             },
+            examples: {
+                action: "Commencer avec des exemples",
+                hint: "Ajoute cinq messages courants dans votre langue, à modifier ou supprimer comme n’importe quel autre modèle.",
+                added: "Modèles d’exemple ajoutés.",
+                failed: "Impossible d’ajouter les exemples.",
+                items: {
+                    paymentReminder: {
+                        name: "Rappel de paiement",
+                        subject: "Rappeler à {{name}} le paiement en attente",
+                        body: "Bonjour {{name}}, nous vous rappelons aimablement que votre paiement à {{business}} est toujours en attente. Merci de nous indiquer quand nous pouvons l’attendre. — {{user}}",
+                    },
+                    thankYou: {
+                        name: "Merci pour votre achat",
+                        body: "Bonjour {{name}}, merci d’avoir fait vos achats chez {{business}}. Au plaisir de vous servir à nouveau. — {{user}}",
+                    },
+                    visitFollowUp: {
+                        name: "Suivi après une visite",
+                        subject: "Relancer {{name}} après la visite",
+                        body: "Bonjour {{name}}, merci pour le temps que vous nous avez accordé aujourd’hui. Pour toute question sur ce dont nous avons parlé, n’hésitez pas à nous contacter. — {{user}}, {{business}}",
+                    },
+                    missedCall: {
+                        name: "Appel manqué",
+                        body: "Bonjour {{name}}, j’ai essayé de vous appeler le {{date}} sans parvenir à vous joindre. Merci de me rappeler quand cela vous convient. — {{user}}, {{business}}",
+                    },
+                    quoteFollowUp: {
+                        name: "Relance de devis",
+                        subject: "Relancer {{name}} au sujet du devis envoyé",
+                        body: "Bonjour {{name}}, avez-vous eu l’occasion de consulter notre devis ? Je reste à votre disposition pour toute question. — {{user}}, {{business}}",
+                    },
+                },
+            },
         },
         leadTaxonomy: {
             addSource: "Ajouter une source",
