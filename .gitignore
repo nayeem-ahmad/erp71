@@ -62,3 +62,6 @@ next-env.d.ts
 # Local DB dumps (never commit — contains live customer data)
 /backups/
 *.dump
+babu-bazar-stock-xr.pdf
+stock-babu-bazar-2.csv
+stock-babu-bazar.csv
