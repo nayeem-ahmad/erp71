@@ -47,6 +47,7 @@ const CUSTOMER_SORTABLE: SortableMap = {
     segment_category: (dir) => ({ segment_category: dir }),
     customer_type: (dir) => ({ customer_type: dir }),
     loyalty_points: (dir) => ({ loyalty_points: dir }),
+    due_balance: (dir) => ({ due_balance: dir }),
 };
 const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
 

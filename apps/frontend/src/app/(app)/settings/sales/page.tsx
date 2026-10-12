@@ -156,10 +156,9 @@ export default function SalesSettingsPage() {
                                     className="mt-0.5"
                                 />
                                 <span>
-                                    <span className="block text-sm font-semibold text-gray-700">Show customer credit in Customers</span>
+                                    <span className="block text-sm font-semibold text-gray-700">Show credit limits in Customers</span>
                                     <span className="block mt-1 text-xs text-gray-400">
-                                        Adds a Credit column to the Customers list showing what each customer owes
-                                        against their credit limit.
+                                        Shows each customer&apos;s credit limit under their due on the Customers list.
                                     </span>
                                 </span>
                             </label>
