@@ -1,3 +1,4 @@
+import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
 import { printPurchaseInvoiceFromRecord, type PrintablePurchase, type PurchasePrintContext } from './purchase-print-actions';
 import { printPurchaseInvoice } from './purchase-invoice-printer';
 import { enMessages } from './localization/messages/en';
@@ -70,7 +71,36 @@ describe('printPurchaseInvoiceFromRecord', () => {
             expect.anything(),
             'Thermal80',
             undefined,
+            undefined,
         );
+    });
+
+    it("passes on the member's invoice layout, who is printing and the QR code", () => {
+        const layout = { ...DEFAULT_INVOICE_PRINT_PREFS, layout: 'detailed' as const };
+        printPurchaseInvoiceFromRecord(
+            {
+                ...purchase,
+                paid_amount: '30',
+                prepared_by: 'Rina Akter',
+                supplier: { ...purchase.supplier, supplier_code: 'SUP-00012' },
+            },
+            'A4',
+            { ...ctx, invoiceLayout: layout, printedBy: 'Karim', qrDataUrl: 'data:image/png;base64,AAAA' },
+            true,
+        );
+        const [data, , , passedLayout] = (printPurchaseInvoice as jest.Mock).mock.calls[0];
+
+        expect(passedLayout).toBe(layout);
+        expect(data.supplierCode).toBe('SUP-00012');
+        expect(data.preparedBy).toBe('Rina Akter');
+        expect(data.printedBy).toBe('Karim');
+        expect(data.qrDataUrl).toBe('data:image/png;base64,AAAA');
+        expect(data.amountPaid).toBe(30);
+    });
+
+    it('leaves the paid figure to the tenders when the record has none', () => {
+        printPurchaseInvoiceFromRecord(purchase, 'A4', ctx, true);
+        expect((printPurchaseInvoice as jest.Mock).mock.calls[0][0].amountPaid).toBeUndefined();
     });
 
     it('attaches a preview toolbar unless the operator opted out', () => {

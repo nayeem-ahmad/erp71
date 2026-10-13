@@ -30,6 +30,11 @@ export async function quotationQrDataUrl(quoteId: string): Promise<string | unde
     return qrDataUrl(`${window.location.origin}${routes.sales.quoteDetail(quoteId)}`);
 }
 
+/** The same for a printed purchase receipt: a code that opens the purchase. */
+export async function purchaseQrDataUrl(purchaseId: string): Promise<string | undefined> {
+    return qrDataUrl(`${window.location.origin}${routes.purchases.purchaseDetail(purchaseId)}`);
+}
+
 async function qrDataUrl(url: string): Promise<string | undefined> {
     try {
         return await QRCode.toDataURL(url, { margin: 1, width: 240 });

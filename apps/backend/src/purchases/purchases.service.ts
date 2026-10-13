@@ -16,6 +16,7 @@ import { nextSupplierPaymentNumber } from '../suppliers/supplier-payment-number.
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
 import { paymentInstrumentData } from '../common/payment-instrument.util';
 import { purchasePaymentStatus } from './purchase-status';
+import { loadPreparerNames, preparerOf } from '../sales/sale-preparer.util';
 
 const PURCHASE_SORTABLE: SortableMap = {
     purchase_number: (dir) => ({ purchase_number: dir }),
@@ -1192,7 +1193,9 @@ export class PurchasesService {
 
         if (!purchase) throw new NotFoundException('Purchase not found');
 
-        return { purchase, tenant };
+        // Who entered it, by name — the detailed receipt's Entry By.
+        const preparers = await loadPreparerNames(this.db, [purchase]);
+        return { purchase: { ...purchase, prepared_by: preparerOf(preparers, purchase) }, tenant };
     }
 
     async findOne(tenantId: string, id: string) {

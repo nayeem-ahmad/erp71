@@ -322,6 +322,32 @@ describe('PurchasesService', () => {
         expect(purchase.paymentAllocations).toBeUndefined();
     });
 
+    describe('getInvoiceData', () => {
+        beforeEach(() => {
+            db.tenant = { findUnique: jest.fn().mockResolvedValue({ name: 'Demo Store' }) };
+            db.user = { findMany: jest.fn().mockResolvedValue([{ id: 'user-1', name: 'Rina Akter', email: 'rina@example.com' }]) };
+        });
+
+        it('names who entered the purchase, for the receipt\'s Entry By', async () => {
+            db.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', created_by: 'user-1', items: [], payments: [] });
+
+            const { purchase, tenant }: any = await service.getInvoiceData('tenant-1', 'purchase-1');
+
+            expect(purchase.prepared_by).toBe('Rina Akter');
+            expect(tenant).toEqual({ name: 'Demo Store' });
+            expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['user-1'] } } }));
+        });
+
+        it('leaves Entry By empty for a purchase nobody is recorded against', async () => {
+            db.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', created_by: null, items: [], payments: [] });
+
+            const { purchase }: any = await service.getInvoiceData('tenant-1', 'purchase-1');
+
+            expect(purchase.prepared_by).toBeNull();
+            expect(db.user.findMany).not.toHaveBeenCalled();
+        });
+    });
+
     it('filters created_at to the inclusive Dhaka day range', async () => {
         db.purchase.findMany.mockResolvedValue([]);
         db.purchase.count = jest.fn().mockResolvedValue(0);

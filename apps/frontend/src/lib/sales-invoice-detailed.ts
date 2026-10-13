@@ -17,8 +17,9 @@ import type { InvoiceData, InvoiceItem } from './sales-invoice-printer';
  * `sales-invoice-printer.ts` only swaps the body, the stylesheet and the footer.
  *
  * The box, the item table and the closing block are exported on their own, so
- * the sales quotation prints on the same design with its own lines in them —
- * see `sales-quotation-printer.ts`.
+ * the sales quotation and the purchase receipt print on the same design with
+ * their own lines in them — see `sales-quotation-printer.ts` and
+ * `purchase-invoice-printer.ts`.
  *
  * The figures are the standard invoice's own, never re-derived: this file only
  * decides where each one is written. In particular the tax is *read* from the
@@ -198,6 +199,8 @@ export function detailedItemsHtml(
     layout: InvoicePrintPrefs,
     infoBox: string,
     money: DetailedMoney = TAKA,
+    /** "Unit Price" on a sale; a purchase pays a unit cost. */
+    unitPriceHeading = 'Unit Price',
 ): string {
     const showDiscount = items.some((item) => !!item.discount);
     const showWarranty = layout.warranty_column === 'always'
@@ -237,7 +240,7 @@ export function detailedItemsHtml(
                 <th class="d-item">Item</th>
                 ${showWarranty ? '<th class="d-warranty">Warranty</th>' : ''}
                 <th class="d-num">Quantity</th>
-                <th class="d-num">Unit Price (${unit})</th>
+                <th class="d-num">${unitPriceHeading} (${unit})</th>
                 ${showDiscount ? `<th class="d-num">Discount (${unit})</th>` : ''}
                 <th class="d-num">Total (${unit})</th>
             </tr>
@@ -262,6 +265,8 @@ export function detailedEndHtml(parts: {
     right: string;
     note?: string;
     signatures: boolean;
+    /** Who signs on the left: the customer, or on a purchase the supplier. */
+    partySignature?: string;
 }): string {
     return `
     <div class="invoice-body inv-d inv-d--end">
@@ -278,10 +283,19 @@ export function detailedEndHtml(parts: {
     ${parts.note ? `<div class="note-box"><strong>Note:</strong> ${esc(parts.note)}</div>` : ''}
     ${parts.signatures ? `
     <div class="signatures">
-        <div class="signature">Customer's Signature</div>
+        <div class="signature">${parts.partySignature ?? "Customer's Signature"}</div>
         <div class="signature">Authorised Signature</div>
     </div>` : ''}
     </div>`;
+}
+
+/** "Paid by: Cash 500 · Cheque 1,000 (CHQ-889001)" — the tenders, or nothing. */
+export function detailedPaidByHtml(payments: { method: string; amount: number; reference?: string }[]): string {
+    return payments.length > 0
+        ? `<p class="d-paid-by">Paid by: ${payments.map((p) =>
+            `${esc(paymentMethodLabel(p.method))} ${amount(p.amount)}${p.reference ? ` (${esc(p.reference)})` : ''}`,
+        ).join(' · ')}</p>`
+        : '';
 }
 
 /**
@@ -312,17 +326,11 @@ export function detailedBodyHtml(
         ],
     );
 
-    const payments = data.payments.length > 0
-        ? `<p class="d-paid-by">Paid by: ${data.payments.map((p) =>
-            `${esc(paymentMethodLabel(p.method))} ${amount(p.amount)}${p.reference ? ` (${esc(p.reference)})` : ''}`,
-        ).join(' · ')}</p>`
-        : '';
-
     return {
         body: detailedItemsHtml(data.items, layout, infoBox),
         end: detailedEndHtml({
             words: layout.amount_in_words ? takaInWords(data.total) : undefined,
-            left: `${dues && layout.balance !== 'never' ? `<table class="d-block">${accountRows(data, dues)}</table>` : ''}${payments}`,
+            left: `${dues && layout.balance !== 'never' ? `<table class="d-block">${accountRows(data, dues)}</table>` : ''}${detailedPaidByHtml(data.payments)}`,
             right: `<table class="d-block">${invoiceTotalsRows(data, paid)}</table>`,
             note: data.note,
             signatures: layout.signature_lines,

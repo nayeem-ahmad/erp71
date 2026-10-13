@@ -363,7 +363,7 @@ export const salesMessages = {
                 heading: "Invoice layout",
                 hint: "Saved to your account, so it follows you to any device.",
                 layoutLabel: "Invoice design",
-                layoutHint: "Detailed adds an invoice / order / date strip, a Warranty column, tax beside the totals, a footer with who prepared it and when, and a QR code that opens the invoice for anyone allowed to see it. Prints on A4, A5 and Letter; rolls keep the standard design.",
+                layoutHint: "Detailed adds an invoice / order / date strip, a Warranty column, tax beside the totals, a footer with who prepared it and when, and a QR code that opens the invoice for anyone allowed to see it. Prints on A4, A5 and Letter; rolls keep the standard design. Purchase receipts follow this choice too.",
                 layoutStandard: "Standard",
                 layoutDetailed: "Detailed",
                 paddingLabel: "Space around the content",

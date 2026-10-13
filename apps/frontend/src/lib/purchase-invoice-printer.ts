@@ -1,7 +1,20 @@
+import { DEFAULT_INVOICE_PRINT_PREFS, type InvoicePrintPrefs } from '@erp71/shared-types';
+import { takaInWords } from './amount-in-words';
 import { formatBDT } from './format';
 import { paymentMethodLabel } from './payment-method-label';
-import { COMPACT_SCOPE, openPrintWindow, renderHeaderHtml } from './print';
+import { COMPACT_SCOPE, isThermalPaper, openPrintWindow, renderHeaderHtml } from './print';
 import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig, PrintPreviewOptions } from './print';
+import {
+    TAKA,
+    detailedEndHtml,
+    detailedFooterHtml,
+    detailedInfoBoxHtml,
+    detailedItemsHtml,
+    detailedPaidByHtml,
+    detailedRow as row,
+    formatPrintStamp,
+} from './sales-invoice-detailed';
+import { detailedSheetStyles, type InvoiceItem } from './sales-invoice-printer';
 
 export type { PaperSize } from './print';
 
@@ -47,9 +60,19 @@ export interface PurchaseInvoiceData {
     companyName?: string;
     headerConfig?: DeepPartial<PrintHeaderConfig>;
     supplierName?: string;
+    /** The supplier's code ("SUP-00001") — the detailed layout's Supplier ID. */
+    supplierCode?: string;
     supplierPhone?: string;
     supplierAddress?: string;
     storeName?: string;
+    /** Who entered the purchase — the detailed layout's Entry By. */
+    preparedBy?: string;
+    /** Who is printing it — the signed-in user — named after the print time. */
+    printedBy?: string;
+    /** When it was printed, already formatted; the moment of printing when omitted. */
+    printedAt?: string;
+    /** A QR code that opens the purchase in the app; detailed layout only. */
+    qrDataUrl?: string;
     items: PurchaseInvoiceItem[];
     payments: PurchaseInvoicePayment[];
     subtotal: number;
@@ -57,6 +80,11 @@ export interface PurchaseInvoiceData {
     discount?: number;
     freight?: number;
     total: number;
+    /**
+     * Paid on this bill so far — at entry and by later supplier payments. The
+     * entry tenders' sum when left out.
+     */
+    amountPaid?: number;
     note?: string;
     labels: PurchaseInvoiceLabels;
 }
@@ -238,12 +266,133 @@ function buildBody(data: PurchaseInvoiceData, isThermal: boolean): string {
     </div>`;
 }
 
+const toPaisa = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * The money, top to bottom: the goods, the tax and freight on top, the
+ * discount off, the total, then what has been paid and what is still owed to
+ * the supplier. A bill whose stored total is not those figures (one brought in
+ * from another system) shows the difference as an adjustment, so the block
+ * always foots on its face.
+ */
+function detailedTotalsRows(data: PurchaseInvoiceData, paid: number): string {
+    const amount = TAKA.format;
+    const tax = data.tax ?? 0;
+    const freight = data.freight ?? 0;
+    const discount = data.discount ?? 0;
+    const rows = [row('Sub Total (৳):', amount(data.subtotal))];
+    if (tax) rows.push(row('Total Tax (৳):', amount(tax)));
+    if (freight) rows.push(row('Freight (৳):', amount(freight)));
+    if (discount) rows.push(row('Discount (৳):', `-${amount(discount)}`, 'neg'));
+
+    const gap = toPaisa(data.total - (data.subtotal + tax + freight - discount));
+    if (Math.abs(gap) > 0.005) rows.push(row('Adjustment (৳):', amount(gap)));
+
+    rows.push(row('Total (৳):', amount(data.total), 'rule'));
+    rows.push(row('Paid (৳):', amount(paid)));
+    rows.push(row('Due (৳):', amount(Math.max(0, toPaisa(data.total - paid))), 'rule'));
+    return rows.join('');
+}
+
+/**
+ * The purchase receipt on the sales invoice's detailed design, for a member
+ * whose invoice layout is Detailed: the letterhead with a QR code, the
+ * supplier and the purchase boxed together, the item table, the money, the
+ * note and signatures, and the foot pinned to the page bottom.
+ *
+ * It follows the member's invoice padding, table rules, total in words and
+ * signature lines. Not the Warranty column — a product's warranty is what the
+ * shop gives its customer, not what the supplier gave the shop — and not the
+ * invoice's footer text, which speaks to customers: the foot keeps the
+ * receipt's own line.
+ */
+function printDetailedPurchaseInvoice(
+    data: PurchaseInvoiceData,
+    paperSize: PaperSize,
+    preview: PrintPreviewOptions | undefined,
+    layout: InvoicePrintPrefs,
+): void {
+    const { labels } = data;
+    const printedAt = data.printedAt ?? formatPrintStamp();
+    const who = data.printedBy?.trim();
+    const paid = data.amountPaid ?? data.payments.reduce((sum, p) => sum + p.amount, 0);
+
+    const context: HeaderContext = {
+        docTitle: labels.docTitle,
+        docNumber: data.purchaseNumber,
+        docDate: data.date,
+        companyName: data.companyName || 'RETAIL STORE',
+        storeName: data.storeName,
+        preparedBy: data.preparedBy,
+        printDate: printedAt,
+    };
+
+    const infoBox = detailedInfoBoxHtml(
+        [
+            ['Supplier ID', data.supplierCode],
+            ['Name', data.supplierName || labels.noSupplier],
+            ['Address', data.supplierAddress],
+            ['Mobile', data.supplierPhone],
+        ],
+        [
+            ['Purchase No.', data.purchaseNumber],
+            // The supplier's own bill number, which their statement quotes.
+            ['Reference No.', data.referenceNumber ?? undefined],
+            ['Date', data.date],
+            ['Branch', data.storeName],
+            ['Entry By', data.preparedBy],
+        ],
+    );
+
+    const items: InvoiceItem[] = data.items.map((item) => ({
+        name: item.name,
+        sku: item.sku,
+        quantity: item.quantity,
+        unitPrice: item.unitCost,
+    }));
+
+    openPrintWindow({
+        context,
+        headerConfig: data.headerConfig,
+        // The QR code in place of the number and date, which the box says.
+        headerHtml: renderHeaderHtml(data.headerConfig, { ...context, docQr: data.qrDataUrl, hideDocMeta: true }, paperSize),
+        bodyHtml: detailedItemsHtml(items, { ...layout, warranty_column: 'never' }, infoBox, TAKA, 'Unit Cost'),
+        endHtml: detailedEndHtml({
+            words: layout.amount_in_words ? takaInWords(data.total) : undefined,
+            left: detailedPaidByHtml(data.payments),
+            right: `<table class="d-block">${detailedTotalsRows(data, paid)}</table>`,
+            note: data.note,
+            signatures: layout.signature_lines,
+            partySignature: "Supplier's Signature",
+        }),
+        footerHtml: detailedFooterHtml(labels.footer),
+        title: `${labels.docTitle} ${data.purchaseNumber}`,
+        paperSize,
+        styles: detailedSheetStyles(layout),
+        repeatHeader: true,
+        pinFooter: true,
+        pageStamp: { text: `Printed ${printedAt}${who ? ` by ${who}` : ''}`, pageNumbers: true },
+        compactable: true,
+        preview,
+    });
+}
+
+/**
+ * @param layout The printing member's invoice layout (see
+ *   `useInvoicePrintPrefs`); the built-in one when omitted. Detailed prints
+ *   the detailed design on sheet paper; a roll keeps the receipt it always had.
+ */
 export function printPurchaseInvoice(
     data: PurchaseInvoiceData,
     paperSize: PaperSize = 'A4',
     preview?: PrintPreviewOptions,
+    layout: InvoicePrintPrefs = DEFAULT_INVOICE_PRINT_PREFS,
 ): void {
-    const isThermal = paperSize === 'Thermal80' || paperSize === 'Thermal58';
+    const isThermal = isThermalPaper(paperSize);
+    if (!isThermal && layout.layout === 'detailed') {
+        printDetailedPurchaseInvoice(data, paperSize, preview, layout);
+        return;
+    }
 
     const headerContext: HeaderContext = {
         docTitle: data.labels.docTitle,
