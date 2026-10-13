@@ -248,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'کمپیکٹ لے آؤٹ',
         compactHint: 'چھوٹا متن اور قریب قریب قطاریں، تاکہ ہر صفحے پر زیادہ سطریں آئیں',
+        typeSize: 'متن کا سائز',
+        typeSizeHint: 'انوائس اور کوٹیشن پر گاہک، اشیاء اور میزان کا سائز۔ لیٹرہیڈ اپنا سائز رکھتا ہے۔ اس براؤزر میں یاد رہتا ہے۔',
+        typeNormal: 'عام',
+        typeLarge: 'بڑا',
+        typeLarger: 'مزید بڑا',
     },
 
     richText: {

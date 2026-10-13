@@ -6,6 +6,7 @@ import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { Alert, Button, Checkbox, Field, Select } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import type { PrintDensity } from '@/lib/print';
+import type { PrintTypeScale } from '@/lib/print/type-scale';
 import { PAPER_SIZES, paperSizeLabel, type PaperSize } from '@/lib/sales-invoice-printer';
 import InvoiceLayoutFields from './InvoiceLayoutFields';
 
@@ -24,7 +25,9 @@ export interface PrintSettingsModalProps {
     paperSize: PaperSize;
     skipPreview: boolean;
     density: PrintDensity;
-    onSave: (next: { paperSize: PaperSize; skipPreview: boolean; density: PrintDensity }) => void;
+    /** Size of the invoice and quotation data, remembered on this browser. */
+    typeScale: PrintTypeScale;
+    onSave: (next: { paperSize: PaperSize; skipPreview: boolean; density: PrintDensity; typeScale: PrintTypeScale }) => void;
     onClose: () => void;
     /**
      * The member's invoice layout (`useInvoicePrintPrefs`), on screens that
@@ -38,8 +41,8 @@ export interface PrintSettingsModalProps {
 }
 
 /**
- * How this counter prints — paper size, whether to preview first, and whether
- * to print compact.
+ * How this counter prints — paper size, whether to preview first, how large
+ * the invoice data is, and whether to print compact.
  *
  * All three describe how this counter prints rather than the tenant, so they
  * are saved per device (see `useSalePrintPrefs`). Compact is the one answer
@@ -61,6 +64,7 @@ export default function PrintSettingsModal({
     paperSize,
     skipPreview,
     density,
+    typeScale,
     onSave,
     onClose,
     invoiceLayout,
@@ -73,6 +77,7 @@ export default function PrintSettingsModal({
     const [size, setSize] = useState<PaperSize>(paperSize);
     const [skip, setSkip] = useState(skipPreview);
     const [compact, setCompact] = useState(density === 'compact');
+    const [textSize, setTextSize] = useState<PrintTypeScale>(typeScale);
     const [layout, setLayout] = useState(invoiceLayout?.prefs);
     const [saving, setSaving] = useState(false);
     const [layoutError, setLayoutError] = useState(false);
@@ -94,7 +99,7 @@ export default function PrintSettingsModal({
                 }
             }
         }
-        onSave({ paperSize: size, skipPreview: skip, density: compact ? 'compact' : 'normal' });
+        onSave({ paperSize: size, skipPreview: skip, density: compact ? 'compact' : 'normal', typeScale: textSize });
         onClose();
     };
 
@@ -121,6 +126,18 @@ export default function PrintSettingsModal({
                                 {paperSizeLabel(option)}
                             </option>
                         ))}
+                    </Select>
+                </Field>
+
+                <Field label={t.components.printWindow.typeSize} hint={t.components.printWindow.typeSizeHint} htmlFor="print-settings-type-size">
+                    <Select
+                        id="print-settings-type-size"
+                        value={textSize}
+                        onChange={(e) => setTextSize(e.target.value as PrintTypeScale)}
+                    >
+                        <option value="normal">{t.components.printWindow.typeNormal}</option>
+                        <option value="large">{t.components.printWindow.typeLarge}</option>
+                        <option value="larger">{t.components.printWindow.typeLarger}</option>
                     </Select>
                 </Field>
 

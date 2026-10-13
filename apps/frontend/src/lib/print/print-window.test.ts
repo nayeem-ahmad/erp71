@@ -1,5 +1,6 @@
 import { buildPrintDocument, openPrintWindow, PRINT_PREVIEW_SKIP_MESSAGE } from './print-window';
 import { PRINT_DENSITY_KEY, PRINT_DENSITY_MESSAGE, readPrintDensity } from './density';
+import { PRINT_TYPE_SCALE_KEY, PRINT_TYPE_SCALE_MESSAGE } from './type-scale';
 import { loadMessages } from '@/lib/localization/load-messages';
 
 const base = {
@@ -596,6 +597,42 @@ describe('the page margin line', () => {
     it('is absent unless asked for', () => {
         expect(buildPrintDocument(base)).not.toContain('@bottom-left');
     });
+
+    it('sits at the inner edge of a deeper margin, clear of the paper edge', () => {
+        const html = buildPrintDocument({ ...base, pageStamp: stamp });
+
+        // Bottom-aligned text lands in the strip a printer cannot mark and
+        // comes out cut in half. The inner edge of a deeper margin does not.
+        expect(html).toContain('vertical-align: top; padding-top: 1.5mm;');
+        expect(html).toContain('@page { size: A4 portrait; margin: 15mm 15mm 22mm 15mm; }');
+    });
+
+    it('keeps a pinned signature block short of that deeper page, so a little extra margin still fits', () => {
+        const html = buildPrintDocument({
+            ...base,
+            pageStamp: stamp,
+            pinFooter: true,
+            endHtml: '<p>SIGN</p>',
+            footerHtml: '<div class="p71-doc-ft">Thanks</div>',
+        });
+
+        // 297mm sheet, 15mm top, 22mm bottom, 12mm of slack: 248mm.
+        // A table of the full 260mm content box overflows as soon as the print
+        // dialog adds margin, and the unbreakable signature row jumps to page 2.
+        expect(html).toContain('.p71-doc--end { height: 248mm; }');
+        expect(html).not.toContain('height: 267mm');
+    });
+
+    it('deepens the top margin instead when the footer bleeds into the bottom one', () => {
+        const html = buildPrintDocument({
+            ...base,
+            pageStamp: stamp,
+            headerConfig: { footer: { show: true, lines: [{ text: 'Band' }], bleed: true } },
+        });
+
+        expect(html).toContain('vertical-align: bottom; padding-bottom: 1.5mm;');
+        expect(html).toContain('margin: 22mm 15mm 15mm 15mm;');
+    });
 });
 
 describe('preview toolbar', () => {
@@ -956,5 +993,73 @@ describe('openPrintWindow — compactable documents', () => {
         }));
 
         expect(readPrintDensity()).toBe('compact');
+    });
+});
+
+describe('text size', () => {
+    function mockWindow() {
+        const win = {
+            document: { write: jest.fn(), close: jest.fn(), images: [] },
+            print: jest.fn(),
+            focus: jest.fn(),
+            setTimeout: jest.fn(),
+        };
+        jest.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+        return win;
+    }
+    const written = (win: ReturnType<typeof mockWindow>) => win.document.write.mock.calls[0][0] as string;
+
+    beforeEach(() => window.localStorage.clear());
+    afterEach(() => jest.restoreAllMocks());
+
+    it('prints at the size this browser chose, and offers the control', () => {
+        window.localStorage.setItem(PRINT_TYPE_SCALE_KEY, 'larger');
+        const win = mockWindow();
+
+        openPrintWindow({ ...base, bodyTypeScale: true });
+
+        const html = written(win);
+        expect(html).toContain('<html class="p71-fs-xl">');
+        expect(html).toContain('>Text size<');
+        expect(html).toContain('value="larger" selected');
+        expect(html).toContain(PRINT_TYPE_SCALE_MESSAGE);
+        expect(html).not.toContain('localStorage');
+    });
+
+    it('leaves a document that did not ask for it at the ordinary size', () => {
+        window.localStorage.setItem(PRINT_TYPE_SCALE_KEY, 'large');
+        const win = mockWindow();
+
+        openPrintWindow(base);
+
+        const html = written(win);
+        expect(html).not.toContain('p71-fs-lg');
+        expect(html).not.toContain('>Text size<');
+    });
+
+    it('reflows the open document and tells the opener when changed', () => {
+        const win = mockWindow();
+        openPrintWindow({ ...base, bodyTypeScale: true, preview: { title: 'Invoice', printLabel: 'Print', closeLabel: 'Close' } });
+        const html = written(win);
+
+        const frame = document.createElement('iframe');
+        document.body.appendChild(frame);
+        const popup = frame.contentWindow!;
+        const postMessage = jest.fn();
+        Object.defineProperty(popup, 'opener', { value: { postMessage }, configurable: true });
+        popup.document.open();
+        popup.document.write(html);
+        popup.document.close();
+
+        const select = popup.document.querySelector<HTMLSelectElement>('.p71-pv-type select')!;
+        select.value = 'large';
+        select.dispatchEvent(new popup.Event('change', { bubbles: true }));
+
+        expect(popup.document.documentElement.classList.contains('p71-fs-lg')).toBe(true);
+        expect(postMessage).toHaveBeenCalledWith(
+            { type: PRINT_TYPE_SCALE_MESSAGE, typeScale: 'large' },
+            '*',
+        );
+        frame.remove();
     });
 });

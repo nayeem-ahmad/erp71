@@ -248,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'Mise en page compacte',
         compactHint: 'Texte plus petit et lignes resserrées pour faire tenir plus de lignes sur chaque page',
+        typeSize: 'Taille du texte',
+        typeSizeHint: 'Taille du client, des lignes et des totaux sur les factures et devis. L’en-tête garde sa propre taille. Mémorisée dans ce navigateur.',
+        typeNormal: 'Normal',
+        typeLarge: 'Grand',
+        typeLarger: 'Plus grand',
     },
 
     richText: {

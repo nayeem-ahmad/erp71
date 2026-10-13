@@ -27,7 +27,7 @@ import { printedByName } from './useSalePrinting';
 export function usePurchasePrinting() {
     const { t, locale } = useI18n();
     const header = usePrintHeader('PURCHASE_INVOICE');
-    const { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity } =
+    const { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity, typeScale, setTypeScale } =
         useSalePrintPrefs();
     // The member's sales invoice layout: a member on the detailed invoice gets
     // the purchase receipt on the same design.
@@ -92,6 +92,8 @@ export function usePurchasePrinting() {
         setSkipPreview,
         density,
         setDensity,
+        typeScale,
+        setTypeScale,
         busyId,
         printInvoice,
     };

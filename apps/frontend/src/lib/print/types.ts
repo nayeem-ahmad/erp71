@@ -28,6 +28,28 @@ export const PAGE_MARGIN_MM: Record<PaperSize, number> = {
 };
 
 /**
+ * Depth of the page margin that carries the "printed by" line, in mm.
+ *
+ * The line sits at the inner edge of this margin, so the glyphs stay about
+ * 18mm clear of the paper. Many printers cannot mark the last 12mm, which is
+ * why a line aligned to the outer edge of the ordinary 15mm margin comes out
+ * cut in half. The other three edges stay at `PAGE_MARGIN_MM`, so a bleeding
+ * footer still meets the paper on the edge it cancels.
+ */
+export const PAGE_STAMP_EDGE_MM = 22;
+
+/**
+ * How far short of the content box a pinned footer stops, on a page that
+ * carries that print line, in mm.
+ *
+ * The pin is a fixed height. The browser's print dialog can add margin on top
+ * of the CSS margin, and a table even 1mm too tall throws the unbreakable
+ * signature row onto the next page — a one-line invoice then prints half empty.
+ * This slack absorbs a modest extra margin so the signatures stay put.
+ */
+export const PAGE_PIN_SLACK_MM = 12;
+
+/**
  * Menu label for a paper size. The two thermal rolls are the only ones whose
  * name does not say how wide they are, and picking the wrong roll is the one
  * mistake that wastes a whole print.

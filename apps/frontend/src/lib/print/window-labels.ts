@@ -6,6 +6,11 @@ export interface PrintWindowLabels {
     close: string;
     compact: string;
     compactHint: string;
+    typeSize: string;
+    typeSizeHint: string;
+    typeNormal: string;
+    typeLarge: string;
+    typeLarger: string;
 }
 
 /**
@@ -29,5 +34,10 @@ export function printWindowLabels(): PrintWindowLabels {
         close: copy.common.close,
         compact: copy.components.printWindow.compact,
         compactHint: copy.components.printWindow.compactHint,
+        typeSize: copy.components.printWindow.typeSize,
+        typeSizeHint: copy.components.printWindow.typeSizeHint,
+        typeNormal: copy.components.printWindow.typeNormal,
+        typeLarge: copy.components.printWindow.typeLarge,
+        typeLarger: copy.components.printWindow.typeLarger,
     };
 }

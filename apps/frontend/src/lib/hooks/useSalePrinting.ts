@@ -37,7 +37,7 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
     // Its own template, so a shop can put a plainer letterhead on the copy a
     // rider carries than on the invoice the customer keeps.
     const challanHeader = usePrintHeader('DELIVERY_CHALLAN');
-    const { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity } =
+    const { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity, typeScale, setTypeScale } =
         useSalePrintPrefs();
     const { resolve: resolveInvoiceLayout } = useInvoicePrintPrefs();
 
@@ -173,6 +173,8 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
         setSkipPreview,
         density,
         setDensity,
+        typeScale,
+        setTypeScale,
         busyId,
         batchBusy,
         printInvoice,

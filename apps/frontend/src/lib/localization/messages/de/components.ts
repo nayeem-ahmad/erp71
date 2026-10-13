@@ -248,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'Kompaktes Layout',
         compactHint: 'Kleinere Schrift und engere Zeilen, damit mehr Positionen auf jede Seite passen',
+        typeSize: 'Schriftgröße',
+        typeSizeHint: 'Größe von Kunde, Positionen und Summen auf Rechnungen und Angeboten. Der Briefkopf behält seine eigene Größe. Wird in diesem Browser gemerkt.',
+        typeNormal: 'Normal',
+        typeLarge: 'Groß',
+        typeLarger: 'Größer',
     },
 
     richText: {

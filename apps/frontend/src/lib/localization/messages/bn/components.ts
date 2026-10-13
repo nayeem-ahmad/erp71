@@ -248,6 +248,11 @@ export const componentsMessages = {
             /* The switch in the toolbar over every print window that lists rows. */
             compact: 'কমপ্যাক্ট লেআউট',
             compactHint: 'ছোট লেখা ও ঘন সারি, তাই প্রতি পৃষ্ঠায় বেশি লাইন ধরে',
+            typeSize: 'লেখার আকার',
+            typeSizeHint: 'ইনভয়েস ও কোটেশনের গ্রাহক, পণ্য ও মোটের লেখার আকার। লেটারহেডের আকার আলাদা থাকে। এই ব্রাউজারে মনে রাখা হয়।',
+            typeNormal: 'স্বাভাবিক',
+            typeLarge: 'বড়',
+            typeLarger: 'আরও বড়',
         },
 
         richText: {

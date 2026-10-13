@@ -4,6 +4,7 @@ import type { InvoiceDues } from './customer-credit';
 import { formatBDT, getActiveTimeZone } from './format';
 import { paymentMethodLabel } from './payment-method-label';
 import { COMPACT_SCOPE, escapeHtml as esc } from './print';
+import { dataTypeScaleCss } from './print/type-scale';
 import type { InvoiceData, InvoiceItem } from './sales-invoice-printer';
 
 /**
@@ -430,5 +431,10 @@ export function detailedStyles(): string {
         ${c} .d-sums { margin-bottom:8px; }
         ${c} .d-words { margin-bottom:6px; }
         ${c} .d-foot { font-size:10px; padding-top:4px; }
+
+        /* Larger steps for the same data. After the compact rules, and the
+           combined selector wins when both are on. */
+        ${dataTypeScaleCss(['.inv-d', '.d-info', '.d-table td', '.d-table th', '.d-block td', '.d-words'], 15, 17)}
+        ${dataTypeScaleCss(['.d-paid-by', '.d-foot'], 13, 15)}
 `;
 }

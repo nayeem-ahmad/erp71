@@ -14,6 +14,7 @@ import {
 } from './sales-invoice-detailed';
 import { paymentMethodLabel } from './payment-method-label';
 import { COMPACT_SCOPE, isThermalPaper, openPrintWindow, paperSizeLabel, renderHeaderHtml } from './print';
+import { dataTypeScaleCss } from './print/type-scale';
 import type {
     DeepPartial,
     HeaderContext,
@@ -240,8 +241,36 @@ function buildStyles(isThermal: boolean, layout: InvoicePrintPrefs): string {
 
         .footer { text-align:center; font-size:${isThermal ? '10px' : '12px'}; color:#888; margin-top:${isThermal ? '10px' : '24px'}; ${isThermal ? '' : 'border-top:1px solid #e5e7eb; padding-top:14px;'} }
         ${isThermal ? '' : compactStyles()}
+        ${isThermal ? '' : sheetTypeScaleCss()}
         ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles()}
     `;
+}
+
+/**
+ * Larger steps for the data — the customer, the lines and the totals. The
+ * letterhead is not in this list; its size belongs to the template. Inert
+ * until the print window marks `<html>` with the step.
+ */
+function sheetTypeScaleCss(): string {
+    return [
+        dataTypeScaleCss([
+            '.meta-block p',
+            '.items-table tbody td',
+            '.totals-table td',
+            '.pay-label',
+            '.pay-amount',
+        ], 15, 17),
+        dataTypeScaleCss([
+            '.items-table thead th',
+            '.meta-block h3',
+            '.payments-section h3',
+            '.pay-ref',
+            '.signature',
+        ], 13, 15),
+        dataTypeScaleCss(['.note-box', '.amount-words', '.invoice-note'], 14, 16),
+        dataTypeScaleCss(['.sku'], 11, 12),
+        dataTypeScaleCss(['.grand-total td'], 17, 19),
+    ].join('\n');
 }
 
 /**
@@ -549,6 +578,7 @@ export function printSalesInvoice(
         pageStamp: detailedPageStamp(layout, printedAt, data.printedBy),
         // A long item list is exactly what compact is for.
         compactable: true,
+        bodyTypeScale: true,
         preview,
     });
 }
@@ -582,6 +612,7 @@ export function printSalesInvoices(
         // A batch is printed by one person at one moment.
         pageStamp: detailedPageStamp(layout, invoices[0].printedAt ?? printedAt, invoices[0].printedBy),
         compactable: true,
+        bodyTypeScale: true,
         preview,
     });
 }

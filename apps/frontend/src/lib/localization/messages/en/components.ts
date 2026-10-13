@@ -248,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'Compact layout',
         compactHint: 'Smaller type and tighter rows, so more lines fit on each page',
+        typeSize: 'Text size',
+        typeSizeHint: 'Size of the customer, items and totals on invoices and quotations. The letterhead keeps its own size. Remembered in this browser.',
+        typeNormal: 'Normal',
+        typeLarge: 'Large',
+        typeLarger: 'Larger',
     },
 
     richText: {
