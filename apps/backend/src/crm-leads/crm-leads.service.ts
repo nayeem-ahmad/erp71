@@ -10,6 +10,7 @@ import { CustomersService } from '../customers/customers.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import {
     BulkLeadActionDto,
+    BulkLeadChangesDto,
     CreateLeadDto,
     isClosedStatus,
     LeadBulkAction,
@@ -710,31 +711,105 @@ export class CrmLeadsService {
     /** Apply a single action to many leads at once. All operations are tenant-scoped. */
     async bulkAction(tenantId: string, dto: BulkLeadActionDto) {
         const { ids, action, value } = dto;
-        const where = { tenant_id: tenantId, id: { in: ids } };
 
         if (action === LeadBulkAction.DELETE) {
             await this.purgePhotoAssets(tenantId, ids);
-            const res = await this.db.lead.deleteMany({ where });
+            const res = await this.db.lead.deleteMany({ where: { tenant_id: tenantId, id: { in: ids } } });
             return { count: res.count };
         }
 
         if (action === LeadBulkAction.ASSIGN) {
-            const assignee = value && value.trim() ? value.trim() : null;
-            const res = await this.db.lead.updateMany({ where, data: { assigned_to: assignee } });
-            return { count: res.count };
+            return this.bulkUpdate(tenantId, ids, { assigned_to: value?.trim() || null });
         }
 
         if (action === LeadBulkAction.STATUS) {
-            // A stage id, or a bare code from an older client. Open stages only.
-            const stage = await this.statuses.forBulk(tenantId, value ?? '');
-            const res = await this.db.lead.updateMany({
-                where,
-                data: { status_id: stage.id, status: stage.lifecycle },
-            });
-            return { count: res.count };
+            // A stage id, or a bare code from an older client.
+            return this.bulkUpdate(tenantId, ids, { status_id: value ?? '' });
+        }
+
+        if (action === LeadBulkAction.UPDATE) {
+            return this.bulkUpdate(tenantId, ids, dto.changes ?? {});
         }
 
         throw new BadRequestException('Unsupported bulk action.');
+    }
+
+    /**
+     * One change set over many leads — the list's "Edit field".
+     *
+     * Each lead goes through update(), not an updateMany, so it gets everything a
+     * single edit does: the stage rules and a fresh score (source and priority
+     * both feed it). Converted leads are skipped, as update() would refuse them;
+     * the old updateMany moved them back onto an open stage instead.
+     *
+     * Every value is checked before the first lead is written, so a bad stage or
+     * source fails the whole request rather than half of it.
+     */
+    private async bulkUpdate(
+        tenantId: string,
+        ids: string[],
+        changes: BulkLeadChangesDto,
+    ): Promise<{ count: number; skipped: number }> {
+        const patch: UpdateLeadDto = {};
+        if (changes.status_id !== undefined) {
+            // Open stages only: closing needs a lost reason or a customer record.
+            const stage = await this.statuses.forBulk(tenantId, changes.status_id);
+            patch.status_id = stage.id ?? undefined;
+            patch.status = stage.lifecycle;
+        }
+        if (changes.assigned_to !== undefined) patch.assigned_to = changes.assigned_to || null;
+        if (changes.priority !== undefined) patch.priority = changes.priority;
+        if (changes.category !== undefined) {
+            await this.resolveTaxonomy(tenantId, LeadTaxonomyKind.CATEGORY, changes.category);
+            patch.category = changes.category;
+        }
+        if (changes.source !== undefined) {
+            await this.resolveTaxonomy(tenantId, LeadTaxonomyKind.SOURCE, changes.source);
+            patch.source = changes.source;
+        }
+
+        let customFields: Record<string, string> | undefined;
+        if (changes.custom_fields && Object.keys(changes.custom_fields).length) {
+            customFields = await this.customFields.sanitizeValues(
+                tenantId,
+                CustomFieldEntity.LEAD,
+                changes.custom_fields,
+            );
+            if (!customFields) throw new BadRequestException('Unknown custom field.');
+        }
+
+        const hasPatch = Object.keys(patch).length > 0;
+        if (!hasPatch && !customFields) throw new BadRequestException('Nothing to change.');
+
+        const leads = await this.db.lead.findMany({
+            where: { tenant_id: tenantId, id: { in: ids } },
+            select: { id: true, status: true, custom_fields: true },
+        });
+
+        let count = 0;
+        let skipped = 0;
+        for (const lead of leads) {
+            if (lead.status === LeadStatus.CONVERTED) {
+                skipped++;
+                continue;
+            }
+            if (hasPatch) await this.update(tenantId, lead.id, patch);
+            if (customFields) {
+                // Written here rather than through update(), which replaces the
+                // whole map with the sanitized input: that would drop this lead's
+                // values for any field the tenant has since retired.
+                const own =
+                    lead.custom_fields && typeof lead.custom_fields === 'object' && !Array.isArray(lead.custom_fields)
+                        ? (lead.custom_fields as Record<string, string>)
+                        : {};
+                await this.db.lead.update({
+                    where: { id: lead.id },
+                    data: { custom_fields: { ...own, ...customFields } },
+                });
+            }
+            count++;
+        }
+        return { count, skipped };
     }
 
     /**

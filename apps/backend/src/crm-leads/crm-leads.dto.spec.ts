@@ -1,5 +1,5 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
-import { ListLeadsDto, UpdateLeadDto } from './crm-leads.dto';
+import { BulkLeadActionDto, ListLeadsDto, UpdateLeadDto } from './crm-leads.dto';
 
 /**
  * The lead edit form used to POST the next-step rollup columns. Those keys
@@ -114,5 +114,38 @@ describe('ListLeadsDto — mine', () => {
     it('leaves the scope unset when the param is absent', async () => {
         const result: any = await pipe.transform({}, metadata);
         expect(result.mine).toBeUndefined();
+    });
+});
+
+/**
+ * The list's "Edit field" sends its change set nested under `changes`, so the
+ * nested object has to be whitelisted too — without `@ValidateNested` a client
+ * could slip `name` or `mobile` in and have it applied to every selected lead.
+ */
+describe('BulkLeadActionDto — changes', () => {
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const metadata = { type: 'body' as const, metatype: BulkLeadActionDto };
+    const ids = ['3f9c1b8e-0000-4000-8000-000000000001'];
+
+    it('accepts one field to set', async () => {
+        const result: any = await pipe.transform({ ids, action: 'update', changes: { priority: 'HIGH' } }, metadata);
+        expect(result.changes).toEqual({ priority: 'HIGH' });
+    });
+
+    it('turns a blank owner into an explicit null, so leads can be unassigned', async () => {
+        const result: any = await pipe.transform({ ids, action: 'update', changes: { assigned_to: '' } }, metadata);
+        expect(result.changes.assigned_to).toBeNull();
+    });
+
+    it('refuses a field the bulk edit does not offer', async () => {
+        await expect(
+            pipe.transform({ ids, action: 'update', changes: { mobile: '01700000000' } }, metadata),
+        ).rejects.toThrow(BadRequestException);
+    });
+
+    it('refuses a priority that does not exist', async () => {
+        await expect(
+            pipe.transform({ ids, action: 'update', changes: { priority: 'SOMEDAY' } }, metadata),
+        ).rejects.toThrow(BadRequestException);
     });
 });

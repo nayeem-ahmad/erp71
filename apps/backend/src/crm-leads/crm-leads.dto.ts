@@ -1,5 +1,5 @@
-import { Transform } from 'class-transformer';
-import { IsString, IsOptional, IsEnum, IsIn, IsUUID, IsEmail, IsDateString, IsObject, IsArray, ArrayNotEmpty, IsBoolean, IsInt, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsString, IsOptional, IsEnum, IsIn, IsUUID, IsEmail, IsDateString, IsObject, IsArray, ArrayNotEmpty, ArrayMaxSize, IsBoolean, IsInt, Max, Min, ValidateNested } from 'class-validator';
 
 // Define enums locally since Prisma enums aren't exported at runtime
 export enum LeadStatus {
@@ -485,13 +485,59 @@ export class ListLeadsDto {
 
 export enum LeadBulkAction {
     DELETE = 'delete',
+    /** Kept for older clients; the same as UPDATE with `status_id`. */
     STATUS = 'status',
+    /** Kept for older clients; the same as UPDATE with `assigned_to`. */
     ASSIGN = 'assign',
+    UPDATE = 'update',
+}
+
+/**
+ * The fields the leads list's "Edit field" can set on many leads at once — the
+ * ones a group of leads plausibly shares. Name, mobile, email and the free-text
+ * fields are left out: one value for all of them is never what anyone means.
+ */
+export class BulkLeadChangesDto {
+    /** A stage id. Open stages only — see LeadStatusResolver.forBulk. */
+    @IsOptional()
+    @IsString()
+    status_id?: string;
+
+    /** `''`/`null` unassigns, as on the lead form. */
+    @IsOptional()
+    @Transform(emptyToNull)
+    @IsUUID()
+    assigned_to?: string | null;
+
+    /** A category row id; `''` clears it. */
+    @IsOptional()
+    @IsString()
+    category?: string;
+
+    /** A source row id. */
+    @IsOptional()
+    @IsString()
+    source?: string;
+
+    @IsOptional()
+    @IsEnum(LeadPriority)
+    priority?: LeadPriority;
+
+    /** Merged into each lead's own values; `''` clears a field. */
+    @IsOptional()
+    @IsObject()
+    custom_fields?: Record<string, string>;
 }
 
 export class BulkLeadActionDto {
+    /**
+     * A selection spans one page of the list (100 rows at most), so this is
+     * headroom, not a limit anyone meets. It exists because an edit applies
+     * lead by lead: an unbounded list would be an unbounded request.
+     */
     @IsArray()
     @ArrayNotEmpty()
+    @ArrayMaxSize(500)
     @IsString({ each: true })
     ids: string[];
 
@@ -501,4 +547,10 @@ export class BulkLeadActionDto {
     @IsOptional()
     @IsString()
     value?: string;
+
+    /** For UPDATE: the fields to set. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BulkLeadChangesDto)
+    changes?: BulkLeadChangesDto;
 }

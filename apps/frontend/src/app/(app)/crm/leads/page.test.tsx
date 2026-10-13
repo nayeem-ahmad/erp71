@@ -1,6 +1,7 @@
 'use client';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LeadsPage from './page';
+import { useToastStore } from '@/lib/toast';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -41,6 +42,7 @@ jest.mock('@/lib/api', () => ({
         getLeadTaxonomy: jest.fn().mockResolvedValue([]),
         deleteLead: jest.fn(),
         bulkLeadAction: jest.fn(),
+        bulkUpdateLeads: jest.fn(),
         importLeads: jest.fn(),
     },
 }));
@@ -741,13 +743,15 @@ describe('LeadsPage — tenant stages', () => {
         expect(selectByOption('All statuses').value).toBe('');
     });
 
-    it('offers only open stages to the bulk status action', async () => {
+    it('offers only open stages to the bulk edit', async () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.click(screen.getAllByRole('checkbox')[1]);
-        const bulk = selectByOption('Set status…');
-        const options = Array.from(bulk.options).map((o) => o.value);
+        fireEvent.click(screen.getAllByRole('checkbox', { name: 'Select row' })[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Edit field' }));
+        fireEvent.change(screen.getByLabelText('Field'), { target: { value: 'status' } });
+
+        const options = Array.from((screen.getByLabelText('New value') as HTMLSelectElement).options).map((o) => o.value);
         expect(options).toEqual(['', 'st-new', 'st-neg']);
     });
 });
@@ -854,5 +858,133 @@ describe('LeadsPage — board view', () => {
 
         expect(await screen.findByRole('region', { name: 'Rifat' })).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Unassigned' })).toBeInTheDocument();
+    });
+});
+
+describe('LeadsPage — bulk actions', () => {
+    const toasts = () => useToastStore.getState().toasts.map((item) => [item.type, item.message]);
+    /** Each row carries its own Delete, so the bar's is found inside the bar. */
+    const bulkBar = () => within(screen.getByText(/^\d+ selected$/).parentElement as HTMLElement);
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+        useToastStore.setState({ toasts: [] });
+        api.getLeads.mockResolvedValue({ items: leads, total: 2 });
+        api.getCrmAssignees.mockResolvedValue([{ userId: 'user-1', name: 'Nayeem' }]);
+        api.getCustomFields.mockResolvedValue([{ key: 'area', label: 'Area' }]);
+    });
+
+    afterAll(() => {
+        api.getCustomFields.mockResolvedValue([]);
+    });
+
+    /** Waits for the custom-field column first: its arrival re-renders the rows. */
+    async function selectBoth() {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        await screen.findByText('Area');
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+        await screen.findByText('2 selected');
+    }
+
+    function editField(field: string, value: string) {
+        fireEvent.click(screen.getByRole('button', { name: 'Edit field' }));
+        fireEvent.change(screen.getByLabelText('Field'), { target: { value: field } });
+        fireEvent.change(screen.getByLabelText('New value'), { target: { value } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply to 2 lead(s)' }));
+    }
+
+    it('offers Edit field and Delete for the selection, and no separate status or owner pickers', async () => {
+        await selectBoth();
+
+        expect(screen.getByText('2 selected')).toBeInTheDocument();
+        expect(bulkBar().getByRole('button', { name: 'Edit field' })).toBeInTheDocument();
+        expect(bulkBar().getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: 'Set status…' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: 'Assign to…' })).not.toBeInTheDocument();
+    });
+
+    it('sets one field on every selected lead, then reloads and clears the selection', async () => {
+        api.bulkUpdateLeads.mockResolvedValue({ count: 2, skipped: 0 });
+        await selectBoth();
+        const loadsBefore = api.getLeads.mock.calls.length;
+
+        editField('owner', 'user-1');
+
+        await waitFor(() =>
+            expect(api.bulkUpdateLeads).toHaveBeenCalledWith(['lead-1', 'lead-2'], { assigned_to: 'user-1' }),
+        );
+        await waitFor(() => expect(screen.queryByText('2 selected')).not.toBeInTheDocument());
+        expect(screen.queryByLabelText('Field')).not.toBeInTheDocument();
+        expect(api.getLeads.mock.calls.length).toBeGreaterThan(loadsBefore);
+        expect(toasts()).toEqual([['success', '2 lead(s) updated.']]);
+    });
+
+    it('sets a custom field on the selection', async () => {
+        api.bulkUpdateLeads.mockResolvedValue({ count: 2, skipped: 0 });
+        await selectBoth();
+
+        editField('cf:area', 'Mirpur');
+
+        await waitFor(() =>
+            expect(api.bulkUpdateLeads).toHaveBeenCalledWith(['lead-1', 'lead-2'], { custom_fields: { area: 'Mirpur' } }),
+        );
+    });
+
+    it('says how many converted leads were left alone', async () => {
+        api.bulkUpdateLeads.mockResolvedValue({ count: 1, skipped: 1 });
+        await selectBoth();
+
+        editField('priority', 'HIGH');
+
+        await waitFor(() =>
+            expect(toasts()).toEqual([
+                ['success', '1 lead(s) updated.'],
+                ['info', '1 converted lead(s) skipped — converted leads cannot be edited.'],
+            ]),
+        );
+    });
+
+    it('keeps the dialog and the selection when the edit fails, and still reloads', async () => {
+        api.bulkUpdateLeads.mockRejectedValue(new Error('Invalid status.'));
+        await selectBoth();
+        const loadsBefore = api.getLeads.mock.calls.length;
+
+        editField('priority', 'HIGH');
+
+        await waitFor(() => expect(toasts()).toEqual([['error', 'Invalid status.']]));
+        expect(screen.getByLabelText('Field')).toBeInTheDocument();
+        await waitFor(() => expect(api.getLeads.mock.calls.length).toBeGreaterThan(loadsBefore));
+    });
+
+    it('deletes the selection only after it is confirmed in a dialog', async () => {
+        api.bulkLeadAction.mockResolvedValue({ count: 2 });
+        await selectBoth();
+
+        fireEvent.click(bulkBar().getByRole('button', { name: 'Delete' }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByText('Delete 2 selected lead(s)? This cannot be undone.')).toBeInTheDocument();
+        expect(api.bulkLeadAction).not.toHaveBeenCalled();
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.bulkLeadAction).toHaveBeenCalledWith(['lead-1', 'lead-2'], 'delete'));
+        await waitFor(() => expect(toasts()).toEqual([['success', '2 lead(s) deleted.']]));
+    });
+
+    it('deletes one lead from its row after confirming in a dialog, not a browser prompt', async () => {
+        const confirmSpy = jest.spyOn(window, 'confirm');
+        api.deleteLead.mockResolvedValue({ success: true });
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+
+        fireEvent.click(screen.getAllByTitle('Delete')[0]);
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.deleteLead).toHaveBeenCalledWith('lead-1'));
+        expect(confirmSpy).not.toHaveBeenCalled();
+        confirmSpy.mockRestore();
     });
 });

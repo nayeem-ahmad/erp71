@@ -3,8 +3,9 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink, LayoutList, Kanban } from 'lucide-react';
-import { api, ApiError } from '@/lib/api';
+import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink, LayoutList, Kanban, Pencil } from 'lucide-react';
+import { api, ApiError, type BulkLeadChanges } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -13,7 +14,7 @@ import { DataTable, createdAtColumn, CreatedRangeFilter, type BulkAction } from 
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, PageHeader, Button, Select, StatusBadge, Input } from '@/components/ui';
+import { PageShell, PageHeader, Button, Select, StatusBadge, Input, ConfirmDialog } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import {
@@ -26,6 +27,7 @@ import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
+import BulkEditLeadsModal from '@/components/crm/BulkEditLeadsModal';
 import { leadPriorityColor, leadScoreColor } from '@/lib/lead-badges';
 import LeadsBoard from '@/components/crm/leads-board/LeadsBoard';
 import { useLeadsView } from '@/components/crm/leads-board/use-leads-view';
@@ -310,6 +312,9 @@ function LeadsPage() {
     const statusOptions = useMemo(() => allStatusOptions.filter((o) => o.is_active), [allStatusOptions]);
     const [selectionEpoch, setSelectionEpoch] = useState(0);
     const [bulkBusy, setBulkBusy] = useState(false);
+    const [bulkEditOpen, setBulkEditOpen] = useState(false);
+    const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<Lead | null>(null);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -414,40 +419,79 @@ function LeadsPage() {
         setPage(1);
     }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, sort]);
 
-    const deleteLead = useCallback(async (lead: Lead) => {
-        if (!confirm(m.deleteConfirm)) return;
+    const confirmDelete = useCallback(async () => {
+        if (!pendingDelete) return;
         try {
-            await api.deleteLead(lead.id);
+            await api.deleteLead(pendingDelete.id);
+            setPendingDelete(null);
             await loadLeads();
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : m.deleteFailed);
+            toast.error(err instanceof Error ? err.message : m.deleteFailed);
         }
-    }, [m, loadLeads]);
+    }, [pendingDelete, m.deleteFailed, loadLeads]);
 
     const clearSelection = useCallback(() => {
         setSelectedLeads([]);
         setSelectionEpoch((e) => e + 1);
     }, []);
 
-    const runBulkAction = useCallback(async (action: 'delete' | 'status' | 'assign', value?: string) => {
+    /**
+     * Runs one bulk request and reloads the list whichever way it ends: an edit
+     * applies lead by lead, so a failure part-way leaves some leads changed, and
+     * the list must show that rather than the rows as they were.
+     */
+    const runBulk = useCallback(async <T,>(send: (ids: string[]) => Promise<T>, done: (result: T) => void) => {
         const ids = selectedLeads.map((l) => l.id);
         if (!ids.length) return;
         setBulkBusy(true);
         try {
-            await api.bulkLeadAction(ids, action, value);
-            await loadLeads();
+            done(await send(ids));
             clearSelection();
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : (m as any).actionFailed ?? 'Action failed');
+            toast.error(err instanceof Error ? err.message : m.bulk.failed);
         } finally {
             setBulkBusy(false);
+            await loadLeads();
         }
-    }, [selectedLeads, loadLeads, clearSelection, m]);
+    }, [selectedLeads, clearSelection, loadLeads, m.bulk.failed]);
+
+    const bulkUpdate = useCallback((changes: BulkLeadChanges) => {
+        void runBulk(
+            (ids) => api.bulkUpdateLeads(ids, changes),
+            ({ count, skipped }) => {
+                setBulkEditOpen(false);
+                if (count > 0) toast.success(m.bulk.updated.replace('{count}', String(count)));
+                if (skipped > 0) toast.info(m.bulk.skipped.replace('{count}', String(skipped)));
+            },
+        );
+    }, [runBulk, m.bulk]);
 
     const bulkDelete = useCallback(() => {
-        if (!confirm(((m as any).bulkDeleteConfirm ?? 'Delete {count} selected lead(s)? This cannot be undone.').replace('{count}', String(selectedLeads.length)))) return;
-        void runBulkAction('delete');
-    }, [runBulkAction, selectedLeads.length, m]);
+        const count = selectedLeads.length;
+        void runBulk(
+            (ids) => api.bulkLeadAction(ids, 'delete'),
+            () => {
+                setBulkDeleteOpen(false);
+                toast.success(m.bulk.deleted.replace('{count}', String(count)));
+            },
+        );
+    }, [runBulk, selectedLeads.length, m.bulk]);
+
+    // Open stages only: closing a lead needs a lost reason or a customer record,
+    // which a bulk edit cannot supply. Before the tenant's stages load, the three
+    // open lifecycle codes stand in — the API resolves them to the seeded stages.
+    const bulkStages = useMemo(
+        () =>
+            statusOptions.length > 0
+                ? statusOptions
+                    .filter((o) => isOpenLifecycle(o.lifecycle))
+                    .map((o) => ({ value: o.id, label: stageOptionLabel(o, m.statuses) }))
+                : (['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((code) => ({
+                    value: code,
+                    label: (m.statuses as Record<string, string>)[code] ?? code,
+                })),
+        [statusOptions, m.statuses],
+    );
 
     const statusLabel = (status: string) => (m.statuses as Record<string, string>)[status] ?? status;
     const priorityLabel = (priority: string) => (m.priorities as Record<string, string>)[priority] ?? priority;
@@ -647,7 +691,7 @@ function LeadsPage() {
                         </Link>
                         <button
                             type="button"
-                            onClick={() => void deleteLead(lead)}
+                            onClick={() => setPendingDelete(lead)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-danger-light transition-colors"
                             title={c.delete}
                         >
@@ -661,7 +705,7 @@ function LeadsPage() {
             enableResizing: false,
             size: 90,
         }),
-    ], [m, c, locale, statusLabel, priorityLabel, deleteLead, customFieldDefs]);
+    ], [m, c, locale, statusLabel, priorityLabel, customFieldDefs]);
 
     const importFields: ImportField[] = useMemo(
         () => [
@@ -674,13 +718,18 @@ function LeadsPage() {
     const bulkActions: BulkAction<Lead>[] = useMemo(
         () => [
             {
+                label: m.bulk.editField,
+                icon: <Pencil className="w-4 h-4" />,
+                onClick: () => setBulkEditOpen(true),
+            },
+            {
                 label: c.delete,
                 tone: 'danger',
                 icon: <Trash2 className="w-4 h-4" />,
-                onClick: bulkDelete,
+                onClick: () => setBulkDeleteOpen(true),
             },
         ],
-        [c.delete, bulkDelete],
+        [m.bulk.editField, c.delete],
     );
 
     return (
@@ -895,39 +944,6 @@ function LeadsPage() {
                     clearSelectionSignal={selectionEpoch}
                     bulkActions={bulkActions}
                     bulkActionsDisabled={bulkBusy}
-                    renderBulkExtra={() => (
-                        <>
-                            <select
-                                value=""
-                                disabled={bulkBusy}
-                                onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('status', v); }}
-                                className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                            >
-                                <option value="">{(m as any).bulkSetStatus ?? 'Set status…'}</option>
-                                {/* Open stages only: closing a lead needs a lost reason or a
-                                    customer record, which a bulk action cannot supply. */}
-                                {statusOptions.length > 0
-                                    ? statusOptions
-                                        .filter((o) => isOpenLifecycle(o.lifecycle))
-                                        .map((o) => (
-                                            <option key={o.id} value={o.id}>{stageOptionLabel(o, m.statuses)}</option>
-                                        ))
-                                    : (['NEW', 'CONTACTED', 'QUALIFIED'] as const).map((s) => (
-                                        <option key={s} value={s}>{statusLabel(s)}</option>
-                                    ))}
-                            </select>
-                            <select
-                                value=""
-                                disabled={bulkBusy}
-                                onChange={(e) => { const v = e.target.value; e.target.value = ''; if (v) void runBulkAction('assign', v === '__unassign__' ? '' : v); }}
-                                className="border border-primary-border bg-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                            >
-                                <option value="">{(m as any).bulkAssign ?? 'Assign to…'}</option>
-                                <option value="__unassign__">{(m as any).bulkUnassign ?? '— Unassigned —'}</option>
-                                {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
-                            </select>
-                        </>
-                    )}
                 />
             )}
 
@@ -938,6 +954,43 @@ function LeadsPage() {
                 fields={importFields}
                 importFn={(rows, mode) => api.importLeads(rows, mode)}
                 onSuccess={refresh}
+            />
+
+            {bulkEditOpen && (
+                <BulkEditLeadsModal
+                    count={selectedLeads.length}
+                    stages={bulkStages}
+                    members={memberOptions}
+                    categories={categoryOptions}
+                    sources={sourceOptions}
+                    customFields={customFieldDefs}
+                    busy={bulkBusy}
+                    onSubmit={bulkUpdate}
+                    onClose={() => setBulkEditOpen(false)}
+                />
+            )}
+
+            <ConfirmDialog
+                open={bulkDeleteOpen}
+                title={c.delete}
+                prompt={m.bulk.deleteConfirm.replace('{count}', String(selectedLeads.length))}
+                confirmLabel={c.delete}
+                cancelLabel={c.cancel}
+                loading={bulkBusy}
+                danger
+                onConfirm={bulkDelete}
+                onCancel={() => setBulkDeleteOpen(false)}
+            />
+
+            <ConfirmDialog
+                open={Boolean(pendingDelete)}
+                title={c.delete}
+                prompt={m.deleteConfirm}
+                confirmLabel={c.delete}
+                cancelLabel={c.cancel}
+                danger
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => setPendingDelete(null)}
             />
         </PageShell>
     );
