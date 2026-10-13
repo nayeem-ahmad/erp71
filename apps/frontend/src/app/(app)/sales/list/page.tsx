@@ -3,11 +3,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Receipt, Eye, Edit2, FileText, Printer, Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate } from '@/lib/format';
+import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { PostingBadge } from '@/components/PostingBadge';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
@@ -54,6 +54,20 @@ const statusColors: Record<string, string> = {
 
 const columnHelper = createColumnHelper<Sale>();
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A sale's date with the minute it was rung up. A sale synced from Dizi or
+ * Express arrives with a date only, stored at UTC midnight; printing that
+ * midnight in the shop's zone would invent a time (06:00 in Dhaka), so those
+ * show the day alone.
+ */
+function formatSaleDate(value: string | null | undefined, locale: string): string {
+    if (!value) return formatDate(value, locale);
+    const instant = new Date(value).getTime();
+    return instant % DAY_MS === 0 ? formatDate(value, locale) : formatDateTime(value, locale);
+}
+
 export default function SalesPage() {
     const { t, locale } = useI18n();
     const branch = useBranchScope();
@@ -93,6 +107,7 @@ export default function SalesPage() {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     // Typing must not fire a request per keystroke against a table this large.
@@ -116,13 +131,14 @@ export default function SalesPage() {
         initialSort: { id: 'created_at', desc: true },
         // The branch filter is a filter like the rest: a change is page 1 of a
         // fresh query, and the export walks the same filtered query.
-        deps: [debouncedSearch, statusFilter, createdRange, branch.apiStoreId],
+        deps: [debouncedSearch, statusFilter, dateRange, createdRange, branch.apiStoreId],
         enabled: branch.ready,
         fetch: (params) =>
             api.getSalesList({
                 ...params,
                 search: debouncedSearch || undefined,
                 status: statusFilter || undefined,
+                ...applyDateRangeQuery(dateRange),
                 ...applyCreatedRangeQuery(createdRange),
                 storeId: branch.apiStoreId,
             }),
@@ -169,9 +185,9 @@ export default function SalesPage() {
                 id: 'sale_date',
                 header: t.sales.columns.saleDate,
                 cell: (info) => (
-                    <span className="text-sm text-gray-600">{formatDate(info.getValue(), locale)}</span>
+                    <span className="text-sm text-gray-600">{formatSaleDate(info.getValue(), locale)}</span>
                 ),
-                size: 130,
+                size: 150,
             }),
             createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
@@ -414,6 +430,7 @@ export default function SalesPage() {
                             className="ps-9"
                         />
                     </div>
+                    <DateRangeFilter label={t.common.date} withTime value={dateRange} onChange={setDateRange} />
                     <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                     <Select
                         value={statusFilter}

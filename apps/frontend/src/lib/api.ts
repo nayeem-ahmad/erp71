@@ -1965,6 +1965,9 @@ export const api = {
         mine?: boolean;
         createdFrom?: string;
         createdTo?: string;
+        /** The sale's own date (`sale_date`), `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. */
+        dateFrom?: string;
+        dateTo?: string;
         /** A branch or `'all'`, from the page's branch filter. */
         storeId?: string;
     }) => {
@@ -1978,6 +1981,8 @@ export const api = {
         if (params.mine) query.set('mine', 'true');
         if (params.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params.createdTo) query.set('createdTo', params.createdTo);
+        if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+        if (params.dateTo) query.set('dateTo', params.dateTo);
         if (params.storeId) query.set('storeId', params.storeId);
         return fetchPaginated(`/sales?${query.toString()}`);
     },

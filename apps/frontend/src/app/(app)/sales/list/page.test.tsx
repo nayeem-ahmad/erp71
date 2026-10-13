@@ -24,6 +24,8 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import SalesListPage from './page';
 import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
+import { createdRangeFromPreset } from '@/lib/created-range';
+import { formatDate, formatDateTime } from '@/lib/format';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
@@ -336,6 +338,56 @@ describe('SalesListPage — Sales Transaction List', () => {
         });
     });
 
+    it('filters by the sale date through its own Date chip, apart from Created', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await waitFor(() => expect(api.getSalesList).toHaveBeenCalledTimes(1));
+
+        fireEvent.click(screen.getByRole('button', { name: /^date · any time$/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+
+        const today = createdRangeFromPreset('today');
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ dateFrom: today.from, dateTo: today.to }),
+            ),
+        );
+        expect(api.getSalesList.mock.lastCall[0]).not.toHaveProperty('createdFrom');
+        expect(screen.getByRole('button', { name: /^created · any time$/i })).toBeInTheDocument();
+    });
+
+    it('offers times on the Date chip', async () => {
+        renderWithQueryClient(<SalesListPage />);
+        fireEvent.click(await screen.findByRole('button', { name: /^date · any time$/i }));
+        expect(screen.getByLabelText('From (Time)')).toBeInTheDocument();
+    });
+
+    /**
+     * Dizi/Express sync stores a provider's date-only sale at UTC midnight. Its
+     * time is not a time anyone rang it up, so the column shows the day alone;
+     * a sale entered here keeps the minute it was made.
+     */
+    it('shows the sale time, except for a date-only synced sale', async () => {
+        const { api } = require('@/lib/api');
+        api.getSalesList.mockResolvedValue({
+            items: [
+                { ...mockSales[0], id: 'timed', serial_number: 'SL-T', sale_date: '2026-10-13T09:15:00.000Z' },
+                { ...mockSales[0], id: 'synced', serial_number: 'SL-S', sale_date: '2026-10-13T00:00:00.000Z' },
+            ],
+            total: 2,
+            page: 1,
+            limit: 20,
+            pages: 1,
+        });
+        renderWithQueryClient(<SalesListPage />);
+
+        const timedRow = (await screen.findByText('SL-T')).closest('tr') as HTMLElement;
+        const syncedRow = screen.getByText('SL-S').closest('tr') as HTMLElement;
+        expect(within(timedRow).getByText(formatDateTime('2026-10-13T09:15:00.000Z', 'en'))).toBeInTheDocument();
+        expect(within(syncedRow).getByText(formatDate('2026-10-13T00:00:00.000Z', 'en'))).toBeInTheDocument();
+        expect(within(syncedRow).queryByText(formatDateTime('2026-10-13T00:00:00.000Z', 'en'))).not.toBeInTheDocument();
+    });
+
     it('requests a page from the server on mount', async () => {
         const { api } = require('@/lib/api');
         renderWithQueryClient(<SalesListPage />);
@@ -388,7 +440,8 @@ describe('SalesListPage — Sales Transaction List', () => {
         await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
         expect(screen.getByRole('columnheader', { name: /sale date/i })).toBeInTheDocument();
         expect(screen.getByRole('columnheader', { name: /^created$/i })).toBeInTheDocument();
-        expect(screen.getByText('05/01/2026')).toBeInTheDocument();
+        // The sale date carries its time now (the Date chip filters by it).
+        expect(screen.getByText(formatDateTime('2026-01-05T12:00:00.000Z', 'en'))).toBeInTheDocument();
         expect(screen.getByText('20/03/2026')).toBeInTheDocument();
     });
 
