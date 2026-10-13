@@ -41,6 +41,12 @@ describe('isAppOnlyPath', () => {
         expect(isAppOnlyPath('/admin/tenants/ledger')).toBe(true);
     });
 
+    it('claims the short task link, which resolves against the session', () => {
+        expect(isAppOnlyPath('/t/ERP-14')).toBe(true);
+        // A whole segment: the marketing site's /terms is not a task link.
+        expect(isAppOnlyPath('/terms')).toBe(false);
+    });
+
     it('claims the auth flows, which write credentials into the origin', () => {
         for (const path of ['/login', '/signup', '/demo', '/select-account', '/verify-email']) {
             expect(isAppOnlyPath(path)).toBe(true);
