@@ -913,10 +913,9 @@ describe('detailed invoice layout', () => {
             const html = render(posted, 'A4', detailed);
             expect(html).toContain('@bottom-left { content: "Printed 06-10-2026 1:02:59 PM";');
             expect(html).toContain('@bottom-right { content: "Page " counter(page) " of " counter(pages);');
-            // Clear of the paper edge, and the signature block stops short of
-            // the page so a slightly larger print-dialog margin still fits.
+            // Clear of the paper edge, and the footer still on the page foot.
             expect(html).toContain('vertical-align: top;');
-            expect(html).toContain('.p71-doc--end { height: 248mm; }');
+            expect(html).toContain('.p71-doc--end { height: 267mm; }');
         });
 
         it('names who printed it after the time', () => {

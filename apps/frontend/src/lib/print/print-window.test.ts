@@ -598,16 +598,16 @@ describe('the page margin line', () => {
         expect(buildPrintDocument(base)).not.toContain('@bottom-left');
     });
 
-    it('sits at the inner edge of a deeper margin, clear of the paper edge', () => {
+    it('sits at the inner edge of the margin, clear of the paper edge', () => {
         const html = buildPrintDocument({ ...base, pageStamp: stamp });
 
         // Bottom-aligned text lands in the strip a printer cannot mark and
-        // comes out cut in half. The inner edge of a deeper margin does not.
+        // comes out cut in half. The inner edge of the margin does not.
         expect(html).toContain('vertical-align: top; padding-top: 1.5mm;');
-        expect(html).toContain('@page { size: A4 portrait; margin: 15mm 15mm 22mm 15mm; }');
+        expect(html).toContain('@page { size: A4 portrait; margin: 15mm; }');
     });
 
-    it('keeps a pinned signature block short of that deeper page, so a little extra margin still fits', () => {
+    it('leaves a pinned footer on the foot of the page', () => {
         const html = buildPrintDocument({
             ...base,
             pageStamp: stamp,
@@ -616,14 +616,13 @@ describe('the page margin line', () => {
             footerHtml: '<div class="p71-doc-ft">Thanks</div>',
         });
 
-        // 297mm sheet, 15mm top, 22mm bottom, 12mm of slack: 248mm.
-        // A table of the full 260mm content box overflows as soon as the print
-        // dialog adds margin, and the unbreakable signature row jumps to page 2.
-        expect(html).toContain('.p71-doc--end { height: 248mm; }');
-        expect(html).not.toContain('height: 267mm');
+        // The line lives in the margin, so it takes no room from the page: the
+        // signature block and footer still fill the whole 267mm content box.
+        // A shorter table left the footer floating above the page bottom.
+        expect(html).toContain('.p71-doc--end { height: 267mm; }');
     });
 
-    it('deepens the top margin instead when the footer bleeds into the bottom one', () => {
+    it('sits at the inner edge of the top margin when the footer bleeds into the bottom one', () => {
         const html = buildPrintDocument({
             ...base,
             pageStamp: stamp,
@@ -631,7 +630,7 @@ describe('the page margin line', () => {
         });
 
         expect(html).toContain('vertical-align: bottom; padding-bottom: 1.5mm;');
-        expect(html).toContain('margin: 22mm 15mm 15mm 15mm;');
+        expect(html).toContain('margin: 15mm; }');
     });
 });
 
