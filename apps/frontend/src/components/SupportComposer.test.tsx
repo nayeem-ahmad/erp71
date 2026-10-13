@@ -103,3 +103,83 @@ describe('SupportComposer', () => {
         expect(screen.getByPlaceholderText('Describe the bug, idea, or other feedback…')).toBeInTheDocument();
     });
 });
+
+describe('SupportComposer attachments', () => {
+    const renderComposer = (onCreated = jest.fn()) =>
+        render(
+            <SupportComposer
+                supportEnabled
+                feedbackEnabled={false}
+                onCreated={onCreated}
+                onCancel={jest.fn()}
+            />,
+        );
+    const pick = (...files: File[]) =>
+        fireEvent.change(screen.getByLabelText('Attach file', { selector: 'input' }), {
+            target: { files },
+        });
+
+    beforeEach(() => {
+        const { api } = require('@/lib/api');
+        api.createSupportThread.mockReset();
+    });
+
+    it('sends picked files with the ticket', async () => {
+        const { api } = require('@/lib/api');
+        api.createSupportThread.mockResolvedValue({ id: 'thr-2', ticketNumber: 13 });
+        const onCreated = jest.fn();
+        renderComposer(onCreated);
+
+        const shot = new File(['png'], 'screen.png', { type: 'image/png' });
+        pick(shot);
+        expect(screen.getByText('screen.png')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByPlaceholderText('Describe what you need help with…'), {
+            target: { value: 'Totals look wrong' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+        await waitFor(() => expect(onCreated).toHaveBeenCalled());
+        expect(api.createSupportThread).toHaveBeenCalledWith(
+            expect.objectContaining({ body: 'Totals look wrong', attachments: [shot] }),
+        );
+    });
+
+    it('lets an attachment stand in for the written message', async () => {
+        const { api } = require('@/lib/api');
+        api.createSupportThread.mockResolvedValue({ id: 'thr-3', ticketNumber: 14 });
+        renderComposer();
+
+        const send = screen.getByRole('button', { name: 'Send' });
+        expect(send).toBeDisabled();
+        pick(new File(['ogg'], 'voice.ogg', { type: 'audio/ogg' }));
+        expect(send).not.toBeDisabled();
+
+        fireEvent.click(send);
+        await waitFor(() => expect(api.createSupportThread).toHaveBeenCalledWith(
+            expect.objectContaining({ body: '' }),
+        ));
+    });
+
+    it('refuses an unsupported file inline', () => {
+        renderComposer();
+        pick(new File(['x'], 'setup.exe', { type: 'application/x-msdownload' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('That file type is not supported');
+        expect(screen.queryByText('setup.exe')).not.toBeInTheDocument();
+    });
+
+    it('stops at five files', () => {
+        renderComposer();
+        const files = Array.from({ length: 6 }, (_, i) => new File(['x'], `${i}.png`, { type: 'image/png' }));
+        pick(...files);
+        expect(screen.getByRole('alert')).toHaveTextContent('You can attach up to 5 files.');
+        expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(5);
+    });
+
+    it('removes a pending file', () => {
+        renderComposer();
+        pick(new File(['x'], 'a.png', { type: 'image/png' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Remove a.png' }));
+        expect(screen.queryByText('a.png')).not.toBeInTheDocument();
+    });
+});

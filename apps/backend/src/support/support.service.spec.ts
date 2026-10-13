@@ -1,9 +1,10 @@
-import { ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { SupportService } from './support.service';
 
 function makeService(opts?: {
     support?: boolean;
     feedback?: boolean;
+    storage?: boolean;
 }) {
     const features = {
         support: opts?.support ?? true,
@@ -38,8 +39,21 @@ function makeService(opts?: {
     const email: any = {
         sendFeedbackNotification: jest.fn().mockResolvedValue(undefined),
     };
-    const service = new SupportService(db, platformSettings, email);
-    return { service, db, tx, platformSettings, email };
+    let uploads = 0;
+    const assets: any = {
+        isEnabled: jest.fn().mockReturnValue(opts?.storage ?? true),
+        uploadBuffer: jest.fn().mockImplementation((buffer: Buffer, _folder: string, _name: string) => {
+            uploads += 1;
+            return Promise.resolve({
+                url: `https://cdn.example/${uploads}`,
+                publicId: `retail/support/ten-1/${uploads}`,
+                bytes: buffer.byteLength,
+            });
+        }),
+        deleteFile: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new SupportService(db, platformSettings, email, assets);
+    return { service, db, tx, platformSettings, email, assets };
 }
 
 describe('SupportService.createKnock', () => {
@@ -152,6 +166,111 @@ describe('SupportService.createKnock', () => {
         await expect(service.createKnock({ ...base, category: 'bug' })).rejects.toBeInstanceOf(
             ForbiddenException,
         );
+    });
+});
+
+describe('SupportService.createKnock with attachments', () => {
+    const base = { tenantId: 'ten-1', userId: 'user-1', category: 'bug' };
+    const file = (originalname: string, mimetype: string, size = 4) => ({
+        buffer: Buffer.alloc(size, 1),
+        originalname,
+        mimetype,
+        size,
+    });
+
+    it('stores each file and attaches it to the first message', async () => {
+        const { service, tx, assets } = makeService();
+        await service.createKnock({
+            ...base,
+            body: 'Totals are wrong',
+            attachments: [
+                file('screen.png', 'image/png'),
+                file('voice-note.webm', 'audio/webm;codecs=opus'),
+                file('invoice.pdf', 'application/pdf'),
+            ],
+        });
+
+        expect(assets.uploadBuffer.mock.calls.map((c: any[]) => [c[1], c[3]])).toEqual([
+            ['support/ten-1', 'image'],
+            ['support/ten-1', 'video'],
+            ['support/ten-1', 'raw'],
+        ]);
+        const message = tx.supportThread.create.mock.calls[0][0].data.messages.create;
+        expect(message.body).toBe('Totals are wrong');
+        expect(message.attachments.create).toEqual([
+            expect.objectContaining({ tenantId: 'ten-1', kind: 'file', mimeType: 'image/png', resourceType: 'image', storageKey: 'retail/support/ten-1/1' }),
+            expect.objectContaining({ tenantId: 'ten-1', kind: 'voice', mimeType: 'audio/webm', resourceType: 'video' }),
+            expect.objectContaining({ tenantId: 'ten-1', kind: 'file', mimeType: 'application/pdf', resourceType: 'raw' }),
+        ]);
+    });
+
+    it('accepts a voice note with no written message', async () => {
+        const { service, tx } = makeService();
+        await service.createKnock({ ...base, body: '  ', attachments: [file('voice-note.webm', 'audio/webm')] });
+        expect(tx.supportThread.create.mock.calls[0][0].data.messages.create.body).toBe('(Voice note)');
+    });
+
+    it('keeps a short note that came with a file', async () => {
+        const { service, tx } = makeService();
+        await service.createKnock({ ...base, body: 'ok', attachments: [file('a.png', 'image/png')] });
+        expect(tx.supportThread.create.mock.calls[0][0].data.messages.create.body).toBe('ok');
+    });
+
+    it('still rejects a ticket with neither words nor files', async () => {
+        const { service } = makeService();
+        await expect(service.createKnock({ ...base, body: '' })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects an unsupported type before uploading anything', async () => {
+        const { service, assets } = makeService();
+        await expect(
+            service.createKnock({
+                ...base,
+                body: 'See attached',
+                attachments: [file('a.png', 'image/png'), file('evil.exe', 'application/x-msdownload')],
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(assets.uploadBuffer).not.toHaveBeenCalled();
+    });
+
+    it('says attachments are unavailable when storage is not configured', async () => {
+        const { service, tx } = makeService({ storage: false });
+        await expect(
+            service.createKnock({ ...base, body: 'See attached', attachments: [file('a.png', 'image/png')] }),
+        ).rejects.toBeInstanceOf(ServiceUnavailableException);
+        expect(tx.supportThread.create).not.toHaveBeenCalled();
+    });
+
+    it('removes the stored files when the thread cannot be saved', async () => {
+        const { service, tx, assets } = makeService();
+        tx.supportThread.create.mockRejectedValue(new Error('db down'));
+        await expect(
+            service.createKnock({
+                ...base,
+                body: 'See attached',
+                attachments: [file('a.png', 'image/png'), file('v.m4a', 'audio/mp4')],
+            }),
+        ).rejects.toThrow('db down');
+        expect(assets.deleteFile.mock.calls).toEqual([
+            ['retail/support/ten-1/1', 'image'],
+            ['retail/support/ten-1/2', 'video'],
+        ]);
+    });
+
+    it('undoes earlier uploads when a later one fails', async () => {
+        const { service, tx, assets } = makeService();
+        assets.uploadBuffer
+            .mockResolvedValueOnce({ url: 'u1', publicId: 'p1', bytes: 4 })
+            .mockRejectedValueOnce(new Error('cloudinary down'));
+        await expect(
+            service.createKnock({
+                ...base,
+                body: 'See attached',
+                attachments: [file('a.png', 'image/png'), file('b.png', 'image/png')],
+            }),
+        ).rejects.toBeInstanceOf(ServiceUnavailableException);
+        expect(assets.deleteFile).toHaveBeenCalledWith('p1', 'image');
+        expect(tx.supportThread.create).not.toHaveBeenCalled();
     });
 });
 

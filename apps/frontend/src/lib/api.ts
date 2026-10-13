@@ -4499,17 +4499,33 @@ export const api = {
         if (params?.category) query.set('category', params.category);
         return fetchWithAuth(`/support/threads${query.toString() ? `?${query.toString()}` : ''}`);
     },
+    /**
+     * JSON when there is nothing to attach; otherwise FormData, so the
+     * browser sets the multipart boundary itself. Voice notes are just files
+     * here — the server tells them apart by their audio type.
+     */
     createSupportThread: (data: {
         category?: 'support' | 'bug' | 'feature' | 'general';
         subject?: string;
         body: string;
         page?: string;
-    }) =>
-        fetchWithAuth('/support/threads', {
-            method: 'POST',
-            body: JSON.stringify(data),
-            headers: { 'Content-Type': 'application/json' },
-        }),
+        attachments?: File[];
+    }) => {
+        const { attachments, ...fields } = data;
+        if (!attachments?.length) {
+            return fetchWithAuth('/support/threads', {
+                method: 'POST',
+                body: JSON.stringify(fields),
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        const body = new FormData();
+        for (const [key, value] of Object.entries(fields)) {
+            if (value !== undefined && value !== '') body.append(key, value);
+        }
+        for (const file of attachments) body.append('attachments', file, file.name);
+        return fetchWithAuth('/support/threads', { method: 'POST', body });
+    },
     /**
      * Live thread changes for this workspace. Each frame is a nudge to re-read
      * a thread, never the thread itself — see `openAuthedStream`.

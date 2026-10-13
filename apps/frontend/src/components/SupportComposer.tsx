@@ -1,10 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { Mic, Paperclip, Square } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { Button, Field, Input, Textarea } from '@/components/ui';
+import {
+    MAX_SUPPORT_ATTACHMENTS,
+    PendingAttachmentList,
+    SUPPORT_ATTACHMENT_ACCEPT,
+    checkSupportFile,
+} from '@/components/SupportAttachments';
+import { formatRecordingTime, useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 
 export type KnockCategory = 'support' | 'bug' | 'feature' | 'general';
 
@@ -52,15 +60,49 @@ export default function SupportComposer({
     );
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
+    const [attachments, setAttachments] = useState<File[]>([]);
+    const [attachmentError, setAttachmentError] = useState('');
     const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const a = m.attachments;
+
+    /** Adds what fits and says, inline, why the rest did not. */
+    function addFiles(incoming: File[]) {
+        setAttachmentError('');
+        const accepted: File[] = [];
+        let problem = '';
+        for (const file of incoming) {
+            const issue = checkSupportFile(file);
+            if (issue === 'type') problem = a.unsupported;
+            else if (issue === 'size') problem = formatMessage(a.tooLarge, { name: file.name });
+            else accepted.push(file);
+        }
+        const room = Math.max(0, MAX_SUPPORT_ATTACHMENTS - attachments.length);
+        if (accepted.length > room) problem = formatMessage(a.tooMany, { max: MAX_SUPPORT_ATTACHMENTS });
+        if (accepted.length && room) setAttachments([...attachments, ...accepted.slice(0, room)]);
+        if (problem) setAttachmentError(problem);
+    }
+
+    const recorder = useVoiceRecorder({ onRecorded: (file) => addFiles([file]) });
+    const recorderError =
+        recorder.error === 'denied' ? a.micDenied
+        : recorder.error === 'unsupported' ? a.micUnsupported
+        : recorder.error === 'failed' ? a.micFailed
+        : '';
+    const full = attachments.length >= MAX_SUPPORT_ATTACHMENTS;
 
     const activeCategory = categories.includes(category) ? category : categories[0];
     const placeholder = activeCategory === 'support' ? m.placeholderSupport : m.placeholderFeedback;
+    // A voice note or a screenshot can stand in for the written message.
+    const canSubmit =
+        (body.trim().length >= 3 || attachments.length > 0)
+        && !recorder.recording
+        && status !== 'submitting';
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!activeCategory || body.trim().length < 3) return;
+        if (!activeCategory || !canSubmit) return;
         setStatus('submitting');
         setErrorMsg('');
         try {
@@ -69,6 +111,7 @@ export default function SupportComposer({
                 subject: subject.trim() || undefined,
                 body: body.trim(),
                 page: capturePage && typeof window !== 'undefined' ? window.location.pathname : undefined,
+                attachments: attachments.length ? attachments : undefined,
             }) as CreatedKnock;
             // The number is the one thing worth carrying away from this form,
             // and one of the two places it is submitted from navigates away
@@ -125,6 +168,81 @@ export default function SupportComposer({
                 />
             </Field>
 
+            <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={full || status === 'submitting'}
+                        icon={<Paperclip className="h-4 w-4" aria-hidden />}
+                    >
+                        {a.attach}
+                    </Button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="sr-only"
+                        tabIndex={-1}
+                        aria-label={a.attach}
+                        accept={SUPPORT_ATTACHMENT_ACCEPT}
+                        onChange={(e) => {
+                            addFiles(Array.from(e.target.files ?? []));
+                            // Cleared, or picking the same file again fires nothing.
+                            e.target.value = '';
+                        }}
+                    />
+                    {recorder.recording ? (
+                        <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={recorder.stop}
+                            icon={<Square className="h-3.5 w-3.5" aria-hidden />}
+                        >
+                            {a.stopRecording}
+                        </Button>
+                    ) : (
+                        recorder.supported && (
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                    setAttachmentError('');
+                                    void recorder.start();
+                                }}
+                                disabled={full || status === 'submitting'}
+                                icon={<Mic className="h-4 w-4" aria-hidden />}
+                            >
+                                {a.record}
+                            </Button>
+                        )
+                    )}
+                    {recorder.recording ? (
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-red-600" role="status">
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" aria-hidden />
+                            {formatMessage(a.recording, { time: formatRecordingTime(recorder.elapsedMs) })}
+                        </span>
+                    ) : (
+                        <span className="text-xs text-gray-400">{a.hint}</span>
+                    )}
+                </div>
+                {(attachmentError || recorderError) && (
+                    <p role="alert" className="text-xs text-danger">{attachmentError || recorderError}</p>
+                )}
+                <PendingAttachmentList
+                    files={attachments}
+                    disabled={status === 'submitting'}
+                    onRemove={(index) => {
+                        setAttachmentError('');
+                        setAttachments((current) => current.filter((_, i) => i !== index));
+                    }}
+                />
+            </div>
+
             {status === 'error' && (
                 <p className="text-xs text-danger">{errorMsg}</p>
             )}
@@ -137,7 +255,7 @@ export default function SupportComposer({
                     type="submit"
                     variant="primary"
                     loading={status === 'submitting'}
-                    disabled={body.trim().length < 3 || status === 'submitting'}
+                    disabled={!canSubmit}
                 >
                     {status === 'submitting' ? m.submitting : m.submit}
                 </Button>

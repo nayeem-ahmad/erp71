@@ -1,5 +1,6 @@
 import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
+import { AssetsModule } from '../assets/assets.module';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 import { SupportController } from './support.controller';
 import { AdminSupportController } from './admin-support.controller';
@@ -7,7 +8,7 @@ import { SupportService } from './support.service';
 import { SupportEventsService } from './support-events.service';
 
 @Module({
-    imports: [DatabaseModule, PlatformSettingsModule],
+    imports: [DatabaseModule, PlatformSettingsModule, AssetsModule],
     controllers: [SupportController, AdminSupportController],
     providers: [SupportService, SupportEventsService],
     exports: [SupportService, SupportEventsService],
