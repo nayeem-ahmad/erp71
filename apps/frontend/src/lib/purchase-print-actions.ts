@@ -1,3 +1,4 @@
+import type { InvoicePrintPrefs } from '@erp71/shared-types';
 import { formatDate } from '@/lib/format';
 import { instrumentFromRecord, instrumentSummary } from '@/lib/payment-instrument';
 import { paperSizeLabel } from '@/lib/print';
@@ -24,9 +25,14 @@ export interface PrintablePurchase {
     discount_amount?: string | number;
     freight_amount?: string | number;
     total_amount: string | number;
+    /** Paid so far, at entry and by later supplier payments. */
+    paid_amount?: string | number;
+    /** Who entered it, by name — GET /purchases/:id/invoice resolves it. */
+    prepared_by?: string | null;
     store?: { name?: string | null } | null;
     supplier?: {
         name?: string;
+        supplier_code?: string | null;
         phone?: string | null;
         address?: string | null;
     } | null;
@@ -81,6 +87,15 @@ export interface PurchasePrintContext {
     supplierLabel: string;
     dateLabel: string;
     branchLabel: string;
+    /**
+     * The printing member's invoice layout. Detailed prints the receipt on the
+     * detailed invoice's design; the built-in layout when omitted.
+     */
+    invoiceLayout?: InvoicePrintPrefs;
+    /** The signed-in user printing, named on the detailed layout's print line. */
+    printedBy?: string;
+    /** A code that opens the purchase in the app; the detailed layout prints it. */
+    qrDataUrl?: string;
 }
 
 function money(value: string | number | undefined): number {
@@ -140,6 +155,7 @@ export function printPurchaseInvoiceFromRecord(
     const tax = money(purchase.tax_amount);
     const discount = money(purchase.discount_amount);
     const freight = money(purchase.freight_amount);
+    const paid = purchase.paid_amount === undefined ? undefined : money(purchase.paid_amount);
 
     printPurchaseInvoice(
         {
@@ -149,9 +165,13 @@ export function printPurchaseInvoiceFromRecord(
             companyName: ctx.header.companyName,
             headerConfig: ctx.header.headerConfig,
             supplierName: purchase.supplier?.name,
+            supplierCode: purchase.supplier?.supplier_code ?? undefined,
             supplierPhone: purchase.supplier?.phone ?? undefined,
             supplierAddress: purchase.supplier?.address ?? undefined,
             storeName: purchase.store?.name ?? undefined,
+            preparedBy: purchase.prepared_by ?? undefined,
+            printedBy: ctx.printedBy,
+            qrDataUrl: ctx.qrDataUrl,
             items: purchase.items.map((item) => ({
                 name: item.product?.name ?? ctx.unknownProductLabel,
                 sku: item.product?.sku ?? undefined,
@@ -168,10 +188,12 @@ export function printPurchaseInvoiceFromRecord(
             discount: discount || undefined,
             freight: freight || undefined,
             total: money(purchase.total_amount),
+            amountPaid: paid,
             note: purchase.notes ?? undefined,
             labels: labelsFor(ctx, companyName),
         },
         size,
         previewFor(size, ctx, skipPreview),
+        ctx.invoiceLayout,
     );
 }

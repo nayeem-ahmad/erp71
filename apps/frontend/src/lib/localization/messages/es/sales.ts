@@ -360,7 +360,7 @@ export const salesMessages = {
                 heading: "Diseño de factura",
                 hint: "Guardado en tu cuenta, así te acompaña en cualquier dispositivo.",
                 layoutLabel: "Diseño de la factura",
-                layoutHint: "El diseño detallado añade una franja de factura / pedido / fecha, una columna de Garantía, el impuesto junto a los totales, un pie con quién la preparó y cuándo, y un código QR que abre la factura a quien tenga permiso para verla. Se imprime en A4, A5 y Letter; los rollos conservan el diseño estándar.",
+                layoutHint: "El diseño detallado añade una franja de factura / pedido / fecha, una columna de Garantía, el impuesto junto a los totales, un pie con quién la preparó y cuándo, y un código QR que abre la factura a quien tenga permiso para verla. Se imprime en A4, A5 y Letter; los rollos conservan el diseño estándar. Los recibos de compra también siguen esta opción.",
                 layoutStandard: "Estándar",
                 layoutDetailed: "Detallado",
                 paddingLabel: "Espacio alrededor del contenido",

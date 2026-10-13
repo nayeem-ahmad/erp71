@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
+import { purchaseQrDataUrl } from '@/lib/invoice-qr';
+import { isThermalPaper } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
 import {
@@ -11,6 +13,8 @@ import {
     type PurchasePrintContext,
 } from '@/lib/purchase-print-actions';
 import { useSalePrintPrefs } from './useSalePrintPrefs';
+import { useInvoicePrintPrefs } from './useInvoicePrintPrefs';
+import { printedByName } from './useSalePrinting';
 
 /**
  * Wires the purchases-list print button to the printer, with letterhead and
@@ -25,6 +29,9 @@ export function usePurchasePrinting() {
     const header = usePrintHeader('PURCHASE_INVOICE');
     const { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity } =
         useSalePrintPrefs();
+    // The member's sales invoice layout: a member on the detailed invoice gets
+    // the purchase receipt on the same design.
+    const { resolve: resolveInvoiceLayout } = useInvoicePrintPrefs();
 
     const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -53,11 +60,19 @@ export function usePurchasePrinting() {
                 }
                 // The purchase's own branch letterhead, not the one resolved on mount.
                 const storeId = data.purchase.store_id ?? data.purchase.store?.id ?? undefined;
-                const purchaseHeader = await header.resolve(storeId);
+                const [purchaseHeader, invoiceLayout, printedBy] = await Promise.all([
+                    header.resolve(storeId),
+                    resolveInvoiceLayout(),
+                    printedByName(),
+                ]);
+                // Only the detailed design prints the code, so only it waits on one.
+                const qrDataUrl = !isThermalPaper(size) && invoiceLayout.layout === 'detailed'
+                    ? await purchaseQrDataUrl(purchaseId)
+                    : undefined;
                 printPurchaseInvoiceFromRecord(
                     data.purchase,
                     size,
-                    { ...ctx, header: purchaseHeader },
+                    { ...ctx, header: purchaseHeader, invoiceLayout, printedBy, qrDataUrl },
                     skipPreview,
                 );
             } catch (error) {
@@ -67,7 +82,7 @@ export function usePurchasePrinting() {
                 setBusyId(null);
             }
         },
-        [ctx, header, skipPreview, t],
+        [ctx, header, resolveInvoiceLayout, skipPreview, t],
     );
 
     return {

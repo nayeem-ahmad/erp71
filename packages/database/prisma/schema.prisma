@@ -336,6 +336,12 @@ enum PostingRuleEventType {
   /// what failed is collection, not the sale — so this is an expense rather
   /// than a reversal of Sales Revenue.
   bad_debt_write_off
+  /// What a customer or supplier owed when their history was imported from
+  /// another system: their control account against Opening Balance Equity,
+  /// tagged to the party. Posted by `postPartyOpeningBalance` through
+  /// `postMultiLeg`, never by a PostingRule, so a tenant's rules cannot turn
+  /// an opening position into revenue or purchases.
+  party_opening_balance
 }
 
 /// A subsidiary-ledger party. Marks a control account (Accounts Receivable,
