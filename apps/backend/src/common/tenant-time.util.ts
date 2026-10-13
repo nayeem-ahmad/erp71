@@ -25,6 +25,8 @@ const MINUTE_MS = 60 * 1000;
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 /** `YYYY-MM-DDTHH:MM[:SS[.mmm]]` with no `Z` and no `±HH:MM` — a local wall clock. */
 const NAKED_DATETIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?$/;
+/** `YYYY-MM-DDTHH:mm` — the one timed shape the list filters send. */
+const DATE_MINUTE = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/;
 
 /**
  * `Intl.DateTimeFormat` construction is expensive relative to the formatting
@@ -233,6 +235,17 @@ export function zonedTodayWindow(
     return { gte: startOfZonedToday(timeZone, now), lt: startOfNextZonedDay(now, timeZone) };
 }
 
+/** The instant a `YYYY-MM-DDTHH:mm` minute starts in `timeZone`; null for anything else. */
+function zonedMinuteStart(value: string | undefined, timeZone: string): Date | null {
+    const match = value ? DATE_MINUTE.exec(value.trim()) : null;
+    if (!match) return null;
+    const date = parseCalendarDate(match[1]);
+    const hour = Number(match[2]);
+    const minute = Number(match[3]);
+    if (!date || hour > 23 || minute > 59) return null;
+    return wallClockToInstant({ ...date, hour, minute }, timeZone);
+}
+
 export type ZonedDayFilter = { gte?: Date; lte?: Date };
 
 /**
@@ -241,6 +254,10 @@ export type ZonedDayFilter = { gte?: Date; lte?: Date };
  * `to` covers the whole last day. The end is computed as "midnight of the next
  * day, less a millisecond" rather than "start plus 24 hours" so a day that DST
  * makes 23 or 25 hours long is still exactly one day.
+ *
+ * Either bound may instead carry a time, `YYYY-MM-DDTHH:mm`, for a window such
+ * as a night shift that runs past midnight. A timed `to` covers its whole
+ * minute, so "to 02:00" keeps a sale rung up at 02:00:40.
  */
 export function zonedDayRange(
     from: string | undefined,
@@ -255,10 +272,13 @@ export function zonedDayRange(
     const zone = resolveZone(timeZone);
     const filter: ZonedDayFilter = {};
 
-    const start = zonedDayStart(from, zone);
+    const start = zonedMinuteStart(from, zone) ?? zonedDayStart(from, zone);
     if (start) filter.gte = start;
 
-    if (to && parseCalendarDate(to)) {
+    const lastMinute = zonedMinuteStart(to, zone);
+    if (lastMinute) {
+        filter.lte = new Date(lastMinute.getTime() + MINUTE_MS - 1);
+    } else if (to && parseCalendarDate(to)) {
         const dayAfter = zonedDayStart(addCalendarDays(to.trim(), 1), zone);
         if (dayAfter) filter.lte = new Date(dayAfter.getTime() - 1);
     }
