@@ -248,6 +248,11 @@ export const componentsMessages = {
             /* The switch in the toolbar over every print window that lists rows. */
             compact: 'Susun atur padat',
             compactHint: 'Tulisan lebih kecil dan baris lebih rapat, jadi lebih banyak baris muat pada setiap halaman',
+            typeSize: 'Saiz teks',
+            typeSizeHint: 'Saiz pelanggan, item dan jumlah pada invois dan sebut harga. Kepala surat kekal saiznya sendiri. Diingati pada pelayar ini.',
+            typeNormal: 'Biasa',
+            typeLarge: 'Besar',
+            typeLarger: 'Lebih besar',
         },
 
         richText: {

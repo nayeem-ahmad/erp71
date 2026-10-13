@@ -10,6 +10,7 @@ describe('PrintSettingsModal — compact', () => {
                 paperSize="A4"
                 skipPreview={false}
                 density="normal"
+                typeScale="normal"
                 onSave={onSave}
                 onClose={jest.fn()}
             />,
@@ -18,7 +19,26 @@ describe('PrintSettingsModal — compact', () => {
         fireEvent.click(screen.getByLabelText(/Compact layout/));
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-        expect(onSave).toHaveBeenCalledWith({ paperSize: 'A4', skipPreview: false, density: 'compact' });
+        expect(onSave).toHaveBeenCalledWith({ paperSize: 'A4', skipPreview: false, density: 'compact', typeScale: 'normal' });
+    });
+
+    it('saves a larger text size for this browser', () => {
+        const onSave = jest.fn();
+        render(
+            <PrintSettingsModal
+                paperSize="A4"
+                skipPreview={false}
+                density="normal"
+                typeScale="normal"
+                onSave={onSave}
+                onClose={jest.fn()}
+            />,
+        );
+
+        fireEvent.change(screen.getByLabelText('Text size'), { target: { value: 'large' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        expect(onSave).toHaveBeenCalledWith({ paperSize: 'A4', skipPreview: false, density: 'normal', typeScale: 'large' });
     });
 
     it('opens on the answer the counter already has', () => {
@@ -27,6 +47,7 @@ describe('PrintSettingsModal — compact', () => {
                 paperSize="A5"
                 skipPreview
                 density="compact"
+                typeScale="normal"
                 onSave={jest.fn()}
                 onClose={jest.fn()}
             />,
@@ -42,6 +63,7 @@ describe('PrintSettingsModal — compact', () => {
                 paperSize="A4"
                 skipPreview={false}
                 density="normal"
+                typeScale="normal"
                 onSave={onSave}
                 onClose={jest.fn()}
             />,
@@ -69,6 +91,7 @@ describe('PrintSettingsModal — invoice layout', () => {
                 paperSize="A4"
                 skipPreview={false}
                 density="normal"
+                typeScale="normal"
                 onSave={onSave}
                 onClose={onClose}
                 invoiceLayout={{ prefs: member, save }}
@@ -83,6 +106,7 @@ describe('PrintSettingsModal — invoice layout', () => {
                 paperSize="A4"
                 skipPreview={false}
                 density="normal"
+                typeScale="normal"
                 onSave={jest.fn()}
                 onClose={jest.fn()}
             />,
@@ -107,7 +131,7 @@ describe('PrintSettingsModal — invoice layout', () => {
 
         await waitFor(() => expect(onClose).toHaveBeenCalled());
         expect(save).toHaveBeenCalledWith({ padding: 'wide', balance: 'never', amount_in_words: true });
-        expect(onSave).toHaveBeenCalledWith({ paperSize: 'A4', skipPreview: false, density: 'normal' });
+        expect(onSave).toHaveBeenCalledWith({ paperSize: 'A4', skipPreview: false, density: 'normal', typeScale: 'normal' });
     });
 
     it('saves the detailed design\u2019s table borders', async () => {

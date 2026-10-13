@@ -317,6 +317,16 @@ describe('compact invoice', () => {
         expect(html).toMatch(/<input type="checkbox" checked onchange="document\.documentElement\.classList\.toggle/);
     });
 
+    it('prints the data larger once this browser has chosen it', () => {
+        window.localStorage.setItem('erp71:print:type-scale', 'large');
+        const html = render();
+
+        expect(html).toContain('<html class="p71-fs-lg">');
+        expect(html).toMatch(/html\.p71-fs-lg \.items-table tbody td[^{]*\{ font-size: 15px; \}/);
+        // The normal cell is untouched, so Normal still prints as it always has.
+        expect(ruleFor(html, '.items-table tbody td')).toMatch(/font-size:13px/);
+    });
+
     it('keeps a roll in its own treatment, compact or not', () => {
         window.localStorage.setItem('erp71:print:density', 'compact');
         const html = render(baseInvoice, 'Thermal80');
@@ -903,6 +913,10 @@ describe('detailed invoice layout', () => {
             const html = render(posted, 'A4', detailed);
             expect(html).toContain('@bottom-left { content: "Printed 06-10-2026 1:02:59 PM";');
             expect(html).toContain('@bottom-right { content: "Page " counter(page) " of " counter(pages);');
+            // Clear of the paper edge, and the signature block stops short of
+            // the page so a slightly larger print-dialog margin still fits.
+            expect(html).toContain('vertical-align: top;');
+            expect(html).toContain('.p71-doc--end { height: 248mm; }');
         });
 
         it('names who printed it after the time', () => {

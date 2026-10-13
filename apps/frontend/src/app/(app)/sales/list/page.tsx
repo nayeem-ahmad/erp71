@@ -90,6 +90,8 @@ export default function SalesPage() {
         setSkipPreview,
         density,
         setDensity,
+        typeScale,
+        setTypeScale,
         busyId,
         batchBusy,
         printInvoice,
@@ -467,10 +469,12 @@ export default function SalesPage() {
                         paperSize={paperSize}
                         skipPreview={skipPreview}
                         density={density}
+                        typeScale={typeScale}
                         onSave={(next) => {
                             setPaperSize(next.paperSize);
                             setSkipPreview(next.skipPreview);
                             setDensity(next.density);
+                            setTypeScale(next.typeScale);
                             toast.success(t.sales.printSettings.saved);
                         }}
                         onClose={() => setPrintSettingsOpen(false)}

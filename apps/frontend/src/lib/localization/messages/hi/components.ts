@@ -248,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'कॉम्पैक्ट लेआउट',
         compactHint: 'छोटा टेक्स्ट और सघन पंक्तियाँ, ताकि हर पेज पर ज़्यादा लाइनें आएँ',
+        typeSize: 'अक्षर आकार',
+        typeSizeHint: 'इनवॉइस और कोटेशन पर ग्राहक, आइटम और कुल का आकार। लेटरहेड अपना आकार रखता है। इस ब्राउज़र में याद रहता है।',
+        typeNormal: 'सामान्य',
+        typeLarge: 'बड़ा',
+        typeLarger: 'और बड़ा',
     },
 
     richText: {

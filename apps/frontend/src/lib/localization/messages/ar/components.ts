@@ -248,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'تخطيط مضغوط',
         compactHint: 'خط أصغر وصفوف متقاربة، لتتسع كل صفحة لأسطر أكثر',
+        typeSize: 'حجم الخط',
+        typeSizeHint: 'حجم بيانات العميل والأصناف والمجاميع في الفاتورة وعرض السعر. الترويسة تحتفظ بحجمها. يُحفظ في هذا المتصفح.',
+        typeNormal: 'عادي',
+        typeLarge: 'كبير',
+        typeLarger: 'أكبر',
     },
 
     richText: {
