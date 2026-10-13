@@ -82,6 +82,8 @@ export const coreMessages = {
                 custom: "কাস্টম",
                 apply: "প্রয়োগ",
                 clear: "মুছুন",
+                time: "সময়",
+                fromAfterTo: "\"থেকে\" অবশ্যই \"পর্যন্ত\"-এর আগে বা একই হতে হবে",
             },
             name: "নাম",
             email: "ইমেইল",

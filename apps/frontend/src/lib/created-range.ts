@@ -1,6 +1,10 @@
 import { DEFAULT_TIMEZONE } from '@/lib/timezones';
 import { getActiveTimeZone } from '@/lib/format';
 
+/**
+ * Each bound is `YYYY-MM-DD` (the whole day) or, from a chip with times,
+ * `YYYY-MM-DDTHH:mm` — both on the workspace's own wall clock.
+ */
 export type CreatedRange = { from?: string; to?: string };
 export type CreatedRangePreset = 'today' | 'yesterday' | 'last7' | 'thisMonth';
 
@@ -53,6 +57,23 @@ function formatDayMonth(ymd: string): string {
     });
 }
 
+/** Splits a bound into its day and its `HH:mm`, which is empty for a whole-day bound. */
+export function splitRangeBound(bound: string | undefined): { date: string; time: string } {
+    if (!bound) return { date: '', time: '' };
+    return { date: bound.slice(0, 10), time: bound.length > 10 ? bound.slice(11, 16) : '' };
+}
+
+/** The inverse of `splitRangeBound`. A time without its day is dropped, not sent bare. */
+export function joinRangeBound(date: string, time: string): string | undefined {
+    if (!date) return undefined;
+    return time ? `${date}T${time}` : date;
+}
+
+function formatBound(bound: string): string {
+    const { date, time } = splitRangeBound(bound);
+    return time ? `${formatDayMonth(date)} ${time}` : formatDayMonth(date);
+}
+
 export function formatCreatedRangeLabel(
     range: CreatedRange | null | undefined,
     anyTime: string,
@@ -60,10 +81,16 @@ export function formatCreatedRangeLabel(
     if (isCreatedRangeEmpty(range)) return anyTime;
     const from = range?.from;
     const to = range?.to;
-    if (from && to && from === to) return formatDayMonth(from);
-    if (from && to) return `${formatDayMonth(from)} – ${formatDayMonth(to)}`;
-    if (from) return `${formatDayMonth(from)} –`;
-    return `– ${formatDayMonth(to!)}`;
+    if (from && to && from === to) return formatBound(from);
+    if (from && to) {
+        const start = splitRangeBound(from);
+        const end = splitRangeBound(to);
+        // "12 Oct 09:00 – 13:00" rather than naming the same day twice.
+        if (start.date === end.date && start.time && end.time) return `${formatBound(from)} – ${end.time}`;
+        return `${formatBound(from)} – ${formatBound(to)}`;
+    }
+    if (from) return `${formatBound(from)} –`;
+    return `– ${formatBound(to!)}`;
 }
 
 export function applyCreatedRangeQuery(
@@ -87,5 +114,20 @@ export function applyDueRangeQuery(
     return {
         ...(range?.from ? { dueFrom: range.from } : {}),
         ...(range?.to ? { dueTo: range.to } : {}),
+    };
+}
+
+/**
+ * The same range aimed at a list's own transaction date (a sale's `sale_date`,
+ * a loan's `start_date`) rather than at `created_at`. Lists carry both, so the
+ * two need their own param names.
+ */
+export function applyDateRangeQuery(
+    range: CreatedRange | null | undefined,
+): { dateFrom?: string; dateTo?: string } {
+    if (isCreatedRangeEmpty(range)) return {};
+    return {
+        ...(range?.from ? { dateFrom: range.from } : {}),
+        ...(range?.to ? { dateTo: range.to } : {}),
     };
 }

@@ -82,6 +82,8 @@ export const coreMessages = {
             custom: 'مخصوص',
             apply: 'لاگو کریں',
             clear: 'صاف کریں',
+            time: 'وقت',
+            fromAfterTo: '«از» کو «تا» سے پہلے یا اس کے برابر ہونا چاہیے',
         },
         name: 'نام',
         email: 'ای میل',

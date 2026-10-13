@@ -1,5 +1,6 @@
 import {
     applyCreatedRangeQuery,
+    applyDateRangeQuery,
     applyDueRangeQuery,
     createdRangeFromPreset,
     formatCreatedRangeLabel,
@@ -79,5 +80,36 @@ describe('applyDueRangeQuery', () => {
 
     it('omits an absent bound', () => {
         expect(applyDueRangeQuery({ from: '2026-08-01' })).toEqual({ dueFrom: '2026-08-01' });
+    });
+});
+
+describe('formatCreatedRangeLabel with times', () => {
+    it('prints the minute on each timed bound', () => {
+        expect(
+            formatCreatedRangeLabel({ from: '2026-10-12T18:00', to: '2026-10-13T02:00' }, 'Any time'),
+        ).toBe('12 Oct 18:00 – 13 Oct 02:00');
+    });
+
+    it('names the day once when both times fall on it', () => {
+        expect(
+            formatCreatedRangeLabel({ from: '2026-10-12T09:00', to: '2026-10-12T13:00' }, 'Any time'),
+        ).toBe('12 Oct 09:00 – 13:00');
+    });
+
+    it('keeps an open end readable', () => {
+        expect(formatCreatedRangeLabel({ from: '2026-10-12T18:00' }, 'Any time')).toBe('12 Oct 18:00 –');
+    });
+});
+
+describe('applyDateRangeQuery', () => {
+    it('sends dateFrom/dateTo so they filter the transaction date, not created_at', () => {
+        expect(applyDateRangeQuery({ from: '2026-10-12T18:00', to: '2026-10-13' })).toEqual({
+            dateFrom: '2026-10-12T18:00',
+            dateTo: '2026-10-13',
+        });
+    });
+
+    it('sends nothing for an empty range', () => {
+        expect(applyDateRangeQuery(null)).toEqual({});
     });
 });
