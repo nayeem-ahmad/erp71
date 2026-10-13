@@ -823,6 +823,27 @@ export interface BulkTaskChanges {
     removeLabelIds?: string[];
 }
 
+/** The leads list's "Edit field": one or more fields to set on every selected lead. */
+export interface BulkLeadChanges {
+    /** A stage id — open stages only. */
+    status_id?: string;
+    /** `null` unassigns. */
+    assigned_to?: string | null;
+    /** A category row id; `''` clears it. */
+    category?: string;
+    /** A source row id. */
+    source?: string;
+    priority?: string;
+    /** Merged into each lead's own values; `''` clears a field. */
+    custom_fields?: Record<string, string>;
+}
+
+/** Converted leads cannot be edited, so a bulk edit skips them. */
+export interface BulkLeadOutcome {
+    count: number;
+    skipped: number;
+}
+
 export interface BulkTaskOutcome {
     updated: number;
     /** The tasks that refused, each with the server's reason. */
@@ -2193,6 +2214,12 @@ export const api = {
         fetchWithAuth('/crm/leads/bulk-actions', {
             method: 'POST',
             body: JSON.stringify({ ids, action, ...(value !== undefined ? { value } : {}) }),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    bulkUpdateLeads: (ids: string[], changes: BulkLeadChanges): Promise<BulkLeadOutcome> =>
+        fetchWithAuth('/crm/leads/bulk-actions', {
+            method: 'POST',
+            body: JSON.stringify({ ids, action: 'update', changes }),
             headers: { 'Content-Type': 'application/json' },
         }),
     importLeads: (rows: Record<string, unknown>[], mode: 'skip' | 'upsert') =>

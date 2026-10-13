@@ -1667,7 +1667,11 @@ describe('CrmLeadsService', () => {
         });
 
         it('bulk-moves leads to a stage, writing both columns', async () => {
-            db.lead.updateMany = jest.fn().mockResolvedValue({ count: 2 });
+            db.lead.findMany.mockResolvedValue([
+                { id: 'a', status: LeadStatus.CONTACTED, custom_fields: null },
+                { id: 'b', status: LeadStatus.CONTACTED, custom_fields: null },
+            ]);
+            db.lead.findFirst.mockImplementation(async ({ where }: any) => ({ ...openLead, id: where.id }));
 
             await service.bulkAction('tenant-1', {
                 ids: ['a', 'b'],
@@ -1675,19 +1679,18 @@ describe('CrmLeadsService', () => {
                 value: 'st-neg',
             } as any);
 
-            expect(db.lead.updateMany).toHaveBeenCalledWith({
-                where: { tenant_id: 'tenant-1', id: { in: ['a', 'b'] } },
-                data: { status_id: 'st-neg', status: 'QUALIFIED' },
-            });
+            expect(db.lead.update).toHaveBeenCalledTimes(2);
+            expect(db.lead.update.mock.calls.map((call: any[]) => call[0].where.id)).toEqual(['a', 'b']);
+            expect(dataOfUpdate()).toEqual(
+                expect.objectContaining({ status_id: 'st-neg', status: 'QUALIFIED' }),
+            );
         });
 
         it('refuses a bulk move onto a closing stage', async () => {
-            db.lead.updateMany = jest.fn();
-
             await expect(
                 service.bulkAction('tenant-1', { ids: ['a'], action: LeadBulkAction.STATUS, value: 'st-lost' } as any),
             ).rejects.toThrow(BadRequestException);
-            expect(db.lead.updateMany).not.toHaveBeenCalled();
+            expect(db.lead.update).not.toHaveBeenCalled();
         });
 
         it('filters the list to one stage', async () => {
@@ -1772,6 +1775,128 @@ describe('CrmLeadsService', () => {
 
             expect(result.created).toBe(0);
             expect(result.errors[0]).toMatch(/lost_reason/);
+        });
+    });
+
+    describe('bulkAction() — edit field', () => {
+        const lead = (id: string, extra: Record<string, unknown> = {}) => ({
+            id,
+            tenant_id: 'tenant-1',
+            status: LeadStatus.CONTACTED,
+            status_id: 'st-con',
+            lost_reason: null,
+            priority: 'MEDIUM',
+            last_contacted_at: null,
+            next_step_date: null,
+            source_id: 'src-other',
+            custom_fields: null,
+            ...extra,
+        });
+        const rows: Record<string, ReturnType<typeof lead>> = {
+            a: lead('a'),
+            b: lead('b'),
+            won: lead('won', { status: LeadStatus.CONVERTED, status_id: 'st-won' }),
+        };
+        const updatedIds = () => db.lead.update.mock.calls.map((call: any[]) => call[0].where.id);
+        const dataFor = (id: string) =>
+            db.lead.update.mock.calls.find((call: any[]) => call[0].where.id === id)?.[0].data;
+
+        beforeEach(() => {
+            db.lead.findMany.mockImplementation(async ({ where }: any) =>
+                where.id.in.map((id: string) => rows[id]).filter(Boolean),
+            );
+            db.lead.findFirst.mockImplementation(async ({ where }: any) => rows[where.id] ?? null);
+            db.lead.update.mockImplementation(async ({ where }: any) => rows[where.id]);
+        });
+
+        const edit = (ids: string[], changes: Record<string, unknown>) =>
+            service.bulkAction('tenant-1', { ids, action: LeadBulkAction.UPDATE, changes } as any);
+
+        it('sets one field on every selected lead and skips converted ones', async () => {
+            const result = await edit(['a', 'b', 'won'], { priority: 'URGENT' });
+
+            expect(result).toEqual({ count: 2, skipped: 1 });
+            expect(updatedIds()).toEqual(['a', 'b']);
+            expect(dataFor('a')).toEqual(expect.objectContaining({ priority: 'URGENT' }));
+        });
+
+        // The list's old bulk paths were a raw updateMany: no rescoring, and a
+        // converted lead in the selection was quietly moved back onto an open stage.
+        it('rescores each lead it changes', async () => {
+            await edit(['a'], { priority: 'URGENT' });
+
+            expect(dataFor('a').score).toEqual(expect.any(Number));
+        });
+
+        it('leaves converted leads alone on a bulk status move', async () => {
+            const result = await service.bulkAction('tenant-1', {
+                ids: ['a', 'won'],
+                action: LeadBulkAction.STATUS,
+                value: 'st-neg',
+            } as any);
+
+            expect(result).toEqual({ count: 1, skipped: 1 });
+            expect(updatedIds()).toEqual(['a']);
+        });
+
+        it('unassigns through the assign action', async () => {
+            await service.bulkAction('tenant-1', { ids: ['a', 'won'], action: LeadBulkAction.ASSIGN, value: '' } as any);
+
+            expect(updatedIds()).toEqual(['a']);
+            expect(dataFor('a').assigned_to).toBeNull();
+        });
+
+        it('moves leads to an open stage', async () => {
+            await edit(['a'], { status_id: 'st-neg' });
+
+            expect(dataFor('a')).toEqual(expect.objectContaining({ status_id: 'st-neg', status: 'QUALIFIED' }));
+        });
+
+        it('refuses a closing stage before touching any lead', async () => {
+            await expect(edit(['a', 'b'], { status_id: 'st-lost' })).rejects.toThrow(BadRequestException);
+            expect(db.lead.update).not.toHaveBeenCalled();
+        });
+
+        it('clears the category with an empty value', async () => {
+            await edit(['a'], { category: '' });
+
+            expect(dataFor('a')).toEqual(expect.objectContaining({ category_id: null, category: null }));
+        });
+
+        it('refuses an unknown source before touching any lead', async () => {
+            taxonomyService.resolveByIdOrCode.mockResolvedValue(null);
+
+            await expect(edit(['a', 'b'], { source: 'no-such-source' })).rejects.toThrow(BadRequestException);
+            expect(db.lead.update).not.toHaveBeenCalled();
+        });
+
+        it('sets a custom field without disturbing the lead\'s other custom values', async () => {
+            rows.a = lead('a', { custom_fields: { area: 'Mirpur', tier: 'Gold', retired_key: 'kept' } });
+            customFieldsService.sanitizeValues.mockResolvedValue({ tier: 'Silver' });
+
+            const result = await edit(['a', 'won'], { custom_fields: { tier: 'Silver' } });
+
+            expect(customFieldsService.sanitizeValues).toHaveBeenCalledWith('tenant-1', 'LEAD', { tier: 'Silver' });
+            expect(result).toEqual({ count: 1, skipped: 1 });
+            expect(dataFor('a')).toEqual({
+                custom_fields: { area: 'Mirpur', tier: 'Silver', retired_key: 'kept' },
+            });
+            rows.a = lead('a');
+        });
+
+        it('refuses a custom field the tenant does not have', async () => {
+            customFieldsService.sanitizeValues.mockResolvedValue(undefined);
+
+            await expect(edit(['a'], { custom_fields: { nope: 'x' } })).rejects.toThrow(BadRequestException);
+            expect(db.lead.update).not.toHaveBeenCalled();
+        });
+
+        it('refuses a change set that changes nothing', async () => {
+            await expect(edit(['a'], {})).rejects.toThrow(BadRequestException);
+            await expect(
+                service.bulkAction('tenant-1', { ids: ['a'], action: LeadBulkAction.UPDATE } as any),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.lead.update).not.toHaveBeenCalled();
         });
     });
 });
