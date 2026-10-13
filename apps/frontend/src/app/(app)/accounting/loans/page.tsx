@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Loader2, Plus, Trash2, Wallet } from 'lucide-react';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
 import {
     AccountingPageShell,
     CompactStat,
@@ -69,6 +69,7 @@ export default function LoansPage() {
     const [loading, setLoading] = useState(true);
     const [directionFilter, setDirectionFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -98,6 +99,7 @@ export default function LoansPage() {
                     storeId: branch.apiStoreId,
                     direction: directionFilter || undefined,
                     status: statusFilter || undefined,
+                    ...applyDateRangeQuery(dateRange),
                     ...applyCreatedRangeQuery(createdRange),
                 }),
                 api.getLoanSummary({ storeId: branch.apiStoreId }),
@@ -115,7 +117,7 @@ export default function LoansPage() {
     useEffect(() => {
         if (!branch.ready) return;
         void loadData();
-    }, [branch.ready, branch.apiStoreId, directionFilter, statusFilter, createdRange]);
+    }, [branch.ready, branch.apiStoreId, directionFilter, statusFilter, dateRange, createdRange]);
 
     const openCreate = () => {
         setEditingId(null);
@@ -380,6 +382,7 @@ export default function LoansPage() {
                         <option value="CLOSED">{t.loans.closed}</option>
                     </select>
                 </label>
+                <DateRangeFilter label={t.common.date} value={dateRange} onChange={setDateRange} />
                 <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
             </div>
 
