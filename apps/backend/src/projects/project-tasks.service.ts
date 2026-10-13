@@ -163,15 +163,18 @@ export class ProjectTasksService {
         const parsed = parseTaskKey(key);
         if (!parsed) return null;
 
+        // Case-insensitive: codes are upper case, but a key read aloud or typed
+        // into a chat comes back as `erp-14` often enough to matter.
+        const code = { equals: parsed.code, mode: 'insensitive' as const };
         let project = await this.db.project.findFirst({
-            where: { tenant_id: tenantId, code: parsed.code, deleted_at: null },
+            where: { tenant_id: tenantId, code, deleted_at: null },
             select: { id: true, code: true },
         });
         let moved = false;
 
         if (!project) {
             const past = await this.db.projectCodeHistory.findFirst({
-                where: { tenant_id: tenantId, code: parsed.code },
+                where: { tenant_id: tenantId, code },
                 select: { project_id: true },
             });
             if (!past) return null;

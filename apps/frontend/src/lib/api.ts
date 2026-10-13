@@ -6099,6 +6099,9 @@ export const api = {
         }),
 
     getProjectTask: (id: string) => fetchWithAuth(`/project-tasks/${id}`),
+    /** `ERP-14` → the task's id. Also answers a key whose project code has since changed. */
+    resolveTaskKey: (key: string): Promise<{ id: string; currentKey: string; moved: boolean }> =>
+        fetchWithAuth(`/project-tasks/resolve/${encodeURIComponent(key)}`),
     getTaskRemainingHistory: (id: string) =>
         fetchWithAuth(`/project-tasks/${id}/remaining-history`),
     createProjectTask: (data: Record<string, unknown>) =>

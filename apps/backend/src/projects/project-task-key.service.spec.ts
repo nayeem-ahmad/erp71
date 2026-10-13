@@ -71,7 +71,10 @@ describe('resolving a task by key', () => {
 
         expect(db.project.findFirst).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: expect.objectContaining({ tenant_id: 'tenant1', code: 'PRJ-0002' }),
+                where: expect.objectContaining({
+                    tenant_id: 'tenant1',
+                    code: { equals: 'PRJ-0002', mode: 'insensitive' },
+                }),
             }),
         );
     });
@@ -82,7 +85,27 @@ describe('resolving a task by key', () => {
 
         expect(db.projectCodeHistory.findFirst).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: expect.objectContaining({ tenant_id: 'tenant1', code: 'OLD' }),
+                where: expect.objectContaining({
+                    tenant_id: 'tenant1',
+                    code: { equals: 'OLD', mode: 'insensitive' },
+                }),
+            }),
+        );
+    });
+
+    it('matches a key typed in lower case', async () => {
+        // `/t/erp-14` from a chat should land on ERP-14, not 404.
+        db.project.findFirst.mockResolvedValue({ id: 'p1', code: 'ERP' });
+        db.projectTask.findFirst.mockResolvedValue({ id: 't1', reference: 14 });
+
+        expect(await service.resolveTaskKey('tenant1', 'erp-14')).toEqual({
+            taskId: 't1',
+            currentKey: 'ERP-14',
+            moved: false,
+        });
+        expect(db.project.findFirst).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ code: { equals: 'erp', mode: 'insensitive' } }),
             }),
         );
     });
