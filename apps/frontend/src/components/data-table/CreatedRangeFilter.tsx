@@ -2,12 +2,14 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Calendar } from 'lucide-react';
-import { Button, Input } from '@/components/ui';
+import { Button, Field, Input } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import {
     createdRangeFromPreset,
     formatCreatedRangeLabel,
     isCreatedRangeEmpty,
+    joinRangeBound,
+    splitRangeBound,
     type CreatedRange,
     type CreatedRangePreset,
 } from '@/lib/created-range';
@@ -22,6 +24,12 @@ type CreatedRangeFilterProps = {
      * "Created"; a list filtering two different dates must name both.
      */
     label?: string;
+    /**
+     * Offers an optional time under each date, for a column that carries one
+     * (a sale's `sale_date`) — a night shift runs past midnight. Bounds then
+     * read `YYYY-MM-DDTHH:mm`; a bound left without a time is still the whole day.
+     */
+    withTime?: boolean;
 };
 
 const PRESETS: CreatedRangePreset[] = ['today', 'yesterday', 'last7', 'thisMonth'];
@@ -33,20 +41,28 @@ const VIEWPORT_MARGIN = 8;
 /** SSR has no layout to measure, and useLayoutEffect warns there. */
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export default function CreatedRangeFilter({ value, onChange, now, label }: CreatedRangeFilterProps) {
+export default function CreatedRangeFilter({ value, onChange, now, label, withTime = false }: CreatedRangeFilterProps) {
     const { t } = useI18n();
     const copy = t.common.createdRange;
     const [open, setOpen] = useState(false);
-    const [from, setFrom] = useState(value?.from ?? '');
-    const [to, setTo] = useState(value?.to ?? '');
+    const [fromDate, setFromDate] = useState(() => splitRangeBound(value?.from).date);
+    const [fromTime, setFromTime] = useState(() => splitRangeBound(value?.from).time);
+    const [toDate, setToDate] = useState(() => splitRangeBound(value?.to).date);
+    const [toTime, setToTime] = useState(() => splitRangeBound(value?.to).time);
+    const [rangeError, setRangeError] = useState<string | null>(null);
     const [alignEnd, setAlignEnd] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
     const fromId = useId();
     const toId = useId();
 
     useEffect(() => {
-        setFrom(value?.from ?? '');
-        setTo(value?.to ?? '');
+        const start = splitRangeBound(value?.from);
+        const end = splitRangeBound(value?.to);
+        setFromDate(start.date);
+        setFromTime(start.time);
+        setToDate(end.date);
+        setToTime(end.time);
+        setRangeError(null);
     }, [value]);
 
     /* The trigger is the last chip in a wrapping filter bar, so it usually sits
@@ -90,12 +106,31 @@ export default function CreatedRangeFilter({ value, onChange, now, label }: Crea
     };
 
     const applyCustom = () => {
-        if (!from && !to) {
+        const nextFrom = joinRangeBound(fromDate, withTime ? fromTime : '');
+        const nextTo = joinRangeBound(toDate, withTime ? toTime : '');
+        if (!nextFrom && !nextTo) {
             onChange(null);
-        } else {
-            onChange({ from: from || undefined, to: to || undefined });
+            setOpen(false);
+            return;
         }
+        // Compared as text: `YYYY-MM-DDTHH:mm` sorts the way time runs. A bound
+        // without a time stands for its whole day, so it opens at 00:00 and
+        // closes at 23:59.
+        if (nextFrom && nextTo) {
+            const start = `${fromDate}T${(withTime && fromTime) || '00:00'}`;
+            const end = `${toDate}T${(withTime && toTime) || '23:59'}`;
+            if (start > end) {
+                setRangeError(copy.fromAfterTo);
+                return;
+            }
+        }
+        onChange({ from: nextFrom, to: nextTo });
         setOpen(false);
+    };
+
+    const edit = (setter: (next: string) => void) => (event: { target: { value: string } }) => {
+        setter(event.target.value);
+        setRangeError(null);
     };
 
     return (
@@ -132,28 +167,32 @@ export default function CreatedRangeFilter({ value, onChange, now, label }: Crea
                         ))}
                     </div>
                     <div className="space-y-2">
-                        <div>
-                            <label htmlFor={fromId} className="block text-xs font-medium text-gray-600 mb-1">
-                                {t.common.from}
-                            </label>
-                            <Input
-                                id={fromId}
-                                type="date"
-                                value={from}
-                                onChange={(e) => setFrom(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor={toId} className="block text-xs font-medium text-gray-600 mb-1">
-                                {t.common.to}
-                            </label>
-                            <Input
-                                id={toId}
-                                type="date"
-                                value={to}
-                                onChange={(e) => setTo(e.target.value)}
-                            />
-                        </div>
+                        <Field label={t.common.from} htmlFor={fromId}>
+                            <Input id={fromId} type="date" value={fromDate} onChange={edit(setFromDate)} />
+                            {withTime ? (
+                                <Input
+                                    type="time"
+                                    aria-label={`${t.common.from} (${copy.time})`}
+                                    value={fromTime}
+                                    disabled={!fromDate}
+                                    onChange={edit(setFromTime)}
+                                    className="mt-1.5"
+                                />
+                            ) : null}
+                        </Field>
+                        <Field label={t.common.to} htmlFor={toId} error={rangeError ?? undefined}>
+                            <Input id={toId} type="date" value={toDate} error={Boolean(rangeError)} onChange={edit(setToDate)} />
+                            {withTime ? (
+                                <Input
+                                    type="time"
+                                    aria-label={`${t.common.to} (${copy.time})`}
+                                    value={toTime}
+                                    disabled={!toDate}
+                                    onChange={edit(setToTime)}
+                                    className="mt-1.5"
+                                />
+                            ) : null}
+                        </Field>
                     </div>
                     <div className="flex items-center justify-end gap-2">
                         {!isCreatedRangeEmpty(value) ? (

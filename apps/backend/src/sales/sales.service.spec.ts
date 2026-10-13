@@ -1543,6 +1543,29 @@ describe('SalesService', () => {
         }),
       );
     });
+
+    it('filters sale_date by dateFrom/dateTo, alongside created_at', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(0);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', {
+        timezone: 'Asia/Dhaka',
+        dateFrom: '2026-10-12T18:00',
+        dateTo: '2026-10-13T02:00',
+        createdFrom: '2026-10-13',
+        createdTo: '2026-10-13',
+      });
+
+      expect(db.sale.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sale_date: { gte: new Date('2026-10-12T12:00:00.000Z'), lte: new Date('2026-10-12T20:00:59.999Z') },
+            created_at: { gte: new Date('2026-10-12T18:00:00.000Z'), lte: new Date('2026-10-13T17:59:59.999Z') },
+          }),
+        }),
+      );
+    });
   });
 
   describe('findOne()', () => {

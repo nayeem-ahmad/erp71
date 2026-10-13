@@ -1,5 +1,6 @@
 import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { toDatetimeLocal } from '@/lib/format';
 import NewSalePage from './page';
 import { api, fetchWithAuth } from '@/lib/api';
 
@@ -128,6 +129,65 @@ describe('NewSalePage — editable sale date', () => {
         const dateInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement | null;
         expect(dateInput).toBeInTheDocument();
         expect(dateInput?.value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    });
+
+    /**
+     * The field is seeded when the page opens, and a counter keeps the page open
+     * for a whole shift. Sent as-is, every sale would carry the opening minute,
+     * so the list's time filter would miss them. Left alone, the server stamps
+     * the moment the sale posts.
+     */
+    it('lets the server stamp a sale whose date was left alone', async () => {
+        await act(async () => {
+            render(<NewSalePage />);
+        });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '100' } });
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Create Sale'));
+        });
+
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        expect((api.createNewSale as jest.Mock).mock.lastCall[0].saleDate).toBeUndefined();
+    });
+
+    it('moves an untouched date field on to now once a sale is posted', async () => {
+        jest.useFakeTimers({ advanceTimers: true, now: new Date('2026-10-12T11:55:00.000Z') });
+        try {
+            await act(async () => {
+                render(<NewSalePage />);
+            });
+            await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+            const dateInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+            expect(dateInput.value).toBe(toDatetimeLocal(new Date('2026-10-12T11:55:00.000Z')));
+
+            const searchInput = screen.getByPlaceholderText(/Add product/i);
+            fireEvent.focus(searchInput);
+            fireEvent.change(searchInput, { target: { value: 'Rice' } });
+            await waitFor(() => screen.getByText('Rice 5kg'));
+            fireEvent.click(screen.getByText('Rice 5kg'));
+            fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+            fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '100' } });
+
+            jest.setSystemTime(new Date('2026-10-12T20:05:00.000Z'));
+            await act(async () => {
+                fireEvent.click(screen.getByText('Create Sale'));
+            });
+
+            await waitFor(() =>
+                expect(dateInput.value).toBe(toDatetimeLocal(new Date('2026-10-12T20:05:00.000Z'))),
+            );
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('sends the chosen sale date/time when creating a sale', async () => {

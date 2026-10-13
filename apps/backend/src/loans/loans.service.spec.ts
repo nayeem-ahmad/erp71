@@ -200,4 +200,32 @@ describe('LoansService — list filters', () => {
             }),
         );
     });
+
+    it('filters start_date by calendar day, not by a zoned range', async () => {
+        const db = {
+            loan: {
+                findMany: jest.fn().mockResolvedValue([]),
+                count: jest.fn().mockResolvedValue(0),
+            },
+        };
+        const service = new LoansService(db as any);
+
+        await service.listLoans('tenant-1', { timezone: 'America/New_York',
+            page: 1,
+            limit: 20,
+            dateFrom: '2026-08-12',
+            dateTo: '2026-08-19',
+        });
+
+        expect(db.loan.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    start_date: {
+                        gte: new Date('2026-08-12T00:00:00.000Z'),
+                        lte: new Date('2026-08-19T00:00:00.000Z'),
+                    },
+                }),
+            }),
+        );
+    });
 });

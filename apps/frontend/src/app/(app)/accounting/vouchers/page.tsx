@@ -10,7 +10,7 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { compactDensity } from '@/lib/ui/compact-density';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { VoucherType } from '@erp71/shared-types';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { api } from '@/lib/api';
 import { BranchFilter } from '@/components/ui';
@@ -83,8 +83,7 @@ function AccountingVouchersListPageContent() {
     });
     const [loading, setLoading] = useState(true);
     const [voucherType, setVoucherType] = useState('');
-    const [from, setFrom] = useState('');
-    const [to, setTo] = useState('');
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [page, setPage] = useState(1);
     // A branch change is page 1 of a fresh list, like any other filter.
@@ -118,8 +117,8 @@ function AccountingVouchersListPageContent() {
         try {
             const data = await api.getVouchers({
                 voucherType: voucherType || undefined,
-                from: from || undefined,
-                to: to || undefined,
+                from: dateRange?.from,
+                to: dateRange?.to,
                 ...applyCreatedRangeQuery(createdRange),
                 approvalStatus: approvalStatus || undefined,
                 page,
@@ -137,7 +136,7 @@ function AccountingVouchersListPageContent() {
         }
         // `branch` is a fresh object every render; what it asks for is these two.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [voucherType, from, to, createdRange, approvalStatus, page, branch.ready, branch.apiStoreId]);
+    }, [voucherType, dateRange, createdRange, approvalStatus, page, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         void loadVouchers();
@@ -424,20 +423,10 @@ function AccountingVouchersListPageContent() {
                     <option key={option.label} value={option.value}>{option.label}</option>
                 ))}
             </select>
-            <input
-                aria-label={t.journal.fromDateAria}
-                type="date"
-                value={from}
-                onChange={(e) => { setFrom(e.target.value); setPage(1); }}
-                className="px-1.5 py-0.5 border rounded text-xs"
-            />
-            <span className="text-gray-400">–</span>
-            <input
-                aria-label={t.journal.toDateAria}
-                type="date"
-                value={to}
-                onChange={(e) => { setTo(e.target.value); setPage(1); }}
-                className="px-1.5 py-0.5 border rounded text-xs"
+            <DateRangeFilter
+                label={t.common.date}
+                value={dateRange}
+                onChange={(next) => { setDateRange(next); setPage(1); }}
             />
             <CreatedRangeFilter
                 value={createdRange}

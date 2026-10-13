@@ -5,8 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Loader2, Plus, Settings2, BarChart3, Trash2 } from 'lucide-react';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
+import { applyCreatedRangeQuery, createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
 import {
     AccountingPageShell,
     CompactSection,
@@ -43,16 +43,6 @@ const columnHelper = createColumnHelper<ExpenseEntry>();
 
 const PAYMENT_METHODS = ['CASH', 'BKASH', 'CARD', 'BANK'] as const;
 
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
-
 function ExpensesPageContent() {
     const { t } = useI18n();
     // Which branch's entries to list; a new entry is still booked on the
@@ -62,8 +52,8 @@ function ExpensesPageContent() {
     const [entries, setEntries] = useState<ExpenseEntry[]>([]);
     const [categories, setCategories] = useState<ExpenseCategory[]>([]);
     const [loading, setLoading] = useState(true);
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    // Opens on this month, read on the workspace's calendar rather than UTC's.
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(() => createdRangeFromPreset('thisMonth'));
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [categoryFilter, setCategoryFilter] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -81,8 +71,8 @@ function ExpensesPageContent() {
         try {
             const [entriesData, categoriesData] = await Promise.all([
                 api.getExpenseEntries({
-                    from: fromDate || undefined,
-                    to: toDate || undefined,
+                    from: dateRange?.from,
+                    to: dateRange?.to,
                     categoryId: categoryFilter || undefined,
                     ...applyCreatedRangeQuery(createdRange),
                     storeId: branch.apiStoreId,
@@ -102,7 +92,7 @@ function ExpensesPageContent() {
     useEffect(() => {
         if (!branch.ready) return;
         void loadData();
-    }, [fromDate, toDate, categoryFilter, createdRange, branch.ready, branch.apiStoreId]);
+    }, [dateRange, categoryFilter, createdRange, branch.ready, branch.apiStoreId]);
 
     useEffect(() => {
         if (searchParams.get('new') === '1') {
@@ -262,14 +252,7 @@ function ExpensesPageContent() {
                 <CompactStat label={t.expenses.periodTotal} value={formatBDT(totalAmount)} tone="negative" />
                 <CompactSection className="sm:col-span-2" flat>
                     <div className={`${compactDensity.filterBar} !p-0 !border-0 !bg-transparent`}>
-                        <label className="block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>{t.common.date} (from)</span>
-                            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={compactDensity.formField} />
-                        </label>
-                        <label className="block">
-                            <span className={`${compactDensity.formLabel} block mb-1`}>{t.common.date} (to)</span>
-                            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={compactDensity.formField} />
-                        </label>
+                        <DateRangeFilter label={t.common.date} value={dateRange} onChange={setDateRange} />
                         <label className="block">
                             <span className={`${compactDensity.formLabel} block mb-1`}>{t.expenses.category}</span>
                             <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={compactDensity.formField}>

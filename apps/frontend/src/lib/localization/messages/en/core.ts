@@ -82,6 +82,8 @@ export const coreMessages = {
             custom: 'Custom',
             apply: 'Apply',
             clear: 'Clear',
+            time: 'Time',
+            fromAfterTo: 'From must be on or before To',
         },
         name: 'Name',
         email: 'Email',

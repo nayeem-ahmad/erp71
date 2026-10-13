@@ -82,6 +82,8 @@ export const coreMessages = {
                 custom: "Tersuai",
                 apply: "Guna",
                 clear: "Kosongkan",
+                time: "Masa",
+                fromAfterTo: "\"Dari\" mesti sebelum atau sama dengan \"Hingga\"",
             },
             name: "Nama",
             email: "E-mel",

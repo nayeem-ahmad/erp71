@@ -82,6 +82,8 @@ export const coreMessages = {
             custom: "Personalizado",
             apply: "Aplicar",
             clear: "Borrar",
+            time: "Hora",
+            fromAfterTo: "«Desde» debe ser anterior o igual a «Hasta»",
         },
         name: "Nombre",
         email: "Correo electrónico",

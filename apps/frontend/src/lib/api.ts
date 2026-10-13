@@ -1965,6 +1965,9 @@ export const api = {
         mine?: boolean;
         createdFrom?: string;
         createdTo?: string;
+        /** The sale's own date (`sale_date`), `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. */
+        dateFrom?: string;
+        dateTo?: string;
         /** A branch or `'all'`, from the page's branch filter. */
         storeId?: string;
     }) => {
@@ -1978,6 +1981,8 @@ export const api = {
         if (params.mine) query.set('mine', 'true');
         if (params.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params.createdTo) query.set('createdTo', params.createdTo);
+        if (params.dateFrom) query.set('dateFrom', params.dateFrom);
+        if (params.dateTo) query.set('dateTo', params.dateTo);
         if (params.storeId) query.set('storeId', params.storeId);
         return fetchPaginated(`/sales?${query.toString()}`);
     },
@@ -5383,7 +5388,7 @@ export const api = {
         return fetchWithAuth(`/expenses/summary?${q}`);
     },
     // Loans
-    getLoans: (params?: { direction?: string; status?: string; storeId?: string; search?: string; createdFrom?: string; createdTo?: string }) => {
+    getLoans: (params?: { direction?: string; status?: string; storeId?: string; search?: string; createdFrom?: string; createdTo?: string; dateFrom?: string; dateTo?: string }) => {
         const q = new URLSearchParams();
         if (params?.direction) q.set('direction', params.direction);
         if (params?.status) q.set('status', params.status);
@@ -5391,6 +5396,8 @@ export const api = {
         if (params?.search) q.set('search', params.search);
         if (params?.createdFrom) q.set('createdFrom', params.createdFrom);
         if (params?.createdTo) q.set('createdTo', params.createdTo);
+        if (params?.dateFrom) q.set('dateFrom', params.dateFrom);
+        if (params?.dateTo) q.set('dateTo', params.dateTo);
         return fetchAllPages(`/loans${q.toString() ? `?${q}` : ''}`);
     },
     getLoanSummary: (params?: { storeId?: string }) =>
