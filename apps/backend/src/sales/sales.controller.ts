@@ -45,6 +45,8 @@ export class SalesController {
         @Query('sortDir') sortDir?: string,
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
+        @Query('dateFrom') dateFrom?: string,
+        @Query('dateTo') dateTo?: string,
         @Query('storeId') requestedStoreId?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
@@ -60,6 +62,8 @@ export class SalesController {
             sortDir: sortDir || undefined,
             createdFrom: createdFrom || undefined,
             createdTo: createdTo || undefined,
+            dateFrom: dateFrom || undefined,
+            dateTo: dateTo || undefined,
         });
     }
 

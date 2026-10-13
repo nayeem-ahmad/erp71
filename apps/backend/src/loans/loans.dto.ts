@@ -126,6 +126,15 @@ export class ListLoansQueryDto extends PaginationDto {
     @IsOptional()
     @IsDateString()
     createdTo?: string;
+
+    /** The loan's start date (`start_date`), as distinct from when it was entered. */
+    @IsOptional()
+    @IsDateString()
+    dateFrom?: string;
+
+    @IsOptional()
+    @IsDateString()
+    dateTo?: string;
 }
 
 export class CreateLoanPaymentDto {

@@ -31,6 +31,7 @@ import { checkedSalesRepId, SALES_REP_SELECT, salesRepForSale } from '../custome
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { createdAtRange } from '../common/created-range.util';
+import { zonedDayRange } from '../common/tenant-time.util';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
 import { CrmCampaignsService } from '../crm-campaigns/crm-campaigns.service';
@@ -1258,6 +1259,9 @@ export class SalesService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** The sale's own date, which a backdated or synced sale holds apart from created_at. */
+            dateFrom?: string;
+            dateTo?: string;
             /** One branch (already resolved by the controller); omitted, every branch. */
             storeId?: string;
             /** IANA zone the calendar-day bounds above are measured in. */
@@ -1273,10 +1277,12 @@ export class SalesService {
             .filter(Boolean);
 
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const saleDate = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
         const where: any = {
             tenant_id: tenantId,
             ...(opts?.storeId ? { store_id: opts.storeId } : {}),
             ...(created ? { created_at: created } : {}),
+            ...(saleDate ? { sale_date: saleDate } : {}),
             ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
             // Accepts one status or a comma-separated set, so a caller can ask
             // for a count across several (the dashboard's delivery-pending tile)
