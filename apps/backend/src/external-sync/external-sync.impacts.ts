@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules, postingIdempotencyKey } from '../accounting/posting.utils';
 import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
+import { postPartyOpeningBalance } from '../accounting/party-opening-balance.posting';
 import { PaymentParty } from './external-sync.mapper';
 import { customerBranchId } from '../customers/customer-branch.util';
 import { supplierBranchId } from '../suppliers/supplier-branch.util';
@@ -769,39 +770,66 @@ export interface OpeningBalanceInput {
  * imported, so the balance is reduced by money whose matching sale was never
  * in the source data at all.
  *
- * Written as an ADJUSTMENT rather than a posting: it is an opening position,
- * not an economic event of ours, and posting it would credit revenue that
- * belongs to the previous system.
+ * Written as an ADJUSTMENT rather than through the posting rules: it is an
+ * opening position, not an economic event of ours, and a rule would credit
+ * revenue that belongs to the previous system. It is still posted, against
+ * Opening Balance Equity (`postPartyOpeningBalance`), so the books carry the
+ * due too: the customer and supplier ledgers are read from the GL, and an
+ * opening left out of it made them close short of the party's due.
  */
 export async function applyOpeningBalance(input: OpeningBalanceInput): Promise<void> {
     const { tx, tenantId, partyId, amount, asOf } = input;
     if (Math.abs(amount) < EPSILON) return;
 
     const isCustomer = input.party === 'CUSTOMER';
+    const notes = openingBalanceNote(input.label);
     const data = {
         tenant_id: tenantId,
         type: 'ADJUSTMENT',
         amount,
-        notes: openingBalanceNote(input.label),
+        notes,
         created_at: asOf,
     };
 
     // An opening balance belongs to its party's branch, like every credit row,
     // and adds to whatever the party already owes: a party imported earlier
     // keeps the effect of their documents.
+    let row: { id: string };
+    let storeId: string;
     if (isCustomer) {
-        const store_id = await customerBranchId(tx, partyId);
+        storeId = await customerBranchId(tx, partyId);
         const current = await tx.customer.findUnique({ where: { id: partyId }, select: { due_balance: true } });
         const balanceAfter = Number(current?.due_balance ?? 0) + amount;
-        await tx.customerCreditTransaction.create({ data: { ...data, balance_after: balanceAfter, customer_id: partyId, store_id } });
+        row = await tx.customerCreditTransaction.create({
+            data: { ...data, balance_after: balanceAfter, customer_id: partyId, store_id: storeId },
+            select: { id: true },
+        });
         await tx.customer.update({ where: { id: partyId }, data: { due_balance: balanceAfter } });
     } else {
-        const store_id = await supplierBranchId(tx, partyId);
+        storeId = await supplierBranchId(tx, partyId);
         const current = await tx.supplier.findUnique({ where: { id: partyId }, select: { due_balance: true } });
         const balanceAfter = Number(current?.due_balance ?? 0) + amount;
-        await tx.supplierCreditTransaction.create({ data: { ...data, balance_after: balanceAfter, supplier_id: partyId, store_id } });
+        row = await tx.supplierCreditTransaction.create({
+            data: { ...data, balance_after: balanceAfter, supplier_id: partyId, store_id: storeId },
+            select: { id: true },
+        });
         await tx.supplier.update({ where: { id: partyId }, data: { due_balance: balanceAfter } });
     }
+
+    // Keyed on the ledger row, so clearing a branch, which deletes vouchers by
+    // the ids of the rows it deletes, takes this voucher with its row.
+    await postPartyOpeningBalance({
+        tx,
+        tenantId,
+        party: input.party,
+        partyId,
+        amount,
+        date: asOf,
+        sourceModule: 'external-sync',
+        sourceId: row.id,
+        storeId,
+        description: notes,
+    });
 }
 
 /** The note every imported opening balance carries, so a later run can find it. */

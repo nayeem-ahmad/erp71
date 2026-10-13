@@ -15,6 +15,9 @@ export type PostingEventType =
     | 'loan_repayment'
     | 'customer_payment'
     | 'bad_debt_write_off'
+    // An imported party's opening due, against Opening Balance Equity. Posted
+    // through postMultiLeg, so it has no PostingRule rows either.
+    | 'party_opening_balance'
     | 'supplier_payment'
     | 'depreciation'
     | 'cash_transaction'
@@ -124,6 +127,8 @@ const VOUCHER_TYPE_BY_EVENT: Record<PostingEventType, string> = {
     // Forgiving a receivable moves no cash — the whole point is that none
     // ever arrived — so it is a journal voucher, not a cash-receive.
     bad_debt_write_off: VoucherType.JOURNAL,
+    // An opening position, not a receipt or payment: no cash moves.
+    party_opening_balance: VoucherType.JOURNAL,
     // Paying a supplier is the common case, so cash OUT is the default here and
     // the 'receive' direction is the exception below — the mirror of
     // customer_payment, where money normally comes IN.

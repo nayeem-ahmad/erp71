@@ -90,6 +90,8 @@ function makeDb(mappings: Record<string, Array<[string, string]>> = {}) {
             update: jest.fn(async () => ({})),
         },
         postingEvent: { findUnique: jest.fn(async () => ({ status: 'posted' })) },
+        // No chart of accounts: an opening due records its row and posts nothing.
+        account: { findFirst: jest.fn(async () => null) },
         sale: { findUnique: jest.fn(async () => ({ customer_id: 'cust-1' })) },
         saleItem: { findMany: jest.fn(async () => [{ id: 'si-1', product_id: 'prod-1' }]) },
         salesReturn: { findFirst: jest.fn(async () => ({ id: 'ret-1' })), update: jest.fn(async () => ({})) },

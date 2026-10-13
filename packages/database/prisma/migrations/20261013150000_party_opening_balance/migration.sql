@@ -1,0 +1,14 @@
+-- Posting a customer's or supplier's imported opening due to the books.
+--
+-- `applyOpeningBalance` used to write the party's ledger row and move
+-- `due_balance` without posting, so the GL-derived customer and supplier
+-- ledgers closed short of the party's due by exactly the opening. It now posts
+-- the control account (tagged to the party) against Opening Balance Equity,
+-- through `postMultiLeg` rather than a PostingRule.
+--
+-- The 'Opening Balance Equity' account (310102) is a per-tenant row,
+-- provisioned by DEFAULT_ACCOUNTING_TEMPLATE and carried to existing tenants
+-- by `npm run sync:accounting` on every container start, so it is not in this
+-- file. Openings imported before this change are posted by
+-- `apps/backend/scripts/post-opening-balances.ts`.
+ALTER TYPE "PostingRuleEventType" ADD VALUE IF NOT EXISTS 'party_opening_balance';

@@ -192,6 +192,14 @@ const DEFAULT_ACCOUNTING_TEMPLATE = [
 						type: AccountType.EQUITY,
 						category: AccountCategory.GENERAL,
 					},
+					// A party's due brought over from another system, posted
+					// against their control account. See postPartyOpeningBalance.
+					{
+						name: 'Opening Balance Equity',
+						code: '310102',
+						type: AccountType.EQUITY,
+						category: AccountCategory.GENERAL,
+					},
 				],
 			},
 			{

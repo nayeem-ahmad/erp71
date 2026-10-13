@@ -60,6 +60,12 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'platform_billing', conditionKey: 'none', conditionValue: null, emittedBy: 'platform-accounting.service.ts syncBillingEvents', expectation: 'multi-leg' },
     { eventType: 'platform_expense', conditionKey: 'none', conditionValue: null, emittedBy: 'platform-accounting.service.ts postExpenseVoucher', expectation: 'multi-leg' },
 
+    // ── imported opening dues ────────────────────────────────────────────────
+    // A party's due from before the imported history, posted against Opening
+    // Balance Equity. A rule could only ever map it onto revenue or purchases,
+    // which is the previous system's trading, not ours.
+    { eventType: 'party_opening_balance', conditionKey: 'none', conditionValue: null, emittedBy: 'external-sync.impacts.ts applyOpeningBalance', expectation: 'multi-leg' },
+
     // ── sales ────────────────────────────────────────────────────────────────
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales.service.ts:325', expectation: 'rule' },
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales.service.ts:325', expectation: 'rule' },

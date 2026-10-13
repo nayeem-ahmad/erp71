@@ -295,6 +295,18 @@ export const DEFAULT_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = [
                         type: AccountType.EQUITY,
                         category: AccountCategory.GENERAL,
                     },
+                    // What a customer or supplier already owed when their
+                    // history was imported from another system. Posted against
+                    // their control account, so the receivable or payable and
+                    // its per-party ledger carry the opening, without crediting
+                    // revenue or debiting purchases that belong to the
+                    // previous system's books. See postPartyOpeningBalance.
+                    {
+                        name: 'Opening Balance Equity',
+                        code: '310102',
+                        type: AccountType.EQUITY,
+                        category: AccountCategory.GENERAL,
+                    },
                 ],
             },
             {

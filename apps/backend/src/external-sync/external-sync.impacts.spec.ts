@@ -29,13 +29,17 @@ jest.mock('../accounting/posting.utils', () => ({
 jest.mock('../accounting/payment-account.util', () => ({
     resolvePaymentMethodAccountId: (...args: any[]) => resolvePaymentMethodAccountId(...args),
 }));
+const postPartyOpeningBalance: jest.Mock = jest.fn(async () => ({ postingStatus: 'posted' }));
+jest.mock('../accounting/party-opening-balance.posting', () => ({
+    postPartyOpeningBalance: (...args: any[]) => postPartyOpeningBalance(...args),
+}));
 
 function makeTx(overrides: any = {}) {
     return {
         customer: { findUnique: jest.fn(async () => ({ due_balance: 1000 })), update: jest.fn() },
         supplier: { findUnique: jest.fn(async () => ({ due_balance: 500 })), update: jest.fn() },
-        customerCreditTransaction: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn(async () => null) },
-        supplierCreditTransaction: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn(async () => null) },
+        customerCreditTransaction: { create: jest.fn(async () => ({ id: 'credit-row' })), update: jest.fn(), findFirst: jest.fn(async () => null) },
+        supplierCreditTransaction: { create: jest.fn(async () => ({ id: 'credit-row' })), update: jest.fn(), findFirst: jest.fn(async () => null) },
         ...overrides,
     } as any;
 }
@@ -219,8 +223,48 @@ describe('external-sync impacts', () => {
                 where: { id: 'cust-1' },
                 data: { due_balance: 9685 },
             });
-            // An opening position is not our economic event, so it must not post.
+            // Not through the rules: an opening is not a sale, so it must not
+            // credit revenue.
             expect(autoPostFromRules).not.toHaveBeenCalled();
+        });
+
+        it('posts the opening to the books, keyed on its ledger row', async () => {
+            const tx = makeTx();
+            tx.customerCreditTransaction.create.mockResolvedValue({ id: 'credit-row-1' });
+            tx.customer.findUnique.mockResolvedValue({ due_balance: 1000, store_id: 'store-1' });
+
+            await applyOpeningBalance({
+                tx, tenantId: 't1', party: 'CUSTOMER', partyId: 'cust-1',
+                amount: 8685, asOf: SALE_DATE, label: 'EXPRESS_RETAIL_PRO',
+            });
+
+            // Without it the GL-derived customer ledger closes lower than the
+            // due the sale screen shows, by exactly this opening.
+            expect(postPartyOpeningBalance).toHaveBeenCalledWith(expect.objectContaining({
+                tx,
+                tenantId: 't1',
+                party: 'CUSTOMER',
+                partyId: 'cust-1',
+                amount: 8685,
+                date: SALE_DATE,
+                sourceId: 'credit-row-1',
+                storeId: 'store-1',
+                description: 'Opening balance imported from EXPRESS_RETAIL_PRO',
+            }));
+        });
+
+        it("posts a supplier's opening the same way", async () => {
+            const tx = makeTx();
+            tx.supplierCreditTransaction.create.mockResolvedValue({ id: 'sup-row-1' });
+
+            await applyOpeningBalance({
+                tx, tenantId: 't1', party: 'SUPPLIER', partyId: 's-1',
+                amount: -120, asOf: SALE_DATE, label: 'DIZI',
+            });
+
+            expect(postPartyOpeningBalance).toHaveBeenCalledWith(expect.objectContaining({
+                party: 'SUPPLIER', partyId: 's-1', amount: -120, sourceId: 'sup-row-1',
+            }));
         });
 
         it('writes nothing when the party opened at zero', async () => {
@@ -232,6 +276,7 @@ describe('external-sync impacts', () => {
 
             expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
             expect(tx.supplier.update).not.toHaveBeenCalled();
+            expect(postPartyOpeningBalance).not.toHaveBeenCalled();
         });
     });
 
