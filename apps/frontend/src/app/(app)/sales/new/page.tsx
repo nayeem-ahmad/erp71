@@ -95,6 +95,18 @@ function NewSalePageContent() {
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
     const [saleDate, setSaleDate] = useState<string>(() => toDatetimeLocal(new Date()));
+    // The field is seeded when the page opens, and a counter keeps it open all
+    // shift. Until the operator picks a date, none is sent and the server stamps
+    // the moment the sale posts; otherwise every sale would carry the opening
+    // minute and the list's date/time filter would miss them.
+    const [saleDatePicked, setSaleDatePicked] = useState(false);
+    const pickSaleDate = (value: string) => {
+        setSaleDate(value);
+        setSaleDatePicked(true);
+    };
+    const refreshUnpickedSaleDate = () => {
+        if (!saleDatePicked) setSaleDate(toDatetimeLocal(new Date()));
+    };
     const [adjustments, setAdjustments] = useState<SaleAdjustments>(EMPTY_ADJUSTMENTS);
     // Set once a sale is posted, which is also when the screen is wiped for the
     // next customer — so the invoice is snapshotted here rather than re-read off
@@ -422,7 +434,7 @@ function NewSalePageContent() {
         amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
         discountAmount: totals.postedDiscount > 0 ? totals.postedDiscount : undefined,
         note: description || undefined,
-        saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
+        saleDate: saleDatePicked && saleDate ? new Date(saleDate).toISOString() : undefined,
         payments: payments.map((p) => ({
             paymentMethod: p.method,
             amount: p.amount,
@@ -470,6 +482,7 @@ function NewSalePageContent() {
             setCustomerDraftNameInvalid(false);
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
+            refreshUnpickedSaleDate();
             toast.success(`Sale created successfully!\nSale #: ${response.serial_number}`);
             const overpaidNote = overpaymentOutcome(response);
             if (overpaidNote) toast.info(overpaidNote, 8000);
@@ -512,6 +525,7 @@ function NewSalePageContent() {
             setCustomerDraftNameInvalid(false);
             setAdjustments(EMPTY_ADJUSTMENTS);
             resetConversion();
+            refreshUnpickedSaleDate();
             toast.success(`Draft saved.\nRef: ${response.reference_number || response.serial_number}`);
         } catch (error: any) {
             console.error('Draft save error:', error);
@@ -586,7 +600,7 @@ function NewSalePageContent() {
             setRefNumber={setRefNumber}
             currentUser={currentUser}
             saleDate={saleDate}
-            setSaleDate={setSaleDate}
+            setSaleDate={pickSaleDate}
             customer={customer}
             customerDraft={customerDraft}
             setCustomerDraft={setCustomerDraft}
