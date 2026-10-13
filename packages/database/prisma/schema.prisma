@@ -7199,11 +7199,40 @@ model SupportMessage {
   body       String
   createdAt  DateTime @default(now())
 
-  thread SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  sender User          @relation("SupportMessageSender", fields: [senderId], references: [id])
+  thread      SupportThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender      User                @relation("SupportMessageSender", fields: [senderId], references: [id])
+  attachments SupportAttachment[]
 
   @@index([threadId, createdAt])
   @@map("support_messages")
+}
+
+/// A file or voice note sent with a support message — a screenshot of the
+/// error, a photo of the jammed printer, a spoken description from someone who
+/// would rather talk than type. Stored in Cloudinary; `storageKey` and
+/// `resourceType` together are what deleting the file needs, since a URL
+/// cannot be turned back into a Cloudinary handle.
+model SupportAttachment {
+  id           String   @id @default(cuid())
+  messageId    String
+  /// Denormalised from the thread so a tenant-scoped query never has to join.
+  tenantId     String
+  /// "file" | "voice"
+  kind         String   @default("file")
+  fileUrl      String
+  fileName     String
+  mimeType     String
+  fileSize     Int
+  storageKey   String?
+  /// Cloudinary's resource type: "image" | "raw" | "video" (audio lives under video).
+  resourceType String   @default("image")
+  createdAt    DateTime @default(now())
+
+  message SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([tenantId])
+  @@map("support_attachments")
 }
 
 // ── Referral / Commission ─────────────────────────────────────────────────────

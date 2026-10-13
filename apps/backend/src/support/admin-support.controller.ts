@@ -18,6 +18,7 @@ import { PlatformRole } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { parseTicketNumberQuery, threadCategoryWhere } from './support.util';
 import { SupportEventsService } from './support-events.service';
+import { serializeSupportAttachment } from './support-attachment.util';
 
 class AdminSendMessageDto {
     @IsString()
@@ -195,7 +196,10 @@ export class AdminSupportController {
         const messages = await this.db.supportMessage.findMany({
             where: { threadId: id },
             orderBy: { createdAt: 'asc' },
-            include: { sender: { select: { name: true, email: true } } },
+            include: {
+                sender: { select: { name: true, email: true } },
+                attachments: { orderBy: { createdAt: 'asc' } },
+            },
         });
 
         return {
@@ -221,6 +225,7 @@ export class AdminSupportController {
                 senderName: m.sender.name ?? m.sender.email,
                 body: m.body,
                 createdAt: m.createdAt,
+                attachments: (m.attachments ?? []).map(serializeSupportAttachment),
             })),
         };
     }

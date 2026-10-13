@@ -15,6 +15,7 @@ import { useSupportStream, type SupportStreamEvent } from '@/hooks/useSupportStr
 import { useVisibleInterval } from '@/hooks/useVisibleInterval';
 import { toast } from '@/lib/toast';
 import { formatDate } from '@/lib/format';
+import { SupportAttachmentList, type SupportAttachment } from '@/components/SupportAttachments';
 
 /**
  * How often the screen re-reads itself when the live stream is *not* carrying
@@ -52,6 +53,7 @@ type Message = {
     senderName: string;
     body: string;
     createdAt: string;
+    attachments?: SupportAttachment[];
 };
 
 type ThreadInfo = {
@@ -520,6 +522,7 @@ export default function SupportPage() {
                                                         {isOwner ? page.you : page.admin}
                                                     </p>
                                                     <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                                                    <SupportAttachmentList attachments={msg.attachments} onPrimary={isOwner} />
                                                     <p className={`text-[10px] mt-1 ${isOwner ? 'text-blue-200' : 'text-gray-400'}`}>
                                                         {new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                                     </p>
