@@ -177,14 +177,14 @@ function TaskDetailPage() {
                                 variant="secondary"
                                 className="max-md:hidden"
                                 icon={<Link2 className="h-4 w-4" aria-hidden />}
-                                onClick={() => void copyTaskLink(taskId, m.task)}
+                                onClick={() => void copyTaskLink({ id: taskId, key: taskKey }, m.task)}
                             >
                                 {m.task.copyLink}
                             </Button>
                             <TaskActionsMenu
                                 taskKey={taskKey}
                                 onCopyKey={() => void copyKey()}
-                                onCopyLink={() => void copyTaskLink(taskId, m.task)}
+                                onCopyLink={() => void copyTaskLink({ id: taskId, key: taskKey }, m.task)}
                                 onOpenProject={
                                     project ? () => router.push(routes.projects.detail(project.id)) : undefined
                                 }

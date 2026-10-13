@@ -160,6 +160,21 @@ describe('the task page', () => {
         await waitFor(() => expect(writeText).toHaveBeenCalledWith('PRJ-0001-7'));
     });
 
+    it('copies the short /t/<key> link rather than the id-based one', async () => {
+        const writeText = jest.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+        render(<TaskDetailPage />);
+        await screen.findByRole('heading', { level: 1, name: 'Wire the meter' });
+
+        // From the ⋯ menu: the header's own Copy link button is hidden below `md`.
+        fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Copy link' }));
+
+        await waitFor(() =>
+            expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/t/PRJ-0001-7`),
+        );
+    });
+
     it('deletes the task only after asking, then goes to its project', async () => {
         render(<TaskDetailPage />);
 

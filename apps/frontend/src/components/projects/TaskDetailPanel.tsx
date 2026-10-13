@@ -61,7 +61,7 @@ export default function TaskDetailPanel({
                 {task && <WatchButton card={card} iconOnly />}
                 <button
                     type="button"
-                    onClick={() => void copyTaskLink(taskId, m.task)}
+                    onClick={() => void copyTaskLink({ id: taskId, key: taskKey }, m.task)}
                     aria-label={m.task.copyLink}
                     title={m.task.copyLink}
                     className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
