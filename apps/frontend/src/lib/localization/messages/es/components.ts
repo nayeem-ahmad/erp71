@@ -76,6 +76,22 @@ export const componentsMessages = {
         successDescription: "Le responderemos en esta conversación.",
         defaultError: "Algo salió mal. Inténtelo de nuevo.",
         createdToast: "Ticket #{number} creado.",
+        attachments: {
+            attach: "Adjuntar archivo",
+            record: "Grabar voz",
+            stopRecording: "Detener",
+            recording: "Grabando {time}",
+            remove: "Quitar",
+            voiceNote: "Nota de voz",
+            open: "Abrir",
+            hint: "Imágenes, PDF o audio · hasta 5 archivos, 10 MB cada uno",
+            tooMany: "Puedes adjuntar hasta {max} archivos.",
+            unsupported: "Ese tipo de archivo no es compatible. Adjunta una imagen, un PDF o una grabación de audio.",
+            tooLarge: "\"{name}\" supera los 10 MB.",
+            micDenied: "El acceso al micrófono está bloqueado. Permítelo en tu navegador para grabar.",
+            micUnsupported: "La grabación de voz no es compatible con este navegador.",
+            micFailed: "No se pudo grabar el audio. Inténtalo de nuevo.",
+        },
     },
     supportPage: {
         title: "Soporte",
@@ -232,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'Diseño compacto',
         compactHint: 'Texto más pequeño y filas más juntas para que quepan más líneas en cada página',
+        typeSize: 'Tamaño del texto',
+        typeSizeHint: 'Tamaño del cliente, las líneas y los totales en facturas y cotizaciones. El membrete conserva el suyo. Se recuerda en este navegador.',
+        typeNormal: 'Normal',
+        typeLarge: 'Grande',
+        typeLarger: 'Más grande',
     },
 
     richText: {

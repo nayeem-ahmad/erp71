@@ -76,6 +76,22 @@ export const componentsMessages = {
             successDescription: "আমরা এই কথোপকথনে উত্তর দেব।",
             defaultError: "কিছু ভুল হয়েছে। আবার চেষ্টা করুন।",
             createdToast: "টিকিট #{number} তৈরি হয়েছে।",
+            attachments: {
+                attach: "ফাইল যুক্ত করুন",
+                record: "ভয়েস রেকর্ড",
+                stopRecording: "থামান",
+                recording: "রেকর্ড হচ্ছে {time}",
+                remove: "সরান",
+                voiceNote: "ভয়েস নোট",
+                open: "খুলুন",
+                hint: "ছবি, PDF বা অডিও · সর্বোচ্চ ৫টি ফাইল, প্রতিটি ১০ MB",
+                tooMany: "সর্বোচ্চ {max}টি ফাইল যুক্ত করা যাবে।",
+                unsupported: "এই ধরনের ফাইল সমর্থিত নয়। ছবি, PDF বা অডিও রেকর্ডিং যুক্ত করুন।",
+                tooLarge: "\"{name}\" ১০ MB-এর চেয়ে বড়।",
+                micDenied: "মাইক্রোফোন ব্যবহারের অনুমতি বন্ধ। রেকর্ড করতে ব্রাউজারে অনুমতি দিন।",
+                micUnsupported: "এই ব্রাউজারে ভয়েস রেকর্ডিং সমর্থিত নয়।",
+                micFailed: "অডিও রেকর্ড করা যায়নি। আবার চেষ্টা করুন।",
+            },
         },
         supportPage: {
             title: "সাপোর্ট",
@@ -232,6 +248,11 @@ export const componentsMessages = {
             /* The switch in the toolbar over every print window that lists rows. */
             compact: 'কমপ্যাক্ট লেআউট',
             compactHint: 'ছোট লেখা ও ঘন সারি, তাই প্রতি পৃষ্ঠায় বেশি লাইন ধরে',
+            typeSize: 'লেখার আকার',
+            typeSizeHint: 'ইনভয়েস ও কোটেশনের গ্রাহক, পণ্য ও মোটের লেখার আকার। লেটারহেডের আকার আলাদা থাকে। এই ব্রাউজারে মনে রাখা হয়।',
+            typeNormal: 'স্বাভাবিক',
+            typeLarge: 'বড়',
+            typeLarger: 'আরও বড়',
         },
 
         richText: {

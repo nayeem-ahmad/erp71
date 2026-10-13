@@ -91,6 +91,8 @@ const APP_ONLY_PREFIXES = [
     '/status',
     '/storefront',
     '/support',
+    // `/t/<key>`, the short task link — it resolves against the signed-in workspace.
+    '/t',
     '/team',
     '/w',
     '/whats-new',

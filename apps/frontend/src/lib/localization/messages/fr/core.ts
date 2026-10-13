@@ -82,6 +82,8 @@ export const coreMessages = {
             custom: "Personnalisé",
             apply: "Appliquer",
             clear: "Effacer",
+            time: "Heure",
+            fromAfterTo: "« Du » doit être antérieur ou égal à « Au »",
         },
         name: "Nom",
         email: "E-mail",

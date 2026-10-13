@@ -76,6 +76,22 @@ export const componentsMessages = {
         successDescription: "ہم اسی گفتگو میں جواب دیں گے۔",
         defaultError: "کچھ غلط ہو گیا۔ براہِ کرم دوبارہ کوشش کریں۔",
         createdToast: "ٹکٹ #{number} بن گیا۔",
+        attachments: {
+            attach: "فائل منسلک کریں",
+            record: "آواز ریکارڈ کریں",
+            stopRecording: "روکیں",
+            recording: "ریکارڈنگ {time}",
+            remove: "ہٹائیں",
+            voiceNote: "وائس نوٹ",
+            open: "کھولیں",
+            hint: "تصاویر، PDF یا آڈیو · زیادہ سے زیادہ 5 فائلیں، ہر ایک 10 MB",
+            tooMany: "آپ زیادہ سے زیادہ {max} فائلیں منسلک کر سکتے ہیں۔",
+            unsupported: "یہ فائل کی قسم معاون نہیں ہے۔ تصویر، PDF یا آڈیو ریکارڈنگ منسلک کریں۔",
+            tooLarge: "\"{name}\" 10 MB سے بڑی ہے۔",
+            micDenied: "مائیکروفون تک رسائی بند ہے۔ ریکارڈ کرنے کے لیے براؤزر میں اجازت دیں۔",
+            micUnsupported: "اس براؤزر میں آواز کی ریکارڈنگ معاون نہیں ہے۔",
+            micFailed: "آڈیو ریکارڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
+        },
     },
     supportPage: {
         title: "سپورٹ",
@@ -232,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'کمپیکٹ لے آؤٹ',
         compactHint: 'چھوٹا متن اور قریب قریب قطاریں، تاکہ ہر صفحے پر زیادہ سطریں آئیں',
+        typeSize: 'متن کا سائز',
+        typeSizeHint: 'انوائس اور کوٹیشن پر گاہک، اشیاء اور میزان کا سائز۔ لیٹرہیڈ اپنا سائز رکھتا ہے۔ اس براؤزر میں یاد رہتا ہے۔',
+        typeNormal: 'عام',
+        typeLarge: 'بڑا',
+        typeLarger: 'مزید بڑا',
     },
 
     richText: {

@@ -97,9 +97,11 @@ export class AssetsService implements OnModuleInit {
          * `image` keeps Cloudinary's image pipeline (and its transformations).
          * `raw` is for anything it should store byte-for-byte — a PDF put
          * through the image pipeline is rejected or mangled. Defaults to
-         * `image` so existing callers are untouched.
+         * `image` so existing callers are untouched. `video` is where
+         * Cloudinary keeps audio too — a voice note uploaded as `image` is
+         * rejected, and as `raw` it is served without a playable type.
          */
-        resourceType: 'image' | 'raw' = 'image',
+        resourceType: 'image' | 'raw' | 'video' = 'image',
     ): Promise<{ url: string; publicId: string; bytes: number; format?: string }> {
         if (!this.enabled) {
             throw new Error('Cloudinary is not configured');
@@ -203,7 +205,7 @@ export class AssetsService implements OnModuleInit {
     /**
      * Delete a Cloudinary asset by its public_id.
      */
-    async deleteFile(publicId: string, resourceType: 'image' | 'raw' = 'image'): Promise<void> {
+    async deleteFile(publicId: string, resourceType: 'image' | 'raw' | 'video' = 'image'): Promise<void> {
         if (!this.enabled) return;
         // Cloudinary keys destroy by resource type too — asking for an image
         // deletes nothing when the asset was stored raw.

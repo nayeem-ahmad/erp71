@@ -209,6 +209,9 @@ export const routes = {
         // A card is normally a modal opened from a list or a board. This is the
         // same card as a page, so a link to one task can be pasted somewhere.
         taskDetail: (id: string) => `/projects/tasks/${id}` as const,
+        // The short, sayable form of the same page: `/t/ERP-14`. What "Copy
+        // link" hands out; it resolves the key and lands on `taskDetail`.
+        taskShort: (key: string) => `/t/${encodeURIComponent(key)}` as const,
         // Every project's stories on one screen, as the Backlog tree grouped by
         // project and opened to the stories.
         stories: '/projects/stories',

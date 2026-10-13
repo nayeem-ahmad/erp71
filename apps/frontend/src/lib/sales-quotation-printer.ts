@@ -229,5 +229,6 @@ export function printSalesQuotation(
         pinFooter: true,
         pageStamp: { text: `Printed ${printedAt}${who ? ` by ${who}` : ''}`, pageNumbers: true },
         compactable: true,
+        bodyTypeScale: true,
     });
 }

@@ -5,6 +5,8 @@ import { api } from '@/lib/api';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
 import { PRINT_PREVIEW_SKIP_MESSAGE, type PrintDensity } from '@/lib/print';
 import { usePrintDensity } from '@/lib/print/use-print-density';
+import { usePrintTypeScale } from '@/lib/print/use-print-type-scale';
+import type { PrintTypeScale } from '@/lib/print/type-scale';
 
 const PAPER_SIZE_KEY = 'erp71:sales-print:paper-size';
 const SKIP_PREVIEW_KEY = 'erp71:sales-print:skip-preview';
@@ -46,6 +48,12 @@ export interface SalePrintPrefs {
      */
     density: PrintDensity;
     setDensity: (density: PrintDensity) => void;
+    /**
+     * How large the invoice and quotation data prints. Like density, one
+     * answer for this browser, surfaced here so the print settings can show it.
+     */
+    typeScale: PrintTypeScale;
+    setTypeScale: (scale: PrintTypeScale) => void;
 }
 
 /**
@@ -65,6 +73,7 @@ export function useSalePrintPrefs(): SalePrintPrefs {
     const [paperSize, setPaperSizeState] = useState<PaperSize>('A4');
     const [skipPreview, setSkipPreviewState] = useState(false);
     const [density, setDensity] = usePrintDensity();
+    const [typeScale, setTypeScale] = usePrintTypeScale();
 
     // Read the stored answers on mount rather than in the initialiser: this
     // renders on the server first, where there is no localStorage, and a
@@ -121,5 +130,5 @@ export function useSalePrintPrefs(): SalePrintPrefs {
         return () => window.removeEventListener('message', onMessage);
     }, [setSkipPreview]);
 
-    return { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity };
+    return { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity, typeScale, setTypeScale };
 }

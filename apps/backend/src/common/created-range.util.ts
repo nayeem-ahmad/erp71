@@ -1,4 +1,4 @@
-import { zonedDayRange, type ZonedDayFilter } from './tenant-time.util';
+import { isCalendarDate, zonedDayRange, type ZonedDayFilter } from './tenant-time.util';
 
 export type CreatedAtPrismaFilter = ZonedDayFilter;
 
@@ -20,3 +20,22 @@ export type CreatedAtPrismaFilter = ZonedDayFilter;
  * any other column, `zonedDayRange` is the same function under a neutral name.
  */
 export const createdAtRange = zonedDayRange;
+
+/**
+ * Inclusive filter for a `@db.Date` column such as `expense_date` or a loan's
+ * `start_date`.
+ *
+ * Those columns hold a calendar day with no zone, stored as UTC midnight. A
+ * zoned range would be wrong for them: west of Greenwich the tenant's day
+ * starts after that midnight, so the first day of every range would drop out.
+ * Anything but a real `YYYY-MM-DD` is ignored, as `zonedDayRange` does.
+ */
+export function calendarDateRange(
+    from: string | undefined,
+    to: string | undefined,
+): ZonedDayFilter | undefined {
+    const filter: ZonedDayFilter = {};
+    if (from && isCalendarDate(from)) filter.gte = new Date(`${from.trim()}T00:00:00.000Z`);
+    if (to && isCalendarDate(to)) filter.lte = new Date(`${to.trim()}T00:00:00.000Z`);
+    return Object.keys(filter).length > 0 ? filter : undefined;
+}

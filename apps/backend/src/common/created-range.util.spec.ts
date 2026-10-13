@@ -1,4 +1,4 @@
-import { createdAtRange } from './created-range.util';
+import { calendarDateRange, createdAtRange } from './created-range.util';
 
 /**
  * The exhaustive day-boundary and DST cases live in `tenant-time.util.spec.ts`,
@@ -45,5 +45,24 @@ describe('createdAtRange', () => {
         expect(createdAtRange('2026-08-19', undefined, undefined)).toEqual({
             gte: new Date('2026-08-18T18:00:00.000Z'),
         });
+    });
+});
+
+/**
+ * `expense_date` and `start_date` are `@db.Date`: stored as UTC midnight with no
+ * zone at all. A zoned range would push that midnight out of the window for any
+ * tenant west of Greenwich, so these compare the calendar day as written.
+ */
+describe('calendarDateRange', () => {
+    it('compares @db.Date columns as UTC-midnight calendar days, whatever the zone', () => {
+        expect(calendarDateRange('2026-08-12', '2026-08-19')).toEqual({
+            gte: new Date('2026-08-12T00:00:00.000Z'),
+            lte: new Date('2026-08-19T00:00:00.000Z'),
+        });
+    });
+
+    it('ignores anything that is not a real YYYY-MM-DD', () => {
+        expect(calendarDateRange('2026-02-31', '2026-08-19T10:00')).toBeUndefined();
+        expect(calendarDateRange(undefined, '2026-08-19')).toEqual({ lte: new Date('2026-08-19T00:00:00.000Z') });
     });
 });

@@ -46,6 +46,8 @@ export class SalesController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
         @Query('storeId') requestedStoreId?: string,
+        @Query('dateFrom') dateFrom?: string,
+        @Query('dateTo') dateTo?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
         const storeId = await this.branchScope.resolveStoreId(tenant, requestedStoreId, { permissions: SALES_READ });
@@ -60,6 +62,8 @@ export class SalesController {
             sortDir: sortDir || undefined,
             createdFrom: createdFrom || undefined,
             createdTo: createdTo || undefined,
+            dateFrom: dateFrom || undefined,
+            dateTo: dateTo || undefined,
         });
     }
 

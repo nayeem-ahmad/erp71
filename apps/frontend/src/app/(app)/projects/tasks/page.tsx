@@ -19,6 +19,7 @@ import type { BulkAction } from '@/components/data-table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import { copyTaskLink } from '@/components/projects/task-link';
+import { taskKeyOf } from '@/components/projects/task-card/model';
 import TaskQuickAdd from '@/components/projects/TaskQuickAdd';
 import TaskEntryModal, { type TaskEntryValues } from '@/components/projects/TaskEntryModal';
 import TaskRowSelect, {
@@ -63,6 +64,8 @@ interface TaskRow {
     remaining_trend?: number[];
     status?: { id: string; name: string; category: string };
     project?: { id: string; code: string; name: string };
+    /** With the project's code, the task's key (`ERP-14`) — what its short link is built from. */
+    reference?: number;
     sprint?: { id: string; name: string; status: string } | null;
     assignee?: { id: string; name?: string | null; email: string } | null;
     assigneeEmployee?: { id: string; name: string } | null;
@@ -557,7 +560,12 @@ export default function TasksPage() {
                             type="button"
                             aria-label={m.task.copyLink}
                             title={m.task.copyLink}
-                            onClick={() => void copyTaskLink(row.original.id, m.task)}
+                            onClick={() =>
+                                void copyTaskLink(
+                                    { id: row.original.id, key: taskKeyOf(row.original.reference, row.original.project) },
+                                    m.task,
+                                )
+                            }
                             className="min-h-touch min-w-touch rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
                         >
                             <Link2 className="mx-auto h-4 w-4" />

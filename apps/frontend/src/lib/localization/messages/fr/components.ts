@@ -76,6 +76,22 @@ export const componentsMessages = {
         successDescription: "Nous répondrons dans cette conversation.",
         defaultError: "Une erreur est survenue. Veuillez réessayer.",
         createdToast: "Ticket #{number} créé.",
+        attachments: {
+            attach: "Joindre un fichier",
+            record: "Enregistrer la voix",
+            stopRecording: "Arrêter",
+            recording: "Enregistrement {time}",
+            remove: "Retirer",
+            voiceNote: "Note vocale",
+            open: "Ouvrir",
+            hint: "Images, PDF ou audio · jusqu’à 5 fichiers, 10 Mo chacun",
+            tooMany: "Vous pouvez joindre jusqu’à {max} fichiers.",
+            unsupported: "Ce type de fichier n’est pas pris en charge. Joignez une image, un PDF ou un enregistrement audio.",
+            tooLarge: "« {name} » dépasse 10 Mo.",
+            micDenied: "L’accès au micro est bloqué. Autorisez-le dans votre navigateur pour enregistrer.",
+            micUnsupported: "L’enregistrement vocal n’est pas pris en charge par ce navigateur.",
+            micFailed: "Impossible d’enregistrer l’audio. Veuillez réessayer.",
+        },
     },
     supportPage: {
         title: "Assistance",
@@ -232,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'Mise en page compacte',
         compactHint: 'Texte plus petit et lignes resserrées pour faire tenir plus de lignes sur chaque page',
+        typeSize: 'Taille du texte',
+        typeSizeHint: 'Taille du client, des lignes et des totaux sur les factures et devis. L’en-tête garde sa propre taille. Mémorisée dans ce navigateur.',
+        typeNormal: 'Normal',
+        typeLarge: 'Grand',
+        typeLarger: 'Plus grand',
     },
 
     richText: {

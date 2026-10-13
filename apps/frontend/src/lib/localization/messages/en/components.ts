@@ -76,6 +76,22 @@ export const componentsMessages = {
         successDescription: 'We will reply in this conversation.',
         defaultError: 'Something went wrong. Please try again.',
         createdToast: 'Ticket #{number} created.',
+        attachments: {
+            attach: 'Attach file',
+            record: 'Record voice',
+            stopRecording: 'Stop',
+            recording: 'Recording {time}',
+            remove: 'Remove',
+            voiceNote: 'Voice note',
+            open: 'Open',
+            hint: 'Images, PDF or audio · up to 5 files, 10 MB each',
+            tooMany: 'You can attach up to {max} files.',
+            unsupported: 'That file type is not supported. Attach an image, a PDF or an audio recording.',
+            tooLarge: '"{name}" is larger than 10 MB.',
+            micDenied: 'Microphone access is blocked. Allow it in your browser to record.',
+            micUnsupported: 'Voice recording is not supported in this browser.',
+            micFailed: 'Could not record audio. Please try again.',
+        },
     },
     supportPage: {
         title: 'Support',
@@ -232,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'Compact layout',
         compactHint: 'Smaller type and tighter rows, so more lines fit on each page',
+        typeSize: 'Text size',
+        typeSizeHint: 'Size of the customer, items and totals on invoices and quotations. The letterhead keeps its own size. Remembered in this browser.',
+        typeNormal: 'Normal',
+        typeLarge: 'Large',
+        typeLarger: 'Larger',
     },
 
     richText: {

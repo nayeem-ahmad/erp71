@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
-import { createdAtRange } from '../common/created-range.util';
+import { calendarDateRange, createdAtRange } from '../common/created-range.util';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import {
     CreateLoanDto,
@@ -263,6 +263,8 @@ export class LoansService {
         }
         const created = createdAtRange(query.createdFrom, query.createdTo, query.timezone);
         if (created) where.created_at = created;
+        const started = calendarDateRange(query.dateFrom, query.dateTo);
+        if (started) where.start_date = started;
         return where;
     }
 

@@ -76,6 +76,22 @@ export const componentsMessages = {
         successDescription: "Wir antworten in dieser Konversation.",
         defaultError: "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
         createdToast: "Ticket #{number} erstellt.",
+        attachments: {
+            attach: "Datei anhängen",
+            record: "Sprachnachricht",
+            stopRecording: "Stopp",
+            recording: "Aufnahme {time}",
+            remove: "Entfernen",
+            voiceNote: "Sprachnachricht",
+            open: "Öffnen",
+            hint: "Bilder, PDF oder Audio · bis zu 5 Dateien, je 10 MB",
+            tooMany: "Sie können bis zu {max} Dateien anhängen.",
+            unsupported: "Dieser Dateityp wird nicht unterstützt. Hängen Sie ein Bild, eine PDF oder eine Audioaufnahme an.",
+            tooLarge: "„{name}“ ist größer als 10 MB.",
+            micDenied: "Der Mikrofonzugriff ist blockiert. Erlauben Sie ihn im Browser, um aufzunehmen.",
+            micUnsupported: "Sprachaufnahmen werden in diesem Browser nicht unterstützt.",
+            micFailed: "Audio konnte nicht aufgenommen werden. Bitte erneut versuchen.",
+        },
     },
     supportPage: {
         title: "Support",
@@ -232,6 +248,11 @@ export const componentsMessages = {
         /* The switch in the toolbar over every print window that lists rows. */
         compact: 'Kompaktes Layout',
         compactHint: 'Kleinere Schrift und engere Zeilen, damit mehr Positionen auf jede Seite passen',
+        typeSize: 'Schriftgröße',
+        typeSizeHint: 'Größe von Kunde, Positionen und Summen auf Rechnungen und Angeboten. Der Briefkopf behält seine eigene Größe. Wird in diesem Browser gemerkt.',
+        typeNormal: 'Normal',
+        typeLarge: 'Groß',
+        typeLarger: 'Größer',
     },
 
     richText: {

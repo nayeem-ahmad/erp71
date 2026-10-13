@@ -116,6 +116,32 @@ describe('tenant-time.util', () => {
                 lte: new Date('2026-10-25T22:59:59.999Z'),
             });
         });
+
+        it('reads a HH:mm bound as that minute on the Dhaka wall clock, end inclusive', () => {
+            expect(zonedDayRange('2026-10-12T18:00', '2026-10-13T02:00', 'Asia/Dhaka')).toEqual({
+                gte: new Date('2026-10-12T12:00:00.000Z'),
+                lte: new Date('2026-10-12T20:00:59.999Z'),
+            });
+        });
+
+        it('mixes a whole-day bound with a timed one', () => {
+            expect(zonedDayRange('2026-10-12', '2026-10-12T14:30', 'Asia/Dhaka')).toEqual({
+                gte: new Date('2026-10-11T18:00:00.000Z'),
+                lte: new Date('2026-10-12T08:30:59.999Z'),
+            });
+        });
+
+        it('ignores impossible times like any other garbage', () => {
+            expect(zonedDayRange('2026-10-12T25:00', '2026-10-12T10:60', 'Asia/Dhaka')).toBeUndefined();
+        });
+
+        it('keeps a night window exact across a DST change', () => {
+            // New York leaves EDT (UTC-4) for EST (UTC-5) on 2026-11-01.
+            expect(zonedDayRange('2026-10-31T23:00', '2026-11-01T23:00', 'America/New_York')).toEqual({
+                gte: new Date('2026-11-01T03:00:00.000Z'),
+                lte: new Date('2026-11-02T04:00:59.999Z'),
+            });
+        });
     });
 
     describe('startOfZonedToday / zonedTodayWindow', () => {

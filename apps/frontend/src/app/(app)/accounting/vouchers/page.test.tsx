@@ -19,6 +19,11 @@ jest.mock('next/link', () => {
 jest.mock('@/components/data-table', () => ({
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
     CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
+    DateRangeFilter: ({ label, withTime, onChange }: { label: string; withTime?: boolean; onChange: (next: { from: string; to: string }) => void }) => (
+        <button type="button" data-with-time={String(Boolean(withTime))} onClick={() => onChange({ from: '2026-10-01', to: '2026-10-13' })}>
+            {`${label} range`}
+        </button>
+    ),
     DataTable: ({ columns, data, enableRowSelection, onRowSelectionChange, bulkActions }: {
         columns: Array<{ id?: string; accessorKey?: string; header: unknown; cell: (info: unknown) => React.ReactNode }>;
         data: Array<Record<string, unknown>>;
@@ -153,6 +158,26 @@ describe('AccountingVouchersListPage', () => {
         await waitFor(() => {
             expect(getVouchers).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
         });
+    });
+
+    it('filters by voucher date through the Date chip, whole days only', async () => {
+        const getVouchers = api.getVouchers as jest.Mock;
+        getVouchers.mockResolvedValue({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
+
+        render(<AccountingVouchersListPage />);
+        await waitFor(() => expect(getVouchers).toHaveBeenCalled());
+
+        expect(screen.queryByLabelText('Journal from date')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Date range' })).toHaveAttribute('data-with-time', 'false');
+        expect(screen.getByTestId('created-range-filter')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Date range' }));
+
+        await waitFor(() =>
+            expect(getVouchers).toHaveBeenLastCalledWith(
+                expect.objectContaining({ from: '2026-10-01', to: '2026-10-13', page: 1 }),
+            ),
+        );
     });
 
     it('lists the header branch\'s vouchers, and goes back to page 1 of the branch picked', async () => {

@@ -82,6 +82,8 @@ export const coreMessages = {
             custom: "Benutzerdefiniert",
             apply: "Anwenden",
             clear: "Zurücksetzen",
+            time: "Uhrzeit",
+            fromAfterTo: "„Von“ muss vor oder gleich „Bis“ sein",
         },
         name: "Name",
         email: "E-Mail",

@@ -82,6 +82,8 @@ export const coreMessages = {
             custom: 'مخصص',
             apply: 'تطبيق',
             clear: 'مسح',
+            time: 'الوقت',
+            fromAfterTo: 'يجب أن يكون «من» قبل «إلى» أو مساويًا له',
         },
         name: 'الاسم',
         email: 'البريد الإلكتروني',

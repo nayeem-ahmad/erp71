@@ -7,12 +7,14 @@ import {
     Query,
     Req,
     Res,
+    UploadedFiles,
     UseGuards,
     UseInterceptors,
     NotFoundException,
     ForbiddenException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantInterceptor } from '../database/tenant.interceptor';
@@ -21,6 +23,12 @@ import { DatabaseService } from '../database/database.service';
 import { SupportService } from './support.service';
 import { KNOCK_CATEGORIES, threadCategoryWhere } from './support.util';
 import { SupportEventsService, formatSseFrame, sseHeartbeat } from './support-events.service';
+import {
+    MAX_SUPPORT_ATTACHMENT_BYTES,
+    MAX_SUPPORT_ATTACHMENTS,
+    serializeSupportAttachment,
+    type SupportUploadFile,
+} from './support-attachment.util';
 
 /** How often an idle stream writes a comment frame, to outlive proxy read timeouts. */
 const STREAM_HEARTBEAT_MS = 25_000;
@@ -44,9 +52,13 @@ class CreateThreadDto {
     @MaxLength(200)
     subject?: string;
 
+    /**
+     * Optional here because a voice note or a screenshot can stand in for it;
+     * `createKnock` still refuses a ticket with neither.
+     */
+    @IsOptional()
     @IsString()
-    @MinLength(3)
-    body: string;
+    body?: string;
 
     @IsOptional()
     @IsString()
@@ -205,8 +217,22 @@ export class SupportController {
         });
     }
 
+    /**
+     * JSON, or multipart with up to five `attachments` — screenshots, a PDF,
+     * voice notes. Multer enforces the size and count before anything is
+     * buffered past them; `createKnock` checks the types.
+     */
     @Post('threads')
-    async createThread(@Tenant() tenant: TenantContext, @Body() dto: CreateThreadDto) {
+    @UseInterceptors(
+        FilesInterceptor('attachments', MAX_SUPPORT_ATTACHMENTS, {
+            limits: { fileSize: MAX_SUPPORT_ATTACHMENT_BYTES, files: MAX_SUPPORT_ATTACHMENTS },
+        }),
+    )
+    async createThread(
+        @Tenant() tenant: TenantContext,
+        @Body() dto: CreateThreadDto,
+        @UploadedFiles() files?: SupportUploadFile[],
+    ) {
         return this.support.createKnock({
             tenantId: tenant.tenantId,
             userId: tenant.userId,
@@ -214,6 +240,7 @@ export class SupportController {
             subject: dto.subject,
             body: dto.body,
             page: dto.page,
+            attachments: files,
         });
     }
 
@@ -227,7 +254,10 @@ export class SupportController {
         const messages = await this.db.supportMessage.findMany({
             where: { threadId: id },
             orderBy: { createdAt: 'asc' },
-            include: { sender: { select: { name: true, email: true } } },
+            include: {
+                sender: { select: { name: true, email: true } },
+                attachments: { orderBy: { createdAt: 'asc' } },
+            },
         });
 
         return {
@@ -246,6 +276,7 @@ export class SupportController {
                 senderName: m.sender.name ?? m.sender.email,
                 body: m.body,
                 createdAt: m.createdAt,
+                attachments: (m.attachments ?? []).map(serializeSupportAttachment),
             })),
         };
     }

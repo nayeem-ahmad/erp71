@@ -76,6 +76,22 @@ export const componentsMessages = {
             successDescription: 'Kami akan membalas dalam perbualan ini.',
             defaultError: 'Sesuatu telah berlaku. Sila cuba lagi.',
             createdToast: 'Tiket #{number} dicipta.',
+            attachments: {
+                attach: "Lampirkan fail",
+                record: "Rakam suara",
+                stopRecording: "Henti",
+                recording: "Merakam {time}",
+                remove: "Buang",
+                voiceNote: "Nota suara",
+                open: "Buka",
+                hint: "Imej, PDF atau audio · sehingga 5 fail, 10 MB setiap satu",
+                tooMany: "Anda boleh melampirkan sehingga {max} fail.",
+                unsupported: "Jenis fail itu tidak disokong. Lampirkan imej, PDF atau rakaman audio.",
+                tooLarge: "\"{name}\" melebihi 10 MB.",
+                micDenied: "Akses mikrofon disekat. Benarkannya dalam pelayar untuk merakam.",
+                micUnsupported: "Rakaman suara tidak disokong dalam pelayar ini.",
+                micFailed: "Tidak dapat merakam audio. Sila cuba lagi.",
+            },
         },
         supportPage: {
             title: 'Sokongan',
@@ -232,6 +248,11 @@ export const componentsMessages = {
             /* The switch in the toolbar over every print window that lists rows. */
             compact: 'Susun atur padat',
             compactHint: 'Tulisan lebih kecil dan baris lebih rapat, jadi lebih banyak baris muat pada setiap halaman',
+            typeSize: 'Saiz teks',
+            typeSizeHint: 'Saiz pelanggan, item dan jumlah pada invois dan sebut harga. Kepala surat kekal saiznya sendiri. Diingati pada pelayar ini.',
+            typeNormal: 'Biasa',
+            typeLarge: 'Besar',
+            typeLarger: 'Lebih besar',
         },
 
         richText: {

@@ -82,6 +82,8 @@ export const coreMessages = {
             custom: "कस्टम",
             apply: "लागू करें",
             clear: "साफ़ करें",
+            time: "समय",
+            fromAfterTo: "\"से\" को \"तक\" से पहले या उसके बराबर होना चाहिए",
         },
         name: "नाम",
         email: "ईमेल",

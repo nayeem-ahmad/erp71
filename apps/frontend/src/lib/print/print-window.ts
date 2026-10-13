@@ -21,8 +21,17 @@ import {
     renderFooterHtml,
 } from './header';
 import {
+    listenForPrintWindowTypeScale,
+    PRINT_TYPE_SCALE_MESSAGE,
+    readPrintTypeScale,
+    TYPE_SCALE_CLASS,
+    type PrintTypeScale,
+} from './type-scale';
+import {
     isThermalPaper,
     PAGE_MARGIN_MM,
+    PAGE_PIN_SLACK_MM,
+    PAGE_STAMP_EDGE_MM,
     type DeepPartial,
     type HeaderContext,
     type PaperSize,
@@ -40,8 +49,60 @@ const PAGE_SIZE: Record<PaperSize, string> = {
     Thermal58: '58mm auto',
 };
 
-function pageCss(paperSize: PaperSize): string {
-    return `@page { size: ${PAGE_SIZE[paperSize]}; margin: ${PAGE_MARGIN_MM[paperSize]}mm; }`;
+interface PageEdges {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+}
+
+/**
+ * The four page margins. Uniform, except the edge that carries the print line,
+ * which is deeper so the line clears the strip a printer cannot mark.
+ */
+function pageEdges(paperSize: PaperSize, stampEdge: 'top' | 'bottom' | null): PageEdges {
+    const base = PAGE_MARGIN_MM[paperSize];
+    const stamp = stampEdge ? Math.max(base, PAGE_STAMP_EDGE_MM) : base;
+    return {
+        top: stampEdge === 'top' ? stamp : base,
+        right: base,
+        bottom: stampEdge === 'bottom' ? stamp : base,
+        left: base,
+    };
+}
+
+/** `15mm` when the four edges agree, so a bleeding footer still matches it. */
+function marginValue(edges: PageEdges): string {
+    const { top, right, bottom, left } = edges;
+    if (top === right && right === bottom && bottom === left) return `${top}mm`;
+    return `${top}mm ${right}mm ${bottom}mm ${left}mm`;
+}
+
+function pageCss(paperSize: PaperSize, edges: PageEdges): string {
+    return `@page { size: ${PAGE_SIZE[paperSize]}; margin: ${marginValue(edges)}; }`;
+}
+
+/** The sheet's height. A roll has none — it prints to whatever length it needs. */
+function paperHeightMm(paperSize: PaperSize): number | undefined {
+    const content = PAGE_CONTENT_HEIGHT_MM[paperSize];
+    if (content == null) return undefined;
+    return content + PAGE_MARGIN_MM[paperSize] * 2;
+}
+
+/**
+ * How tall the pinned document is drawn.
+ *
+ * Without a print line it is the content box, exactly. With one, it stops
+ * `PAGE_PIN_SLACK_MM` short of the (already deeper) content box, so a print
+ * dialog that adds a little margin of its own does not push the signature row
+ * onto a second page.
+ */
+function pinnedHeightMm(paperSize: PaperSize, stampEdge: 'top' | 'bottom' | null): number | undefined {
+    const paper = paperHeightMm(paperSize);
+    if (paper == null) return undefined;
+    if (!stampEdge) return PAGE_CONTENT_HEIGHT_MM[paperSize];
+    const edges = pageEdges(paperSize, stampEdge);
+    return paper - edges.top - edges.bottom - PAGE_PIN_SLACK_MM;
 }
 
 /** A value as a CSS string literal, safe inside a `<style>` element. */
@@ -65,7 +126,12 @@ function pageStampCss(
     edge: 'top' | 'bottom',
     pageNumbers: boolean,
 ): string {
-    const box = 'font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; color: #6b7280;';
+    // At the inner edge of the margin, not the paper edge. A bottom-aligned
+    // line sits in the strip many printers cannot mark and comes out cut off.
+    const align = edge === 'bottom'
+        ? 'vertical-align: top; padding-top: 1.5mm;'
+        : 'vertical-align: bottom; padding-bottom: 1.5mm;';
+    const box = `font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; line-height: 1.2; color: #6b7280; ${align}`;
     const left = stamp.text?.trim()
         ? `@${edge}-left { content: ${cssString(stamp.text.trim())}; ${box} }`
         : '';
@@ -132,8 +198,10 @@ export interface PrintDocumentOptions {
      * A small grey line in the page margin of every printed page: `text` at the
      * left (the print time), "Page X of Y" at the right. In the bottom margin,
      * under everything the letterhead prints — or the top margin when the
-     * footer bleeds into the bottom one. Sheet paper only, and page numbers
-     * only for a single document: a batch would count across its documents.
+     * footer bleeds into the bottom one. The line sits at the inner edge of a
+     * deeper margin, clear of the strip a printer cannot mark. Sheet paper
+     * only, and page numbers only for a single document: a batch would count
+     * across its documents.
      */
     pageStamp?: { text?: string; pageNumbers?: boolean };
     /**
@@ -158,6 +226,15 @@ export interface PrintDocumentOptions {
      * `<html>` with `COMPACT_CLASS`; a thermal roll ignores it.
      */
     density?: PrintDensity;
+    /**
+     * The customer, the lines and the totals can be set larger, and the choice
+     * is remembered on this browser. The document's stylesheet carries the
+     * rules (see `dataTypeScaleCss`); this only marks `<html>` and offers the
+     * control. Ignored on a roll.
+     */
+    bodyTypeScale?: boolean;
+    /** The step to print at. Read from this browser when omitted. */
+    typeScale?: PrintTypeScale;
     autoPrint?: boolean;
     /**
      * Show the document with a toolbar instead of printing straight away.
@@ -217,6 +294,12 @@ export interface PrintPreviewOptions {
     compactLabel?: string;
     /** Tooltip saying what the switch does. */
     compactHint?: string;
+    /** Wording of the text-size control; omitted to hide it. */
+    typeSizeLabel?: string;
+    typeSizeHint?: string;
+    typeNormal?: string;
+    typeLarge?: string;
+    typeLarger?: string;
 }
 
 /**
@@ -287,15 +370,14 @@ const PAGE_WIDTH_MM: Record<PaperSize, number> = {
  * Screen-only. On paper the page box already is the sheet, so every rule here
  * is switched off in print.
  */
-function previewSheetCss(paperSize: PaperSize): string {
-    const margin = PAGE_MARGIN_MM[paperSize];
+function previewSheetCss(paperSize: PaperSize, edges: PageEdges): string {
     const width = PAGE_WIDTH_MM[paperSize];
-    const heightMm = PAGE_CONTENT_HEIGHT_MM[paperSize];
+    const paper = paperHeightMm(paperSize);
 
     // A roll prints to an open-ended length and has no page bottom, so it gets
     // the paper width but never a fixed height — a sheet would draw a bottom
     // edge that does not exist.
-    const sheetHeight = heightMm ? `min-height: ${heightMm + margin * 2}mm;` : '';
+    const sheetHeight = paper ? `min-height: ${paper}mm;` : '';
 
     return `
         @media screen {
@@ -304,7 +386,7 @@ function previewSheetCss(paperSize: PaperSize): string {
                 width: ${width}mm;
                 ${sheetHeight}
                 box-sizing: border-box;
-                padding: ${margin}mm;
+                padding: ${marginValue(edges)};
                 margin: 16px auto;
                 background: #fff;
                 box-shadow: 0 1px 4px rgba(0,0,0,0.28);
@@ -465,6 +547,13 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     // turn them on without a rebuild.
     const compactOn = opts.density === 'compact' && !thermal;
     const compactSwitch = !!opts.preview?.compactLabel && !thermal;
+    // The print line's edge. A bleeding footer already owns the bottom margin,
+    // so the line moves to the top one — and that is the edge made deeper.
+    const stampEdge = opts.pageStamp && !thermal ? (bleeds ? 'top' : 'bottom') : null;
+    const edges = pageEdges(opts.paperSize, stampEdge);
+    const pinMm = pinnedHeightMm(opts.paperSize, stampEdge);
+    const scaleOn = !!opts.bodyTypeScale && !thermal;
+    const scale: PrintTypeScale = scaleOn ? (opts.typeScale ?? 'normal') : 'normal';
 
     // A batch draws each document on its own paper in the preview and starts
     // each on a fresh page in print. A single document keeps its old markup.
@@ -478,7 +567,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             : contents[0]}</div>`;
 
     return `<!DOCTYPE html>
-<html${compactOn ? ` class="${COMPACT_CLASS}"` : ''}>
+<html${rootClass(compactOn, scale)}>
 <head>
     <meta charset="utf-8">
     <title>${escapeAttr(opts.title)}</title>
@@ -491,7 +580,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             background: #fff;
         }
         ${wrapCss(thermal, bleeds, !!opts.preview)}
-        ${opts.preview ? previewSheetCss(opts.paperSize) : ''}
+        ${opts.preview ? previewSheetCss(opts.paperSize, edges) : ''}
         .p71-doc { width: 100%; border-collapse: collapse; }
         /* A footer band is one piece: never split across a page break. */
         @media print { .p71-ft, .p71-doc-ft { break-inside: avoid; } }
@@ -506,7 +595,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         /* A full-page-height table leaves the tbody to absorb the slack, which
            pushes the repeating tfoot onto the bottom edge of every page. */
         @media print {
-            .p71-doc--pinned { height: ${pageHeightMm}mm; }
+            .p71-doc--pinned { height: ${pinMm}mm; }
             .p71-doc--pinned > tbody > tr > td { vertical-align: top; }
             .p71-doc--pinned > tfoot > tr > td { vertical-align: bottom; }
         }
@@ -518,16 +607,19 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             /* The preview sheet is drawn to the paper's size, where a percentage
                has nothing to resolve against — so the table takes the page's
                height in mm, as it does on paper. */
-            .p71-pv-sheet .p71-doc--pinned { height: ${pageHeightMm}mm; }
+            .p71-pv-sheet .p71-doc--pinned { height: ${pinMm}mm; }
         }` : ''}
         ${endRowAny ? `
-        /* The page table is a full page tall, and its last row takes whatever
-           the body row leaves — totals at the top of it, the footer at the
-           bottom. The row cannot split, so a closing block that does not fit
-           under the last rows moves to the next page whole, headed by the
-           repeating letterhead. A 1px height lets the body row shrink to its
-           content while the end row, at 100%, takes the slack. */
-        .p71-doc--end { height: ${pageHeightMm}mm; }
+        /* The page table fills the page, and its last row takes whatever the
+           body row leaves — totals at the top of it, the footer at the bottom.
+           On a page with a print line the table stops short of the content box
+           (see pinnedHeightMm), so a slightly larger print-dialog margin does
+           not make the table taller than the page. The row cannot split, so a
+           closing block that genuinely does not fit under the last rows moves
+           to the next page whole, headed by the repeating letterhead. A 1px
+           height lets the body row shrink to its content while the end row, at
+           100%, takes the slack. */
+        .p71-doc--end { height: ${pinMm}mm; }
         .p71-doc--end > tbody > tr.p71-body-row { height: 1px; }
         .p71-doc--end > tbody > tr.p71-end { height: 100%; break-inside: avoid; }
         .p71-doc--end > tbody > tr > td { vertical-align: top; }
@@ -540,7 +632,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
            the break when it is long — the foot of the last page either way.
            The height is stated in mm because a percentage resolves against the
            viewport, which knows nothing about the @page box. */
-        .p71-sheet { display: flex; flex-direction: column; min-height: ${pageHeightMm}mm; }
+        .p71-sheet { display: flex; flex-direction: column; min-height: ${pinMm}mm; }
         .p71-sheet > .p71-sheet-body, .p71-sheet > .p71-doc { flex: 1 0 auto; }
         /* The stretched table must hand its spare height to the body row, not
            spread it over the repeating header too — which would open a gap
@@ -556,7 +648,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             .p71-wrap { min-height: 100%; }
         }` : ''}
         ${headerCss(opts.headerConfig, opts.paperSize)}
-        ${pageCss(opts.paperSize)}
+        ${pageCss(opts.paperSize, edges)}
         ${opts.pageStamp && !thermal
             ? pageStampCss(opts.pageStamp, bleeds ? 'top' : 'bottom', !!opts.pageStamp.pageNumbers && sheets.length === 1)
             : ''}
@@ -567,7 +659,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     </style>
 </head>
 <body>
-${opts.preview ? previewToolbarHtml(opts.preview, { show: compactSwitch, on: compactOn }) : ''}
+${opts.preview ? previewToolbarHtml(opts.preview, { show: compactSwitch, on: compactOn }, scale) : ''}
 ${body}
 </body>
 </html>`;
@@ -585,13 +677,23 @@ export function openPrintWindow(opts: PrintDocumentOptions): Window | null {
     if (!win) return null;
 
     const compactable = !!opts.compactable && !isThermalPaper(opts.paperSize);
+    const scalable = !!opts.bodyTypeScale && !isThermalPaper(opts.paperSize);
     // A document that lists rows prints at the operator's standing answer
     // unless its caller decided; anything else prints as it always has.
     const density = opts.density ?? (compactable ? readPrintDensity() : 'normal');
-    const preview = compactable ? withCompactSwitch(opts.preview, opts.title) : opts.preview;
+    const typeScale = opts.typeScale ?? (scalable ? readPrintTypeScale() : 'normal');
+    let preview = compactable ? withCompactSwitch(opts.preview, opts.title) : opts.preview;
+    if (scalable) preview = withTypeScale(preview, opts.title);
     if (compactable) listenForPrintWindowDensity();
+    if (scalable) listenForPrintWindowTypeScale();
 
-    win.document.write(buildPrintDocument({ ...opts, density, preview }));
+    win.document.write(buildPrintDocument({
+        ...opts,
+        density,
+        typeScale,
+        bodyTypeScale: scalable,
+        preview,
+    }));
     win.document.close();
 
     // A previewed document waits for the operator to press Print; printing it
@@ -618,6 +720,29 @@ function withCompactSwitch(
     return { compactLabel: labels.compact, compactHint: labels.compactHint, ...bar };
 }
 
+/**
+ * The text-size control a scalable document's window carries.
+ *
+ * Same shape as the compact switch: a document printed straight away gets the
+ * bar too, waiting under the print dialog, and the choice is posted back rather
+ * than written from the popup.
+ */
+function withTypeScale(
+    preview: PrintPreviewOptions | undefined,
+    title: string,
+): PrintPreviewOptions {
+    const labels = printWindowLabels();
+    const bar = preview ?? { title, printLabel: labels.print, closeLabel: labels.close };
+    return {
+        typeSizeLabel: labels.typeSize,
+        typeSizeHint: labels.typeSizeHint,
+        typeNormal: labels.typeNormal,
+        typeLarge: labels.typeLarge,
+        typeLarger: labels.typeLarger,
+        ...bar,
+    };
+}
+
 /** Message a preview window posts back when "skip next time" is ticked. */
 export const PRINT_PREVIEW_SKIP_MESSAGE = 'erp71:print-preview-skip';
 
@@ -641,7 +766,18 @@ export const PRINT_PREVIEW_SKIP_MESSAGE = 'erp71:print-preview-skip';
 function previewToolbarHtml(
     preview: PrintPreviewOptions,
     compact: { show: boolean; on: boolean },
+    scale: PrintTypeScale,
 ): string {
+    const typeSize = preview.typeSizeLabel && preview.typeNormal && preview.typeLarge && preview.typeLarger
+        ? `<label class="p71-pv-type"${preview.typeSizeHint ? ` title="${escapeAttr(preview.typeSizeHint)}"` : ''}>
+               <span>${escapeAttr(preview.typeSizeLabel)}</span>
+               <select onchange="var r=document.documentElement;r.classList.remove('${TYPE_SCALE_CLASS.large}','${TYPE_SCALE_CLASS.larger}');if(this.value==='large')r.classList.add('${TYPE_SCALE_CLASS.large}');else if(this.value==='larger')r.classList.add('${TYPE_SCALE_CLASS.larger}');try{window.opener&&window.opener.postMessage({type:'${PRINT_TYPE_SCALE_MESSAGE}',typeScale:this.value},'*')}catch(e){}">
+                   <option value="normal"${scale === 'normal' ? ' selected' : ''}>${escapeAttr(preview.typeNormal)}</option>
+                   <option value="large"${scale === 'large' ? ' selected' : ''}>${escapeAttr(preview.typeLarge)}</option>
+                   <option value="larger"${scale === 'larger' ? ' selected' : ''}>${escapeAttr(preview.typeLarger)}</option>
+               </select>
+           </label>`
+        : '';
     const compactSwitch = compact.show && preview.compactLabel
         ? `<label class="p71-pv-check p71-pv-compact"${preview.compactHint ? ` title="${escapeAttr(preview.compactHint)}"` : ''}>
                <input type="checkbox"${compact.on ? ' checked' : ''} onchange="document.documentElement.classList.toggle('${COMPACT_CLASS}',this.checked);try{window.opener&&window.opener.postMessage({type:'${PRINT_DENSITY_MESSAGE}',density:this.checked?'compact':'normal'},'*')}catch(e){}">
@@ -658,6 +794,7 @@ function previewToolbarHtml(
     return `<div class="p71-pv no-print">
         <span class="p71-pv-title">${escapeAttr(preview.title)}</span>
         <span class="p71-pv-actions">
+            ${typeSize}
             ${compactSwitch}
             ${skip}
             <button type="button" class="p71-pv-btn p71-pv-btn--ghost" onclick="window.close()">${escapeAttr(preview.closeLabel)}</button>
@@ -687,6 +824,12 @@ function previewCss(): string {
         /* The switch changes the page itself, so it reads as a setting rather
            than as small print beside the buttons. */
         .p71-pv-compact { color: #111827; font-weight: 600; }
+        .p71-pv-type { display: flex; align-items: center; gap: 6px; color: #111827; font-weight: 600; font-size: 12px; }
+        .p71-pv-type select {
+            font: inherit; font-weight: 600; color: #111827;
+            border: 1px solid #d1d5db; border-radius: 6px;
+            background: #fff; padding: 4px 8px; min-height: 32px;
+        }
         .p71-pv-btn {
             border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
             cursor: pointer; border: 1px solid transparent; min-height: 32px;
@@ -748,6 +891,14 @@ function safePrint(win: Window): void {
     } catch {
         // Popup closed before printing — nothing useful to do.
     }
+}
+
+function rootClass(compactOn: boolean, scale: PrintTypeScale): string {
+    const classes = [];
+    if (compactOn) classes.push(COMPACT_CLASS);
+    const scaleClass = TYPE_SCALE_CLASS[scale];
+    if (scaleClass) classes.push(scaleClass);
+    return classes.length ? ` class="${classes.join(' ')}"` : '';
 }
 
 function escapeAttr(value: string): string {
