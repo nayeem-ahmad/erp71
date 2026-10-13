@@ -30,8 +30,6 @@ import {
 import {
     isThermalPaper,
     PAGE_MARGIN_MM,
-    PAGE_PIN_SLACK_MM,
-    PAGE_STAMP_EDGE_MM,
     type DeepPartial,
     type HeaderContext,
     type PaperSize,
@@ -49,60 +47,8 @@ const PAGE_SIZE: Record<PaperSize, string> = {
     Thermal58: '58mm auto',
 };
 
-interface PageEdges {
-    top: number;
-    right: number;
-    bottom: number;
-    left: number;
-}
-
-/**
- * The four page margins. Uniform, except the edge that carries the print line,
- * which is deeper so the line clears the strip a printer cannot mark.
- */
-function pageEdges(paperSize: PaperSize, stampEdge: 'top' | 'bottom' | null): PageEdges {
-    const base = PAGE_MARGIN_MM[paperSize];
-    const stamp = stampEdge ? Math.max(base, PAGE_STAMP_EDGE_MM) : base;
-    return {
-        top: stampEdge === 'top' ? stamp : base,
-        right: base,
-        bottom: stampEdge === 'bottom' ? stamp : base,
-        left: base,
-    };
-}
-
-/** `15mm` when the four edges agree, so a bleeding footer still matches it. */
-function marginValue(edges: PageEdges): string {
-    const { top, right, bottom, left } = edges;
-    if (top === right && right === bottom && bottom === left) return `${top}mm`;
-    return `${top}mm ${right}mm ${bottom}mm ${left}mm`;
-}
-
-function pageCss(paperSize: PaperSize, edges: PageEdges): string {
-    return `@page { size: ${PAGE_SIZE[paperSize]}; margin: ${marginValue(edges)}; }`;
-}
-
-/** The sheet's height. A roll has none — it prints to whatever length it needs. */
-function paperHeightMm(paperSize: PaperSize): number | undefined {
-    const content = PAGE_CONTENT_HEIGHT_MM[paperSize];
-    if (content == null) return undefined;
-    return content + PAGE_MARGIN_MM[paperSize] * 2;
-}
-
-/**
- * How tall the pinned document is drawn.
- *
- * Without a print line it is the content box, exactly. With one, it stops
- * `PAGE_PIN_SLACK_MM` short of the (already deeper) content box, so a print
- * dialog that adds a little margin of its own does not push the signature row
- * onto a second page.
- */
-function pinnedHeightMm(paperSize: PaperSize, stampEdge: 'top' | 'bottom' | null): number | undefined {
-    const paper = paperHeightMm(paperSize);
-    if (paper == null) return undefined;
-    if (!stampEdge) return PAGE_CONTENT_HEIGHT_MM[paperSize];
-    const edges = pageEdges(paperSize, stampEdge);
-    return paper - edges.top - edges.bottom - PAGE_PIN_SLACK_MM;
+function pageCss(paperSize: PaperSize): string {
+    return `@page { size: ${PAGE_SIZE[paperSize]}; margin: ${PAGE_MARGIN_MM[paperSize]}mm; }`;
 }
 
 /** A value as a CSS string literal, safe inside a `<style>` element. */
@@ -198,8 +144,8 @@ export interface PrintDocumentOptions {
      * A small grey line in the page margin of every printed page: `text` at the
      * left (the print time), "Page X of Y" at the right. In the bottom margin,
      * under everything the letterhead prints — or the top margin when the
-     * footer bleeds into the bottom one. The line sits at the inner edge of a
-     * deeper margin, clear of the strip a printer cannot mark. Sheet paper
+     * footer bleeds into the bottom one. The line sits at the inner edge of
+     * the margin, clear of the strip a printer cannot mark. Sheet paper
      * only, and page numbers only for a single document: a batch would count
      * across its documents.
      */
@@ -370,14 +316,15 @@ const PAGE_WIDTH_MM: Record<PaperSize, number> = {
  * Screen-only. On paper the page box already is the sheet, so every rule here
  * is switched off in print.
  */
-function previewSheetCss(paperSize: PaperSize, edges: PageEdges): string {
+function previewSheetCss(paperSize: PaperSize): string {
+    const margin = PAGE_MARGIN_MM[paperSize];
     const width = PAGE_WIDTH_MM[paperSize];
-    const paper = paperHeightMm(paperSize);
+    const heightMm = PAGE_CONTENT_HEIGHT_MM[paperSize];
 
     // A roll prints to an open-ended length and has no page bottom, so it gets
     // the paper width but never a fixed height — a sheet would draw a bottom
     // edge that does not exist.
-    const sheetHeight = paper ? `min-height: ${paper}mm;` : '';
+    const sheetHeight = heightMm ? `min-height: ${heightMm + margin * 2}mm;` : '';
 
     return `
         @media screen {
@@ -386,7 +333,7 @@ function previewSheetCss(paperSize: PaperSize, edges: PageEdges): string {
                 width: ${width}mm;
                 ${sheetHeight}
                 box-sizing: border-box;
-                padding: ${marginValue(edges)};
+                padding: ${margin}mm;
                 margin: 16px auto;
                 background: #fff;
                 box-shadow: 0 1px 4px rgba(0,0,0,0.28);
@@ -547,11 +494,6 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     // turn them on without a rebuild.
     const compactOn = opts.density === 'compact' && !thermal;
     const compactSwitch = !!opts.preview?.compactLabel && !thermal;
-    // The print line's edge. A bleeding footer already owns the bottom margin,
-    // so the line moves to the top one — and that is the edge made deeper.
-    const stampEdge = opts.pageStamp && !thermal ? (bleeds ? 'top' : 'bottom') : null;
-    const edges = pageEdges(opts.paperSize, stampEdge);
-    const pinMm = pinnedHeightMm(opts.paperSize, stampEdge);
     const scaleOn = !!opts.bodyTypeScale && !thermal;
     const scale: PrintTypeScale = scaleOn ? (opts.typeScale ?? 'normal') : 'normal';
 
@@ -580,7 +522,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             background: #fff;
         }
         ${wrapCss(thermal, bleeds, !!opts.preview)}
-        ${opts.preview ? previewSheetCss(opts.paperSize, edges) : ''}
+        ${opts.preview ? previewSheetCss(opts.paperSize) : ''}
         .p71-doc { width: 100%; border-collapse: collapse; }
         /* A footer band is one piece: never split across a page break. */
         @media print { .p71-ft, .p71-doc-ft { break-inside: avoid; } }
@@ -595,7 +537,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         /* A full-page-height table leaves the tbody to absorb the slack, which
            pushes the repeating tfoot onto the bottom edge of every page. */
         @media print {
-            .p71-doc--pinned { height: ${pinMm}mm; }
+            .p71-doc--pinned { height: ${pageHeightMm}mm; }
             .p71-doc--pinned > tbody > tr > td { vertical-align: top; }
             .p71-doc--pinned > tfoot > tr > td { vertical-align: bottom; }
         }
@@ -607,19 +549,16 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             /* The preview sheet is drawn to the paper's size, where a percentage
                has nothing to resolve against — so the table takes the page's
                height in mm, as it does on paper. */
-            .p71-pv-sheet .p71-doc--pinned { height: ${pinMm}mm; }
+            .p71-pv-sheet .p71-doc--pinned { height: ${pageHeightMm}mm; }
         }` : ''}
         ${endRowAny ? `
-        /* The page table fills the page, and its last row takes whatever the
-           body row leaves — totals at the top of it, the footer at the bottom.
-           On a page with a print line the table stops short of the content box
-           (see pinnedHeightMm), so a slightly larger print-dialog margin does
-           not make the table taller than the page. The row cannot split, so a
-           closing block that genuinely does not fit under the last rows moves
-           to the next page whole, headed by the repeating letterhead. A 1px
-           height lets the body row shrink to its content while the end row, at
-           100%, takes the slack. */
-        .p71-doc--end { height: ${pinMm}mm; }
+        /* The page table is a full page tall, and its last row takes whatever
+           the body row leaves — totals at the top of it, the footer at the
+           bottom. The row cannot split, so a closing block that does not fit
+           under the last rows moves to the next page whole, headed by the
+           repeating letterhead. A 1px height lets the body row shrink to its
+           content while the end row, at 100%, takes the slack. */
+        .p71-doc--end { height: ${pageHeightMm}mm; }
         .p71-doc--end > tbody > tr.p71-body-row { height: 1px; }
         .p71-doc--end > tbody > tr.p71-end { height: 100%; break-inside: avoid; }
         .p71-doc--end > tbody > tr > td { vertical-align: top; }
@@ -632,7 +571,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
            the break when it is long — the foot of the last page either way.
            The height is stated in mm because a percentage resolves against the
            viewport, which knows nothing about the @page box. */
-        .p71-sheet { display: flex; flex-direction: column; min-height: ${pinMm}mm; }
+        .p71-sheet { display: flex; flex-direction: column; min-height: ${pageHeightMm}mm; }
         .p71-sheet > .p71-sheet-body, .p71-sheet > .p71-doc { flex: 1 0 auto; }
         /* The stretched table must hand its spare height to the body row, not
            spread it over the repeating header too — which would open a gap
@@ -648,7 +587,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             .p71-wrap { min-height: 100%; }
         }` : ''}
         ${headerCss(opts.headerConfig, opts.paperSize)}
-        ${pageCss(opts.paperSize, edges)}
+        ${pageCss(opts.paperSize)}
         ${opts.pageStamp && !thermal
             ? pageStampCss(opts.pageStamp, bleeds ? 'top' : 'bottom', !!opts.pageStamp.pageNumbers && sheets.length === 1)
             : ''}

@@ -164,7 +164,7 @@ describe('sales quotation — detailed layout', () => {
         expect(html).toContain('<div class="d-foot-l">Thank you for your business!</div>');
         expect(html).toContain('Printed 06-10-2026 1:02:59 PM by Rina Akter');
         expect(html).toContain('vertical-align: top;');
-        expect(html).toContain('.p71-doc--end { height: 248mm; }');
+        expect(html).toContain('.p71-doc--end { height: 267mm; }');
         expect(html).toContain('html.p71-fs-lg .d-table td');
         expect(render(quote, { footer_text: 'Valid while stocks last' })).toContain(
             '<div class="d-foot-l">Valid while stocks last</div>',
