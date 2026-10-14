@@ -246,6 +246,7 @@ export default function TotalsFooter({
                             type="number"
                             min="0"
                             step="0.01"
+                            aria-label="Transport"
                             value={totals.transportCost}
                             onChange={(e) => onTotalsChange({ transportCost: Math.max(0, parseFloat(e.target.value) || 0) })}
                             className={inputClass}
@@ -258,6 +259,7 @@ export default function TotalsFooter({
                             type="number"
                             min="0"
                             step="0.01"
+                            aria-label="Labor"
                             value={totals.laborCost}
                             onChange={(e) => onTotalsChange({ laborCost: Math.max(0, parseFloat(e.target.value) || 0) })}
                             className={inputClass}
@@ -269,6 +271,7 @@ export default function TotalsFooter({
                         <input
                             type="number"
                             step="0.01"
+                            aria-label={roundingLabel}
                             value={totals.rounding}
                             onChange={(e) => onTotalsChange({ rounding: parseFloat(e.target.value) || 0 })}
                             className={inputClass}
