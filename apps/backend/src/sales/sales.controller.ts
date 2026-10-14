@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, Param, Query, UseGuards, UseInterceptors, Patch, Delete, ForbiddenException } from '@nestjs/common';
+import { readColumnFiltersQuery } from '../common/column-filter.util';
 import { StorePermission } from '@erp71/shared-types';
 import { SalesService } from './sales.service';
 import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, PrintSalesBatchDto, UpdateSaleDto } from './sale.dto';
@@ -48,6 +49,7 @@ export class SalesController {
         @Query('storeId') requestedStoreId?: string,
         @Query('dateFrom') dateFrom?: string,
         @Query('dateTo') dateTo?: string,
+        @Query('filters') filters?: string,
     ) {
         const mineOnly = mine === 'true' || mine === '1';
         const storeId = await this.branchScope.resolveStoreId(tenant, requestedStoreId, { permissions: SALES_READ });
@@ -64,6 +66,7 @@ export class SalesController {
             createdTo: createdTo || undefined,
             dateFrom: dateFrom || undefined,
             dateTo: dateTo || undefined,
+            filters: readColumnFiltersQuery(filters),
         });
     }
 

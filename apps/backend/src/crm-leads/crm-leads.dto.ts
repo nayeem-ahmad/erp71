@@ -1,6 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import { IsString, IsOptional, IsEnum, IsIn, IsUUID, IsEmail, IsDateString, IsObject, IsArray, ArrayNotEmpty, ArrayMaxSize, IsBoolean, IsInt, Max, Min, ValidateNested } from 'class-validator';
-import { ColumnFilters, parseColumnFiltersParam } from '../common/column-filter.util';
+import { ColumnFilters, ColumnFiltersParam } from '../common/column-filter.util';
 
 // Define enums locally since Prisma enums aren't exported at runtime
 export enum LeadStatus {
@@ -488,9 +488,7 @@ export class ListLeadsDto {
      * Applied in the query, before the page is cut, so they narrow the whole
      * list. See LEAD_FILTERABLE in crm-leads.service.ts for the columns that take one.
      */
-    @IsOptional()
-    @Transform(parseColumnFiltersParam)
-    @IsObject()
+    @ColumnFiltersParam()
     filters?: ColumnFilters;
 }
 

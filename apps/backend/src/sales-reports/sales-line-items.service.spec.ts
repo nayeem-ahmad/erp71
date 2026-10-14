@@ -68,6 +68,20 @@ describe('salesLineFilter', () => {
         ]);
         expect(salesLineFilter(TENANT, { search: '   ' }, TZ).line).toEqual({});
     });
+
+    it('puts the table column filters on the line, so the totals and invoice count narrow with the rows', () => {
+        const { line, where } = salesLineFilter(
+            TENANT,
+            { filters: { customer: 'karim', unitPrice: '45', amount: '90' } },
+            TZ,
+        );
+
+        expect(line.AND).toEqual([
+            { sale: { customer: { name: { contains: 'karim', mode: 'insensitive' } } } },
+            { price_at_sale: 45 },
+        ]);
+        expect(where.AND).toEqual(line.AND);
+    });
 });
 
 describe('SalesLineItemsService', () => {

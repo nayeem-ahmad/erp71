@@ -22,6 +22,7 @@ import {
 } from 'class-validator';
 import { BOARD_BACKGROUND_COLORS, type BoardBackgroundColor } from '@erp71/shared-types';
 import { PROJECT_CODE_PATTERN } from './url-keys/project-code';
+import { type ColumnFilters, ColumnFiltersParam } from '../common/column-filter.util';
 
 export enum ProjectStatusDto {
     DRAFT = 'DRAFT',
@@ -115,6 +116,10 @@ export class ListProjectsDto {
 
     @IsOptional() @IsUUID()
     customerId?: string;
+
+    /** The table's advanced column filters — see PROJECT_FILTERABLE. */
+    @ColumnFiltersParam()
+    filters?: ColumnFilters;
 }
 
 export class CreateProjectDto {
@@ -460,6 +465,10 @@ export class ListTasksDto {
 
     @IsOptional() @IsUUID()
     labelId?: string;
+
+    /** The table's advanced column filters — see TASK_FILTERABLE. */
+    @ColumnFiltersParam()
+    filters?: ColumnFilters;
 
     @IsOptional() @Type(() => Number) @IsInt() @Min(1)
     page?: number;

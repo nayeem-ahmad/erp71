@@ -100,3 +100,56 @@ describe('useServerList response', () => {
         expect(result.current.error).toBeInstanceOf(Error);
     });
 });
+
+/**
+ * A table's advanced filters used to narrow only the page on screen, splitting
+ * a filter's matches across pages. Opted in, they go to the server instead.
+ */
+describe('useServerList column filters', () => {
+    const page = (n: number) => ({ items: [{ id: String(n) }], total: 120, page: n, limit: 20, pages: 6 });
+
+    it('leaves the filters to the table unless the list opts in', async () => {
+        const fetch = jest.fn(async ({ page: n }: { page: number }) => page(n));
+        const { result } = renderHook(() => useServerList({ fetch }));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        expect(result.current.serverPagination.onColumnFiltersChange).toBeUndefined();
+        expect(fetch.mock.calls[0][0]).not.toHaveProperty('filters');
+    });
+
+    it('sends the typed filters from page 1 once typing stops, and exports with them', async () => {
+        const fetch = jest.fn(async ({ page: n }: { page: number }) => page(n));
+        const { result } = renderHook(() => useServerList({ fetch, columnFilters: true }));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => result.current.serverPagination.onPageChange(4));
+        await waitFor(() => expect(fetch).toHaveBeenLastCalledWith(expect.objectContaining({ page: 4 })));
+
+        act(() => result.current.serverPagination.onColumnFiltersChange!([{ id: 'name', value: 'G' }]));
+        act(() => result.current.serverPagination.onColumnFiltersChange!([{ id: 'name', value: 'Gold ' }]));
+        // The boxes follow every keystroke; the request waits for the typing to stop.
+        expect(result.current.serverPagination.columnFilters).toEqual([{ id: 'name', value: 'Gold ' }]);
+
+        await waitFor(() =>
+            expect(fetch).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, filters: { name: 'Gold' } })),
+        );
+        // No request went out with a half-typed value.
+        const sent = fetch.mock.calls.map(([p]) => (p as any).filters).filter(Boolean);
+        expect(sent.every((f) => f.name === 'Gold')).toBe(true);
+
+        await result.current.serverPagination.fetchAllRows!();
+        expect(fetch).toHaveBeenLastCalledWith(expect.objectContaining({ filters: { name: 'Gold' } }));
+    });
+
+    it('drops the param again when the boxes are cleared', async () => {
+        const fetch = jest.fn(async ({ page: n }: { page: number }) => page(n));
+        const { result } = renderHook(() => useServerList({ fetch, columnFilters: true }));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => result.current.serverPagination.onColumnFiltersChange!([{ id: 'name', value: 'Gold' }]));
+        await waitFor(() => expect(fetch).toHaveBeenLastCalledWith(expect.objectContaining({ filters: { name: 'Gold' } })));
+        act(() => result.current.serverPagination.onColumnFiltersChange!([{ id: 'name', value: '  ' }]));
+
+        await waitFor(() => expect(fetch.mock.calls.at(-1)![0]).not.toHaveProperty('filters'));
+    });
+});

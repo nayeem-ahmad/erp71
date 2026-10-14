@@ -1097,6 +1097,21 @@ describe('InventoryService', () => {
             );
         });
 
+        it('should narrow by the table column filters before paging, count included', async () => {
+            db.inventoryMovement.findMany.mockResolvedValue([]);
+            db.inventoryMovement.count.mockResolvedValue(0);
+
+            await service.getLedger(tenantId, { filters: { warehouse: 'main', quantity_delta: '-5', reference: 'SALE' } } as any);
+
+            const where = db.inventoryMovement.findMany.mock.calls[0][0].where;
+            expect(where.AND).toEqual([
+                { warehouse: { name: { contains: 'main', mode: 'insensitive' } } },
+                { quantity_delta: -5 },
+                { OR: [{ reference_type: { contains: 'SALE', mode: 'insensitive' } }, { reference_id: { contains: 'SALE', mode: 'insensitive' } }] },
+            ]);
+            expect(db.inventoryMovement.count).toHaveBeenCalledWith({ where });
+        });
+
         it('should only honour allowlisted sort keys', async () => {
             db.inventoryMovement.findMany.mockResolvedValue([]);
 

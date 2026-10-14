@@ -1,6 +1,7 @@
 import { IsStoreIdOrAll } from './store-id-or-all.validator';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { type ColumnFilters, ColumnFiltersParam } from './column-filter.util';
 
 /**
  * The shared half of the two line-item searches — every sale line and every
@@ -76,6 +77,10 @@ export class LineItemSearchDto {
     @IsOptional()
     @IsIn(LINE_ITEM_SORT_DIRECTIONS)
     sortDir?: LineItemSortDirection;
+
+    /** The table's advanced column filters, JSON `{ "<column id>": "<text>" }`. */
+    @ColumnFiltersParam()
+    filters?: ColumnFilters;
 }
 
 export function lineItemPage(query: { page?: number; limit?: number }) {

@@ -1,4 +1,5 @@
 import { ArrayMinSize, IsArray, IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
+import { type ColumnFilters, ColumnFiltersParam } from '../common/column-filter.util';
 import { Type } from 'class-transformer';
 import { PaginationDto } from '../common/pagination.dto';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
@@ -218,6 +219,10 @@ export class ListSuppliersQueryDto extends PaginationDto {
     @IsOptional()
     @IsStoreIdOrAll()
     storeId?: string;
+
+    /** The table's advanced column filters — see SUPPLIER_FILTERABLE. */
+    @ColumnFiltersParam()
+    filters?: ColumnFilters;
 }
 
 export class ListSupplierCreditPaymentsQueryDto extends PaginationDto {

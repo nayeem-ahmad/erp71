@@ -52,6 +52,23 @@ describe('ImportShipmentsPage', () => {
         api.getImportShipments.mockResolvedValue(page([row()]));
     });
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        const { api } = require('@/lib/api');
+        render(<ImportShipmentsPage />);
+        await waitFor(() => expect(api.getImportShipments).toHaveBeenCalled());
+
+        fireEvent.click(await screen.findByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Supplier/), { target: { value: 'shenzhen' } });
+
+        await waitFor(() =>
+            expect(api.getImportShipments).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, filters: { supplier: 'shenzhen' } }),
+            ),
+        );
+    });
+
     it('asks the server for one page, not the whole history', async () => {
         const { api } = require('@/lib/api');
         render(<ImportShipmentsPage />);

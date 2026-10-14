@@ -94,6 +94,18 @@ describe('SalesLineItemsPage', () => {
         api().searchProductsByQuantity.mockResolvedValue([{ id: 'prod-1', name: 'Miniket Rice 5kg', sku: 'RICE-5' }]);
     });
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, so the totals cover the same lines', async () => {
+        render(<SalesLineItemsPage />);
+        await screen.findByText('Soybean Oil 1L');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Product/), { target: { value: 'rice' } });
+
+        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ page: 1, filters: { product: 'rice' } })));
+    });
+
     it('opens on the last 30 days, newest first', async () => {
         render(<SalesLineItemsPage />);
 

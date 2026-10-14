@@ -11,6 +11,12 @@ import {
 } from '../common/line-item-search';
 import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 import { GetPurchaseLineItemsDto, type PurchaseLineItemSort } from './purchase-reports.dto';
+import {
+    applyColumnFilters,
+    containsInsensitive,
+    type FilterableMap,
+    numberEquals,
+} from '../common/column-filter.util';
 
 /**
  * How each sortable column orders the lines, before `lineOrder` appends the
@@ -42,6 +48,22 @@ function lineOrder(query: GetPurchaseLineItemsDto): Prisma.PurchaseItemOrderByWi
  * and what a line of it has to be. The bill count asks for purchases with a
  * matching line and needs the purchase's own tenant scope up front.
  */
+/**
+ * Columns of the line-items table that take an advanced filter, by the table's
+ * column id. Returned is worked out per line, so it takes none.
+ */
+const PURCHASE_LINE_FILTERABLE: FilterableMap<Prisma.PurchaseItemWhereInput> = {
+    bill: (v) => ({
+        purchase: { OR: [{ purchase_number: containsInsensitive(v) }, { reference_number: containsInsensitive(v) }] },
+    }),
+    supplier: (v) => ({ purchase: { supplier: { name: containsInsensitive(v) } } }),
+    branch: (v) => ({ purchase: { store: { name: containsInsensitive(v) } } }),
+    product: (v) => ({ product: { OR: [{ name: containsInsensitive(v) }, { sku: containsInsensitive(v) }] } }),
+    quantity: numberEquals('quantity'),
+    unitCost: numberEquals('unit_cost'),
+    amount: numberEquals('line_total'),
+};
+
 export function purchaseLineFilter(tenantId: string, query: GetPurchaseLineItemsDto, timezone: string) {
     const createdAt = zonedDayRange(query.from, query.to, timezone);
     const search = searchTerm(query.search);
@@ -57,7 +79,7 @@ export function purchaseLineFilter(tenantId: string, query: GetPurchaseLineItems
         ...(createdAt ? { created_at: createdAt } : {}),
     };
 
-    const line: Prisma.PurchaseItemWhereInput = {
+    const searchLine: Prisma.PurchaseItemWhereInput = {
         ...(query.productId ? { product_id: query.productId } : {}),
         ...(search
             ? {
@@ -74,6 +96,8 @@ export function purchaseLineFilter(tenantId: string, query: GetPurchaseLineItems
               }
             : {}),
     };
+    // On the line half, so the totals and the bill count narrow with the rows.
+    const line = applyColumnFilters(searchLine, query.filters, PURCHASE_LINE_FILTERABLE);
 
     return { purchase, line, where: { ...line, purchase } satisfies Prisma.PurchaseItemWhereInput };
 }

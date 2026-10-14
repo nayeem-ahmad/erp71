@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { Injectable, BadRequestException, ConflictException, HttpException, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
@@ -31,6 +32,13 @@ import { loadPreparerNames, preparerOf } from './sale-preparer.util';
 import { checkedSalesRepId, SALES_REP_SELECT, salesRepForSale } from '../customers/sales-rep.util';
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import {
+    applyColumnFilters,
+    type ColumnFilters,
+    containsInsensitive,
+    type FilterableMap,
+    numberEquals,
+} from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import { zonedDayRange } from '../common/tenant-time.util';
 import { EmailService } from '../email/email.service';
@@ -134,6 +142,16 @@ const SALE_SORTABLE: SortableMap = {
     amount_paid: (dir) => ({ amount_paid: dir }),
     status: (dir) => ({ status: dir }),
     customer: (dir) => ({ customer: { name: dir } }),
+};
+
+/** Columns of the sales list that take an advanced filter, by the table's column id. */
+const SALE_FILTERABLE: FilterableMap<Prisma.SaleWhereInput> = {
+    serial_number: (v) => ({ serial_number: containsInsensitive(v) }),
+    customer: (v) => ({ customer: { name: containsInsensitive(v) } }),
+    total_amount: numberEquals('total_amount'),
+    amount_paid: numberEquals('amount_paid'),
+    status: (v) => ({ status: containsInsensitive(v) }),
+    payments: (v) => ({ payments: { some: { payment_method: containsInsensitive(v) } } }),
 };
 
 @Injectable()
@@ -1267,6 +1285,8 @@ export class SalesService {
             storeId?: string;
             /** IANA zone the calendar-day bounds above are measured in. */
             timezone: string;
+            /** The table's advanced column filters — see SALE_FILTERABLE. */
+            filters?: ColumnFilters;
         },
     ): Promise<PaginatedResult<any>> {
         const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
@@ -1279,7 +1299,7 @@ export class SalesService {
 
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
         const saleDate = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
-        const where: any = {
+        const baseWhere: any = {
             tenant_id: tenantId,
             ...(opts?.storeId ? { store_id: opts.storeId } : {}),
             ...(created ? { created_at: created } : {}),
@@ -1304,6 +1324,7 @@ export class SalesService {
                   }
                 : {}),
         };
+        const where = applyColumnFilters(baseWhere, opts?.filters, SALE_FILTERABLE);
 
         const [sales, total] = await Promise.all([
             this.db.sale.findMany({

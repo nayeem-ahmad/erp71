@@ -54,6 +54,7 @@ export default function InventoryLedgerPage() {
         }),
         deps: [warehouseId, movementType, branch.apiStoreId],
         enabled: branch.ready,
+        columnFilters: true,
     });
     useBranchForbiddenReset(ledgerError, branch, t.dashboardLayout.branchFilterForbidden);
 
@@ -80,6 +81,8 @@ export default function InventoryLedgerPage() {
         () => [
             columnHelper.accessor('created_at', {
                 header: t.inventoryLedger.columns.timestamp,
+                // A timestamp: no typed text the server could match it against.
+                enableColumnFilter: false,
                 cell: (info) => formatDateTime(info.getValue()),
                 size: 170,
             }),

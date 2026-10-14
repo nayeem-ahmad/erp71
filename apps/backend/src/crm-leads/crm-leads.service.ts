@@ -39,7 +39,15 @@ import {
     leadIdentityPatch,
 } from '@erp71/shared-types';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
-import { ColumnFilters, escapeLikePattern, FilterableMap, resolveColumnFilters } from '../common/column-filter.util';
+import {
+    codesContaining,
+    ColumnFilters,
+    containsInsensitive as containsText,
+    escapeLikePattern,
+    FilterableMap,
+    NO_MATCH,
+    resolveColumnFilters,
+} from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import { parseTenantDateTime, zonedTodayWindow } from '../common/tenant-time.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
@@ -101,12 +109,6 @@ const LEAD_SORTABLE: SortableMap = {
 };
 const LEAD_DEFAULT_ORDER = [{ next_step_date: 'asc' as const }, { updated_at: 'desc' as const }];
 
-const containsText = (value: string) => ({ contains: escapeLikePattern(value), mode: 'insensitive' as const });
-
-/** Enum values whose code contains the typed text, e.g. "high" → HIGH. */
-const codesContaining = <T extends string>(codes: T[], value: string): T[] =>
-    codes.filter((code) => code.toLowerCase().includes(value.toLowerCase()));
-
 /**
  * The spellings a custom-field value is tried in. Prisma's JSON path filter has
  * no case-insensitive mode, so "a" is also tried as "A", and "old dhaka" as
@@ -154,7 +156,7 @@ const LEAD_FILTERABLE: FilterableMap<Prisma.LeadWhereInput> = {
     priority: (v) => ({ priority: { in: codesContaining(Object.values(LeadPriority), v) } }),
     assignee: (v) => ({ assignee: { name: containsText(v) } }),
     // A number, so an exact match; text that is not one matches no lead.
-    score: (v) => (/^\d+$/.test(v) ? { score: Number(v) } : { id: { in: [] } }),
+    score: (v) => (/^\d+$/.test(v) ? { score: Number(v) } : NO_MATCH),
     ...Object.fromEntries(CUSTOM_FIELD_SLOTS.map((slot) => [`cf_${slot}`, customFieldContains(slot)])),
 };
 

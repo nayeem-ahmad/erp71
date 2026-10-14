@@ -38,6 +38,18 @@ beforeEach(() => {
 });
 
 describe('Projects page — remembered filters', () => {
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        render(<ProjectsPage />);
+        await screen.findByText('Shop fit-out');
+
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Name/), { target: { value: 'shop' } });
+
+        await waitFor(() => expect(lastCall()).toEqual(expect.objectContaining({ page: 1, filters: { name: 'shop' } })));
+    });
+
     it('comes back to the status the last visit left set', async () => {
         const first = render(<ProjectsPage />);
         await screen.findByText('Shop fit-out');

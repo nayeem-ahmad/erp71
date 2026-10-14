@@ -1463,6 +1463,25 @@ describe('SalesService', () => {
       );
     });
 
+    it('should narrow by the table column filters before paging, count included', async () => {
+      db.sale.findMany.mockResolvedValue([]);
+      db.sale.count.mockResolvedValue(0);
+      db.voucher.findMany.mockResolvedValue([]);
+
+      await service.findAll('tenant-1', {
+        timezone: 'Asia/Dhaka',
+        filters: { customer: 'karim', total_amount: '500', payments: 'bkash', item_count: '3' },
+      });
+
+      const where = db.sale.findMany.mock.calls[0][0].where;
+      expect(where.AND).toEqual([
+        { customer: { name: { contains: 'karim', mode: 'insensitive' } } },
+        { total_amount: 500 },
+        { payments: { some: { payment_method: { contains: 'bkash', mode: 'insensitive' } } } },
+      ]);
+      expect(db.sale.count).toHaveBeenCalledWith({ where });
+    });
+
     it('should search serial, reference, status and customer name', async () => {
       db.sale.findMany.mockResolvedValue([]);
       db.sale.count.mockResolvedValue(0);

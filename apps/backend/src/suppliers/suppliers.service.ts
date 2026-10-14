@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
@@ -7,6 +8,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { applyColumnFilters, type ColumnFilters, containsInsensitive, type FilterableMap } from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import {
     AllocateSupplierPaymentDto,
@@ -36,6 +38,16 @@ import { codeForNewRecord, nextSeriesCode } from '../common/code-series.util';
 
 /** The numbered series a typed payment serial may fall in (payments, payouts). */
 const SERIAL_SERIES = Object.values(SUPPLIER_PAYMENT_PREFIXES);
+
+/** Columns of the suppliers table that take an advanced filter, by the table's column id. */
+const SUPPLIER_FILTERABLE: FilterableMap<Prisma.SupplierWhereInput> = {
+    supplier_code: (v) => ({ supplier_code: containsInsensitive(v) }),
+    name: (v) => ({ name: containsInsensitive(v) }),
+    phone: (v) => ({ phone: containsInsensitive(v) }),
+    branch: (v) => ({ store: { name: containsInsensitive(v) } }),
+    email: (v) => ({ email: containsInsensitive(v) }),
+    address: (v) => ({ address: containsInsensitive(v) }),
+};
 
 const SUPPLIER_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -156,7 +168,7 @@ export class SuppliersService {
         tenantId: string,
         page = 1,
         limit = 100,
-        opts?: { search?: string; sortBy?: string; sortDir?: string; scope?: SupplierScope },
+        opts?: { search?: string; sortBy?: string; sortDir?: string; scope?: SupplierScope; filters?: ColumnFilters },
     ): Promise<PaginatedResult<unknown>> {
         const where: any = { tenant_id: tenantId, deleted_at: null, ...supplierScopeWhere(opts?.scope ?? null) };
         if (opts?.search) {
@@ -172,7 +184,7 @@ export class SuppliersService {
         return paginatedFindMany({
             findMany: (args) => this.db.supplier.findMany(args as any),
             count: (args) => this.db.supplier.count(args as any),
-            where,
+            where: applyColumnFilters(where, opts?.filters, SUPPLIER_FILTERABLE),
             orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, SUPPLIER_SORTABLE, SUPPLIER_DEFAULT_ORDER),
             page,
             limit,
