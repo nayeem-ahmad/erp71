@@ -79,6 +79,8 @@ export default function SalesPage() {
     // bypasses the guard server-side and may hold no grant rows at all.
     const { permissions, role } = useTenantPlanFeatures();
     const canCancel = isOwner(role) || hasPermission(permissions, 'CANCEL_ENTRY');
+    // Return and exchange share the grant, as on the sale's own page.
+    const canCreateReturn = isOwner(role) || hasPermission(permissions, 'CREATE_RETURN');
 
     // A list row carries no line items, so each document is printed from a
     // freshly fetched sale rather than from the row — an invoice built off the
@@ -348,6 +350,10 @@ export default function SalesPage() {
                                 label={t.sales.printMenu.moreActions}
                                 paperSize={paperSize}
                                 onPrintReceipt={(size) => void printReceipt(sale.id, size)}
+                                // A row carries no return history, so a fully
+                                // returned sale still shows these; the entry
+                                // screen says nothing is left to return.
+                                canReturn={canCreateReturn && !isCancelled && sale.status !== 'DRAFT'}
                                 onCancel={
                                     canCancel && !isCancelled
                                         ? () => setCancelTarget(sale)
@@ -363,7 +369,7 @@ export default function SalesPage() {
                 size: 200,
             }),
         ],
-        [t, locale, handleDelete, deletingId, canCancel, paperSize, busyId, printInvoice, printChallan, printReceipt],
+        [t, locale, handleDelete, deletingId, canCancel, canCreateReturn, paperSize, busyId, printInvoice, printChallan, printReceipt],
     );
 
     // Tick the rows, print them as one job — the day's invoices for the file,

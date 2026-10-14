@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { Suspense, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { routes } from '@/lib/routes';
@@ -27,8 +27,11 @@ function returnableQty(saleItem: any): number {
     return openSaleLineQty(saleItem);
 }
 
-export default function NewSalesReturnPage() {
+function NewSalesReturnPageContent() {
     const router = useRouter();
+    // Set when the return is started from a sale (the sales list's row menu):
+    // that sale is loaded straight away instead of asking for its serial.
+    const saleIdParam = useSearchParams().get('saleId');
     const {
         items,
         description,
@@ -76,6 +79,65 @@ export default function NewSalesReturnPage() {
         };
     }, [items]);
 
+    /** Loads a fetched sale's still-returnable lines into the cart. */
+    const acceptSale = (fullSale: any) => {
+        const lines: LineItem[] = (fullSale.items ?? [])
+            .map((saleItem: any) => {
+                const max = returnableQty(saleItem);
+                return {
+                    // Keyed by sale-item id, not product id: one sale can
+                    // carry the same product on two lines, and the cart
+                    // identifies rows by `productId`.
+                    productId: saleItem.id,
+                    sourceLineId: saleItem.id,
+                    name: saleItem.product?.name || 'Item',
+                    price: Number(saleItem.price_at_sale),
+                    quantity: max,
+                    maxQuantity: max,
+                    discount: 0,
+                    warehouseId: saleItem.warehouse_id ?? undefined,
+                };
+            })
+            .filter((line: LineItem) => (line.maxQuantity ?? 0) > 0);
+
+        if (lines.length === 0) {
+            toast.error(`Sale ${fullSale.serial_number} has already been fully returned`);
+            return;
+        }
+
+        setSale(fullSale);
+        setSerialNumber(fullSale.serial_number ?? '');
+        if (fullSale.warehouse_id) setWarehouseId(fullSale.warehouse_id);
+        // Shown rather than hidden behind the switch when the sale really
+        // was split: a warehouse steering a line has to be on the line.
+        if (lines.some((line) => line.warehouseId)) setPerLineWarehouse(true);
+        // loadCart resets the whole cart, so carry over any reason already typed.
+        loadCart({ items: lines, description });
+    };
+
+    // The sale named in the URL, loaded once on arrival.
+    useEffect(() => {
+        if (!saleIdParam) return;
+        let cancelled = false;
+        setSearching(true);
+        api.getSale(saleIdParam)
+            .then((fullSale) => {
+                if (!cancelled) acceptSale(fullSale);
+            })
+            .catch((error: any) => {
+                if (cancelled) return;
+                console.error('Sale lookup error:', error);
+                toast.error(error?.message || 'Failed to look up the sale');
+            })
+            .finally(() => {
+                if (!cancelled) setSearching(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [saleIdParam]);
+
     const findSale = async () => {
         const serial = serialNumber.trim();
         if (!serial) return;
@@ -94,38 +156,7 @@ export default function NewSalesReturnPage() {
 
             // The list payload has no per-item return history; the detail does,
             // and without it the returnable quantities would be wrong.
-            const fullSale = await api.getSale(found.id);
-            const lines: LineItem[] = (fullSale.items ?? [])
-                .map((saleItem: any) => {
-                    const max = returnableQty(saleItem);
-                    return {
-                        // Keyed by sale-item id, not product id: one sale can
-                        // carry the same product on two lines, and the cart
-                        // identifies rows by `productId`.
-                        productId: saleItem.id,
-                        sourceLineId: saleItem.id,
-                        name: saleItem.product?.name || 'Item',
-                        price: Number(saleItem.price_at_sale),
-                        quantity: max,
-                        maxQuantity: max,
-                        discount: 0,
-                        warehouseId: saleItem.warehouse_id ?? undefined,
-                    };
-                })
-                .filter((line: LineItem) => (line.maxQuantity ?? 0) > 0);
-
-            if (lines.length === 0) {
-                toast.error(`Sale ${serial} has already been fully returned`);
-                return;
-            }
-
-            setSale(fullSale);
-            if (fullSale.warehouse_id) setWarehouseId(fullSale.warehouse_id);
-            // Shown rather than hidden behind the switch when the sale really
-            // was split: a warehouse steering a line has to be on the line.
-            if (lines.some((line) => line.warehouseId)) setPerLineWarehouse(true);
-            // loadCart resets the whole cart, so carry over any reason already typed.
-            loadCart({ items: lines, description });
+            acceptSale(await api.getSale(found.id));
         } catch (error: any) {
             console.error('Sale lookup error:', error);
             toast.error(error.message || 'Failed to look up the sale');
@@ -140,6 +171,8 @@ export default function NewSalesReturnPage() {
         setWarehouseId(defaultWarehouseId);
         setPerLineWarehouse(false);
         clearCart();
+        // Drop the sale from the URL too, or a reload would bring it back.
+        if (saleIdParam) router.replace(routes.sales.returnNew);
     };
 
     const handleVoiceReturn = (result: VoiceEntryResult) => {
@@ -335,5 +368,13 @@ export default function NewSalesReturnPage() {
                 </>
             }
         />
+    );
+}
+
+export default function NewSalesReturnPage() {
+    return (
+        <Suspense>
+            <NewSalesReturnPageContent />
+        </Suspense>
     );
 }

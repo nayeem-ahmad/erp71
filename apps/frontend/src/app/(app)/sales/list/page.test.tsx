@@ -602,4 +602,60 @@ describe('SalesListPage — Sales Transaction List', () => {
             expect(screen.queryByRole('link', { name: /^edit$/i })).toBeNull();
         });
     });
+
+    describe('returning or exchanging a sale', () => {
+        /** Opens the first row's kebab once the grants from /auth/me have landed. */
+        const openFirstRowMenu = async () => {
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            });
+            fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
+        };
+
+        const withSales = (items: typeof mockSales) => {
+            const { api } = require('@/lib/api');
+            api.getSalesList.mockResolvedValue({ items, total: items.length, page: 1, limit: 20, pages: 1 });
+        };
+
+        it('starts a return or an exchange with the row\'s sale already chosen', async () => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({
+                tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['CREATE_RETURN'] }],
+            });
+
+            renderWithQueryClient(<SalesListPage />);
+            await openFirstRowMenu();
+
+            expect(await screen.findByRole('menuitem', { name: 'Sales Return' }))
+                .toHaveAttribute('href', '/sales/returns/new?saleId=sale-1');
+            expect(screen.getByRole('menuitem', { name: 'Exchange' }))
+                .toHaveAttribute('href', '/sales/exchanges/new?saleId=sale-1');
+        });
+
+        it('hides both from someone without CREATE_RETURN', async () => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({
+                tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['CANCEL_ENTRY'] }],
+            });
+
+            renderWithQueryClient(<SalesListPage />);
+            await openFirstRowMenu();
+
+            expect(screen.queryByRole('menuitem', { name: 'Sales Return' })).toBeNull();
+            expect(screen.queryByRole('menuitem', { name: 'Exchange' })).toBeNull();
+        });
+
+        it.each(['DRAFT', 'CANCELLED'])('offers neither on a %s sale', async (status) => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({ tenants: [{ id: 'tenant-1', role: 'OWNER', permissions: [] }] });
+            withSales([{ ...mockSales[0], status }]);
+
+            renderWithQueryClient(<SalesListPage />);
+            await openFirstRowMenu();
+
+            expect(screen.queryByRole('menuitem', { name: 'Sales Return' })).toBeNull();
+            expect(screen.queryByRole('menuitem', { name: 'Exchange' })).toBeNull();
+        });
+    });
 });
