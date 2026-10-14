@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import DocumentEntryLayout from '@/components/document-entry/DocumentEntryLayout';
-import DocumentMetaBar from '@/components/document-entry/DocumentMetaBar';
+import DocumentMetaBar, { MetaField, metaFieldInputClass } from '@/components/document-entry/DocumentMetaBar';
+import { formatDateTime } from '@/lib/format';
 import WarehouseMetaFields from '@/components/document-entry/WarehouseMetaFields';
 import LineItemsTable from '@/components/document-entry/LineItemsTable';
 import ProductSearch from '@/components/document-entry/ProductSearch';
@@ -24,8 +25,16 @@ interface PurchaseEntryLayoutProps {
     readOnly?: boolean;
     /** Assigned number of a recorded purchase; a new one reads "Auto". */
     purchaseNumber?: string;
-    /** When the purchase was recorded. Shown, never edited: the API keeps it. */
-    purchaseDate?: string;
+    /**
+     * When the purchase happened. A `datetime-local` value while
+     * `transactionDateEditable` is set; an ISO instant on a saved bill.
+     */
+    transactionDate?: string;
+    setTransactionDate?: (value: string) => void;
+    /** Record Purchase only. A saved bill shows the time and does not edit it. */
+    transactionDateEditable?: boolean;
+    /** When the row was written. Empty on a new bill, which reads "Auto". */
+    createdAt?: string | null;
     currentUser?: any;
     /**
      * What the supplier was owed apart from this bill. A recorded bill is
@@ -54,7 +63,10 @@ export default function PurchaseEntryLayout({
     banner,
     readOnly = false,
     purchaseNumber,
-    purchaseDate,
+    transactionDate = '',
+    setTransactionDate,
+    transactionDateEditable = false,
+    createdAt,
     currentUser = null,
     previousPayable,
     onVoiceResult,
@@ -107,12 +119,29 @@ export default function PurchaseEntryLayout({
                     serialNumber={purchaseNumber}
                     currentUser={currentUser}
                     showRefNumber={false}
-                    showDate={Boolean(purchaseDate)}
-                    documentDate={purchaseDate}
-                    // The date is the API's to keep; only the warehouse fields
-                    // below follow the screen's mode.
+                    showDate={false}
                     readOnly
                 >
+                    <MetaField label={t.purchases.columns.transactionDate}>
+                        {transactionDateEditable && setTransactionDate ? (
+                            <input
+                                type="datetime-local"
+                                aria-label={t.purchases.columns.transactionDate}
+                                value={transactionDate}
+                                onChange={(e) => setTransactionDate(e.target.value)}
+                                className={metaFieldInputClass}
+                            />
+                        ) : (
+                            <output className="font-medium text-gray-700">
+                                {transactionDate ? formatDateTime(transactionDate) : '—'}
+                            </output>
+                        )}
+                    </MetaField>
+                    <MetaField label={t.common.createdAt}>
+                        <output className="font-medium text-gray-700">
+                            {createdAt ? formatDateTime(createdAt) : <span className="italic text-gray-400">Auto</span>}
+                        </output>
+                    </MetaField>
                     <WarehouseMetaFields
                         warehouses={warehouses}
                         value={warehouseId}

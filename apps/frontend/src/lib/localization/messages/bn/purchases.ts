@@ -129,6 +129,7 @@ export const purchasesMessages = {
             searchPlaceholder: "ক্রয় #, সরবরাহকারী বা পণ্য দিয়ে অনুসন্ধান...",
             columns: {
                 purchaseNumber: "ক্রয় #",
+                transactionDate: "লেনদেনের তারিখ",
                 supplier: "সরবরাহকারী",
                 items: "আইটেম",
                 products: "পণ্য",

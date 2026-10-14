@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Copy, Download, Printer } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
@@ -18,6 +18,7 @@ interface InvoiceData {
         purchase_number: string;
         reference_number: string | null;
         created_at: string;
+        purchase_date?: string | null;
         notes: string | null;
         subtotal_amount: string;
         tax_amount: string;
@@ -181,7 +182,7 @@ export default function PurchaseInvoicePage() {
                                     {t.purchases.invoice.purchaseReceipt}
                                 </div>
                                 <div className="text-white text-2xl font-black">{purchase.purchase_number}</div>
-                                <div className="text-white/80 text-sm mt-1">{formatDateTime(purchase.created_at, locale)}</div>
+                                <div className="text-white/80 text-sm mt-1">{formatDateTime(purchase.purchase_date || purchase.created_at, locale)}</div>
                             </div>
                         </div>
                     </div>
@@ -237,7 +238,7 @@ export default function PurchaseInvoicePage() {
                             </div>
                             <div>
                                 <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">{t.common.date}</div>
-                                <div className="font-bold text-gray-800 mt-0.5">{formatDate(purchase.created_at, locale)}</div>
+                                <div className="font-bold text-gray-800 mt-0.5">{formatDateTime(purchase.purchase_date || purchase.created_at, locale)}</div>
                             </div>
                             <div>
                                 <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">{t.common.branch}</div>

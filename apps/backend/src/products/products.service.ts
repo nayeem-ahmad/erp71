@@ -393,9 +393,9 @@ export class ProductsService {
         const base = { product_id: productId, purchase: { tenant_id: tenantId, ...ACTIVE_PURCHASE } };
         const query = {
             include: {
-                purchase: { select: { id: true, purchase_number: true, reference_number: true, created_at: true, supplier_id: true, supplier: { select: { name: true } } } },
+                purchase: { select: { id: true, purchase_number: true, reference_number: true, purchase_date: true, created_at: true, supplier_id: true, supplier: { select: { name: true } } } },
             },
-            orderBy: { purchase: { created_at: 'desc' as const } },
+            orderBy: { purchase: { purchase_date: 'desc' as const } },
             take,
         };
 

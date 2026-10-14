@@ -3119,10 +3119,12 @@ export const api = {
     updatePurchaseQuotationStatus: (id: string, status: string) => fetchWithAuth(`/purchase-quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     convertPurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}/convert`, { method: 'POST' }),
     deletePurchaseQuotation: (id: string) => fetchWithAuth(`/purchase-quotations/${id}`, { method: 'DELETE' }),
-    getPurchases: (params?: BranchListParams) => {
+    getPurchases: (params?: BranchListParams & { dateFrom?: string; dateTo?: string }) => {
         const query = new URLSearchParams();
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+        if (params?.dateTo) query.set('dateTo', params.dateTo);
         if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/purchases${query.toString() ? `?${query.toString()}` : ''}`);
     },

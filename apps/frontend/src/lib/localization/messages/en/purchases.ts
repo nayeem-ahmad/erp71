@@ -129,6 +129,7 @@ export const purchasesMessages = {
         searchPlaceholder: 'Search by purchase #, supplier, or product...',
         columns: {
             purchaseNumber: 'Purchase #',
+            transactionDate: 'Transaction date',
             supplier: 'Supplier',
             items: 'Items',
             products: 'Products',

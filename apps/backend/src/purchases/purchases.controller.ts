@@ -6,9 +6,8 @@ import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
-import { SortableBranchListQueryDto } from '../common/branch-list-query.dto';
 import { BranchScopeService } from '../database/branch-scope.service';
-import { CreatePurchaseDto, UpdatePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, PurchaseListQueryDto, UpdatePurchaseDto } from './purchase.dto';
 import { PurchasesService } from './purchases.service';
 
 import { PURCHASE_READ, PURCHASE_WRITE } from '../auth/permission-sets';
@@ -36,13 +35,15 @@ export class PurchasesController {
     @Get()
     async findAll(
         @Tenant() tenant: TenantContext,
-        @Query() query: SortableBranchListQueryDto,
+        @Query() query: PurchaseListQueryDto,
     ) {
         const { sortBy, sortDir } = query;
         const storeId = await this.branchScope.resolveStoreId(tenant, query.storeId, { permissions: PURCHASE_READ });
         return this.purchasesService.findAll(tenant.tenantId, query.page, query.limit, { timezone: tenant.timezone,
             createdFrom: query.createdFrom,
             createdTo: query.createdTo,
+            dateFrom: query.dateFrom,
+            dateTo: query.dateTo,
             storeId,
             sortBy,
             sortDir,

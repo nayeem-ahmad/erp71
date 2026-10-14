@@ -304,6 +304,7 @@ export class DemoWriter {
                 payment_status: 'UNPAID',
                 notes: anomaly ? anomalyNote(anomaly) : undefined,
                 created_by: this.world.userId,
+                purchase_date: date,
                 created_at: date,
                 items: {
                     create: priced.map((l) => ({

@@ -27,13 +27,13 @@ const PURCHASE_LINE_SORTS: Record<
     PurchaseLineItemSort,
     (dir: LineItemSortDirection) => Prisma.PurchaseItemOrderByWithRelationInput[]
 > = {
-    date: (dir) => [{ purchase: { created_at: dir } }, { purchase: { purchase_number: dir } }],
+    date: (dir) => [{ purchase: { purchase_date: dir } }, { purchase: { purchase_number: dir } }],
     bill: (dir) => [{ purchase: { purchase_number: dir } }],
-    supplier: (dir) => [{ purchase: { supplier: { name: dir } } }, { purchase: { created_at: 'desc' } }],
-    product: (dir) => [{ product: { name: dir } }, { purchase: { created_at: 'desc' } }],
-    quantity: (dir) => [{ quantity: dir }, { purchase: { created_at: 'desc' } }],
-    unitCost: (dir) => [{ unit_cost: dir }, { purchase: { created_at: 'desc' } }],
-    amount: (dir) => [{ line_total: dir }, { purchase: { created_at: 'desc' } }],
+    supplier: (dir) => [{ purchase: { supplier: { name: dir } } }, { purchase: { purchase_date: 'desc' } }],
+    product: (dir) => [{ product: { name: dir } }, { purchase: { purchase_date: 'desc' } }],
+    quantity: (dir) => [{ quantity: dir }, { purchase: { purchase_date: 'desc' } }],
+    unitCost: (dir) => [{ unit_cost: dir }, { purchase: { purchase_date: 'desc' } }],
+    amount: (dir) => [{ line_total: dir }, { purchase: { purchase_date: 'desc' } }],
 };
 
 function lineOrder(query: GetPurchaseLineItemsDto): Prisma.PurchaseItemOrderByWithRelationInput[] {
@@ -65,7 +65,7 @@ const PURCHASE_LINE_FILTERABLE: FilterableMap<Prisma.PurchaseItemWhereInput> = {
 };
 
 export function purchaseLineFilter(tenantId: string, query: GetPurchaseLineItemsDto, timezone: string) {
-    const createdAt = zonedDayRange(query.from, query.to, timezone);
+    const transactionAt = zonedDayRange(query.from, query.to, timezone);
     const search = searchTerm(query.search);
 
     // A cancelled bill has had its stock, payable and ledger reversed, so its
@@ -76,7 +76,7 @@ export function purchaseLineFilter(tenantId: string, query: GetPurchaseLineItems
         ...ACTIVE_PURCHASE,
         ...(query.storeId ? { store_id: query.storeId } : {}),
         ...(query.supplierId ? { supplier_id: query.supplierId } : {}),
-        ...(createdAt ? { created_at: createdAt } : {}),
+        ...(transactionAt ? { purchase_date: transactionAt } : {}),
     };
 
     const searchLine: Prisma.PurchaseItemWhereInput = {
@@ -136,6 +136,7 @@ export class PurchaseLineItemsService {
                             id: true,
                             purchase_number: true,
                             reference_number: true,
+                            purchase_date: true,
                             created_at: true,
                             store: { select: { id: true, name: true } },
                             supplier: { select: { id: true, name: true, phone: true } },
@@ -176,7 +177,7 @@ export class PurchaseLineItemsService {
                 purchaseId: item.purchase.id,
                 purchaseNumber: item.purchase.purchase_number,
                 referenceNumber: item.purchase.reference_number,
-                date: item.purchase.created_at,
+                date: item.purchase.purchase_date ?? item.purchase.created_at,
                 store: item.purchase.store,
                 supplier: item.purchase.supplier,
                 product: item.product,

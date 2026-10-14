@@ -32,8 +32,8 @@ interface DocumentMetaBarProps {
     showRefNumber?: boolean;
     /**
      * Document date. Off where the API assigns it server-side and accepts no
-     * override (quotations, sales orders, returns, purchases) — an editable
-     * date there would imply a back-dating the save silently ignores.
+     * override (quotations, sales orders, returns). Purchases draw their own
+     * transaction date beside a created time the server keeps.
      */
     showDate?: boolean;
     /** Per-document extras (Valid Until, Delivery Date, source Sale #). */

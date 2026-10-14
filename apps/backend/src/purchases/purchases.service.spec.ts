@@ -215,6 +215,58 @@ describe('PurchasesService', () => {
         expect(result.id).toBe('purchase-1');
     });
 
+    it('stores a chosen transaction date apart from created_at, and dates stock and the voucher with it', async () => {
+        db.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
+        db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
+        tx.purchase.count.mockResolvedValue(0);
+        tx.purchase.create.mockResolvedValue({ id: 'purchase-1', purchase_number: 'PUR-00001', total_amount: 10 });
+        tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
+        tx.supplier.findFirst.mockResolvedValue({ due_balance: 0, store_id: 'store-1' });
+
+        const purchaseDate = '2026-03-02T03:30:00.000Z';
+        await service.create('tenant-1', 'user-1', {
+            storeId: 'store-1',
+            supplierId: 'sup-1',
+            items: [{ productId: 'prod-1', quantity: 1, unitCost: 10 }],
+            purchaseDate,
+        });
+
+        const created = tx.purchase.create.mock.calls[0][0].data;
+        expect(created.purchase_date).toEqual(new Date(purchaseDate));
+        expect(created).not.toHaveProperty('created_at');
+        expect(applyInventoryMovement).toHaveBeenCalledWith(
+            tx,
+            expect.objectContaining({ occurredAt: new Date(purchaseDate) }),
+        );
+        expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({ type: 'CREDIT_PURCHASE', created_at: new Date(purchaseDate) }),
+        });
+        expect(autoPostFromRules).toHaveBeenCalledWith(
+            expect.objectContaining({ eventType: 'purchase', date: new Date(purchaseDate) }),
+        );
+    });
+
+    it('leaves the transaction date to the database clock when none is sent', async () => {
+        db.store.findFirst.mockResolvedValue({ id: 'store-1', tenant_id: 'tenant-1' });
+        db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
+        tx.purchase.count.mockResolvedValue(0);
+        tx.purchase.create.mockResolvedValue({ id: 'purchase-1', purchase_number: 'PUR-00001', total_amount: 10 });
+        tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
+
+        const before = Date.now();
+        await service.create('tenant-1', 'user-1', {
+            storeId: 'store-1',
+            items: [{ productId: 'prod-1', quantity: 1, unitCost: 10 }],
+        });
+        const after = Date.now();
+
+        const created = tx.purchase.create.mock.calls[0][0].data;
+        expect(created.purchase_date).toBeInstanceOf(Date);
+        expect(created.purchase_date.getTime()).toBeGreaterThanOrEqual(before);
+        expect(created.purchase_date.getTime()).toBeLessThanOrEqual(after);
+        expect(created).not.toHaveProperty('created_at');
+    });
+
     it('creates a supplier inline when newSupplier payload is provided', async () => {
         db.store.findFirst.mockResolvedValue({ id: 'store-1' });
         db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
@@ -346,6 +398,35 @@ describe('PurchasesService', () => {
             expect(purchase.prepared_by).toBeNull();
             expect(db.user.findMany).not.toHaveBeenCalled();
         });
+    });
+
+    it('filters purchase_date by dateFrom/dateTo, alongside created_at', async () => {
+        db.purchase.findMany.mockResolvedValue([]);
+        db.purchase.count = jest.fn().mockResolvedValue(0);
+        db.voucher.findMany.mockResolvedValue([]);
+
+        await service.findAll('tenant-1', 1, 20, {
+            timezone: 'Asia/Dhaka',
+            createdFrom: '2026-08-19',
+            createdTo: '2026-08-19',
+            dateFrom: '2026-03-02T09:30',
+            dateTo: '2026-03-02T18:00',
+        });
+
+        expect(db.purchase.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    created_at: {
+                        gte: new Date('2026-08-18T18:00:00.000Z'),
+                        lte: new Date('2026-08-19T17:59:59.999Z'),
+                    },
+                    purchase_date: {
+                        gte: new Date('2026-03-02T03:30:00.000Z'),
+                        lte: new Date('2026-03-02T12:00:59.999Z'),
+                    },
+                }),
+            }),
+        );
     });
 
     it('filters created_at to the inclusive Dhaka day range', async () => {

@@ -129,6 +129,7 @@ export const purchasesMessages = {
         searchPlaceholder: "Nach Einkaufsnr., Lieferant oder Produkt suchen...",
         columns: {
             purchaseNumber: "Einkaufsnr.",
+            transactionDate: "Transaktionsdatum",
             supplier: "Lieferant",
             items: "Artikel",
             products: "Produkte",

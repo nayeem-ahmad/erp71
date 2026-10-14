@@ -441,6 +441,9 @@ describe('ImportsService', () => {
                     supplier_id: 'sup-1',
                 }),
             });
+            const written = tx.purchase.create.mock.calls[0][0].data;
+            expect(written.purchase_date).toEqual(written.created_at);
+            expect(written.purchase_date).toBeInstanceOf(Date);
         });
 
         it('bills the supplier only for their invoice, not for duty and freight', async () => {

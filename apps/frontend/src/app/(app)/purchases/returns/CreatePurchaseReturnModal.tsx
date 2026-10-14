@@ -35,6 +35,7 @@ interface PurchaseRecord {
     id: string;
     purchase_number: string;
     created_at: string;
+    purchase_date?: string | null;
     total_amount: string | number;
     store_id: string;
     warehouse_id?: string | null;
@@ -326,7 +327,7 @@ export default function CreatePurchaseReturnModal({
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-gray-500 mt-2">
-                                                        {formatDate(purchase.created_at, locale)} · {purchase.items.length} items
+                                                        {formatDate(purchase.purchase_date || purchase.created_at, locale)} · {purchase.items.length} items
                                                     </p>
                                                 </button>
                                             );
@@ -359,7 +360,7 @@ export default function CreatePurchaseReturnModal({
                                         <div>
                                             <span className="text-xs font-medium text-gray-500 block mb-1">Purchase Date</span>
                                             <span className="text-sm font-bold text-gray-700">
-                                                {formatDate(selectedPurchase.created_at, locale)}
+                                                {formatDate(selectedPurchase.purchase_date || selectedPurchase.created_at, locale)}
                                             </span>
                                         </div>
                                         <div>
