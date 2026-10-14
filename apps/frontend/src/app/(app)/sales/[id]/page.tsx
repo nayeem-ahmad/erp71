@@ -124,7 +124,8 @@ function SaleDetailPageContent() {
     // not persisted and must not be invented here. A sale entered with VAT
     // added on top is the exception: its before-VAT prices and its discount are
     // recovered exactly from the stored prices and rates, so it reopens the way
-    // it was typed and its VAT is worked out again when lines change.
+    // it was typed and its VAT is worked out again when lines change; anything
+    // billed above its lines (transport, labour) is the Adjustment there too.
     useEffect(() => {
         if (!sale) return;
         const onTop = enteredBeforeVat(sale);
@@ -167,10 +168,21 @@ function SaleDetailPageContent() {
             );
             const netLines = cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0);
             const discount = enteredDiscount(grossLines, netLines, total);
+            const recovered = { ...EMPTY_ADJUSTMENTS, discountMode: 'AMOUNT' as const, discountAmount: discount };
+            // A total above the lines was billed on top of them — transport,
+            // labour, a rounding up — not discounted. Which one is not stored,
+            // so it comes back as the Adjustment; dropping it would show, and
+            // re-save, a total without the transport the customer was charged.
+            const surplus = discount > 0
+                ? 0
+                : total - computeSaleTotals(
+                    cartItems,
+                    recovered,
+                    { defaultVatRate: taxPricing.defaultVatRate, pricesIncludeVat: false },
+                ).total;
             setAdjustments({
-                ...EMPTY_ADJUSTMENTS,
-                discountMode: 'AMOUNT',
-                discountAmount: discount,
+                ...recovered,
+                rounding: surplus > 0.005 ? Number(surplus.toFixed(2)) : 0,
             });
         } else {
             const subtotal = cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0);

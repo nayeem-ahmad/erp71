@@ -461,6 +461,75 @@ describe('SaleDetailPage — edit mode', () => {
         );
     });
 
+    it('adds transport typed during the edit to the total it shows and saves', async () => {
+        await renderPage();
+
+        fireEvent.change(screen.getByLabelText('Transport'), { target: { value: '150' } });
+
+        expect(screen.getAllByText('৳3150.00').length).toBeGreaterThan(0);
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        });
+        expect(getApi().updateSale).toHaveBeenCalledWith(
+            'test-sale-1',
+            expect.objectContaining({ totalAmount: 3150 }),
+        );
+    });
+
+    describe('a sale priced before VAT', () => {
+        // 2 × ৳1,000 before 15% VAT is ৳2,300 of VAT-inclusive lines.
+        const beforeVatSale = {
+            ...mockSale,
+            prices_include_vat: false,
+            total_amount: '2300',
+            amount_paid: '2300',
+            items: [{ ...mockSale.items[0], quantity: 2, price_at_sale: '1150', vat_rate: '15', sd_rate: '0' }],
+            payments: [{ payment_method: 'Cash', amount: '2300', created_at: '2026-01-15T12:01:00Z' }],
+        };
+
+        it('adds transport typed during the edit to the total it shows and saves', async () => {
+            getApi().getSale.mockResolvedValue(beforeVatSale);
+            await renderPage();
+
+            fireEvent.change(screen.getByLabelText('Transport'), { target: { value: '100' } });
+
+            expect(screen.getAllByText('৳2400.00').length).toBeGreaterThan(0);
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+            });
+            expect(getApi().updateSale).toHaveBeenCalledWith(
+                'test-sale-1',
+                expect.objectContaining({ totalAmount: 2400 }),
+            );
+        });
+
+        it('reopens with the transport it was saved with still in the total', async () => {
+            // Saved at ৳2,400: the lines plus ৳100 of transport.
+            getApi().getSale.mockResolvedValue({ ...beforeVatSale, total_amount: '2400' });
+            await renderPage();
+
+            expect(screen.getByLabelText('Adjustment')).toHaveValue(100);
+            expect(screen.getAllByText('৳2400.00').length).toBeGreaterThan(0);
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+            });
+            expect(getApi().updateSale).toHaveBeenCalledWith(
+                'test-sale-1',
+                expect.objectContaining({ totalAmount: 2400 }),
+            );
+        });
+
+        it('still reopens a discounted sale with its discount', async () => {
+            // ৳200 off before VAT is ৳230 off the VAT-inclusive lines.
+            getApi().getSale.mockResolvedValue({ ...beforeVatSale, total_amount: '2070' });
+            await renderPage();
+
+            expect(screen.getByLabelText('Discount amount')).toHaveValue(200);
+            expect(screen.getByLabelText('Adjustment')).toHaveValue(0);
+            expect(screen.getAllByText('৳2070.00').length).toBeGreaterThan(0);
+        });
+    });
+
     it('reloads a saved payment into its matching tenant method', async () => {
         // The sale stores the canonical "Mobile Wallet"; the tenant calls it bKash.
         getApi().getPaymentMethods.mockResolvedValue([
