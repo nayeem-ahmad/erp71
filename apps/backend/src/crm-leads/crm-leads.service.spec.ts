@@ -1399,6 +1399,99 @@ describe('CrmLeadsService', () => {
         });
     });
 
+    /**
+     * The table's advanced filters. They used to filter only the rows already on
+     * the page, so two leads matching "Grade = A" showed up one on page 4 and the
+     * other on page 5. Here they narrow the query itself, count included.
+     */
+    describe('findAll — column filters', () => {
+        beforeEach(() => {
+            db.lead.findMany.mockResolvedValue([]);
+            db.lead.count.mockResolvedValue(0);
+        });
+
+        const whereFor = async (filters: Record<string, string>, extra: Record<string, unknown> = {}) => {
+            await service.findAll('tenant-1', { filters, ...extra } as any);
+            return db.lead.findMany.mock.calls[0][0].where;
+        };
+
+        it('filters on a custom field before paginating, and counts the same rows', async () => {
+            const where = await whereFor({ cf_cf_2: 'A' });
+
+            expect(where.AND).toEqual([
+                {
+                    OR: [
+                        { custom_fields: { path: ['cf_2'], string_contains: 'A' } },
+                        { custom_fields: { path: ['cf_2'], string_contains: 'a' } },
+                    ],
+                },
+            ]);
+            expect(db.lead.count.mock.calls[0][0].where).toEqual(where);
+        });
+
+        it('tries a custom-field value in the casings it is likely stored in', async () => {
+            const where = await whereFor({ cf_cf_1: 'old dhaka' });
+
+            const variants = where.AND[0].OR.map((c: any) => c.custom_fields.string_contains);
+            expect(variants).toEqual(['old dhaka', 'OLD DHAKA', 'Old Dhaka']);
+        });
+
+        it('matches text columns as a case-insensitive contains, with wildcards taken literally', async () => {
+            const where = await whereFor({ name: 'karim', remarks: '50%_off' });
+
+            expect(where.AND).toEqual([
+                { name: { contains: 'karim', mode: 'insensitive' } },
+                { remarks: { contains: '50\\%\\_off', mode: 'insensitive' } },
+            ]);
+        });
+
+        it('matches category, source and owner by the name the table shows', async () => {
+            const where = await whereFor({ category: 'whole', source: 'walk', assignee: 'rifat' });
+
+            expect(where.AND).toEqual([
+                { categoryOption: { name: { contains: 'whole', mode: 'insensitive' } } },
+                { sourceOption: { name: { contains: 'walk', mode: 'insensitive' } } },
+                { assignee: { name: { contains: 'rifat', mode: 'insensitive' } } },
+            ]);
+        });
+
+        it('matches status by stage name, or by lifecycle for a lead with no stage yet', async () => {
+            const where = await whereFor({ status: 'new' });
+
+            expect(where.AND).toEqual([
+                {
+                    OR: [
+                        { statusOption: { name: { contains: 'new', mode: 'insensitive' } } },
+                        { status_id: null, status: { in: ['NEW'] } },
+                    ],
+                },
+            ]);
+        });
+
+        it('matches priority against its codes', async () => {
+            expect((await whereFor({ priority: 'high' })).AND).toEqual([{ priority: { in: ['HIGH'] } }]);
+        });
+
+        it('matches a score exactly, and nothing for text that is not a number', async () => {
+            expect((await whereFor({ score: '40' })).AND).toEqual([{ score: 40 }]);
+            db.lead.findMany.mockClear();
+            expect((await whereFor({ score: 'forty' })).AND).toEqual([{ id: { in: [] } }]);
+        });
+
+        it('ignores columns it cannot filter and blank values', async () => {
+            const where = await whereFor({ created_at: '2026', password: 'x', name: '  ' });
+
+            expect(where).not.toHaveProperty('AND');
+        });
+
+        it('keeps the other filters that also live in AND', async () => {
+            const where = await whereFor({ name: 'karim' }, { emailPresence: 'empty', staleDays: 14 });
+
+            expect(where.AND).toHaveLength(3);
+            expect(where.AND[2]).toEqual({ name: { contains: 'karim', mode: 'insensitive' } });
+        });
+    });
+
     describe('findAll sorting', () => {
         beforeEach(() => {
             db.lead.findMany.mockResolvedValue([]);

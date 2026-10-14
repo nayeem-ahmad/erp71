@@ -7,7 +7,7 @@ import {
 import { CustomFieldEntity, Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CustomersService } from '../customers/customers.service';
-import { CustomFieldsService } from '../custom-fields/custom-fields.service';
+import { CUSTOM_FIELD_SLOTS, CustomFieldsService } from '../custom-fields/custom-fields.service';
 import {
     BulkLeadActionDto,
     BulkLeadChangesDto,
@@ -39,6 +39,7 @@ import {
     leadIdentityPatch,
 } from '@erp71/shared-types';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import { ColumnFilters, escapeLikePattern, FilterableMap, resolveColumnFilters } from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import { parseTenantDateTime, zonedTodayWindow } from '../common/tenant-time.util';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
@@ -99,6 +100,63 @@ const LEAD_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
 };
 const LEAD_DEFAULT_ORDER = [{ next_step_date: 'asc' as const }, { updated_at: 'desc' as const }];
+
+const containsText = (value: string) => ({ contains: escapeLikePattern(value), mode: 'insensitive' as const });
+
+/** Enum values whose code contains the typed text, e.g. "high" → HIGH. */
+const codesContaining = <T extends string>(codes: T[], value: string): T[] =>
+    codes.filter((code) => code.toLowerCase().includes(value.toLowerCase()));
+
+/**
+ * The spellings a custom-field value is tried in. Prisma's JSON path filter has
+ * no case-insensitive mode, so "a" is also tried as "A", and "old dhaka" as
+ * "OLD DHAKA" and "Old Dhaka". Only a mixed-case value typed in some other
+ * casing ("mcdonald" for "McDonald") is missed.
+ */
+function caseVariants(value: string): string[] {
+    const lower = value.toLowerCase();
+    const titled = lower.replace(/(^|\s)(\S)/g, (_, space: string, ch: string) => space + ch.toUpperCase());
+    return [...new Set([value, lower, value.toUpperCase(), titled])];
+}
+
+const customFieldContains = (slot: string) => (value: string): Prisma.LeadWhereInput => ({
+    OR: caseVariants(value).map((variant) => ({
+        custom_fields: { path: [slot], string_contains: escapeLikePattern(variant) },
+    })),
+});
+
+/**
+ * Columns of the leads table that take an advanced filter, keyed by the column
+ * id the table sends. Each matches text the way the cell shows it: a contains,
+ * ignoring case. Custom-field columns are `cf_<slot>` (the table prefixes the
+ * slot key, which is itself `cf_N`).
+ */
+const LEAD_FILTERABLE: FilterableMap<Prisma.LeadWhereInput> = {
+    name: (v) => ({ name: containsText(v) }),
+    mobile: (v) => ({ mobile: containsText(v) }),
+    email: (v) => ({ email: containsText(v) }),
+    address: (v) => ({ address: containsText(v) }),
+    remarks: (v) => ({ remarks: containsText(v) }),
+    linkedin_url: (v) => ({ linkedin_url: containsText(v) }),
+    fb_url: (v) => ({ fb_url: containsText(v) }),
+    x_url: (v) => ({ x_url: containsText(v) }),
+    website_url: (v) => ({ website_url: containsText(v) }),
+    category: (v) => ({ categoryOption: { name: containsText(v) } }),
+    source: (v) => ({ sourceOption: { name: containsText(v) } }),
+    // The stage name, or the lifecycle for a lead not yet given a stage — the
+    // same fallback the list's status cell makes.
+    status: (v) => ({
+        OR: [
+            { statusOption: { name: containsText(v) } },
+            { status_id: null, status: { in: codesContaining(Object.values(LeadStatus), v) } },
+        ],
+    }),
+    priority: (v) => ({ priority: { in: codesContaining(Object.values(LeadPriority), v) } }),
+    assignee: (v) => ({ assignee: { name: containsText(v) } }),
+    // A number, so an exact match; text that is not one matches no lead.
+    score: (v) => (/^\d+$/.test(v) ? { score: Number(v) } : { id: { in: [] } }),
+    ...Object.fromEntries(CUSTOM_FIELD_SLOTS.map((slot) => [`cf_${slot}`, customFieldContains(slot)])),
+};
 
 /**
  * A lead with no usable email address.
@@ -482,6 +540,8 @@ export class CrmLeadsService {
             sortDir?: string;
             createdFrom?: string;
             createdTo?: string;
+            /** The table's advanced column filters — see LEAD_FILTERABLE. */
+            filters?: ColumnFilters;
             /** IANA zone the calendar-day bounds above are measured in. */
             timezone: string;
         },
@@ -541,6 +601,11 @@ export class CrmLeadsService {
         if (opts.staleDays) {
             where.AND = [...(where.AND ?? []), staleLeadWhere(staleLeadCutoff(opts.staleDays))];
         }
+        // In the query, not on the page afterwards, so the count and the pages
+        // cover only the matching leads. AND-ed for the same reason as above:
+        // several of these are ORs themselves.
+        const columnClauses = resolveColumnFilters(opts.filters, LEAD_FILTERABLE);
+        if (columnClauses.length) where.AND = [...(where.AND ?? []), ...columnClauses];
 
         const [items, total] = await Promise.all([
             this.db.lead.findMany({
