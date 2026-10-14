@@ -73,6 +73,7 @@ const TITLE_POSITIONS = [
     'below-center',
     'below-right',
 ] as const;
+const QR_POSITIONS = ['below-title', 'above-title', 'left-of-title', 'right-of-title'] as const;
 
 /*
  * The config mirrors PrintHeaderConfig in the frontend's lib/print/types.ts —
@@ -158,6 +159,33 @@ export class HeaderTitleDto {
     position?: (typeof TITLE_POSITIONS)[number];
 
     /** Nudge from the slot, in mm. Negative moves left/up. */
+    @IsOptional()
+    @IsNumber()
+    @Min(-100)
+    @Max(100)
+    offsetXMm?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(-100)
+    @Max(100)
+    offsetYMm?: number;
+}
+
+/**
+ * Placement and size of the document's QR code. The template only places it —
+ * whether a code prints is up to the document.
+ */
+export class HeaderQrDto {
+    @IsNumber()
+    @Min(10)
+    @Max(60)
+    sizeMm: number;
+
+    @IsIn(QR_POSITIONS)
+    position: (typeof QR_POSITIONS)[number];
+
+    /** Nudge from the position, in mm. Negative moves left/up. */
     @IsOptional()
     @IsNumber()
     @Min(-100)
@@ -310,11 +338,12 @@ export class PrintFooterConfigDto {
 export class PrintHeaderConfigDto {
     /**
      * 1 — header only. 2 — adds `images` and `footer`. 3 — adds logo width,
-     * title placement and footer pinning/bleed. All are accepted; the fields a
-     * version predates are optional and default to what it already printed.
+     * title placement and footer pinning/bleed. 4 — adds `qr`. All are
+     * accepted; the fields a version predates are optional and default to what
+     * it already printed.
      */
     @IsInt()
-    @IsIn([1, 2, 3])
+    @IsIn([1, 2, 3, 4])
     version: number;
 
     @IsIn(LAYOUTS)
@@ -331,6 +360,12 @@ export class PrintHeaderConfigDto {
     @ValidateNested()
     @Type(() => HeaderTitleDto)
     title: HeaderTitleDto;
+
+    /** Absent before v4 — the renderer prints the code 20mm under the title. */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => HeaderQrDto)
+    qr?: HeaderQrDto;
 
     @IsArray()
     @ValidateNested({ each: true })
