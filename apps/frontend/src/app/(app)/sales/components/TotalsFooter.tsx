@@ -53,9 +53,9 @@ interface TotalsFooterProps {
     showAdjustments?: boolean;
     totalLabel?: string;
     /**
-     * Label for the free-form adjustment row. An existing sale stores only its
-     * final total, so the gap between the line subtotal and that total is
-     * carried here as one "Adjustment" rather than a fake rounding figure.
+     * Label for the free-form adjustment row. On an existing sale this is
+     * "Adjustment". A sale saved before transport and labour were stored on
+     * their own still carries its unexplained gap here.
      */
     roundingLabel?: string;
 }

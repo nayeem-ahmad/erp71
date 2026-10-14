@@ -8,6 +8,7 @@ import {
     productTaxRates,
     saleLineRates,
 } from '@/lib/sale-vat';
+import { roundMoney, storedInvoiceExtras } from '@/lib/sale-extras';
 import type { VatPricing } from '../components/SaleEntryLayout';
 
 /**
@@ -132,20 +133,28 @@ export function seedFromQuotation(quote: any, pricing: VatPricing): SeededSale {
  * payment is money that actually changed hands, and prefilling one would record
  * a receipt nobody made. The operator states how this copy was paid.
  *
- * A sale stores only its final total, so the gap between that and the line
- * subtotal comes across as a single rounding adjustment — the same thing the
- * detail screen does, and for the same reason: the original discount/VAT/
- * transport split is not persisted and must not be invented here.
+ * Transport, labour and the adjustment come across in the boxes they were
+ * saved in. A sale from before those were stored carries only its final total,
+ * so that gap comes across as one adjustment — the same thing the detail
+ * screen does, and for the same reason: which box it was typed in was never
+ * recorded.
  *
  * A shop that enters prices before VAT gets the copy in those terms instead:
  * each stored (VAT-inclusive) price is taken back with the rates its line was
- * taxed at, and the gap comes across as a discount, which the screen then
- * adds VAT on top of again.
+ * taxed at, and the gap under the lines comes across as a discount, which the
+ * screen then adds VAT on top of again. A gap above the lines (transport that
+ * was never stored on its own) comes across as the adjustment.
  */
 export function seedFromSale(
     sale: any,
     pricing: VatPricing,
-): SeededSale & { rounding: number; discountAmount: number; warehouseId?: string } {
+): SeededSale & {
+    rounding: number;
+    discountAmount: number;
+    transportCost: number;
+    laborCost: number;
+    warehouseId?: string;
+} {
     const beforeVat = !pricing.pricesIncludeVat;
     const items: LineItem[] = (sale.items ?? []).map((item: any) => {
         const rates = saleLineRates(item, pricing.defaultVatRate);
@@ -162,6 +171,9 @@ export function seedFromSale(
         (sum: number, item: any) => sum + item.quantity * Number(item.price_at_sale ?? 0),
         0,
     );
+    const stored = storedInvoiceExtras(sale);
+    // The goods portion of the total: extras sit outside the discount.
+    const goodsTotal = roundMoney(total - stored.transportCost - stored.laborCost - stored.rounding);
 
     return {
         source: {
@@ -176,8 +188,12 @@ export function seedFromSale(
         items,
         customer: sale.customer ? { ...sale.customer, id: sale.customer_id } : null,
         description: sale.note || '',
-        rounding: beforeVat ? 0 : Number((total - subtotal).toFixed(2)),
-        discountAmount: beforeVat ? enteredDiscount(grossLines, subtotal, total) : 0,
+        transportCost: stored.transportCost,
+        laborCost: stored.laborCost,
+        rounding: beforeVat
+            ? roundMoney(stored.rounding + Math.max(0, roundMoney(goodsTotal - grossLines)))
+            : roundMoney(goodsTotal - subtotal + stored.rounding),
+        discountAmount: beforeVat ? enteredDiscount(grossLines, subtotal, goodsTotal) : 0,
         // A copy sells out of the same place unless the user says otherwise.
         warehouseId: sale.warehouse_id ?? undefined,
     };

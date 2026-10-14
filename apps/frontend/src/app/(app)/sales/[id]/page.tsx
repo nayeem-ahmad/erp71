@@ -16,10 +16,12 @@ import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
 import { useSalesReps } from '@/lib/hooks/useSalesReps';
 import { enteredBeforeVat, enteredDiscount, enteredUnitPrice, productTaxRates, saleLineRates } from '@/lib/sale-vat';
 import SaleEntryLayout, {
+    adjustmentsForStoredSale,
     computeSaleTotals,
     EMPTY_ADJUSTMENTS,
     type SaleAdjustments,
 } from '../components/SaleEntryLayout';
+import { roundMoney, storedInvoiceExtras } from '@/lib/sale-extras';
 import { availableQtyOf, stockByWarehouseOf } from '@/components/document-entry/ProductSearch';
 import SalePrintMenu from '../components/SalePrintMenu';
 import { toast } from '@/lib/toast';
@@ -118,14 +120,13 @@ function SaleDetailPageContent() {
         [taxPricing.defaultVatRate, beforeVat],
     );
 
-    // Seed the entry form from the loaded sale. A sale stores only its final
-    // total, so whatever separates that total from the line subtotal is carried
-    // as a single "Adjustment" — the original discount/VAT/transport split is
-    // not persisted and must not be invented here. A sale entered with VAT
-    // added on top is the exception: its before-VAT prices and its discount are
-    // recovered exactly from the stored prices and rates, so it reopens the way
-    // it was typed and its VAT is worked out again when lines change; anything
-    // billed above its lines (transport, labour) is the Adjustment there too.
+    // Seed the entry form from the loaded sale. Transport, labour and the
+    // free-form adjustment come back from the columns they were saved in. A
+    // sale written before those columns still carries only its final total, so
+    // the unexplained gap stays one Adjustment — which box it was typed in was
+    // never recorded, and inventing one would be a guess. A sale entered with
+    // VAT added on top recovers its before-VAT prices and its discount from
+    // the stored prices and rates, so it reopens the way it was typed.
     useEffect(() => {
         if (!sale) return;
         const onTop = enteredBeforeVat(sale);
@@ -161,36 +162,22 @@ function SaleDetailPageContent() {
         });
 
         const total = parseFloat(sale.total_amount);
-        if (onTop) {
-            const grossLines = (sale.items || []).reduce(
-                (sum: number, item: any) => sum + item.quantity * parseFloat(item.price_at_sale),
-                0,
-            );
-            const netLines = cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0);
-            const discount = enteredDiscount(grossLines, netLines, total);
-            const recovered = { ...EMPTY_ADJUSTMENTS, discountMode: 'AMOUNT' as const, discountAmount: discount };
-            // A total above the lines was billed on top of them — transport,
-            // labour, a rounding up — not discounted. Which one is not stored,
-            // so it comes back as the Adjustment; dropping it would show, and
-            // re-save, a total without the transport the customer was charged.
-            const surplus = discount > 0
-                ? 0
-                : total - computeSaleTotals(
-                    cartItems,
-                    recovered,
-                    { defaultVatRate: taxPricing.defaultVatRate, pricesIncludeVat: false },
-                ).total;
-            setAdjustments({
-                ...recovered,
-                rounding: surplus > 0.005 ? Number(surplus.toFixed(2)) : 0,
-            });
-        } else {
-            const subtotal = cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0);
-            setAdjustments({
-                ...EMPTY_ADJUSTMENTS,
-                rounding: Number((total - subtotal).toFixed(2)),
-            });
-        }
+        const stored = storedInvoiceExtras(sale);
+        const pricing = { defaultVatRate: taxPricing.defaultVatRate, pricesIncludeVat: !onTop };
+        // Before VAT, the discount was typed on the goods and then grossed up.
+        // Take the stored extras back off the total first, so a transport charge
+        // is not read as part of that discount.
+        const discountAmount = onTop
+            ? enteredDiscount(
+                (sale.items || []).reduce(
+                    (sum: number, item: any) => sum + item.quantity * parseFloat(item.price_at_sale),
+                    0,
+                ),
+                cartItems.reduce((sum: number, i: any) => sum + i.quantity * i.price, 0),
+                roundMoney(total - stored.transportCost - stored.laborCost - stored.rounding),
+            )
+            : 0;
+        setAdjustments(adjustmentsForStoredSale(cartItems, pricing, total, stored, discountAmount));
         setStatus(sale.status);
         setSaleDate(toDatetimeLocal(new Date(sale.sale_date ?? sale.created_at)));
         setWarehouseId(sale.warehouse_id ?? '');
@@ -235,6 +222,9 @@ function SaleDetailPageContent() {
                 note: description,
                 saleDate: saleDate ? new Date(saleDate).toISOString() : undefined,
                 totalAmount: totals.total,
+                transportCost: totals.transportCost,
+                laborCost: totals.laborCost,
+                rounding: totals.rounding,
                 warehouseId: warehouseId || undefined,
                 // VAT-inclusive, as every sale is stored — grossed up again when
                 // the sale was entered before VAT.

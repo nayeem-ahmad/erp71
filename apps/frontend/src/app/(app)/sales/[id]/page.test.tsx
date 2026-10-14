@@ -457,8 +457,30 @@ describe('SaleDetailPage — edit mode', () => {
 
         expect(getApi().updateSale).toHaveBeenCalledWith(
             'test-sale-1',
-            expect.objectContaining({ totalAmount: 3250 }),
+            expect.objectContaining({
+                totalAmount: 3250,
+                // The gap was never stored as transport, so it stays the adjustment.
+                transportCost: 0,
+                laborCost: 0,
+                rounding: 250,
+            }),
         );
+    });
+
+    it('reopens a saved transport charge in Transport, not in Adjustment', async () => {
+        getApi().getSale.mockResolvedValue({
+            ...mockSale,
+            total_amount: '3010',
+            transport_cost: '10',
+            labor_cost: '0',
+            rounding: '0',
+        });
+        await renderPage();
+
+        expect(screen.getByLabelText('Transport')).toHaveValue(10);
+        expect(screen.getByLabelText('Labor')).toHaveValue(0);
+        expect(screen.getByLabelText('Adjustment')).toHaveValue(0);
+        expect(screen.getAllByText('৳3010.00').length).toBeGreaterThan(0);
     });
 
     it('adds transport typed during the edit to the total it shows and saves', async () => {
@@ -472,7 +494,12 @@ describe('SaleDetailPage — edit mode', () => {
         });
         expect(getApi().updateSale).toHaveBeenCalledWith(
             'test-sale-1',
-            expect.objectContaining({ totalAmount: 3150 }),
+            expect.objectContaining({
+                totalAmount: 3150,
+                transportCost: 150,
+                laborCost: 0,
+                rounding: 0,
+            }),
         );
     });
 
@@ -499,8 +526,22 @@ describe('SaleDetailPage — edit mode', () => {
             });
             expect(getApi().updateSale).toHaveBeenCalledWith(
                 'test-sale-1',
-                expect.objectContaining({ totalAmount: 2400 }),
+                expect.objectContaining({
+                    totalAmount: 2400,
+                    transportCost: 100,
+                    laborCost: 0,
+                    rounding: 0,
+                }),
             );
+        });
+
+        it('reopens a saved transport charge in Transport', async () => {
+            getApi().getSale.mockResolvedValue({ ...beforeVatSale, total_amount: '2400', transport_cost: '100' });
+            await renderPage();
+
+            expect(screen.getByLabelText('Transport')).toHaveValue(100);
+            expect(screen.getByLabelText('Adjustment')).toHaveValue(0);
+            expect(screen.getAllByText('৳2400.00').length).toBeGreaterThan(0);
         });
 
         it('reopens with the transport it was saved with still in the total', async () => {

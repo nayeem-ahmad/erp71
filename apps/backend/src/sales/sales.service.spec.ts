@@ -390,6 +390,51 @@ describe('SalesService', () => {
       );
     });
 
+    it('accepts transport on top of the lines and stores it apart from the total', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 110 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false },
+      ]);
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 110,
+        amountPaid: 110,
+        transportCost: 10,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+      });
+
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            total_amount: 110,
+            transport_cost: 10,
+            labor_cost: 0,
+            rounding: 0,
+          }),
+        }),
+      );
+    });
+
+    it('refuses a total that does not include the transport it names', async () => {
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false },
+      ]);
+
+      await expect(
+        service.create('tenant-1', 'user-1', {
+          storeId: 'store-1',
+          totalAmount: 100,
+          amountPaid: 100,
+          transportCost: 10,
+          items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
     it('stamps the sales rep the screen named, once checked against this tenant', async () => {
       tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 100 });
       tx.saleItem.create.mockResolvedValue({});
@@ -1902,9 +1947,31 @@ describe('SalesService', () => {
       });
     });
 
+    it('keeps a transport charge on its own column when the edit sends one', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, customer_id: null,
+      });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+
+      await service.update('tenant-1', 's1', {
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
+        totalAmount: 110,
+        transportCost: 10,
+        laborCost: 0,
+        rounding: 0,
+      });
+
+      expect(tx.sale.update.mock.calls[0][0].data).toEqual(expect.objectContaining({
+        total_amount: 110,
+        transport_cost: 10,
+        labor_cost: 0,
+        rounding: 0,
+      }));
+    });
+
     it('honours an explicit totalAmount over the sum of the lines', async () => {
-      // The entry form's adjustments (VAT, transport, rounding) live only in
-      // the total — recomputing from lines alone would silently drop them.
+      // The entry form's adjustments (VAT, transport, rounding) are not on the
+      // lines — recomputing from lines alone would silently drop them.
       tx.sale.findFirst.mockResolvedValue({
         id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, customer_id: null,
       });

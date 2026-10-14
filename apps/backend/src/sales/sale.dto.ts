@@ -9,12 +9,35 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    Min,
     ValidateIf,
     ValidateNested,
 } from 'class-validator';
 import { PaymentInstrumentDto } from '../common/payment-instrument.dto';
 import { InlineCustomerDto } from '../customers/customer.dto';
 import { QUOTATION_BATCH_LIMIT } from './quotation-to-sale.util';
+
+/**
+ * Transport, labour and the free-form adjustment typed beside the lines.
+ * They are inside `totalAmount`, and stored on the sale so an edit puts each
+ * one back in the box it was typed in. Omit them and they stay zero.
+ */
+export class SaleInvoiceExtrasDto {
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    transportCost?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    laborCost?: number;
+
+    /** May be negative: an adjustment can take money off as well as add it. */
+    @IsOptional()
+    @IsNumber()
+    rounding?: number;
+}
 
 export class CreateSaleItemDto {
     @IsString()
@@ -58,7 +81,7 @@ export class CreatePaymentDto extends PaymentInstrumentDto {
     accountId?: string; // Links payment to account for accounting
 }
 
-export class CreateSaleDto {
+export class CreateSaleDto extends SaleInvoiceExtrasDto {
     @IsString()
     @IsNotEmpty()
     storeId: string;
@@ -205,7 +228,7 @@ export class CreateSaleDto {
  * post the draft exactly as it was parked, or supply the ones the user edited
  * on the way out (warranty serials can only arrive here — a draft has none).
  */
-export class FinalizeSaleDto {
+export class FinalizeSaleDto extends SaleInvoiceExtrasDto {
     @IsOptional()
     @IsString()
     customerId?: string | null;
@@ -288,7 +311,7 @@ export class UpdatePaymentDto extends PaymentInstrumentDto {
     accountId?: string;
 }
 
-export class UpdateSaleDto {
+export class UpdateSaleDto extends SaleInvoiceExtrasDto {
     @IsOptional()
     @IsString()
     customerId?: string | null;
@@ -334,8 +357,9 @@ export class UpdateSaleDto {
 
     /**
      * Invoice total including the entry-form adjustments (discount, VAT,
-     * transport, labour, rounding) that are not stored per-line. Omit to let
-     * the total fall back to the sum of the line items.
+     * transport, labour, rounding). Transport, labour and rounding are also
+     * stored on their own columns; omit the total to let it fall back to the
+     * sum of the line items.
      */
     @IsOptional()
     @IsNumber()

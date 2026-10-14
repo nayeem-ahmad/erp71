@@ -141,6 +141,18 @@ describe('printSaleInvoice', () => {
         expect(data.total).toBe(2900);
         expect(data.rounding).toBeCloseTo(-100);
     });
+
+    it('prints a stored transport charge as transport, not as the adjustment', () => {
+        const data = saleToInvoiceData(
+            { ...listShapedSale, total_amount: '3100', transport_cost: '100', labor_cost: '0', rounding: '0' },
+            ctx,
+        );
+
+        expect(data.transportCost).toBe(100);
+        expect(data.laborCost).toBeUndefined();
+        expect(data.rounding).toBeUndefined();
+        expect(data.total).toBe(3100);
+    });
 });
 
 describe('the sale\u2019s store on the letterhead', () => {

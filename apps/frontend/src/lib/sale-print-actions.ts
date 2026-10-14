@@ -2,6 +2,7 @@ import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { paymentInstrumentSummary } from '@/lib/payment-instrument';
 import { invoiceQrDataUrl } from '@/lib/invoice-qr';
 import { enteredBeforeVat, enteredUnitPrice } from '@/lib/sale-vat';
+import { roundMoney, storedInvoiceExtras } from '@/lib/sale-extras';
 import { printSalesInvoice, printSalesInvoices, type InvoiceData, type PaperSize } from '@/lib/sales-invoice-printer';
 import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
@@ -66,6 +67,14 @@ export interface PrintableSale {
     sd_amount?: string | number | null;
     /** False when the sale was entered before VAT, with the tax added on top. */
     prices_include_vat?: boolean | null;
+    /**
+     * Transport, labour and the free-form adjustment, stored with the sale.
+     * Absent on a list row or a sale written before the columns existed; the
+     * gap is then printed as one adjustment, which is all those rows recorded.
+     */
+    transport_cost?: string | number | null;
+    labor_cost?: string | number | null;
+    rounding?: string | number | null;
     /** The order the sale was raised from, when it was. */
     salesOrder?: { order_number?: string | null } | null;
     /** Name of the user who entered the sale, as the print endpoints resolve it. */
@@ -213,25 +222,40 @@ export function saleToInvoiceData(sale: PrintableSale, ctx: SalePrintContext): I
 
     // Entered before VAT: the stored VAT is added to the before-VAT lines, and
     // whatever is left between those and the total is the discount (or, above
-    // it, an adjustment) — so the printed block always foots.
+    // it, an adjustment) — so the printed block always foots. Transport and
+    // labour print on their own rows when the sale recorded them; a sale from
+    // before that still prints the whole gap as one adjustment.
     const tax = taxInside(sale) ?? 0;
-    const gap = Math.round((subtotal + tax - total) * 100) / 100;
+    const extras = storedInvoiceExtras(sale);
+    const explained = extras.transportCost + extras.laborCost + extras.rounding;
+    const present = (value: number) => (Math.abs(value) > 0.005 ? value : undefined);
     const amounts = beforeVat
-        ? {
-            discountAmount: gap > 0.005 ? gap : undefined,
-            rounding: gap < -0.005 ? -gap : undefined,
-            vat: tax > 0.005 ? tax : undefined,
-            taxIncluded: undefined,
-        }
-        : {
-            // The difference between the lines and the stored total is whatever
-            // invoice-level adjustment was applied; showing it as rounding is
-            // closer than silently printing a total the lines do not sum to.
-            rounding: Math.abs(total - subtotal) > 0.005 ? total - subtotal : undefined,
-            // Both stored columns, or neither: a sale carrying only one would read
-            // as having no tax inside it rather than an unknown amount.
-            taxIncluded: taxInside(sale),
-        };
+        ? (() => {
+            const gap = roundMoney(subtotal + tax + explained - total);
+            const rounding = roundMoney(extras.rounding + (gap < -0.005 ? -gap : 0));
+            return {
+                discountAmount: gap > 0.005 ? gap : undefined,
+                transportCost: present(extras.transportCost),
+                laborCost: present(extras.laborCost),
+                rounding: present(rounding),
+                vat: tax > 0.005 ? tax : undefined,
+                taxIncluded: undefined,
+            };
+        })()
+        : (() => {
+            // A gap the stored extras do not explain (a discount, or a charge
+            // from before the columns existed) stays on the adjustment, so the
+            // printed total still matches the lines.
+            const rounding = roundMoney(extras.rounding + roundMoney(total - subtotal - explained));
+            return {
+                transportCost: present(extras.transportCost),
+                laborCost: present(extras.laborCost),
+                rounding: present(rounding),
+                // Both stored columns, or neither: a sale carrying only one would read
+                // as having no tax inside it rather than an unknown amount.
+                taxIncluded: taxInside(sale),
+            };
+        })();
 
     return {
         referenceNumber: sale.reference_number || sale.serial_number,

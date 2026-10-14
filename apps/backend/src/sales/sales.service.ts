@@ -154,6 +154,37 @@ const SALE_FILTERABLE: FilterableMap<Prisma.SaleWhereInput> = {
     payments: (v) => ({ payments: { some: { payment_method: containsInsensitive(v) } } }),
 };
 
+function extraOrZero(value: unknown): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Transport, labour and the free-form adjustment, as columns on Sale. */
+function invoiceExtraColumns(dto: {
+    transportCost?: number;
+    laborCost?: number;
+    rounding?: number;
+}) {
+    return {
+        transport_cost: dto.transportCost ?? 0,
+        labor_cost: dto.laborCost ?? 0,
+        rounding: dto.rounding ?? 0,
+    };
+}
+
+/** Only the extras the caller actually sent, so a note-only edit leaves them. */
+function invoiceExtraPatch(dto: {
+    transportCost?: number;
+    laborCost?: number;
+    rounding?: number;
+}) {
+    return {
+        ...(dto.transportCost !== undefined && { transport_cost: dto.transportCost }),
+        ...(dto.laborCost !== undefined && { labor_cost: dto.laborCost }),
+        ...(dto.rounding !== undefined && { rounding: dto.rounding }),
+    };
+}
+
 @Injectable()
 export class SalesService {
     private readonly logger = new Logger(SalesService.name);
@@ -217,6 +248,7 @@ export class SalesService {
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
                     prices_include_vat: dto.pricesIncludeVat ?? true,
+                    ...invoiceExtraColumns(dto),
                     sales_rep_id: salesRepId,
                     amount_paid: prep.amountPaid,
                     sale_date: saleDate,
@@ -548,7 +580,11 @@ export class SalesService {
         }
         const { loyaltyDiscount } = loyaltyPreview;
 
-        const computedTotal = Math.max(0, preLoyaltyTotal - loyaltyDiscount);
+        // Transport, labour and the adjustment sit on top of the goods. A sale
+        // that names none of them (POS, an import, a quotation conversion)
+        // adds zero, so its total check is unchanged.
+        const extras = (dto.transportCost ?? 0) + (dto.laborCost ?? 0) + (dto.rounding ?? 0);
+        const computedTotal = Math.max(0, preLoyaltyTotal - loyaltyDiscount) + extras;
         if (Math.abs(computedTotal - dto.totalAmount) > 0.02) {
             throw new BadRequestException(
                 `Sale total mismatch. Expected ৳${computedTotal.toFixed(2)} after discounts and loyalty.`,
@@ -1041,6 +1077,7 @@ export class SalesService {
                     // Completing the draft keeps it: the parked prices were
                     // entered this way.
                     prices_include_vat: dto.pricesIncludeVat ?? true,
+                    ...invoiceExtraColumns(dto),
                     sales_rep_id: draftSalesRepId,
                     amount_paid: dto.amountPaid,
                     sale_date: dto.saleDate ? new Date(dto.saleDate) : new Date(),
@@ -1132,11 +1169,21 @@ export class SalesService {
                 ?? (dto.payments
                     ? dto.payments.reduce((sum, p) => sum + p.amount, 0)
                     : Number(draft.amount_paid));
+            // What was parked, unless the screen sends a replacement. A draft
+            // completed from its own row (the Complete action sends nothing)
+            // keeps the transport it was saved with.
+            const extras = invoiceExtraColumns({
+                transportCost: dto.transportCost ?? extraOrZero(draft.transport_cost),
+                laborCost: dto.laborCost ?? extraOrZero(draft.labor_cost),
+                rounding: dto.rounding ?? extraOrZero(draft.rounding),
+            });
             // A draft stores whatever total the entry screen sent, with no
-            // discount breakdown. Re-derive the discount from it so the shared
-            // total check sees a consistent pair instead of rejecting the draft
-            // the moment it is posted.
-            const discountAmount = dto.discountAmount ?? Math.max(0, itemsSubtotal - totalAmount);
+            // discount breakdown. Re-derive the discount from the goods portion
+            // (the total less transport, labour and the adjustment) so the
+            // shared total check sees a consistent pair instead of rejecting
+            // the draft the moment it is posted.
+            const discountAmount = dto.discountAmount
+                ?? Math.max(0, itemsSubtotal - (totalAmount - extras.transport_cost - extras.labor_cost - extras.rounding));
 
             const saleDto: CreateSaleDto = {
                 storeId: draft.store_id,
@@ -1152,6 +1199,9 @@ export class SalesService {
                 totalAmount,
                 amountPaid,
                 discountAmount,
+                transportCost: extras.transport_cost,
+                laborCost: extras.labor_cost,
+                rounding: extras.rounding,
                 pointsToRedeem: dto.pointsToRedeem,
                 note: dto.note ?? draft.note ?? undefined,
                 saleDate: dto.saleDate,
@@ -1190,6 +1240,9 @@ export class SalesService {
                     // posted, which may differ from what was parked.
                     vat_amount: prep.tax.vat_amount,
                     sd_amount: prep.tax.sd_amount,
+                    transport_cost: extras.transport_cost,
+                    labor_cost: extras.labor_cost,
+                    rounding: extras.rounding,
                     amount_paid: prep.amountPaid,
                     note: saleDto.note ?? null,
                     // The resolved id, not the parked one: a draft may have been
@@ -1593,8 +1646,9 @@ export class SalesService {
 
             // 3. Recalculate totals if items changed. An explicit totalAmount
             // wins: the entry form's adjustments (discount, VAT, transport,
-            // labour, rounding) live only in the total, not on the lines, so
-            // recomputing from lines alone would silently drop them.
+            // labour, rounding) are not on the lines, so recomputing from
+            // lines alone would silently drop them. Transport, labour and the
+            // adjustment are stored beside the total when the edit sends them.
             const totalAmount = dto.totalAmount
                 ?? (dto.items
                     ? dto.items.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0)
@@ -1650,6 +1704,7 @@ export class SalesService {
                     }),
                     ...(dto.saleDate ? { sale_date: new Date(dto.saleDate) } : {}),
                     ...(totalAmount !== undefined && { total_amount: totalAmount }),
+                    ...invoiceExtraPatch(dto),
                     ...(editedTax !== undefined && {
                         vat_amount: editedTax.vat_amount,
                         sd_amount: editedTax.sd_amount,
