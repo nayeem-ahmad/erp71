@@ -155,6 +155,32 @@ describe('SalesReturnsService', () => {
       });
   });
 
+  it('create() refuses a unit a completed exchange already took', async () => {
+      db.sale.findUnique.mockResolvedValue({
+          id: 'sale-1',
+          customer_id: null,
+          items: [
+              {
+                  id: 'item-1',
+                  product_id: 'p-1',
+                  quantity: 1,
+                  price_at_sale: 10,
+                  returns: [],
+                  exchangeLines: [{ returned_quantity: 1 }],
+              },
+          ],
+      });
+
+      await expect(
+          service.create('tenant-1', 'user-1', {
+              storeId: 'store-1',
+              saleId: 'sale-1',
+              items: [{ saleItemId: 'item-1', quantity: 1 }],
+          }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(db.salesReturn.create).not.toHaveBeenCalled();
+  });
+
   it('create() puts the goods back where the sale took them from', async () => {
       // Without this a two-warehouse tenant gets every return landing in the
       // configured default, which is exactly the mis-stocking the feature is

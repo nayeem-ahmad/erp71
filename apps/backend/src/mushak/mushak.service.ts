@@ -330,6 +330,11 @@ export class MushakService {
             };
         });
 
+        const exchangeBook = await this.exchangeSalesBookEntries(tenantId, query, period);
+        if (exchangeBook.estimated) estimated = true;
+        entries.push(...exchangeBook.rows);
+        entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
         const rows = taxableOnly
             ? entries.filter((entry) => entry.vatAmount > 0 || entry.sdAmount > 0)
             : entries;
@@ -387,7 +392,226 @@ export class MushakService {
         };
     }
 
+    /**
+     * মূসক-৬.৩ for the goods that left on an exchange. Numbered with the
+     * exchange, priced at the replacement the customer took, not the invoice
+     * they originally bought.
+     */
+    async getExchangeTaxInvoice(tenantId: string, exchangeId: string) {
+        const [exchange, tenant] = await Promise.all([
+            this.db.salesExchange.findFirst({
+                where: { id: exchangeId, tenant_id: tenantId },
+                include: {
+                    items: {
+                        include: {
+                            replacementProduct: { select: { name: true, sku: true, unit_type: true } },
+                        },
+                    },
+                    sale: { include: { customer: true } },
+                    store: { select: { name: true } },
+                },
+            }),
+            this.loadTenant(tenantId),
+        ]);
+        if (!exchange) throw new NotFoundException('Exchange not found');
+
+        const built = this.documentLinesFromStored(
+            exchange.items.map((item: any) => ({
+                description: item.replacementProduct?.name ?? 'Item',
+                sku: item.replacementProduct?.sku ?? null,
+                unitType: item.replacementProduct?.unit_type ?? null,
+                quantity: item.replacement_quantity,
+                inclusive: Number(item.replacement_unit_price) * item.replacement_quantity,
+                vatRate: item.replacement_vat_rate != null ? Number(item.replacement_vat_rate) : null,
+                sdRate: item.replacement_sd_rate != null ? Number(item.replacement_sd_rate) : null,
+                vatAmount: Number(item.replacement_vat_amount),
+                sdAmount: Number(item.replacement_sd_amount),
+            })),
+        );
+
+        return {
+            form: MushakForm.TAX_INVOICE,
+            issuer: this.toIssuer(tenant),
+            buyer: this.toBuyer(exchange.sale?.customer),
+            invoice: {
+                saleId: exchange.sale_id,
+                exchangeId: exchange.id,
+                number: exchange.exchange_number,
+                serialNumber: exchange.exchange_number,
+                issuedAt: exchange.created_at,
+                status: exchange.status,
+                cancelled: exchange.status === 'CANCELLED',
+                branch: exchange.store?.name ?? null,
+            },
+            lines: built.lines,
+            totals: built.totals,
+            estimated: built.estimated,
+        };
+    }
+
+    /**
+     * মূসক-৬.৭ for the goods that came back. It reduces the original invoice
+     * at the rates that invoice carried. It is not a negative 6.2 row.
+     */
+    async getExchangeCreditNote(tenantId: string, exchangeId: string) {
+        const [exchange, tenant] = await Promise.all([
+            this.db.salesExchange.findFirst({
+                where: { id: exchangeId, tenant_id: tenantId },
+                include: {
+                    items: {
+                        include: {
+                            returnedProduct: { select: { name: true, sku: true, unit_type: true } },
+                        },
+                    },
+                    sale: { include: { customer: true } },
+                    store: { select: { name: true } },
+                },
+            }),
+            this.loadTenant(tenantId),
+        ]);
+        if (!exchange) throw new NotFoundException('Exchange not found');
+        if (!exchange.sale) {
+            throw new BadRequestException('An exchange credit note needs the invoice it reduces.');
+        }
+
+        const built = this.documentLinesFromStored(
+            exchange.items.map((item: any) => ({
+                description: item.returnedProduct?.name ?? 'Item',
+                sku: item.returnedProduct?.sku ?? null,
+                unitType: item.returnedProduct?.unit_type ?? null,
+                quantity: item.returned_quantity,
+                inclusive: Number(item.returned_unit_price) * item.returned_quantity,
+                vatRate: item.returned_vat_rate != null ? Number(item.returned_vat_rate) : null,
+                sdRate: item.returned_sd_rate != null ? Number(item.returned_sd_rate) : null,
+                vatAmount: Number(item.returned_vat_amount),
+                sdAmount: Number(item.returned_sd_amount),
+            })),
+        );
+
+        return {
+            form: MushakForm.CREDIT_NOTE,
+            issuer: this.toIssuer(tenant),
+            buyer: this.toBuyer(exchange.sale.customer),
+            note: {
+                returnId: exchange.id,
+                exchangeId: exchange.id,
+                number: exchange.exchange_number,
+                issuedAt: exchange.created_at,
+                reason: exchange.reason ?? null,
+                branch: exchange.store?.name ?? null,
+            },
+            against: {
+                saleId: exchange.sale.id,
+                number: exchange.sale.reference_number || exchange.sale.serial_number,
+                issuedAt: exchange.sale.sale_date ?? exchange.sale.created_at,
+            },
+            lines: built.lines,
+            totals: built.totals,
+            estimated: built.estimated,
+        };
+    }
+
     // ── internals ───────────────────────────────────────────────────────────
+
+    private async exchangeSalesBookEntries(
+        tenantId: string,
+        query: GetSalesBookDto,
+        period: { gte?: Date; lte?: Date } | null | undefined,
+    ): Promise<{ rows: any[]; estimated: boolean }> {
+        const exchanges = await this.db.salesExchange.findMany({
+            where: {
+                tenant_id: tenantId,
+                status: 'COMPLETED',
+                ...(query.storeId ? { store_id: query.storeId } : {}),
+                ...(period ? { created_at: period } : {}),
+            },
+            include: {
+                items: {
+                    include: {
+                        replacementProduct: { select: { name: true, sku: true, unit_type: true } },
+                    },
+                },
+                sale: {
+                    include: {
+                        customer: { select: { name: true, address: true, bin: true, nid: true, phone: true } },
+                    },
+                },
+                store: { select: { name: true } },
+            },
+            orderBy: { created_at: 'asc' },
+        });
+
+        let estimated = false;
+        const rows = exchanges.map((exchange: any) => {
+            const built = this.documentLinesFromStored(
+                exchange.items.map((item: any) => ({
+                    description: item.replacementProduct?.name ?? 'Item',
+                    sku: item.replacementProduct?.sku ?? null,
+                    unitType: item.replacementProduct?.unit_type ?? null,
+                    quantity: item.replacement_quantity,
+                    inclusive: Number(item.replacement_unit_price) * item.replacement_quantity,
+                    vatRate: item.replacement_vat_rate != null ? Number(item.replacement_vat_rate) : null,
+                    sdRate: item.replacement_sd_rate != null ? Number(item.replacement_sd_rate) : null,
+                    vatAmount: Number(item.replacement_vat_amount),
+                    sdAmount: Number(item.replacement_sd_amount),
+                })),
+            );
+            if (built.estimated) estimated = true;
+            return {
+                saleId: exchange.id,
+                date: exchange.created_at,
+                invoiceNumber: exchange.exchange_number,
+                buyer: this.toBuyer(exchange.sale?.customer),
+                branch: exchange.store?.name ?? null,
+                description: this.describeSupply(built.lines),
+                quantity: built.lines.reduce((sum, line) => sum + line.quantity, 0),
+                ...built.totals,
+            };
+        });
+        return { rows, estimated };
+    }
+
+    /**
+     * A Mushak line from the tax amounts stored on the exchange. The inclusive
+     * price is what was posted; VAT and SD are not recomputed from today's rates.
+     */
+    private documentLinesFromStored(parts: Array<{
+        description: string;
+        sku: string | null;
+        unitType: string | null;
+        quantity: number;
+        inclusive: number;
+        vatRate: number | null;
+        sdRate: number | null;
+        vatAmount: number;
+        sdAmount: number;
+    }>): { lines: MushakDocumentLine[]; totals: MushakDocumentTotals; estimated: boolean } {
+        let estimated = false;
+        const lines: MushakDocumentLine[] = parts.map((part, index) => {
+            if (part.vatRate == null) estimated = true;
+            const vatAmount = roundMoney(part.vatAmount);
+            const sdAmount = roundMoney(part.sdAmount);
+            const inclusiveTotal = roundMoney(part.inclusive);
+            const totalValue = roundMoney(inclusiveTotal - vatAmount - sdAmount);
+            const unit = mushakSupplyUnit(part.unitType);
+            return {
+                serial: index + 1,
+                description: part.description,
+                sku: part.sku,
+                unitBn: unit.bn,
+                unitEn: unit.en,
+                quantity: part.quantity,
+                unitValue: part.quantity > 0 ? roundMoney(totalValue / part.quantity) : 0,
+                totalValue,
+                sdRate: part.sdRate ?? 0,
+                sdAmount,
+                vatRate: part.vatRate ?? 0,
+                vatAmount,
+                inclusiveTotal,
+            };
+        });
+        return { lines, totals: this.sumLines(lines), estimated };
+    }
 
     private async loadTenant(tenantId: string) {
         const tenant = await this.db.tenant.findUnique({

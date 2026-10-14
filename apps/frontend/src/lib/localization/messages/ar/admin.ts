@@ -1208,6 +1208,7 @@ export const adminMessages = {
             PRODUCT: 'منتج',
             SALE: 'بيع',
             SALES_RETURN: 'مرتجع مبيعات',
+            SALES_EXCHANGE: 'مبادلة مبيعات',
             PURCHASE: 'شراء',
             PURCHASE_RETURN: 'مرتجع مشتريات',
             CUSTOMER_PAYMENT: 'دفعة عميل',

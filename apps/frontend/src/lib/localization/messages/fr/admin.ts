@@ -1208,6 +1208,7 @@ export const adminMessages = {
             PRODUCT: 'Produit',
             SALE: 'Vente',
             SALES_RETURN: 'Retour de vente',
+            SALES_EXCHANGE: 'Échange de vente',
             PURCHASE: 'Achat',
             PURCHASE_RETURN: 'Retour d’achat',
             CUSTOMER_PAYMENT: 'Paiement client',

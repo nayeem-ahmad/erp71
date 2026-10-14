@@ -1201,6 +1201,7 @@ export const adminMessages = {
                 PRODUCT: 'Produk',
                 SALE: 'Jualan',
                 SALES_RETURN: 'Pulangan jualan',
+                SALES_EXCHANGE: 'Pertukaran jualan',
                 PURCHASE: 'Belian',
                 PURCHASE_RETURN: 'Pulangan belian',
                 CUSTOMER_PAYMENT: 'Bayaran pelanggan',

@@ -107,7 +107,7 @@ export class SalesReportsService {
             ...buildSaleDateWindow(query.from, query.to),
         };
 
-        const [rawSales, rawReturns] = await Promise.all([
+        const [rawSales, rawReturns, rawExchanges] = await Promise.all([
             this.db.sale.findMany({
                 where: saleWhere,
                 select: {
@@ -157,7 +157,90 @@ export class SalesReportsService {
                     },
                 },
             }),
+            this.db.salesExchange.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    status: 'COMPLETED',
+                    ...(query.storeId ? { store_id: query.storeId } : {}),
+                    ...buildReturnDateWindow(query.from, query.to),
+                },
+                select: {
+                    id: true,
+                    created_at: true,
+                    store_id: true,
+                    returned_total: true,
+                    replacement_total: true,
+                    sale: {
+                        select: {
+                            customer_id: true,
+                            counter_id: true,
+                            created_by: true,
+                            sales_rep_id: true,
+                            customer: { select: { id: true, name: true, phone: true, customer_code: true } },
+                        },
+                    },
+                    items: {
+                        select: {
+                            returned_product_id: true,
+                            returned_quantity: true,
+                            returned_unit_price: true,
+                            returned_unit_cost: true,
+                            replacement_product_id: true,
+                            replacement_quantity: true,
+                            replacement_unit_price: true,
+                            replacement_unit_cost: true,
+                        },
+                    },
+                },
+            }),
         ]);
+
+        // Outgoing lines count as sales and incoming lines as returns, so the
+        // net moves by the difference once. They are flagged so a bill count
+        // does not treat an exchange as another invoice.
+        const salesRows = rawSales as any[];
+        const returnRows = rawReturns as any[];
+        for (const exchange of rawExchanges as any[]) {
+            const saleMeta = exchange.sale ?? {};
+            salesRows.push({
+                id: `exchange-out-${exchange.id}`,
+                is_exchange: true,
+                serial_number: null,
+                total_amount: exchange.replacement_total,
+                sale_date: exchange.created_at,
+                store_id: exchange.store_id,
+                counter_id: saleMeta.counter_id ?? null,
+                created_by: saleMeta.created_by ?? null,
+                sales_rep_id: saleMeta.sales_rep_id ?? null,
+                customer_id: saleMeta.customer_id ?? null,
+                customer: saleMeta.customer ?? null,
+                items: (exchange.items ?? []).map((item: any) => ({
+                    product_id: item.replacement_product_id,
+                    quantity: item.replacement_quantity,
+                    price_at_sale: item.replacement_unit_price,
+                    unit_cost_at_sale: item.replacement_unit_cost,
+                })),
+            });
+            returnRows.push({
+                id: `exchange-in-${exchange.id}`,
+                is_exchange: true,
+                created_at: exchange.created_at,
+                store_id: exchange.store_id,
+                total_refund: exchange.returned_total,
+                sale: {
+                    customer_id: saleMeta.customer_id ?? null,
+                    counter_id: saleMeta.counter_id ?? null,
+                    created_by: saleMeta.created_by ?? null,
+                    sales_rep_id: saleMeta.sales_rep_id ?? null,
+                },
+                items: (exchange.items ?? []).map((item: any) => ({
+                    product_id: item.returned_product_id,
+                    quantity: item.returned_quantity,
+                    refund_amount: Number(item.returned_unit_price) * Number(item.returned_quantity),
+                    unit_cost_at_return: item.returned_unit_cost,
+                })),
+            });
+        }
 
         return {
             rawSales,
@@ -190,7 +273,7 @@ export class SalesReportsService {
 
         const totalRevenue = rawSales.reduce((sum: number, s: any) => sum + Number(s.total_amount), 0);
         const totalReturns = rawReturns.reduce((sum: number, r: any) => sum + Number(r.total_refund), 0);
-        const transactionCount = rawSales.length;
+        const transactionCount = rawSales.filter((sale: any) => !sale.is_exchange).length;
         const avgOrderValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
 
         // Day is taken in the shop's own time, not UTC: a sale rung up at 1am
@@ -218,7 +301,10 @@ export class SalesReportsService {
         const totals = summariseMargin(lines);
         const perDay = groupMargin(lines);
         const transactionsByDay = new Map<string, number>();
-        for (const day of saleDay.values()) {
+        for (const sale of rawSales as any[]) {
+            if (sale.is_exchange) continue;
+            const day = saleDay.get(sale.id);
+            if (!day) continue;
             transactionsByDay.set(day, (transactionsByDay.get(day) ?? 0) + 1);
         }
 
@@ -626,7 +712,7 @@ export class SalesReportsService {
                     customer: sale.customer ?? WALK_IN_CUSTOMER,
                 });
             }
-            orderCounts.set(key, (orderCounts.get(key) ?? 0) + 1);
+            if (!sale.is_exchange) orderCounts.set(key, (orderCounts.get(key) ?? 0) + 1);
         }
         // A refund belongs to whoever bought the goods, so returns reach through
         // to the original sale's customer. A parentless return has none, and
@@ -686,7 +772,7 @@ export class SalesReportsService {
             };
         });
 
-        const totalOrders = rawSales.length;
+        const totalOrders = rawSales.filter((sale: any) => !sale.is_exchange).length;
 
         return {
             summary: {
@@ -1417,10 +1503,13 @@ export class SalesReportsService {
         }
 
         const lines: MarginLine[] = [];
+        const exchangeSaleIds = new Set(
+            (rawSales as any[]).filter((sale) => sale.is_exchange).map((sale) => sale.id),
+        );
         const orderCounts = new Map<string, number>();
         for (const sale of sales) {
             const key = keyForSale.get(sale.id) ?? UNATTRIBUTED_KEY;
-            orderCounts.set(key, (orderCounts.get(key) ?? 0) + 1);
+            if (!exchangeSaleIds.has(sale.id)) orderCounts.set(key, (orderCounts.get(key) ?? 0) + 1);
             lines.push(...saleLines([sale], () => ({ key, label: key })));
         }
         for (const ret of returns) {

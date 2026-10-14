@@ -352,6 +352,7 @@ export const coreMessages = {
             customerPayment: "Règlement client",
             customerLedger: "Grand livre clients",
             salesReturns: "Retours de vente",
+            salesExchanges: "Échanges",
             salesOrders: "Commandes clients",
             salesQuotations: "Devis de vente",
             warrantyClaims: "Demandes de garantie",

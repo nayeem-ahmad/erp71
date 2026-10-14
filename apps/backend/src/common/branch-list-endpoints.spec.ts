@@ -15,6 +15,8 @@ import { SalesQuotationsController } from '../sales-quotations/sales-quotations.
 import { SalesQuotationsService } from '../sales-quotations/sales-quotations.service';
 import { SalesReturnsController } from '../sales-returns/sales-returns.controller';
 import { SalesReturnsService } from '../sales-returns/sales-returns.service';
+import { SalesExchangesController } from '../sales-exchanges/sales-exchanges.controller';
+import { SalesExchangesService } from '../sales-exchanges/sales-exchanges.service';
 import { WarrantyClaimsController } from '../warranty-claims/warranty-claims.controller';
 import { WarrantyClaimsService } from '../warranty-claims/warranty-claims.service';
 import { PurchasesController } from '../purchases/purchases.controller';
@@ -86,6 +88,14 @@ const controllerCases: ControllerCase[] = [
     {
         name: 'GET /sales-returns',
         make: (s, b) => new SalesReturnsController(s, b),
+        call: (c, id) => c.findAll(tenant, { page: 1, limit: 20, storeId: id }),
+        method: 'findAll',
+        permissions: SALES_READ,
+        received: optsAt(3),
+    },
+    {
+        name: 'GET /sales-exchanges',
+        make: (s, b) => new SalesExchangesController(s, b, {} as any),
         call: (c, id) => c.findAll(tenant, { page: 1, limit: 20, storeId: id }),
         method: 'findAll',
         permissions: SALES_READ,
@@ -284,6 +294,7 @@ const serviceCases: ServiceCase[] = [
         expected: branch,
     },
     { name: 'sales returns', run: (db, id) => new SalesReturnsService(db).findAll('t1', 1, 20, opts(id)), model: 'salesReturn', expected: branch },
+    { name: 'sales exchanges', run: (db, id) => new SalesExchangesService(db).findAll('t1', 1, 20, opts(id)), model: 'salesExchange', expected: branch },
     { name: 'warranty claims', run: (db, id) => new WarrantyClaimsService(db).findAll('t1', 1, 20, opts(id)), model: 'warrantyClaim', expected: branch },
     { name: 'purchases', run: (db, id) => new PurchasesService(db).findAll('t1', 1, 20, opts(id)), model: 'purchase', expected: branch },
     { name: 'purchase orders', run: (db, id) => new PurchaseOrdersService(db).findAll('t1', 1, 20, opts(id)), model: 'purchaseOrder', expected: branch },

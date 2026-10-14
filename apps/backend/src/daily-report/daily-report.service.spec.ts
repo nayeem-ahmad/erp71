@@ -10,6 +10,7 @@ describe('DailyReportService.getReport', () => {
     const db = {
         sale: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
         salesReturn: { findMany: jest.fn().mockResolvedValue([]) },
+        salesExchange: { findMany: jest.fn().mockResolvedValue([]) },
         cashierSession: { findMany: jest.fn().mockResolvedValue([]) },
         customerCreditTransaction: { findMany: jest.fn().mockResolvedValue([]) },
         supplierCreditTransaction: { findMany: jest.fn().mockResolvedValue([]) },
@@ -59,6 +60,7 @@ describe('DailyReportService.getReport', () => {
         db.salesReturn.findMany.mockResolvedValue([
             { total_refund: 200, return_number: 'R1', reason: 'damaged' },
         ]);
+        db.salesExchange.findMany.mockResolvedValue([]);
         db.cashierSession.findMany.mockResolvedValue([]);
         db.customerCreditTransaction.findMany.mockResolvedValue([]);
         db.supplierCreditTransaction.findMany.mockResolvedValue([]);
@@ -88,6 +90,21 @@ describe('DailyReportService.getReport', () => {
         const tenderSum = report.tenders.reduce((s, t) => s + t.amount, 0);
         expect(tenderSum).toBe(1000);
         expect(report.tenders.some((t) => t.method === 'Credit' && t.amount === 150)).toBe(true);
+    });
+
+    it('adds a completed exchange difference to net once and leaves gross and the returns list alone', async () => {
+        db.salesExchange.findMany.mockResolvedValue([
+            { difference: 50, cash_delta: 50 },
+            { difference: -20, cash_delta: 0 },
+        ]);
+        const report = await service.getReport(input);
+        expect(report.sales.gross).toBe(1000);
+        expect(report.sales.net).toBe(830);
+        expect(report.headlines.netSales).toBe(830);
+        expect(report.returns.rows).toEqual([{ label: 'damaged', amount: 200 }]);
+        // No open shift, so the cash fallback adds the stored cash delta (50)
+        // on top of cash takings (600) minus the return (200).
+        expect(report.headlines.cashMovement).toBe(450);
     });
 
     it('counts a 01:00 Asia/Dhaka sale in both net sales and new dues', async () => {

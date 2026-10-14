@@ -352,6 +352,7 @@ export const coreMessages = {
             customerPayment: "ग्राहक भुगतान",
             customerLedger: "ग्राहक बहीखाता",
             salesReturns: "बिक्री वापसी",
+            salesExchanges: "विनिमय",
             salesOrders: "बिक्री ऑर्डर",
             salesQuotations: "बिक्री कोटेशन",
             warrantyClaims: "वारंटी दावे",

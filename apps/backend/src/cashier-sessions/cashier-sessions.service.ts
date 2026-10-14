@@ -339,7 +339,7 @@ export class CashierSessionsService {
       throw new BadRequestException('Session not found');
     }
 
-    const [sales, salesReturns, cashTransactions] = await Promise.all([
+    const [sales, salesReturns, cashTransactions, exchanges] = await Promise.all([
       this.db.sale.findMany({
         where: {
           tenant_id: tenantId,
@@ -367,6 +367,18 @@ export class CashierSessionsService {
         where: { tenant_id: tenantId, session_id: sessionId },
         select: { amount: true, type: true },
       }),
+      // An exchange is not a sales return. Only its stored cash_delta moves
+      // this drawer; a bKash or due difference leaves the till alone. A closed
+      // shift keeps the expected_cash snapshotted at close — this live figure
+      // is what that snapshot was taken from, and it is not recomputed later.
+      this.db.salesExchange.findMany({
+        where: {
+          tenant_id: tenantId,
+          session_id: sessionId,
+          status: { not: 'CANCELLED' },
+        },
+        select: { cash_delta: true },
+      }),
     ]);
 
     const byMethod = new Map<string, number>();
@@ -385,6 +397,7 @@ export class CashierSessionsService {
     // A return settles in cash — `SalesReturnsService` has no other tender to
     // give it back through — so the whole refund comes out of this drawer.
     const refunds = salesReturns.reduce((sum, ret) => sum + money(ret.total_refund), 0);
+    const exchangeCash = exchanges.reduce((sum, row) => sum + money(row.cash_delta), 0);
 
     const cashIn = cashTransactions
       .filter((tx) => money(tx.amount) > 0)
@@ -394,7 +407,7 @@ export class CashierSessionsService {
       .reduce((sum, tx) => sum + Math.abs(money(tx.amount)), 0);
 
     const openingCash = money(session.opening_cash);
-    const expectedCash = round2(openingCash + cashTakings - refunds + cashIn - cashOut);
+    const expectedCash = round2(openingCash + cashTakings - refunds + exchangeCash + cashIn - cashOut);
 
     return {
       sessionId,

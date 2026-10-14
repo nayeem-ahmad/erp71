@@ -77,6 +77,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'sales.order-flow.orders': { id: 'sales.order-flow.orders', kind: 'link', icon: 'ClipboardList', labelKey: 'sidebar.items.salesOrders', href: '/sales/orders' },
   'sales.order-flow.delivery': { id: 'sales.order-flow.delivery', kind: 'link', icon: 'MapPin', labelKey: 'sidebar.items.delivery', href: '/sales/delivery' },
   'sales.order-flow.returns': { id: 'sales.order-flow.returns', kind: 'link', icon: 'ArrowLeftRight', labelKey: 'sidebar.items.salesReturns', href: '/sales/returns' },
+  'sales.order-flow.exchanges': { id: 'sales.order-flow.exchanges', kind: 'link', icon: 'ArrowLeftRight', labelKey: 'sidebar.items.salesExchanges', href: '/sales/exchanges' },
   'sales.order-flow.warranty-claims': { id: 'sales.order-flow.warranty-claims', kind: 'link', icon: 'ShieldCheck', labelKey: 'sidebar.items.warrantyClaims', href: '/sales/warranty-claims' },
   'sales.customers': { id: 'sales.customers', kind: 'subgroup', icon: 'Users', labelKey: 'sales.hub.customersCrm' },
   'sales.customers.list': { id: 'sales.customers.list', kind: 'link', icon: 'Users', labelKey: 'sidebar.items.customers', href: '/sales/customers' },
@@ -449,6 +450,7 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'sales.order-flow.quotes': ['CREATE_QUOTATION'],
   'sales.order-flow.orders': ['CREATE_SALES_ORDER'],
   'sales.order-flow.returns': ['CREATE_RETURN'],
+  'sales.order-flow.exchanges': ['CREATE_RETURN'],
   'sales.daily-report': ['VIEW_FINANCIAL_REPORTS'],
 
   storefront: [
@@ -541,6 +543,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * The 2026-09-26 line-item searches added one leaf to each of the two report
  * subgroups, again with no reset needed:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=sales.reports.line-items,purchase.reports.line-items`.
+ *
+ * The 2026-10-13 sales exchange added `sales.order-flow.exchanges` next to
+ * Returns. A saved layout does not grow new nodes on its own:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=sales.order-flow.exchanges`.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -548,15 +554,16 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.overview', 'sales', 0),
   layoutNode('sales.list', 'sales', 1),
   layoutNode('sales.order-flow.returns', 'sales', 2),
-  layoutNode('sales.receivables.customer-payments', 'sales', 3),
-  layoutNode('sales.pos', 'sales', 4),
-  layoutNode('sales.order-flow.quotes', 'sales', 5),
-  layoutNode('sales.order-flow.orders', 'sales', 6),
-  layoutNode('sales.order-flow.delivery', 'sales', 7),
-  layoutNode('sales.order-flow.warranty-claims', 'sales', 8),
-  layoutNode('sales.mushak', 'sales', 9),
-  layoutNode('sales.daily-report', 'sales', 10),
-  layoutNode('sales.reports', 'sales', 11),
+  layoutNode('sales.order-flow.exchanges', 'sales', 3),
+  layoutNode('sales.receivables.customer-payments', 'sales', 4),
+  layoutNode('sales.pos', 'sales', 5),
+  layoutNode('sales.order-flow.quotes', 'sales', 6),
+  layoutNode('sales.order-flow.orders', 'sales', 7),
+  layoutNode('sales.order-flow.delivery', 'sales', 8),
+  layoutNode('sales.order-flow.warranty-claims', 'sales', 9),
+  layoutNode('sales.mushak', 'sales', 10),
+  layoutNode('sales.daily-report', 'sales', 11),
+  layoutNode('sales.reports', 'sales', 12),
   layoutNode('sales.reports.summary', 'sales.reports', 0),
   layoutNode('sales.reports.products', 'sales.reports', 1),
   layoutNode('sales.reports.line-items', 'sales.reports', 2),
@@ -570,7 +577,7 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.receivables.due-aging', 'sales.reports', 10),
   layoutNode('sales.customers.loyalty', 'sales.reports', 11),
   layoutNode('sales.receivables.bad-debts', 'sales.reports', 12),
-  layoutNode('sales.setup', 'sales', 12),
+  layoutNode('sales.setup', 'sales', 13),
   layoutNode('sales.setup.customer-groups', 'sales.setup', 0),
   layoutNode('sales.setup.price-lists', 'sales.setup', 1),
   layoutNode('sales.setup.territories', 'sales.setup', 2),

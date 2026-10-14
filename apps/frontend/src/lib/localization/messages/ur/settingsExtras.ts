@@ -218,6 +218,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "منی رسیدیں",
             SALES_ORDER: "سیلز آرڈرز",
             SALES_RETURN: "سیلز واپسیاں",
+            SALES_EXCHANGE: "سیلز تبادلے",
             DELIVERY_CHALLAN: "ڈیلیوری چالان",
             PURCHASE_ORDER: "خریداری کے آرڈرز",
             PURCHASE_INVOICE: "خریداری کے انوائسز",

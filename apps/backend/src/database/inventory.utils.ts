@@ -300,6 +300,10 @@ const NEGATIVE_STOCK_MOVEMENT_TYPES = new Set([
     'SALES_ORDER_DELIVERY',
     'SALES_RETURN_REVERSAL',
     'SALES_RETURN_DELETE',
+    // The replacement leaving the shelf is a sale. Undoing the restock of the
+    // goods that came back is the undo of a receipt, same as a return reversal.
+    'EXCHANGE_OUT',
+    'EXCHANGE_IN_REVERSAL',
 ]);
 
 /**

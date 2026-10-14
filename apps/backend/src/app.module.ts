@@ -40,6 +40,7 @@ import { CustomerGroupsModule } from './customer-groups/customer-groups.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
 import { TerritoriesModule } from './territories/territories.module';
 import { SalesReturnsModule } from './sales-returns/sales-returns.module';
+import { SalesExchangesModule } from './sales-exchanges/sales-exchanges.module';
 import { SalesOrdersModule } from './sales-orders/sales-orders.module';
 import { SalesQuotationsModule } from './sales-quotations/sales-quotations.module';
 import { CashierSessionsModule } from './cashier-sessions/cashier-sessions.module';
@@ -193,6 +194,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         PriceListsModule,
         TerritoriesModule,
         SalesReturnsModule,
+        SalesExchangesModule,
         SalesOrdersModule,
         SalesQuotationsModule,
         CashierSessionsModule,

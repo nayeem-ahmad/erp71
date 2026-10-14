@@ -59,6 +59,9 @@ describe('SalesReportsService', () => {
                 aggregate: jest.fn(),
                 groupBy: jest.fn(),
             },
+            salesExchange: {
+                findMany: jest.fn().mockResolvedValue([]),
+            },
             salesReturn: {
                 findUnique: jest.fn(),
                 findFirst: jest.fn(),
@@ -202,6 +205,36 @@ describe('SalesReportsService', () => {
             expect(result.summary.totalRevenue).toBe(1000);
             expect(result.summary.totalReturns).toBe(200);
             expect(result.summary.netRevenue).toBe(800);
+        });
+
+        it('counts an exchange once, as replacement sales minus returned goods', async () => {
+            db.sale.findMany.mockResolvedValue([makeSale('2026-01-01', 1000)]);
+            db.salesReturn.findMany.mockResolvedValue([]);
+            db.salesExchange.findMany.mockResolvedValue([{
+                id: 'ex-1',
+                created_at: new Date('2026-01-01'),
+                store_id: 'store-1',
+                returned_total: 400,
+                replacement_total: 550,
+                sale: { customer_id: null, counter_id: null, created_by: null, sales_rep_id: null, customer: null },
+                items: [{
+                    returned_product_id: 'p1',
+                    returned_quantity: 1,
+                    returned_unit_price: 400,
+                    returned_unit_cost: 200,
+                    replacement_product_id: 'p2',
+                    replacement_quantity: 1,
+                    replacement_unit_price: 550,
+                    replacement_unit_cost: 300,
+                }],
+            }]);
+
+            const result = await service.getSalesSummary(tenantId, {}, 'Asia/Dhaka');
+
+            expect(result.summary.totalRevenue).toBe(1550);
+            expect(result.summary.totalReturns).toBe(400);
+            expect(result.summary.netRevenue).toBe(1150);
+            expect(result.summary.transactionCount).toBe(1);
         });
 
         it('builds daily breakdown rows correctly', async () => {

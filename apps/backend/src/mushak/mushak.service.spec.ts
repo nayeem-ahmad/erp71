@@ -72,6 +72,7 @@ describe('MushakService', () => {
             tenant: { findUnique: jest.fn().mockResolvedValue(TENANT) },
             sale: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
             salesReturn: { findFirst: jest.fn() },
+            salesExchange: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -376,6 +377,90 @@ describe('MushakService', () => {
         it('refuses a return with no invoice to reduce', async () => {
             db.salesReturn.findFirst.mockResolvedValue(returnRow({ sale: null }));
             await expect(service.getCreditNote('t1', 'ret-1')).rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('builds an exchange 6.7 at the original rates and a 6.3 at the replacement price', async () => {
+            db.salesExchange.findFirst.mockResolvedValue({
+                id: 'ex-1',
+                exchange_number: 'EXC-1',
+                status: 'COMPLETED',
+                reason: 'Wrong size',
+                created_at: new Date('2026-09-12T04:00:00.000Z'),
+                store: { name: 'Motijheel' },
+                sale: {
+                    id: 'sale-1',
+                    reference_number: '2609-001',
+                    serial_number: 'SL-1',
+                    sale_date: new Date('2026-09-10T04:00:00.000Z'),
+                    created_at: new Date('2026-09-10T04:00:00.000Z'),
+                    customer: { name: 'Rahim Stores', bin: null, nid: null, address: null, phone: null },
+                },
+                items: [{
+                    returned_quantity: 1,
+                    returned_unit_price: 575,
+                    returned_vat_rate: 15,
+                    returned_sd_rate: 0,
+                    returned_vat_amount: 75,
+                    returned_sd_amount: 0,
+                    returnedProduct: { name: 'Shirt M', sku: 'M', unit_type: 'pcs' },
+                    replacement_quantity: 1,
+                    replacement_unit_price: 690,
+                    replacement_vat_rate: 15,
+                    replacement_sd_rate: 0,
+                    replacement_vat_amount: 90,
+                    replacement_sd_amount: 0,
+                    replacementProduct: { name: 'Shirt L', sku: 'L', unit_type: 'pcs' },
+                }],
+            });
+
+            const note = await service.getExchangeCreditNote('t1', 'ex-1');
+            expect(note.form).toBe('6.7');
+            expect(note.against).toMatchObject({ saleId: 'sale-1', number: '2609-001' });
+            expect(note.note.number).toBe('EXC-1');
+            expect(note.lines[0]).toMatchObject({
+                description: 'Shirt M',
+                vatRate: 15,
+                vatAmount: 75,
+                inclusiveTotal: 575,
+            });
+
+            const invoice = await service.getExchangeTaxInvoice('t1', 'ex-1');
+            expect(invoice.form).toBe('6.3');
+            expect(invoice.invoice.number).toBe('EXC-1');
+            expect(invoice.lines[0]).toMatchObject({
+                description: 'Shirt L',
+                vatRate: 15,
+                vatAmount: 90,
+                inclusiveTotal: 690,
+            });
+        });
+
+        it('puts the exchange number on the 6.2 row at the replacement total', async () => {
+            db.sale.findMany.mockResolvedValue([]);
+            db.salesExchange.findMany.mockResolvedValue([{
+                id: 'ex-1',
+                exchange_number: 'EXC-9',
+                created_at: new Date('2026-09-12T04:00:00.000Z'),
+                store: { name: 'Motijheel' },
+                sale: { customer: { name: 'Rahim', bin: null, nid: null, address: null, phone: null } },
+                items: [{
+                    replacement_quantity: 1,
+                    replacement_unit_price: 115,
+                    replacement_vat_rate: 15,
+                    replacement_sd_rate: 0,
+                    replacement_vat_amount: 15,
+                    replacement_sd_amount: 0,
+                    replacementProduct: { name: 'Shirt L', sku: 'L', unit_type: 'pcs' },
+                }],
+            }]);
+
+            const book = await service.getSalesBook('t1', {}, 'Asia/Dhaka');
+            expect(book.rows).toHaveLength(1);
+            expect(book.rows[0]).toMatchObject({
+                invoiceNumber: 'EXC-9',
+                inclusiveTotal: 115,
+                vatAmount: 15,
+            });
         });
 
         it('flags a note built from a pre-snapshot sale line', async () => {

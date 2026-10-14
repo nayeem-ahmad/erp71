@@ -218,6 +218,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "Resit wang",
             SALES_ORDER: "Pesanan jualan",
             SALES_RETURN: "Pulangan jualan",
+            SALES_EXCHANGE: "Pertukaran jualan",
             DELIVERY_CHALLAN: "Nota penghantaran",
             PURCHASE_ORDER: "Pesanan belian",
             PURCHASE_INVOICE: "Invois belian",

@@ -33,6 +33,7 @@ export const DOC_TYPES: PrintDocType[] = [
     'MONEY_RECEIPT',
     'SALES_ORDER',
     'SALES_RETURN',
+    'SALES_EXCHANGE',
     'DELIVERY_CHALLAN',
     'PURCHASE_ORDER',
     'PURCHASE_INVOICE',

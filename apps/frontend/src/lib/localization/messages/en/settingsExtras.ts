@@ -218,6 +218,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: 'Money receipts',
             SALES_ORDER: 'Sales orders',
             SALES_RETURN: 'Sales returns',
+            SALES_EXCHANGE: 'Sales exchanges',
             DELIVERY_CHALLAN: 'Delivery challans',
             PURCHASE_ORDER: 'Purchase orders',
             PURCHASE_INVOICE: 'Purchase invoices',

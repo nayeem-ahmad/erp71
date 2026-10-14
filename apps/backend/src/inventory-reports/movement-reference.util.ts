@@ -46,6 +46,22 @@ const LOADERS: Record<string, Loader> = {
             party: row.customer?.name ?? null,
         })),
 
+    SALES_EXCHANGE: async (db, tenantId, ids) =>
+        (
+            await db.salesExchange.findMany({
+                where: { id: { in: ids }, tenant_id: tenantId },
+                select: {
+                    id: true,
+                    exchange_number: true,
+                    sale: { select: { customer: { select: { name: true } } } },
+                },
+            })
+        ).map((row: any) => ({
+            id: row.id,
+            number: row.exchange_number ?? null,
+            party: row.sale?.customer?.name ?? null,
+        })),
+
     SALES_RETURN: async (db, tenantId, ids) =>
         (
             await db.salesReturn.findMany({

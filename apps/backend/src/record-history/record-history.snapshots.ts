@@ -195,6 +195,50 @@ const loadSalesReturn: Loader = async (db, id) => {
     });
 };
 
+const loadSalesExchange: Loader = async (db, id) => {
+    const row = await db.salesExchange.findUnique({
+        where: { id },
+        include: {
+            sale: { select: { serial_number: true, reference_number: true } },
+            store: named,
+            warehouse: named,
+            items: {
+                include: {
+                    returnedProduct: productRef,
+                    replacementProduct: productRef,
+                    warehouse: named,
+                },
+            },
+        },
+    });
+    if (!row) return null;
+    const { sale, store, warehouse, items } = row;
+    return snapshot(row.tenant_id, row.exchange_number, {
+        ...scalars(await withUserNames(db, row, ['created_by', 'cancelled_by']), [
+            'sale', 'store', 'warehouse', 'items', 'sale_id', 'store_id', 'warehouse_id', 'session_id',
+        ]),
+        sale: sale?.reference_number || sale?.serial_number || null,
+        branch: nameOf(store),
+        warehouse: nameOf(warehouse),
+        items: keyLines(
+            items.map((item) => ({
+                _ref: item.id,
+                returned_product: item.returnedProduct?.name ?? null,
+                returned_sku: item.returnedProduct?.sku ?? null,
+                returned_quantity: item.returned_quantity,
+                returned_unit_price: item.returned_unit_price,
+                replacement_product: item.replacementProduct?.name ?? null,
+                replacement_sku: item.replacementProduct?.sku ?? null,
+                replacement_quantity: item.replacement_quantity,
+                replacement_unit_price: item.replacement_unit_price,
+                warehouse: nameOf(item.warehouse),
+            })),
+            (line) => line._ref,
+            (line) => line.replacement_product ?? line.returned_product ?? line._ref,
+        ),
+    });
+};
+
 const loadPurchase: Loader = async (db, id) => {
     const row = await db.purchase.findUnique({
         where: { id },
@@ -330,6 +374,7 @@ export const SNAPSHOT_LOADERS: Record<RecordHistoryEntityType, Loader> = {
     PRODUCT: loadProduct,
     SALE: loadSale,
     SALES_RETURN: loadSalesReturn,
+    SALES_EXCHANGE: loadSalesExchange,
     PURCHASE: loadPurchase,
     PURCHASE_RETURN: loadPurchaseReturn,
     CUSTOMER_PAYMENT: loadCustomerPayment,

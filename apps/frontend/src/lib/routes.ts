@@ -31,6 +31,11 @@ export const routes = {
         returnDetail: (id: string) => `/sales/returns/${id}` as const,
         /** মূসক-৬.৭ · the credit note raised against a return. */
         returnMushak: (id: string) => `/sales/returns/${id}/mushak` as const,
+        exchanges: '/sales/exchanges',
+        exchangeNew: '/sales/exchanges/new',
+        exchangeDetail: (id: string) => `/sales/exchanges/${id}` as const,
+        exchangeMushak: (id: string) => `/sales/exchanges/${id}/mushak` as const,
+        exchangeCreditNote: (id: string) => `/sales/exchanges/${id}/credit-note` as const,
         orders: '/sales/orders',
         orderNew: '/sales/orders/new',
         orderDetail: (id: string) => `/sales/orders/${id}` as const,
