@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { CustomerType, Prisma } from '@prisma/client';
 import { checkedSalesRepId, listSalesReps, SALES_REP_SELECT } from './sales-rep.util';
 import { DatabaseService } from '../database/database.service';
 import { EncryptionService } from '../common/encryption.service';
@@ -19,6 +20,14 @@ import {
 import { paginate, PaginatedResult } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import {
+    applyColumnFilters,
+    codesContaining,
+    ColumnFilters,
+    containsInsensitive,
+    FilterableMap,
+    numberEquals,
+} from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import {
     assertNotAheadOfSeries,
@@ -50,6 +59,24 @@ const CUSTOMER_SORTABLE: SortableMap = {
     due_balance: (dir) => ({ due_balance: dir }),
 };
 const CUSTOMER_DEFAULT_ORDER = { created_at: 'desc' as const };
+
+/**
+ * Columns of the customers table that take an advanced filter, by the column id
+ * the table sends. The Customer cell shows the phone under the name, so that
+ * column matches either.
+ */
+const CUSTOMER_FILTERABLE: FilterableMap<Prisma.CustomerWhereInput> = {
+    customer_code: (v) => ({ customer_code: containsInsensitive(v) }),
+    name: (v) => ({ OR: [{ name: containsInsensitive(v) }, { phone: containsInsensitive(v) }] }),
+    owner_name: (v) => ({ owner_name: containsInsensitive(v) }),
+    customer_type: (v) => ({ customer_type: { in: codesContaining(Object.values(CustomerType), v) } }),
+    group: (v) => ({ customerGroup: { name: containsInsensitive(v) } }),
+    territory: (v) => ({ territory: { name: containsInsensitive(v) } }),
+    total_spent: numberEquals('total_spent'),
+    due_balance: numberEquals('due_balance'),
+    loyalty_points: numberEquals('loyalty_points'),
+    segment_category: (v) => ({ segment_category: containsInsensitive(v) }),
+};
 
 /** Amounts below this are rounding dust, not money. Matches customer-credit.utils. */
 const AMOUNT_EPSILON = 0.005;
@@ -426,6 +453,8 @@ export class CustomersService {
             timezone: string;
             /** Whose customers — see `customer-visibility.ts`. Omitted: everyone's. */
             scope?: CustomerScope;
+            /** The table's advanced column filters — see CUSTOMER_FILTERABLE. */
+            filters?: ColumnFilters;
         },
     ): Promise<PaginatedResult<any>> {
         const page = opts?.page ?? 1;
@@ -445,10 +474,11 @@ export class CustomersService {
         }
         if (opts?.segment) where.segment_category = opts.segment;
         if (opts?.customerType) where.customer_type = opts.customerType;
+        const filtered = applyColumnFilters(where, opts?.filters, CUSTOMER_FILTERABLE);
 
         const [items, total] = await Promise.all([
             this.db.customer.findMany({
-                where,
+                where: filtered,
                 // The rep travels with the customer so the sale screen can
                 // credit the sale to them on picking the customer.
                 include: {
@@ -461,7 +491,7 @@ export class CustomersService {
                 skip,
                 take: limit,
             }),
-            this.db.customer.count({ where }),
+            this.db.customer.count({ where: filtered }),
         ]);
 
         return paginate(items.map(c => this.decryptCustomer(c)), total, page, limit);

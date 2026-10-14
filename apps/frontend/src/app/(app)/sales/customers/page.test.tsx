@@ -87,6 +87,23 @@ describe('CustomersPage — Customer Management', () => {
         jest.clearAllMocks();
     });
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Code/), { target: { value: 'CUST-9' } });
+
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, filters: { customer_code: 'CUST-9' } }),
+            ),
+        );
+    });
+
     it('renders the Customers page heading', async () => {
         render(<CustomersPage />);
         expect(screen.getByRole('heading', { name: 'Customers' })).toBeInTheDocument();

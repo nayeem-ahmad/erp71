@@ -109,15 +109,22 @@ jest.mock('@/components/data-table', () => ({
         isLoading,
         data,
         columns = [],
+        serverPagination,
     }: {
         title: string;
         emptyMessage: string;
         isLoading: boolean;
         data: any[];
         columns?: any[];
+        serverPagination?: { onColumnFiltersChange?: (filters: { id: string; value: string }[]) => void };
     }) => (
         <div>
             <div data-testid="data-table-title">{title}</div>
+            {serverPagination?.onColumnFiltersChange && (
+                <button type="button" onClick={() => serverPagination.onColumnFiltersChange!([{ id: 'sku', value: 'RICE' }])}>
+                    filter-sku
+                </button>
+            )}
             {isLoading && <div data-testid="loading-indicator">Loading</div>}
             <div data-testid="empty-message">{emptyMessage}</div>
             <div data-testid="row-count">{data.length}</div>
@@ -198,6 +205,21 @@ describe('InventoryPage', () => {
         ]);
         // Clear localStorage subscription plan
         removeWorkspaceItem('subscription_plan_code');
+    });
+
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('sends the table column filters to the server, from page 1', async () => {
+        const { api } = require('@/lib/api');
+        render(<InventoryPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'filter-sku' }));
+
+        await waitFor(() =>
+            expect(api.getProductsPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, filters: { sku: 'RICE' } }),
+            ),
+        );
     });
 
     it('renders the page heading', async () => {

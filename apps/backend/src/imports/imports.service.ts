@@ -36,10 +36,29 @@ import {
     UpdateImportShipmentDto,
 } from './imports.dto';
 import { paginatedFindMany } from '../common/list-pagination.util';
+import {
+    applyColumnFilters,
+    containsInsensitive,
+    type FilterableMap,
+    numberEquals,
+} from '../common/column-filter.util';
 import { AssetsService } from '../assets/assets.service';
 import { parseAttachmentUpload, resourceTypeFor } from '../common/file-upload.util';
 
 const num = (value: unknown) => Number(value ?? 0);
+
+/**
+ * Columns of the shipments table that take an advanced filter, by the table's
+ * column id. The BDT value and costs to date are worked out per shipment, and
+ * the ETA is a date, so those take none.
+ */
+const SHIPMENT_FILTERABLE: FilterableMap<Prisma.ImportShipmentWhereInput> = {
+    reference_number: (v) => ({ reference_number: containsInsensitive(v) }),
+    lc_number: (v) => ({ lc_number: containsInsensitive(v) }),
+    supplier: (v) => ({ supplier: { name: containsInsensitive(v) } }),
+    status: (v) => ({ status: containsInsensitive(v) }),
+    invoice_value_fc: numberEquals('invoice_value_fc'),
+};
 
 /**
  * Imports under a Letter of Credit.
@@ -307,6 +326,7 @@ export class ImportsService {
                   }
                 : {}),
         };
+        const filtered = applyColumnFilters(where, query.filters, SHIPMENT_FILTERABLE);
 
         const sortBy = (SHIPMENT_SORTABLE as readonly string[]).includes(query.sortBy ?? '')
             ? (query.sortBy as ShipmentSortable)
@@ -323,7 +343,7 @@ export class ImportsService {
                     },
                 }),
             count: (args) => this.db.importShipment.count(args as any),
-            where,
+            where: filtered,
             // Nulls last on the optional columns, or a shipment with no ETA
             // heads a list somebody is reading for what arrives next.
             orderBy:

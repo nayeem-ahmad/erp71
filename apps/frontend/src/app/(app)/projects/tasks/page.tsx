@@ -246,6 +246,7 @@ export default function TasksPage() {
             createdRange?.to,
             userId,
         ],
+        columnFilters: true,
         fetch: (params) =>
             api.getProjectTasks({
                 ...params,
@@ -533,11 +534,12 @@ export default function TasksPage() {
                 id: 'due_date',
                 header: m.fields.dueDate,
                 accessorKey: 'due_date',
+                enableColumnFilter: false,
                 meta: { hideOnMobile: true },
                 cell: ({ row }: { row: { original: TaskRow } }) =>
                     formatDate(row.original.due_date),
             },
-            createdAtColumn(columnHelper, { header: t.common.createdAt }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, enableColumnFilter: false }),
             {
                 id: 'actions',
                 header: m.fields.actions,

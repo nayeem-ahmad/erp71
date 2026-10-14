@@ -1,4 +1,5 @@
 import { Transform } from 'class-transformer';
+import { type ColumnFilters, ColumnFiltersParam } from '../common/column-filter.util';
 import {
     ArrayNotEmpty,
     IsArray,
@@ -231,6 +232,10 @@ export class ListContactsDto {
     @Transform(emptyToUndefined)
     @IsString()
     createdTo?: string;
+
+    /** The table's advanced column filters — see CONTACT_FILTERABLE. */
+    @ColumnFiltersParam()
+    filters?: ColumnFilters;
 }
 
 export enum ContactBulkAction {

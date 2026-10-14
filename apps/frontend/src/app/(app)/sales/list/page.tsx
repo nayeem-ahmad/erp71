@@ -135,6 +135,7 @@ export default function SalesPage() {
         // fresh query, and the export walks the same filtered query.
         deps: [debouncedSearch, statusFilter, dateRange, createdRange, branch.apiStoreId],
         enabled: branch.ready,
+        columnFilters: true,
         fetch: (params) =>
             api.getSalesList({
                 ...params,
@@ -186,12 +187,14 @@ export default function SalesPage() {
             columnHelper.accessor((row) => row.sale_date ?? row.created_at, {
                 id: 'sale_date',
                 header: t.sales.columns.saleDate,
+                // The date-range control filters this column.
+                enableColumnFilter: false,
                 cell: (info) => (
                     <span className="text-sm text-gray-600">{formatSaleDate(info.getValue(), locale)}</span>
                 ),
                 size: 150,
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
                 id: 'customer',
                 header: t.sales.columns.customer,
@@ -205,6 +208,8 @@ export default function SalesPage() {
             columnHelper.accessor((row) => row.items?.length ?? 0, {
                 id: 'item_count',
                 header: t.sales.columns.items,
+                // A count of the lines, not a stored value the query could match.
+                enableColumnFilter: false,
                 cell: (info) => (
                     <span className="text-sm font-bold text-gray-700">
                         {formatMessage(t.shared.itemsCount, { count: info.getValue() })}

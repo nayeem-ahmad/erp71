@@ -127,6 +127,23 @@ describe('SalesListPage — Sales Transaction List', () => {
         jest.clearAllMocks();
     });
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Customer/), { target: { value: 'karim' } });
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, filters: { customer: 'karim' } }),
+            ),
+        );
+    });
+
     it('renders the Sales page heading', async () => {
         renderWithQueryClient(<SalesListPage />);
         expect(screen.getByRole('heading', { level: 1, name: 'Sales' })).toBeInTheDocument();

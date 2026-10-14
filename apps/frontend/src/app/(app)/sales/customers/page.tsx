@@ -145,6 +145,7 @@ export default function CustomersPage() {
         }),
         deps: [debouncedSearch, segment, customerType, createdRange, branch.apiStoreId],
         enabled: branch.ready,
+        columnFilters: true,
     });
     useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
@@ -334,7 +335,7 @@ export default function CustomersPage() {
                 size: 130,
                 meta: { hideOnMobile: true },
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.display({
                 id: 'actions',
                 header: t.common.actions,

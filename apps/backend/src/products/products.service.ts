@@ -11,6 +11,13 @@ import { RedisService } from '../cache/redis.service';
 import { PriceListsService } from '../price-lists/price-lists.service';
 import { PlanEntitlementsService } from '../subscription-plans/plan-entitlements.service';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import {
+    applyColumnFilters,
+    type ColumnFilters,
+    containsInsensitive,
+    type FilterableMap,
+    numberEquals,
+} from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import {
     clampRateHistoryLimit,
@@ -23,6 +30,19 @@ import {
 import { ACTIVE_PURCHASE } from '../purchases/purchase-status';
 
 const CACHE_TTL = 60; // seconds
+
+/**
+ * Columns of the products table that take an advanced filter, by the table's
+ * column id. Stock, its value and status, and the warranty label are worked out
+ * per row, so they take none — the stock-status picker covers status.
+ */
+const PRODUCT_FILTERABLE: FilterableMap<Prisma.ProductWhereInput> = {
+    name: (v) => ({ name: containsInsensitive(v) }),
+    sku: (v) => ({ sku: containsInsensitive(v) }),
+    price: numberEquals('price'),
+    group: (v) => ({ group: { name: containsInsensitive(v) } }),
+    subgroup: (v) => ({ subgroup: { name: containsInsensitive(v) } }),
+};
 
 const PRODUCT_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -145,6 +165,8 @@ export class ProductsService {
             createdTo?: string;
             /** IANA zone the calendar-day bounds above are measured in. */
             timezone: string;
+            /** The table's advanced column filters — see PRODUCT_FILTERABLE. Part of the cache key below. */
+            columnFilters?: ColumnFilters;
         },
     ): Promise<PaginatedResult<any>> {
         const page = filters?.page ?? 1;
@@ -155,7 +177,7 @@ export class ProductsService {
         const cached = await this.redis.get<PaginatedResult<any>>(cacheKey);
         if (cached) return cached;
 
-        const where = this.buildWhere(tenantId, filters);
+        const where = applyColumnFilters(this.buildWhere(tenantId, filters), filters?.columnFilters, PRODUCT_FILTERABLE);
 
         const [items, total] = await Promise.all([
             this.db.product.findMany({

@@ -106,6 +106,18 @@ beforeEach(() => {
 });
 
 describe('Tasks page', () => {
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        render(<TasksPage />);
+        await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+
+        fireEvent.click(await screen.findByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Task/), { target: { value: 'roof' } });
+
+        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ page: 1, filters: { title: 'roof' } })));
+    });
+
     it('opens on the signed-in user’s tasks, preserving what My Tasks used to show', async () => {
         render(<TasksPage />);
 

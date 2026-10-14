@@ -86,6 +86,7 @@ export default function ProjectsPage() {
         enabled: filtersReady,
         initialSort: { id: 'created_at', desc: true },
         deps: [effectiveSearch, status, typeId, visibility],
+        columnFilters: true,
         fetch: (params) =>
             api.getProjects({
                 ...params,
@@ -178,6 +179,7 @@ export default function ProjectsPage() {
                 id: 'target_end_date',
                 header: m.fields.targetEndDate,
                 accessorKey: 'target_end_date',
+                enableColumnFilter: false,
                 hideOnMobile: true,
                 cell: ({ row }: { row: { original: ProjectRow } }) =>
                     formatDate(row.original.target_end_date),

@@ -7,6 +7,12 @@ import { paginate } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { runImport, type ImportResult } from '../common/import.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import {
+    applyColumnFilters,
+    codesContaining,
+    containsInsensitive,
+    type FilterableMap,
+} from '../common/column-filter.util';
 import { RemainingHoursService, RemainingSource } from './remaining-hours.service';
 import { ProjectSettingsService } from './project-settings.service';
 import { ActivityType, ProjectActivityService } from './project-activity.service';
@@ -53,6 +59,16 @@ export function assigneePatch(value: string | null): Partial<UpdateTaskDto> {
     if (kind === 'employee') return { assigneeEmployeeId: id, assigneeId: '' };
     throw new BadRequestException('Unknown assignee.');
 }
+
+/**
+ * Columns of the tasks table that take an advanced filter, by the table's
+ * column id. Only the columns the table reads through an accessor offer one;
+ * the two dates have the created-range control and none.
+ */
+const TASK_FILTERABLE: FilterableMap<Prisma.ProjectTaskWhereInput> = {
+    title: (v) => ({ title: containsInsensitive(v) }),
+    priority: (v) => ({ priority: { in: codesContaining(Object.values(ProjectPriorityDto), v) } }),
+};
 
 const TASK_SORTABLE: SortableMap = {
     title: (dir) => ({ title: dir }),
@@ -246,7 +262,10 @@ export class ProjectTasksService {
         // page's assignee filter is theirs to clear.
         // Merged rather than spread so a filter added above can never be
         // overwritten by, or overwrite, this one.
-        const scoped = ProjectAccessService.merge(where, await this.access.taskFilter(viewer));
+        const scoped = ProjectAccessService.merge(
+            applyColumnFilters(where, query.filters, TASK_FILTERABLE),
+            await this.access.taskFilter(viewer),
+        );
 
         const [items, total] = await Promise.all([
             this.db.projectTask.findMany({

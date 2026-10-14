@@ -9,7 +9,7 @@ import { toast } from '@/lib/toast';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
-import { createColumnHelper, type ColumnDef, type ColumnFiltersState } from '@tanstack/react-table';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { DataTable, createdAtColumn, CreatedRangeFilter, type BulkAction } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
@@ -24,6 +24,7 @@ import {
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { isOpenLifecycle, leadStatusLabel, leadStatusTone, stageOptionLabel, type LeadStage } from '@/lib/lead-status';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { useServerColumnFilters } from '@/lib/column-filters';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
@@ -177,18 +178,6 @@ function readStaleDaysParam(value: string | null): number | null {
     return Number.isInteger(days) && days > 0 && days <= MAX_STALE_DAYS ? days : null;
 }
 
-/**
- * The table's advanced filters as the list endpoint takes them — `{ columnId: text }`,
- * serialised so it can be compared by value — or `''` when none is set. Blank boxes
- * are dropped, so clearing one does not count as a change of slice.
- */
-function columnFilterKey(filters: ColumnFiltersState): string {
-    const entries = filters.flatMap((f) =>
-        typeof f.value === 'string' && f.value.trim() ? [[f.id, f.value.trim()] as const] : [],
-    );
-    return entries.length ? JSON.stringify(Object.fromEntries(entries)) : '';
-}
-
 const LEAD_IMPORT_FIELDS: ImportField[] = [
     { key: 'name', label: 'Name', required: true },
     { key: 'mobile', label: 'Mobile', required: false },
@@ -331,15 +320,8 @@ function LeadsPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null);
-    /**
-     * The table's advanced filters. Held here and sent to the server rather than
-     * left to the table, which could only narrow the page already fetched — a
-     * filter matching two leads showed one on page 4 and the other on page 5.
-     * Typed, so debounced like the search box.
-     */
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-    const typedColumnFilterKey = useMemo(() => columnFilterKey(columnFilters), [columnFilters]);
-    const [appliedColumnFilterKey, setAppliedColumnFilterKey] = useState('');
+    // The table's advanced filters, sent to the server — see useServerColumnFilters.
+    const { columnFilters, setColumnFilters, filters: columnFilterParam } = useServerColumnFilters();
     // Guards against out-of-order responses: a filter/sort change while on page > 1 fires a
     // stale-page fetch, then the reset-to-page-1 effect fires a second fetch. Only the latest
     // in-flight request may commit its result.
@@ -383,19 +365,11 @@ function LeadsPage() {
         return () => clearTimeout(timer);
     }, [search, typing]);
 
-    useEffect(() => {
-        const timer = setTimeout(() => setAppliedColumnFilterKey(typedColumnFilterKey), 300);
-        return () => clearTimeout(timer);
-    }, [typedColumnFilterKey]);
-
     /** The list's query: every page filter plus the table's own. The board has no
      *  column filters to show, so it keeps to `baseQuery`. */
     const tableQuery = useMemo(
-        () => ({
-            ...baseQuery,
-            filters: appliedColumnFilterKey ? (JSON.parse(appliedColumnFilterKey) as Record<string, string>) : undefined,
-        }),
-        [baseQuery, appliedColumnFilterKey],
+        () => ({ ...baseQuery, filters: columnFilterParam }),
+        [baseQuery, columnFilterParam],
     );
 
     const fetchAllRows = useCallback(
@@ -453,7 +427,7 @@ function LeadsPage() {
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, appliedColumnFilterKey, sort]);
+    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, columnFilterParam, sort]);
 
     const confirmDelete = useCallback(async () => {
         if (!pendingDelete) return;
@@ -710,9 +684,7 @@ function LeadsPage() {
                 enableSorting: false,
             }),
         ),
-        // The created-range control above filters this one; a text box matched
-        // against a timestamp has nothing the API could do with it.
-        { ...createdAtColumn(columnHelper, { header: c.createdAt, locale }), enableColumnFilter: false },
+        createdAtColumn(columnHelper, { header: c.createdAt, locale, enableColumnFilter: false }),
         columnHelper.display({
             id: 'actions',
             header: c.actions,
