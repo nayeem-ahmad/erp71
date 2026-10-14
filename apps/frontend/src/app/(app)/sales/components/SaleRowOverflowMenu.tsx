@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Ban, Copy, Eye, FileCheck, MoreHorizontal, Receipt } from 'lucide-react';
+import { ArrowLeftRight, Ban, Copy, Eye, FileCheck, MoreHorizontal, Receipt, Undo2 } from 'lucide-react';
 import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { useI18n } from '@/lib/i18n';
@@ -13,6 +13,11 @@ interface SaleRowOverflowMenuProps {
     saleId: string;
     /** Cancel is hidden without the grant, and absent on an already-void entry. */
     onCancel?: () => void;
+    /**
+     * Offer Sales Return and Exchange against this sale. Off for a draft or a
+     * cancelled sale and without CREATE_RETURN — the API refuses all three.
+     */
+    canReturn?: boolean;
     /** The size the occasional documents print at — the counter's remembered one. */
     paperSize: PaperSize;
     onPrintReceipt: (size: PaperSize) => void;
@@ -45,6 +50,7 @@ interface SaleRowOverflowMenuProps {
 export default function SaleRowOverflowMenu({
     saleId,
     onCancel,
+    canReturn = false,
     label,
     paperSize,
     onPrintReceipt,
@@ -133,6 +139,30 @@ export default function SaleRowOverflowMenu({
                         <Copy className="h-4 w-4 text-gray-400" />
                         {t.common.duplicate}
                     </Link>
+                    {/* Both entry screens load the sale from `saleId`, so the
+                        counter never retypes the invoice number it clicked on. */}
+                    {canReturn && (
+                        <>
+                            <Link
+                                href={`${routes.sales.returnNew}?saleId=${saleId}`}
+                                role="menuitem"
+                                onClick={() => setOpen(false)}
+                                className={itemClass}
+                            >
+                                <Undo2 className="h-4 w-4 text-gray-400" />
+                                {t.sales.printMenu.salesReturn}
+                            </Link>
+                            <Link
+                                href={`${routes.sales.exchangeNew}?saleId=${saleId}`}
+                                role="menuitem"
+                                onClick={() => setOpen(false)}
+                                className={itemClass}
+                            >
+                                <ArrowLeftRight className="h-4 w-4 text-gray-400" />
+                                {t.sales.printMenu.exchange}
+                            </Link>
+                        </>
+                    )}
                     {onCancel && (
                         <button
                             type="button"

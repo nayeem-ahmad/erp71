@@ -408,6 +408,8 @@ export const salesMessages = {
             posReceipt: "Ticket de caisse",
             mushak: "Mushak 6.3",
             openInvoicePage: "Ouvrir la page de facture",
+            salesReturn: "Retour de vente",
+            exchange: "Échange",
             preview: {
                 heading: "{document} — {size}",
                 print: "Imprimer",

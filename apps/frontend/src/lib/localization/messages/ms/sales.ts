@@ -408,6 +408,8 @@ export const salesMessages = {
                 posReceipt: "Resit POS",
                 mushak: "Mushak 6.3",
                 openInvoicePage: "Buka halaman invois",
+                salesReturn: "Pulangan Jualan",
+                exchange: "Pertukaran",
                 preview: {
                     heading: "{document} — {size}",
                     print: "Cetak",

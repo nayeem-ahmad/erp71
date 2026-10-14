@@ -411,6 +411,8 @@ export const salesMessages = {
             posReceipt: 'POS Receipt',
             mushak: 'Mushak 6.3',
             openInvoicePage: 'Open invoice page',
+            salesReturn: 'Sales Return',
+            exchange: 'Exchange',
             preview: {
                 /* Toolbar shown over the document before it goes to the printer. */
                 heading: '{document} — {size}',

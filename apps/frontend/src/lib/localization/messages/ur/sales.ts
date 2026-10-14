@@ -408,6 +408,8 @@ export const salesMessages = {
             posReceipt: "پی او ایس رسید",
             mushak: "مشک 6.3",
             openInvoicePage: "انوائس صفحہ کھولیں",
+            salesReturn: "سیلز واپسی",
+            exchange: "تبادلہ",
             preview: {
                 heading: "{document} — {size}",
                 print: "پرنٹ",
