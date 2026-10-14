@@ -352,9 +352,10 @@ export async function applyInventoryMovement(
         unitCost?: number;
         note?: string;
         /**
-         * Backdates InventoryMovement.created_at. Omitted by every real caller
-         * (movements stamp now); used by the demo-data generator to backfill a
-         * six-month history so the stock ledger agrees with backdated sales.
+         * Backdates InventoryMovement.created_at to the document's own time.
+         * A recorded purchase passes its transaction date; an import passes
+         * the source document's date; the demo-data generator backfills a
+         * history. Omitted, the movement stamps now.
          */
         occurredAt?: Date;
         /**

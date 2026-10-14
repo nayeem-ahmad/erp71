@@ -1,6 +1,7 @@
 import {
     ArrayMinSize,
     IsArray,
+    IsDateString,
     IsNotEmpty,
     IsNumber,
     IsOptional,
@@ -9,6 +10,7 @@ import {
     ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { SortableBranchListQueryDto } from '../common/branch-list-query.dto';
 import { PaymentInstrumentDto } from '../common/payment-instrument.dto';
 import { CreateSupplierDto } from '../suppliers/supplier.dto';
 
@@ -121,6 +123,26 @@ export class PurchaseBillDto {
 export class CreatePurchaseDto extends PurchaseBillDto {
     @IsString()
     storeId: string;
+
+    /**
+     * When the purchase happened. Omitted, the server stamps the moment the
+     * bill is posted. Never written into `created_at`, which stays the time
+     * the row was inserted.
+     */
+    @IsOptional()
+    @IsDateString()
+    purchaseDate?: string;
+}
+
+/** The purchases list: the created window, plus the bill's own transaction date. */
+export class PurchaseListQueryDto extends SortableBranchListQueryDto {
+    @IsOptional()
+    @IsString()
+    dateFrom?: string;
+
+    @IsOptional()
+    @IsString()
+    dateTo?: string;
 }
 
 /**

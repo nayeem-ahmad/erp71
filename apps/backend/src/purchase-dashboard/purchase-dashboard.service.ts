@@ -76,7 +76,7 @@ export class PurchaseDashboardService {
 
         const [purchases, returns] = await Promise.all([
             this.db.purchase.aggregate({
-                where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: inWindow },
+                where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, purchase_date: inWindow },
                 _sum: { total_amount: true },
                 _count: { _all: true },
             }),
@@ -186,7 +186,7 @@ export class PurchaseDashboardService {
     private async getTopSuppliers(tenantId: string, window: DateWindow, branch: BranchFilter) {
         const grouped = await this.db.purchase.groupBy({
             by: ['supplier_id'],
-            where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
+            where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, purchase_date: { gte: window.fromDate, lte: window.toDate } },
             _sum: { total_amount: true },
             _count: { _all: true },
         });
@@ -220,7 +220,7 @@ export class PurchaseDashboardService {
         const grouped = await this.db.purchaseItem.groupBy({
             by: ['product_id'],
             where: {
-                purchase: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
+                purchase: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, purchase_date: { gte: window.fromDate, lte: window.toDate } },
             },
             _sum: { quantity: true, line_total: true },
         });
@@ -246,7 +246,7 @@ export class PurchaseDashboardService {
     private async getRecent(tenantId: string, branch: BranchFilter) {
         const rows = await this.db.purchase.findMany({
             where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE },
-            orderBy: { created_at: 'desc' },
+            orderBy: { purchase_date: 'desc' },
             take: RECENT_PURCHASES,
             select: {
                 id: true,
@@ -274,14 +274,14 @@ export class PurchaseDashboardService {
 
         const branch = branchFilter(query.storeId);
         const purchases = await this.db.purchase.findMany({
-            where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, created_at: { gte: window.fromDate, lte: window.toDate } },
-            select: { created_at: true, total_amount: true },
+            where: { tenant_id: tenantId, ...branch, ...ACTIVE_PURCHASE, purchase_date: { gte: window.fromDate, lte: window.toDate } },
+            select: { purchase_date: true, total_amount: true },
         });
 
         const buckets = emptyDailyBuckets(window, () => ({ spend: 0, purchases: 0 }));
 
         for (const row of purchases) {
-            const bucket = buckets.get(window.dayOf(row.created_at));
+            const bucket = buckets.get(window.dayOf(row.purchase_date));
             if (!bucket) continue;
             bucket.spend += Number(row.total_amount);
             bucket.purchases += 1;

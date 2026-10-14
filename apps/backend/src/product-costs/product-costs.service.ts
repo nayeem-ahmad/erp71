@@ -262,13 +262,16 @@ export class ProductCostsService {
                 unit_cost: { gt: 0 },
                 purchase: { tenant_id: tenantId, ...ACTIVE_PURCHASE },
             },
-            orderBy: { purchase: { created_at: 'desc' } },
+            orderBy: { purchase: { purchase_date: 'desc' } },
             distinct: ['product_id'],
-            select: { product_id: true, unit_cost: true, purchase: { select: { created_at: true } } },
+            select: { product_id: true, unit_cost: true, purchase: { select: { purchase_date: true, created_at: true } } },
         });
         for (const line of lines) {
             if (!costs.has(line.product_id)) {
-                costs.set(line.product_id, { unitCost: Number(line.unit_cost), at: line.purchase.created_at });
+                costs.set(line.product_id, {
+                    unitCost: Number(line.unit_cost),
+                    at: line.purchase.purchase_date ?? line.purchase.created_at,
+                });
             }
         }
         return costs;

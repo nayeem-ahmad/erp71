@@ -10,6 +10,7 @@ export class PurchaseReportsService {
 
     async getPurchaseSummary(tenantId: string, query: GetPurchaseSummaryDto) {
         const dateFilter = buildDateWindow(query.from, query.to);
+        const returnDateFilter = buildDateWindow(query.from, query.to, 'created_at');
 
         const [purchases, returns] = await Promise.all([
             this.db.purchase.findMany({
@@ -19,14 +20,14 @@ export class PurchaseReportsService {
                     ...(query.storeId ? { store_id: query.storeId } : {}),
                     ...dateFilter,
                 },
-                select: { id: true, total_amount: true, created_at: true },
-                orderBy: { created_at: 'asc' },
+                select: { id: true, total_amount: true, purchase_date: true },
+                orderBy: { purchase_date: 'asc' },
             }),
             this.db.purchaseReturn.findMany({
                 where: {
                     tenant_id: tenantId,
                     ...(query.storeId ? { store_id: query.storeId } : {}),
-                    ...dateFilter,
+                    ...returnDateFilter,
                 },
                 select: { total_amount: true, created_at: true },
             }),
@@ -41,7 +42,7 @@ export class PurchaseReportsService {
         const dayMap = new Map<string, { orders: number; grossPurchases: number; returns: number }>();
 
         for (const p of purchases) {
-            const day = p.created_at.toISOString().slice(0, 10);
+            const day = p.purchase_date.toISOString().slice(0, 10);
             const existing = dayMap.get(day) ?? { orders: 0, grossPurchases: 0, returns: 0 };
             existing.orders += 1;
             existing.grossPurchases += Number(p.total_amount);
@@ -268,20 +269,20 @@ export class PurchaseReportsService {
     }
 }
 
-function buildDateWindow(from?: string, to?: string) {
+function buildDateWindow(from?: string, to?: string, field: 'purchase_date' | 'created_at' = 'purchase_date') {
     const where: Record<string, any> = {};
     if (from || to) {
-        where.created_at = {};
+        where[field] = {};
         if (from) {
             const date = new Date(from);
-            if (!Number.isNaN(date.getTime())) where.created_at.gte = date;
+            if (!Number.isNaN(date.getTime())) where[field].gte = date;
         }
         if (to) {
             // A bare YYYY-MM-DD upper bound covers the whole day; parsed as-is it
             // would be midnight and drop everything purchased on the last day.
             const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(to.trim());
             const date = new Date(dateOnly ? `${to.trim()}T23:59:59.999Z` : to);
-            if (!Number.isNaN(date.getTime())) where.created_at.lte = date;
+            if (!Number.isNaN(date.getTime())) where[field].lte = date;
         }
     }
     return where;

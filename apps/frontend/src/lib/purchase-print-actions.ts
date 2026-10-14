@@ -1,5 +1,5 @@
 import type { InvoicePrintPrefs } from '@erp71/shared-types';
-import { formatDate } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 import { instrumentFromRecord, instrumentSummary } from '@/lib/payment-instrument';
 import { paperSizeLabel } from '@/lib/print';
 import type { DeepPartial, PrintHeaderConfig, PrintPreviewOptions } from '@/lib/print';
@@ -19,6 +19,8 @@ export interface PrintablePurchase {
     purchase_number: string;
     reference_number?: string | null;
     created_at: string;
+    /** When the purchase happened. Absent on a row saved before the column existed. */
+    purchase_date?: string | null;
     notes?: string | null;
     subtotal_amount: string | number;
     tax_amount?: string | number;
@@ -161,7 +163,7 @@ export function printPurchaseInvoiceFromRecord(
         {
             purchaseNumber: purchase.purchase_number,
             referenceNumber: purchase.reference_number,
-            date: formatDate(purchase.created_at, ctx.locale),
+            date: formatDateTime(purchase.purchase_date || purchase.created_at, ctx.locale),
             companyName: ctx.header.companyName,
             headerConfig: ctx.header.headerConfig,
             supplierName: purchase.supplier?.name,

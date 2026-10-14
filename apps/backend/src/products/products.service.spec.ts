@@ -673,7 +673,7 @@ describe('ProductsService', () => {
       expect(db.saleItem.findMany).not.toHaveBeenCalled();
       const [partyCall, otherCall] = db.purchaseItem.findMany.mock.calls;
       expect(partyCall[0].where.purchase).toMatchObject({ tenant_id: 'tenant-1', supplier_id: 'sup-1' });
-      expect(partyCall[0].orderBy).toEqual({ purchase: { created_at: 'desc' } });
+      expect(partyCall[0].orderBy).toEqual({ purchase: { purchase_date: 'desc' } });
       expect(otherCall[0].where.purchase.OR).toEqual([
         { supplier_id: null },
         { supplier_id: { not: 'sup-1' } },

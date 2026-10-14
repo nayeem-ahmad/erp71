@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Ban, Copy, Pencil, Printer, Save, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { formatBDT, formatDate, toDatetimeLocal } from '@/lib/format';
+import { formatBDT, formatDate } from '@/lib/format';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
@@ -266,7 +266,8 @@ function PurchaseDetailPageContent() {
                 banner={banner}
                 readOnly={!editing}
                 purchaseNumber={purchase.purchase_number}
-                purchaseDate={toDatetimeLocal(new Date(purchase.created_at))}
+                transactionDate={purchase.purchase_date ?? purchase.created_at}
+                createdAt={purchase.created_at}
                 previousPayable={previousPayable}
                 actions={editing ? editActions : viewActions}
                 headerActions={headerActions}

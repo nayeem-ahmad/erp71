@@ -2434,7 +2434,13 @@ model Purchase {
   status           String   @default("RECORDED")
   notes            String?
   created_by       String?
+  /// When this row was written. The server sets it and nothing edits it.
+  /// The bill's own time is `purchase_date`.
   created_at       DateTime @default(now())
+  /// When the purchase happened. Record Purchase lets the operator set it;
+  /// left alone, it is the moment the bill is posted. Reports, the stock
+  /// ledger and the voucher use this, not `created_at`.
+  purchase_date    DateTime @default(now())
   /// Which warehouse received the goods, recorded rather than re-derived —
   /// see `Sale.warehouse_id` for why. Lines may override it when one bill is
   /// split across warehouses.
@@ -2460,6 +2466,7 @@ model Purchase {
 
   @@unique([tenant_id, purchase_number])
   @@index([tenant_id, created_at])
+  @@index([tenant_id, purchase_date])
   @@index([tenant_id, store_id])
   @@index([tenant_id, payment_status])
   @@index([tenant_id, status])

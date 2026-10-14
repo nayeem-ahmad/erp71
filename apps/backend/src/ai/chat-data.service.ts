@@ -351,7 +351,7 @@ export class ChatDataService {
                         tenant_id: tenantId,
                         ...ACTIVE_PURCHASE,
                         ...(storeId ? { store_id: storeId } : {}),
-                        ...(window ? { created_at: window } : {}),
+                        ...(window ? { purchase_date: window } : {}),
                         ...(searchFilter
                             ? {
                                   OR: [
@@ -367,17 +367,17 @@ export class ChatDataService {
                         total_amount: true,
                         paid_amount: true,
                         payment_status: true,
-                        created_at: true,
+                        purchase_date: true,
                         store: { select: { name: true } },
                         supplier: { select: { name: true } },
                     },
-                    orderBy: { created_at: 'desc' },
+                    orderBy: { purchase_date: 'desc' },
                     take: limit,
                 });
                 return rows.map((r) => ({
                     id: r.id,
                     number: r.purchase_number,
-                    date: toDateString(r.created_at),
+                    date: toDateString(r.purchase_date),
                     party: r.supplier?.name ?? 'Unknown supplier',
                     branch: r.store.name,
                     amount: Number(r.total_amount),
