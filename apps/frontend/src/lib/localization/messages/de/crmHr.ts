@@ -133,6 +133,20 @@ export const crmHrMessages = {
                 approvalApproved: 'Genehmigt',
                 approvalPending: 'Wartet auf Freigabe',
             },
+            layout: {
+                group: 'Layout',
+                standard: 'Standard',
+                compact: 'Kompakt',
+                agenda: 'Agenda',
+            },
+            moreFilters: 'Weitere Filter',
+            searchPlaceholder: 'Aktivitäten suchen',
+            groups: {
+                today: 'Heute',
+                later: 'Später',
+                earlier: 'Früher',
+                undated: 'Ohne Fälligkeit',
+            },
         },
         setup: {
             title: "CRM-Einrichtung",

@@ -137,6 +137,20 @@ export const crmHrMessages = {
                 approvalApproved: 'Approved',
                 approvalPending: 'Awaiting approval',
             },
+            layout: {
+                group: 'Layout',
+                standard: 'Standard',
+                compact: 'Compact',
+                agenda: 'Agenda',
+            },
+            moreFilters: 'More filters',
+            searchPlaceholder: 'Search activities',
+            groups: {
+                today: 'Today',
+                later: 'Later',
+                earlier: 'Earlier',
+                undated: 'No due date',
+            },
         },
         setup: {
             title: 'CRM Setup',

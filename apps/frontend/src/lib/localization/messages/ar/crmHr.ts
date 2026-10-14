@@ -133,6 +133,20 @@ export const crmHrMessages = {
                 approvalApproved: 'معتمد',
                 approvalPending: 'بانتظار الاعتماد',
             },
+            layout: {
+                group: 'التخطيط',
+                standard: 'قياسي',
+                compact: 'مضغوط',
+                agenda: 'الأجندة',
+            },
+            moreFilters: 'مزيد من عوامل التصفية',
+            searchPlaceholder: 'البحث في الأنشطة',
+            groups: {
+                today: 'اليوم',
+                later: 'لاحقًا',
+                earlier: 'سابقًا',
+                undated: 'بلا تاريخ استحقاق',
+            },
         },
         setup: {
             title: 'إعداد إدارة العلاقات',

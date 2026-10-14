@@ -133,6 +133,20 @@ export const crmHrMessages = {
                 approvalApproved: 'अनुमोदित',
                 approvalPending: 'अनुमोदन की प्रतीक्षा में',
             },
+            layout: {
+                group: 'लेआउट',
+                standard: 'मानक',
+                compact: 'संक्षिप्त',
+                agenda: 'एजेंडा',
+            },
+            moreFilters: 'और फ़िल्टर',
+            searchPlaceholder: 'गतिविधियाँ खोजें',
+            groups: {
+                today: 'आज',
+                later: 'बाद में',
+                earlier: 'पहले',
+                undated: 'कोई तिथि नहीं',
+            },
         },
         setup: {
             title: "CRM सेटअप",

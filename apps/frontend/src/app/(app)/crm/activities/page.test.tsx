@@ -630,3 +630,162 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
         expect(listCalls()).toBe(before);
     });
 });
+
+/**
+ * Three ways to read the same list. Standard is what the page has always been.
+ * Compact keeps the table and tucks the rarely used filters away. Agenda groups
+ * the loaded rows by when they are due. The choice is a preference, so it is
+ * stored in localStorage and read back on the next visit — unlike the filters,
+ * which die with the tab.
+ */
+describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => {
+    const { ACTIVITY_LAYOUT_KEY } = jest.requireActual('@/components/crm/crm-activity-layout') as typeof import('@/components/crm/crm-activity-layout');
+
+    const withPurpose = {
+        ...activity,
+        purpose: { id: 'purpose-1', name: 'Collection', icon: null },
+    };
+
+    /** Noon in Dhaka, so the workspace day of the instant is `ymd` itself. */
+    const atDhakaNoon = (ymd: string) => `${ymd}T06:00:00.000Z`;
+    const shiftDay = (ymd: string, days: number) => {
+        const [year, month, day] = ymd.split('-').map(Number);
+        return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+    };
+
+    const radio = (name: string) => screen.getByRole('radio', { name });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        localStorage.removeItem(ACTIVITY_LAYOUT_KEY);
+        sessionStorage.clear();
+        api.getAllCrmActivities.mockResolvedValue([withPurpose]);
+        api.getCrmActivitySummary.mockResolvedValue({ dueToday: 4, overdue: 2, total: 18 });
+        api.getCrmAssignees.mockResolvedValue([
+            { userId: 'user-1', name: 'Nayeem' },
+            { userId: 'user-2', name: 'Rifat' },
+        ]);
+        api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
+    });
+
+    afterEach(() => {
+        localStorage.removeItem(ACTIVITY_LAYOUT_KEY);
+    });
+
+    it('opens on the standard table, with stripes and every filter in the row', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(screen.getByText('Everything planned and everything logged, across leads and customers.')).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Purpose / channel' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Created' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'All lead owners' })).toBeInTheDocument();
+        expect(radio('Standard')).toHaveAttribute('aria-checked', 'true');
+
+        const row = screen.getByText('Call about pricing').closest('tr');
+        expect(row?.className).toContain('even:bg-gray-50');
+        expect(row?.className).toContain('hover:bg-blue-50');
+        expect(screen.getByRole('button', { name: 'View activities' }).className).toMatch(/(^|\s)min-h-touch(\s|$)/);
+    });
+
+    it('hides the long columns and the extra filters until More filters is opened', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(radio('Compact'));
+
+        expect(screen.queryByText('Everything planned and everything logged, across leads and customers.')).not.toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: 'Purpose / channel' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: 'Created' })).not.toBeInTheDocument();
+        expect(screen.getByText(/Call about pricing/)).toHaveTextContent('Call about pricing · Collection');
+        expect(screen.queryByRole('option', { name: 'All lead owners' })).not.toBeInTheDocument();
+
+        const view = screen.getByRole('button', { name: 'View activities' });
+        expect(view.className).toContain('h-6');
+        expect(view.className).toContain('max-md:min-h-touch');
+        expect(view.className).not.toMatch(/(^|\s)min-h-touch(\s|$)/);
+
+        fireEvent.click(screen.getByRole('button', { name: /more filters/i }));
+        expect(screen.getByRole('option', { name: 'All lead owners' })).toBeInTheDocument();
+    });
+
+    it('counts how many of the tucked-away filters are narrowed', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        fireEvent.click(radio('Compact'));
+
+        fireEvent.click(screen.getByRole('button', { name: /more filters/i }));
+        fireEvent.change(selectByOption('All approvals'), { target: { value: 'pending' } });
+
+        await waitFor(() => expect(lastCall().approval).toBe('pending'));
+        expect(screen.getByRole('button', { name: /more filters/i })).toHaveTextContent('1');
+    });
+
+    it('groups the agenda by when the work is due, and searches within it', async () => {
+        const today = tenantDateOnly();
+        const yesterday = shiftDay(today, -1);
+        const tomorrow = shiftDay(today, 1);
+        api.getAllCrmActivities.mockResolvedValue([
+            { ...activity, id: 'later', subject: 'Call later', due_at: atDhakaNoon(tomorrow) },
+            { ...activity, id: 'today', subject: 'Call today', due_at: atDhakaNoon(today) },
+            { ...activity, id: 'overdue', subject: 'Call overdue', due_at: atDhakaNoon(yesterday) },
+            { ...activity, id: 'earlier', subject: 'Call earlier', status: 'DONE', due_at: atDhakaNoon(yesterday) },
+            { ...activity, id: 'undated', subject: 'Call undated', due_at: null },
+        ]);
+
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call today');
+        fireEvent.click(radio('Agenda'));
+
+        const names = ['Overdue', 'Today', 'Later', 'Earlier', 'No due date'];
+        const regions = names.map((name) => screen.getByRole('region', { name }));
+        expect(regions.map((region) => region.getAttribute('aria-label'))).toEqual(names);
+
+        const earlier = screen.getByRole('region', { name: 'Earlier' });
+        expect(within(earlier).getByText('Call earlier')).toBeInTheDocument();
+        expect(within(earlier).queryByRole('switch')).not.toBeInTheDocument();
+
+        const todayRow = screen.getByText('Call today').closest('[class*="hover:bg-blue-50"]');
+        expect(todayRow?.className).toContain('even:bg-gray-50');
+        expect(todayRow?.className).toContain('hover:bg-blue-50');
+
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Search activities' }), {
+            target: { value: 'overdue' },
+        });
+        expect(screen.getByText('Call overdue')).toBeInTheDocument();
+        expect(screen.queryByText('Call today')).not.toBeInTheDocument();
+    });
+
+    it('lets the strip set overdue, and planned, without the tall cards', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        fireEvent.click(radio('Compact'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Overdue' }));
+        await waitFor(() => {
+            expect(lastCall().overdue).toBe(true);
+            expect(lastCall().dueFrom).toBeUndefined();
+        });
+
+        fireEvent.change(selectByOption('All statuses'), { target: { value: 'DONE' } });
+        await waitFor(() => expect(lastCall().status).toBe('DONE'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Planned' }));
+        await waitFor(() => expect(lastCall().status).toBe('PLANNED'));
+    });
+
+    it('remembers the layout for the next visit', async () => {
+        const first = renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        fireEvent.click(radio('Compact'));
+        expect(localStorage.getItem(ACTIVITY_LAYOUT_KEY)).toBe('compact');
+        first.unmount();
+
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        expect(radio('Compact')).toHaveAttribute('aria-checked', 'true');
+        expect(screen.queryByRole('columnheader', { name: 'Created' })).not.toBeInTheDocument();
+    });
+});
