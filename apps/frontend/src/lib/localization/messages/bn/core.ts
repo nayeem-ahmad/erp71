@@ -352,6 +352,7 @@ export const coreMessages = {
                 customerPayment: "গ্রাহক পেমেন্ট",
                 customerLedger: "গ্রাহক লেজার",
                 salesReturns: "বিক্রয় রিটার্ন",
+                salesExchanges: "বিনিময়",
                 salesOrders: "বিক্রয় অর্ডার",
                 salesQuotations: "বিক্রয় কোটেশন",
                 warrantyClaims: "ওয়ারেন্টি ক্লেইম",

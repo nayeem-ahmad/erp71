@@ -352,6 +352,7 @@ export const coreMessages = {
             customerPayment: 'مدفوعات الزبائن',
             customerLedger: 'دفتر الزبون',
             salesReturns: 'مرتجعات المبيعات',
+            salesExchanges: 'المبادلات',
             salesOrders: 'أوامر البيع',
             salesQuotations: 'عروض الأسعار',
             warrantyClaims: 'مطالبات الضمان',

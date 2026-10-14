@@ -89,6 +89,7 @@ export class DailyReportService {
             accountingOverview,
             returnsRows,
             pendingDeliveryCount,
+            exchangeRows,
         ] = await Promise.all([
             this.db.sale.findMany({
                 where: {
@@ -165,12 +166,28 @@ export class DailyReportService {
                     },
                 }),
             ),
+            // The difference only. Outgoing goods are not another day's gross,
+            // and the returns list stays returns.
+            settled(
+                this.db.salesExchange.findMany({
+                    where: {
+                        tenant_id: input.tenantId,
+                        store_id: input.storeId,
+                        status: 'COMPLETED',
+                        created_at: dayRange,
+                    },
+                    select: { difference: true, cash_delta: true },
+                }),
+            ),
         ]);
 
         const allReturns = returnsRows ?? [];
+        const exchanges = exchangeRows ?? [];
         const gross = round2(daySales.reduce((sum, sale) => sum + num(sale.total_amount), 0));
         const returnsAmount = round2(allReturns.reduce((sum, row) => sum + num(row.total_refund), 0));
-        const net = round2(gross - returnsAmount);
+        const exchangeDifference = round2(exchanges.reduce((sum, row) => sum + num(row.difference), 0));
+        const exchangeCash = round2(exchanges.reduce((sum, row) => sum + num(row.cash_delta), 0));
+        const net = round2(gross - returnsAmount + exchangeDifference);
         const bills = daySales.length;
         const yesterdayNet =
             yesterdaySales == null
@@ -270,7 +287,7 @@ export class DailyReportService {
 
         const stock = await settled(this.loadStock(input.tenantId, dayRange));
 
-        const cashMovement = this.cashMovement(till, tenders, allReturns);
+        const cashMovement = this.cashMovement(till, tenders, allReturns, exchangeCash);
 
         const generatedAt = now.toISOString();
         const checklist = this.checklist(
@@ -320,8 +337,10 @@ export class DailyReportService {
         till: DailyReport['till'],
         tenders: DailyReport['tenders'],
         returns: Array<{ total_refund?: unknown }>,
+        exchangeCash: number,
     ): number {
         if (till && till.sessions.length > 0) {
+            // The till rollup already includes each shift's exchange cash_delta.
             const { cashTakings, refunds, cashIn, cashOut } = till.rollup;
             return round2(cashTakings - refunds + cashIn - cashOut);
         }
@@ -329,7 +348,7 @@ export class DailyReportService {
             .filter((t) => classifyPaymentMode(t.method) === 'cash')
             .reduce((sum, t) => sum + t.amount, 0);
         const cashRefunds = returns.reduce((sum, row) => sum + num(row.total_refund), 0);
-        return round2(cashTenders - cashRefunds);
+        return round2(cashTenders - cashRefunds + exchangeCash);
     }
 
     private checklist(openTills: number, reorderCount: number, pendingDelivery: number) {

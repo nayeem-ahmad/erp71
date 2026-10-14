@@ -218,6 +218,7 @@ export const settingsExtrasMessages = {
             MONEY_RECEIPT: "Zahlungsquittungen",
             SALES_ORDER: "Kundenaufträge",
             SALES_RETURN: "Verkaufsretouren",
+            SALES_EXCHANGE: "Verkaufsumtausche",
             DELIVERY_CHALLAN: "Lieferscheine",
             PURCHASE_ORDER: "Bestellungen",
             PURCHASE_INVOICE: "Eingangsrechnungen",

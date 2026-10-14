@@ -1201,6 +1201,7 @@ export const adminMessages = {
                 PRODUCT: 'পণ্য',
                 SALE: 'বিক্রয়',
                 SALES_RETURN: 'বিক্রয় ফেরত',
+                SALES_EXCHANGE: 'বিক্রয় বিনিময়',
                 PURCHASE: 'ক্রয়',
                 PURCHASE_RETURN: 'ক্রয় ফেরত',
                 CUSTOMER_PAYMENT: 'গ্রাহকের পেমেন্ট',

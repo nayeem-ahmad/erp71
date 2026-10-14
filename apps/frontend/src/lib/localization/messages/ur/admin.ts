@@ -1208,6 +1208,7 @@ export const adminMessages = {
             PRODUCT: 'پروڈکٹ',
             SALE: 'فروخت',
             SALES_RETURN: 'فروخت کی واپسی',
+            SALES_EXCHANGE: 'فروخت کا تبادلہ',
             PURCHASE: 'خریداری',
             PURCHASE_RETURN: 'خریداری کی واپسی',
             CUSTOMER_PAYMENT: 'گاہک کی ادائیگی',

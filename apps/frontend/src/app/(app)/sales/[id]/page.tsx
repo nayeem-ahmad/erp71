@@ -7,6 +7,8 @@ import { api } from '@/lib/api';
 import { formatBDT, formatDate, toDatetimeLocal } from '@/lib/format';
 import Link from 'next/link';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { openSaleLineQty } from '@/lib/open-sale-line';
+import { routes } from '@/lib/routes';
 import { useNewSaleCart } from '@/lib/hooks/useNewSaleCart';
 import { instrumentFromRecord } from '@/lib/payment-instrument';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
@@ -465,15 +467,31 @@ function SaleDetailPageContent() {
      * document — save, delete, cancel, complete — which is what it was crowded
      * out of when six print buttons shared it.
      */
+    const canExchange =
+        (isOwner(role) || hasPermission(permissions, 'CREATE_RETURN'))
+        && !isDraft
+        && !isCancelled
+        && (sale.items ?? []).some((item: any) => openSaleLineQty(item) > 0);
+
     const headerActions = (
-        <SalePrintMenu
-            saleId={sale.id}
-            paperSize={paperSize}
-            onPaperSizeChange={setPaperSize}
-            onPrintInvoice={(size) => void printInvoice(sale.id, size)}
-            onPrintChallan={(size) => void printChallan(sale.id, size)}
-            onPrintReceipt={(size) => void printReceipt(sale.id, size)}
-        />
+        <>
+            {canExchange && (
+                <Link
+                    href={`${routes.sales.exchangeNew}?saleId=${sale.id}`}
+                    className="inline-flex items-center px-3 py-2 border rounded text-sm text-blue-600 hover:bg-blue-50 min-h-touch"
+                >
+                    {t.exchanges.newExchange}
+                </Link>
+            )}
+            <SalePrintMenu
+                saleId={sale.id}
+                paperSize={paperSize}
+                onPaperSizeChange={setPaperSize}
+                onPrintInvoice={(size) => void printInvoice(sale.id, size)}
+                onPrintChallan={(size) => void printChallan(sale.id, size)}
+                onPrintReceipt={(size) => void printReceipt(sale.id, size)}
+            />
+        </>
     );
 
     const viewActions = (

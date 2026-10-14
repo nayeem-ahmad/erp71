@@ -79,6 +79,17 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
     { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
     { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
+    // An exchange posts the same sale / sale_return tuples. No new rule.
+    { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
 
     // ── purchases ────────────────────────────────────────────────────────────
     // Only 'credit' — and that is still accurate, not a shortcut. The bill always

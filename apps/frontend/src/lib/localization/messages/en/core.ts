@@ -352,6 +352,7 @@ export const coreMessages = {
             customerPayment: 'Customer Payment',
             customerLedger: 'Customer Ledger',
             salesReturns: 'Sales Returns',
+            salesExchanges: 'Exchanges',
             salesOrders: 'Sales Orders',
             salesQuotations: 'Sales Quotations',
             warrantyClaims: 'Warranty Claims',

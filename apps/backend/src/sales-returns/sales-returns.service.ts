@@ -16,6 +16,7 @@ import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../a
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { creditDueAmount } from '../customers/customer-credit.utils';
 import { findOpenSessionForUser } from '../cashier-sessions/active-session.util';
+import { committedReturnQuantity, completedExchangeLinesInclude } from '../sales/open-sale-quantity';
 
 @Injectable()
 export class SalesReturnsService {
@@ -30,7 +31,10 @@ export class SalesReturnsService {
             const sale = dto.saleId
                 ? await tx.sale.findUnique({
                       where: { id: dto.saleId, tenant_id: tenantId },
-                      include: { items: { include: { returns: true } }, payments: { orderBy: { created_at: 'asc' } } },
+                      include: {
+                          items: { include: { returns: true, exchangeLines: completedExchangeLinesInclude } },
+                          payments: { orderBy: { created_at: 'asc' } },
+                      },
                   })
                 : null;
 
@@ -112,8 +116,9 @@ export class SalesReturnsService {
                     throw new BadRequestException(`Item ${returnItem.saleItemId} not found in this sale.`);
                 }
 
-                // Check previously returned quantity for this item
-                const previouslyReturned = originalItem.returns.reduce((sum: number, r: any) => sum + r.quantity, 0);
+                // Returns and completed exchanges share one open quantity, so the
+                // same unit cannot be refunded and also exchanged.
+                const previouslyReturned = committedReturnQuantity(originalItem);
                 const availableToReturn = originalItem.quantity - previouslyReturned;
 
                 if (returnItem.quantity > availableToReturn) {
@@ -303,7 +308,7 @@ export class SalesReturnsService {
         const salesReturn = await this.db.salesReturn.findFirst({
             where: { id, tenant_id: tenantId },
             include: {
-                sale: { include: { items: { include: { product: true, returns: true } } } },
+                sale: { include: { items: { include: { product: true, returns: true, exchangeLines: completedExchangeLinesInclude } } } },
                 items: { include: { product: true } },
             }
         });
@@ -322,7 +327,7 @@ export class SalesReturnsService {
         return this.db.$transaction(async (tx) => {
             const existing = await tx.salesReturn.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true, sale: { include: { items: { include: { returns: true } } } } },
+                include: { items: true, sale: { include: { items: { include: { returns: true, exchangeLines: completedExchangeLinesInclude } } } } },
             });
             if (!existing) throw new BadRequestException('Return not found');
 
@@ -418,14 +423,19 @@ export class SalesReturnsService {
                         throw new BadRequestException(`Sale item ${newItem.saleItemId} not found.`);
                     }
 
-                    // Check available quantity (excluding THIS return's old items)
-                    const otherReturns = originalSaleItem.returns.filter(
+                    // This return's own lines are about to be replaced, so they
+                    // do not count. Completed exchanges do: that quantity is gone.
+                    const otherReturns = (originalSaleItem.returns ?? []).filter(
                         (r: any) => r.return_id !== id,
+                    );
+                    const exchanged = (originalSaleItem.exchangeLines ?? []).reduce(
+                        (sum: number, row: { returned_quantity: number }) => sum + row.returned_quantity,
+                        0,
                     );
                     const previouslyReturned = otherReturns.reduce(
                         (sum: number, r: any) => sum + r.quantity,
                         0,
-                    );
+                    ) + exchanged;
                     const availableToReturn = originalSaleItem.quantity - previouslyReturned;
 
                     if (newItem.quantity > availableToReturn) {

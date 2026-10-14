@@ -31,6 +31,11 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     // ── Posts a voucher ──────────────────────────────────────────────────────
     { model: 'Sale', postsVia: 'sale' },
     { model: 'SalesReturn', postsVia: 'sale_return' },
+    {
+        model: 'SalesExchange',
+        postsVia: 'sale',
+        note: 'A higher replacement posts sale; a lower one posts sale_return (a refund larger than the due is two sale_return legs, due and tender). An even swap posts nothing.',
+    },
     { model: 'Purchase', postsVia: 'purchase' },
     { model: 'PurchaseOrder', postsVia: 'purchase', note: 'posts on receipt' },
     { model: 'PurchaseReturn', postsVia: 'purchase_return' },
@@ -72,6 +77,7 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'SaleItem', exempt: 'Line item of Sale, which posts the total.' },
     { model: 'SalesOrderItem', exempt: 'Line item of SalesOrder (a commitment, not yet a sale).' },
     { model: 'SalesReturnItem', exempt: 'Line item of SalesReturn, which posts the total.' },
+    { model: 'SalesExchangeLine', exempt: 'Line item of SalesExchange, which posts the difference.' },
     { model: 'PurchaseItem', exempt: 'Line item of Purchase, which posts the total.' },
     { model: 'PurchaseOrderItem', exempt: 'Line item of PurchaseOrder, which posts on receipt.' },
     { model: 'PurchaseReturnItem', exempt: 'Line item of PurchaseReturn, which posts the total.' },

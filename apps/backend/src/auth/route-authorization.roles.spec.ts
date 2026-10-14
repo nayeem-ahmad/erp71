@@ -86,6 +86,11 @@ describe('route authorization by role', () => {
             'POST /loyalty/customers/:customerId/redeem',
             'POST /discount-codes/validate',
             'POST /sales-returns',
+            'POST /sales-exchanges',
+            'GET /sales-exchanges',
+            'GET /sales-exchanges/:id',
+            'GET /sales-exchanges/:id/mushak',
+            'GET /sales-exchanges/:id/credit-note',
             'GET /print-templates/resolve',
             'GET /print-templates/assignments',
         ]);
@@ -102,6 +107,7 @@ describe('route authorization by role', () => {
             'POST /expenses/entries',
             'POST /api-keys',
             'DELETE /sales/:id',
+            'POST /sales-exchanges/:id/cancel',
             'POST /products',
             'POST /price-lists',
             'GET /manufacturing/jobs',
@@ -137,7 +143,10 @@ describe('route authorization by role', () => {
     describe('deleting a posted sale', () => {
         cannotReach('the legacy Manager', legacy(UserRole.MANAGER), ['DELETE /sales/:id']);
         cannotReach('a Sales Manager', template('sales_manager'), ['DELETE /sales/:id']);
-        canReach('a role granted CANCEL_ENTRY', [StorePermission.CANCEL_ENTRY], ['DELETE /sales/:id']);
+        canReach('a role granted CANCEL_ENTRY', [StorePermission.CANCEL_ENTRY], [
+            'DELETE /sales/:id',
+            'POST /sales-exchanges/:id/cancel',
+        ]);
     });
 
     describe('the seeded role templates keep the module they exist for', () => {
@@ -147,6 +156,11 @@ describe('route authorization by role', () => {
             'POST /sales-orders',
             'POST /sales-quotations',
             'POST /sales-returns',
+            'POST /sales-exchanges',
+            'GET /sales-exchanges',
+            'GET /sales-exchanges/:id',
+            'GET /sales-exchanges/:id/mushak',
+            'GET /sales-exchanges/:id/credit-note',
             'GET /customers',
             'POST /customers',
             'GET /customers/:id/credit',
@@ -155,6 +169,7 @@ describe('route authorization by role', () => {
         ]);
         cannotReach('a Sales User', template('sales_user'), [
             'DELETE /sales/:id',
+            'POST /sales-exchanges/:id/cancel',
             'POST /purchases',
             'GET /salary-payments',
             'POST /products',

@@ -46,6 +46,9 @@ describe('CashierSessionsService', () => {
       salesReturn: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      salesExchange: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(db)),
     };
 
@@ -639,6 +642,22 @@ describe('CashierSessionsService', () => {
 
       expect(summary.refunds).toBe(120);
       expect(summary.expectedCash).toBe(680); // 500 + 300 - 120
+    });
+
+    it('adds an exchange cash difference and ignores a non-cash one', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+      db.sale.findMany.mockResolvedValue([]);
+      db.salesReturn.findMany.mockResolvedValue([]);
+      db.salesExchange.findMany.mockResolvedValue([
+        { cash_delta: 80 },
+        { cash_delta: 0 },
+        { cash_delta: -30 },
+      ]);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.refunds).toBe(0);
+      expect(summary.expectedCash).toBe(550); // 500 float + 80 − 30
     });
 
     it('applies recorded cash movements in both directions', async () => {

@@ -352,6 +352,7 @@ export const coreMessages = {
             customerPayment: 'گاہک کی ادائیگی',
             customerLedger: 'گاہک کھاتہ',
             salesReturns: 'سیلز واپسیاں',
+            salesExchanges: 'تبادلے',
             salesOrders: 'سیلز آرڈرز',
             salesQuotations: 'سیلز کوٹیشنز',
             warrantyClaims: 'وارنٹی کلیمز',

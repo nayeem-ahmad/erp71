@@ -1621,6 +1621,8 @@ A CRM-first tenant landed on `RetailDashboard` — sales, stock, top products �
 
 ## ROADMAP — Post-launch features
 
+
+
 - [ ] **Customer Payments list still loads every payment and every customer up front** — found 2026-10-07. Moving the table to server pagination (`useServerList`) needs a totals endpoint, since the page sums amounts across all rows; the customer picker should move onto `api.searchCustomers`. Separately, `nextCustomerCreditNumber` reads the last number without a lock (two simultaneous saves can hit the `payment_number` unique constraint) and orders `payment_number` as a string, which misorders past 99,999.
 
 - [ ] Lead edit form: a lead on a since-hidden stage shows that stage under its lifecycle label (e.g. "Qualified") rather than its own name, because the form only holds `status_id`. Thread `lead.statusOption` into `LeadFormFields` so the extra option is labelled correctly. Found 2026-10-01 building dynamic lead statuses.
@@ -2021,6 +2023,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **Sales exchange** — done 2026-10-13. One screen posts goods coming back and the replacement together, prints one slip, and settles only the difference the way the original invoice was paid (cash, bKash, Nagad, bank, or the customer's due). New `SalesExchange` document (`EXC-` number); the original invoice is not rewritten. Stock moves `EXCHANGE_IN` / `EXCHANGE_OUT` in the warehouse the line left from. Sidebar **Exchanges** at `/sales/exchanges` (permission `CREATE_RETURN`). Spec `docs/superpowers/specs/2026-10-13-sales-exchange-design.md`. After this ships, run `npx tsx prisma/sync-nav-layout.ts --nodes=sales.order-flow.exchanges` so saved layouts grow the new link.
 
 - [x] **Invoice print: footer back on the page foot** — done 2026-10-13. The evening's printed-by change made the pinned table 12mm short of the page and deepened the bottom margin to 22mm, so the footer rule and text rode 19mm up the page (A4 footer text 277.5mm → 258.5mm in a headless-Chrome PDF; a bleeding footer also stopped short of the paper edge and the letterhead dropped 7mm). Back to a uniform 15mm margin and the exact 267mm pin, so the footer prints exactly where it did before; the printed-by line keeps its inner-edge alignment and now starts at 283.9mm (~10.5mm clear of the paper, was ~6mm). Trade-off: custom print-dialog margins larger than 15mm can again push a one-line invoice's signatures to page 2 — keep the dialog on Default margins.
 

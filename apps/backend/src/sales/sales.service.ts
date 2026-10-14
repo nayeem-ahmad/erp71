@@ -19,6 +19,7 @@ import {
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
+import { completedExchangeLinesInclude } from './open-sale-quantity';
 import { paymentRecordData } from './payment-record-data';
 import { snapshotSaleTax, type SaleTaxSnapshot } from '../mushak/sale-tax.util';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
@@ -1339,7 +1340,7 @@ export class SalesService {
         const sale = await this.db.sale.findFirst({
             where: { id, tenant_id: tenantId },
             include: {
-                items: { include: { product: true, returns: true } },
+                items: { include: { product: true, returns: true, exchangeLines: completedExchangeLinesInclude } },
                 payments: true,
                 customer: true,
                 // Just enough to name the document this entry was converted

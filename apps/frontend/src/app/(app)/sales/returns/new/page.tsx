@@ -19,15 +19,12 @@ import {
 } from '@/lib/voice-entry';
 import { useNewSaleCart, type LineItem } from '@/lib/hooks/useNewSaleCart';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
+import { openSaleLineQty } from '@/lib/open-sale-line';
 import { toast } from '@/lib/toast';
 
-/** Units of a sale line not already covered by an earlier return. */
+/** Units of a sale line not already covered by an earlier return or exchange. */
 function returnableQty(saleItem: any): number {
-    const alreadyReturned = (saleItem.returns ?? []).reduce(
-        (sum: number, entry: any) => sum + (entry.quantity ?? 0),
-        0,
-    );
-    return Math.max(0, saleItem.quantity - alreadyReturned);
+    return openSaleLineQty(saleItem);
 }
 
 export default function NewSalesReturnPage() {

@@ -47,6 +47,11 @@ interface ProductSearchProps {
      * held is the normal case and it turns this off.
      */
     warnOverStock?: boolean;
+    /**
+     * Seed for the staged quantity. Defaults to 1. An exchange starts the
+     * replacement at the quantity coming back.
+     */
+    initialQuantity?: number;
 }
 
 /**
@@ -85,6 +90,7 @@ export default function ProductSearch({
     historyPartyName,
     warehouseId,
     warnOverStock = true,
+    initialQuantity,
 }: ProductSearchProps) {
     const [query, setQuery] = useState('');
     const [products, setProducts] = useState<any[]>([]);
@@ -178,7 +184,8 @@ export default function ProductSearch({
         const seededPrice = initialPriceOf ? initialPriceOf(product) : Number(product.price);
         priceTouched.current = false;
         setStagedPrice(seededPrice == null ? '' : String(Number.isFinite(seededPrice) ? seededPrice : 0));
-        setStagedQty('1');
+        const seededQty = Math.trunc(Number(initialQuantity));
+        setStagedQty(String(seededQty >= 1 ? seededQty : 1));
         setQuery('');
         setShowDropdown(false);
         // Let the staging row mount before moving focus into it.

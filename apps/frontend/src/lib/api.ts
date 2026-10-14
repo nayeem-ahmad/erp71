@@ -2880,6 +2880,30 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    getExchanges: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-exchanges', params)),
+    getExchange: (id: string) => fetchWithAuth(`/sales-exchanges/${id}`),
+    createExchange: (data: {
+        saleId: string;
+        reason?: string;
+        lines: Array<{
+            saleItemId: string;
+            quantity: number;
+            replacementProductId: string;
+            replacementQuantity: number;
+            unitPrice: number;
+        }>;
+    }) => fetchWithAuth('/sales-exchanges', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    cancelExchange: (id: string, note: string) => fetchWithAuth(`/sales-exchanges/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    getExchangeMushak: (id: string) => fetchWithAuth(`/sales-exchanges/${id}/mushak`),
+    getExchangeCreditNote: (id: string) => fetchWithAuth(`/sales-exchanges/${id}/credit-note`),
     getOrders: (params?: BranchListParams) => fetchAllPages(withCreatedRange('/sales-orders', params)),
     getOrder: (id: string) => fetchWithAuth(`/sales-orders/${id}`),
     createOrder: (data: any) => fetchWithAuth('/sales-orders', {

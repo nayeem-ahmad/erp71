@@ -352,6 +352,7 @@ export const coreMessages = {
                 customerPayment: "Bayaran Pelanggan",
                 customerLedger: "Lejar Pelanggan",
                 salesReturns: "Pulangan Jualan",
+                salesExchanges: "Pertukaran",
                 salesOrders: "Pesanan Jualan",
                 salesQuotations: "Sebutharga Jualan",
                 warrantyClaims: "Tuntutan Waranti",
