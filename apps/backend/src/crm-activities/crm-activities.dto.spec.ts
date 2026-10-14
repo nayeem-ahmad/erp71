@@ -1,5 +1,33 @@
 import { ValidationPipe } from '@nestjs/common';
-import { SetActivityApprovalDto, UpdateCrmActivityDto } from './crm-activities.dto';
+import { CreateCrmActivityDto, SetActivityApprovalDto, UpdateCrmActivityDto } from './crm-activities.dto';
+
+/**
+ * When a logged activity happened. The pipe forbids unknown keys, so the field
+ * has to be declared for the Log activity dialog's date to arrive at all.
+ */
+describe('CreateCrmActivityDto — completed_at', () => {
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const metadata = { type: 'body' as const, metatype: CreateCrmActivityDto };
+
+    it('accepts the bare wall clock a datetime-local input posts', async () => {
+        const result: any = await pipe.transform({ completed_at: '2026-08-10T15:30' }, metadata);
+        expect(result.completed_at).toBe('2026-08-10T15:30');
+    });
+
+    it('accepts one that names its offset', async () => {
+        const result: any = await pipe.transform({ completed_at: '2026-08-10T15:30:00+06:00' }, metadata);
+        expect(result.completed_at).toBe('2026-08-10T15:30:00+06:00');
+    });
+
+    it('drops an empty value, which means now', async () => {
+        const result: any = await pipe.transform({ completed_at: '' }, metadata);
+        expect(result.completed_at).toBeUndefined();
+    });
+
+    it('rejects something that is not a date', async () => {
+        await expect(pipe.transform({ completed_at: 'last tuesday' }, metadata)).rejects.toThrow();
+    });
+});
 
 /**
  * Reassigning a planned activity is how a lead's `next_step_assigned_to` rollup

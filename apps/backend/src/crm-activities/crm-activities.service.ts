@@ -64,6 +64,18 @@ const ACTIVITY_DEFAULT_ORDER = [{ due_at: 'asc' as const }, { created_at: 'desc'
 /** How long a customer must go untouched before the reorder cron flags them. */
 const REORDER_DORMANT_DAYS = 60;
 
+/**
+ * How far past the server's clock a logged time may sit and still count as
+ * "just now". The picker is filled from the browser, whose clock can run a
+ * minute or two fast; refusing that would refuse the time the rep was shown.
+ */
+const LOGGED_AT_CLOCK_SKEW_MS = 5 * 60_000;
+
+/** The later of a stored timestamp and a new one — contact columns only move forward. */
+function later(current: Date | null | undefined, at: Date): Date {
+    return current && current.getTime() > at.getTime() ? current : at;
+}
+
 export type ListActivityOpts = {
     leadId?: string;
     customerId?: string;
@@ -186,6 +198,23 @@ export class CrmActivitiesService {
         return purpose;
     }
 
+    /**
+     * When a directly logged activity happened: the time the rep picked, or now.
+     *
+     * A future time is refused rather than stored — a DONE row is a record of
+     * something that already took place, and one dated tomorrow would sort
+     * above today's calls and stamp the lead as contacted before anyone has.
+     * Within the clock-skew allowance it is read as now instead.
+     */
+    private loggedAt(value: string | undefined, timezone: string, now: Date): Date {
+        const at = parseTenantDateTime(value, timezone);
+        if (!at) return now;
+        if (at.getTime() > now.getTime() + LOGGED_AT_CLOCK_SKEW_MS) {
+            throw new BadRequestException('An activity cannot be logged as done in the future.');
+        }
+        return at.getTime() > now.getTime() ? now : at;
+    }
+
     async create(tenantId: string, userId: string, dto: CreateCrmActivityDto, timezone: string) {
         const target = await this.resolveTarget(tenantId, dto.lead_id, dto.customer_id);
         const status = dto.status ?? 'PLANNED';
@@ -198,10 +227,17 @@ export class CrmActivitiesService {
                 'summary and channel are required when logging a completed activity.',
             );
         }
+        if (status === 'PLANNED' && dto.completed_at) {
+            throw new BadRequestException(
+                'completed_at only applies when logging a completed activity.',
+            );
+        }
+
+        const now = new Date();
+        const completedAt = status === 'DONE' ? this.loggedAt(dto.completed_at, timezone, now) : null;
 
         const purpose = await this.resolvePurpose(tenantId, dto.purpose);
         const channel = dto.channel ? await this.resolveChannel(tenantId, dto.channel) : null;
-        const now = new Date();
 
         const activity = await this.db.crmActivity.create({
             data: {
@@ -210,7 +246,7 @@ export class CrmActivitiesService {
                 subject: dto.subject ?? null,
                 status,
                 due_at: parseTenantDateTime(dto.due_at, timezone),
-                completed_at: status === 'DONE' ? now : null,
+                completed_at: completedAt,
                 purpose_id: purpose?.id ?? null,
                 channel_id: channel?.id ?? null,
                 channel_code: channel?.code ?? null,
@@ -241,8 +277,11 @@ export class CrmActivitiesService {
         // complete() stamped `last_contacted_at`, so logging a call that had
         // already happened — the quickest path in the UI — left the lead reading
         // as never contacted, unscored for recency and stuck in the stale list.
+        //
+        // Stamped with when the call happened, not when it was written up:
+        // entering last month's calls must not make a lead read as worked today.
         if (status === 'DONE') {
-            await this.stampLastContacted(this.db, target, now);
+            await this.stampLastContacted(this.db, target, completedAt ?? now);
             await this.rescoreLead(this.db, tenantId, leadIdOf(target));
         } else {
             await touchLeadActivity(this.db, leadIdOf(target), now);
@@ -473,22 +512,39 @@ export class CrmActivitiesService {
      * — create() calls this too. Before the merge only logging a conversation
      * did, so the reorder cron re-fired at customers the team had called and
      * marked done.
+     *
+     * Never moves a column backwards. A call logged with an earlier date —
+     * last week's, written up today — is still contact, but it is not the
+     * latest contact if somebody has spoken to them since, and overwriting
+     * would push the lead back into the stale list and the customer back in
+     * front of the reorder cron.
      */
     private async stampLastContacted(tx: any, target: any, at: Date) {
         if (target.lead_id) {
+            const lead = await tx.lead.findFirst({
+                where: { id: target.lead_id },
+                select: { last_contacted_at: true, last_activity_at: true },
+            });
             // Both columns in one write: contact is a kind of activity, so a lead
             // we just spoke to can never show up in the "no activity" list.
             // Customers below have no `last_activity_at` — nothing reads a
             // neglect signal off them, the reorder cron watches contact instead.
             await tx.lead.update({
                 where: { id: target.lead_id },
-                data: { last_contacted_at: at, last_activity_at: at },
+                data: {
+                    last_contacted_at: later(lead?.last_contacted_at, at),
+                    last_activity_at: later(lead?.last_activity_at, at),
+                },
             });
             return;
         }
+        const customer = await tx.customer.findFirst({
+            where: { id: target.customer_id },
+            select: { last_contacted_at: true },
+        });
         await tx.customer.update({
             where: { id: target.customer_id },
-            data: { last_contacted_at: at },
+            data: { last_contacted_at: later(customer?.last_contacted_at, at) },
         });
     }
 
