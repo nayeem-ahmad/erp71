@@ -64,3 +64,14 @@ export function isoToTenantLocal(iso: string | null): string {
     if (Number.isNaN(parsed.getTime())) return '';
     return toDatetimeLocal(parsed, activeZone());
 }
+
+/** The current minute as a `datetime-local` value, in workspace time. */
+export function nowLocal(): string {
+    return isoToTenantLocal(new Date().toISOString());
+}
+
+/** Whether a `datetime-local` value, read in workspace time, is still to come. */
+export function isFutureLocal(value: string): boolean {
+    const iso = tenantLocalToIso(value);
+    return !!iso && new Date(iso).getTime() > Date.now();
+}

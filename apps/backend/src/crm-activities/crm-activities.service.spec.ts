@@ -247,6 +247,111 @@ describe('CrmActivitiesService', () => {
         });
     });
 
+    /**
+     * Writing up a call from last week: the row carries when it happened, not
+     * when it was typed in, and the lead's contact columns only ever move forward.
+     */
+    describe('create() — logging an earlier activity', () => {
+        const CALL = { id: 'ch-call', code: 'CALL', name: 'Call', is_active: true };
+        const logged = (extra: Record<string, unknown>) =>
+            ({ lead_id: 'l1', status: 'DONE', summary: 'Spoke to Karim', channel: 'CALL', ...extra }) as any;
+
+        beforeEach(() => {
+            db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW', priority: 'MEDIUM' });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', lead_id: 'l1' });
+            db.crmActivity.findFirst.mockResolvedValue(null);
+            db.crmActivity.count.mockResolvedValue(1);
+            taxonomy.resolveByIdOrCode.mockResolvedValue(CALL);
+        });
+
+        const contactStamp = () =>
+            db.lead.update.mock.calls.find(([args]: [any]) => args.data.last_contacted_at !== undefined)[0];
+
+        it('stores the picked time, read as the tenant\'s wall clock', async () => {
+            await service.create('t1', 'u1', logged({ completed_at: '2026-08-10T15:30' }), 'Asia/Dhaka');
+
+            // 15:30 in Dhaka is 09:30 UTC.
+            expect(db.crmActivity.create.mock.calls[0][0].data.completed_at.toISOString())
+                .toBe('2026-08-10T09:30:00.000Z');
+        });
+
+        it('stamps contact at that time, not at the moment it was typed in', async () => {
+            await service.create('t1', 'u1', logged({ completed_at: '2026-08-10T09:30:00Z' }), 'Asia/Dhaka');
+
+            const stamp = contactStamp();
+            expect(stamp.data.last_contacted_at.toISOString()).toBe('2026-08-10T09:30:00.000Z');
+            expect(stamp.data.last_activity_at.toISOString()).toBe('2026-08-10T09:30:00.000Z');
+        });
+
+        it('does not move a later contact backwards', async () => {
+            const since = new Date('2026-09-01T06:00:00Z');
+            db.lead.findFirst.mockResolvedValue({
+                id: 'l1', status: 'NEW', priority: 'MEDIUM',
+                last_contacted_at: since, last_activity_at: since,
+            });
+
+            await service.create('t1', 'u1', logged({ completed_at: '2026-08-10T09:30:00Z' }), 'Asia/Dhaka');
+
+            const stamp = contactStamp();
+            expect(stamp.data.last_contacted_at).toEqual(since);
+            expect(stamp.data.last_activity_at).toEqual(since);
+        });
+
+        it('does not move a customer\'s later contact backwards either', async () => {
+            const since = new Date('2026-09-01T06:00:00Z');
+            db.customer.findFirst
+                .mockResolvedValueOnce({ id: 'c1' })
+                .mockResolvedValue({ last_contacted_at: since });
+            db.crmActivity.create.mockResolvedValue({ id: 'a1', customer_id: 'c1' });
+
+            await service.create(
+                't1', 'u1',
+                logged({ lead_id: undefined, customer_id: 'c1', completed_at: '2026-08-10T09:30:00Z' }),
+                'Asia/Dhaka',
+            );
+
+            const stamp = db.customer.update.mock.calls.find(
+                ([args]: [any]) => args.data.last_contacted_at !== undefined,
+            )[0];
+            expect(stamp.data.last_contacted_at).toEqual(since);
+        });
+
+        it('defaults to now when no time is given', async () => {
+            const before = Date.now();
+            await service.create('t1', 'u1', logged({}), 'Asia/Dhaka');
+
+            const at = db.crmActivity.create.mock.calls[0][0].data.completed_at as Date;
+            expect(at.getTime()).toBeGreaterThanOrEqual(before);
+            expect(at.getTime()).toBeLessThanOrEqual(Date.now());
+        });
+
+        it('refuses a time in the future', async () => {
+            const tomorrow = new Date(Date.now() + 24 * 3600_000).toISOString();
+            await expect(
+                service.create('t1', 'u1', logged({ completed_at: tomorrow }), 'Asia/Dhaka'),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.crmActivity.create).not.toHaveBeenCalled();
+        });
+
+        it('reads a time a browser clock puts a minute ahead as now', async () => {
+            const ahead = new Date(Date.now() + 60_000).toISOString();
+            await service.create('t1', 'u1', logged({ completed_at: ahead }), 'Asia/Dhaka');
+
+            const at = db.crmActivity.create.mock.calls[0][0].data.completed_at as Date;
+            expect(at.getTime()).toBeLessThanOrEqual(Date.now());
+        });
+
+        it('refuses a completion time on a planned activity', async () => {
+            await expect(
+                service.create('t1', 'u1', {
+                    lead_id: 'l1',
+                    subject: 'Call Karim',
+                    completed_at: '2026-08-10T09:30:00Z',
+                } as any, 'Asia/Dhaka'),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
     describe('create() — assignee', () => {
         beforeEach(() => {
             db.lead.findFirst.mockResolvedValue({ id: 'l1', status: 'NEW' });
