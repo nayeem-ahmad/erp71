@@ -105,6 +105,25 @@ export const TITLE_POSITIONS: TitlePosition[] = [
     'below-right',
 ];
 
+/**
+ * Where the document's QR code sits, relative to the title it travels with.
+ *
+ * `below-title` is where the code always printed. The side positions put it
+ * next to the title text, so a tall code does not deepen the header band.
+ */
+export type QrPosition =
+    | 'below-title'
+    | 'above-title'
+    | 'left-of-title'
+    | 'right-of-title';
+
+export const QR_POSITIONS: QrPosition[] = [
+    'below-title',
+    'above-title',
+    'left-of-title',
+    'right-of-title',
+];
+
 export interface HeaderLine {
     /** Free text; may contain {{tokens}} — see TOKENS in header.ts. */
     text: string;
@@ -192,14 +211,14 @@ export interface PrintFooterConfig {
 export interface PrintHeaderConfig {
     /**
      * 1 — header only. 2 — adds `images` and `footer`. 3 — adds logo width,
-     * title placement, and footer pinning/bleed.
+     * title placement, and footer pinning/bleed. 4 — adds `qr`.
      *
      * Every shape is readable: fields added in a later version are filled from
      * `DEFAULT_HEADER_CONFIG` by `resolveHeaderConfig`, so a stored v1 config
      * renders unchanged and only gains a footer once a tenant designs one.
-     * The v3 additions all default to the behaviour v2 already printed.
+     * The v3 and v4 additions all default to what the version before printed.
      */
-    version: 1 | 2 | 3;
+    version: 1 | 2 | 3 | 4;
     layout: HeaderLayout;
     logo: {
         url?: string;
@@ -245,6 +264,23 @@ export interface PrintHeaderConfig {
          * only its painted position shifts — a tenant cannot push it off the
          * page and lose it. Down is a margin, so the header grows to hold the
          * block and its divider is never painted over.
+         */
+        offsetXMm?: number;
+        offsetYMm?: number;
+    };
+    /**
+     * The document's QR code — printed in the title block by the documents that
+     * carry one (`HeaderContext.docQr`). The template only places and sizes it;
+     * whether a code prints at all is up to the document.
+     */
+    qr: {
+        /** Printed width and height — a QR code is square. */
+        sizeMm: number;
+        position: QrPosition;
+        /**
+         * Nudge from that position, in mm, on the same terms as the title's:
+         * across and up only shift where it is painted, down grows the band.
+         * The title's own nudge moves the code along with it.
          */
         offsetXMm?: number;
         offsetYMm?: number;
@@ -322,7 +358,7 @@ export const DEFAULT_FOOTER_CONFIG: PrintFooterConfig = {
 };
 
 export const DEFAULT_HEADER_CONFIG: PrintHeaderConfig = {
-    version: 3,
+    version: 4,
     layout: 'logo-left',
     logo: { heightMm: 16, showOnThermal: true },
     company: { show: true, fontSizePt: 16, bold: true, color: '#1d4ed8' },
@@ -335,6 +371,7 @@ export const DEFAULT_HEADER_CONFIG: PrintHeaderConfig = {
         offsetXMm: 0,
         offsetYMm: 0,
     },
+    qr: { sizeMm: 20, position: 'below-title', offsetXMm: 0, offsetYMm: 0 },
     lines: [
         { text: '{{address}}', fontSizePt: 9, color: '#555555' },
         { text: 'Tel: {{phone}}', fontSizePt: 9, color: '#555555' },

@@ -67,7 +67,7 @@ A letterhead switcher across the top (pills, plus "+ Add another") appears only 
 
 **Guard against overwriting real work.** The header lines count as *simple* when every line is either one of the generated detail lines or a single trailing extra line, and no line carries per-line overrides (bold, italic, underline, font family, letter spacing). If the lines are not simple, the checkboxes and the extra line are replaced by "Your header lines are customised — edit them in Fine-tune". Size, colour and alignment do not count as overrides. The footer textarea follows the same rule for footer lines. Footer images and footer layout are always edited in Fine-tune, whatever the lines look like.
 
-**Fine-tune** (collapsed by default) holds every remaining `HeaderEditor` control, grouped as: Logo size & placement · Business name · Document title · Header lines · Header images · Divider · Footer layout (images/signature, divider, every page, pin to bottom, bleed) · Type. These reuse the existing `TemplateBlocks` components.
+**Fine-tune** (collapsed by default) holds every remaining `HeaderEditor` control, grouped as: Logo size & placement · Business name · Document title · QR code (position, size, nudge) · Header lines · Header images · Divider · Footer layout (images/signature, divider, every page, pin to bottom, bleed) · Type. These reuse the existing `TemplateBlocks` components.
 
 Opening the page never saves. Configs are written only on Save. Save sends the loaded config with the user's edits applied, so every untouched field renders as before.
 

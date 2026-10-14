@@ -1,13 +1,15 @@
 'use client';
 
+import { useId } from 'react';
 import { Field, Input, Select } from '@/components/ui';
-import { defaultTitlePosition, TITLE_POSITIONS } from '@/lib/print';
+import { DEFAULT_HEADER_CONFIG, defaultTitlePosition, QR_POSITIONS, TITLE_POSITIONS } from '@/lib/print';
 import type {
     HeaderLayout,
     PrintDocType,
     PrintFontFamily,
     PrintFooterConfig,
     PrintHeaderConfig,
+    QrPosition,
     TitlePosition,
 } from '@/lib/print';
 import { useI18n } from '@/lib/i18n';
@@ -74,6 +76,10 @@ export default function HeaderEditor({
     const fields = copy.fields;
 
     const patch = (changes: Partial<PrintHeaderConfig>) => onConfigChange({ ...config, ...changes });
+    // The defaults fill `qr` on every config the page loads; this only covers a
+    // stored `null`, which the API's optional field lets through.
+    const qr = config.qr ?? DEFAULT_HEADER_CONFIG.qr;
+    const qrPositionId = useId();
     const patchFooter = (changes: Partial<PrintFooterConfig>) =>
         patch({ footer: { ...config.footer, ...changes } });
 
@@ -299,6 +305,47 @@ export default function HeaderEditor({
                     />
                 </div>
                 <p className="text-xs text-gray-400">{fields.titleOffsetHint}</p>
+            </Section>
+
+            <Section title={copy.sections.qr}>
+                <p className="text-xs text-gray-400">{fields.qrHint}</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label={fields.qrPosition} htmlFor={qrPositionId}>
+                        <Select
+                            id={qrPositionId}
+                            value={qr.position}
+                            onChange={(e) => patch({ qr: { ...qr, position: e.target.value as QrPosition } })}
+                        >
+                            {QR_POSITIONS.map((position) => (
+                                <option key={position} value={position}>
+                                    {copy.qrPositions[position]}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                    <NumberField
+                        label={fields.qrSize}
+                        value={qr.sizeMm}
+                        min={10}
+                        max={60}
+                        onChange={(sizeMm) => patch({ qr: { ...qr, sizeMm } })}
+                    />
+                    <NumberField
+                        label={fields.qrOffsetX}
+                        value={qr.offsetXMm ?? 0}
+                        min={-100}
+                        max={100}
+                        onChange={(offsetXMm) => patch({ qr: { ...qr, offsetXMm } })}
+                    />
+                    <NumberField
+                        label={fields.qrOffsetY}
+                        value={qr.offsetYMm ?? 0}
+                        min={-100}
+                        max={100}
+                        onChange={(offsetYMm) => patch({ qr: { ...qr, offsetYMm } })}
+                    />
+                </div>
+                <p className="text-xs text-gray-400">{fields.qrOffsetHint}</p>
             </Section>
 
             <Section title={copy.sections.lines}>

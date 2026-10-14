@@ -16,6 +16,7 @@ import {
     defaultTitlePosition,
     isThermalPaper,
     PAGE_MARGIN_MM,
+    QR_POSITIONS,
     TITLE_POSITIONS,
     type DeepPartial,
     type HeaderContext,
@@ -23,6 +24,7 @@ import {
     type PaperSize,
     type PrintFontFamily,
     type PrintHeaderConfig,
+    type QrPosition,
     type TemplateImage,
     type TitlePosition,
 } from './types';
@@ -179,6 +181,15 @@ function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): Prin
             offsetXMm: 0,
             offsetYMm: 0,
         },
+        // Same for the QR code: it stays in the column, under or over the
+        // title, and no larger than the roll can scan it at.
+        qr: {
+            ...config.qr,
+            sizeMm: Math.min(qrSize(config), narrow ? 30 : 40),
+            position: qrPosition(config) === 'above-title' ? 'above-title' : 'below-title',
+            offsetXMm: 0,
+            offsetYMm: 0,
+        },
         baseFontSizePt: Math.min(config.baseFontSizePt, narrow ? 8 : 9),
         spacingMm: Math.min(config.spacingMm, 2),
         footer: {
@@ -230,6 +241,41 @@ export function titlePosition(config: PrintHeaderConfig): TitlePosition {
     return (TITLE_POSITIONS as readonly string[]).includes(stored ?? '')
         ? (stored as TitlePosition)
         : defaultTitlePosition(config.layout);
+}
+
+/** The QR code's slot: the stored one when we know it, otherwise under the title. */
+export function qrPosition(config: PrintHeaderConfig): QrPosition {
+    const stored = config.qr?.position;
+    return (QR_POSITIONS as readonly string[]).includes(stored ?? '')
+        ? (stored as QrPosition)
+        : 'below-title';
+}
+
+/** Printed side length of the QR code, in mm. */
+function qrSize(config: PrintHeaderConfig): number {
+    return num(config.qr?.sizeMm, 20, 10, 60);
+}
+
+/** Space between the QR code and the title text it sits under or over, in mm. */
+const QR_GAP_MM = 1.5;
+
+/**
+ * The inline declarations for a nudge, in mm.
+ *
+ * Across and up are relative, so the element keeps its place in the flow and
+ * only its painted position moves — a large nudge cannot make it disappear.
+ * Down is a margin instead, added to `baseTopMm` (whatever top margin the
+ * element already carries): the band grows to hold it, so the divider under
+ * the header moves with it rather than being painted over.
+ */
+function nudgeDeclarations(offsetXMm: number | undefined, offsetYMm: number | undefined, baseTopMm = 0): string[] {
+    const offsetX = num(offsetXMm, 0, -100, 100);
+    const offsetY = num(offsetYMm, 0, -100, 100);
+    return [
+        offsetX ? `left:${offsetX}mm` : '',
+        offsetY > 0 ? `margin-top:${baseTopMm + offsetY}mm` : '',
+        offsetY < 0 ? `top:${offsetY}mm` : '',
+    ].filter(Boolean);
 }
 
 /** Splits a slot into its row ('above' | 'beside' | 'below') and alignment. */
@@ -368,25 +414,38 @@ function renderDocBlock(config: PrintHeaderConfig, ctx: HeaderContext): string {
     if (!title && meta.length === 0 && !qr) return '';
 
     const { row, align } = titleSlot(titlePosition(config));
-    // Across and up are relative, so the block keeps its place in the flow and
-    // only its painted position moves — a large nudge cannot make the title
-    // disappear. Down is a margin instead: the band grows to hold the block, so
-    // the divider under the header moves with it rather than being painted
-    // over. That matters once the block carries a QR code, which makes it the
-    // tallest thing in the band.
-    const offsetX = num(config.title.offsetXMm, 0, -100, 100);
-    const offsetY = num(config.title.offsetYMm, 0, -100, 100);
-    const declarations = [
-        offsetX ? `left:${offsetX}mm` : '',
-        offsetY > 0 ? `margin-top:${offsetY}mm` : '',
-        offsetY < 0 ? `top:${offsetY}mm` : '',
-    ].filter(Boolean);
+    // The nudge matters most once the block carries a QR code, which makes it
+    // the tallest thing in the band — see `nudgeDeclarations`.
+    const declarations = nudgeDeclarations(config.title.offsetXMm, config.title.offsetYMm);
     const offset = declarations.length ? ` style="${declarations.join(';')}"` : '';
 
-    return `<div class="p71-hd-doc p71-hd-doc--${row} p71-hd-doc--${align}"${offset}>
-        ${title ? `<div class="p71-hd-title">${escapeHtml(title)}</div>` : ''}
-        ${meta.map((entry) => `<div class="p71-hd-meta">${escapeHtml(entry)}</div>`).join('')}
-        ${qr ? `<img class="p71-hd-qr" src="${escapeHtml(qr)}" alt="QR code">` : ''}
+    const textHtml = `${title ? `<div class="p71-hd-title">${escapeHtml(title)}</div>` : ''}
+        ${meta.map((entry) => `<div class="p71-hd-meta">${escapeHtml(entry)}</div>`).join('')}`;
+    const classes = `p71-hd-doc p71-hd-doc--${row} p71-hd-doc--${align}`;
+    if (!qr) return `<div class="${classes}"${offset}>${textHtml}</div>`;
+
+    const position = qrPosition(config);
+    // The code's own nudge, on top of the title's — the block moves both.
+    const qrDeclarations = nudgeDeclarations(
+        config.qr?.offsetXMm,
+        config.qr?.offsetYMm,
+        position === 'below-title' ? QR_GAP_MM : 0,
+    );
+    const qrStyle = qrDeclarations.length ? ` style="${qrDeclarations.join(';')}"` : '';
+    const qrHtml = `<img class="p71-hd-qr" src="${escapeHtml(qr)}" alt="QR code"${qrStyle}>`;
+
+    if (position === 'above-title') {
+        return `<div class="${classes} p71-hd-doc--qr-above"${offset}>${qrHtml}${textHtml}</div>`;
+    }
+    if (position === 'left-of-title' || position === 'right-of-title') {
+        // Side by side in a row of their own, which the block's alignment
+        // places like a line of text.
+        const text = title || meta.length ? `<div class="p71-hd-doc-text">${textHtml}</div>` : '';
+        const cells = position === 'left-of-title' ? `${qrHtml}${text}` : `${text}${qrHtml}`;
+        return `<div class="${classes} p71-hd-doc--qr-side"${offset}><div class="p71-hd-doc-row">${cells}</div></div>`;
+    }
+    return `<div class="${classes}"${offset}>${textHtml}
+        ${qrHtml}
     </div>`;
 }
 
@@ -577,9 +636,14 @@ export function headerCss(
     .p71-hd-doc--left { text-align: left; }
     .p71-hd-doc--center { text-align: center; }
     .p71-hd-doc--right { text-align: right; }
-    .p71-hd-qr { display: block; width: 20mm; height: 20mm; margin-top: 1.5mm; }
+    .p71-hd-qr { display: block; width: ${qrSize(resolved)}mm; height: ${qrSize(resolved)}mm; margin-top: ${QR_GAP_MM}mm; position: relative; }
     .p71-hd-doc--right .p71-hd-qr { margin-left: auto; }
     .p71-hd-doc--center .p71-hd-qr { margin-left: auto; margin-right: auto; }
+    .p71-hd-doc--qr-above .p71-hd-qr { margin-top: 0; margin-bottom: ${QR_GAP_MM}mm; }
+    /* Beside the title the code and the text share a row, which the block's
+       text-align places; the auto margins above would only fight it. */
+    .p71-hd-doc-row { display: inline-flex; align-items: flex-start; gap: 3mm; vertical-align: top; }
+    .p71-hd-doc--qr-side .p71-hd-qr { flex: none; margin: 0; }
     /* Out of the band it owns a full-width row, so its alignment has room to
        mean something. In the band it only takes the space the brand leaves. */
     .p71-hd-doc--above, .p71-hd-doc--below { width: 100%; }

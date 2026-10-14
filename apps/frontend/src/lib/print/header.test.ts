@@ -64,6 +64,84 @@ describe('the header title block with a QR code', () => {
         expect(css).toContain('.p71-hd-doc--right .p71-hd-qr { margin-left: auto; }');
         expect(css).toContain('.p71-hd-qr { display: block; width: 20mm; height: 20mm;');
     });
+
+    describe('placed and sized by the template', () => {
+        const withMeta = { ...ctx, docQr: qr, hideDocMeta: true };
+
+        it('prints at the size the template sets, clamped to what scans and fits', () => {
+            expect(headerCss({ qr: { sizeMm: 32 } }, 'A4')).toContain('width: 32mm; height: 32mm;');
+            expect(headerCss({ qr: { sizeMm: 2 } }, 'A4')).toContain('width: 10mm; height: 10mm;');
+            expect(headerCss({ qr: { sizeMm: 900 } }, 'A4')).toContain('width: 60mm; height: 60mm;');
+        });
+
+        it('keeps a stored template without QR settings printing as before', () => {
+            const html = renderHeaderHtml({ version: 3 }, withMeta, 'A4');
+
+            expect(html.indexOf('p71-hd-title')).toBeLessThan(html.indexOf('p71-hd-qr'));
+            expect(html).toContain('<img class="p71-hd-qr" src="data:image/png;base64,QQQQ" alt="QR code">');
+            expect(headerCss({ version: 3 }, 'A4')).toContain('width: 20mm; height: 20mm;');
+        });
+
+        it('stacks the code over the title', () => {
+            const html = renderHeaderHtml({ qr: { position: 'above-title' } }, withMeta, 'A4');
+
+            expect(html).toContain('p71-hd-doc--qr-above');
+            expect(html.indexOf('p71-hd-qr')).toBeLessThan(html.indexOf('p71-hd-title'));
+            expect(headerCss({}, 'A4')).toContain('.p71-hd-doc--qr-above .p71-hd-qr { margin-top: 0; margin-bottom: 1.5mm; }');
+        });
+
+        it.each([
+            ['left-of-title', true],
+            ['right-of-title', false],
+        ] as const)('puts the code %s, sharing a row with the text', (position, qrFirst) => {
+            const html = renderHeaderHtml({ qr: { position } }, withMeta, 'A4');
+
+            expect(html).toContain('p71-hd-doc--qr-side');
+            expect(html).toContain('<div class="p71-hd-doc-row">');
+            expect(html.indexOf('p71-hd-qr') < html.indexOf('p71-hd-doc-text')).toBe(qrFirst);
+        });
+
+        it('leaves out the empty text cell beside a code whose title is hidden', () => {
+            const html = renderHeaderHtml(
+                { title: { show: false }, qr: { position: 'right-of-title' } },
+                withMeta,
+                'A4',
+            );
+
+            expect(html).toContain('<img class="p71-hd-qr"');
+            expect(html).not.toContain('p71-hd-doc-text');
+        });
+
+        it('nudges the code on its own: across and up move it, down grows the band', () => {
+            const across = renderHeaderHtml({ qr: { offsetXMm: -6, offsetYMm: -2 } }, withMeta, 'A4');
+            expect(across).toContain('alt="QR code" style="left:-6mm;top:-2mm"');
+
+            // Under the title, the nudge adds to the gap it already keeps.
+            const down = renderHeaderHtml({ qr: { offsetYMm: 4 } }, withMeta, 'A4');
+            expect(down).toContain('alt="QR code" style="margin-top:5.5mm"');
+
+            const beside = renderHeaderHtml({ qr: { position: 'left-of-title', offsetYMm: 4 } }, withMeta, 'A4');
+            expect(beside).toContain('alt="QR code" style="margin-top:4mm"');
+        });
+
+        it('falls back to under the title for a position it does not know', () => {
+            const html = renderHeaderHtml({ qr: { position: 'page-corner' as never } }, withMeta, 'A4');
+
+            expect(html).not.toContain('p71-hd-doc--qr-');
+            expect(html.indexOf('p71-hd-title')).toBeLessThan(html.indexOf('p71-hd-qr'));
+        });
+
+        it('keeps the code in the column on a thermal roll, at a size the roll can carry', () => {
+            const config: DeepPartial<PrintHeaderConfig> = {
+                qr: { position: 'left-of-title', sizeMm: 60, offsetXMm: 20, offsetYMm: 10 },
+            };
+            const resolved = resolveHeaderConfig(config, 'Thermal58');
+
+            expect(resolved.qr).toEqual({ position: 'below-title', sizeMm: 30, offsetXMm: 0, offsetYMm: 0 });
+            expect(resolveHeaderConfig({ qr: { position: 'above-title' } }, 'Thermal80').qr.position).toBe('above-title');
+            expect(renderHeaderHtml(config, withMeta, 'Thermal58')).not.toContain('p71-hd-doc--qr-side');
+        });
+    });
 });
 
 describe('applyTokens — who prepared it and when it printed', () => {

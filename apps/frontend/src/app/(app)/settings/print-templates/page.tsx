@@ -10,7 +10,7 @@ import { toast } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { Button, ConfirmDialog, PageShell, Select } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { DEFAULT_HEADER_CONFIG, PAPER_SIZES, resolveHeaderConfig } from '@/lib/print';
+import { DEFAULT_HEADER_CONFIG, isThermalPaper, PAPER_SIZES, resolveHeaderConfig } from '@/lib/print';
 // Imported from the hook module directly: `@/lib/print` stays React-free so the
 // printer libs can import it without pulling in a client component.
 import { clearPrintTemplateCache } from '@/lib/print/use-print-header';
@@ -19,6 +19,7 @@ import { formatDate } from '@/lib/format';
 import BranchAssignments from './BranchAssignments';
 import HeaderEditor from './HeaderEditor';
 import HeaderPreview from './HeaderPreview';
+import { CheckboxRow } from './TemplateBlocks';
 
 interface PrintTemplate {
     id: string;
@@ -36,6 +37,38 @@ const PAPER_LABELS: Record<PaperSize, string> = {
     Thermal58: '58mm thermal',
 };
 
+/**
+ * A stand-in QR code for the preview: three finder squares and a scatter of
+ * modules, drawn as SVG. It encodes nothing — it only has to look like the code
+ * a document prints, so its size and position can be judged on the page.
+ */
+function sampleQrDataUrl(): string {
+    const size = 25;
+    const finder = (x: number, y: number) =>
+        `M${x} ${y}h7v7h-7zM${x + 1} ${y + 1}v5h5v-5zM${x + 2} ${y + 2}h3v3h-3z`;
+    const nearFinder = (x: number, y: number) =>
+        (x < 8 && y < 8) || (x >= size - 8 && y < 8) || (x < 8 && y >= size - 8);
+    // An integer hash of the cell, so about half the modules fill, evenly.
+    const filled = (x: number, y: number) => {
+        let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        return ((h ^ (h >>> 16)) & 1) === 1;
+    };
+    let modules = '';
+    for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+            if (!nearFinder(x, y) && filled(x, y)) modules += `M${x} ${y}h1v1h-1z`;
+        }
+    }
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${size + 2} ${size + 2}">`
+        + `<rect x="-1" y="-1" width="${size + 2}" height="${size + 2}" fill="#fff"/>`
+        + `<path fill-rule="evenodd" d="${finder(0, 0)}${finder(size - 7, 0)}${finder(0, size - 7)}${modules}"/>`
+        + '</svg>';
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const SAMPLE_QR = sampleQrDataUrl();
+
 export default function PrintTemplatesPage() {
     const { t } = useI18n();
     const copy = t.settingsExtras.printTemplates;
@@ -48,6 +81,7 @@ export default function PrintTemplatesPage() {
     const [uploading, setUploading] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+    const [previewQr, setPreviewQr] = useState(true);
 
     const [name, setName] = useState('');
     const [isDefault, setIsDefault] = useState(false);
@@ -153,7 +187,11 @@ export default function PrintTemplatesPage() {
         website: 'example.com',
         vatRegNo: '000000000-0101',
         tin: '123456789012',
-    }), [branding.businessName]);
+        // The documents that print a QR code print it in place of the number
+        // and date, so the preview does the same. They only do on sheet paper:
+        // no roll carries the code in its letterhead.
+        ...(previewQr && !isThermalPaper(paperSize) ? { docQr: SAMPLE_QR, hideDocMeta: true } : {}),
+    }), [branding.businessName, previewQr, paperSize]);
 
     return (
         <PageShell>
@@ -239,16 +277,23 @@ export default function PrintTemplatesPage() {
                         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-3 md:p-4 lg:sticky lg:top-4 lg:self-start">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <h2 className="text-sm font-semibold text-gray-700">{copy.sections.preview}</h2>
-                                <Select
-                                    aria-label={copy.fields.paperSize}
-                                    className="w-auto"
-                                    value={paperSize}
-                                    onChange={(e) => setPaperSize(e.target.value as PaperSize)}
-                                >
-                                    {PAPER_SIZES.map((size) => (
-                                        <option key={size} value={size}>{PAPER_LABELS[size]}</option>
-                                    ))}
-                                </Select>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <CheckboxRow
+                                        label={copy.fields.previewQr}
+                                        checked={previewQr}
+                                        onChange={setPreviewQr}
+                                    />
+                                    <Select
+                                        aria-label={copy.fields.paperSize}
+                                        className="w-auto"
+                                        value={paperSize}
+                                        onChange={(e) => setPaperSize(e.target.value as PaperSize)}
+                                    >
+                                        {PAPER_SIZES.map((size) => (
+                                            <option key={size} value={size}>{PAPER_LABELS[size]}</option>
+                                        ))}
+                                    </Select>
+                                </div>
                             </div>
 
                             <HeaderPreview
