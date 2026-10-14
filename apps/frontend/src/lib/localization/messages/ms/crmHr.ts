@@ -133,6 +133,20 @@ export const crmHrMessages = {
                 approvalApproved: 'Diluluskan',
                 approvalPending: 'Menunggu kelulusan',
             },
+            layout: {
+                group: 'Susun atur',
+                standard: 'Standard',
+                compact: 'Padat',
+                agenda: 'Agenda',
+            },
+            moreFilters: 'Lagi penapis',
+            searchPlaceholder: 'Cari aktiviti',
+            groups: {
+                today: 'Hari ini',
+                later: 'Kemudian',
+                earlier: 'Terdahulu',
+                undated: 'Tiada tarikh',
+            },
         },
         setup: {
             title: 'Persediaan CRM',

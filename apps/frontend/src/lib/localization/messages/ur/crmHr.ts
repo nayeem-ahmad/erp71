@@ -133,6 +133,20 @@ export const crmHrMessages = {
                 approvalApproved: 'منظور شدہ',
                 approvalPending: 'منظوری کے منتظر',
             },
+            layout: {
+                group: 'خاکہ',
+                standard: 'معیاری',
+                compact: 'مختصر',
+                agenda: 'ایجنڈا',
+            },
+            moreFilters: 'مزید فلٹر',
+            searchPlaceholder: 'سرگرمیاں تلاش کریں',
+            groups: {
+                today: 'آج',
+                later: 'بعد میں',
+                earlier: 'پہلے',
+                undated: 'کوئی تاریخ نہیں',
+            },
         },
         setup: {
             title: 'سی آر ایم سیٹ اپ',

@@ -133,6 +133,20 @@ export const crmHrMessages = {
                 approvalApproved: "Aprobada",
                 approvalPending: "Pendiente de aprobación",
             },
+            layout: {
+                group: "Diseño",
+                standard: "Estándar",
+                compact: "Compacta",
+                agenda: "Agenda",
+            },
+            moreFilters: "Más filtros",
+            searchPlaceholder: "Buscar actividades",
+            groups: {
+                today: "Hoy",
+                later: "Más tarde",
+                earlier: "Antes",
+                undated: "Sin fecha",
+            },
         },
         setup: {
             title: "Configuración de CRM",

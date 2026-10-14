@@ -104,6 +104,20 @@ describe('DataTable', () => {
         expect(screen.getByText('Gamma Product')).toBeInTheDocument();
     });
 
+    it('stripes rows and gives them a hover wash when asked', () => {
+        render(<DataTable {...defaultProps} striped />);
+        const row = screen.getByText('Alpha Product').closest('tr');
+        expect(row?.className).toContain('even:bg-gray-50');
+        expect(row?.className).toContain('hover:bg-blue-50');
+    });
+
+    it('keeps the faint hover when stripes are off', () => {
+        render(<DataTable {...defaultProps} />);
+        const row = screen.getByText('Alpha Product').closest('tr');
+        expect(row?.className).toContain('hover:bg-gray-50/50');
+        expect(row?.className).not.toContain('even:bg-gray-50');
+    });
+
     it('renders search input with default placeholder', () => {
         render(<DataTable {...defaultProps} />);
         expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
