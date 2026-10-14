@@ -52,6 +52,7 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import { useCompactUi } from '@/contexts/CompactUiContext';
 import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
+import { stripedRowClass } from '@/lib/ui/striped-row';
 import { useTablePreferences } from './useTablePreferences';
 import {
     columnDefId,
@@ -132,6 +133,11 @@ export interface DataTableProps<T> {
     onRowClick?: (row: T) => void;
     /** Extra classes per row — a selected row, one just added. */
     rowClassName?: (row: T) => string | undefined;
+    /**
+     * Alternating row fill and a blue hover wash. Off by default: most lists
+     * keep the faint gray hover they already have.
+     */
+    striped?: boolean;
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
      *  client row count. Pages using this must also set `showSearch={false}` and render
@@ -324,6 +330,7 @@ export default function DataTable<T>({
     serverPagination,
     onRowClick,
     rowClassName,
+    striped = false,
 }: DataTableProps<T>) {
     const { t } = useI18n();
     // Lazy: every list page renders this table, but printing is a rare click.
@@ -1036,7 +1043,7 @@ export default function DataTable<T>({
                                 {table.getRowModel().rows.map((row) => (
                                     <tr
                                         key={row.id}
-                                        className={`hover:bg-gray-50/50 transition-colors ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${rowClassName?.(row.original) ?? ''}`}
+                                        className={`${striped ? stripedRowClass : 'hover:bg-gray-50/50 transition-colors'} ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${rowClassName?.(row.original) ?? ''}`}
                                         onClick={onRowClick ? (event) => {
                                             if (isFromControl(event.target)) return;
                                             onRowClick(row.original);
