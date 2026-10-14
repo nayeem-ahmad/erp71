@@ -42,6 +42,14 @@ export class CreateCrmActivityDto {
 
     @IsOptional() @Transform(emptyToUndefined) @IsDateString() due_at?: string;
 
+    /**
+     * When a DONE activity actually happened, for writing up a call from last
+     * week rather than one just made. Defaults to now; refused on a PLANNED row
+     * and refused in the future. An offsetless value is the tenant's wall clock,
+     * as `due_at` is.
+     */
+    @IsOptional() @Transform(emptyToUndefined) @IsDateString() completed_at?: string;
+
     /** A CrmActivityPurpose id or code. */
     @IsOptional() @Transform(emptyToUndefined) @IsString() purpose?: string;
     /** A ConversationChannel id or code. Required when status is DONE. */

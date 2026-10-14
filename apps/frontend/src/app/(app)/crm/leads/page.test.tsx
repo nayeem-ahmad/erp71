@@ -988,3 +988,72 @@ describe('LeadsPage — bulk actions', () => {
         confirmSpy.mockRestore();
     });
 });
+
+/**
+ * The table's advanced filters. They used to narrow only the page already
+ * fetched, so the two leads graded A showed one on page 4 and the other on
+ * page 5. They go to the server now, and the list starts over at page 1.
+ */
+describe('LeadsPage — advanced column filters', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = new URLSearchParams();
+        api.getLeads.mockResolvedValue({ items: leads, total: 146 });
+        api.getCustomFields.mockResolvedValue([{ key: 'cf_1', label: 'Grade' }]);
+    });
+
+    afterAll(() => {
+        api.getCustomFields.mockResolvedValue([]);
+    });
+
+    async function openFilters() {
+        render(<LeadsPage />);
+        await screen.findByText('Karim Traders');
+        await screen.findByRole('columnheader', { name: /grade/i });
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+    }
+
+    it('asks the server for the filtered list from page 1, rather than filtering the page on screen', async () => {
+        await openFilters();
+        fireEvent.click(screen.getByRole('button', { name: '4' }));
+        await waitFor(() => expect(api.getLeads).toHaveBeenLastCalledWith(expect.objectContaining({ page: 4 })));
+
+        fireEvent.change(screen.getByPlaceholderText('Filter Grade...'), { target: { value: 'A' } });
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, filters: { cf_cf_1: 'A' } }),
+            ),
+        );
+    });
+
+    it('waits for typing to stop before fetching', async () => {
+        await openFilters();
+        const loadsBefore = api.getLeads.mock.calls.length;
+
+        const input = screen.getByPlaceholderText('Filter Name...');
+        fireEvent.change(input, { target: { value: 'K' } });
+        fireEvent.change(input, { target: { value: 'Ka' } });
+        fireEvent.change(input, { target: { value: 'Kar' } });
+
+        await waitFor(() =>
+            expect(api.getLeads).toHaveBeenLastCalledWith(expect.objectContaining({ filters: { name: 'Kar' } })),
+        );
+        const filtered = api.getLeads.mock.calls.slice(loadsBefore).filter(([q]: any[]) => q.filters);
+        expect(filtered).toHaveLength(1);
+    });
+
+    it('sends no filters while the boxes are empty', async () => {
+        await openFilters();
+
+        for (const [query] of api.getLeads.mock.calls) {
+            expect(query.filters).toBeUndefined();
+        }
+    });
+
+    it('offers no text filter on the created date, which the date range control covers', async () => {
+        await openFilters();
+
+        expect(screen.queryByPlaceholderText(/^filter created/i)).not.toBeInTheDocument();
+    });
+});

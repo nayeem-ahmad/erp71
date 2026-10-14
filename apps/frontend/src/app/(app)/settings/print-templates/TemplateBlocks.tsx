@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Trash2, Upload } from 'lucide-react';
 import { Button, Checkbox, Field, Input, Select } from '@/components/ui';
 import { HEADER_TOKENS, type HeaderLine, type PrintFontFamily, type TemplateImage } from '@/lib/print';
@@ -361,9 +361,11 @@ export function NumberField({
     disabled?: boolean;
     onChange: (value: number) => void;
 }) {
+    const id = useId();
     return (
-        <Field label={label}>
+        <Field label={label} htmlFor={id}>
             <Input
+                id={id}
                 type="number"
                 min={min}
                 max={max}
@@ -372,7 +374,13 @@ export function NumberField({
                 onChange={(e) => {
                     const next = Number(e.target.value);
                     // Ignore a cleared input rather than writing NaN into the config.
-                    if (Number.isFinite(next)) onChange(Math.min(max, Math.max(min, next)));
+                    // Only the maximum applies while typing: raising a value to the
+                    // minimum on every keystroke turns the "2" of "25" into 10
+                    // before the "5" arrives. The minimum is applied on blur.
+                    if (Number.isFinite(next)) onChange(Math.min(max, next));
+                }}
+                onBlur={() => {
+                    if (value < min) onChange(min);
                 }}
             />
         </Field>

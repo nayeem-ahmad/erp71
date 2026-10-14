@@ -2,18 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Field, Input } from '@/components/ui';
-import { isoToTenantLocal, tenantLocalToIso } from '@/lib/schedule-time';
-
-/** The current minute as a `datetime-local` value, in workspace time. */
-export function nowLocal(): string {
-    return isoToTenantLocal(new Date().toISOString());
-}
-
-/** Whether a `datetime-local` value, read in workspace time, is still to come. */
-export function isFutureLocal(value: string): boolean {
-    const iso = tenantLocalToIso(value);
-    return !!iso && new Date(iso).getTime() > Date.now();
-}
 
 /**
  * The serial a new payment would get, fetched while the form is open and again

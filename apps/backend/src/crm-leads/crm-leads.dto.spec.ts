@@ -117,6 +117,28 @@ describe('ListLeadsDto — mine', () => {
     });
 });
 
+/** The table's advanced column filters arrive as one JSON-encoded query param. */
+describe('ListLeadsDto — filters', () => {
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    const metadata = { type: 'query' as const, metatype: ListLeadsDto };
+
+    it('parses the column filters into an object', async () => {
+        const result: any = await pipe.transform({ filters: '{"cf_cf_1":"A","name":"karim"}' }, metadata);
+        expect(result.filters).toEqual({ cf_cf_1: 'A', name: 'karim' });
+    });
+
+    it('treats an empty param as no filters', async () => {
+        const result: any = await pipe.transform({ filters: '' }, metadata);
+        expect(result.filters).toBeUndefined();
+    });
+
+    it('rejects a param that is not an object of strings', async () => {
+        for (const filters of ['not json', '["A"]', '{"score":5}']) {
+            await expect(pipe.transform({ filters }, metadata)).rejects.toThrow(BadRequestException);
+        }
+    });
+});
+
 /**
  * The list's "Edit field" sends its change set nested under `changes`, so the
  * nested object has to be whitelisted too — without `@ValidateNested` a client
