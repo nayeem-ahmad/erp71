@@ -71,8 +71,28 @@ describe('CreatePrintTemplateDto', () => {
         ).toHaveLength(0);
     });
 
+    it('accepts a v4 config placing and sizing the QR code', async () => {
+        expect(
+            await parse({
+                ...base,
+                version: 4,
+                qr: { sizeMm: 28, position: 'right-of-title', offsetXMm: -3, offsetYMm: 1.5 },
+            }),
+        ).toHaveLength(0);
+    });
+
     it('rejects a version the renderer does not know', async () => {
-        expect((await parse({ ...base, version: 4 })).length).toBeGreaterThan(0);
+        expect((await parse({ ...base, version: 5 })).length).toBeGreaterThan(0);
+    });
+
+    it.each([
+        ['a position outside the known slots', { sizeMm: 20, position: 'page-corner' }],
+        ['a size too small to scan', { sizeMm: 4, position: 'below-title' }],
+        ['a size larger than the band', { sizeMm: 200, position: 'below-title' }],
+        ['a nudge off the page', { sizeMm: 20, position: 'below-title', offsetXMm: 500 }],
+        ['a field the renderer does not read', { sizeMm: 20, position: 'below-title', style: 'x' }],
+    ])('rejects a QR code with %s', async (_label, qr) => {
+        expect((await parse({ ...base, version: 4, qr })).length).toBeGreaterThan(0);
     });
 
     it('rejects a title position outside the known slots', async () => {
