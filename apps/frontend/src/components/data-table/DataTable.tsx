@@ -147,6 +147,13 @@ export interface DataTableProps<T> {
             truncated: boolean;
             total: number;
         }>;
+        /** The advanced column filters, owned by the page so it can send them to the server.
+         *  When `onColumnFiltersChange` is set the table stops filtering rows itself: a
+         *  filter applied to one page's rows splits its matches across pages and leaves the
+         *  total counting rows that do not match. Without it, the filters still only narrow
+         *  the rows of the page on screen. */
+        columnFilters?: ColumnFiltersState;
+        onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
     };
 }
 
@@ -449,6 +456,17 @@ export default function DataTable<T>({
     const effectivePageSize = serverPagination ? serverPagination.pageSize : pageSize;
     const effectivePageIndex = serverPagination ? serverPagination.page - 1 : clientPageIndex;
 
+    const onServerColumnFiltersChange = serverPagination?.onColumnFiltersChange;
+    const isServerFiltering = isServer && !!onServerColumnFiltersChange;
+    const activeColumnFilters = isServerFiltering ? serverPagination?.columnFilters ?? [] : columnFilters;
+    const applyColumnFilters = useCallback(
+        (next: ColumnFiltersState) => {
+            if (onServerColumnFiltersChange) onServerColumnFiltersChange(next);
+            else setColumnFilters(next);
+        },
+        [onServerColumnFiltersChange],
+    );
+
     // The selector renders `effectivePageSize` as its value, so that size MUST exist as an
     // option: a <select> whose value matches no <option> silently displays the first one.
     // Compact density defaults to 25, which is not a preset — the control read "10" while
@@ -468,7 +486,7 @@ export default function DataTable<T>({
         columns: effectiveColumns,
         state: {
             sorting: isServer ? serverSorting : sorting,
-            columnFilters,
+            columnFilters: activeColumnFilters,
             globalFilter,
             columnVisibility: effectiveColumnVisibility,
             columnOrder: effectiveColumnOrder,
@@ -486,7 +504,8 @@ export default function DataTable<T>({
                   );
               }
             : setSorting,
-        onColumnFiltersChange: setColumnFilters,
+        onColumnFiltersChange: (updater) =>
+            applyColumnFilters(typeof updater === 'function' ? updater(activeColumnFilters) : updater),
         onGlobalFilterChange: setGlobalFilter,
         onColumnVisibilityChange: setColumnVisibility,
         onColumnOrderChange: setColumnOrder,
@@ -528,6 +547,7 @@ export default function DataTable<T>({
         columnResizeMode: 'onChange',
         manualPagination: isServer,
         manualSorting: isServer,
+        manualFiltering: isServerFiltering,
         pageCount: isServer
             ? Math.max(1, Math.ceil(serverPagination!.total / serverPagination!.pageSize))
             : undefined,
@@ -640,10 +660,10 @@ export default function DataTable<T>({
 
     const handlePreset = (preset: { label: string; filters: ColumnFiltersState }) => {
         if (activePreset === preset.label) {
-            setColumnFilters([]);
+            applyColumnFilters([]);
             setActivePreset(null);
         } else {
-            setColumnFilters(preset.filters);
+            applyColumnFilters(preset.filters);
             setActivePreset(preset.label);
         }
     };
@@ -771,7 +791,7 @@ export default function DataTable<T>({
                         <button
                             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                             className={`${d.toolbarBtn} ${
-                                showAdvancedFilters || columnFilters.length > 0
+                                showAdvancedFilters || activeColumnFilters.length > 0
                                     ? 'bg-blue-50 text-blue-700 border-blue-200'
                                     : d.toolbarBtnIdle
                             }`}
@@ -779,9 +799,9 @@ export default function DataTable<T>({
                         >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
                             <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.filters}</span>
-                            {columnFilters.length > 0 && (
+                            {activeColumnFilters.length > 0 && (
                                 <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                                    {columnFilters.length}
+                                    {activeColumnFilters.length}
                                 </span>
                             )}
                         </button>
@@ -882,9 +902,9 @@ export default function DataTable<T>({
                                 {preset.label}
                             </button>
                         ))}
-                        {columnFilters.length > 0 && (
+                        {activeColumnFilters.length > 0 && (
                             <button
-                                onClick={() => { setColumnFilters([]); setActivePreset(null); }}
+                                onClick={() => { applyColumnFilters([]); setActivePreset(null); }}
                                 className="px-2.5 py-1 rounded-lg text-xs font-bold text-red-500 bg-red-50 border border-red-200 hover:bg-red-100 transition-all"
                             >
                                 {t.common.dataTable.clearAll}

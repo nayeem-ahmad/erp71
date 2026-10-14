@@ -2177,7 +2177,7 @@ export const api = {
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
     /** `mine` narrows to the caller's own leads; the server resolves the id. */
-    getLeads: (params?: { status?: string; statusId?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    getLeads: (params?: { status?: string; statusId?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string; filters?: Record<string, string> }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.statusId) query.set('statusId', params.statusId);
@@ -2196,6 +2196,8 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        // The table's advanced column filters, `{ columnId: text }`, applied server-side.
+        if (params?.filters && Object.keys(params.filters).length) query.set('filters', JSON.stringify(params.filters));
         return fetchPaginated(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
     // Every CRM person-picker reads this, not `getTeamMembers`: that one is the Team
