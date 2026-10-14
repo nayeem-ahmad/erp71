@@ -7,6 +7,7 @@ import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
+import { isFutureLocal, nowLocal, tenantLocalToIso } from '@/lib/schedule-time';
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { useTeamMemberOptions } from '@/lib/use-team-member-options';
 import CrmMessageTemplatePicker, { type PickedTemplate } from './CrmMessageTemplatePicker';
@@ -76,7 +77,10 @@ export default function CrmActivityComposer({
 
     const [saving, setSaving] = useState(false);
     const [plan, setPlan] = useState(emptyPlan);
-    const [log, setLog] = useState({ channel: '', summary: draft?.summary ?? '', outcome: '' });
+    // `at` left blank means "now": the box shows the current minute, and only a
+    // time the rep actually picks is sent. Filling it in at open would stamp the
+    // call with when the dialog appeared rather than when it was saved.
+    const [log, setLog] = useState({ channel: '', summary: draft?.summary ?? '', outcome: '', at: '' });
 
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<TargetChoice[]>([]);
@@ -91,6 +95,7 @@ export default function CrmActivityComposer({
     const logChannelId = useId();
     const logSummaryId = useId();
     const logOutcomeId = useId();
+    const logAtId = useId();
     const planSubjectId = useId();
     const planDueId = useId();
     const planPurposeId = useId();
@@ -240,8 +245,11 @@ export default function CrmActivityComposer({
         }
     }, [resolvedTarget, plan, m.toast, onSaved, onClose]);
 
+    // A logged activity is a record of something that already happened.
+    const logAtError = isFutureLocal(log.at) ? m.fields.completedAtFuture : undefined;
+
     const saveLog = useCallback(async () => {
-        if (!resolvedTarget || !log.channel || !log.summary.trim()) return;
+        if (!resolvedTarget || !log.channel || !log.summary.trim() || logAtError) return;
         setSaving(true);
         try {
             await api.createCrmActivity({
@@ -250,6 +258,7 @@ export default function CrmActivityComposer({
                 channel: log.channel,
                 summary: log.summary.trim(),
                 outcome: log.outcome || undefined,
+                completed_at: tenantLocalToIso(log.at) ?? undefined,
             });
             toast.success(m.toast.logged);
             onSaved();
@@ -259,7 +268,7 @@ export default function CrmActivityComposer({
         } finally {
             setSaving(false);
         }
-    }, [resolvedTarget, log, m.toast, onSaved, onClose]);
+    }, [resolvedTarget, log, logAtError, m.toast, onSaved, onClose]);
 
     const targetPicker = needsTarget && (
         <Field label={m.fields.target} required htmlFor={targetInputId}>
@@ -327,15 +336,32 @@ export default function CrmActivityComposer({
                 <ModalHeader title={m.logActivity} onClose={onClose} closeLabel={t.common.close} />
                 <div className="space-y-3 overflow-y-auto p-4">
                     {targetPicker}
-                    {/* Above the picker on purpose: the channel is what narrows
-                        the template list, so it has to be settled first. */}
-                    <Field label={m.fields.channel} required htmlFor={logChannelId}>
-                        <Select id={logChannelId} value={log.channel} onChange={(e) => setLog({ ...log, channel: e.target.value })}>
-                            {channels.map((c) => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                        </Select>
-                    </Field>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {/* Above the picker on purpose: the channel is what narrows
+                            the template list, so it has to be settled first. */}
+                        <Field label={m.fields.channel} required htmlFor={logChannelId}>
+                            <Select id={logChannelId} value={log.channel} onChange={(e) => setLog({ ...log, channel: e.target.value })}>
+                                {channels.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </Select>
+                        </Field>
+                        <Field
+                            label={m.fields.completedAt}
+                            htmlFor={logAtId}
+                            error={logAtError}
+                            hint={m.fields.completedAtHint}
+                        >
+                            <Input
+                                id={logAtId}
+                                type="datetime-local"
+                                value={log.at || nowLocal()}
+                                max={nowLocal()}
+                                onChange={(e) => setLog({ ...log, at: e.target.value })}
+                                error={Boolean(logAtError)}
+                            />
+                        </Field>
+                    </div>
                     {templatePicker}
                     <Field label={m.fields.summary} required htmlFor={logSummaryId}>
                         <Textarea
@@ -355,7 +381,7 @@ export default function CrmActivityComposer({
                     <Button
                         onClick={saveLog}
                         loading={saving}
-                        disabled={!resolvedTarget || !log.channel || !log.summary.trim()}
+                        disabled={!resolvedTarget || !log.channel || !log.summary.trim() || Boolean(logAtError)}
                     >
                         {m.fields.save}
                     </Button>

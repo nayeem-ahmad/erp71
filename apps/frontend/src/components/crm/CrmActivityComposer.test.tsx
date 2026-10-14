@@ -174,6 +174,65 @@ describe('CrmActivityComposer — opened from a record that already knows its ta
     });
 });
 
+/**
+ * Writing up last week's calls: the log dialog takes when it happened, so the
+ * history reads in the order things happened rather than the order they were typed.
+ */
+describe('CrmActivityComposer — when a logged activity happened', () => {
+    const renderLog = () =>
+        renderWithQueryClient(
+            <CrmActivityComposer
+                mode="log"
+                target={{ lead_id: 'lead-9' }}
+                onClose={jest.fn()}
+                onSaved={jest.fn()}
+            />,
+        );
+
+    const fillSummary = async () =>
+        fireEvent.change(await screen.findByPlaceholderText(/Spoke to Karim/), {
+            target: { value: 'Rang about the invoice' },
+        });
+
+    it('shows now, and leaves the time to the server when it is not changed', async () => {
+        renderLog();
+        await fillSummary();
+
+        expect(screen.getByLabelText('When it happened')).not.toHaveValue('');
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.createCrmActivity).toHaveBeenCalled());
+        expect(api.createCrmActivity.mock.calls[0][0].completed_at).toBeUndefined();
+    });
+
+    it('sends an earlier time in workspace time', async () => {
+        renderLog();
+        await fillSummary();
+
+        fireEvent.change(screen.getByLabelText('When it happened'), {
+            target: { value: '2026-08-10T15:30' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(api.createCrmActivity).toHaveBeenCalled());
+        expect(api.createCrmActivity.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ status: 'DONE', completed_at: '2026-08-10T15:30:00+06:00' }),
+        );
+    });
+
+    it('refuses a time in the future, inline, and will not save', async () => {
+        renderLog();
+        await fillSummary();
+
+        fireEvent.change(screen.getByLabelText('When it happened'), {
+            target: { value: `${new Date().getFullYear() + 1}-01-01T10:00` },
+        });
+
+        expect(screen.getByText('It cannot have happened in the future.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+});
+
 describe('CrmActivityComposer — picking a message template', () => {
     beforeEach(() => {
         api.getCrmMessageTemplates.mockResolvedValue([REMINDER]);
