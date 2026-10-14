@@ -13,6 +13,7 @@ import {
     ValidateNested,
     ArrayMinSize,
 } from 'class-validator';
+import { type ColumnFilters, ColumnFiltersParam } from '../common/column-filter.util';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
 import { Type } from 'class-transformer';
 import {
@@ -385,4 +386,8 @@ export class ListShipmentsQueryDto extends PaginationDto {
     @IsOptional()
     @IsIn(['asc', 'desc'])
     sortDir?: 'asc' | 'desc';
+
+    /** The table's advanced column filters — see SHIPMENT_FILTERABLE. */
+    @ColumnFiltersParam()
+    filters?: ColumnFilters;
 }

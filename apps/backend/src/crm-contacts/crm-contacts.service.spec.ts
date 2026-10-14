@@ -148,6 +148,21 @@ describe('CrmContactsService', () => {
             expect(db.crmContact.findMany.mock.calls[0][0].take).toBe(100);
         });
 
+        it('narrows by the table column filters before paging, count included', async () => {
+            await service.findAll(TENANT, {
+                timezone: 'Asia/Dhaka',
+                filters: { company: 'acme', capture_source: 'business card', assignee: 'rifat' },
+            });
+
+            const where = db.crmContact.findMany.mock.calls[0][0].where;
+            expect(where.AND).toEqual([
+                { company: { contains: 'acme', mode: 'insensitive' } },
+                { capture_source: { in: ['BUSINESS_CARD'] } },
+                { assignee: { name: { contains: 'rifat', mode: 'insensitive' } } },
+            ]);
+            expect(db.crmContact.count.mock.calls[0][0].where).toEqual(where);
+        });
+
         it('falls back to name order for an unknown sort key', async () => {
             await service.findAll(TENANT, { timezone: 'Asia/Dhaka', sortBy: 'DROP TABLE', sortDir: 'desc' });
             expect(db.crmContact.findMany.mock.calls[0][0].orderBy).toEqual([{ name: 'asc' }]);

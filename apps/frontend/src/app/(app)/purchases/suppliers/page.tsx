@@ -81,6 +81,7 @@ export default function SuppliersPage() {
         deps: [debouncedSearch, branch.apiStoreId],
         enabled: branch.ready,
         initialSort: { id: 'name', desc: false },
+        columnFilters: true,
     });
     useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
@@ -216,6 +217,8 @@ export default function SuppliersPage() {
             }),
             columnHelper.accessor('created_at', {
                 header: t.suppliers.columns.added,
+                // A timestamp: no typed text the server could match it against.
+                enableColumnFilter: false,
                 cell: (info) => (
                     <span className="text-sm text-gray-500">{formatDate(info.getValue(), locale)}</span>
                 ),

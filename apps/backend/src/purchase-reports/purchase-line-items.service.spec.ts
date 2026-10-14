@@ -60,6 +60,27 @@ describe('purchaseLineFilter', () => {
             { purchase: { supplier: { phone: { contains: 'BILL-9' } } } },
         ]);
     });
+
+    it('puts the table column filters on the line, so the totals and bill count narrow with the rows', () => {
+        const { line, where } = purchaseLineFilter(
+            TENANT,
+            { filters: { bill: 'BILL-9', amount: '1,200' } },
+            TZ,
+        );
+
+        expect(line.AND).toEqual([
+            {
+                purchase: {
+                    OR: [
+                        { purchase_number: { contains: 'BILL-9', mode: 'insensitive' } },
+                        { reference_number: { contains: 'BILL-9', mode: 'insensitive' } },
+                    ],
+                },
+            },
+            { line_total: 1200 },
+        ]);
+        expect(where.AND).toEqual(line.AND);
+    });
 });
 
 describe('PurchaseLineItemsService', () => {

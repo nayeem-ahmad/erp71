@@ -1,7 +1,14 @@
+import { BadRequestException } from '@nestjs/common';
 import {
+    applyColumnFilters,
+    codesContaining,
     escapeLikePattern,
     FilterableMap,
+    NO_MATCH,
+    numberEquals,
     parseColumnFiltersParam,
+    parseNumberFilter,
+    readColumnFiltersQuery,
     resolveColumnFilters,
 } from './column-filter.util';
 
@@ -67,5 +74,59 @@ describe('escapeLikePattern', () => {
 
     it('leaves ordinary text alone', () => {
         expect(escapeLikePattern('Gold tier')).toBe('Gold tier');
+    });
+});
+
+describe('readColumnFiltersQuery', () => {
+    it('parses the param a raw @Query handler receives', () => {
+        expect(readColumnFiltersQuery('{"name":"karim"}')).toEqual({ name: 'karim' });
+        expect(readColumnFiltersQuery(undefined)).toBeUndefined();
+        expect(readColumnFiltersQuery('')).toBeUndefined();
+    });
+
+    it('400s on anything that is not a flat object of strings', () => {
+        for (const raw of ['not json', '["a"]', '{"a":1}', { a: { b: 'c' } }]) {
+            expect(() => readColumnFiltersQuery(raw)).toThrow(BadRequestException);
+        }
+    });
+});
+
+describe('applyColumnFilters', () => {
+    const map: FilterableMap<unknown> = { name: (v) => ({ name: v }) };
+
+    it('appends to an AND the where already holds, as an array or a lone clause', () => {
+        expect(applyColumnFilters({ AND: [{ a: 1 }] }, { name: 'x' }, map)).toEqual({ AND: [{ a: 1 }, { name: 'x' }] });
+        expect(applyColumnFilters({ AND: { a: 1 } }, { name: 'x' }, map)).toEqual({ AND: [{ a: 1 }, { name: 'x' }] });
+    });
+
+    it('leaves the where alone, OR included, when nothing applies', () => {
+        const where = { OR: [{ b: 2 }] };
+        expect(applyColumnFilters(where, undefined, map)).toBe(where);
+        expect(applyColumnFilters(where, { other: 'x' }, map)).toBe(where);
+        expect(applyColumnFilters(where, { name: 'x' }, map)).toEqual({ OR: [{ b: 2 }], AND: [{ name: 'x' }] });
+    });
+});
+
+describe('codesContaining', () => {
+    const codes = ['MANUAL', 'BUSINESS_CARD', 'IMPORT'] as const;
+
+    it('matches codes ignoring case, reading an underscore as a space', () => {
+        expect(codesContaining(codes, 'business card')).toEqual(['BUSINESS_CARD']);
+        expect(codesContaining(codes, 'card')).toEqual(['BUSINESS_CARD']);
+        expect(codesContaining(codes, 'man')).toEqual(['MANUAL']);
+        expect(codesContaining(codes, 'nothing')).toEqual([]);
+    });
+});
+
+describe('numberEquals', () => {
+    it('reads a typed amount, separators and the taka sign included', () => {
+        expect(parseNumberFilter('৳1,250.50')).toBe(1250.5);
+        expect(parseNumberFilter('-3')).toBe(-3);
+        expect(parseNumberFilter('12abc')).toBeNull();
+    });
+
+    it('matches the column exactly, and nothing for text that is not a number', () => {
+        expect(numberEquals('total_amount')('500')).toEqual({ total_amount: 500 });
+        expect(numberEquals('total_amount')('five')).toBe(NO_MATCH);
     });
 });

@@ -39,6 +39,7 @@ function PurchaseLineItemsContent() {
         initialSort: { id: 'date', desc: true },
         deps: filters.deps,
         enabled: branch.ready,
+        columnFilters: true,
         fetch: async (params) => {
             const report = await api.getPurchaseLineItems({
                 ...filters.query,
@@ -46,6 +47,7 @@ function PurchaseLineItemsContent() {
                 limit: params.limit,
                 sortBy: params.sortBy,
                 sortDir: params.sortDir,
+                filters: params.filters,
             });
             return { ...report, items: report.rows, ...report.pagination };
         },
@@ -71,6 +73,8 @@ function PurchaseLineItemsContent() {
             columnHelper.accessor((row) => formatDate(row.date, locale), {
                 id: 'date',
                 header: copy.columns.date,
+                // The period pickers filter this column.
+                enableColumnFilter: false,
                 size: 96,
                 cell: (info) => <span className="whitespace-nowrap text-sm text-gray-700">{info.getValue()}</span>,
             }),
@@ -164,6 +168,8 @@ function PurchaseLineItemsContent() {
             columnHelper.accessor('returnedQuantity', {
                 id: 'returned',
                 header: copy.columns.returned,
+                // Summed from the line's returns, not a stored value the query could match.
+                enableColumnFilter: false,
                 size: 96,
                 enableSorting: false,
                 meta: { hideOnMobile: true },

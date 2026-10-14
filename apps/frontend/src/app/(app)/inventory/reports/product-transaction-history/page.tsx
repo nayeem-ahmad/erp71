@@ -513,6 +513,13 @@ function ProductTransactionHistoryContent() {
                         emptyMessage={error ? copy.loadErrorEmpty : copy.emptyMessage}
                         emptyIcon={<History className="w-16 h-16 text-gray-200" />}
                         showSearch={false}
+                        // No per-column filters: a row's balance is the sum of every
+                        // movement before it, so a card cut down to the matching rows
+                        // would print balances that reconcile with nothing — and the
+                        // party and reference are looked up after the query, so the
+                        // server could not filter on them anyway. Product, warehouse
+                        // and dates above are the filters this report takes.
+                        enableColumnFilters={false}
                         serverPagination={{
                             total: report?.pagination.total ?? 0,
                             page,

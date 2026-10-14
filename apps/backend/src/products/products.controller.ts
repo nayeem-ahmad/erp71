@@ -12,6 +12,7 @@ import {
     UseGuards,
     UseInterceptors,
 } from '@nestjs/common';
+import { readColumnFiltersQuery } from '../common/column-filter.util';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 import { CreateProductDto, LowStockCountQueryDto, MergeProductDto, UpdateProductDto } from './product.dto';
@@ -163,6 +164,7 @@ export class ProductsController {
         @Query('sortDir') sortDir?: string,
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
+        @Query('filters') columnFilters?: string,
     ) {
         const parsedLimit = limit ? parseInt(limit, 10) : undefined;
         if (cursor !== undefined) {
@@ -186,6 +188,7 @@ export class ProductsController {
             sortDir,
             createdFrom,
             createdTo,
+            columnFilters: readColumnFiltersQuery(columnFilters),
         });
     }
 

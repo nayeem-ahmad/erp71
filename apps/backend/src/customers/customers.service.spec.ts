@@ -136,6 +136,29 @@ describe('CustomersService', () => {
       expect(db.customer.findMany.mock.calls[0][0].where.AND).toBeUndefined();
     });
 
+    // The table's advanced filters, applied before the page is cut so the
+    // matches are not scattered across pages and the total counts only them.
+    it('narrows the query by the table column filters, count included', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.customer.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', {
+        timezone: 'Asia/Dhaka',
+        search: 'rahim',
+        filters: { name: '0171', group: 'whole', customer_type: 'org', due_balance: '1,500' },
+      });
+
+      const where = db.customer.findMany.mock.calls[0][0].where;
+      expect(where.OR).toHaveLength(4);
+      expect(where.AND).toEqual([
+        { OR: [{ name: { contains: '0171', mode: 'insensitive' } }, { phone: { contains: '0171', mode: 'insensitive' } }] },
+        { customerGroup: { name: { contains: 'whole', mode: 'insensitive' } } },
+        { customer_type: { in: ['ORGANIZATION'] } },
+        { due_balance: 1500 },
+      ]);
+      expect(db.customer.count).toHaveBeenCalledWith({ where });
+    });
+
     it('shows a scoped customer with only the sales at the member\'s branches', async () => {
       db.customer.findFirst.mockResolvedValue({ id: 'cust-1', nid: null });
 

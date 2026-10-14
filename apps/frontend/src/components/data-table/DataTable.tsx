@@ -116,6 +116,12 @@ export interface DataTableProps<T> {
     showSearch?: boolean;
     /** Predefined filter presets */
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
+    /**
+     * False to offer no per-column filters at all — for a server-paginated report
+     * whose rows cannot be filtered on their own (a stock card's running balance
+     * is positional). The Filters button is left out whenever no column can filter.
+     */
+    enableColumnFilters?: boolean;
     /** Table density — defaults to CompactUiContext when inside accounting module */
     density?: UiDensity;
     /**
@@ -313,6 +319,7 @@ export default function DataTable<T>({
     searchPlaceholder,
     showSearch = true,
     filterPresets,
+    enableColumnFilters = true,
     density,
     serverPagination,
     onRowClick,
@@ -544,6 +551,7 @@ export default function DataTable<T>({
         getSortedRowModel: getSortedRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         enableRowSelection,
+        enableColumnFilters,
         columnResizeMode: 'onChange',
         manualPagination: isServer,
         manualSorting: isServer,
@@ -788,23 +796,25 @@ export default function DataTable<T>({
                     {/* Toolbar buttons — always aligned to the right, even when the search box is hidden */}
                     <div className="flex items-center gap-2 flex-wrap ms-auto">
                         {/* Advanced Filters */}
-                        <button
-                            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                            className={`${d.toolbarBtn} ${
-                                showAdvancedFilters || activeColumnFilters.length > 0
-                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                    : d.toolbarBtnIdle
-                            }`}
-                            title={t.common.dataTable.filters}
-                        >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                            <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.filters}</span>
-                            {activeColumnFilters.length > 0 && (
-                                <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                                    {activeColumnFilters.length}
-                                </span>
-                            )}
-                        </button>
+                        {filterableColumns.length > 0 && (
+                            <button
+                                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                                className={`${d.toolbarBtn} ${
+                                    showAdvancedFilters || activeColumnFilters.length > 0
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                        : d.toolbarBtnIdle
+                                }`}
+                                title={t.common.dataTable.filters}
+                            >
+                                <SlidersHorizontal className="w-3.5 h-3.5" />
+                                <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.filters}</span>
+                                {activeColumnFilters.length > 0 && (
+                                    <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
+                                        {activeColumnFilters.length}
+                                    </span>
+                                )}
+                            </button>
+                        )}
 
                         {/* Column Selector */}
                         <div className="relative" ref={columnSelectorRef}>
@@ -914,7 +924,7 @@ export default function DataTable<T>({
                 )}
 
                 {/* Advanced Column Filters */}
-                {showAdvancedFilters && (
+                {showAdvancedFilters && filterableColumns.length > 0 && (
                     <div className="bg-gray-50 rounded-xl p-3 space-y-2">
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                             {filterableColumns.map((column) => (

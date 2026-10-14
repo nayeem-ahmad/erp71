@@ -82,6 +82,7 @@ export class SuppliersController {
             sortBy: query.sortBy,
             sortDir: query.sortDir,
             scope: await this.scope(tenant, query.storeId),
+            filters: query.filters,
         });
     }
 

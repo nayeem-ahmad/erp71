@@ -80,6 +80,20 @@ describe('ContactsPage — only mine', () => {
     const toggle = () => screen.getByRole('button', { name: 'Only mine' });
     const lastCall = () => api.getContacts.mock.calls.at(-1)[0];
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        render(<ContactsPage />);
+        await screen.findByText('Karim Rahman');
+
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Company/), { target: { value: 'acme' } });
+
+        await waitFor(() => expect(lastCall()).toEqual(expect.objectContaining({ page: 1, filters: { company: 'acme' } })));
+        // The created date has the date-range control, not a text box.
+        expect(screen.queryByPlaceholderText(/^Filter Created/)).not.toBeInTheDocument();
+    });
+
     it('shows the whole team until somebody asks for their own', async () => {
         render(<ContactsPage />);
         await screen.findByText('Karim Rahman');

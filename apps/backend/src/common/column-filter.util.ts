@@ -1,3 +1,7 @@
+import { applyDecorators, BadRequestException } from '@nestjs/common';
+import { Transform } from 'class-transformer';
+import { IsObject, IsOptional } from 'class-validator';
+
 /**
  * Server-side half of a server-paginated DataTable's advanced filters.
  *
@@ -25,12 +29,31 @@ export function parseColumnFiltersParam({ value }: { value: unknown }): unknown 
             return value;
         }
     }
-    const isFlatStringObject =
-        !!parsed &&
-        typeof parsed === 'object' &&
-        !Array.isArray(parsed) &&
-        Object.values(parsed).every((v) => typeof v === 'string');
-    return isFlatStringObject ? parsed : value;
+    return isColumnFilters(parsed) ? parsed : value;
+}
+
+function isColumnFilters(value: unknown): value is ColumnFilters {
+    return (
+        !!value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.values(value).every((v) => typeof v === 'string')
+    );
+}
+
+/** A list DTO's `filters` field: optional, parsed, and a 400 when malformed. */
+export const ColumnFiltersParam = () =>
+    applyDecorators(IsOptional(), Transform(parseColumnFiltersParam), IsObject());
+
+/**
+ * The same parse for a handler that reads `@Query('filters')` directly rather
+ * than through a DTO: a malformed param is a 400 here too.
+ */
+export function readColumnFiltersQuery(raw: unknown): ColumnFilters | undefined {
+    const parsed = parseColumnFiltersParam({ value: raw });
+    if (parsed === undefined) return undefined;
+    if (!isColumnFilters(parsed)) throw new BadRequestException('filters must be a JSON object of strings');
+    return parsed;
 }
 
 /**
@@ -60,4 +83,60 @@ export function resolveColumnFilters<Where>(
         clauses.push(filterable[columnId](value));
     }
     return clauses;
+}
+
+/** A case-insensitive contains on a string column, wildcards taken literally. */
+export const containsInsensitive = (value: string) => ({
+    contains: escapeLikePattern(value),
+    mode: 'insensitive' as const,
+});
+
+/**
+ * Enum values whose code contains the typed text, e.g. "high" → HIGH. An
+ * underscore reads as a space, so the label the table shows ("business card")
+ * finds its code (BUSINESS_CARD).
+ */
+export const codesContaining = <T extends string>(codes: readonly T[], value: string): T[] => {
+    const words = (text: string) => text.toLowerCase().replace(/_/g, ' ');
+    return codes.filter((code) => words(code).includes(words(value)));
+};
+
+/**
+ * The typed text as a number, for a numeric column matched exactly — or null
+ * when it is not one (thousands separators and a currency sign are allowed, so
+ * "৳1,250" reads as 1250).
+ */
+export function parseNumberFilter(value: string): number | null {
+    const cleaned = value.replace(/[,\s৳$]/g, '');
+    if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+    return Number(cleaned);
+}
+
+/** A clause no row satisfies — for a filter whose text cannot match the column at all. */
+export const NO_MATCH = { id: { in: [] as string[] } };
+
+/**
+ * An exact match on a numeric column, or no rows when the text is not a number:
+ * no amount "contains" letters.
+ */
+export const numberEquals = (field: string) => (value: string) => {
+    const n = parseNumberFilter(value);
+    return n === null ? NO_MATCH : { [field]: n };
+};
+
+/**
+ * `where` narrowed by the column filters. They go into `AND`, appended to what
+ * is there: several are ORs themselves, and the where may already hold its own
+ * OR (a free-text search) that a merged key would overwrite.
+ */
+export function applyColumnFilters<W extends object>(
+    where: W,
+    filters: ColumnFilters | undefined,
+    filterable: FilterableMap<unknown>,
+): W {
+    const clauses = resolveColumnFilters(filters, filterable);
+    if (!clauses.length) return where;
+    const existing = (where as { AND?: unknown }).AND;
+    const and = Array.isArray(existing) ? existing : existing ? [existing] : [];
+    return { ...where, AND: [...and, ...clauses] };
 }

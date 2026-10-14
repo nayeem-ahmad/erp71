@@ -42,6 +42,7 @@ function SalesLineItemsContent() {
         initialSort: { id: 'date', desc: true },
         deps: filters.deps,
         enabled: branch.ready,
+        columnFilters: true,
         fetch: async (params) => {
             const report = await api.getSalesLineItems({
                 ...filters.query,
@@ -49,6 +50,7 @@ function SalesLineItemsContent() {
                 limit: params.limit,
                 sortBy: params.sortBy,
                 sortDir: params.sortDir,
+                filters: params.filters,
             });
             return { ...report, items: report.rows, ...report.pagination };
         },
@@ -74,6 +76,8 @@ function SalesLineItemsContent() {
             columnHelper.accessor((row) => formatDate(row.date, locale), {
                 id: 'date',
                 header: copy.columns.date,
+                // The period pickers filter this column.
+                enableColumnFilter: false,
                 size: 96,
                 cell: (info) => <span className="whitespace-nowrap text-sm text-gray-700">{info.getValue()}</span>,
             }),
@@ -153,10 +157,11 @@ function SalesLineItemsContent() {
                     <span className="text-sm tabular-nums text-gray-700">{formatBDT(info.getValue(), { locale })}</span>
                 ),
             }),
-            // Not sortable: quantity × price is not a column the database holds.
+            // Not sortable or filterable: quantity × price is not a column the database holds.
             columnHelper.accessor('amount', {
                 id: 'amount',
                 header: copy.columns.amount,
+                enableColumnFilter: false,
                 size: 116,
                 enableSorting: false,
                 cell: (info) => (
@@ -168,6 +173,8 @@ function SalesLineItemsContent() {
             columnHelper.accessor('returnedQuantity', {
                 id: 'returned',
                 header: copy.columns.returned,
+                // Summed from the line's returns, not a stored value the query could match.
+                enableColumnFilter: false,
                 size: 96,
                 enableSorting: false,
                 meta: { hideOnMobile: true },

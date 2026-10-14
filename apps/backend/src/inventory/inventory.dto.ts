@@ -12,6 +12,7 @@ import {
     MinLength,
 } from 'class-validator';
 import { IsStoreIdOrAll } from '../common/store-id-or-all.validator';
+import { type ColumnFilters, ColumnFiltersParam } from '../common/column-filter.util';
 import { COSTING_METHODS } from '../database/product-cost.utils';
 
 /**
@@ -235,4 +236,8 @@ export class ListStockLedgerQueryDto {
     @IsOptional()
     @IsString()
     sortDir?: string;
+
+    /** The table's advanced column filters — see LEDGER_FILTERABLE. */
+    @ColumnFiltersParam()
+    filters?: ColumnFilters;
 }

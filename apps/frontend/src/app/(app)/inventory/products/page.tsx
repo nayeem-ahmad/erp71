@@ -88,6 +88,7 @@ export default function InventoryPage() {
         }),
         deps: [selectedGroupId, selectedSubgroupId, showUncategorized, debouncedSearch, stockStatus, createdRange],
         initialSort: { id: 'name', desc: false },
+        columnFilters: true,
     });
 
     useEffect(() => {
@@ -235,6 +236,8 @@ export default function InventoryPage() {
                 {
                 id: 'warranty',
                 header: t.inventory.columns.warranty,
+                // A label built from two fields, not one the server could match.
+                enableColumnFilter: false,
                 cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
                 size: 120,
                 meta: { hideOnMobile: true },
@@ -242,6 +245,9 @@ export default function InventoryPage() {
             columnHelper.accessor((row) => Number(row.stocks?.[0]?.quantity || 0), {
                 id: 'stock',
                 header: t.inventory.columns.currentStock,
+                // Stock, its value and its status are worked out per row; the
+                // stock-status picker above is the filter for them.
+                enableColumnFilter: false,
                 cell: (info) => (
                     <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>
                 ),
@@ -253,6 +259,7 @@ export default function InventoryPage() {
                 {
                     id: 'stock_value',
                     header: t.inventory.columns.stockValue,
+                    enableColumnFilter: false,
                     cell: (info) => (
                         <span className="text-sm font-bold text-gray-700">
                             {formatBDT(Number(info.getValue() || 0))}
@@ -273,6 +280,7 @@ export default function InventoryPage() {
                 {
                     id: 'status',
                     header: t.inventory.columns.status,
+                    enableColumnFilter: false,
                     cell: (info) => {
                         const status = info.getValue();
                         const classes =
@@ -311,7 +319,7 @@ export default function InventoryPage() {
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.display({
                 id: 'actions',
                 header: t.inventory.columns.actions,

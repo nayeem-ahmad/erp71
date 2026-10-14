@@ -32,13 +32,16 @@ jest.mock('@/components/data-table', () => ({
         emptyMessage,
         isLoading,
         serverPagination,
+        enableColumnFilters,
     }: {
         data: any[];
         emptyMessage: string;
         isLoading: boolean;
         serverPagination?: { total: number; page: number; onPageChange: (page: number) => void };
+        enableColumnFilters?: boolean;
     }) => (
         <div>
+            <div data-testid="column-filters">{String(enableColumnFilters ?? true)}</div>
             {isLoading && <div data-testid="loading-indicator">Loading</div>}
             <div data-testid="empty-message">{emptyMessage}</div>
             <div data-testid="row-count">{data.length}</div>
@@ -138,6 +141,16 @@ describe('ProductTransactionHistoryPage', () => {
         await waitFor(() => expect(require('@/lib/api').api.getInventoryWarehouses).toHaveBeenCalled());
         expect(require('@/lib/api').api.getProductTransactionHistory).not.toHaveBeenCalled();
         expect(screen.getByText('Pick a product to see its transaction history.')).toBeInTheDocument();
+    });
+
+    // A stock card's balances are positional: filtering its rows — on the page or
+    // on the server — would print balances that reconcile with nothing.
+    it('offers no per-column filters', async () => {
+        searchParams.set('productId', 'prod-1');
+        render(<ProductTransactionHistoryPage />);
+
+        await waitFor(() => expect(screen.getByTestId('row-count')).toHaveTextContent('4'));
+        expect(screen.getByTestId('column-filters')).toHaveTextContent('false');
     });
 
     it('opens on the opening quantity and runs the balance down the page', async () => {

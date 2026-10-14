@@ -643,6 +643,13 @@ describe('DataTable server pagination mode', () => {
         expect(onColumnFiltersChange).toHaveBeenCalledWith([{ id: 'name', value: 'Alpha' }]);
     });
 
+    it('leaves the Filters button out when no column can filter', () => {
+        render(<DataTable {...defaultProps} showSearch={false} enableColumnFilters={false} serverPagination={{ ...serverBase }} />);
+
+        expect(screen.queryByRole('button', { name: /filters/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+    });
+
     it('shows every row the server returned for the filters the page holds', () => {
         render(
             <DataTable

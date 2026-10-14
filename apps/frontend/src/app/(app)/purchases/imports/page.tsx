@@ -91,6 +91,7 @@ export default function ImportShipmentsPage() {
         initialSort: { id: 'created_at', desc: true },
         deps: [debouncedSearch, statusFilter, openOnly, branch.apiStoreId],
         enabled: branch.ready,
+        columnFilters: true,
         fetch: (params) =>
             api.getImportShipments({
                 ...params,
@@ -168,7 +169,9 @@ export default function ImportShipmentsPage() {
             }),
             columnHelper.accessor('invoice_value_bdt', {
                 header: copy.columns.invoiceValueBdt,
+                // Worked out per shipment, so not a column the server can sort or filter.
                 enableSorting: false,
+                enableColumnFilter: false,
                 meta: { hideOnMobile: true },
                 cell: (info) => <span className="text-sm text-gray-700">{formatBDT(info.getValue(), { locale })}</span>,
                 size: 140,
@@ -177,14 +180,17 @@ export default function ImportShipmentsPage() {
                 id: 'costs',
                 header: copy.columns.costsToDate,
                 // Always BDT: the charges are paid locally whatever the
-                // shipment is denominated in.
+                // shipment is denominated in. Summed per shipment, so not
+                // sortable or filterable.
                 enableSorting: false,
+                enableColumnFilter: false,
                 meta: { hideOnMobile: true },
                 cell: (info) => <span className="text-sm text-gray-700">{formatBDT(info.getValue(), { locale })}</span>,
                 size: 140,
             }),
             columnHelper.accessor('eta', {
                 header: copy.columns.eta,
+                enableColumnFilter: false,
                 cell: (info) => (
                     <span className="text-sm text-gray-600">
                         {info.getValue() ? formatDate(info.getValue() as string, locale) : '—'}
