@@ -291,6 +291,25 @@ describe('ProductsService', () => {
       );
     });
 
+    it('should narrow by the table column filters, and cache each filtered slice apart', async () => {
+      db.product.findMany.mockResolvedValue([]);
+      db.product.count.mockResolvedValue(0);
+
+      await service.findAll('tenant-1', {
+        timezone: 'Asia/Dhaka',
+        columnFilters: { group: 'grocer', price: '120', stock: '4' },
+      });
+
+      const where = db.product.findMany.mock.calls[0][0].where;
+      expect(where.AND).toEqual(expect.arrayContaining([
+        { group: { name: { contains: 'grocer', mode: 'insensitive' } } },
+        { price: 120 },
+      ]));
+      expect(db.product.count).toHaveBeenCalledWith({ where });
+      // The unfiltered page must not be served from the cache for a filtered one.
+      expect(redis.get.mock.calls[0][0]).toContain('"columnFilters":{"group":"grocer"');
+    });
+
     it('should translate stock status into a default-warehouse stock filter', async () => {
       db.product.findMany.mockResolvedValue([]);
       db.product.count.mockResolvedValue(0);

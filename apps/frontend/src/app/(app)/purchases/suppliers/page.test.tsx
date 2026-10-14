@@ -42,6 +42,30 @@ describe('SuppliersPage', () => {
         jest.clearAllMocks();
     });
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        const { api } = require('@/lib/api');
+        api.getSuppliersPaged.mockResolvedValue({
+            items: [{ id: '1', name: 'Dhaka Traders Ltd', supplier_code: 'SUP-1', store_id: 'store-1', created_at: '2026-01-01T00:00:00Z' }],
+            total: 1,
+            page: 1,
+            limit: 20,
+            pages: 1,
+        });
+        render(<SuppliersPage />);
+        await screen.findByText('Dhaka Traders Ltd');
+
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Supplier/), { target: { value: 'dhaka' } });
+
+        await waitFor(() =>
+            expect(api.getSuppliersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, filters: { name: 'dhaka' } }),
+            ),
+        );
+    });
+
     it('renders the page heading', async () => {
         const { api } = require('@/lib/api');
         api.getSuppliersPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });

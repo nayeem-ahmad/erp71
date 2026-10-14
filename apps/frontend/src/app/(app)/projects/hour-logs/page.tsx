@@ -346,7 +346,12 @@ export default function HourLogsPage() {
             deps: [range.from, range.to, effectiveSearch, projectId, personId, tagId],
             fetch: (params) =>
                 api.getProjectTimeEntries({
-                    ...params,
+                    // Spelled out: this page draws its own grouped list rather than a
+                    // DataTable, so it has no column filters to forward.
+                    page: params.page,
+                    limit: params.limit,
+                    sortBy: params.sortBy,
+                    sortDir: params.sortDir,
                     from: range.from,
                     to: range.to,
                     search: effectiveSearch || undefined,

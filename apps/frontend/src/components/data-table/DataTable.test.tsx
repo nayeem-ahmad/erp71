@@ -624,6 +624,52 @@ describe('DataTable server pagination mode', () => {
         fireEvent.click(screen.getByText('Name'));
         expect(onSortChange).toHaveBeenCalledWith({ id: 'name', desc: false });
     });
+
+    // Filtering one page's rows split a filter's matches across pages ("one on
+    // page 4, another on page 5"), so a page that owns the filters gets them
+    // to send to the server instead.
+    it('hands a column filter to the page rather than filtering the rows on screen', () => {
+        const onColumnFiltersChange = jest.fn();
+        render(
+            <DataTable
+                {...defaultProps}
+                showSearch={false}
+                serverPagination={{ ...serverBase, columnFilters: [], onColumnFiltersChange }}
+            />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/filter name\.\.\./i), { target: { value: 'Alpha' } });
+
+        expect(onColumnFiltersChange).toHaveBeenCalledWith([{ id: 'name', value: 'Alpha' }]);
+    });
+
+    it('leaves the Filters button out when no column can filter', () => {
+        render(<DataTable {...defaultProps} showSearch={false} enableColumnFilters={false} serverPagination={{ ...serverBase }} />);
+
+        expect(screen.queryByRole('button', { name: /filters/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+    });
+
+    it('shows every row the server returned for the filters the page holds', () => {
+        render(
+            <DataTable
+                {...defaultProps}
+                showSearch={false}
+                serverPagination={{
+                    ...serverBase,
+                    columnFilters: [{ id: 'name', value: 'Alpha' }],
+                    onColumnFiltersChange: jest.fn(),
+                }}
+            />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+
+        // The server already applied it; the table must not filter again.
+        expect(screen.getByText('Beta Product')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/filter name\.\.\./i)).toHaveValue('Alpha');
+        // Counted on the Filters button like a filter the table holds itself.
+        expect(screen.getByRole('button', { name: /filters/i })).toHaveTextContent('1');
+    });
 });
 
 // ── Client-side pagination ────────────────────────────────────────

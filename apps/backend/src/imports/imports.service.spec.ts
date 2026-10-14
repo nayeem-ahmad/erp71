@@ -987,6 +987,21 @@ describe('ImportsService', () => {
             ]);
         });
 
+        it('narrows by the table column filters before paging, count included', async () => {
+            await service.findAll('tenant-1', {
+                search: 'IMP',
+                filters: { supplier: 'shenzhen', invoice_value_fc: '12500', costs: '9' },
+            } as any);
+
+            const where = db.importShipment.findMany.mock.calls[0][0].where;
+            expect(where.OR).toHaveLength(5);
+            expect(where.AND).toEqual([
+                { supplier: { name: { contains: 'shenzhen', mode: 'insensitive' } } },
+                { invoice_value_fc: 12500 },
+            ]);
+            expect(db.importShipment.count.mock.calls[0][0].where).toEqual(where);
+        });
+
         it('falls back to created_at for a column outside the allowlist', async () => {
             // The direction the caller asked for is still honoured — only the
             // column they invented is replaced, because `orderBy` reaches Prisma

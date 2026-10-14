@@ -9,8 +9,12 @@ jest.mock('next/link', () => {
 });
 
 const push = jest.fn();
+const replace = jest.fn();
+// `?saleId=` — set when the return is started from the sales list's row menu.
+let saleIdParam: string | null = null;
 jest.mock('next/navigation', () => ({
-    useRouter: () => ({ push }),
+    useRouter: () => ({ push, replace }),
+    useSearchParams: () => ({ get: (key: string) => (key === 'saleId' ? saleIdParam : null) }),
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -75,6 +79,7 @@ const findSale = async (serial = 'S-00001') => {
 describe('NewSalesReturnPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        saleIdParam = null;
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getSalesList as jest.Mock).mockResolvedValue({
             items: [{ id: 'sale-1', serial_number: 'S-00001' }],
@@ -227,5 +232,32 @@ describe('NewSalesReturnPage', () => {
         await findSale();
         await screen.findByText('Rice 5kg');
         expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled();
+    });
+
+    describe('started from a sale', () => {
+        it('loads the sale named in the URL without asking for its serial', async () => {
+            saleIdParam = 'sale-1';
+            await act(async () => { render(<NewSalesReturnPage />); });
+
+            expect(await screen.findByText('Rice 5kg')).toBeInTheDocument();
+            expect(api.getSale).toHaveBeenCalledWith('sale-1');
+            expect(api.getSalesList).not.toHaveBeenCalled();
+            // The lookup shows which sale it is, locked until "Change".
+            expect(screen.getByPlaceholderText(/Sale serial number/i)).toHaveValue('S-00001');
+            expect(screen.getByPlaceholderText(/Sale serial number/i)).toBeDisabled();
+            expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled();
+        });
+
+        it('drops the sale from the URL when the user picks another', async () => {
+            saleIdParam = 'sale-1';
+            await act(async () => { render(<NewSalesReturnPage />); });
+            await screen.findByText('Rice 5kg');
+
+            fireEvent.click(screen.getByRole('button', { name: /Change/i }));
+
+            expect(replace).toHaveBeenCalledWith('/sales/returns/new');
+            expect(screen.queryByText('Rice 5kg')).not.toBeInTheDocument();
+            expect(screen.getByPlaceholderText(/Sale serial number/i)).toBeEnabled();
+        });
     });
 });

@@ -4,6 +4,7 @@ import {
     NotFoundException,
     ServiceUnavailableException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { AiService, type BusinessCardScanResult } from '../ai/ai.service';
 import { AssetsService } from '../assets/assets.service';
@@ -21,6 +22,12 @@ import {
 import { paginate } from '../common/pagination.dto';
 import { runImport, ImportResult } from '../common/import.util';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import {
+    applyColumnFilters,
+    codesContaining,
+    containsInsensitive,
+    type FilterableMap,
+} from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import { parseImageUpload } from '../common/image-upload.util';
 
@@ -36,6 +43,19 @@ const contactIncludes = {
         include: attachmentIncludes,
     },
 } as const;
+
+/** Columns of the contacts table that take an advanced filter, by the table's column id. */
+const CONTACT_FILTERABLE: FilterableMap<Prisma.CrmContactWhereInput> = {
+    name: (v) => ({ name: containsInsensitive(v) }),
+    company: (v) => ({ company: containsInsensitive(v) }),
+    designation: (v) => ({ designation: containsInsensitive(v) }),
+    mobile: (v) => ({ mobile: containsInsensitive(v) }),
+    email: (v) => ({ email: containsInsensitive(v) }),
+    capture_source: (v) => ({
+        capture_source: { in: codesContaining(Object.values(CrmContactCaptureSource), v) },
+    }),
+    assignee: (v) => ({ assignee: { name: containsInsensitive(v) } }),
+};
 
 const CONTACT_SORTABLE: SortableMap = {
     name: (dir) => ({ name: dir }),
@@ -154,15 +174,17 @@ export class CrmContactsService {
             ];
         }
 
+        const filtered = applyColumnFilters(where, opts.filters, CONTACT_FILTERABLE);
+
         const [items, total] = await Promise.all([
             this.db.crmContact.findMany({
-                where,
+                where: filtered,
                 include: contactIncludes,
                 orderBy: resolveOrderBy(opts.sortBy, opts.sortDir, CONTACT_SORTABLE, CONTACT_DEFAULT_ORDER),
                 skip,
                 take: limit,
             }),
-            this.db.crmContact.count({ where }),
+            this.db.crmContact.count({ where: filtered }),
         ]);
 
         return paginate(items, total, page, limit);

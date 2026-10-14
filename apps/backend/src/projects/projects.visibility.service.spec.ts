@@ -82,6 +82,18 @@ describe('ProjectsService — visibility', () => {
             expect(where.AND).toEqual([{ OR: visibilityOr('user-7') }]);
         });
 
+        it('keeps the table column filters beside the visibility filter, count included', async () => {
+            await service.list(staff('user-7'), { filters: { name: 'roof', status: 'active' } } as never);
+
+            const [{ where }] = db.project.findMany.mock.calls.at(-1);
+            expect(where.AND).toEqual([
+                { name: { contains: 'roof', mode: 'insensitive' } },
+                { status: { in: ['ACTIVE'] } },
+                { OR: visibilityOr('user-7') },
+            ]);
+            expect(db.project.count.mock.calls.at(-1)[0].where).toEqual(where);
+        });
+
         it('adds no clause for the owner', async () => {
             await service.list(OWNER, {} as never);
 

@@ -24,6 +24,7 @@ import {
 import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
 import { isOpenLifecycle, leadStatusLabel, leadStatusTone, stageOptionLabel, type LeadStage } from '@/lib/lead-status';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
+import { useServerColumnFilters } from '@/lib/column-filters';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
@@ -319,6 +320,8 @@ function LeadsPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null);
+    // The table's advanced filters, sent to the server — see useServerColumnFilters.
+    const { columnFilters, setColumnFilters, filters: columnFilterParam } = useServerColumnFilters();
     // Guards against out-of-order responses: a filter/sort change while on page > 1 fires a
     // stale-page fetch, then the reset-to-page-1 effect fires a second fetch. Only the latest
     // in-flight request may commit its result.
@@ -362,14 +365,21 @@ function LeadsPage() {
         return () => clearTimeout(timer);
     }, [search, typing]);
 
+    /** The list's query: every page filter plus the table's own. The board has no
+     *  column filters to show, so it keeps to `baseQuery`. */
+    const tableQuery = useMemo(
+        () => ({ ...baseQuery, filters: columnFilterParam }),
+        [baseQuery, columnFilterParam],
+    );
+
     const fetchAllRows = useCallback(
         (onProgress?: (loaded: number, total: number) => void) =>
             fetchAllPages(
                 ({ page: p, limit, sortBy, sortDir }) =>
-                    api.getLeads({ ...baseQuery, page: p, limit, sortBy, sortDir }),
+                    api.getLeads({ ...tableQuery, page: p, limit, sortBy, sortDir }),
                 { sort, onProgress },
             ),
-        [baseQuery, sort],
+        [tableQuery, sort],
     );
 
     const loadLeads = useCallback(async () => {
@@ -382,7 +392,7 @@ function LeadsPage() {
         setLoading(true);
         try {
             const data = await api.getLeads({
-                ...baseQuery,
+                ...tableQuery,
                 page,
                 limit: pageSize,
                 sortBy: sort?.id,
@@ -400,7 +410,7 @@ function LeadsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [baseQuery, page, pageSize, sort, filtersReady, scopeReady, viewReady, view]);
+    }, [tableQuery, page, pageSize, sort, filtersReady, scopeReady, viewReady, view]);
 
     useEffect(() => { void loadLeads(); }, [loadLeads]);
 
@@ -417,7 +427,7 @@ function LeadsPage() {
     // Any change to filters/search/sort returns to the first page.
     useEffect(() => {
         setPage(1);
-    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, sort]);
+    }, [effectiveSearch, statusFilter, categoryFilter, sourceFilter, priorityFilter, ownerFilter, mineOnly, emailFilter, staleOnly, staleDays, createdRange, columnFilterParam, sort]);
 
     const confirmDelete = useCallback(async () => {
         if (!pendingDelete) return;
@@ -674,7 +684,7 @@ function LeadsPage() {
                 enableSorting: false,
             }),
         ),
-        createdAtColumn(columnHelper, { header: c.createdAt, locale }),
+        createdAtColumn(columnHelper, { header: c.createdAt, locale, enableColumnFilter: false }),
         columnHelper.display({
             id: 'actions',
             header: c.actions,
@@ -927,6 +937,8 @@ function LeadsPage() {
                         sort,
                         onSortChange: setSort,
                         fetchAllRows,
+                        columnFilters,
+                        onColumnFiltersChange: setColumnFilters,
                     }}
                     enableRowSelection
                     onRowSelectionChange={setSelectedLeads}

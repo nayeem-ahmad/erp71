@@ -408,6 +408,8 @@ export const salesMessages = {
             posReceipt: "إيصال نقطة البيع",
             mushak: "مشك ٦٫٣",
             openInvoicePage: "فتح صفحة الفاتورة",
+            salesReturn: "مرتجع مبيعات",
+            exchange: "مبادلة",
             preview: {
                 heading: "{document} — {size}",
                 print: "طباعة",

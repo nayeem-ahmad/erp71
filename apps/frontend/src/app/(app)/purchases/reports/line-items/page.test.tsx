@@ -99,6 +99,18 @@ describe('PurchaseLineItemsPage', () => {
         api().searchProductsByQuantity.mockResolvedValue([]);
     });
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, so the totals cover the same lines', async () => {
+        render(<PurchaseLineItemsPage />);
+        await waitFor(() => expect(api().getPurchaseLineItems).toHaveBeenCalled());
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Filters' }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Product/), { target: { value: 'rice' } });
+
+        await waitFor(() => expect(lastQuery()).toEqual(expect.objectContaining({ page: 1, filters: { product: 'rice' } })));
+    });
+
     it('opens on the last 30 days, newest first', async () => {
         render(<PurchaseLineItemsPage />);
 

@@ -17,9 +17,11 @@ jest.mock('next/link', () => {
 });
 
 const push = jest.fn();
+// `?saleId=` — set when the exchange is started from a sale.
+let saleIdParam: string | null = null;
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ push, replace: jest.fn() }),
-    useSearchParams: () => ({ get: () => null }),
+    useSearchParams: () => ({ get: (key: string) => (key === 'saleId' ? saleIdParam : null) }),
 }));
 
 jest.mock('@/lib/toast', () => ({
@@ -89,6 +91,7 @@ const SALE = {
 describe('NewExchangePage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        saleIdParam = null;
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Cashier' });
         (api.getSalesList as jest.Mock).mockResolvedValue({
             items: [{ id: 'sale-1', serial_number: 'S-00001' }],
@@ -153,5 +156,15 @@ describe('NewExchangePage', () => {
         await waitFor(() => {
             expect(toast.error).toHaveBeenCalledWith('A draft or cancelled sale cannot be exchanged.');
         });
+    });
+
+    it('loads the sale named in the URL without asking for its serial', async () => {
+        saleIdParam = 'sale-1';
+        render(<NewExchangePage />);
+
+        expect(await screen.findByText('Shirt M')).toBeInTheDocument();
+        expect(api.getSale).toHaveBeenCalledWith('sale-1');
+        expect(api.getSalesList).not.toHaveBeenCalled();
+        expect(screen.getByPlaceholderText('Invoice serial')).toHaveValue('S-00001');
     });
 });

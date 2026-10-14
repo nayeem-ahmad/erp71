@@ -1286,6 +1286,16 @@ describe('ProjectTasksService', () => {
     describe('list filters', () => {
         const whereOf = () => db.projectTask.findMany.mock.calls.at(-1)[0].where;
 
+        it('narrows by the table column filters, before the access filter is merged in', async () => {
+            await service.list(OWNER, { filters: { title: 'roof', priority: 'urg', due_date: '2026' } } as never);
+
+            expect(whereOf().AND).toEqual([
+                { title: { contains: 'roof', mode: 'insensitive' } },
+                { priority: { in: ['URGENT'] } },
+            ]);
+            expect(db.projectTask.count.mock.calls.at(-1)[0].where).toEqual(whereOf());
+        });
+
         it('narrows to tasks nobody holds — both columns, not just the user one', async () => {
             await service.list(OWNER, { unassigned: 'true' } as never);
 

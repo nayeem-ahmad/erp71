@@ -17,6 +17,7 @@ import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import { PageShell, PageHeader, Button, Select, Input, ConfirmDialog } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useCrmMineOnly } from '@/lib/crm-scope';
+import { useServerColumnFilters } from '@/lib/column-filters';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
 import BusinessCardScanner, { type ScannedCard, type ScannedCardImage } from './BusinessCardScanner';
@@ -88,6 +89,8 @@ export default function ContactsPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(null);
+    // The table's advanced filters, sent to the server — see useServerColumnFilters.
+    const { columnFilters, setColumnFilters, filters: columnFilterParam } = useServerColumnFilters();
     // Only the latest in-flight request may commit — a filter change while on a
     // later page fires a stale fetch alongside the reset-to-page-1 one.
     const loadSeq = useRef(0);
@@ -115,10 +118,11 @@ export default function ContactsPage() {
                         sortBy,
                         sortDir,
                         ...applyCreatedRangeQuery(createdRange),
+                        filters: columnFilterParam,
                     }),
                 { sort, onProgress },
             ),
-        [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, createdRange, sort],
+        [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, createdRange, columnFilterParam, sort],
     );
 
     const loadContacts = useCallback(async () => {
@@ -136,6 +140,7 @@ export default function ContactsPage() {
                 sortBy: sort?.id,
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
                 ...applyCreatedRangeQuery(createdRange),
+                filters: columnFilterParam,
             });
             if (seq !== loadSeq.current) return;
             setContacts(data?.items ?? []);
@@ -147,13 +152,13 @@ export default function ContactsPage() {
         } finally {
             if (seq === loadSeq.current) setLoading(false);
         }
-    }, [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, scopeReady, createdRange, page, pageSize, sort]);
+    }, [debouncedSearch, captureSourceFilter, assignedFilter, mineOnly, scopeReady, createdRange, columnFilterParam, page, pageSize, sort]);
 
     useEffect(() => { void loadContacts(); }, [loadContacts]);
 
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, sort]);
+    }, [debouncedSearch, captureSourceFilter, assignedFilter, createdRange, columnFilterParam, sort]);
 
     const clearSelection = useCallback(() => {
         setSelected([]);
@@ -267,7 +272,7 @@ export default function ContactsPage() {
             enableSorting: false,
             meta: { hideOnMobile: true },
         }),
-        createdAtColumn(columnHelper, { header: c.createdAt, locale }),
+        createdAtColumn(columnHelper, { header: c.createdAt, locale, enableColumnFilter: false }),
         columnHelper.display({
             id: 'actions',
             header: c.actions,
@@ -407,6 +412,8 @@ export default function ContactsPage() {
                     sort,
                     onSortChange: setSort,
                     fetchAllRows,
+                    columnFilters,
+                    onColumnFiltersChange: setColumnFilters,
                 }}
                 enableRowSelection
                 onRowSelectionChange={setSelected}

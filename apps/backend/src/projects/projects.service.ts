@@ -7,6 +7,8 @@ import { SprintMembershipService } from './sprint-membership.service';
 import { BurndownRecorder } from './burndown-recorder.service';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
+import type { Prisma } from '@prisma/client';
+import { applyColumnFilters, codesContaining, containsInsensitive, type FilterableMap } from '../common/column-filter.util';
 import {
     buildBurndownSeries,
     eachDate,
@@ -18,10 +20,22 @@ import {
     CreateMilestoneDto,
     CreateProjectDto,
     ListProjectsDto,
+    ProjectStatusDto,
     UpdateMilestoneDto,
     UpdateProjectDto,
     UpsertProjectMemberDto,
 } from './project.dto';
+
+/**
+ * Columns of the projects table that take an advanced filter, by the table's
+ * column id. Only the columns the table reads through an accessor offer one.
+ */
+const PROJECT_FILTERABLE: FilterableMap<Prisma.ProjectWhereInput> = {
+    code: (v) => ({ code: containsInsensitive(v) }),
+    name: (v) => ({ name: containsInsensitive(v) }),
+    // An enum: matched on its codes, so "on hold" finds ON_HOLD.
+    status: (v) => ({ status: { in: codesContaining(Object.values(ProjectStatusDto), v) } }),
+};
 
 const PROJECT_SORTABLE: SortableMap = {
     code: (dir) => ({ code: dir }),
@@ -173,7 +187,10 @@ export class ProjectsService {
         // and the visibility filter is another one. Two `OR` keys on the same
         // object would leave only the second, which would be a search that
         // ignores visibility or a visibility filter that ignores the search.
-        const where = ProjectAccessService.merge(base, await this.access.projectFilter(viewer));
+        const where = ProjectAccessService.merge(
+            applyColumnFilters(base, query.filters, PROJECT_FILTERABLE),
+            await this.access.projectFilter(viewer),
+        );
 
         const [items, total] = await Promise.all([
             this.db.project.findMany({

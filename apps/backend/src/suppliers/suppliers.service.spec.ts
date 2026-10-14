@@ -170,6 +170,20 @@ describe('SuppliersService', () => {
                 supplier_code: { contains: 'sup-0004', mode: 'insensitive' },
             });
         });
+
+        it('narrows by the table column filters before paging, count included', async () => {
+            db.supplier.findMany.mockResolvedValue([]);
+            db.supplier.count.mockResolvedValue(0);
+
+            await service.findAll('tenant-1', 1, 20, { filters: { name: 'acme', branch: 'mirpur' } });
+
+            const where = db.supplier.findMany.mock.calls[0][0].where;
+            expect(where.AND).toEqual([
+                { name: { contains: 'acme', mode: 'insensitive' } },
+                { store: { name: { contains: 'mirpur', mode: 'insensitive' } } },
+            ]);
+            expect(db.supplier.count.mock.calls[0][0].where).toEqual(where);
+        });
     });
 
     it('rejects duplicate supplier names per tenant', async () => {

@@ -5,12 +5,16 @@ import type { Paginated } from '@/lib/api';
 import { useTablePreferences } from '@/components/data-table/useTablePreferences';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { fetchAllPages, type FetchAllPagesResult } from '@/components/data-table/fetch-all-pages';
+import type { ColumnFiltersState } from '@tanstack/react-table';
+import { useServerColumnFilters, type ColumnFilterParam } from '@/lib/column-filters';
 
 export interface ServerListParams {
     page: number;
     limit: number;
     sortBy?: string;
     sortDir?: 'asc' | 'desc';
+    /** The table's advanced column filters, for a list that opted in with `columnFilters`. */
+    filters?: ColumnFilterParam;
 }
 
 /** Shape consumed by `DataTable`'s `serverPagination` prop. */
@@ -23,6 +27,8 @@ export interface ServerPaginationProps<T = unknown> {
     sort: { id: string; desc: boolean } | null;
     onSortChange: (sort: { id: string; desc: boolean } | null) => void;
     fetchAllRows?: (onProgress?: (loaded: number, total: number) => void) => Promise<FetchAllPagesResult<T>>;
+    columnFilters?: ColumnFiltersState;
+    onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
 }
 
 export interface UseServerListResult<T, R extends Paginated<T> = Paginated<T>> {
@@ -69,6 +75,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
     initialPageSize,
     initialSort = null,
     enabled = true,
+    columnFilters: serverColumnFilters = false,
 }: {
     fetch: (params: ServerListParams) => Promise<R>;
     deps?: unknown[];
@@ -83,6 +90,13 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
     initialSort?: { id: string; desc: boolean } | null;
     /** Set false to hold off fetching until prerequisites (e.g. a selected account) exist. */
     enabled?: boolean;
+    /**
+     * Take over the table's advanced column filters and pass them to `fetch` as
+     * `filters`, for an endpoint that applies them. Left off, the table filters
+     * only the page on screen, which splits matches across pages — so only set it
+     * once `fetch` forwards `filters` and the endpoint handles every filterable column.
+     */
+    columnFilters?: boolean;
 }): UseServerListResult<T, R> {
     const [items, setItems] = useState<T[]>([]);
     const [total, setTotal] = useState(0);
@@ -99,6 +113,8 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
         savedPageSize ?? initialPageSize ?? DEFAULT_PAGE_SIZE,
     );
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(initialSort);
+    const { columnFilters, setColumnFilters, filters: typedFilters } = useServerColumnFilters();
+    const filters = serverColumnFilters ? typedFilters : undefined;
 
     const loadSeq = useRef(0);
     // Held in a ref so callers can pass a fresh inline closure each render without
@@ -122,6 +138,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
                 limit: pageSize,
                 sortBy: sort?.id,
                 sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
+                ...(filters ? { filters } : {}),
             });
             if (seq !== loadSeq.current) return;
             setItems(result?.items ?? []);
@@ -138,7 +155,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
             if (seq === loadSeq.current) setLoading(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enabled, page, pageSize, sort, ...deps]);
+    }, [enabled, page, pageSize, sort, filters, ...deps]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -146,7 +163,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
     useEffect(() => {
         setPage(1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sort, ...deps]);
+    }, [sort, filters, ...deps]);
 
     const fetchAllRows = useCallback(
         (onProgress?: (loaded: number, total: number) => void) =>
@@ -156,10 +173,11 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
                     limit: params.limit,
                     sortBy: params.sortBy,
                     sortDir: params.sortDir,
+                    ...(filters ? { filters } : {}),
                 }),
                 { sort, onProgress },
             ),
-        [sort],
+        [sort, filters],
     );
 
     const serverPagination = useMemo<ServerPaginationProps<T>>(() => ({
@@ -173,7 +191,8 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
         sort,
         onSortChange: setSort,
         fetchAllRows,
-    }), [total, page, pageSize, sort, fetchAllRows]);
+        ...(serverColumnFilters ? { columnFilters, onColumnFiltersChange: setColumnFilters } : {}),
+    }), [total, page, pageSize, sort, fetchAllRows, serverColumnFilters, columnFilters, setColumnFilters]);
 
     return { items, total, response, loading, error, serverPagination, reload: load, setItems, page, pageSize, sort };
 }

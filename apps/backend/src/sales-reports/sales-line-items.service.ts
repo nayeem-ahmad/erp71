@@ -10,6 +10,12 @@ import {
     type LineItemSortDirection,
 } from '../common/line-item-search';
 import { GetSalesLineItemsDto, type SalesLineItemSort } from './sales-reports.dto';
+import {
+    applyColumnFilters,
+    containsInsensitive,
+    type FilterableMap,
+    numberEquals,
+} from '../common/column-filter.util';
 
 /**
  * How each sortable column orders the lines. `lineOrder` appends the line id to
@@ -27,6 +33,21 @@ const SALE_LINE_SORTS: Record<
     product: (dir) => [{ product: { name: dir } }, { sale: { sale_date: 'desc' } }],
     quantity: (dir) => [{ quantity: dir }, { sale: { sale_date: 'desc' } }],
     unitPrice: (dir) => [{ price_at_sale: dir }, { sale: { sale_date: 'desc' } }],
+};
+
+/**
+ * Columns of the line-items table that take an advanced filter, by the table's
+ * column id. Amount and returned are worked out per line, so they take none.
+ */
+const SALE_LINE_FILTERABLE: FilterableMap<Prisma.SaleItemWhereInput> = {
+    invoice: (v) => ({
+        sale: { OR: [{ serial_number: containsInsensitive(v) }, { reference_number: containsInsensitive(v) }] },
+    }),
+    customer: (v) => ({ sale: { customer: { name: containsInsensitive(v) } } }),
+    branch: (v) => ({ sale: { store: { name: containsInsensitive(v) } } }),
+    product: (v) => ({ product: { OR: [{ name: containsInsensitive(v) }, { sku: containsInsensitive(v) }] } }),
+    quantity: numberEquals('quantity'),
+    unitPrice: numberEquals('price_at_sale'),
 };
 
 function lineOrder(query: GetSalesLineItemsDto): Prisma.SaleItemOrderByWithRelationInput[] {
@@ -58,7 +79,7 @@ export function salesLineFilter(tenantId: string, query: GetSalesLineItemsDto, t
         ...(saleDate ? { sale_date: saleDate } : {}),
     };
 
-    const line: Prisma.SaleItemWhereInput = {
+    const searchLine: Prisma.SaleItemWhereInput = {
         ...(query.productId ? { product_id: query.productId } : {}),
         ...(search
             ? {
@@ -74,6 +95,8 @@ export function salesLineFilter(tenantId: string, query: GetSalesLineItemsDto, t
               }
             : {}),
     };
+    // On the line half, so the totals and the invoice count narrow with the rows.
+    const line = applyColumnFilters(searchLine, query.filters, SALE_LINE_FILTERABLE);
 
     return { sale, line, where: { ...line, sale } satisfies Prisma.SaleItemWhereInput };
 }

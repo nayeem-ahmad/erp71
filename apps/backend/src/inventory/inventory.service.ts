@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import {
     CreateWarehouseDto,
@@ -12,6 +13,28 @@ import {
 import { ensureDefaultWarehouse } from '../database/inventory.utils';
 import { paginate } from '../common/pagination.dto';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
+import {
+    applyColumnFilters,
+    containsInsensitive,
+    type FilterableMap,
+    numberEquals,
+} from '../common/column-filter.util';
+
+/**
+ * Columns of the stock ledger that take an advanced filter, by the table's
+ * column id. The timestamp takes none; the reference cell shows the type and
+ * the id together, so that column matches either.
+ */
+const LEDGER_FILTERABLE: FilterableMap<Prisma.InventoryMovementWhereInput> = {
+    product: (v) => ({ product: { name: containsInsensitive(v) } }),
+    warehouse: (v) => ({ warehouse: { name: containsInsensitive(v) } }),
+    movement_type: (v) => ({ movement_type: containsInsensitive(v) }),
+    quantity_delta: numberEquals('quantity_delta'),
+    balance_after: numberEquals('balance_after'),
+    reference: (v) => ({
+        OR: [{ reference_type: containsInsensitive(v) }, { reference_id: containsInsensitive(v) }],
+    }),
+};
 
 const LEDGER_SORTABLE: SortableMap = {
     created_at: (dir) => ({ created_at: dir }),
@@ -290,10 +313,11 @@ export class InventoryService {
             ...(query.movementType ? { movement_type: query.movementType } : {}),
             ...buildDateWindow(query.from, query.to),
         };
+        const filtered = applyColumnFilters(where, query.filters, LEDGER_FILTERABLE);
 
         const [items, total] = await Promise.all([
             this.db.inventoryMovement.findMany({
-                where,
+                where: filtered,
                 include: {
                     product: {
                         include: { group: true, subgroup: true },
@@ -304,7 +328,7 @@ export class InventoryService {
                 skip: (page - 1) * limit,
                 take: limit,
             }),
-            this.db.inventoryMovement.count({ where }),
+            this.db.inventoryMovement.count({ where: filtered }),
         ]);
 
         return paginate(items, total, page, limit);

@@ -127,6 +127,23 @@ describe('SalesListPage — Sales Transaction List', () => {
         jest.clearAllMocks();
     });
 
+    // The table's advanced filters go to the server, so their matches are paged
+    // together rather than left wherever they fell in the unfiltered list.
+    it('filters on the server, from page 1, rather than within the rows on screen', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+        fireEvent.change(screen.getByPlaceholderText(/^Filter Customer/), { target: { value: 'karim' } });
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, filters: { customer: 'karim' } }),
+            ),
+        );
+    });
+
     it('renders the Sales page heading', async () => {
         renderWithQueryClient(<SalesListPage />);
         expect(screen.getByRole('heading', { level: 1, name: 'Sales' })).toBeInTheDocument();
@@ -583,6 +600,62 @@ describe('SalesListPage — Sales Transaction List', () => {
 
             expect(await openRowMenu()).toBeNull();
             expect(screen.queryByRole('link', { name: /^edit$/i })).toBeNull();
+        });
+    });
+
+    describe('returning or exchanging a sale', () => {
+        /** Opens the first row's kebab once the grants from /auth/me have landed. */
+        const openFirstRowMenu = async () => {
+            await waitFor(() => expect(screen.getByText('SL-00001')).toBeInTheDocument());
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            });
+            fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
+        };
+
+        const withSales = (items: typeof mockSales) => {
+            const { api } = require('@/lib/api');
+            api.getSalesList.mockResolvedValue({ items, total: items.length, page: 1, limit: 20, pages: 1 });
+        };
+
+        it('starts a return or an exchange with the row\'s sale already chosen', async () => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({
+                tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['CREATE_RETURN'] }],
+            });
+
+            renderWithQueryClient(<SalesListPage />);
+            await openFirstRowMenu();
+
+            expect(await screen.findByRole('menuitem', { name: 'Sales Return' }))
+                .toHaveAttribute('href', '/sales/returns/new?saleId=sale-1');
+            expect(screen.getByRole('menuitem', { name: 'Exchange' }))
+                .toHaveAttribute('href', '/sales/exchanges/new?saleId=sale-1');
+        });
+
+        it('hides both from someone without CREATE_RETURN', async () => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({
+                tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['CANCEL_ENTRY'] }],
+            });
+
+            renderWithQueryClient(<SalesListPage />);
+            await openFirstRowMenu();
+
+            expect(screen.queryByRole('menuitem', { name: 'Sales Return' })).toBeNull();
+            expect(screen.queryByRole('menuitem', { name: 'Exchange' })).toBeNull();
+        });
+
+        it.each(['DRAFT', 'CANCELLED'])('offers neither on a %s sale', async (status) => {
+            const { api } = require('@/lib/api');
+            api.getMe.mockResolvedValue({ tenants: [{ id: 'tenant-1', role: 'OWNER', permissions: [] }] });
+            withSales([{ ...mockSales[0], status }]);
+
+            renderWithQueryClient(<SalesListPage />);
+            await openFirstRowMenu();
+
+            expect(screen.queryByRole('menuitem', { name: 'Sales Return' })).toBeNull();
+            expect(screen.queryByRole('menuitem', { name: 'Exchange' })).toBeNull();
         });
     });
 });

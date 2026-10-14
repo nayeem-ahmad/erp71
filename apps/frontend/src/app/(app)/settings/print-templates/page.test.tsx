@@ -193,6 +193,70 @@ describe('PrintTemplatesPage', () => {
         );
     });
 
+    describe('the QR code', () => {
+        const preview = () => screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
+
+        it('saves where the code sits and how large it prints', async () => {
+            (mockApi.updatePrintTemplate as jest.Mock).mockResolvedValue(storedTemplate);
+
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            fireEvent.change(screen.getByLabelText('QR code position'), { target: { value: 'right-of-title' } });
+            fireEvent.change(screen.getByLabelText('QR code size (mm)'), { target: { value: '28' } });
+            fireEvent.change(screen.getByLabelText('Nudge QR down (mm)'), { target: { value: '3' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save Template' }));
+
+            await waitFor(() => expect(mockApi.updatePrintTemplate).toHaveBeenCalled());
+            const [, payload] = (mockApi.updatePrintTemplate as jest.Mock).mock.calls[0];
+            expect(payload.config.version).toBe(4);
+            expect(payload.config.qr).toEqual({ sizeMm: 28, position: 'right-of-title', offsetXMm: 0, offsetYMm: 3 });
+        });
+
+        it('previews a sample code at the chosen size, in place of the number and date', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            fireEvent.change(screen.getByLabelText('QR code size (mm)'), { target: { value: '28' } });
+
+            expect(preview()).toContain('<img class="p71-hd-qr" src="data:image/svg+xml,');
+            expect(preview()).toContain('width: 28mm; height: 28mm;');
+            expect(preview()).not.toContain('INV-000123');
+        });
+
+        it('previews the header documents without a code print, on request', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            fireEvent.click(screen.getByLabelText('Show the QR code'));
+
+            expect(preview()).not.toContain('<img class="p71-hd-qr"');
+            expect(preview()).toContain('INV-000123');
+        });
+
+        it('leaves the code off a roll, as no roll prints one', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            fireEvent.change(screen.getByLabelText('Paper size'), { target: { value: 'Thermal80' } });
+
+            expect(preview()).not.toContain('<img class="p71-hd-qr"');
+        });
+
+        it('lets a size be typed past the minimum, applying it on leaving the field', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+            const size = screen.getByLabelText('QR code size (mm)') as HTMLInputElement;
+
+            // The "2" of "25" must survive the keystroke, not jump to the minimum.
+            fireEvent.change(size, { target: { value: '2' } });
+            expect(size.value).toBe('2');
+
+            fireEvent.focusOut(size);
+            expect(size.value).toBe('10');
+        });
+    });
+
     it('removes a header image', async () => {
         render(<PrintTemplatesPage />);
         await screen.findByDisplayValue('Letterhead');

@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission, RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
+import { readColumnFiltersQuery } from '../common/column-filter.util';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { ImportRowsDto } from '../common/import.dto';
 
@@ -82,6 +83,7 @@ export class CustomersController {
         @Query('createdFrom') createdFrom?: string,
         @Query('createdTo') createdTo?: string,
         @Query('storeId') storeId?: string,
+        @Query('filters') filters?: string,
     ) {
         return this.customersService.findAll(tenant.tenantId, { timezone: tenant.timezone,
             scope: await this.scope(tenant, storeId),
@@ -94,6 +96,7 @@ export class CustomersController {
             sortDir,
             createdFrom,
             createdTo,
+            filters: readColumnFiltersQuery(filters),
         });
     }
 

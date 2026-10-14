@@ -859,6 +859,14 @@ export interface Paginated<T = any> {
 }
 
 /**
+ * A server-paginated table's advanced column filters, `{ columnId: text }`, as
+ * the list endpoints take them: one JSON `filters` param, left off when empty.
+ */
+export function setColumnFilterParam(query: URLSearchParams, filters?: Record<string, string>) {
+    if (filters && Object.keys(filters).length) query.set('filters', JSON.stringify(filters));
+}
+
+/**
  * Fetch a paginated list endpoint, preserving the server total.
  *
  * The backend's TransformInterceptor reshapes a `{ items, total, page, limit, pages }`
@@ -1019,6 +1027,8 @@ export type LineItemSearchParams = {
     limit?: number;
     sortBy?: string;
     sortDir?: 'asc' | 'desc';
+    /** The table's advanced column filters. */
+    filters?: Record<string, string>;
 };
 
 export type SalesLineItemParams = LineItemSearchParams & { customerId?: string };
@@ -1093,11 +1103,15 @@ export interface PurchaseLineItemsReport {
 }
 
 /** Only the filters that are set: the API rejects an empty `from=` as a malformed date. */
-function lineItemQuery(params: Record<string, string | number | undefined>): string {
+function lineItemQuery({
+    filters,
+    ...params
+}: { filters?: Record<string, string>; [key: string]: string | number | undefined | Record<string, string> }): string {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
         if (value !== undefined && value !== '') query.set(key, String(value));
     }
+    setColumnFilterParam(query, filters);
     return query.toString();
 }
 
@@ -1404,6 +1418,7 @@ export const api = {
         sortDir?: string;
         createdFrom?: string;
         createdTo?: string;
+        filters?: Record<string, string>;
     }) => {
         const query = new URLSearchParams();
         if (params?.groupId) query.set('groupId', params.groupId);
@@ -1417,6 +1432,7 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        setColumnFilterParam(query, params?.filters);
         return fetchPaginated(`/products${query.toString() ? `?${query.toString()}` : ''}`);
     },
     /** One product with its stock rows — used to seed an entry form from a link. */
@@ -1538,6 +1554,7 @@ export const api = {
         sortDir?: string;
         /** A branch or `'all'`, from the page's branch filter. */
         storeId?: string;
+        filters?: Record<string, string>;
     }) => {
         const query = new URLSearchParams();
         if (params?.productId) query.set('productId', params.productId);
@@ -1550,6 +1567,7 @@ export const api = {
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         if (params?.storeId) query.set('storeId', params.storeId);
+        setColumnFilterParam(query, params?.filters);
         return fetchPaginated(`/inventory/ledger${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getWarehouseTransfers: (params?: { status?: string; sourceWarehouseId?: string; destinationWarehouseId?: string; productId?: string; isCrossBranch?: boolean; from?: string; to?: string; storeId?: string }) => {
@@ -1970,6 +1988,7 @@ export const api = {
         dateTo?: string;
         /** A branch or `'all'`, from the page's branch filter. */
         storeId?: string;
+        filters?: Record<string, string>;
     }) => {
         const query = new URLSearchParams();
         if (params.page) query.set('page', String(params.page));
@@ -1984,6 +2003,7 @@ export const api = {
         if (params.dateFrom) query.set('dateFrom', params.dateFrom);
         if (params.dateTo) query.set('dateTo', params.dateTo);
         if (params.storeId) query.set('storeId', params.storeId);
+        setColumnFilterParam(query, params.filters);
         return fetchPaginated(`/sales?${query.toString()}`);
     },
     /** The most recent few sales — callers that do not need the whole history. */
@@ -2022,6 +2042,7 @@ export const api = {
         createdTo?: string;
         /** A branch id or `all`; omitted, the server shows every customer the member may see. */
         storeId?: string;
+        filters?: Record<string, string>;
     }) => {
         const query = new URLSearchParams();
         if (params?.page) query.set('page', String(params.page));
@@ -2034,6 +2055,7 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        setColumnFilterParam(query, params?.filters);
         return fetchPaginated(`/customers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getCustomer: (id: string) => fetchWithAuth(`/customers/${id}`),
@@ -2177,7 +2199,7 @@ export const api = {
     deleteCrmInteraction: (id: string) => fetchWithAuth(`/crm/interactions/${id}`, { method: 'DELETE' }),
     // CRM Leads
     /** `mine` narrows to the caller's own leads; the server resolves the id. */
-    getLeads: (params?: { status?: string; statusId?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    getLeads: (params?: { status?: string; statusId?: string; source?: string; category?: string; priority?: string; assignedTo?: string; mine?: boolean; emailPresence?: string; staleDays?: number; myActionsToday?: boolean; search?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string; filters?: Record<string, string> }) => {
         const query = new URLSearchParams();
         if (params?.status) query.set('status', params.status);
         if (params?.statusId) query.set('statusId', params.statusId);
@@ -2196,6 +2218,7 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        setColumnFilterParam(query, params?.filters);
         return fetchPaginated(`/crm/leads${query.toString() ? `?${query.toString()}` : ''}`);
     },
     // Every CRM person-picker reads this, not `getTeamMembers`: that one is the Team
@@ -2235,7 +2258,7 @@ export const api = {
         }),
     // CRM Contacts
     /** `mine` narrows to the caller's own contacts; the server resolves the id. */
-    getContacts: (params?: { search?: string; company?: string; assignedTo?: string; mine?: boolean; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string }) => {
+    getContacts: (params?: { search?: string; company?: string; assignedTo?: string; mine?: boolean; captureSource?: string; page?: number; limit?: number; sortBy?: string; sortDir?: string; createdFrom?: string; createdTo?: string; filters?: Record<string, string> }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
         if (params?.company) query.set('company', params.company);
@@ -2248,6 +2271,7 @@ export const api = {
         if (params?.sortDir) query.set('sortDir', params.sortDir);
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        setColumnFilterParam(query, params?.filters);
         return fetchPaginated(`/crm/contacts${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getContact: (id: string) => fetchWithAuth(`/crm/contacts/${id}`),
@@ -2949,6 +2973,7 @@ export const api = {
         sortDir?: string;
         /** The list's branch filter: a branch id or `all`. */
         storeId?: string;
+        filters?: Record<string, string>;
     }) => {
         const query = new URLSearchParams();
         if (params?.storeId) query.set('storeId', params.storeId);
@@ -2957,6 +2982,7 @@ export const api = {
         if (params?.search) query.set('search', params.search);
         if (params?.sortBy) query.set('sortBy', params.sortBy);
         if (params?.sortDir) query.set('sortDir', params.sortDir);
+        setColumnFilterParam(query, params?.filters);
         return fetchPaginated(`/suppliers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     getSupplierCreditLedger: (id: string, params?: { page?: number; limit?: number; from?: string; to?: string }) => {
@@ -3151,12 +3177,15 @@ export const api = {
         sortDir?: 'asc' | 'desc';
         /** A branch or `'all'`, from the page's branch filter. */
         storeId?: string;
+        filters?: Record<string, string>;
     }): Promise<Paginated<any>> => {
+        const { filters, ...rest } = params ?? {};
         const query = new URLSearchParams();
-        for (const [key, value] of Object.entries(params ?? {})) {
+        for (const [key, value] of Object.entries(rest)) {
             if (value === undefined || value === null || value === '') continue;
             query.set(key, String(value));
         }
+        setColumnFilterParam(query, filters);
         const suffix = query.toString();
         return fetchPaginated(`/imports${suffix ? `?${suffix}` : ''}`);
     },
@@ -5697,11 +5726,14 @@ export const api = {
         customerId?: string;
         sortBy?: string;
         sortDir?: 'asc' | 'desc';
+        filters?: Record<string, string>;
     }) => {
+        const { filters, ...rest } = params;
         const query = new URLSearchParams();
-        for (const [key, value] of Object.entries(params)) {
+        for (const [key, value] of Object.entries(rest)) {
             if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
         }
+        setColumnFilterParam(query, filters);
         // fetchPaginated, not fetchWithAuth: TransformInterceptor reshapes the
         // service's `{ items, total, … }` into `{ data: items, meta }`, and
         // fetchWithAuth returns the unwrapped `data` — a bare array with no
@@ -5955,11 +5987,15 @@ export const api = {
     deleteProjectLabel: (id: string) =>
         fetchWithAuth(`/projects/labels/${id}`, { method: 'DELETE' }),
 
-    getProjectTasks: (params: Record<string, string | number | undefined>) => {
+    getProjectTasks: ({
+        filters,
+        ...params
+    }: { filters?: Record<string, string> } & Record<string, string | number | undefined | Record<string, string>>) => {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params)) {
             if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
         }
+        setColumnFilterParam(query, filters);
         return fetchPaginated(`/project-tasks?${query}`);
     },
     /**
