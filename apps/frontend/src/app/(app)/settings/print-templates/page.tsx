@@ -12,12 +12,17 @@ import { Button, ConfirmDialog, PageShell, Select } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import {
     DEFAULT_HEADER_CONFIG,
+    designFor,
+    dropOwnDesign,
+    hasOwnDesign,
     isThermalPaper,
-    OVERRIDE_PAPERS,
+    OWN_DESIGN_PAPERS,
     PAPER_SIZES,
     paperSizeLabel,
-    papersWithOverrides,
+    papersWithOwnDesign,
     resolveHeaderConfig,
+    startOwnDesign,
+    withDesignFor,
 } from '@/lib/print';
 // Imported from the hook module directly: `@/lib/print` stays React-free so the
 // printer libs can import it without pulling in a client component.
@@ -27,7 +32,7 @@ import { formatDate } from '@/lib/format';
 import BranchAssignments from './BranchAssignments';
 import HeaderEditor from './HeaderEditor';
 import HeaderPreview from './HeaderPreview';
-import PaperSizeOverrides from './PaperSizeOverrides';
+import PaperDesignPanel from './PaperDesignPanel';
 import { CheckboxRow } from './TemplateBlocks';
 
 interface PrintTemplate {
@@ -202,9 +207,11 @@ export default function PrintTemplatesPage() {
         ...(previewQr && !isThermalPaper(paperSize) ? { docQr: SAMPLE_QR, hideDocMeta: true } : {}),
     }), [branding.businessName, previewQr, paperSize]);
 
-    // Papers that print sizes of their own, named on the main design's view so
-    // nobody edits a size on A4 and wonders why A5 did not follow.
-    const papersDiffering = papersWithOverrides(config).filter((paper) => paper !== paperSize);
+    // The editor works on the design the previewed paper prints: its own when
+    // it has one, otherwise the main design, which A4 and every other paper share.
+    const ownDesign = hasOwnDesign(config, paperSize);
+    const design = designFor(config, paperSize);
+    const separatePapers = papersWithOwnDesign(config).filter((paper) => paper !== paperSize);
 
     return (
         <PageShell>
@@ -281,10 +288,13 @@ export default function PrintTemplatesPage() {
                             onIsDefaultChange={setIsDefault}
                             docTypes={docTypes}
                             onDocTypesChange={setDocTypes}
-                            config={config}
-                            onConfigChange={setConfig}
+                            config={design}
+                            onConfigChange={(next) => setConfig(withDesignFor(config, paperSize, next))}
                             onUpload={uploadImage}
                             uploading={uploading}
+                            designNote={ownDesign
+                                ? fmt(copy.paperDesigns.editing, { paper: paperSizeLabel(paperSize) })
+                                : undefined}
                         />
 
                         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-3 md:p-4 lg:sticky lg:top-4 lg:self-start">
@@ -309,16 +319,17 @@ export default function PrintTemplatesPage() {
                                 </div>
                             </div>
 
-                            {OVERRIDE_PAPERS.includes(paperSize) ? (
-                                <PaperSizeOverrides
-                                    config={config}
+                            {OWN_DESIGN_PAPERS.includes(paperSize) ? (
+                                <PaperDesignPanel
                                     paperSize={paperSize}
-                                    onConfigChange={setConfig}
+                                    own={ownDesign}
+                                    onStart={() => setConfig(startOwnDesign(config, paperSize))}
+                                    onDrop={() => setConfig(dropOwnDesign(config, paperSize))}
                                 />
-                            ) : papersDiffering.length ? (
+                            ) : separatePapers.length ? (
                                 <p className="text-xs text-gray-500">
-                                    {fmt(copy.paperSizes.othersDiffer, {
-                                        papers: papersDiffering.map(paperSizeLabel).join(', '),
+                                    {fmt(copy.paperDesigns.othersOwn, {
+                                        papers: separatePapers.map(paperSizeLabel).join(', '),
                                     })}
                                 </p>
                             ) : null}

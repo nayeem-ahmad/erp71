@@ -10,6 +10,7 @@ import {
     renderHeaderHtml,
     resolveHeaderConfig,
 } from './header';
+import { DEFAULT_HEADER_CONFIG } from './types';
 import type { HeaderContext, PrintHeaderConfig, DeepPartial } from './types';
 
 const ctx: HeaderContext = {
@@ -511,51 +512,53 @@ describe('line formatting', () => {
     });
 });
 
-describe('line size per paper', () => {
-    // A5 prints the same lines as A4, only smaller: the scale is set per paper
-    // so the lines themselves are never copied.
+describe('a paper with a design of its own', () => {
     const config: DeepPartial<PrintHeaderConfig> = {
-        lines: [{ text: 'Head line', fontSizePt: 9 }, { text: 'Base line' }],
-        baseFontSizePt: 10,
-        footer: { show: true, lines: [{ text: 'Foot line', fontSizePt: 8 }] },
-        perPaper: { A5: { lineScalePct: 80 } },
+        layout: 'logo-left',
+        logo: { url: 'https://cdn.test/a4-logo.png', heightMm: 18, maxWidthMm: 60 },
+        company: { fontSizePt: 18, color: '#dc2626' },
+        lines: [{ text: 'A4 line' }],
+        footer: { show: false },
+        paperDesigns: {
+            A5: {
+                layout: 'text-only',
+                company: { fontSizePt: 12 },
+                lines: [{ text: 'A5 line' }],
+                footer: { show: true, repeatOnEveryPage: true, lines: [{ text: 'A5 bank details' }] },
+            },
+        },
     };
 
-    it('scales every header line on the paper that sets it', () => {
-        const html = renderHeaderHtml(config, ctx, 'A5');
+    it('prints that design on that paper', () => {
+        const resolved = resolveHeaderConfig(config, 'A5');
 
-        expect(html).toContain('font-size:7.2pt');
-        // A line without a size of its own scales from the base size.
-        expect(html).toContain('font-size:8pt');
+        expect(resolved.layout).toBe('text-only');
+        expect(resolved.company.fontSizePt).toBe(12);
+        expect(renderHeaderHtml(config, ctx, 'A5')).toContain('A5 line');
+        expect(renderHeaderHtml(config, ctx, 'A5')).not.toContain('A4 line');
     });
 
-    it('scales the footer lines with them', () => {
-        expect(renderFooterHtml(config, ctx, 'A5')).toContain('font-size:6.4pt');
+    it('borrows nothing from the main design', () => {
+        // Left unset on A5, so A5 prints the defaults — not A4's choices.
+        const resolved = resolveHeaderConfig(config, 'A5');
+
+        expect(resolved.company.color).toBe(DEFAULT_HEADER_CONFIG.company.color);
+        expect(resolved.logo.url).toBeUndefined();
+        expect(resolved.logo.maxWidthMm).toBeUndefined();
     });
 
-    it('leaves the other paper sizes at the sizes the lines carry', () => {
-        const html = renderHeaderHtml(config, ctx, 'A4');
-
-        expect(html).toContain('font-size:9pt');
-        expect(html).toContain('font-size:10pt');
+    it('prints and places its own footer', () => {
+        expect(renderFooterHtml(config, ctx, 'A5')).toContain('A5 bank details');
+        expect(footerRepeats(config, 'A5')).toBe(true);
+        expect(hasFooter(config, ctx, 'A5')).toBe(true);
     });
 
-    it('keeps an unscaled size exactly as stored', () => {
-        // No rounding without a scale: a stored 9.25pt must print as 9.25pt,
-        // or every existing template would shift.
-        const html = renderHeaderHtml({ lines: [{ text: 'x', fontSizePt: 9.25 }] }, ctx, 'A4');
-
-        expect(html).toContain('font-size:9.25pt');
-    });
-
-    it('clamps the scale to a readable range', () => {
-        const html = renderHeaderHtml(
-            { lines: [{ text: 'x', fontSizePt: 10 }], perPaper: { A5: { lineScalePct: 5 } } },
-            ctx,
-            'A5',
-        );
-
-        expect(html).toContain('font-size:5pt');
+    it('leaves every other paper on the main design', () => {
+        for (const paper of ['A4', 'Letter'] as const) {
+            expect(resolveHeaderConfig(config, paper).company.fontSizePt).toBe(18);
+            expect(renderHeaderHtml(config, ctx, paper)).toContain('A4 line');
+            expect(renderFooterHtml(config, ctx, paper)).toBe('');
+        }
     });
 });
 

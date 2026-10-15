@@ -206,14 +206,18 @@ function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): Prin
 }
 
 /**
- * Produces the effective config: defaults → stored config → per-paper
- * overrides → thermal coercion.
+ * Produces the effective config: defaults → stored config (or the paper's
+ * own design, when it has one) → per-paper overrides → thermal coercion.
  */
 export function resolveHeaderConfig(
     config: DeepPartial<PrintHeaderConfig> | undefined,
     paperSize: PaperSize,
 ): PrintHeaderConfig {
-    const merged = mergeDeep(DEFAULT_HEADER_CONFIG, config);
+    // A paper with a design of its own prints that design alone. It is filled
+    // from the defaults, never from the main design, so an option left unset
+    // there stays unset rather than quietly taking the A4 value.
+    const design = config?.paperDesigns?.[paperSize] ?? config;
+    const merged = mergeDeep(DEFAULT_HEADER_CONFIG, design);
     const withPaper = mergeDeep(merged, merged.perPaper?.[paperSize]);
     return coerceForThermal(withPaper, paperSize);
 }
@@ -284,21 +288,9 @@ function titleSlot(position: TitlePosition): { row: string; align: Alignment } {
     return { row, align: alignment(align, 'right') };
 }
 
-/**
- * A line's printed size in pt, after the paper's `lineScalePct`.
- *
- * Rounded only when scaled: an unscaled size prints exactly as stored, so a
- * template that never sets a scale renders byte for byte as it did before.
- */
-function lineFontSize(line: HeaderLine, config: PrintHeaderConfig): number {
-    const size = num(line.fontSizePt, config.baseFontSizePt, 5, 48);
-    const scale = num(config.lineScalePct, 100, 50, 150);
-    return scale === 100 ? size : Math.round(size * scale) / 100;
-}
-
 function lineStyle(line: HeaderLine, config: PrintHeaderConfig): string {
     const parts = [
-        `font-size:${lineFontSize(line, config)}pt`,
+        `font-size:${num(line.fontSizePt, config.baseFontSizePt, 5, 48)}pt`,
         `color:${cssColor(line.color, '#555555')}`,
     ];
     if (line.bold) parts.push('font-weight:bold');

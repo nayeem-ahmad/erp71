@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
+import { validate, ValidationError } from 'class-validator';
 import { CreatePrintTemplateDto, ResolvePrintTemplateQueryDto, UpsertPrintTemplateAssignmentDto } from './print-templates.dto';
 
 /**
@@ -81,27 +81,44 @@ describe('CreatePrintTemplateDto', () => {
         ).toHaveLength(0);
     });
 
-    it('accepts a v5 config that prints its own sizes on A5 and Letter', async () => {
-        const config = {
+    describe('a paper designed separately (v5)', () => {
+        /** Every failing property, as a dotted path from the template body. */
+        const errorPaths = (errors: ValidationError[], prefix = ''): string[] =>
+            errors.flatMap((error) => {
+                const path = prefix ? `${prefix}.${error.property}` : error.property;
+                return error.children?.length ? errorPaths(error.children, path) : [path];
+            });
+        const a5 = {
             ...base,
             version: 5,
-            perPaper: {
-                A5: {
-                    logo: { heightMm: 11 },
-                    company: { fontSizePt: 12 },
-                    title: { fontSizePt: 14 },
-                    lineScalePct: 85,
-                    spacingMm: 2,
-                    qr: { sizeMm: 16 },
-                },
-                Letter: { spacingMm: 6 },
-            },
+            layout: 'text-only',
+            company: { ...base.company, fontSizePt: 12 },
+            lines: [{ text: 'A5 only' }],
+            footer,
         };
-        const dto = plainToInstance(CreatePrintTemplateDto, { name: 'Letterhead', config });
 
-        expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
-        // The whitelist must not strip the overrides on the way to the database.
-        expect(dto.config.perPaper).toEqual(config.perPaper);
+        it('accepts a full design for A5 and Letter', async () => {
+            const config = { ...base, version: 5, paperDesigns: { A5: a5, Letter: { ...a5, spacingMm: 6 } } };
+            const dto = plainToInstance(CreatePrintTemplateDto, { name: 'Letterhead', config });
+
+            expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
+            // The whitelist must not strip the design on its way to the database.
+            expect(JSON.parse(JSON.stringify(dto.config.paperDesigns))).toEqual(config.paperDesigns);
+        });
+
+        it('validates the paper\'s design as strictly as the main one', async () => {
+            const unsafe = { ...a5, logo: { heightMm: 16, showOnThermal: true, url: 'javascript:alert(1)' } };
+
+            const errors = await parse({ ...base, version: 5, paperDesigns: { A5: unsafe } });
+
+            expect(errorPaths(errors)).toEqual(['config.paperDesigns.A5.logo.url']);
+        });
+
+        it('rejects a design for a paper the editor cannot design', async () => {
+            const errors = await parse({ ...base, version: 5, paperDesigns: { Thermal80: a5 } });
+
+            expect(errorPaths(errors)).toEqual(['config.paperDesigns.Thermal80']);
+        });
     });
 
     it('rejects a version the renderer does not know', async () => {
