@@ -465,6 +465,32 @@ describe('member layout preferences', () => {
         expect(render(baseInvoice, 'Thermal80', { signature_lines: true })).not.toContain('Authorised Signature');
     });
 
+    describe('space above the signature lines', () => {
+        const override = /\.signatures, html\.p71-compact \.signatures \{ margin-top:(\d+)mm; \}/;
+
+        it('keeps the built-in gap, and the compact one, when the member has not set it', () => {
+            const html = render(baseInvoice, 'A4', { signature_lines: true });
+
+            expect(ruleFor(html, '.signatures')).toContain('margin-top:48px');
+            expect(ruleFor(html, 'html.p71-compact .signatures')).toContain('margin-top:28px');
+            expect(html).not.toMatch(override);
+        });
+
+        it('opens the gap the member chose, compact or not', () => {
+            const html = render(baseInvoice, 'A4', { signature_lines: true, signature_space_mm: 30 });
+
+            expect(html.match(override)?.[1]).toBe('30');
+            // After the compact rule, so the member's answer is the last word.
+            expect(html.search(override)).toBeGreaterThan(html.indexOf('html.p71-compact .signatures { margin-top:28px; }'));
+        });
+
+        it('carries to the detailed design', () => {
+            const html = render(baseInvoice, 'A4', { layout: 'detailed', signature_lines: true, signature_space_mm: 12 });
+
+            expect(html.match(override)?.[1]).toBe('12');
+        });
+    });
+
     describe('footer text', () => {
         it('prints the built-in thank-you by default', () => {
             expect(render(baseInvoice, 'A4', { footer_text: null })).toContain('Thank you for your business!');

@@ -59,6 +59,13 @@ export type InvoiceTableStyle = (typeof INVOICE_TABLE_STYLES)[number];
 /** Long enough for a return policy, short enough to stay a footer. */
 export const INVOICE_FOOTER_MAX_LENGTH = 500;
 
+/**
+ * The gap above the signature lines, in whole mm: room for a signature at the
+ * bottom of the range, a signature under a company seal at the top. Past 40mm
+ * the closing block of a full invoice no longer fits under its last rows.
+ */
+export const INVOICE_SIGNATURE_SPACE_MM = { min: 5, max: 40 } as const;
+
 export interface InvoicePrintPrefs {
   version: 1;
   layout: InvoiceLayout;
@@ -82,6 +89,11 @@ export interface InvoicePrintPrefs {
    * string prints no footer at all — the two are different answers.
    */
   footer_text: string | null;
+  /**
+   * Space above the signature lines, in mm — see `INVOICE_SIGNATURE_SPACE_MM`.
+   * `null` keeps the built-in gap, which the compact setting tightens.
+   */
+  signature_space_mm: number | null;
 }
 
 /** Exactly how the invoice printed before any of this was configurable. */
@@ -98,6 +110,7 @@ export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   warranty_column: 'always',
   table_borders: 'none',
   footer_text: null,
+  signature_space_mm: null,
 };
 
 function oneOf<T extends string>(options: readonly T[], value: unknown, fallback: T): T {
@@ -108,6 +121,13 @@ function oneOf<T extends string>(options: readonly T[], value: unknown, fallback
 
 function bool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+/** A whole number of mm inside the signature-space range, or the built-in gap. */
+function signatureSpace(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const { min, max } = INVOICE_SIGNATURE_SPACE_MM;
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 /**
@@ -144,5 +164,6 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
       typeof r.footer_text === 'string'
         ? r.footer_text.slice(0, INVOICE_FOOTER_MAX_LENGTH)
         : d.footer_text,
+    signature_space_mm: signatureSpace(r.signature_space_mm),
   };
 }

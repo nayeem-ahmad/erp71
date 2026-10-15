@@ -1,8 +1,9 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
     INVOICE_FOOTER_MAX_LENGTH,
+    INVOICE_SIGNATURE_SPACE_MM,
     type InvoiceBalanceMode,
     type InvoiceLayout,
     type InvoicePadding,
@@ -11,8 +12,8 @@ import {
     type InvoiceTableStyle,
     type InvoiceWarrantyColumn,
 } from '@erp71/shared-types';
-import { Checkbox, Field, Select, Textarea } from '@/components/ui';
-import { useI18n } from '@/lib/i18n';
+import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui';
+import { formatMessage, useI18n } from '@/lib/i18n';
 
 type FooterMode = 'default' | 'custom' | 'none';
 
@@ -22,16 +23,28 @@ function footerMode(text: string | null): FooterMode {
     return text === '' ? 'none' : 'custom';
 }
 
+/** Typed mm as a gap the printer takes, `null` for blank, or `undefined` when it is neither. */
+function parseSignatureSpace(text: string): number | null | undefined {
+    const trimmed = text.trim();
+    if (trimmed === '') return null;
+    if (!/^\d+$/.test(trimmed)) return undefined;
+    const mm = Number(trimmed);
+    const { min, max } = INVOICE_SIGNATURE_SPACE_MM;
+    return mm >= min && mm <= max ? mm : undefined;
+}
+
 export interface InvoiceLayoutFieldsProps {
     value: InvoicePrintPrefs;
     onChange: (next: InvoicePrintPrefs) => void;
+    /** Told whenever the fields start or stop holding something that can be saved. */
+    onValidityChange?: (valid: boolean) => void;
 }
 
 /**
  * The member's own invoice layout, as form controls. Controlled, so the modal
  * holding it decides when anything is saved.
  */
-export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFieldsProps) {
+export default function InvoiceLayoutFields({ value, onChange, onValidityChange }: InvoiceLayoutFieldsProps) {
     const { t } = useI18n();
     const copy = t.sales.printSettings.invoiceLayout;
     const id = useId();
@@ -44,6 +57,16 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
     // box they are about to type in. Saved empty, it does mean no footer.
     const [mode, setMode] = useState<FooterMode>(() => footerMode(value.footer_text));
     const [customText, setCustomText] = useState(mode === 'custom' ? (value.footer_text ?? '') : '');
+
+    // Held as typed, so a half-typed or out-of-range gap stays on screen with
+    // its error instead of snapping back; only a usable one reaches the layout.
+    const [spaceText, setSpaceText] = useState(value.signature_space_mm == null ? '' : String(value.signature_space_mm));
+    const spaceInvalid = parseSignatureSpace(spaceText) === undefined;
+    // A bad gap only blocks saving while its field is on screen to fix.
+    const valid = !(value.signature_lines && spaceInvalid);
+    useEffect(() => {
+        onValidityChange?.(valid);
+    }, [valid, onValidityChange]);
 
     const toggles: { key: 'amount_in_words' | 'serial_column' | 'signature_lines' | 'hide_empty_discount'; label: string }[] = [
         { key: 'amount_in_words', label: copy.amountInWords },
@@ -135,6 +158,33 @@ export default function InvoiceLayoutFields({ value, onChange }: InvoiceLayoutFi
                     </label>
                 ))}
             </div>
+
+            {value.signature_lines && (
+                <Field
+                    label={copy.signatureSpaceLabel}
+                    htmlFor={`${id}-signature-space`}
+                    hint={copy.signatureSpaceHint}
+                    error={spaceInvalid ? formatMessage(copy.signatureSpaceError, INVOICE_SIGNATURE_SPACE_MM) : undefined}
+                >
+                    <Input
+                        id={`${id}-signature-space`}
+                        type="number"
+                        inputMode="numeric"
+                        min={INVOICE_SIGNATURE_SPACE_MM.min}
+                        max={INVOICE_SIGNATURE_SPACE_MM.max}
+                        step={1}
+                        className="w-32"
+                        placeholder={copy.signatureSpaceDefault}
+                        value={spaceText}
+                        error={spaceInvalid}
+                        onChange={(e) => {
+                            setSpaceText(e.target.value);
+                            const mm = parseSignatureSpace(e.target.value);
+                            if (mm !== undefined) set('signature_space_mm', mm);
+                        }}
+                    />
+                </Field>
+            )}
 
             <Field label={copy.footerLabel} htmlFor={`${id}-footer`}>
                 <Select

@@ -81,6 +81,7 @@ export default function PrintSettingsModal({
     const [layout, setLayout] = useState(invoiceLayout?.prefs);
     const [saving, setSaving] = useState(false);
     const [layoutError, setLayoutError] = useState(false);
+    const [layoutValid, setLayoutValid] = useState(true);
 
     const handleSave = async () => {
         if (invoiceLayout && layout) {
@@ -171,7 +172,7 @@ export default function PrintSettingsModal({
                             <h3 className="text-sm font-semibold text-gray-700">{copy.invoiceLayout.heading}</h3>
                             <p className="text-xs text-gray-400">{copy.invoiceLayout.hint}</p>
                         </div>
-                        <InvoiceLayoutFields value={layout} onChange={setLayout} />
+                        <InvoiceLayoutFields value={layout} onChange={setLayout} onValidityChange={setLayoutValid} />
                         {layoutError && <Alert tone="danger">{copy.invoiceLayout.saveFailed}</Alert>}
                     </section>
                 )}
@@ -181,7 +182,7 @@ export default function PrintSettingsModal({
                 <Button type="button" variant="secondary" onClick={onClose}>
                     {t.common.cancel}
                 </Button>
-                <Button type="button" loading={saving} onClick={() => void handleSave()}>
+                <Button type="button" loading={saving} disabled={!layoutValid} onClick={() => void handleSave()}>
                     {t.common.save}
                 </Button>
             </ModalFooter>
