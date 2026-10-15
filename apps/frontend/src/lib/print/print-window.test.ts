@@ -754,6 +754,21 @@ describe('preview sheet', () => {
         expect(html).not.toContain('min-height: 297mm');
     });
 
+    it('draws a bare sheet for a frame that is already the paper', () => {
+        const html = buildPrintDocument({ ...base, sheet: true });
+
+        // The letterhead designer's preview: the content keeps the page margin,
+        // so a line wraps where it wraps on paper ...
+        expect(html).toContain('<div class="p71-pv-sheet"><div class="p71-wrap">');
+        expect(html).toContain('padding: 15mm');
+        expect(html).not.toContain('max-width: 780px');
+        // ... but with no toolbar, and no backdrop or gap around the sheet —
+        // the frame's own edge is the paper's.
+        expect(html).not.toContain('p71-pv no-print');
+        expect(html).not.toContain('background: #9ca3af');
+        expect(html).not.toContain('margin: 16px auto');
+    });
+
     it('keeps the sheet out of the printed document', () => {
         const html = buildPrintDocument({ ...base, preview: previewOpts });
 

@@ -192,6 +192,15 @@ export interface PrintDocumentOptions {
      */
     preview?: PrintPreviewOptions;
     /**
+     * Draw the document on the preview's paper-shaped sheet — paper width,
+     * `@page` margin as padding — with no toolbar and no backdrop, so the
+     * sheet is the whole viewport. For a frame already drawn to the paper's
+     * size, like the letterhead designer's preview: without it the content
+     * runs the frame's full width, wider than the printable area, and a line
+     * that fits on screen wraps on paper. Implied by `preview`.
+     */
+    sheet?: boolean;
+    /**
      * Several documents in one job — a batch of invoices. Each is laid out
      * exactly as it would print alone (its own letterhead, its own tenant
      * footer, the same repeat and pin rules) and starts on a fresh page, so
@@ -315,8 +324,11 @@ const PAGE_WIDTH_MM: Record<PaperSize, number> = {
  *
  * Screen-only. On paper the page box already is the sheet, so every rule here
  * is switched off in print.
+ *
+ * `framed` sets the sheet on a grey backdrop, as a page in a window. Without
+ * it the sheet is the viewport — for a frame that is itself the paper.
  */
-function previewSheetCss(paperSize: PaperSize): string {
+function previewSheetCss(paperSize: PaperSize, framed: boolean): string {
     const margin = PAGE_MARGIN_MM[paperSize];
     const width = PAGE_WIDTH_MM[paperSize];
     const heightMm = PAGE_CONTENT_HEIGHT_MM[paperSize];
@@ -328,15 +340,15 @@ function previewSheetCss(paperSize: PaperSize): string {
 
     return `
         @media screen {
-            body { background: #9ca3af; }
+            ${framed ? 'body { background: #9ca3af; }' : ''}
             .p71-pv-sheet {
                 width: ${width}mm;
                 ${sheetHeight}
                 box-sizing: border-box;
                 padding: ${margin}mm;
-                margin: 16px auto;
+                ${framed ? `margin: 16px auto;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.28);` : ''}
                 background: #fff;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.28);
                 overflow: hidden;
             }
         }
@@ -500,7 +512,8 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     // A batch draws each document on its own paper in the preview and starts
     // each on a fresh page in print. A single document keeps its old markup.
     const jobClass = batch ? ' p71-job' : '';
-    const body = opts.preview
+    const onSheet = !!opts.preview || !!opts.sheet;
+    const body = onSheet
         ? contents
             .map((c) => `<div class="p71-pv-sheet${jobClass}"><div class="p71-wrap">${c}</div></div>`)
             .join('\n')
@@ -521,8 +534,8 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             color: #111;
             background: #fff;
         }
-        ${wrapCss(thermal, bleeds, !!opts.preview)}
-        ${opts.preview ? previewSheetCss(opts.paperSize) : ''}
+        ${wrapCss(thermal, bleeds, onSheet)}
+        ${onSheet ? previewSheetCss(opts.paperSize, !!opts.preview) : ''}
         .p71-doc { width: 100%; border-collapse: collapse; }
         /* A footer band is one piece: never split across a page break. */
         @media print { .p71-ft, .p71-doc-ft { break-inside: avoid; } }

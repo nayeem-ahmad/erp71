@@ -4,13 +4,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildPrintDocument, isThermalPaper, renderHeaderHtml } from '@/lib/print';
 import type { HeaderContext, PaperSize, PrintHeaderConfig } from '@/lib/print';
 
-/** Paper widths/heights at 96dpi — the preview renders at true size, then scales. */
+/**
+ * Paper widths/heights at 96dpi — the preview renders at true size, then scales.
+ * Rounded up: the document draws its sheet to the paper's exact mm width, and a
+ * frame a fraction of a pixel narrower would scroll sideways.
+ */
 const PAPER_PX: Record<PaperSize, { width: number; height: number }> = {
     A4: { width: 794, height: 1123 },
-    A5: { width: 559, height: 794 },
-    Letter: { width: 816, height: 1056 },
-    Thermal80: { width: 302, height: 640 },
-    Thermal58: { width: 219, height: 640 },
+    A5: { width: 560, height: 794 },
+    Letter: { width: 817, height: 1056 },
+    Thermal80: { width: 303, height: 640 },
+    Thermal58: { width: 220, height: 640 },
 };
 
 interface HeaderPreviewProps {
@@ -45,10 +49,12 @@ export default function HeaderPreview({ config, paperSize, context, bodyLabel }:
         const bodyHtml = `<p style="color:#9ca3af;font-size:${isThermalPaper(paperSize) ? '10' : '12'}px">${bodyLabel}</p>`;
 
         // `buildPrintDocument` renders the tenant footer from the config, so the
-        // preview shows the footer exactly as a real print would.
+        // preview shows the footer exactly as a real print would. The sheet
+        // keeps the page margin, so text wraps at the printed width.
         return buildPrintDocument({
             title: 'preview',
             paperSize,
+            sheet: true,
             headerConfig: config,
             headerHtml,
             bodyHtml,

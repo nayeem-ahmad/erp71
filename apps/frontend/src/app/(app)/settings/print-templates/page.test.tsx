@@ -193,6 +193,15 @@ describe('PrintTemplatesPage', () => {
         );
     });
 
+    it('previews the letterhead inside the page margin, so lines wrap as they print', async () => {
+        render(<PrintTemplatesPage />);
+        await screen.findByDisplayValue('Letterhead');
+        const preview = screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
+
+        expect(preview).toContain('<div class="p71-pv-sheet"><div class="p71-wrap">');
+        expect(preview).toContain('padding: 15mm');
+    });
+
     describe('the QR code', () => {
         const preview = () => screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
 
