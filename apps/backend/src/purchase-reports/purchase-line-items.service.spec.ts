@@ -33,10 +33,10 @@ describe('purchaseLineFilter', () => {
         expect(where).toEqual({ purchase });
     });
 
-    it('reads the dates as whole days in the tenant’s zone, on the date the bill was entered', () => {
+    it('reads the dates as whole days in the tenant’s zone, on the transaction date', () => {
         const { purchase } = purchaseLineFilter(TENANT, { from: '2026-03-01', to: '2026-03-01' }, TZ);
 
-        expect(purchase.created_at).toEqual({
+        expect(purchase.purchase_date).toEqual({
             gte: new Date('2026-02-28T18:00:00.000Z'),
             lte: new Date('2026-03-01T17:59:59.999Z'),
         });
@@ -97,7 +97,7 @@ describe('PurchaseLineItemsService', () => {
 
         expect(db.purchaseItem.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                orderBy: [{ purchase: { created_at: 'desc' } }, { purchase: { purchase_number: 'desc' } }, { id: 'asc' }],
+                orderBy: [{ purchase: { purchase_date: 'desc' } }, { purchase: { purchase_number: 'desc' } }, { id: 'asc' }],
                 skip: 0,
                 take: 25,
             }),
@@ -109,7 +109,7 @@ describe('PurchaseLineItemsService', () => {
 
         expect(db.purchaseItem.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                orderBy: [{ line_total: 'desc' }, { purchase: { created_at: 'desc' } }, { id: 'asc' }],
+                orderBy: [{ line_total: 'desc' }, { purchase: { purchase_date: 'desc' } }, { id: 'asc' }],
                 skip: 50,
                 take: 50,
             }),

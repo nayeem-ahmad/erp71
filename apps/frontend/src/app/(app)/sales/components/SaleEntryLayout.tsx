@@ -16,6 +16,7 @@ import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
 import type { SalesRepOption } from '@/lib/hooks/useSalesReps';
 import { useI18n } from '@/lib/i18n';
 import { computeEntryTax, computeSaleTax, resolveTaxRate, type MushakTaxRates } from '@erp71/shared-types';
+import { roundMoney, type StoredInvoiceExtras } from '@/lib/sale-extras';
 
 /**
  * Which of the two discount figures the user is typing. Shops that negotiate
@@ -162,6 +163,36 @@ export function computeSaleTotals(
         postedDiscount: pricing.pricesIncludeVat ? discount : entry.postedDiscount,
         total,
     };
+}
+
+/**
+ * The adjustments an existing sale reopens with.
+ *
+ * Transport, labour and the free-form adjustment come back from the columns
+ * they were saved in. Anything still unexplained — a sale written before those
+ * columns, or a discount that lives only in the total — is added to the
+ * adjustment, so the total the customer was charged is what the form shows
+ * and what a re-save writes back.
+ */
+export function adjustmentsForStoredSale(
+    items: LineItem[],
+    pricing: VatPricing,
+    total: number,
+    stored: StoredInvoiceExtras,
+    discountAmount: number,
+): SaleAdjustments {
+    const base: SaleAdjustments = {
+        ...EMPTY_ADJUSTMENTS,
+        transportCost: stored.transportCost,
+        laborCost: stored.laborCost,
+        rounding: stored.rounding,
+        ...(discountAmount > 0.005
+            ? { discountMode: 'AMOUNT' as const, discountAmount }
+            : {}),
+    };
+    const unexplained = roundMoney(total - computeSaleTotals(items, base, pricing).total);
+    if (Math.abs(unexplained) <= 0.005) return base;
+    return { ...base, rounding: roundMoney(base.rounding + unexplained) };
 }
 
 interface SaleEntryLayoutProps {

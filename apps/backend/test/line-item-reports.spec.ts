@@ -189,6 +189,7 @@ describe('Line-item reports (integration)', () => {
                     purchase_number: data.number,
                     reference_number: data.reference ?? null,
                     status: data.status ?? 'RECORDED',
+                    purchase_date: new Date(data.date),
                     created_at: new Date(data.date),
                     total_amount: data.lines.reduce((sum, l) => sum + l.quantity * l.cost, 0),
                     items: {

@@ -573,12 +573,13 @@ export class ManufacturingService {
                     select: {
                         id: true,
                         purchase_number: true,
+                        purchase_date: true,
                         created_at: true,
                         supplier: { select: { id: true, name: true } },
                     },
                 },
             },
-            orderBy: { purchase: { created_at: 'desc' } },
+            orderBy: { purchase: { purchase_date: 'desc' } },
             take: Math.min(limit, 200),
         });
 
@@ -603,7 +604,7 @@ export class ManufacturingService {
                     purchaseId: item.purchase.id,
                     purchaseNumber: item.purchase.purchase_number,
                     supplierName: item.purchase.supplier?.name ?? null,
-                    purchaseDate: item.purchase.created_at,
+                    purchaseDate: item.purchase.purchase_date ?? item.purchase.created_at,
                     lineTotal: Number(item.line_total),
                     allocatedAmount: allocated,
                     remainingAmount: Number(item.line_total) - allocated,

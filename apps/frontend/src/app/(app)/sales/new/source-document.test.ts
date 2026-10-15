@@ -28,6 +28,18 @@ describe('seedFromSale (Duplicate)', () => {
         expect(seeded.items[0].price).toBe(1150);
         expect(seeded.rounding).toBe(-11.5);
         expect(seeded.discountAmount).toBe(0);
+        expect(seeded.transportCost).toBe(0);
+    });
+
+    it('copies a stored transport charge into Transport, and leaves the adjustment at zero', () => {
+        const seeded = seedFromSale(
+            sale({ total_amount: '1250', transport_cost: '100', prices_include_vat: true }),
+            INCLUDED,
+        );
+
+        expect(seeded.transportCost).toBe(100);
+        expect(seeded.rounding).toBe(0);
+        expect(seeded.discountAmount).toBe(0);
     });
 });
 

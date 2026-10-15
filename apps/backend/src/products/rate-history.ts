@@ -81,7 +81,7 @@ export function mapPurchaseItemToRateRow(item: any): RateHistoryRow {
     return {
         documentId: item.purchase.id,
         documentNumber: item.purchase.reference_number || item.purchase.purchase_number,
-        date: new Date(item.purchase.created_at).toISOString(),
+        date: new Date(item.purchase.purchase_date ?? item.purchase.created_at).toISOString(),
         partyId: item.purchase.supplier_id ?? null,
         partyName: item.purchase.supplier?.name ?? null,
         quantity,

@@ -245,6 +245,18 @@ step sync:story-code \
 step sync:party-branch \
     env DIRECT_URL="$DATABASE_URL" npm run sync:party-branch --workspace=@erp71/database
 
+# sync:purchase-date runs BEFORE db push, and is REQUIRED for the purchase
+# transaction-date release. Migration 20261014120000 adds purchase_date NOT NULL
+# DEFAULT CURRENT_TIMESTAMP and then copies created_at over it. Production never
+# runs that file. db push would keep the default, so every bill already in the
+# database would be dated at the deploy clock — reports, stock and the supplier
+# statement would all read that instant as when the purchase happened. This adds
+# the column nullable, copies created_at onto NULL rows only, and sets NOT NULL
+# before the push. A date an operator has since chosen is left alone. See
+# prisma/sync-purchase-date.ts.
+step sync:purchase-date \
+    env DIRECT_URL="$DATABASE_URL" npm run sync:purchase-date --workspace=@erp71/database
+
 # ---- The schema itself -----------------------------------------------------
 
 # --accept-data-loss: see "Running while the old code serves" above.

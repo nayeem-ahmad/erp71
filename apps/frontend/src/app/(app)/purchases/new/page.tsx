@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Copy } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { toDatetimeLocal } from '@/lib/format';
 import { routes } from '@/lib/routes';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -37,6 +38,15 @@ function NewPurchasePageContent() {
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [submitting, setSubmitting] = useState(false);
     const [duplicatedFrom, setDuplicatedFrom] = useState('');
+    const [transactionDate, setTransactionDate] = useState<string>(() => toDatetimeLocal(new Date()));
+    // Seeded when the page opens. Until the operator picks a time, none is
+    // sent and the server stamps the moment the bill posts — otherwise every
+    // purchase would carry the opening minute.
+    const [transactionDatePicked, setTransactionDatePicked] = useState(false);
+    const pickTransactionDate = (value: string) => {
+        setTransactionDate(value);
+        setTransactionDatePicked(true);
+    };
 
     useEffect(() => {
         api.getCurrentUser().then(setCurrentUser).catch(() => {});
@@ -110,11 +120,15 @@ function NewPurchasePageContent() {
 
         setSubmitting(true);
         try {
+            const pickedDate = transactionDatePicked && transactionDate ? new Date(transactionDate) : null;
             const purchase = await api.createPurchase({
                 // The active branch is persisted per workspace and sent as
                 // x-store-id on every request; the body needs the same id.
                 storeId: getWorkspaceItem('store_id') || '',
                 ...entry.billPayload(),
+                ...(pickedDate && !Number.isNaN(pickedDate.getTime())
+                    ? { purchaseDate: pickedDate.toISOString() }
+                    : {}),
             });
 
             toast.success(
@@ -145,6 +159,9 @@ function NewPurchasePageContent() {
             ) : undefined}
             onSubmit={handleSubmit}
             currentUser={currentUser}
+            transactionDate={transactionDate}
+            setTransactionDate={pickTransactionDate}
+            transactionDateEditable
             onVoiceResult={handleVoicePurchase}
             actions={
                 <>

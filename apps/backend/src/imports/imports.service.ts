@@ -1016,6 +1016,7 @@ export class ImportsService {
                     total_amount: new Prisma.Decimal(sheet.goods_value_bdt),
                     notes: dto.notes ?? `Import ${shipment.reference_number}`,
                     created_by: userId,
+                    purchase_date: receivedAt,
                     created_at: receivedAt,
                 },
             });

@@ -198,7 +198,7 @@ function NewSalePageContent() {
                 }
 
                 // Held separately from `seeded` because only a copied sale
-                // carries a rounding figure, and a union of the three seeds
+                // carries its adjustments, and a union of the three seeds
                 // loses the type of a field two of them do not have.
                 const duplicated = duplicateSaleId ? seedFromSale(doc, taxPricing) : null;
                 const seeded = duplicated
@@ -209,14 +209,21 @@ function NewSalePageContent() {
                     customer: seeded.customer,
                     description: seeded.description,
                 });
-                // A copied sale carries the gap between its line subtotal and
-                // its stored total, so the duplicate totals to the same figure.
-                // Before VAT, the gap is a discount the VAT goes on top of again.
+                // A copied sale carries the transport, labour and adjustment it
+                // was saved with, and — before VAT — the discount the VAT goes
+                // on top of again. A gap from before those were stored comes
+                // across as the adjustment, so the duplicate totals the same.
                 setAdjustments(!duplicated
                     ? EMPTY_ADJUSTMENTS
-                    : duplicated.discountAmount > 0
-                        ? { ...EMPTY_ADJUSTMENTS, discountMode: 'AMOUNT', discountAmount: duplicated.discountAmount }
-                        : { ...EMPTY_ADJUSTMENTS, rounding: duplicated.rounding });
+                    : {
+                        ...EMPTY_ADJUSTMENTS,
+                        ...(duplicated.discountAmount > 0
+                            ? { discountMode: 'AMOUNT' as const, discountAmount: duplicated.discountAmount }
+                            : {}),
+                        transportCost: duplicated.transportCost,
+                        laborCost: duplicated.laborCost,
+                        rounding: duplicated.rounding,
+                    });
                 if (duplicated?.warehouseId) setWarehouseId(duplicated.warehouseId);
                 // Reveal the column when the copied sale was genuinely split,
                 // so the overrides carried over are visible rather than silent.
@@ -431,6 +438,9 @@ function NewSalePageContent() {
             warehouseId: perLineWarehouse ? item.warehouseId : undefined,
         })),
         totalAmount: totals.total,
+        transportCost: totals.transportCost,
+        laborCost: totals.laborCost,
+        rounding: totals.rounding,
         amountPaid: payments.reduce((sum, p) => sum + p.amount, 0),
         discountAmount: totals.postedDiscount > 0 ? totals.postedDiscount : undefined,
         note: description || undefined,

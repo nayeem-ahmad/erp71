@@ -2574,6 +2574,7 @@ export class ExternalSyncService {
                     store_id: connection.store_id,
                     purchase_number: purchaseNumber,
                     created_at: mapped.purchaseDate,
+                    purchase_date: mapped.purchaseDate,
                     ...header,
                     items: { create: items },
                 },
@@ -2618,7 +2619,7 @@ export class ExternalSyncService {
         if (!connection.post_impacts) return false;
         const purchase = await this.db.purchase.findFirst({
             where: { id: purchaseId, tenant_id: connection.tenant_id },
-            select: { total_amount: true, paid_amount: true, supplier_id: true, purchase_number: true, created_at: true },
+            select: { total_amount: true, paid_amount: true, supplier_id: true, purchase_number: true, purchase_date: true, created_at: true },
         });
         const paid = purchase ? Math.min(Number(purchase.paid_amount), Number(purchase.total_amount)) : 0;
         if (!purchase || paid <= 0.005) return false;
@@ -2644,7 +2645,7 @@ export class ExternalSyncService {
                     purchaseNumber: purchase.purchase_number,
                     supplierId: purchase.supplier_id,
                     paid,
-                    purchaseDate: purchase.created_at,
+                    purchaseDate: purchase.purchase_date ?? purchase.created_at,
                 }),
             );
             return posting.postingStatus === 'posted';
@@ -2679,7 +2680,7 @@ export class ExternalSyncService {
     ): Promise<boolean> {
         const current = await tx.purchase.findFirst({
             where: { id: purchaseId, tenant_id: connection.tenant_id },
-            select: { total_amount: true, paid_amount: true, supplier_id: true, created_at: true },
+            select: { total_amount: true, paid_amount: true, supplier_id: true, purchase_date: true, created_at: true },
         });
         if (!current) return false;
         const total = Number(current.total_amount);
@@ -2719,7 +2720,7 @@ export class ExternalSyncService {
                     balance_after: balanceAfter,
                     reference_type: 'PURCHASE',
                     reference_id: purchaseId,
-                    created_at: current.created_at,
+                    created_at: current.purchase_date ?? current.created_at,
                 },
             });
         }

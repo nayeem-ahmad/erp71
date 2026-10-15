@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
+import { zonedDayRange } from '../common/tenant-time.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseDto, PurchaseBillDto, UpdatePurchaseDto } from './purchase.dto';
@@ -21,6 +22,7 @@ import { loadPreparerNames, preparerOf } from '../sales/sale-preparer.util';
 const PURCHASE_SORTABLE: SortableMap = {
     purchase_number: (dir) => ({ purchase_number: dir }),
     created_at: (dir) => ({ created_at: dir }),
+    purchase_date: (dir) => ({ purchase_date: dir }),
     total_amount: (dir) => ({ total_amount: dir }),
 };
 const PURCHASE_DEFAULT_ORDER = { created_at: 'desc' as const };
@@ -41,6 +43,20 @@ type BillAllocation = {
     amount: Prisma.Decimal | number;
     transaction: { id: string; type: string; amount: Prisma.Decimal | number; payment_number: string | null; reference_type: string | null; reference_id: string | null };
 };
+
+/**
+ * The bill's own time. Omitted, that is the moment it is posted — not the
+ * minute the screen was opened. A value that is not a date is refused rather
+ * than stored as Invalid Date.
+ */
+function resolvePurchaseDate(raw?: string): Date {
+    if (!raw) return new Date();
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+        throw new BadRequestException('Transaction date is not a valid date.');
+    }
+    return date;
+}
 
 /** A payment row the entry screen itself wrote for this bill — stamped with its id. */
 function isEntryPayment(allocation: BillAllocation, purchaseId: string) {
@@ -196,6 +212,8 @@ export class PurchasesService {
 
             const count = await tx.purchase.count({ where: { tenant_id: tenantId } });
             const purchaseNumber = `PUR-${String(count + 1).padStart(5, '0')}`;
+            // `created_at` is left to the database. This is the bill's own time.
+            const purchaseDate = resolvePurchaseDate(dto.purchaseDate);
 
             const purchase = await tx.purchase.create({
                 data: {
@@ -215,6 +233,7 @@ export class PurchasesService {
                     payment_status: purchasePaymentStatus(paidAmount, totalAmount),
                     notes: dto.notes,
                     created_by: userId,
+                    purchase_date: purchaseDate,
                     warehouse_id: warehouses.entryWarehouseId,
                 },
             });
@@ -268,6 +287,7 @@ export class PurchasesService {
                     referenceType: 'PURCHASE',
                     referenceId: purchase.id,
                     unitCost: landed.lines[index].landedUnitCost,
+                    occurredAt: purchaseDate,
                 });
             }
 
@@ -308,6 +328,8 @@ export class PurchasesService {
                         reference_type: 'PURCHASE',
                         reference_id: purchase.id,
                         created_by: userId,
+                        // The statement dates the bill, not the minute it was typed.
+                        created_at: purchaseDate,
                     },
                 });
 
@@ -337,6 +359,7 @@ export class PurchasesService {
                             payment_number: await nextSupplierPaymentNumber(tenantId, tx, 'PAYMENT'),
                             notes: `Paid on purchase ${purchase.purchase_number} (${payments.map((p) => p.paymentMethod).join(', ')})`,
                             created_by: userId,
+                            created_at: purchaseDate,
                         },
                     });
 
@@ -367,6 +390,7 @@ export class PurchasesService {
                 amount: Number(purchase.total_amount),
                 storeId: dto.storeId,
                 supplierId,
+                date: purchaseDate,
             });
 
             if (paidAmount > 0.005) {
@@ -377,6 +401,7 @@ export class PurchasesService {
                     storeId: dto.storeId,
                     supplierId,
                     paymentMethod: payments[0].paymentMethod,
+                    date: purchaseDate,
                 });
             }
 
@@ -523,9 +548,19 @@ export class PurchasesService {
         tenantId: string,
         page = 1,
         limit = 20,
-        opts?: { createdFrom?: string; createdTo?: string; timezone: string; storeId?: string; sortBy?: string; sortDir?: string },
+        opts?: {
+            createdFrom?: string;
+            createdTo?: string;
+            dateFrom?: string;
+            dateTo?: string;
+            timezone: string;
+            storeId?: string;
+            sortBy?: string;
+            sortDir?: string;
+        },
     ): Promise<PaginatedResult<unknown>> {
         const created = createdAtRange(opts?.createdFrom, opts?.createdTo, opts?.timezone);
+        const transaction = zonedDayRange(opts?.dateFrom, opts?.dateTo, opts?.timezone);
         const result = await paginatedFindMany({
             findMany: (args) =>
                 this.db.purchase.findMany({
@@ -538,7 +573,12 @@ export class PurchasesService {
                     },
                 }),
             count: (args) => this.db.purchase.count(args as any),
-            where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
+            where: {
+                tenant_id: tenantId,
+                ...(opts?.storeId ? { store_id: opts.storeId } : {}),
+                ...(created ? { created_at: created } : {}),
+                ...(transaction ? { purchase_date: transaction } : {}),
+            },
             orderBy: resolveOrderBy(opts?.sortBy, opts?.sortDir, PURCHASE_SORTABLE, PURCHASE_DEFAULT_ORDER),
             page,
             limit,
@@ -1101,7 +1141,7 @@ export class PurchasesService {
             // ── The books ────────────────────────────────────────────────────
             let posting: Awaited<ReturnType<PurchasesService['postBillVoucher']>> | null = null;
             if (Math.abs(bill.totalAmount - oldTotal) > EPSILON || supplierChanged) {
-                const date = await postedVoucherDate(tx, tenantId, 'purchase', id) ?? purchase.created_at;
+                const date = await postedVoucherDate(tx, tenantId, 'purchase', id) ?? purchase.purchase_date ?? purchase.created_at;
                 await voidAutoPostedVoucher(tx, tenantId, 'purchase', id);
                 posting = await this.postBillVoucher(tx, tenantId, {
                     purchaseId: id,
@@ -1113,7 +1153,7 @@ export class PurchasesService {
                 });
             }
             if (redoPayment) {
-                const date = await postedVoucherDate(tx, tenantId, 'supplier_payment', id, 'paid') ?? purchase.created_at;
+                const date = await postedVoucherDate(tx, tenantId, 'supplier_payment', id, 'paid') ?? purchase.purchase_date ?? purchase.created_at;
                 await voidAutoPostedVoucher(tx, tenantId, 'supplier_payment', id, 'paid');
                 if (newPaid > EPSILON) {
                     await this.postPaidVoucher(tx, tenantId, {

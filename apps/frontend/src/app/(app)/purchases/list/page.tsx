@@ -5,18 +5,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Ban, ClipboardList, Copy, Eye, Pencil, Plus, Printer } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { BranchFilter } from '@/components/ui';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
-import { formatBDT } from '@/lib/format';
+import { formatBDT, formatDateTime } from '@/lib/format';
 import { PostingBadge } from '@/components/PostingBadge';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useI18n, formatMessage } from '@/lib/i18n';
-import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
+import { applyCreatedRangeQuery, applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { toast } from '@/lib/toast';
 import { CancelEntryModal } from '@/components/CancelEntryModal';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
@@ -40,6 +40,7 @@ interface Purchase {
     total_amount: string | number;
     subtotal_amount: string | number;
     created_at: string;
+    purchase_date?: string | null;
     status?: string;
     cancellation_note?: string | null;
     supplier?: {
@@ -66,6 +67,7 @@ export default function PurchasesPage() {
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Purchase | null>(null);
     const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
 
@@ -94,7 +96,7 @@ export default function PurchasesPage() {
     useEffect(() => {
         if (!branch.ready) return;
         loadPurchases();
-    }, [createdRange, branch.ready, branch.apiStoreId]);
+    }, [createdRange, dateRange, branch.ready, branch.apiStoreId]);
 
     // Recording a purchase is its own screen now; keep the old ?new=1 deep
     // link (bookmarks, voice navigation) working by forwarding it there.
@@ -107,7 +109,11 @@ export default function PurchasesPage() {
     const loadPurchases = async () => {
         setLoading(true);
         try {
-            const data = await api.getPurchases({ ...applyCreatedRangeQuery(createdRange), storeId: branch.apiStoreId });
+            const data = await api.getPurchases({
+                ...applyCreatedRangeQuery(createdRange),
+                ...applyDateRangeQuery(dateRange),
+                storeId: branch.apiStoreId,
+            });
             setPurchases(data);
         } catch (error) {
             if (handleBranchForbidden(error, branch, t.dashboardLayout.branchFilterForbidden)) return;
@@ -177,7 +183,16 @@ export default function PurchasesPage() {
                     Number(a.getValue('total_amount') || 0) - Number(b.getValue('total_amount') || 0),
                 size: 120,
             }),
-            createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
+            columnHelper.accessor((row) => row.purchase_date ?? row.created_at, {
+                id: 'purchase_date',
+                header: t.purchases.columns.transactionDate,
+                enableColumnFilter: false,
+                cell: (info) => (
+                    <span className="text-sm text-gray-600">{formatDateTime(info.getValue(), locale)}</span>
+                ),
+                size: 160,
+            }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.accessor((row) => row.status ?? 'RECORDED', {
                 id: 'status',
                 header: t.purchases.columns.status,
@@ -304,6 +319,7 @@ export default function PurchasesPage() {
                 />
 
                 <div className="flex flex-wrap items-center gap-2">
+                    <DateRangeFilter label={t.purchases.columns.transactionDate} withTime value={dateRange} onChange={setDateRange} />
                     <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
                 </div>
 

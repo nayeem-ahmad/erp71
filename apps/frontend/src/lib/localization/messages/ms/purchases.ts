@@ -129,6 +129,7 @@ export const purchasesMessages = {
             searchPlaceholder: 'Cari mengikut # pembelian, pembekal, atau produk...',
             columns: {
                 purchaseNumber: '# Pembelian',
+                transactionDate: 'Tarikh transaksi',
                 supplier: 'Pembekal',
                 items: 'Item',
                 products: 'Produk',

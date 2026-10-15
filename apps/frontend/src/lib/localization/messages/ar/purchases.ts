@@ -129,6 +129,7 @@ export const purchasesMessages = {
         searchPlaceholder: "ابحث برقم الشراء أو المورّد أو المنتج...",
         columns: {
             purchaseNumber: "رقم الشراء",
+            transactionDate: "تاريخ المعاملة",
             supplier: "المورّد",
             items: "الأصناف",
             products: "المنتجات",

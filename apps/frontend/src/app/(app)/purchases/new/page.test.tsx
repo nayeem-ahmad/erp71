@@ -209,6 +209,32 @@ describe('NewPurchasePage', () => {
             );
         });
         expect(push).toHaveBeenCalledWith('/purchases/list');
+        expect((api.createPurchase as jest.Mock).mock.calls[0][0]).not.toHaveProperty('purchaseDate');
+    });
+
+    it('sends a transaction date only once the operator picks one, and keeps created automatic', async () => {
+        await renderPage();
+
+        const transaction = screen.getByLabelText('Transaction date') as HTMLInputElement;
+        expect(transaction).toHaveAttribute('type', 'datetime-local');
+        expect(screen.getByLabelText('Created')).toHaveTextContent('Auto');
+        expect(screen.queryByLabelText('Created')).not.toHaveAttribute('type');
+
+        await stageProduct();
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        fireEvent.change(transaction, { target: { value: '2026-03-02T09:30' } });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /post purchase/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.createPurchase).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    purchaseDate: new Date('2026-03-02T09:30').toISOString(),
+                }),
+            );
+        });
     });
 
     it('hides the warehouse controls entirely for a one-warehouse shop', async () => {

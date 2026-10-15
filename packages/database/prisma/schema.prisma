@@ -2434,7 +2434,13 @@ model Purchase {
   status           String   @default("RECORDED")
   notes            String?
   created_by       String?
+  /// When this row was written. The server sets it and nothing edits it.
+  /// The bill's own time is `purchase_date`.
   created_at       DateTime @default(now())
+  /// When the purchase happened. Record Purchase lets the operator set it;
+  /// left alone, it is the moment the bill is posted. Reports, the stock
+  /// ledger and the voucher use this, not `created_at`.
+  purchase_date    DateTime @default(now())
   /// Which warehouse received the goods, recorded rather than re-derived —
   /// see `Sale.warehouse_id` for why. Lines may override it when one bill is
   /// split across warehouses.
@@ -2460,6 +2466,7 @@ model Purchase {
 
   @@unique([tenant_id, purchase_number])
   @@index([tenant_id, created_at])
+  @@index([tenant_id, purchase_date])
   @@index([tenant_id, store_id])
   @@index([tenant_id, payment_status])
   @@index([tenant_id, status])
@@ -2958,6 +2965,17 @@ model Sale {
   /// edit screen, Duplicate and the printed invoice use it to show an
   /// "added on top" sale back the way it was entered.
   prices_include_vat Boolean @default(true)
+
+  /// Invoice-level charges typed beside the lines. Already inside `total_amount`.
+  /// Stored so an edit reopens with transport in Transport and labour in Labor.
+  /// `rounding` is the free-form figure (Rounding on a new sale, Adjustment on
+  /// an existing one) and may be negative. Zero on rows written before these
+  /// columns existed; those still fold the unexplained gap between the lines
+  /// and the total into the adjustment, because which box it was typed in was
+  /// never recorded.
+  transport_cost Decimal @default(0) @db.Decimal(12, 2)
+  labor_cost     Decimal @default(0) @db.Decimal(12, 2)
+  rounding       Decimal @default(0) @db.Decimal(12, 2)
 
   /// Who sold it — the customer's sales rep when the sale was made, changeable
   /// on the sale. Stamped rather than read through the customer, so a later

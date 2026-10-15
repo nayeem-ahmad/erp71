@@ -129,6 +129,7 @@ export const purchasesMessages = {
         searchPlaceholder: "خریداری نمبر، سپلائر یا پروڈکٹ سے تلاش کریں...",
         columns: {
             purchaseNumber: "خریداری نمبر",
+            transactionDate: "لین دین کی تاریخ",
             supplier: "سپلائر",
             items: "اشیاء",
             products: "پروڈکٹس",

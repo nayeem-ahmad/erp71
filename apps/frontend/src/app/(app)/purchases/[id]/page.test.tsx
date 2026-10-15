@@ -108,6 +108,8 @@ describe('PurchaseDetailPage', () => {
         expect(screen.queryByPlaceholderText(/search products/i)).not.toBeInTheDocument();
         expect(screen.queryByLabelText('Freight')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Transaction date')).not.toHaveAttribute('type');
+        expect(screen.getByLabelText('Created')).not.toHaveTextContent('Auto');
 
         fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
         expect(push).toHaveBeenCalledWith('/purchases/purchase-1?edit=true');
@@ -148,6 +150,8 @@ describe('PurchaseDetailPage', () => {
         });
         // A recorded bill keeps its branch: there is no storeId on an edit.
         expect((api.updatePurchase as jest.Mock).mock.calls[0][1]).not.toHaveProperty('storeId');
+        expect((api.updatePurchase as jest.Mock).mock.calls[0][1]).not.toHaveProperty('purchaseDate');
+        expect(screen.queryByLabelText('Transaction date')).not.toHaveAttribute('type');
         expect(push).toHaveBeenCalledWith('/purchases/purchase-1');
     });
 
