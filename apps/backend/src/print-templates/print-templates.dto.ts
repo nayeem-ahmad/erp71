@@ -338,12 +338,13 @@ export class PrintFooterConfigDto {
 export class PrintHeaderConfigDto {
     /**
      * 1 — header only. 2 — adds `images` and `footer`. 3 — adds logo width,
-     * title placement and footer pinning/bleed. 4 — adds `qr`. All are
-     * accepted; the fields a version predates are optional and default to what
-     * it already printed.
+     * title placement and footer pinning/bleed. 4 — adds `qr`. 5 — adds sizes
+     * of their own for A5 and Letter in `perPaper`, with `lineScalePct`. All
+     * are accepted; the fields a version predates are optional and default to
+     * what it already printed.
      */
     @IsInt()
-    @IsIn([1, 2, 3, 4])
+    @IsIn([1, 2, 3, 4, 5])
     version: number;
 
     @IsIn(LAYOUTS)

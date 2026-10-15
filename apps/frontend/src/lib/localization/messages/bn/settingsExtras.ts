@@ -102,6 +102,20 @@ export const settingsExtrasMessages = {
             saveFailed: "শাখার লেটারহেড সংরক্ষণ ব্যর্থ হয়েছে।",
             loadFailed: "শাখার লেটারহেড লোড করা যায়নি।",
         },
+        paperSizes: {
+            title: "{paper}-এ আকার",
+            hint: "শুধু {paper}-এ বড় বা ছোট করে ছাপাতে এখানে আকার দিন। ঘর খালি রাখলে A4-এর আকারই থাকবে, যা ধূসর রঙে দেখানো আছে। লেখা, ছবি, রং ও বিন্যাস সব কাগজে একই থাকে।",
+            reset: "A4-এর মতো আকার",
+            othersDiffer: "{papers}-এ আকার আলাদা। দেখতে সেই কাগজটি বেছে নিন।",
+            fields: {
+                logoHeightMm: "লোগোর উচ্চতা (মিমি)",
+                companyFontSizePt: "ব্যবসার নাম (pt)",
+                titleFontSizePt: "ডকুমেন্ট শিরোনাম (pt)",
+                lineScalePct: "বিস্তারিত ও ফুটারের লাইন (%)",
+                spacingMm: "ফাঁক (মিমি)",
+                qrSizeMm: "QR কোড (মিমি)",
+            },
+        },
         sections: {
             images: "হেডারের ছবি",
             footer: "ফুটার",

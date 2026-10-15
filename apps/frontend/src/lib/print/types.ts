@@ -217,8 +217,10 @@ export interface PrintHeaderConfig {
      * `DEFAULT_HEADER_CONFIG` by `resolveHeaderConfig`, so a stored v1 config
      * renders unchanged and only gains a footer once a tenant designs one.
      * The v3 and v4 additions all default to what the version before printed.
+     * v5 adds sizes per paper (`perPaper`, `lineScalePct`); absent, every
+     * paper prints the main design's sizes, as before.
      */
-    version: 1 | 2 | 3 | 4;
+    version: 1 | 2 | 3 | 4 | 5;
     layout: HeaderLayout;
     logo: {
         url?: string;
@@ -297,7 +299,17 @@ export interface PrintHeaderConfig {
     fontFamily: PrintFontFamily;
     baseFontSizePt: number;
     spacingMm: number;
-    /** Per-paper-size overrides, merged shallowly over the base config. */
+    /**
+     * Scales the text of every header and footer line, in percent; 100 when
+     * absent. Meant for `perPaper`, so A5 can print the same lines smaller
+     * without a second copy of them to keep in step.
+     */
+    lineScalePct?: number;
+    /**
+     * Per-paper-size overrides, merged deeply over the base config — an array
+     * such as `lines` is replaced whole. The editor writes only sizes here
+     * (see `PAPER_SIZE_FIELDS`); the content stays in the base config.
+     */
     perPaper?: Partial<Record<PaperSize, DeepPartial<PrintHeaderConfig>>>;
 }
 
@@ -358,7 +370,7 @@ export const DEFAULT_FOOTER_CONFIG: PrintFooterConfig = {
 };
 
 export const DEFAULT_HEADER_CONFIG: PrintHeaderConfig = {
-    version: 4,
+    version: 5,
     layout: 'logo-left',
     logo: { heightMm: 16, showOnThermal: true },
     company: { show: true, fontSizePt: 16, bold: true, color: '#1d4ed8' },

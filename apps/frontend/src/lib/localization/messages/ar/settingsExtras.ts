@@ -102,6 +102,20 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperSizes: {
+            title: "الأحجام على {paper}",
+            hint: "اضبط حجمًا هنا لطباعته أكبر أو أصغر على {paper} فقط. الخانة الفارغة تُبقي الحجم المستخدم على A4، والمعروض باللون الرمادي. النص والصور والألوان والتخطيط تبقى كما هي على كل الأوراق.",
+            reset: "نفس أحجام A4",
+            othersDiffer: "الأحجام مختلفة على {papers}. اختر تلك الورقة لرؤيتها.",
+            fields: {
+                logoHeightMm: "ارتفاع الشعار (مم)",
+                companyFontSizePt: "اسم النشاط (pt)",
+                titleFontSizePt: "عنوان المستند (pt)",
+                lineScalePct: "أسطر التفاصيل والتذييل (%)",
+                spacingMm: "التباعد (مم)",
+                qrSizeMm: "رمز QR (مم)",
+            },
+        },
         sections: {
             images: "صور الترويسة",
             footer: "التذييل",

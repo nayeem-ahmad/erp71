@@ -81,8 +81,31 @@ describe('CreatePrintTemplateDto', () => {
         ).toHaveLength(0);
     });
 
+    it('accepts a v5 config that prints its own sizes on A5 and Letter', async () => {
+        const config = {
+            ...base,
+            version: 5,
+            perPaper: {
+                A5: {
+                    logo: { heightMm: 11 },
+                    company: { fontSizePt: 12 },
+                    title: { fontSizePt: 14 },
+                    lineScalePct: 85,
+                    spacingMm: 2,
+                    qr: { sizeMm: 16 },
+                },
+                Letter: { spacingMm: 6 },
+            },
+        };
+        const dto = plainToInstance(CreatePrintTemplateDto, { name: 'Letterhead', config });
+
+        expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
+        // The whitelist must not strip the overrides on the way to the database.
+        expect(dto.config.perPaper).toEqual(config.perPaper);
+    });
+
     it('rejects a version the renderer does not know', async () => {
-        expect((await parse({ ...base, version: 5 })).length).toBeGreaterThan(0);
+        expect((await parse({ ...base, version: 6 })).length).toBeGreaterThan(0);
     });
 
     it.each([

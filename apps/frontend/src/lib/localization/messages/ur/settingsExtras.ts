@@ -102,6 +102,20 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperSizes: {
+            title: "{paper} پر سائز",
+            hint: "صرف {paper} پر بڑا یا چھوٹا چھاپنے کے لیے یہاں سائز درج کریں۔ خالی خانہ A4 والا سائز ہی رکھتا ہے، جو سرمئی رنگ میں دکھایا گیا ہے۔ متن، تصاویر، رنگ اور ترتیب ہر کاغذ پر ایک جیسے رہتے ہیں۔",
+            reset: "A4 جیسے سائز",
+            othersDiffer: "{papers} پر سائز مختلف ہیں۔ انہیں دیکھنے کے لیے وہ کاغذ منتخب کریں۔",
+            fields: {
+                logoHeightMm: "لوگو کی اونچائی (ملی میٹر)",
+                companyFontSizePt: "کاروبار کا نام (pt)",
+                titleFontSizePt: "دستاویز کا عنوان (pt)",
+                lineScalePct: "تفصیلی اور فوٹر سطریں (%)",
+                spacingMm: "فاصلہ (ملی میٹر)",
+                qrSizeMm: "QR کوڈ (ملی میٹر)",
+            },
+        },
         sections: {
             images: "ہیڈر کی تصاویر",
             footer: "فوٹر",

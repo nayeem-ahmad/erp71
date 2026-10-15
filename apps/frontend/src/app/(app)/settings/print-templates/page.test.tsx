@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import PrintTemplatesPage from './page';
 import { api } from '@/lib/api';
@@ -202,6 +202,122 @@ describe('PrintTemplatesPage', () => {
         expect(preview).toContain('padding: 15mm');
     });
 
+    describe('sizes per paper', () => {
+        const choosePaper = (paper: string) =>
+            fireEvent.change(screen.getByLabelText('Paper size'), { target: { value: paper } });
+        const sizes = (paper: string) => within(screen.getByRole('group', { name: `Sizes on ${paper}` }));
+        const preview = () => screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
+        const savedConfig = async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Save Template' }));
+            await waitFor(() => expect(mockApi.updatePrintTemplate).toHaveBeenCalled());
+            return (mockApi.updatePrintTemplate as jest.Mock).mock.calls[0][1].config;
+        };
+
+        beforeEach(() => {
+            (mockApi.updatePrintTemplate as jest.Mock).mockResolvedValue(storedTemplate);
+        });
+
+        it('offers no sizes of its own on A4, the main design', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            expect(screen.queryByRole('group', { name: /Sizes on/ })).not.toBeInTheDocument();
+        });
+
+        it('shows the main design\'s size in an empty box on A5', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            choosePaper('A5');
+
+            const name = sizes('A5').getByLabelText('Business name (pt)') as HTMLInputElement;
+            expect(name.value).toBe('');
+            expect(name.placeholder).toBe('18');
+        });
+
+        it('saves sizes for A5 alone, leaving the main design as it was', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            choosePaper('A5');
+            fireEvent.change(sizes('A5').getByLabelText('Business name (pt)'), { target: { value: '12' } });
+            fireEvent.change(sizes('A5').getByLabelText('Detail and footer lines (%)'), { target: { value: '80' } });
+
+            // The default 9pt detail lines print at 80% on the A5 preview.
+            expect(preview()).toContain('font-size:7.2pt');
+
+            const config = await savedConfig();
+            expect(config.version).toBe(5);
+            expect(config.company.fontSizePt).toBe(18);
+            expect(config.perPaper).toEqual({ A5: { company: { fontSizePt: 12 }, lineScalePct: 80 } });
+        });
+
+        it('keeps a size within the range the main design allows', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            choosePaper('Letter');
+            const logo = sizes('Letter').getByLabelText('Logo height (mm)') as HTMLInputElement;
+            fireEvent.change(logo, { target: { value: '999' } });
+            expect(logo.value).toBe('60');
+
+            fireEvent.change(logo, { target: { value: '1' } });
+            fireEvent.focusOut(logo);
+            expect(logo.value).toBe('3');
+        });
+
+        it('greys out the logo height while the logo stretches across the page', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            fireEvent.click(screen.getByLabelText('Stretch the logo across the full width'));
+            choosePaper('A5');
+
+            // A full-width logo takes its height from its shape, as on A4.
+            expect(sizes('A5').getByLabelText('Logo height (mm)')).toBeDisabled();
+        });
+
+        it('returns a size to the main design when its box is emptied', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            choosePaper('A5');
+            const qr = sizes('A5').getByLabelText('QR code (mm)');
+            fireEvent.change(qr, { target: { value: '14' } });
+            fireEvent.change(qr, { target: { value: '' } });
+
+            expect((await savedConfig()).perPaper).toBeUndefined();
+        });
+
+        describe('on a template that already has A5 sizes', () => {
+            beforeEach(() => {
+                (mockApi.getPrintTemplates as jest.Mock).mockResolvedValue([
+                    { ...storedTemplate, config: { ...storedTemplate.config, perPaper: { A5: { company: { fontSizePt: 12 } } } } },
+                ]);
+            });
+
+            it('says so on A4, where they do not show', async () => {
+                render(<PrintTemplatesPage />);
+                await screen.findByDisplayValue('Letterhead');
+
+                expect(screen.getByText('Sizes differ on A5. Pick that paper to see them.')).toBeInTheDocument();
+            });
+
+            it('loads them, and puts the paper back on the main design\'s sizes', async () => {
+                render(<PrintTemplatesPage />);
+                await screen.findByDisplayValue('Letterhead');
+
+                choosePaper('A5');
+                const name = sizes('A5').getByLabelText('Business name (pt)') as HTMLInputElement;
+                expect(name.value).toBe('12');
+
+                fireEvent.click(sizes('A5').getByRole('button', { name: 'Same sizes as A4' }));
+                expect(name.value).toBe('');
+                expect((await savedConfig()).perPaper).toBeUndefined();
+            });
+        });
+    });
+
     describe('the QR code', () => {
         const preview = () => screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
 
@@ -218,7 +334,7 @@ describe('PrintTemplatesPage', () => {
 
             await waitFor(() => expect(mockApi.updatePrintTemplate).toHaveBeenCalled());
             const [, payload] = (mockApi.updatePrintTemplate as jest.Mock).mock.calls[0];
-            expect(payload.config.version).toBe(4);
+            expect(payload.config.version).toBe(5);
             expect(payload.config.qr).toEqual({ sizeMm: 28, position: 'right-of-title', offsetXMm: 0, offsetYMm: 3 });
         });
 

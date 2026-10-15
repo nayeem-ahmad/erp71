@@ -102,6 +102,20 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperSizes: {
+            title: "Tailles sur {paper}",
+            hint: "Indiquez ici une taille pour l’imprimer plus grande ou plus petite sur {paper} uniquement. Une case vide garde la taille utilisée sur A4, affichée en gris. Le texte, les images, les couleurs et la mise en page restent les mêmes sur chaque papier.",
+            reset: "Mêmes tailles que A4",
+            othersDiffer: "Les tailles diffèrent sur {papers}. Choisissez ce papier pour les voir.",
+            fields: {
+                logoHeightMm: "Hauteur du logo (mm)",
+                companyFontSizePt: "Nom de l’entreprise (pt)",
+                titleFontSizePt: "Titre du document (pt)",
+                lineScalePct: "Lignes de détail et de pied (%)",
+                spacingMm: "Espacement (mm)",
+                qrSizeMm: "Code QR (mm)",
+            },
+        },
         sections: {
             images: "Images de l'en-tête",
             footer: "Pied de page",

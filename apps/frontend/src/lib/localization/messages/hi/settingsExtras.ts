@@ -102,6 +102,20 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperSizes: {
+            title: "{paper} पर आकार",
+            hint: "केवल {paper} पर बड़ा या छोटा छापने के लिए यहाँ आकार डालें। खाली बॉक्स A4 वाला आकार ही रखता है, जो धूसर रंग में दिखाया गया है। टेक्स्ट, चित्र, रंग और लेआउट हर काग़ज़ पर एक जैसे रहते हैं।",
+            reset: "A4 जैसे आकार",
+            othersDiffer: "{papers} पर आकार अलग हैं। उन्हें देखने के लिए वह काग़ज़ चुनें।",
+            fields: {
+                logoHeightMm: "लोगो ऊँचाई (मि.मी.)",
+                companyFontSizePt: "व्यवसाय का नाम (pt)",
+                titleFontSizePt: "दस्तावेज़ शीर्षक (pt)",
+                lineScalePct: "विवरण और फ़ुटर लाइनें (%)",
+                spacingMm: "अंतर (मि.मी.)",
+                qrSizeMm: "QR कोड (मि.मी.)",
+            },
+        },
         sections: {
             images: "हेडर छवियाँ",
             footer: "फ़ुटर",

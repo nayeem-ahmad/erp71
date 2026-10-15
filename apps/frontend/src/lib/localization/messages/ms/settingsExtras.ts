@@ -102,6 +102,20 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperSizes: {
+            title: "Saiz pada {paper}",
+            hint: "Tetapkan saiz di sini untuk mencetaknya lebih besar atau lebih kecil pada {paper} sahaja. Kotak kosong mengekalkan saiz yang digunakan pada A4, ditunjukkan dalam kelabu. Teks, imej, warna dan susun atur kekal sama pada setiap kertas.",
+            reset: "Saiz sama seperti A4",
+            othersDiffer: "Saiz berbeza pada {papers}. Pilih kertas itu untuk melihatnya.",
+            fields: {
+                logoHeightMm: "Tinggi logo (mm)",
+                companyFontSizePt: "Nama perniagaan (pt)",
+                titleFontSizePt: "Tajuk dokumen (pt)",
+                lineScalePct: "Baris butiran dan pengaki (%)",
+                spacingMm: "Jarak (mm)",
+                qrSizeMm: "Kod QR (mm)",
+            },
+        },
         sections: {
             images: "Imej kepala",
             footer: "Pengaki",

@@ -10,7 +10,15 @@ import { toast } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { Button, ConfirmDialog, PageShell, Select } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { DEFAULT_HEADER_CONFIG, isThermalPaper, PAPER_SIZES, resolveHeaderConfig } from '@/lib/print';
+import {
+    DEFAULT_HEADER_CONFIG,
+    isThermalPaper,
+    OVERRIDE_PAPERS,
+    PAPER_SIZES,
+    paperSizeLabel,
+    papersWithOverrides,
+    resolveHeaderConfig,
+} from '@/lib/print';
 // Imported from the hook module directly: `@/lib/print` stays React-free so the
 // printer libs can import it without pulling in a client component.
 import { clearPrintTemplateCache } from '@/lib/print/use-print-header';
@@ -19,6 +27,7 @@ import { formatDate } from '@/lib/format';
 import BranchAssignments from './BranchAssignments';
 import HeaderEditor from './HeaderEditor';
 import HeaderPreview from './HeaderPreview';
+import PaperSizeOverrides from './PaperSizeOverrides';
 import { CheckboxRow } from './TemplateBlocks';
 
 interface PrintTemplate {
@@ -70,7 +79,7 @@ function sampleQrDataUrl(): string {
 const SAMPLE_QR = sampleQrDataUrl();
 
 export default function PrintTemplatesPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const copy = t.settingsExtras.printTemplates;
     const branding = useBranding();
 
@@ -193,6 +202,10 @@ export default function PrintTemplatesPage() {
         ...(previewQr && !isThermalPaper(paperSize) ? { docQr: SAMPLE_QR, hideDocMeta: true } : {}),
     }), [branding.businessName, previewQr, paperSize]);
 
+    // Papers that print sizes of their own, named on the main design's view so
+    // nobody edits a size on A4 and wonders why A5 did not follow.
+    const papersDiffering = papersWithOverrides(config).filter((paper) => paper !== paperSize);
+
     return (
         <PageShell>
             <PageHeader
@@ -295,6 +308,20 @@ export default function PrintTemplatesPage() {
                                     </Select>
                                 </div>
                             </div>
+
+                            {OVERRIDE_PAPERS.includes(paperSize) ? (
+                                <PaperSizeOverrides
+                                    config={config}
+                                    paperSize={paperSize}
+                                    onConfigChange={setConfig}
+                                />
+                            ) : papersDiffering.length ? (
+                                <p className="text-xs text-gray-500">
+                                    {fmt(copy.paperSizes.othersDiffer, {
+                                        papers: papersDiffering.map(paperSizeLabel).join(', '),
+                                    })}
+                                </p>
+                            ) : null}
 
                             <HeaderPreview
                                 config={config}

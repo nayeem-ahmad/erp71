@@ -511,6 +511,54 @@ describe('line formatting', () => {
     });
 });
 
+describe('line size per paper', () => {
+    // A5 prints the same lines as A4, only smaller: the scale is set per paper
+    // so the lines themselves are never copied.
+    const config: DeepPartial<PrintHeaderConfig> = {
+        lines: [{ text: 'Head line', fontSizePt: 9 }, { text: 'Base line' }],
+        baseFontSizePt: 10,
+        footer: { show: true, lines: [{ text: 'Foot line', fontSizePt: 8 }] },
+        perPaper: { A5: { lineScalePct: 80 } },
+    };
+
+    it('scales every header line on the paper that sets it', () => {
+        const html = renderHeaderHtml(config, ctx, 'A5');
+
+        expect(html).toContain('font-size:7.2pt');
+        // A line without a size of its own scales from the base size.
+        expect(html).toContain('font-size:8pt');
+    });
+
+    it('scales the footer lines with them', () => {
+        expect(renderFooterHtml(config, ctx, 'A5')).toContain('font-size:6.4pt');
+    });
+
+    it('leaves the other paper sizes at the sizes the lines carry', () => {
+        const html = renderHeaderHtml(config, ctx, 'A4');
+
+        expect(html).toContain('font-size:9pt');
+        expect(html).toContain('font-size:10pt');
+    });
+
+    it('keeps an unscaled size exactly as stored', () => {
+        // No rounding without a scale: a stored 9.25pt must print as 9.25pt,
+        // or every existing template would shift.
+        const html = renderHeaderHtml({ lines: [{ text: 'x', fontSizePt: 9.25 }] }, ctx, 'A4');
+
+        expect(html).toContain('font-size:9.25pt');
+    });
+
+    it('clamps the scale to a readable range', () => {
+        const html = renderHeaderHtml(
+            { lines: [{ text: 'x', fontSizePt: 10 }], perPaper: { A5: { lineScalePct: 5 } } },
+            ctx,
+            'A5',
+        );
+
+        expect(html).toContain('font-size:5pt');
+    });
+});
+
 describe('logo width', () => {
     const withLogo = (logo: Record<string, unknown>) =>
         renderHeaderHtml({ logo: { url: 'https://cdn.example.com/logo.png', ...logo } } as DeepPartial<PrintHeaderConfig>, ctx, 'A4');
