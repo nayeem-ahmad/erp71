@@ -102,6 +102,18 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperDesigns: {
+            title: "Reka bentuk {paper}",
+            follows: "{paper} mencetak reka bentuk A4, jadi perubahan yang anda buat sekarang turut mengubah A4. Reka {paper} secara berasingan untuk mengubahnya sahaja — ia bermula sebagai salinan A4.",
+            own: "{paper} mempunyai reka bentuk sendiri. Perubahan yang anda buat sekarang hanya untuk {paper}.",
+            start: "Reka {paper} secara berasingan",
+            drop: "Guna reka bentuk A4 pada {paper}",
+            dropTitle: "Kembali kepada reka bentuk A4 pada {paper}?",
+            dropBody: "Reka bentuk {paper} akan dibuang dan {paper} mencetak reka bentuk A4 semula. Tiada apa-apa berubah pada cetakan sehingga anda menyimpan templat.",
+            dropConfirm: "Guna reka bentuk A4",
+            editing: "Anda sedang menyunting reka bentuk {paper}. Reka bentuk A4 tidak berubah.",
+            othersOwn: "{papers} direka secara berasingan — pilih dalam pratonton untuk menyuntingnya.",
+        },
         sections: {
             images: "Imej kepala",
             footer: "Pengaki",

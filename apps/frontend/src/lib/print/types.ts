@@ -217,8 +217,10 @@ export interface PrintHeaderConfig {
      * `DEFAULT_HEADER_CONFIG` by `resolveHeaderConfig`, so a stored v1 config
      * renders unchanged and only gains a footer once a tenant designs one.
      * The v3 and v4 additions all default to what the version before printed.
+     * v5 adds `paperDesigns`; absent, every paper prints the main design,
+     * as before.
      */
-    version: 1 | 2 | 3 | 4;
+    version: 1 | 2 | 3 | 4 | 5;
     layout: HeaderLayout;
     logo: {
         url?: string;
@@ -299,6 +301,14 @@ export interface PrintHeaderConfig {
     spacingMm: number;
     /** Per-paper-size overrides, merged shallowly over the base config. */
     perPaper?: Partial<Record<PaperSize, DeepPartial<PrintHeaderConfig>>>;
+    /**
+     * A whole design for one paper, printed instead of this one. Not merged
+     * over it: the paper is designed separately, from the same defaults, so
+     * an A5 design can change anything — text, images, layout, sizes —
+     * without A4 changing, and nothing set for A4 leaks onto A5. A paper
+     * without an entry prints this design.
+     */
+    paperDesigns?: Partial<Record<PaperSize, DeepPartial<PrintHeaderConfig>>>;
 }
 
 export type DeepPartial<T> = {
@@ -358,7 +368,7 @@ export const DEFAULT_FOOTER_CONFIG: PrintFooterConfig = {
 };
 
 export const DEFAULT_HEADER_CONFIG: PrintHeaderConfig = {
-    version: 4,
+    version: 5,
     layout: 'logo-left',
     logo: { heightMm: 16, showOnThermal: true },
     company: { show: true, fontSizePt: 16, bold: true, color: '#1d4ed8' },

@@ -1,6 +1,7 @@
 import {
   DEFAULT_INVOICE_PRINT_PREFS,
   INVOICE_FOOTER_MAX_LENGTH,
+  INVOICE_SIGNATURE_SPACE_MM,
   normalizeInvoicePrintPrefs,
 } from './invoice-print';
 
@@ -25,6 +26,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       warranty_column: 'always',
       table_borders: 'none',
       footer_text: null,
+      signature_space_mm: null,
     });
   });
 
@@ -42,6 +44,7 @@ describe('normalizeInvoicePrintPrefs', () => {
       warranty_column: 'never',
       table_borders: 'columns',
       footer_text: 'Goods once sold are not returnable.',
+      signature_space_mm: 25,
     };
     expect(normalizeInvoicePrintPrefs(saved)).toEqual(saved);
   });
@@ -87,5 +90,20 @@ describe('normalizeInvoicePrintPrefs', () => {
     expect(normalizeInvoicePrintPrefs({ footer_text: long }).footer_text).toHaveLength(
       INVOICE_FOOTER_MAX_LENGTH,
     );
+  });
+
+  it('reads no signature space as the built-in gap', () => {
+    expect(normalizeInvoicePrintPrefs({}).signature_space_mm).toBeNull();
+    expect(normalizeInvoicePrintPrefs({ signature_space_mm: null }).signature_space_mm).toBeNull();
+    expect(normalizeInvoicePrintPrefs({ signature_space_mm: '20' }).signature_space_mm).toBeNull();
+    expect(normalizeInvoicePrintPrefs({ signature_space_mm: Number.NaN }).signature_space_mm).toBeNull();
+  });
+
+  it('keeps a signature space in whole mm, pulled inside the allowed range', () => {
+    const { min, max } = INVOICE_SIGNATURE_SPACE_MM;
+    expect(normalizeInvoicePrintPrefs({ signature_space_mm: 30 }).signature_space_mm).toBe(30);
+    expect(normalizeInvoicePrintPrefs({ signature_space_mm: 12.6 }).signature_space_mm).toBe(13);
+    expect(normalizeInvoicePrintPrefs({ signature_space_mm: 1 }).signature_space_mm).toBe(min);
+    expect(normalizeInvoicePrintPrefs({ signature_space_mm: 500 }).signature_space_mm).toBe(max);
   });
 });

@@ -206,14 +206,18 @@ function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): Prin
 }
 
 /**
- * Produces the effective config: defaults → stored config → per-paper
- * overrides → thermal coercion.
+ * Produces the effective config: defaults → stored config (or the paper's
+ * own design, when it has one) → per-paper overrides → thermal coercion.
  */
 export function resolveHeaderConfig(
     config: DeepPartial<PrintHeaderConfig> | undefined,
     paperSize: PaperSize,
 ): PrintHeaderConfig {
-    const merged = mergeDeep(DEFAULT_HEADER_CONFIG, config);
+    // A paper with a design of its own prints that design alone. It is filled
+    // from the defaults, never from the main design, so an option left unset
+    // there stays unset rather than quietly taking the A4 value.
+    const design = config?.paperDesigns?.[paperSize] ?? config;
+    const merged = mergeDeep(DEFAULT_HEADER_CONFIG, design);
     const withPaper = mergeDeep(merged, merged.perPaper?.[paperSize]);
     return coerceForThermal(withPaper, paperSize);
 }

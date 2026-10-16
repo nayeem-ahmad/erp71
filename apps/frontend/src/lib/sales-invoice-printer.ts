@@ -243,7 +243,18 @@ function buildStyles(isThermal: boolean, layout: InvoicePrintPrefs): string {
         ${isThermal ? '' : compactStyles()}
         ${isThermal ? '' : sheetTypeScaleCss()}
         ${isThermal || layout.layout !== 'detailed' ? '' : detailedStyles()}
+        ${isThermal ? '' : signatureSpaceCss(layout.signature_space_mm)}
     `;
+}
+
+/**
+ * The member's own gap above the signature lines — room for a signature, or a
+ * signature under a company seal. Last, and for the compact sheet too, so it
+ * overrides both built-in gaps; nothing is emitted when the member has not
+ * set it, so those print exactly as they did.
+ */
+function signatureSpaceCss(mm: number | null): string {
+    return mm == null ? '' : `.signatures, ${COMPACT_SCOPE} .signatures { margin-top:${mm}mm; }`;
 }
 
 /**

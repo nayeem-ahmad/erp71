@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import PrintTemplatesPage from './page';
 import { api } from '@/lib/api';
@@ -193,6 +193,114 @@ describe('PrintTemplatesPage', () => {
         );
     });
 
+    it('previews the letterhead inside the page margin, so lines wrap as they print', async () => {
+        render(<PrintTemplatesPage />);
+        await screen.findByDisplayValue('Letterhead');
+        const preview = screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
+
+        expect(preview).toContain('<div class="p71-pv-sheet"><div class="p71-wrap">');
+        expect(preview).toContain('padding: 15mm');
+    });
+
+    describe('a separate design per paper', () => {
+        const choosePaper = (paper: string) =>
+            fireEvent.change(screen.getByLabelText('Paper size'), { target: { value: paper } });
+        const panel = (paper: string) => within(screen.getByRole('group', { name: `${paper} design` }));
+        const nameOverride = () =>
+            screen.getByPlaceholderText('Leave blank to use your branding name') as HTMLInputElement;
+        const preview = () => screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
+        const savedConfig = async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Save Template' }));
+            await waitFor(() => expect(mockApi.updatePrintTemplate).toHaveBeenCalled());
+            return (mockApi.updatePrintTemplate as jest.Mock).mock.calls[0][1].config;
+        };
+        const withA5Design = {
+            ...storedTemplate,
+            config: { ...storedTemplate.config, paperDesigns: { A5: { company: { nameOverride: 'A5 Traders' } } } },
+        };
+
+        beforeEach(() => {
+            (mockApi.updatePrintTemplate as jest.Mock).mockResolvedValue(storedTemplate);
+        });
+
+        it('offers nothing to design separately on A4, the main design', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            expect(screen.queryByRole('button', { name: /separately/ })).not.toBeInTheDocument();
+        });
+
+        it('edits the A4 design while A5 still prints it', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            choosePaper('A5');
+            expect(panel('A5').getByText(/A5 prints the A4 design/)).toBeInTheDocument();
+            fireEvent.change(nameOverride(), { target: { value: 'Shared Traders' } });
+
+            const config = await savedConfig();
+            expect(config.company.nameOverride).toBe('Shared Traders');
+            expect(config.paperDesigns).toBeUndefined();
+        });
+
+        it('designs A5 separately, starting from a copy of the A4 design', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            choosePaper('A5');
+            fireEvent.click(panel('A5').getByRole('button', { name: 'Design A5 separately' }));
+            expect(screen.getByText('Editing the A5 design. The A4 design is not changed.')).toBeInTheDocument();
+
+            fireEvent.change(nameOverride(), { target: { value: 'A5 Traders' } });
+            expect(preview()).toContain('A5 Traders');
+
+            choosePaper('A4');
+            expect(nameOverride().value).toBe('');
+            expect(preview()).not.toContain('A5 Traders');
+
+            const config = await savedConfig();
+            expect(config.company.nameOverride).toBeUndefined();
+            expect(config.paperDesigns.A5.company).toMatchObject({ nameOverride: 'A5 Traders', fontSizePt: 18 });
+        });
+
+        describe('on a template whose A5 is designed separately', () => {
+            beforeEach(() => {
+                (mockApi.getPrintTemplates as jest.Mock).mockResolvedValue([withA5Design]);
+            });
+
+            it('says so on A4, where the A5 design does not show', async () => {
+                render(<PrintTemplatesPage />);
+                await screen.findByDisplayValue('Letterhead');
+
+                expect(screen.getByText('A5 designed separately — pick it in the preview to edit it.')).toBeInTheDocument();
+                expect(nameOverride().value).toBe('');
+            });
+
+            it('loads the A5 design into the editor on A5', async () => {
+                render(<PrintTemplatesPage />);
+                await screen.findByDisplayValue('Letterhead');
+
+                choosePaper('A5');
+
+                expect(nameOverride().value).toBe('A5 Traders');
+                expect(panel('A5').getByText(/A5 has its own design/)).toBeInTheDocument();
+            });
+
+            it('puts A5 back on the A4 design once confirmed', async () => {
+                render(<PrintTemplatesPage />);
+                await screen.findByDisplayValue('Letterhead');
+
+                choosePaper('A5');
+                fireEvent.click(panel('A5').getByRole('button', { name: 'Use the A4 design on A5' }));
+                expect(await screen.findByText('Go back to the A4 design on A5?')).toBeInTheDocument();
+                fireEvent.click(screen.getByRole('button', { name: 'Use the A4 design' }));
+
+                expect(nameOverride().value).toBe('');
+                expect((await savedConfig()).paperDesigns).toBeUndefined();
+            });
+        });
+    });
+
     describe('the QR code', () => {
         const preview = () => screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
 
@@ -209,7 +317,7 @@ describe('PrintTemplatesPage', () => {
 
             await waitFor(() => expect(mockApi.updatePrintTemplate).toHaveBeenCalled());
             const [, payload] = (mockApi.updatePrintTemplate as jest.Mock).mock.calls[0];
-            expect(payload.config.version).toBe(4);
+            expect(payload.config.version).toBe(5);
             expect(payload.config.qr).toEqual({ sizeMm: 28, position: 'right-of-title', offsetXMm: 0, offsetYMm: 3 });
         });
 

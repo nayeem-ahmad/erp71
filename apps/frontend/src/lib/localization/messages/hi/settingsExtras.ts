@@ -102,6 +102,18 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperDesigns: {
+            title: "{paper} डिज़ाइन",
+            follows: "{paper} पर A4 का डिज़ाइन छपता है, इसलिए अभी किए गए बदलाव A4 को भी बदलते हैं। केवल {paper} बदलने के लिए उसे अलग से डिज़ाइन करें — यह A4 की प्रति के रूप में शुरू होता है।",
+            own: "{paper} का अपना डिज़ाइन है। अभी किए गए बदलाव केवल {paper} पर लागू होते हैं।",
+            start: "{paper} को अलग से डिज़ाइन करें",
+            drop: "{paper} पर A4 का डिज़ाइन इस्तेमाल करें",
+            dropTitle: "{paper} पर A4 के डिज़ाइन पर लौटें?",
+            dropBody: "{paper} का डिज़ाइन हटा दिया जाएगा और {paper} पर फिर से A4 का डिज़ाइन छपेगा। टेम्पलेट सहेजने तक छपाई में कुछ नहीं बदलता।",
+            dropConfirm: "A4 का डिज़ाइन इस्तेमाल करें",
+            editing: "आप {paper} का डिज़ाइन संपादित कर रहे हैं। A4 का डिज़ाइन नहीं बदलता।",
+            othersOwn: "{papers} अलग से डिज़ाइन किया गया है — संपादित करने के लिए प्रीव्यू में उसे चुनें।",
+        },
         sections: {
             images: "हेडर छवियाँ",
             footer: "फ़ुटर",

@@ -102,6 +102,18 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperDesigns: {
+            title: "تصميم {paper}",
+            follows: "تُطبع على {paper} تصميم A4، لذا فإن ما تغيّره الآن يغيّر A4 أيضًا. صمّم {paper} بشكل منفصل لتغييره وحده — يبدأ كنسخة من A4.",
+            own: "لـ {paper} تصميم خاص به. التغييرات التي تجريها الآن تنطبق على {paper} فقط.",
+            start: "تصميم {paper} بشكل منفصل",
+            drop: "استخدام تصميم A4 على {paper}",
+            dropTitle: "العودة إلى تصميم A4 على {paper}؟",
+            dropBody: "سيُتجاهل تصميم {paper} وتعود {paper} إلى طباعة تصميم A4. لا يتغيّر شيء في الطباعة حتى تحفظ القالب.",
+            dropConfirm: "استخدام تصميم A4",
+            editing: "تحرير تصميم {paper}. تصميم A4 لا يتغيّر.",
+            othersOwn: "{papers} مصمَّم بشكل منفصل — اختره في المعاينة لتحريره.",
+        },
         sections: {
             images: "صور الترويسة",
             footer: "التذييل",

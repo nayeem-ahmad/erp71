@@ -57,6 +57,11 @@ interface HeaderEditorProps {
     /** Resolves to the uploaded URL, or null when the upload failed. */
     onUpload: (file: File) => Promise<string | null>;
     uploading: boolean;
+    /**
+     * Shown above the design while `config` is one paper's own design rather
+     * than the main one, so nobody edits A5 believing they are editing A4.
+     */
+    designNote?: string;
 }
 
 export default function HeaderEditor({
@@ -70,6 +75,7 @@ export default function HeaderEditor({
     onConfigChange,
     onUpload,
     uploading,
+    designNote,
 }: HeaderEditorProps) {
     const { t } = useI18n();
     const copy = t.settingsExtras.printTemplates;
@@ -120,6 +126,12 @@ export default function HeaderEditor({
                     </div>
                 </Field>
             </Section>
+
+            {designNote ? (
+                <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                    {designNote}
+                </p>
+            ) : null}
 
             <Section title={copy.sections.logo}>
                 <Field label={fields.logoUrl}>

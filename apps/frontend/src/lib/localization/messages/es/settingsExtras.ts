@@ -102,6 +102,18 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperDesigns: {
+            title: "Diseño para {paper}",
+            follows: "{paper} imprime el diseño de A4, así que lo que cambie ahora también cambia A4. Diseñe {paper} por separado para cambiarlo solo a él; empieza como una copia de A4.",
+            own: "{paper} tiene su propio diseño. Los cambios que haga ahora solo se aplican a {paper}.",
+            start: "Diseñar {paper} por separado",
+            drop: "Usar el diseño de A4 en {paper}",
+            dropTitle: "¿Volver al diseño de A4 en {paper}?",
+            dropBody: "El diseño de {paper} se descarta y {paper} vuelve a imprimir el diseño de A4. Nada cambia en papel hasta que guarde la plantilla.",
+            dropConfirm: "Usar el diseño de A4",
+            editing: "Está editando el diseño de {paper}. El diseño de A4 no cambia.",
+            othersOwn: "{papers} diseñado por separado: elíjalo en la vista previa para editarlo.",
+        },
         sections: {
             images: "Imágenes del encabezado",
             footer: "Pie de página",

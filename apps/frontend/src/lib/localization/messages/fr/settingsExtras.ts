@@ -102,6 +102,18 @@ export const settingsExtrasMessages = {
             saveFailed: "Failed to save the branch letterhead.",
             loadFailed: "Failed to load branch letterheads.",
         },
+        paperDesigns: {
+            title: "Mise en page {paper}",
+            follows: "{paper} imprime la mise en page A4 : ce que vous changez maintenant change aussi A4. Concevez {paper} séparément pour ne modifier que {paper} ; elle part d’une copie de A4.",
+            own: "{paper} a sa propre mise en page. Les modifications faites maintenant ne s’appliquent qu’à {paper}.",
+            start: "Concevoir {paper} séparément",
+            drop: "Utiliser la mise en page A4 pour {paper}",
+            dropTitle: "Revenir à la mise en page A4 pour {paper} ?",
+            dropBody: "La mise en page {paper} est abandonnée et {paper} imprime de nouveau la mise en page A4. Rien ne change à l’impression tant que vous n’enregistrez pas le modèle.",
+            dropConfirm: "Utiliser la mise en page A4",
+            editing: "Vous modifiez la mise en page {paper}. La mise en page A4 ne change pas.",
+            othersOwn: "{papers} conçu séparément — choisissez-le dans l’aperçu pour le modifier.",
+        },
         sections: {
             images: "Images de l'en-tête",
             footer: "Pied de page",

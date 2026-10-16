@@ -338,12 +338,12 @@ export class PrintFooterConfigDto {
 export class PrintHeaderConfigDto {
     /**
      * 1 — header only. 2 — adds `images` and `footer`. 3 — adds logo width,
-     * title placement and footer pinning/bleed. 4 — adds `qr`. All are
-     * accepted; the fields a version predates are optional and default to what
-     * it already printed.
+     * title placement and footer pinning/bleed. 4 — adds `qr`. 5 — adds
+     * `paperDesigns`. All are accepted; the fields a version predates are
+     * optional and default to what it already printed.
      */
     @IsInt()
-    @IsIn([1, 2, 3, 4])
+    @IsIn([1, 2, 3, 4, 5])
     version: number;
 
     @IsIn(LAYOUTS)
@@ -410,6 +410,31 @@ export class PrintHeaderConfigDto {
     @IsOptional()
     @IsObject()
     perPaper?: Record<string, unknown>;
+
+    /**
+     * A whole design for A5 or Letter, printed instead of this one. Validated
+     * as strictly as the main design: it lands in the same print window.
+     *
+     * Typed inline rather than as `PaperDesignsDto`, which is declared below:
+     * naming it here would emit a reference to the class before it exists.
+     */
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => PaperDesignsDto)
+    paperDesigns?: { A5?: PrintHeaderConfigDto; Letter?: PrintHeaderConfigDto };
+}
+
+/** The papers a template can design separately — see `PrintHeaderConfigDto.paperDesigns`. */
+export class PaperDesignsDto {
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => PrintHeaderConfigDto)
+    A5?: PrintHeaderConfigDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => PrintHeaderConfigDto)
+    Letter?: PrintHeaderConfigDto;
 }
 
 export class CreatePrintTemplateDto {

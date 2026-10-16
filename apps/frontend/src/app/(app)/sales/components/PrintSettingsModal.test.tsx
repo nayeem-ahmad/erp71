@@ -174,6 +174,74 @@ describe('PrintSettingsModal — invoice layout', () => {
         expect(save).toHaveBeenCalledWith({ footer_text: '' });
     });
 
+    describe('space above the signatures', () => {
+        const space = () => screen.queryByLabelText('Space above signatures (mm)');
+
+        it('appears once signature lines are on, and saves the gap with them', async () => {
+            const { save, onClose } = renderWithLayout();
+            expect(space()).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByLabelText(/signature lines/));
+            expect(space()).toHaveValue(null);
+            expect(space()).toHaveAttribute('placeholder', 'Default (13)');
+            fireEvent.change(space()!, { target: { value: '25' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() => expect(onClose).toHaveBeenCalled());
+            expect(save).toHaveBeenCalledWith({ signature_lines: true, signature_space_mm: 25 });
+        });
+
+        it('goes back to the default gap when cleared', async () => {
+            const save = jest.fn().mockResolvedValue(member);
+            const onClose = jest.fn();
+            render(
+                <PrintSettingsModal
+                    paperSize="A4"
+                    skipPreview={false}
+                    density="normal"
+                    typeScale="normal"
+                    onSave={jest.fn()}
+                    onClose={onClose}
+                    invoiceLayout={{ prefs: { ...member, signature_lines: true, signature_space_mm: 30 }, save }}
+                />,
+            );
+            expect(space()).toHaveValue(30);
+
+            fireEvent.change(space()!, { target: { value: '' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() => expect(onClose).toHaveBeenCalled());
+            expect(save).toHaveBeenCalledWith({ signature_space_mm: null });
+        });
+
+        it('says what it takes, and holds Save, when the gap is out of range', async () => {
+            const { save, onClose } = renderWithLayout();
+            fireEvent.click(screen.getByLabelText(/signature lines/));
+
+            fireEvent.change(space()!, { target: { value: '60' } });
+            expect(screen.getByText('Enter a whole number from 5 to 40.')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+            fireEvent.change(space()!, { target: { value: '12' } });
+            expect(screen.queryByText('Enter a whole number from 5 to 40.')).not.toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+            await waitFor(() => expect(onClose).toHaveBeenCalled());
+            expect(save).toHaveBeenCalledWith({ signature_lines: true, signature_space_mm: 12 });
+        });
+
+        it('lets Save through again when the signature lines are turned back off', () => {
+            renderWithLayout();
+            fireEvent.click(screen.getByLabelText(/signature lines/));
+            fireEvent.change(space()!, { target: { value: '60' } });
+            expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+            fireEvent.click(screen.getByLabelText(/signature lines/));
+
+            expect(space()).not.toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+        });
+    });
+
     it('stays open with an error when the account save fails, saving nothing on the device', async () => {
         const { onSave, onClose } = renderWithLayout(jest.fn().mockRejectedValue(new Error('network')));
 

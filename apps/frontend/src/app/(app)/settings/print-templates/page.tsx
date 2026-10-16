@@ -10,7 +10,20 @@ import { toast } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { Button, ConfirmDialog, PageShell, Select } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { DEFAULT_HEADER_CONFIG, isThermalPaper, PAPER_SIZES, resolveHeaderConfig } from '@/lib/print';
+import {
+    DEFAULT_HEADER_CONFIG,
+    designFor,
+    dropOwnDesign,
+    hasOwnDesign,
+    isThermalPaper,
+    OWN_DESIGN_PAPERS,
+    PAPER_SIZES,
+    paperSizeLabel,
+    papersWithOwnDesign,
+    resolveHeaderConfig,
+    startOwnDesign,
+    withDesignFor,
+} from '@/lib/print';
 // Imported from the hook module directly: `@/lib/print` stays React-free so the
 // printer libs can import it without pulling in a client component.
 import { clearPrintTemplateCache } from '@/lib/print/use-print-header';
@@ -19,6 +32,7 @@ import { formatDate } from '@/lib/format';
 import BranchAssignments from './BranchAssignments';
 import HeaderEditor from './HeaderEditor';
 import HeaderPreview from './HeaderPreview';
+import PaperDesignPanel from './PaperDesignPanel';
 import { CheckboxRow } from './TemplateBlocks';
 
 interface PrintTemplate {
@@ -70,7 +84,7 @@ function sampleQrDataUrl(): string {
 const SAMPLE_QR = sampleQrDataUrl();
 
 export default function PrintTemplatesPage() {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const copy = t.settingsExtras.printTemplates;
     const branding = useBranding();
 
@@ -193,6 +207,12 @@ export default function PrintTemplatesPage() {
         ...(previewQr && !isThermalPaper(paperSize) ? { docQr: SAMPLE_QR, hideDocMeta: true } : {}),
     }), [branding.businessName, previewQr, paperSize]);
 
+    // The editor works on the design the previewed paper prints: its own when
+    // it has one, otherwise the main design, which A4 and every other paper share.
+    const ownDesign = hasOwnDesign(config, paperSize);
+    const design = designFor(config, paperSize);
+    const separatePapers = papersWithOwnDesign(config).filter((paper) => paper !== paperSize);
+
     return (
         <PageShell>
             <PageHeader
@@ -268,10 +288,13 @@ export default function PrintTemplatesPage() {
                             onIsDefaultChange={setIsDefault}
                             docTypes={docTypes}
                             onDocTypesChange={setDocTypes}
-                            config={config}
-                            onConfigChange={setConfig}
+                            config={design}
+                            onConfigChange={(next) => setConfig(withDesignFor(config, paperSize, next))}
                             onUpload={uploadImage}
                             uploading={uploading}
+                            designNote={ownDesign
+                                ? fmt(copy.paperDesigns.editing, { paper: paperSizeLabel(paperSize) })
+                                : undefined}
                         />
 
                         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-3 md:p-4 lg:sticky lg:top-4 lg:self-start">
@@ -295,6 +318,21 @@ export default function PrintTemplatesPage() {
                                     </Select>
                                 </div>
                             </div>
+
+                            {OWN_DESIGN_PAPERS.includes(paperSize) ? (
+                                <PaperDesignPanel
+                                    paperSize={paperSize}
+                                    own={ownDesign}
+                                    onStart={() => setConfig(startOwnDesign(config, paperSize))}
+                                    onDrop={() => setConfig(dropOwnDesign(config, paperSize))}
+                                />
+                            ) : separatePapers.length ? (
+                                <p className="text-xs text-gray-500">
+                                    {fmt(copy.paperDesigns.othersOwn, {
+                                        papers: separatePapers.map(paperSizeLabel).join(', '),
+                                    })}
+                                </p>
+                            ) : null}
 
                             <HeaderPreview
                                 config={config}

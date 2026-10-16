@@ -1,9 +1,10 @@
-import { IsString, IsOptional, IsEnum, IsBoolean, IsIn, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean, IsIn, IsInt, Max, MaxLength, Min } from 'class-validator';
 import {
   INVOICE_BALANCE_MODES,
   INVOICE_FOOTER_MAX_LENGTH,
   INVOICE_LAYOUTS,
   INVOICE_PADDINGS,
+  INVOICE_SIGNATURE_SPACE_MM,
   INVOICE_TABLE_BORDERS,
   INVOICE_TABLE_STYLES,
   INVOICE_WARRANTY_COLUMNS,
@@ -111,4 +112,11 @@ export class UpdateMemberInvoicePrintDto {
   @IsString()
   @MaxLength(INVOICE_FOOTER_MAX_LENGTH)
   footer_text?: string | null;
+
+  /** Whole mm above the signature lines; `null` goes back to the built-in gap. */
+  @IsOptional()
+  @IsInt()
+  @Min(INVOICE_SIGNATURE_SPACE_MM.min)
+  @Max(INVOICE_SIGNATURE_SPACE_MM.max)
+  signature_space_mm?: number | null;
 }
