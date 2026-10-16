@@ -90,12 +90,14 @@ export const supplierPaymentsAdapter: PartyPaymentsAdapter = {
         return ((summary as { open_bills?: OpenBill[] } | null)?.open_bills ?? []);
     },
     allocate: (paymentId, allocations) => api.allocateSupplierPayment(paymentId, allocations),
-    print: (payment, { businessName, headerConfig, locale, t }) => {
+    print: (payment, { businessName, headerConfig, paperSize, locale, t }) => {
         const copy = t.supplierPayments;
         const supplier = payment.supplier;
         printSupplierPaymentReceipt({
             businessName,
             headerConfig,
+            storeName: payment.store?.name,
+            storeAddress: payment.store?.address ?? undefined,
             paymentNumber: payment.payment_number ?? payment.id,
             date: formatDateTime(payment.created_at, locale),
             direction: payment.type === 'PAYOUT' ? 'receive' : 'pay',
@@ -123,6 +125,6 @@ export const supplierPaymentsAdapter: PartyPaymentsAdapter = {
                 payTitle: copy.print.payTitle,
                 footer: copy.print.footer,
             },
-        });
+        }, paperSize);
     },
 };

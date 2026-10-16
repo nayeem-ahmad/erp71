@@ -332,6 +332,7 @@ export class CustomersService {
             include: {
                 customer: { select: { id: true, name: true, phone: true, customer_code: true, due_balance: true } },
                 creator: { select: { id: true, name: true } },
+                store: { select: { id: true, name: true, address: true } },
             },
         });
         if (!payment) throw new NotFoundException('Customer payment not found');
@@ -879,6 +880,7 @@ export class CustomersService {
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
                     creator: { select: { id: true, name: true } },
+                    store: { select: { id: true, name: true, address: true } },
                 },
                 orderBy: { created_at: 'desc' },
                 skip,
@@ -969,6 +971,7 @@ export class CustomersService {
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
                     creator: { select: { id: true, name: true } },
+                    store: { select: { id: true, name: true, address: true } },
                 },
             });
 
@@ -1098,6 +1101,7 @@ export class CustomersService {
                 include: {
                     customer: { select: { id: true, name: true, phone: true, customer_code: true } },
                     creator: { select: { id: true, name: true } },
+                    store: { select: { id: true, name: true, address: true } },
                 },
             });
 

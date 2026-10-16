@@ -7,6 +7,9 @@ export interface SupplierPaymentReceiptData {
     businessName?: string;
     /** Tenant header design; falls back to the built-in default when omitted. */
     headerConfig?: DeepPartial<PrintHeaderConfig>;
+    /** The payment's branch — fills the letterhead's `{{store_name}}` and `{{address}}`. */
+    storeName?: string;
+    storeAddress?: string;
     paymentNumber: string;
     date: string;
     direction: 'pay' | 'receive';
@@ -48,7 +51,14 @@ export function printSupplierPaymentReceipt(
 
     const headerContext: HeaderContext = {
         docTitle: title,
+        docNumber: data.paymentNumber,
+        docDate: data.date,
         companyName: data.businessName || 'RETAIL STORE',
+        storeName: data.storeName,
+        address: data.storeAddress,
+        preparedBy: data.recordedBy,
+        // The body prints the serial and date; tokens in the letterhead still fill.
+        hideDocMeta: true,
     };
     const headerHtml = renderHeaderHtml(data.headerConfig, headerContext, paperSize);
 
