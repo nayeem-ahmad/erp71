@@ -13,7 +13,7 @@ jest.mock('@/lib/i18n', () => {
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import CustomerPaymentsPage from './page';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, fetchWithAuth } from '@/lib/api';
 import { printCustomerPaymentReceipt } from '@/lib/customer-payment-receipt';
 import { useToastStore } from '@/lib/toast';
 
@@ -49,6 +49,7 @@ jest.mock('@/lib/api', () => ({
         getNextCustomerPaymentNumber: jest.fn().mockResolvedValue({ payment_number: 'CPY-00008' }),
         deleteCustomerCreditPayment: jest.fn(),
         getPaymentMethods: jest.fn(),
+        getSalesSettings: jest.fn().mockResolvedValue(null),
     },
 }));
 
@@ -190,11 +191,29 @@ describe('CustomerPaymentsPage — details', () => {
 
         fireEvent.click(within(panel).getByRole('button', { name: 'Print money receipt' }));
 
-        expect(printCustomerPaymentReceipt).toHaveBeenCalledWith(expect.objectContaining({
+        await waitFor(() => expect(printCustomerPaymentReceipt).toHaveBeenCalledWith(expect.objectContaining({
             paymentNumber: 'CPY-00005',
             method: 'bKash',
             direction: 'receive',
-        }));
+        }), expect.anything()));
+    });
+
+    it('prints on the counter\'s paper with the letterhead of the payment\'s branch', async () => {
+        const pressClub = { lines: [{ text: 'PRESS CLUB', fontSizePt: 9 }] };
+        (fetchWithAuth as jest.Mock).mockImplementation(async (url: string) => (
+            url.includes('storeId=store-2') ? { template_id: 't-2', name: 'Press Club', config: pressClub } : null
+        ));
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ paper_size: 'A5' });
+        setUp({ payments: [{ ...receipt, store_id: 'store-2', store: { id: 'store-2', name: 'Press Club', address: '12 Topkhana Road' } }] });
+        const panel = await openRow('CPY-00005');
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Print money receipt' }));
+
+        await waitFor(() => expect(printCustomerPaymentReceipt).toHaveBeenCalledWith(expect.objectContaining({
+            headerConfig: pressClub,
+            storeName: 'Press Club',
+            storeAddress: '12 Topkhana Road',
+        }), 'A5'));
     });
 
     it('deletes through the app\'s own confirmation, not the browser\'s', async () => {
@@ -339,7 +358,7 @@ describe('CustomerPaymentsPage — entry', () => {
         const [saved] = useToastStore.getState().toasts;
         expect(saved.message).toBe('CPY-00008 saved');
         act(() => saved.action!.onClick());
-        expect(printCustomerPaymentReceipt).toHaveBeenCalledWith(expect.objectContaining({ paymentNumber: 'CPY-00008' }));
+        await waitFor(() => expect(printCustomerPaymentReceipt).toHaveBeenCalledWith(expect.objectContaining({ paymentNumber: 'CPY-00008' }), expect.anything()));
     });
 
     it('prints straight away with Save & print', async () => {

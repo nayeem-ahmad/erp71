@@ -8,6 +8,7 @@ import { DataTable, createdAtColumn } from '@/components/data-table';
 import { applyCreatedRangeQuery } from '@/lib/created-range';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { formatBDT } from '@/lib/format';
 import { toast } from '@/lib/toast';
@@ -49,6 +50,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
     const ui = t.partyPayments;
     const { businessName } = useBranding();
     const printHeader = usePrintHeader('MONEY_RECEIPT');
+    const { paperSize } = useSalePrintPrefs();
     const searchParams = useSearchParams();
     const presetPartyId = searchParams.get(adapter.partyParam) ?? '';
     const docked = useMediaQuery('(min-width: 1280px)');
@@ -134,9 +136,11 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
         void loadParties(true);
     }, [loadPayments, loadParties]);
 
-    const print = useCallback((payment: PartyPayment) => {
-        adapter.print(payment, { businessName: businessName ?? undefined, headerConfig: printHeader.headerConfig, locale, t });
-    }, [adapter, businessName, printHeader.headerConfig, locale, t]);
+    const print = useCallback(async (payment: PartyPayment) => {
+        // The payment's branch picks the letterhead, as a sale's does on its invoice.
+        const header = await printHeader.resolve(payment.store_id ?? undefined);
+        adapter.print(payment, { businessName: businessName ?? undefined, headerConfig: header.headerConfig, paperSize, locale, t });
+    }, [adapter, businessName, printHeader, paperSize, locale, t]);
 
     const printLabel = useCallback(
         (payment: PartyPayment) => (adapter.directionOf(payment) === 'pay' ? labels.printVoucher : labels.printReceipt),
@@ -152,9 +156,9 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
 
     const handleCreated = (saved: PartyPayment, { print: andPrint }: { print: boolean }) => {
         toast.success(formatMessage(ui.saved, { serial: saved.payment_number ?? '' }), {
-            action: { label: printLabel(saved), onClick: () => print(saved) },
+            action: { label: printLabel(saved), onClick: () => void print(saved) },
         });
-        if (andPrint) print(saved);
+        if (andPrint) void print(saved);
         setFreshId(saved.id);
         // Stay open for the next one, cleared.
         openCreate();
@@ -284,7 +288,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                 <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => print(row.original)}
+                    onClick={() => void print(row.original)}
                     aria-label={printLabel(row.original)}
                     title={printLabel(row.original)}
                 >
@@ -421,7 +425,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                                 ui={ui}
                                 common={t.common}
                                 locale={locale}
-                                onPrint={() => print(current)}
+                                onPrint={() => void print(current)}
                                 onEdit={() => setPanel({ kind: 'edit', payment: current })}
                                 onDuplicate={() => openCreate(current)}
                                 onDelete={() => setDeleteTarget(current)}

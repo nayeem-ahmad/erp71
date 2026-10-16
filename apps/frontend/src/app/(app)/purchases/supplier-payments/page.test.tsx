@@ -13,7 +13,8 @@ jest.mock('@/lib/i18n', () => {
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SupplierPaymentsPage from './page';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, fetchWithAuth } from '@/lib/api';
+import { printSupplierPaymentReceipt } from '@/lib/supplier-payment-receipt';
 
 // Every list follows the branch filter; two branches, header = store-1.
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
@@ -48,6 +49,7 @@ jest.mock('@/lib/api', () => ({
         allocateSupplierPayment: jest.fn(),
         getNextSupplierPaymentNumber: jest.fn().mockResolvedValue({ payment_number: 'SPY-00012' }),
         getPaymentMethods: jest.fn(),
+        getSalesSettings: jest.fn().mockResolvedValue(null),
     },
 }));
 
@@ -124,6 +126,27 @@ describe('SupplierPaymentsPage — summary', () => {
         expect(tile('Paid')).toHaveTextContent('Bank');
         expect(tile('Refunds received')).toHaveTextContent('40.00');
         expect(tile('Net paid')).toHaveTextContent('210.00');
+    });
+});
+
+describe('SupplierPaymentsPage — print', () => {
+    it('prints on the counter\'s paper with the letterhead of the payment\'s branch', async () => {
+        const pressClub = { lines: [{ text: 'PRESS CLUB', fontSizePt: 9 }] };
+        (fetchWithAuth as jest.Mock).mockImplementation(async (url: string) => (
+            url.includes('storeId=store-2') ? { template_id: 't-2', name: 'Press Club', config: pressClub } : null
+        ));
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ paper_size: 'A5' });
+        setUp({ payments: [{ ...payment, store_id: 'store-2', store: { id: 'store-2', name: 'Press Club', address: '12 Topkhana Road' } }] });
+        const panel = await openRow('SP-00007');
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Print payment voucher' }));
+
+        await waitFor(() => expect(printSupplierPaymentReceipt).toHaveBeenCalledWith(expect.objectContaining({
+            paymentNumber: 'SP-00007',
+            headerConfig: pressClub,
+            storeName: 'Press Club',
+            storeAddress: '12 Topkhana Road',
+        }), 'A5'));
     });
 });
 

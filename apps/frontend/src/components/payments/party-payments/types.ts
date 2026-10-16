@@ -1,6 +1,6 @@
 import type { BreadcrumbItem } from '@/lib/page-breadcrumbs';
 import type { MessageDictionary } from '@/lib/localization/messages';
-import type { DeepPartial, PrintHeaderConfig } from '@/lib/print/types';
+import type { DeepPartial, PaperSize, PrintHeaderConfig } from '@/lib/print/types';
 import type { PaymentDiscountLabels } from '../PaymentDiscountField';
 
 /**
@@ -47,6 +47,9 @@ export interface PartyPayment {
     unapplied_amount?: number;
     customer?: PaymentParty | null;
     supplier?: PaymentParty | null;
+    /** The branch the payment was taken at; its letterhead prints the receipt. */
+    store_id?: string | null;
+    store?: { id: string; name: string; address?: string | null } | null;
 }
 
 export interface OpenBill {
@@ -152,6 +155,8 @@ export interface PartyPaymentsLabels {
 export interface PrintContext {
     businessName?: string;
     headerConfig?: DeepPartial<PrintHeaderConfig>;
+    /** The paper this counter prints on — the same answer invoices use. */
+    paperSize: PaperSize;
     locale: string;
     t: MessageDictionary;
 }
