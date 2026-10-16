@@ -22,6 +22,7 @@ import {
     RecordTenantFeeDto,
     UpdateTenantLedgerEntryDto,
     AdminSellSmsCreditsDto,
+    AdminSellMessagingCreditsDto,
     AdminSellAiCreditsDto,
     AdminGrantTenantAddonDto,
     SetAdminTenantBusinessTypeDto,
@@ -234,6 +235,15 @@ export class AdminTenantsController {
         @Request() req: any,
     ) {
         return this.adminTenantsService.sellSmsCredits(tenantId, dto, req.user.userId);
+    }
+
+    @Post(':tenantId/messaging-credits')
+    sellMessagingCredits(
+        @Param('tenantId') tenantId: string,
+        @Body() dto: AdminSellMessagingCreditsDto,
+        @Request() req: any,
+    ) {
+        return this.adminTenantsService.sellMessagingCredits(tenantId, dto, req.user.userId);
     }
 
     @Post(':tenantId/ai-credits')

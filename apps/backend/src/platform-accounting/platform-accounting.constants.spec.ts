@@ -73,7 +73,12 @@ describe('BILLING_EVENT_POSTINGS', () => {
                 // gateway refund, neither of which is part of the account
                 // current. `ledgerEventDelta` scores an unknown type 0, so this
                 // also catches a new event type added to one side only.
-                const settled = eventType === 'sms_credit_sale_payment' || eventType === 'ai_credit_sale_payment';
+                const settled = [
+                    'sms_credit_sale_payment',
+                    'whatsapp_credit_sale_payment',
+                    'email_credit_sale_payment',
+                    'ai_credit_sale_payment',
+                ].includes(eventType);
                 expect({ eventType, tenantDelta: settled ? 0 : tenantDelta })
                     .toEqual({ eventType, tenantDelta: 0 });
             }

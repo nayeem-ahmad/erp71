@@ -7,6 +7,7 @@ import {
     PLATFORM_ROLES,
     type PlatformRole,
 } from '@erp71/shared-types';
+import { MESSAGING_CHANNELS, type MessagingChannel } from '../sms/messaging-channel';
 
 export class ListAdminTenantsQueryDto {
     @IsOptional() @IsString() search?: string;
@@ -198,6 +199,13 @@ export class UpdateTenantLedgerEntryDto {
 }
 
 export class AdminSellSmsCreditsDto {
+    @IsInt() @Min(1) credits: number;
+    @IsOptional() @IsNumber() @IsPositive() amount?: number;
+    @IsOptional() @IsString() notes?: string;
+}
+
+export class AdminSellMessagingCreditsDto {
+    @IsIn(MESSAGING_CHANNELS as unknown as string[]) channel: MessagingChannel;
     @IsInt() @Min(1) credits: number;
     @IsOptional() @IsNumber() @IsPositive() amount?: number;
     @IsOptional() @IsString() notes?: string;

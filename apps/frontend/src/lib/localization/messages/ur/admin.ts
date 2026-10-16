@@ -59,13 +59,14 @@ export const adminMessages = {
         },
         actions: {
             viewEdit: 'ٹیننٹ دیکھیں / ترمیم کریں',
-            sellSmsCredits: 'ایس ایم ایس کریڈٹ فروخت کریں',
+            sellSmsCredits: 'میسجنگ کریڈٹ فروخت کریں',
             sellAiCredits: 'اے آئی کریڈٹ فروخت کریں',
         },
         sellCredits: {
-            smsTitle: 'ایس ایم ایس کریڈٹ فروخت کریں',
+            smsTitle: 'میسجنگ کریڈٹ فروخت کریں',
             aiTitle: 'اے آئی کریڈٹ فروخت کریں',
             creditsLabel: 'شامل کرنے کے لیے کریڈٹ',
+            channelLabel: 'چینل',
             creditsPlaceholder: 'مثلاً 500',
             creditsRequired: 'درست کریڈٹ مقدار درج کریں۔',
             amountLabel: 'ادائیگی کی رقم (بی ڈی ٹی، اختیاری)',
@@ -77,7 +78,7 @@ export const adminMessages = {
             confirm: 'کریڈٹ شامل کریں',
             saving: 'محفوظ ہو رہا ہے…',
             failed: 'کریڈٹ شامل نہیں ہو سکے',
-            smsSuccess: '{name} میں {credits} ایس ایم ایس کریڈٹ شامل ہو گئے',
+            smsSuccess: '{name} میں {credits} {channel} کریڈٹ شامل ہو گئے',
             aiSuccess: '{name} میں {credits} اے آئی کریڈٹ شامل ہو گئے',
         },
         payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                 subscription_fee: 'سبسکرپشن فیس',
                 sms_credit_sale_payment: 'ایس ایم ایس کریڈٹ کی فروخت',
                 ai_credit_sale_payment: 'اے آئی کریڈٹ کی فروخت',
+                whatsapp_credit_sale_payment: 'واٹس ایپ کریڈٹ کی فروخت',
+                email_credit_sale_payment: 'ای میل کریڈٹ کی فروخت',
             },
             paymentModal: {
                 title: 'ادائیگی درج کریں',

@@ -131,6 +131,18 @@ export const BILLING_EVENT_POSTINGS: Record<string, BillingEventPosting> = {
         label: 'AI credit sale',
         resolveCashLeg: 'debit',
     },
+    whatsapp_credit_sale_payment: {
+        debit: PLATFORM_ACCOUNT.BANK,
+        credit: PLATFORM_ACCOUNT.WHATSAPP_REVENUE,
+        label: 'WhatsApp credit sale',
+        resolveCashLeg: 'debit',
+    },
+    email_credit_sale_payment: {
+        debit: PLATFORM_ACCOUNT.BANK,
+        credit: PLATFORM_ACCOUNT.EMAIL_REVENUE,
+        label: 'Email credit sale',
+        resolveCashLeg: 'debit',
+    },
 
     // ── Money back ───────────────────────────────────────────────────────────
     // An admin-entered refund against the tenant's billing ledger: cash leaves,

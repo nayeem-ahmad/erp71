@@ -59,13 +59,14 @@ export const adminMessages = {
             },
             actions: {
                 viewEdit: "দেখুন / সম্পাদনা",
-                sellSmsCredits: "SMS ক্রেডিট বিক্রি",
+                sellSmsCredits: "মেসেজিং ক্রেডিট বিক্রি",
                 sellAiCredits: "AI ক্রেডিট বিক্রি",
             },
             sellCredits: {
-                smsTitle: "SMS ক্রেডিট বিক্রি",
+                smsTitle: "মেসেজিং ক্রেডিট বিক্রি",
                 aiTitle: "AI ক্রেডিট বিক্রি",
                 creditsLabel: "যোগ করার ক্রেডিট",
+                channelLabel: "চ্যানেল",
                 creditsPlaceholder: "যেমন 500",
                 creditsRequired: "একটি বৈধ ক্রেডিট পরিমাণ লিখুন।",
                 amountLabel: "পেমেন্ট পরিমাণ (BDT, ঐচ্ছিক)",
@@ -77,7 +78,7 @@ export const adminMessages = {
                 confirm: "ক্রেডিট যোগ করুন",
                 saving: "সংরক্ষণ হচ্ছে…",
                 failed: "ক্রেডিট যোগ করতে ব্যর্থ",
-                smsSuccess: "{name} এ {credits} SMS ক্রেডিট যোগ হয়েছে",
+                smsSuccess: "{name} এ {credits} {channel} ক্রেডিট যোগ হয়েছে",
                 aiSuccess: "{name} এ {credits} AI ক্রেডিট যোগ হয়েছে",
             },
             payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                     subscription_fee: "সাবস্ক্রিপশন ফি",
                     sms_credit_sale_payment: "SMS ক্রেডিট বিক্রি",
                     ai_credit_sale_payment: "AI ক্রেডিট বিক্রি",
+                    whatsapp_credit_sale_payment: "WhatsApp ক্রেডিট বিক্রি",
+                    email_credit_sale_payment: "ইমেইল ক্রেডিট বিক্রি",
                 },
                 paymentModal: {
                     title: "পেমেন্ট রেকর্ড করুন",

@@ -927,6 +927,8 @@ model Tenant {
   sms_on_sale      Boolean @default(false) // send SMS receipt after each sale
   sms_on_low_stock Boolean @default(false) // send SMS for low stock alerts
   sms_credits      Int     @default(0) // prepaid SMS credit balance (number of message segments remaining)
+  whatsapp_credits Int     @default(0) // prepaid WhatsApp credit balance (one per message)
+  email_credits    Int     @default(0) // prepaid email credit balance (one per recipient)
   ai_credits_bonus Int     @default(0) // purchased / admin-granted AI credits (adds to plan monthly allowance)
 
   report_weekly_enabled  Boolean @default(false)
@@ -1153,6 +1155,7 @@ model Tenant {
   chatConversations          ChatConversation[]
   termsAcceptances           TermsAcceptance[]
   activationRequests         ActivationRequest[]
+  creditTopupRequests        CreditTopupRequest[]
   recordHistory              RecordHistory[]
 
   @@index([deleted_at])
@@ -4891,13 +4894,17 @@ model BillingEvent {
   @@index([tenant_id, provider_name])
 }
 
-// ── SMS Credits (prepaid balance the shop spends when sending SMS) ────────────
+// ── Messaging Credits (prepaid balances a shop spends sending SMS, WhatsApp, email)
 
-// Purchasable top-up packages (number of SMS credits for a fixed price).
+// Purchasable top-up packages (a number of credits on one channel for a fixed
+// price). Named for SMS because it predates the other channels; `channel` says
+// which balance a package tops up.
 model SmsPackage {
   id         String   @id @default(uuid())
+  /// SMS | WHATSAPP | EMAIL — the balance this package adds to.
+  channel    String   @default("SMS")
   name       String
-  credits    Int // SMS credits granted on purchase
+  credits    Int // credits granted on purchase
   price      Decimal  @db.Decimal(12, 2) // price for the package
   currency   String   @default("BDT")
   is_active  Boolean  @default(true)
@@ -4905,22 +4912,83 @@ model SmsPackage {
   created_at DateTime @default(now())
 
   @@index([is_active, sort_order])
+  @@index([channel, is_active, sort_order])
 }
 
-// Ledger of every change to a tenant's SMS credit balance.
+// Ledger of every change to a tenant's messaging credit balances, one channel
+// per row. Named for SMS because it predates the other channels.
 model SmsTransaction {
   id            String   @id @default(uuid())
   tenant_id     String
+  /// SMS | WHATSAPP | EMAIL — the balance this entry moved.
+  channel       String   @default("SMS")
   type          String // PURCHASE | USAGE | ADJUSTMENT | REFUND
   credits       Int // positive = credited, negative = consumed
   balance_after Int // resulting balance after this entry
   description   String?
-  recipient     String? // destination phone number for USAGE entries
+  recipient     String? // destination phone number / email address for USAGE entries
   reference     String? // billing/payment reference for PURCHASE entries
   created_at    DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
+  @@index([tenant_id, created_at])
+  @@index([tenant_id, channel, created_at])
+}
+
+/// A tenant's claim that they paid for a messaging-credit package.
+///
+/// Same shape and the same rule as `ActivationRequest`: the tenant sends money
+/// to the team's bKash number out of band and submits the TrxID, and nothing
+/// they do here adds a single credit. Only a platform admin approving the
+/// request — after finding the payment in the bKash app — grants credits, and
+/// the PENDING → APPROVED transition is what stops a second approval from
+/// granting them twice.
+///
+/// Every request opens a support ticket (`support_thread_id`) so it lands in
+/// the admin inbox, and the decision is posted back to that ticket.
+model CreditTopupRequest {
+  id                String    @id @default(uuid())
+  tenant_id         String
+  /// The member who submitted it — an owner or whoever else holds billing access.
+  submitted_by      String
+  /// SMS | WHATSAPP | EMAIL — the balance the package tops up.
+  channel           String
+  /// The package as it was when the tenant chose it. Copied rather than only
+  /// referenced, so a package repriced or retired later does not change what
+  /// this request was for.
+  package_id        String?
+  package_name      String
+  credits           Int
+  /// What the package cost, which is what the tenant was asked to send.
+  amount            Decimal   @db.Decimal(12, 2)
+  currency          String    @default("BDT")
+  /// BKASH today; a string so another wallet needs no schema change.
+  method            String    @default("BKASH")
+  /// The bKash TrxID. Unique per method so one receipt buys one package.
+  transaction_id    String
+  /// The wallet the money came from, so an admin can match a receipt.
+  sender_number     String?
+  note              String?
+  /// PENDING | APPROVED | REJECTED.
+  status            String    @default("PENDING")
+  support_thread_id String?   @unique
+  reviewed_by       String?
+  reviewed_at       DateTime?
+  /// The admin's reason, shown to the tenant verbatim on a rejection.
+  review_note       String?
+  /// What an approval actually granted and received. An admin may correct both
+  /// — a short payment buys fewer credits — so the claim above stays as made.
+  credits_granted   Int?
+  amount_received   Decimal?  @db.Decimal(12, 2)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  supportThread SupportThread? @relation(fields: [support_thread_id], references: [id], onDelete: SetNull)
+
+  @@unique([method, transaction_id])
+  @@index([status, created_at])
   @@index([tenant_id, created_at])
 }
 
@@ -7298,6 +7366,8 @@ model SupportThread {
   feedback  Feedback?        @relation(fields: [feedbackId], references: [id], onDelete: SetNull)
   createdBy User?            @relation("SupportThreadCreator", fields: [createdById], references: [id], onDelete: SetNull)
   messages  SupportMessage[]
+  /// Set when the ticket was opened by a messaging-credit top-up request.
+  creditTopupRequest CreditTopupRequest?
 
   @@index([tenantId, status])
   @@index([tenantId, category])

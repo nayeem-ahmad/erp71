@@ -18,6 +18,14 @@ import type {
 } from '@/components/admin/referrals/types';
 import type { CloudinaryUpload, UploadPurpose, UploadSignature } from '@/lib/uploads/direct-upload';
 import type { CandidateRow, MatchManifest } from '@/types/match';
+import type {
+    AdminCreditTopupRequest,
+    CreditTopupRequestRecord,
+    CreditTopupStatus,
+    MessagingChannel,
+    MessagingCreditPackage,
+    MessagingCreditSummary,
+} from './messaging-credits';
 import type { DailyReport } from '@/lib/daily-report';
 import { browserApiBase } from './api-base';
 import { getQueryClient, ME_QUERY_KEY, readMe } from './query-client';
@@ -86,6 +94,14 @@ export type AdminTenantAddonSubscription = {
 /** How a workspace can pay for its first period while no gateway is live. */
 export type ActivationPaymentMethod = 'BKASH' | 'NAGAD' | 'BANK_TRANSFER';
 
+export type {
+    MessagingChannel,
+    MessagingCreditPackage,
+    MessagingCreditSummary,
+    CreditTopupRequestRecord,
+    CreditTopupStatus,
+    AdminCreditTopupRequest,
+} from './messaging-credits';
 export type ActivationRequestRecord = {
     id: string;
     method: ActivationPaymentMethod;
@@ -3747,14 +3763,54 @@ export const api = {
             body: JSON.stringify(data),
             headers: { 'Content-Type': 'application/json' },
         }),
-    getSmsCreditSummary: () => fetchWithAuth('/sms-credits/summary'),
-    purchaseSmsCredits: (data: { packageId: string }) => fetchWithAuth('/sms-credits/purchase', {
+    // ── Messaging credits (SMS, WhatsApp, email) ───────────────────────────────
+    // A shop never adds credits itself: it pays by bKash and submits the TrxID,
+    // and a platform admin approves the request after checking the payment.
+    getSmsCreditSummary: (): Promise<MessagingCreditSummary> => fetchWithAuth('/sms-credits/summary'),
+    submitCreditTopupRequest: (data: {
+        packageId: string;
+        transactionId: string;
+        senderNumber: string;
+        note?: string;
+    }): Promise<CreditTopupRequestRecord> => fetchWithAuth('/sms-credits/topup-requests', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
-    confirmSmsCreditsPurchase: (data: { packageId: string; reference?: string }) => fetchWithAuth('/sms-credits/confirm', {
+    getAdminCreditTopups: (params?: { status?: CreditTopupStatus }): Promise<AdminCreditTopupRequest[]> => {
+        const query = params?.status ? `?status=${params.status}` : '';
+        return fetchWithAuth(`/admin/credit-topups${query}`);
+    },
+    approveCreditTopup: (id: string, data: { amount?: number; credits?: number; note?: string }) =>
+        fetchWithAuth(`/admin/credit-topups/${id}/approve`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    rejectCreditTopup: (id: string, data: { reason: string }) =>
+        fetchWithAuth(`/admin/credit-topups/${id}/reject`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    getAdminCreditPackages: (): Promise<MessagingCreditPackage[]> => fetchWithAuth('/admin/credit-topups/packages'),
+    createAdminCreditPackage: (data: {
+        channel: MessagingChannel;
+        name: string;
+        credits: number;
+        price: number;
+        sort_order?: number;
+        is_active?: boolean;
+    }): Promise<MessagingCreditPackage> => fetchWithAuth('/admin/credit-topups/packages', {
         method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+    }),
+    updateAdminCreditPackage: (
+        id: string,
+        data: { name?: string; credits?: number; price?: number; sort_order?: number; is_active?: boolean },
+    ): Promise<MessagingCreditPackage> => fetchWithAuth(`/admin/credit-topups/packages/${id}`, {
+        method: 'PATCH',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
@@ -4266,6 +4322,15 @@ export const api = {
         fetchWithAuth(`/admin/tenants/ledger/${eventId}`, { method: 'DELETE' }),
     sellTenantSmsCredits: (tenantId: string, data: { credits: number; amount?: number; notes?: string }) =>
         fetchWithAuth(`/admin/tenants/${tenantId}/sms-credits`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        }),
+    sellTenantMessagingCredits: (
+        tenantId: string,
+        data: { channel: MessagingChannel; credits: number; amount?: number; notes?: string },
+    ) =>
+        fetchWithAuth(`/admin/tenants/${tenantId}/messaging-credits`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),

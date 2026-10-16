@@ -322,6 +322,8 @@ export const routes = {
         // Payments submitted by workspaces awaiting their first activation,
         // queued for a human to check against the bKash/Nagad merchant app.
         activationRequests: '/admin/activation-requests',
+        // bKash payments for SMS, WhatsApp and email credits, verified by hand.
+        creditTopups: '/admin/credit-topups',
         users: '/admin/users',
         // The platform's own books. Deliberately `/admin/accounting`, not a
         // second entrance to `/accounting` — that one is a shop's ledger and

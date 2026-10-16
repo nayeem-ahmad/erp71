@@ -376,7 +376,55 @@ export async function seedPlatformReferenceData(
         features_json: { premiumAccountingAdvanced: true },
     });
 
+    await seedMessagingCreditPackages(prisma);
+
     return { FREE: free, BASIC: basic, ACCOUNTING: accounting, STANDARD: standard, PREMIUM: premium };
+}
+
+/**
+ * The top-up packages a shop chooses from on Settings › Messaging Credits, one
+ * list per channel. Production had none of these until WhatsApp and email were
+ * metered — the SMS list only ever lived in the dev seed — and a channel with
+ * no package is a balance nobody can top up.
+ *
+ * Create-once per channel, like everything else here: a channel that already
+ * has any package, active or not, is left alone, so a platform admin's prices
+ * (Admin › Credit Top-ups › Packages) survive every deploy.
+ */
+export const DEFAULT_MESSAGING_CREDIT_PACKAGES: Record<
+    'SMS' | 'WHATSAPP' | 'EMAIL',
+    Array<{ name: string; credits: number; price: number }>
+> = {
+    SMS: [
+        { name: 'Starter — 500 SMS', credits: 500, price: 250 },
+        { name: 'Business — 2,000 SMS', credits: 2000, price: 900 },
+        { name: 'Pro — 5,000 SMS', credits: 5000, price: 2000 },
+        { name: 'Enterprise — 20,000 SMS', credits: 20000, price: 7000 },
+    ],
+    WHATSAPP: [
+        { name: 'Starter — 500 WhatsApp', credits: 500, price: 500 },
+        { name: 'Business — 2,000 WhatsApp', credits: 2000, price: 1800 },
+        { name: 'Pro — 5,000 WhatsApp', credits: 5000, price: 4000 },
+    ],
+    EMAIL: [
+        { name: 'Starter — 1,000 emails', credits: 1000, price: 100 },
+        { name: 'Business — 5,000 emails', credits: 5000, price: 400 },
+        { name: 'Pro — 20,000 emails', credits: 20000, price: 1200 },
+    ],
+};
+
+export async function seedMessagingCreditPackages(prisma: PrismaClient): Promise<void> {
+    for (const [channel, packages] of Object.entries(DEFAULT_MESSAGING_CREDIT_PACKAGES)) {
+        const existing = await prisma.smsPackage.count({ where: { channel } });
+        if (existing > 0) continue;
+
+        for (const [index, pkg] of packages.entries()) {
+            await prisma.smsPackage.create({
+                data: { ...pkg, channel, currency: 'BDT', is_active: true, sort_order: index },
+            });
+        }
+        console.log(`  ${channel}: seeded ${packages.length} credit package(s)`);
+    }
 }
 
 // Standalone entry point: `npm run db:seed:platform`. This is what production

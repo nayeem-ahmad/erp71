@@ -88,6 +88,7 @@ import { PlatformAccountingModule } from './platform-accounting/platform-account
 import { NavigationModule } from './navigation/navigation.module';
 import { SubscriptionPlansModule } from './subscription-plans/subscription-plans.module';
 import { SmsModule } from './sms/sms.module';
+import { CreditTopupsModule } from './credit-topups/credit-topups.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { TenantMessagingModule } from './tenant-messaging/tenant-messaging.module';
 import { DiscountCodesModule } from './discount-codes/discount-codes.module';
@@ -218,6 +219,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         PurchaseReportsModule,
         BillingModule,
         ActivationModule,
+        CreditTopupsModule,
         AdminTenantsModule,
         TenantBackupModule,
         ExternalSyncModule,
