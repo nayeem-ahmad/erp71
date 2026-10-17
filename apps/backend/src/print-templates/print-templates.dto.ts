@@ -412,8 +412,9 @@ export class PrintHeaderConfigDto {
     perPaper?: Record<string, unknown>;
 
     /**
-     * A whole design for A5 or Letter, printed instead of this one. Validated
-     * as strictly as the main design: it lands in the same print window.
+     * A whole design for A5, Letter or a thermal roll, printed instead of this
+     * one. Validated as strictly as the main design: it lands in the same
+     * print window.
      *
      * Typed inline rather than as `PaperDesignsDto`, which is declared below:
      * naming it here would emit a reference to the class before it exists.
@@ -421,7 +422,12 @@ export class PrintHeaderConfigDto {
     @IsOptional()
     @ValidateNested()
     @Type(() => PaperDesignsDto)
-    paperDesigns?: { A5?: PrintHeaderConfigDto; Letter?: PrintHeaderConfigDto };
+    paperDesigns?: {
+        A5?: PrintHeaderConfigDto;
+        Letter?: PrintHeaderConfigDto;
+        Thermal80?: PrintHeaderConfigDto;
+        Thermal58?: PrintHeaderConfigDto;
+    };
 }
 
 /** The papers a template can design separately — see `PrintHeaderConfigDto.paperDesigns`. */
@@ -435,6 +441,16 @@ export class PaperDesignsDto {
     @ValidateNested()
     @Type(() => PrintHeaderConfigDto)
     Letter?: PrintHeaderConfigDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => PrintHeaderConfigDto)
+    Thermal80?: PrintHeaderConfigDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => PrintHeaderConfigDto)
+    Thermal58?: PrintHeaderConfigDto;
 }
 
 export class CreatePrintTemplateDto {

@@ -1,6 +1,9 @@
 'use client';
 
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+jest.mock('@/lib/print', () => require('@/test-utils/print-paper').printModuleSpy());
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { mockBrowserPaper, printedPaper } from '@/test-utils/print-paper';
 import PurchaseReturnDetailPage from './page';
 
 const pushMock = jest.fn();
@@ -115,5 +118,24 @@ describe('PurchaseReturnDetailPage — Epic 21.4', () => {
             expect(api.deletePurchaseReturn).toHaveBeenCalledWith('pret-1');
         });
         expect(pushMock).toHaveBeenCalledWith('/purchases/returns');
+    });
+
+    describe('printing on the browser’s paper', () => {
+        let openSpy: jest.SpyInstance;
+        beforeEach(() => {
+            openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+        });
+        afterEach(() => openSpy.mockRestore());
+
+        it.each([
+            ['A5', 'A5'],
+            ['Letter', 'Letter'],
+            ['Thermal80', 'A4'],
+        ] as const)('prints a purchase return chosen as %s on %s, with that paper’s letterhead', async (chosen, printed) => {
+            mockBrowserPaper(chosen);
+            render(<PurchaseReturnDetailPage />);
+            fireEvent.click(await screen.findByRole('button', { name: /print preview/i }));
+            await waitFor(() => expect(printedPaper()).toEqual({ page: printed, letterhead: printed }));
+        });
     });
 });

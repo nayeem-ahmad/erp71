@@ -16,7 +16,10 @@ jest.mock('@/lib/i18n', () => {
 }, { virtual: true });
 
 
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+jest.mock('@/lib/print', () => require('@/test-utils/print-paper').printModuleSpy());
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { mockBrowserPaper, printedPaper } from '@/test-utils/print-paper';
 import OrdersPage from './page';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
@@ -51,6 +54,7 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/lib/format', () => ({
     formatBDT: (v: number) => `BDT ${v}`,
     formatDate: (v: string) => `DATE:${v}`,
+    formatDateTime: (v: string) => `DATETIME:${v}`,
 }));
 
 jest.mock('@/components/data-table', () => ({
@@ -215,5 +219,24 @@ describe('OrdersPage', () => {
         const row = await screen.findByTestId('row-ord-1');
         const link = within(row).getByRole('link', { name: 'Convert to Sale' });
         expect(link).toHaveAttribute('href', '/sales/new?salesOrderId=ord-1');
+    });
+
+    describe('printing on the browser’s paper', () => {
+        let openSpy: jest.SpyInstance;
+        beforeEach(() => {
+            openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+        });
+        afterEach(() => openSpy.mockRestore());
+
+        it.each([
+            ['A5', 'A5'],
+            ['Letter', 'Letter'],
+            ['Thermal80', 'A4'],
+        ] as const)('prints an order chosen as %s on %s, with that paper’s letterhead', async (chosen, printed) => {
+            mockBrowserPaper(chosen);
+            render(<OrdersPage />);
+            fireEvent.click(within(await screen.findByTestId('row-ord-1')).getByTitle('Print'));
+            await waitFor(() => expect(printedPaper()).toEqual({ page: printed, letterhead: printed }));
+        });
     });
 });

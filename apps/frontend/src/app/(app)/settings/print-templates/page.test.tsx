@@ -301,6 +301,63 @@ describe('PrintTemplatesPage', () => {
         });
     });
 
+    describe('a separate design per thermal roll', () => {
+        const choosePaper = (paper: string) =>
+            fireEvent.change(screen.getByLabelText('Paper size'), { target: { value: paper } });
+        const panel = (paper: string) => within(screen.getByRole('group', { name: `${paper} design` }));
+        const nameOverride = () =>
+            screen.getByPlaceholderText('Leave blank to use your branding name') as HTMLInputElement;
+        const savedConfig = async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Save Template' }));
+            await waitFor(() => expect(mockApi.updatePrintTemplate).toHaveBeenCalled());
+            return (mockApi.updatePrintTemplate as jest.Mock).mock.calls[0][1].config;
+        };
+
+        beforeEach(() => {
+            (mockApi.updatePrintTemplate as jest.Mock).mockResolvedValue(storedTemplate);
+        });
+
+        it('designs 80mm separately, without the controls a roll cannot use', async () => {
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+            fireEvent.click(screen.getByLabelText('Print a footer on documents'));
+
+            choosePaper('Thermal80');
+            expect(panel('80mm Thermal').getByText(/shrunk to fit the roll/)).toBeInTheDocument();
+            expect(screen.getByLabelText('Show the logo on thermal receipts')).toBeInTheDocument();
+            expect(panel('80mm Thermal').queryByRole('button', { name: /Copy the/ })).not.toBeInTheDocument();
+
+            fireEvent.click(panel('80mm Thermal').getByRole('button', { name: 'Design 80mm Thermal separately' }));
+            expect(panel('80mm Thermal').getByText(/without the automatic shrinking/)).toBeInTheDocument();
+            expect(screen.queryByLabelText('Show the logo on thermal receipts')).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Repeat the footer at the bottom of every page')).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Push the footer to the bottom edge of the page')).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Let the footer run to the paper edge')).not.toBeInTheDocument();
+
+            fireEvent.change(nameOverride(), { target: { value: 'Roll Traders' } });
+            const config = await savedConfig();
+            expect(config.company.nameOverride).toBeUndefined();
+            expect(config.paperDesigns.Thermal80.company.nameOverride).toBe('Roll Traders');
+        });
+
+        it('starts 58mm from a copy of the 80mm design', async () => {
+            (mockApi.getPrintTemplates as jest.Mock).mockResolvedValue([{
+                ...storedTemplate,
+                config: { ...storedTemplate.config, paperDesigns: { Thermal80: { company: { nameOverride: 'Roll Traders' } } } },
+            }]);
+            render(<PrintTemplatesPage />);
+            await screen.findByDisplayValue('Letterhead');
+
+            choosePaper('Thermal58');
+            fireEvent.click(panel('58mm Thermal').getByRole('button', { name: 'Copy the 80mm Thermal design' }));
+            expect(nameOverride().value).toBe('Roll Traders');
+
+            const config = await savedConfig();
+            expect(config.paperDesigns.Thermal58.company.nameOverride).toBe('Roll Traders');
+            expect(config.paperDesigns.Thermal80.company.nameOverride).toBe('Roll Traders');
+        });
+    });
+
     describe('the QR code', () => {
         const preview = () => screen.getByTitle('Print header preview').getAttribute('srcdoc') ?? '';
 

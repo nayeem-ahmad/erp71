@@ -114,10 +114,26 @@ describe('CreatePrintTemplateDto', () => {
             expect(errorPaths(errors)).toEqual(['config.paperDesigns.A5.logo.url']);
         });
 
-        it('rejects a design for a paper the editor cannot design', async () => {
-            const errors = await parse({ ...base, version: 5, paperDesigns: { Thermal80: a5 } });
+        it('accepts a full design for each thermal roll', async () => {
+            const config = { ...base, version: 5, paperDesigns: { Thermal80: a5, Thermal58: { ...a5, spacingMm: 2 } } };
+            const dto = plainToInstance(CreatePrintTemplateDto, { name: 'Letterhead', config });
 
-            expect(errorPaths(errors)).toEqual(['config.paperDesigns.Thermal80']);
+            expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
+            expect(JSON.parse(JSON.stringify(dto.config.paperDesigns))).toEqual(config.paperDesigns);
+        });
+
+        it('validates a roll\'s design as strictly as the main one', async () => {
+            const unsafe = { ...a5, logo: { heightMm: 16, showOnThermal: true, url: 'javascript:alert(1)' } };
+
+            const errors = await parse({ ...base, version: 5, paperDesigns: { Thermal58: unsafe } });
+
+            expect(errorPaths(errors)).toEqual(['config.paperDesigns.Thermal58.logo.url']);
+        });
+
+        it('rejects a design for a paper the editor cannot design', async () => {
+            const errors = await parse({ ...base, version: 5, paperDesigns: { A4: a5 } });
+
+            expect(errorPaths(errors)).toEqual(['config.paperDesigns.A4']);
         });
     });
 

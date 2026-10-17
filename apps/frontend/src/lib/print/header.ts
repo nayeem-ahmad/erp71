@@ -157,12 +157,42 @@ function mergeDeep<T>(base: T, patch: DeepPartial<T> | undefined): T {
     return out as T;
 }
 
-/** Thermal rolls are too narrow for side-by-side layouts and large type. */
-function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): PrintHeaderConfig {
-    if (!isThermalPaper(paperSize)) return config;
+/**
+ * What no roll can print, whoever designed for it: a QR code wider than the
+ * roll can carry, or a footer placed against a page bottom or edge it does not
+ * have.
+ */
+function rollLimits(config: PrintHeaderConfig, paperSize: PaperSize): PrintHeaderConfig {
     const narrow = paperSize === 'Thermal58';
 
     return {
+        ...config,
+        qr: { ...config.qr, sizeMm: Math.min(qrSize(config), narrow ? 30 : 40) },
+        footer: {
+            ...config.footer,
+            // A roll has no page bottom to pin a footer to; it prints once.
+            repeatOnEveryPage: false,
+            pinToPageBottom: false,
+            // A roll is cut to length and already edge to edge — bleeding a
+            // band past the 3-4mm margin only risks the thermal head's edge.
+            bleed: false,
+        },
+    };
+}
+
+/**
+ * Squeezes a design made for sheet paper onto a roll, which is too narrow for
+ * side-by-side layouts and large type. A roll's own design is not squeezed —
+ * see `resolveHeaderConfig`. Exported for copying one roll's design onto the
+ * other, which starts the copy at the size the narrower roll can carry.
+ */
+export function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): PrintHeaderConfig {
+    if (!isThermalPaper(paperSize)) return config;
+    const narrow = paperSize === 'Thermal58';
+    // Imagery prints on a roll only when it opted in — see `showOnThermal`.
+    const onRoll = (images: TemplateImage[] | undefined) => (images ?? []).filter((image) => image.showOnThermal);
+
+    return rollLimits({
         ...config,
         layout: config.layout === 'text-only' ? 'text-only' : 'logo-above',
         logo: {
@@ -183,26 +213,27 @@ function coerceForThermal(config: PrintHeaderConfig, paperSize: PaperSize): Prin
         },
         // Same for the QR code: it stays in the column, under or over the
         // title, and no larger than the roll can scan it at.
+        // The size cap is the roll's limit, applied by `rollLimits`.
         qr: {
             ...config.qr,
-            sizeMm: Math.min(qrSize(config), narrow ? 30 : 40),
             position: qrPosition(config) === 'above-title' ? 'above-title' : 'below-title',
             offsetXMm: 0,
             offsetYMm: 0,
         },
         baseFontSizePt: Math.min(config.baseFontSizePt, narrow ? 8 : 9),
         spacingMm: Math.min(config.spacingMm, 2),
+        images: onRoll(config.images),
         footer: {
             ...config.footer,
+            images: onRoll(config.footer?.images),
             spacingMm: Math.min(config.footer?.spacingMm ?? 4, 2),
-            // A roll has no page bottom to pin a footer to; it prints once.
-            repeatOnEveryPage: false,
-            pinToPageBottom: false,
-            // A roll is cut to length and already edge to edge — bleeding a
-            // band past the 3-4mm margin only risks the thermal head's edge.
-            bleed: false,
         },
-    };
+    }, paperSize);
+}
+
+/** A design as stored, with every option it leaves unset filled from the defaults. */
+export function fillHeaderConfig(design: DeepPartial<PrintHeaderConfig> | undefined): PrintHeaderConfig {
+    return mergeDeep(DEFAULT_HEADER_CONFIG, design);
 }
 
 /**
@@ -216,9 +247,14 @@ export function resolveHeaderConfig(
     // A paper with a design of its own prints that design alone. It is filled
     // from the defaults, never from the main design, so an option left unset
     // there stays unset rather than quietly taking the A4 value.
-    const design = config?.paperDesigns?.[paperSize] ?? config;
-    const merged = mergeDeep(DEFAULT_HEADER_CONFIG, design);
+    const own = config?.paperDesigns?.[paperSize];
+    const merged = fillHeaderConfig(own ?? config);
     const withPaper = mergeDeep(merged, merged.perPaper?.[paperSize]);
+    // A roll's own design was made for the roll, so it prints as designed —
+    // logo and images included, whatever their thermal opt-in says. Only what
+    // the roll physically cannot do is held back. Everything else on a roll is
+    // a sheet design and is squeezed to fit.
+    if (own && isThermalPaper(paperSize)) return rollLimits(withPaper, paperSize);
     return coerceForThermal(withPaper, paperSize);
 }
 
@@ -325,15 +361,8 @@ function renderLines(
  * An entry with a caption but no usable image still renders — that is the
  * blank signature line a tenant leaves for someone to sign by hand.
  */
-function usableImages(
-    images: TemplateImage[] | undefined,
-    paperSize: PaperSize,
-): TemplateImage[] {
-    const thermal = isThermalPaper(paperSize);
-    return (images ?? []).filter((image) => {
-        if (thermal && !image.showOnThermal) return false;
-        return !!safeImageUrl(image.url) || !!image.caption?.trim();
-    });
+function usableImages(images: TemplateImage[] | undefined): TemplateImage[] {
+    return (images ?? []).filter((image) => !!safeImageUrl(image.url) || !!image.caption?.trim());
 }
 
 /** A single image cell — the picture (or a blank slot) plus its caption. */
@@ -359,12 +388,8 @@ function renderImageCell(image: TemplateImage): string {
     return `<div class="p71-img">${slot}${captionHtml}</div>`;
 }
 
-function renderImages(
-    images: TemplateImage[] | undefined,
-    paperSize: PaperSize,
-    prefix: string,
-): string {
-    const usable = usableImages(images, paperSize);
+function renderImages(images: TemplateImage[] | undefined, prefix: string): string {
+    const usable = usableImages(images);
     if (usable.length === 0) return '';
 
     // A full-width image cannot share a row — it gets one of its own, in the
@@ -471,7 +496,7 @@ export function renderHeaderHtml(
         : '';
     const linesHtml = renderLines(resolved.lines, resolved, ctx, 'p71-hd-line');
     const docHtml = renderDocBlock(resolved, ctx);
-    const imagesHtml = renderImages(resolved.images, paperSize, 'p71-hd');
+    const imagesHtml = renderImages(resolved.images, 'p71-hd');
 
     if (!logoHtml && !nameHtml && !linesHtml && !docHtml && !imagesHtml) return '';
 
@@ -515,7 +540,7 @@ export function renderFooterHtml(
     if (!footer?.show) return '';
 
     const linesHtml = renderLines(footer.lines, resolved, ctx, 'p71-ft-line');
-    const imagesHtml = renderImages(footer.images, paperSize, 'p71-ft');
+    const imagesHtml = renderImages(footer.images, 'p71-ft');
     if (!linesHtml && !imagesHtml) return '';
 
     // A bleeding footer that is pinned to the page bottom runs off the bottom
@@ -590,11 +615,14 @@ export function headerCss(
     const ruleColor = cssColor(resolved.rule.color, '#1d4ed8');
     const ruleWidth = num(resolved.rule.thicknessPx, 2, 0, 8);
     const centred = resolved.layout === 'logo-above' || resolved.layout === 'logo-center';
+    // Only a roll's own design can put the logo beside the text on a roll; the
+    // text then lines up against the logo, as it does on a sheet.
+    const sideBySide = resolved.layout === 'logo-left' || resolved.layout === 'logo-right';
 
     // The divider belongs to whichever element is outermost: the wrapper when
     // there is one, the band itself otherwise. Emitted once either way, so
     // switching the divider off leaves no border declaration behind.
-    const hasImages = usableImages(resolved.images, paperSize).length > 0;
+    const hasImages = usableImages(resolved.images).length > 0;
     const titleOutsideBand = titleSlot(titlePosition(resolved)).row !== 'beside';
     const wrapped = hasImages || titleOutsideBand;
     const divider = resolved.rule.show ? `border-bottom: ${ruleWidth}px solid ${ruleColor};` : '';
@@ -625,7 +653,7 @@ export function headerCss(
     .p71-hd--logo-above .p71-hd-brand,
     .p71-hd--logo-center .p71-hd-brand,
     .p71-hd--text-only .p71-hd-brand { width: 100%; }
-    .p71-hd-text { ${centred || thermal ? 'text-align: center;' : ''} min-width: 0; }
+    .p71-hd-text { ${centred || (thermal && !sideBySide) ? 'text-align: center;' : ''} min-width: 0; }
 
     .p71-hd-name {
         font-size: ${num(resolved.company.fontSizePt, 16, 6, 48)}pt;

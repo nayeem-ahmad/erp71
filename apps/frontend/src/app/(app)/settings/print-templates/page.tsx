@@ -12,6 +12,7 @@ import { Button, ConfirmDialog, PageShell, Select } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import {
     DEFAULT_HEADER_CONFIG,
+    copyDesignFrom,
     designFor,
     dropOwnDesign,
     hasOwnDesign,
@@ -211,6 +212,9 @@ export default function PrintTemplatesPage() {
     // it has one, otherwise the main design, which A4 and every other paper share.
     const ownDesign = hasOwnDesign(config, paperSize);
     const design = designFor(config, paperSize);
+    // A roll can start from the other roll's design rather than from A4's.
+    const otherRoll: PaperSize | undefined = paperSize === 'Thermal80' ? 'Thermal58' : paperSize === 'Thermal58' ? 'Thermal80' : undefined;
+    const copySource = otherRoll && hasOwnDesign(config, otherRoll) ? otherRoll : undefined;
     const separatePapers = papersWithOwnDesign(config).filter((paper) => paper !== paperSize);
 
     return (
@@ -295,6 +299,7 @@ export default function PrintTemplatesPage() {
                             designNote={ownDesign
                                 ? fmt(copy.paperDesigns.editing, { paper: paperSizeLabel(paperSize) })
                                 : undefined}
+                            rollDesign={ownDesign && isThermalPaper(paperSize)}
                         />
 
                         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-3 md:p-4 lg:sticky lg:top-4 lg:self-start">
@@ -325,6 +330,10 @@ export default function PrintTemplatesPage() {
                                     own={ownDesign}
                                     onStart={() => setConfig(startOwnDesign(config, paperSize))}
                                     onDrop={() => setConfig(dropOwnDesign(config, paperSize))}
+                                    copySource={copySource}
+                                    onCopy={copySource
+                                        ? () => setConfig(copyDesignFrom(config, paperSize, copySource))
+                                        : undefined}
                                 />
                             ) : separatePapers.length ? (
                                 <p className="text-xs text-gray-500">

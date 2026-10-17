@@ -16,7 +16,10 @@ jest.mock('@/lib/i18n', () => {
 }, { virtual: true });
 
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+jest.mock('@/lib/print', () => require('@/test-utils/print-paper').printModuleSpy());
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { mockBrowserPaper, printedPaper } from '@/test-utils/print-paper';
 import ReturnsPage from './page';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
@@ -44,12 +47,13 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/lib/format', () => ({
     formatBDT: (v: number) => `BDT ${v}`,
     formatDate: (v: string) => `DATE:${v}`,
+    formatDateTime: (v: string) => `DATETIME:${v}`,
 }));
 
 jest.mock('@/components/data-table', () => ({
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
     CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
-    DataTable: ({ data, isLoading, emptyMessage, toolbarActions }: any) => (
+    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions }: any) => (
         <div data-testid="data-table">
             {isLoading && <span>Loading...</span>}
             {!isLoading && data.length === 0 && <span>{emptyMessage || 'No data'}</span>}
@@ -58,6 +62,8 @@ jest.mock('@/components/data-table', () => ({
                     <span>{row.return_number}</span>
                     {row.status && <span>{row.status}</span>}
                     {row.sale && <span>{row.sale.serial_number}</span>}
+                    {/* The row actions are a column, so render that cell too. */}
+                    {columns?.find((column: any) => column.id === 'actions')?.cell({ row: { original: row } })}
                 </div>
             ))}
             {toolbarActions && <div data-testid="toolbar">{toolbarActions}</div>}
@@ -180,6 +186,25 @@ describe('ReturnsPage', () => {
         render(<ReturnsPage />);
         await waitFor(() => {
             expect(screen.getByTestId('data-table')).toBeInTheDocument();
+        });
+    });
+
+    describe('printing on the browser’s paper', () => {
+        let openSpy: jest.SpyInstance;
+        beforeEach(() => {
+            openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+        });
+        afterEach(() => openSpy.mockRestore());
+
+        it.each([
+            ['A5', 'A5'],
+            ['Letter', 'Letter'],
+            ['Thermal80', 'A4'],
+        ] as const)('prints a return chosen as %s on %s, with that paper’s letterhead', async (chosen, printed) => {
+            mockBrowserPaper(chosen);
+            render(<ReturnsPage />);
+            fireEvent.click(within(await screen.findByTestId('row-ret-1')).getByTitle('Print'));
+            await waitFor(() => expect(printedPaper()).toEqual({ page: printed, letterhead: printed }));
         });
     });
 });

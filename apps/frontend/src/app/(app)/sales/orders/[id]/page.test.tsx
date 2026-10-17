@@ -17,7 +17,10 @@ jest.mock('@/lib/i18n', () => {
 const { enMessages } = require('@/lib/localization/messages/en');
 
 import React from 'react';
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+jest.mock('@/lib/print', () => require('@/test-utils/print-paper').printModuleSpy());
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { mockBrowserPaper, printedPaper } from '@/test-utils/print-paper';
 import OrderDetailsPage from './page';
 
 jest.mock('@/lib/api', () => ({
@@ -279,6 +282,25 @@ describe('OrderDetailsPage', () => {
         render(<OrderDetailsPage />);
         await waitFor(() => {
             expect(screen.queryByText(/record payment deposit/i)).not.toBeInTheDocument();
+        });
+    });
+
+    describe('printing on the browser’s paper', () => {
+        let openSpy: jest.SpyInstance;
+        beforeEach(() => {
+            openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+        });
+        afterEach(() => openSpy.mockRestore());
+
+        it.each([
+            ['A5', 'A5'],
+            ['Letter', 'Letter'],
+            ['Thermal80', 'A4'],
+        ] as const)('prints an order chosen as %s on %s, with that paper’s letterhead', async (chosen, printed) => {
+            mockBrowserPaper(chosen);
+            render(<OrderDetailsPage />);
+            fireEvent.click(await screen.findByRole('button', { name: /^print$/i }));
+            await waitFor(() => expect(printedPaper()).toEqual({ page: printed, letterhead: printed }));
         });
     });
 });

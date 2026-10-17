@@ -186,6 +186,32 @@ describe('sales quotation — detailed layout', () => {
     });
 });
 
+describe('sales quotation — paper', () => {
+    const letterhead = {
+        lines: [{ text: 'A4 letterhead' }],
+        paperDesigns: { A5: { lines: [{ text: 'A5 letterhead' }] } },
+    };
+
+    it('prints on A4 when no paper is chosen', () => {
+        expect(render()).toContain('size: A4 portrait');
+    });
+
+    it('prints on the chosen sheet, with the letterhead designed for it', () => {
+        const html = render(quote, {}, { paperSize: 'A5', headerConfig: letterhead });
+        expect(html).toContain('size: A5 portrait');
+        expect(html).not.toContain('size: A4 portrait');
+        expect(html).toContain('A5 letterhead');
+        expect(html).not.toContain('A4 letterhead');
+        expect(render(quote, {}, { paperSize: 'Letter' })).toContain('size: letter portrait');
+    });
+
+    it('prints on A4 rather than a till roll', () => {
+        const html = render(quote, {}, { paperSize: 'Thermal80', headerConfig: letterhead });
+        expect(html).toContain('size: A4 portrait');
+        expect(html).toContain('A4 letterhead');
+    });
+});
+
 describe('proforma invoice — detailed layout', () => {
     const proforma: PrintableQuotation = {
         ...quote,

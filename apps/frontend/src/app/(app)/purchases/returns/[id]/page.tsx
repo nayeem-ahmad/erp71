@@ -9,9 +9,10 @@ import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { COMPACT_SCOPE, SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { COMPACT_SCOPE, SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
 
 interface EditItem {
@@ -26,6 +27,8 @@ interface EditItem {
 function PurchaseReturnDetailPageContent() {
     const { t, locale } = useI18n();
     const printHeader = usePrintHeader('PURCHASE_RETURN');
+    // This browser's paper, as invoices print on; A4 for a till roll.
+    const paper = sheetPaper(useSalePrintPrefs().paperSize);
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -196,9 +199,9 @@ function PurchaseReturnDetailPageContent() {
         openPrintWindow({
             context: headerContext,
             title: purchaseReturn.return_number,
-            paperSize: 'A4',
+            paperSize: paper,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
             styles: `${SIMPLE_DOC_STYLES}
                 .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
                 .meta-box { padding: 12px; background: #f9f9f9; border-radius: 8px; }

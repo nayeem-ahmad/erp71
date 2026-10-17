@@ -8,6 +8,8 @@ import { api, fetchWithAuth } from '@/lib/api';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
 import { printMushakReceipt } from '@/lib/mushak-receipt-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { receiptRoll } from '@/lib/print';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { formatBDT, formatDateTime } from '@/lib/format';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { savePendingSale, cacheProducts, getCachedProducts } from '@/lib/pos-db';
@@ -73,6 +75,8 @@ export default function POSPage() {
     const { t } = useI18n();
     // The till rings up at the workspace store, so that branch's paper is fetched up front.
     const printHeader = usePrintHeader('POS_RECEIPT', { storeId: getWorkspaceItem('store_id') || undefined });
+    // The till's roll: 58mm when this browser chose it, 80mm otherwise.
+    const { paperSize } = useSalePrintPrefs();
     const [products, setProducts] = useState<any[]>([]);
     const [salesWarehouseId, setSalesWarehouseId] = useState<string | null>(null);
     const [cart, setCart] = useState<any[]>([]);
@@ -631,7 +635,7 @@ export default function POSPage() {
             total: tot,
             amountPaid: paid,
             changeDue: change,
-        });
+        }, receiptRoll(paperSize));
     };
 
     /**
@@ -654,7 +658,7 @@ export default function POSPage() {
                 amountPaid: paid,
                 storeName: printHeader.companyName,
                 headerConfig: printHeader.headerConfig,
-            });
+            }, receiptRoll(paperSize));
         } catch (err: any) {
             addNotification(err?.message || t.pos.notifications.mushakPrintFailed, 'error');
         } finally {
