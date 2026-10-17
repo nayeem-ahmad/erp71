@@ -172,9 +172,11 @@ interface ImageListEditorProps {
     /** Resolves to the uploaded URL, or null when the upload failed. */
     onUpload: (file: File) => Promise<string | null>;
     uploading: boolean;
+    /** Off in a roll's own design, which prints every image it carries. */
+    showThermalToggle?: boolean;
 }
 
-export function ImageListEditor({ images, onChange, onUpload, uploading }: ImageListEditorProps) {
+export function ImageListEditor({ images, onChange, onUpload, uploading, showThermalToggle = true }: ImageListEditorProps) {
     const { t } = useI18n();
     const copy = t.settingsExtras.printTemplates;
     const fields = copy.fields;
@@ -246,11 +248,13 @@ export function ImageListEditor({ images, onChange, onUpload, uploading }: Image
                         onChange={(fullWidth) => patchImage(index, { fullWidth })}
                     />
 
-                    <CheckboxRow
-                        label={fields.imageShowOnThermal}
-                        checked={!!image.showOnThermal}
-                        onChange={(showOnThermal) => patchImage(index, { showOnThermal })}
-                    />
+                    {showThermalToggle ? (
+                        <CheckboxRow
+                            label={fields.imageShowOnThermal}
+                            checked={!!image.showOnThermal}
+                            onChange={(showOnThermal) => patchImage(index, { showOnThermal })}
+                        />
+                    ) : null}
                 </div>
             ))}
 

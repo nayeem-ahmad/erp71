@@ -62,6 +62,12 @@ interface HeaderEditorProps {
      * than the main one, so nobody edits A5 believing they are editing A4.
      */
     designNote?: string;
+    /**
+     * `config` is a thermal roll's own design. It prints all of its imagery and
+     * once per receipt, so the thermal opt-ins and the page-placement options
+     * of the footer have nothing to set.
+     */
+    rollDesign?: boolean;
 }
 
 export default function HeaderEditor({
@@ -76,6 +82,7 @@ export default function HeaderEditor({
     onUpload,
     uploading,
     designNote,
+    rollDesign = false,
 }: HeaderEditorProps) {
     const { t } = useI18n();
     const copy = t.settingsExtras.printTemplates;
@@ -210,11 +217,13 @@ export default function HeaderEditor({
                 )}
                 <p className="text-xs text-gray-400">{fields.logoWidthHint}</p>
 
-                <CheckboxRow
-                    label={fields.showOnThermal}
-                    checked={config.logo.showOnThermal}
-                    onChange={(showOnThermal) => patch({ logo: { ...config.logo, showOnThermal } })}
-                />
+                {rollDesign ? null : (
+                    <CheckboxRow
+                        label={fields.showOnThermal}
+                        checked={config.logo.showOnThermal}
+                        onChange={(showOnThermal) => patch({ logo: { ...config.logo, showOnThermal } })}
+                    />
+                )}
             </Section>
 
             <Section title={copy.sections.company}>
@@ -374,6 +383,7 @@ export default function HeaderEditor({
                     onChange={(images) => patch({ images })}
                     onUpload={onUpload}
                     uploading={uploading}
+                    showThermalToggle={!rollDesign}
                 />
             </Section>
 
@@ -424,6 +434,7 @@ export default function HeaderEditor({
                             onChange={(images) => patchFooter({ images })}
                             onUpload={onUpload}
                             uploading={uploading}
+                            showThermalToggle={!rollDesign}
                         />
 
                         <div className="space-y-3 border-t border-gray-200 pt-3">
@@ -455,25 +466,29 @@ export default function HeaderEditor({
                                     onChange={(spacingMm) => patchFooter({ spacingMm })}
                                 />
                             </div>
-                            <CheckboxRow
-                                label={fields.repeatFooter}
-                                checked={config.footer.repeatOnEveryPage}
-                                onChange={(repeatOnEveryPage) => patchFooter({ repeatOnEveryPage })}
-                            />
+                            {rollDesign ? null : (
+                                <>
+                                    <CheckboxRow
+                                        label={fields.repeatFooter}
+                                        checked={config.footer.repeatOnEveryPage}
+                                        onChange={(repeatOnEveryPage) => patchFooter({ repeatOnEveryPage })}
+                                    />
 
-                            <CheckboxRow
-                                label={fields.pinFooter}
-                                checked={!!config.footer.pinToPageBottom}
-                                onChange={(pinToPageBottom) => patchFooter({ pinToPageBottom })}
-                            />
-                            <p className="text-xs text-gray-400">{fields.pinFooterHint}</p>
+                                    <CheckboxRow
+                                        label={fields.pinFooter}
+                                        checked={!!config.footer.pinToPageBottom}
+                                        onChange={(pinToPageBottom) => patchFooter({ pinToPageBottom })}
+                                    />
+                                    <p className="text-xs text-gray-400">{fields.pinFooterHint}</p>
 
-                            <CheckboxRow
-                                label={fields.bleedFooter}
-                                checked={!!config.footer.bleed}
-                                onChange={(bleed) => patchFooter({ bleed })}
-                            />
-                            <p className="text-xs text-gray-400">{fields.bleedFooterHint}</p>
+                                    <CheckboxRow
+                                        label={fields.bleedFooter}
+                                        checked={!!config.footer.bleed}
+                                        onChange={(bleed) => patchFooter({ bleed })}
+                                    />
+                                    <p className="text-xs text-gray-400">{fields.bleedFooterHint}</p>
+                                </>
+                            )}
                         </div>
                     </div>
                 ) : null}

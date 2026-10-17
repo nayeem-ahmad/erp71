@@ -562,6 +562,71 @@ describe('a paper with a design of its own', () => {
     });
 });
 
+describe('a roll with a design of its own', () => {
+    const logo = 'https://cdn.test/roll-logo.png';
+    const seal = 'https://cdn.test/seal.png';
+    const config: DeepPartial<PrintHeaderConfig> = {
+        layout: 'text-only',
+        company: { fontSizePt: 24 },
+        lines: [{ text: 'A4 line' }],
+        paperDesigns: {
+            Thermal80: {
+                layout: 'logo-left',
+                logo: { url: logo, heightMm: 25, showOnThermal: false },
+                company: { fontSizePt: 20 },
+                title: { fontSizePt: 16, letterSpacingPx: 3, position: 'beside-right' },
+                lines: [{ text: '80mm line' }],
+                images: [{ url: seal, heightMm: 12 }],
+                footer: {
+                    show: true,
+                    lines: [{ text: '80mm footer' }],
+                    repeatOnEveryPage: true,
+                    pinToPageBottom: true,
+                    bleed: true,
+                },
+            },
+        },
+    };
+
+    it('prints its layout and sizes without shrinking them to the roll', () => {
+        const resolved = resolveHeaderConfig(config, 'Thermal80');
+
+        expect(resolved.layout).toBe('logo-left');
+        expect(resolved.logo.heightMm).toBe(25);
+        expect(resolved.company.fontSizePt).toBe(20);
+        expect(resolved.title).toMatchObject({ fontSizePt: 16, letterSpacingPx: 3, position: 'beside-right' });
+    });
+
+    it('prints its logo and images without the thermal opt-in, which is for the A4 design', () => {
+        const html = renderHeaderHtml(config, ctx, 'Thermal80');
+
+        expect(html).toContain('roll-logo.png');
+        expect(html).toContain('seal.png');
+        expect(html).toContain('80mm line');
+        expect(html).not.toContain('A4 line');
+    });
+
+    it('still prints its footer once, inside the roll\'s edges', () => {
+        expect(renderFooterHtml(config, ctx, 'Thermal80')).toContain('80mm footer');
+        expect(footerRepeats(config, 'Thermal80')).toBe(false);
+        expect(footerPinsToBottom(config, 'Thermal80')).toBe(false);
+        expect(footerBleeds(config, 'Thermal80')).toBe(false);
+    });
+
+    it('aligns its text with the logo beside it, as a sheet does', () => {
+        expect(headerCss(config, 'Thermal80')).not.toMatch(/\.p71-hd-text \{ text-align: center;/);
+        expect(headerCss(config, 'Thermal58')).toMatch(/\.p71-hd-text \{ text-align: center;/);
+    });
+
+    it('leaves the other roll on the main design, shrunk to fit', () => {
+        const resolved = resolveHeaderConfig(config, 'Thermal58');
+
+        expect(resolved.layout).toBe('text-only');
+        expect(resolved.company.fontSizePt).toBe(12);
+        expect(renderHeaderHtml(config, ctx, 'Thermal58')).toContain('A4 line');
+    });
+});
+
 describe('logo width', () => {
     const withLogo = (logo: Record<string, unknown>) =>
         renderHeaderHtml({ logo: { url: 'https://cdn.example.com/logo.png', ...logo } } as DeepPartial<PrintHeaderConfig>, ctx, 'A4');
