@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
             withinBranchOnly: "Dalam satu cawangan",
             withinBranch: "Cawangan sama",
             crossBranchNotice: "Pemindahan ini melintasi cawangan, jadi ia menunggu kelulusan — tiada stok keluar dari gudang sumber sebelum seseorang yang berhak meluluskannya.",
+            availableAtSource: "Tersedia di sumber: {qty}",
+            inStockTotal: "Dalam stok (semua gudang): {qty}",
+            atDestination: "Di destinasi: {qty}",
+            exceedsSourceStock: "Melebihi stok di sumber",
             columns: {
                 transferNumber: "Pemindahan #",
                 source: "Sumber",

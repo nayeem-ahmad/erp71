@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
         "withinBranchOnly": "ایک شاخ کے اندر",
         "withinBranch": "وہی شاخ",
         "crossBranchNotice": "یہ منتقلی شاخوں کے درمیان ہے، اس لیے یہ منظوری کی منتظر رہے گی — منظوری ملنے تک ماخذ گودام سے کوئی اسٹاک نہیں جائے گا۔",
+        "availableAtSource": "ماخذ میں دستیاب: {qty}",
+        "inStockTotal": "اسٹاک میں (تمام گودام): {qty}",
+        "atDestination": "منزل پر: {qty}",
+        "exceedsSourceStock": "ماخذ میں موجود مقدار سے زیادہ",
         "columns": {
             "transferNumber": "منتقلی نمبر",
             "source": "ماخذ",

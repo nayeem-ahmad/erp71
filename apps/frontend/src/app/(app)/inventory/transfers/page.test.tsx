@@ -345,6 +345,34 @@ describe('InventoryTransfersPage', () => {
         });
     });
 
+    it('shows the selected product\'s stock at the source and destination, and warns past it', async () => {
+        mockApi.getProducts.mockResolvedValue([
+            {
+                id: 'p1',
+                name: 'Widget A',
+                stocks: [
+                    { warehouse_id: 'w1', quantity: 12 },
+                    { warehouse_id: 'w2', quantity: 3 },
+                ],
+            },
+            { id: 'p2', name: 'Widget B', stocks: [] },
+        ]);
+        render(<InventoryTransfersPage />);
+        await waitFor(() => expect(screen.getByText('New Transfer')).toBeInTheDocument());
+
+        pickSearchOption('Product', 'Widget A');
+        // No source picked yet: the total across every warehouse.
+        expect(screen.getByTestId('transfer-line-stock-0')).toHaveTextContent('In stock (all warehouses): 15');
+
+        fireEvent.change(screen.getByText('Source Warehouse').closest('div')!.querySelector('select')!, { target: { value: 'w1' } });
+        fireEvent.change(screen.getByText('Destination Warehouse').closest('div')!.querySelector('select')!, { target: { value: 'w2' } });
+        expect(screen.getByTestId('transfer-line-stock-0')).toHaveTextContent('Available at source: 12 · At destination: 3');
+        expect(screen.queryByText(/More than the source holds/)).not.toBeInTheDocument();
+
+        fireEvent.change(screen.getByText('Quantity').closest('div')!.querySelector('input')!, { target: { value: '20' } });
+        expect(screen.getByText(/More than the source holds/)).toBeInTheDocument();
+    });
+
     it('shows error message when create transfer fails', async () => {
         mockApi.createWarehouseTransfer.mockRejectedValue(new Error('Transfer failed'));
         render(<InventoryTransfersPage />);
