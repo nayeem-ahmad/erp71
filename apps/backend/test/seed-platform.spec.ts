@@ -1,6 +1,8 @@
 import { hasPlanEntitlement, normalizePlanFeatures } from '@erp71/shared-types';
 import {
     addMissingKeys,
+    DEFAULT_MESSAGING_CREDIT_PACKAGES,
+    seedMessagingCreditPackages,
     seedPlatformReferenceData,
 } from '../../../packages/database/prisma/seed-platform';
 
@@ -59,6 +61,10 @@ describe('seedPlatformReferenceData', () => {
                 create: jest.fn(({ data }: never) => Promise.resolve(data)),
                 update: jest.fn(({ data }: never) => Promise.resolve(data)),
             },
+            smsPackage: {
+                count: jest.fn(() => Promise.resolve(0)),
+                create: jest.fn(({ data }: never) => Promise.resolve(data)),
+            },
         } as never;
     }
 
@@ -104,6 +110,7 @@ describe('seedPlatformReferenceData', () => {
                 update: jest.fn(),
             },
             addonModule: { findUnique: jest.fn(() => Promise.resolve(null)), create: jest.fn(({ data }: never) => Promise.resolve(data)), update: jest.fn() },
+            smsPackage: { count: jest.fn(() => Promise.resolve(3)), create: jest.fn() },
         } as never;
 
         await seedPlatformReferenceData(db);
@@ -140,5 +147,42 @@ describe('seedPlatformReferenceData', () => {
         );
 
         expect(entitled).toEqual({ FREE: false, BASIC: false, ACCOUNTING: false, STANDARD: false, PREMIUM: true });
+    });
+});
+
+/**
+ * WhatsApp and email became metered on 2026-10-15, and production had never
+ * had a credit package for any channel — the SMS list only lived in the dev
+ * seed. A channel with no package is a balance no shop can top up.
+ */
+describe('seedMessagingCreditPackages', () => {
+    function fakePrisma(existingByChannel: Record<string, number>) {
+        return {
+            smsPackage: {
+                count: jest.fn(({ where }: { where: { channel: string } }) =>
+                    Promise.resolve(existingByChannel[where.channel] ?? 0),
+                ),
+                create: jest.fn(({ data }: never) => Promise.resolve(data)),
+            },
+        };
+    }
+
+    it('gives every metered channel packages on an empty database', async () => {
+        const db = fakePrisma({});
+        await seedMessagingCreditPackages(db as never);
+
+        const channels = new Set(db.smsPackage.create.mock.calls.map((c) => (c[0] as { data: { channel: string } }).data.channel));
+        expect([...channels].sort()).toEqual(['EMAIL', 'SMS', 'WHATSAPP']);
+        expect(db.smsPackage.create).toHaveBeenCalledTimes(
+            Object.values(DEFAULT_MESSAGING_CREDIT_PACKAGES).reduce((sum, list) => sum + list.length, 0),
+        );
+    });
+
+    it('never touches a channel that already has packages, so admin prices survive a deploy', async () => {
+        const db = fakePrisma({ SMS: 4, WHATSAPP: 1 });
+        await seedMessagingCreditPackages(db as never);
+
+        const channels = db.smsPackage.create.mock.calls.map((c) => (c[0] as { data: { channel: string } }).data.channel);
+        expect(new Set(channels)).toEqual(new Set(['EMAIL']));
     });
 });

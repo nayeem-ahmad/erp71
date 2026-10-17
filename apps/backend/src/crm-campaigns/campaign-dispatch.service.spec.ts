@@ -53,7 +53,7 @@ describe('CampaignDispatchService', () => {
             },
         };
         sms = { sendSms: jest.fn().mockResolvedValue({ sent: true }) };
-        whatsapp = { sendMessage: jest.fn().mockResolvedValue(undefined) };
+        whatsapp = { sendMessage: jest.fn().mockResolvedValue({ sent: true }) };
         email = { sendCustom: jest.fn().mockResolvedValue(undefined) };
         recipients = { writeSegmentRecipients: jest.fn().mockResolvedValue(0) };
 
@@ -249,7 +249,7 @@ describe('CampaignDispatchService', () => {
                 'r1@example.com',
                 'Row subject',
                 'Line 1<br>Line &lt;2&gt;',
-                { tenantId: 't1' },
+                { tenantId: 't1', purpose: 'CRM campaign' },
             );
         });
 
@@ -265,7 +265,7 @@ describe('CampaignDispatchService', () => {
                 'r1@example.com',
                 'Camp subject',
                 'Camp body',
-                { tenantId: 't1' },
+                { tenantId: 't1', purpose: 'CRM campaign' },
             );
         });
 

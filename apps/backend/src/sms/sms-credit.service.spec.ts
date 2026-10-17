@@ -1,33 +1,18 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { SmsCreditService } from './sms-credit.service';
-import { TenantContext } from '../database/tenant.decorator';
-
-const tenantCtx = (overrides: Partial<TenantContext> = {}): TenantContext => ({ timezone: 'Asia/Dhaka',
-    tenantId: 'tenant-1',
-    userId: 'user-1',
-    userRole: 'OWNER',
-    storeId: 'store-1',
-    ...overrides,
-});
 
 describe('SmsCreditService', () => {
     const db = {
         tenant: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
         smsPackage: { findMany: jest.fn(), findUnique: jest.fn() },
         smsTransaction: { findMany: jest.fn(), create: jest.fn() },
-        tenantUser: { findUnique: jest.fn() },
-        billingEvent: { upsert: jest.fn() },
-        userStorePermission: { findFirst: jest.fn() },
     } as any;
-
-    const audit = { log: jest.fn().mockResolvedValue(undefined) } as any;
 
     let service: SmsCreditService;
 
     beforeEach(() => {
         jest.resetAllMocks();
-        audit.log.mockResolvedValue(undefined);
-        service = new SmsCreditService(db, audit);
+        service = new SmsCreditService(db);
     });
 
     describe('countSegments', () => {
@@ -55,9 +40,9 @@ describe('SmsCreditService', () => {
     });
 
     describe('consume', () => {
-        it('deducts credits and records a usage entry when the balance is sufficient', async () => {
+        it('deducts SMS credits and records a usage entry when the balance is sufficient', async () => {
             db.tenant.updateMany.mockResolvedValue({ count: 1 });
-            db.tenant.findUnique.mockResolvedValue({ sms_credits: 95 });
+            db.tenant.findUnique.mockResolvedValue({ sms_credits: 95, whatsapp_credits: 0, email_credits: 0 });
 
             const result = await service.consume('tenant-1', 5, { recipient: '8801', description: 'Sale receipt' });
 
@@ -67,13 +52,42 @@ describe('SmsCreditService', () => {
                 data: { sms_credits: { decrement: 5 } },
             });
             expect(db.smsTransaction.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({ type: 'USAGE', credits: -5, balance_after: 95 }),
+                data: expect.objectContaining({ channel: 'SMS', type: 'USAGE', credits: -5, balance_after: 95 }),
             });
+        });
+
+        it('spends the balance of the channel it is given', async () => {
+            db.tenant.updateMany.mockResolvedValue({ count: 1 });
+            db.tenant.findUnique.mockResolvedValue({ sms_credits: 500, whatsapp_credits: 9, email_credits: 41 });
+
+            const result = await service.consume('tenant-1', 1, { channel: 'EMAIL', recipient: 'a@b.com' });
+
+            expect(result).toEqual({ allowed: true, balance: 41 });
+            expect(db.tenant.updateMany).toHaveBeenCalledWith({
+                where: { id: 'tenant-1', email_credits: { gte: 1 } },
+                data: { email_credits: { decrement: 1 } },
+            });
+            expect(db.smsTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ channel: 'EMAIL', credits: -1, balance_after: 41 }),
+            });
+        });
+
+        it('does not let one channel spend another channel’s balance', async () => {
+            db.tenant.updateMany.mockResolvedValue({ count: 0 });
+            db.tenant.findUnique.mockResolvedValue({ sms_credits: 500, whatsapp_credits: 0, email_credits: 0 });
+
+            const result = await service.consume('tenant-1', 1, { channel: 'WHATSAPP' });
+
+            expect(result).toEqual({ allowed: false, balance: 0 });
+            expect(db.tenant.updateMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: 'tenant-1', whatsapp_credits: { gte: 1 } } }),
+            );
+            expect(db.smsTransaction.create).not.toHaveBeenCalled();
         });
 
         it('does not deduct when the balance is insufficient', async () => {
             db.tenant.updateMany.mockResolvedValue({ count: 0 });
-            db.tenant.findUnique.mockResolvedValue({ sms_credits: 2 });
+            db.tenant.findUnique.mockResolvedValue({ sms_credits: 2, whatsapp_credits: 0, email_credits: 0 });
 
             const result = await service.consume('tenant-1', 5);
 
@@ -82,7 +96,7 @@ describe('SmsCreditService', () => {
         });
 
         it('allows zero-credit sends without touching the balance', async () => {
-            db.tenant.findUnique.mockResolvedValue({ sms_credits: 10 });
+            db.tenant.findUnique.mockResolvedValue({ sms_credits: 10, whatsapp_credits: 0, email_credits: 0 });
 
             const result = await service.consume('tenant-1', 0);
 
@@ -91,74 +105,62 @@ describe('SmsCreditService', () => {
         });
     });
 
-    describe('createPurchase', () => {
-        it('rejects users without billing management permission', async () => {
-            db.tenantUser.findUnique.mockResolvedValue({ role: 'CASHIER' });
-            db.userStorePermission.findFirst.mockResolvedValue(null);
+    describe('grantCredits', () => {
+        it('adds to the named channel and writes a ledger entry for it', async () => {
+            db.tenant.update.mockResolvedValue({ whatsapp_credits: 2500 });
+            db.smsTransaction.create.mockResolvedValue({ id: 'tx-1' });
 
-            await expect(
-                service.createPurchase(tenantCtx({ userRole: 'CASHIER' }), { packageId: 'pkg-1' }),
-            ).rejects.toBeInstanceOf(ForbiddenException);
-        });
-
-        it('rejects unknown packages', async () => {
-            db.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER' });
-            db.smsPackage.findUnique.mockResolvedValue(null);
-
-            await expect(
-                service.createPurchase(tenantCtx(), { packageId: 'missing' }),
-            ).rejects.toBeInstanceOf(BadRequestException);
-        });
-
-        it('records a pending billing event and asks for confirmation', async () => {
-            db.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER' });
-            db.smsPackage.findUnique.mockResolvedValue({
-                id: 'pkg-1',
-                name: 'Starter',
-                credits: 500,
-                price: 250,
-                currency: 'BDT',
-                is_active: true,
+            const result = await service.grantCredits('tenant-1', 'WHATSAPP', 2000, {
+                type: 'PURCHASE',
+                reference: 'bkash:ABC123',
             });
 
-            const result = await service.createPurchase(tenantCtx(), { packageId: 'pkg-1' });
+            expect(result).toEqual({ balance: 2500, transactionId: 'tx-1' });
+            expect(db.tenant.update).toHaveBeenCalledWith({
+                where: { id: 'tenant-1' },
+                data: { whatsapp_credits: { increment: 2000 } },
+                select: { whatsapp_credits: true },
+            });
+            expect(db.smsTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    channel: 'WHATSAPP',
+                    type: 'PURCHASE',
+                    credits: 2000,
+                    balance_after: 2500,
+                    reference: 'bkash:ABC123',
+                }),
+            });
+        });
 
-            expect(result.requires_confirmation).toBe(true);
-            expect(result.package.credits).toBe(500);
-            expect(db.billingEvent.upsert).toHaveBeenCalled();
+        it('runs inside the transaction it is handed', async () => {
+            const tx = {
+                tenant: { update: jest.fn().mockResolvedValue({ sms_credits: 10 }) },
+                smsTransaction: { create: jest.fn().mockResolvedValue({ id: 'tx-2' }) },
+            } as any;
+
+            await service.grantCredits('tenant-1', 'SMS', 10, { type: 'PURCHASE' }, tx);
+
+            expect(tx.tenant.update).toHaveBeenCalled();
+            expect(tx.smsTransaction.create).toHaveBeenCalled();
+            expect(db.tenant.update).not.toHaveBeenCalled();
         });
     });
 
-    describe('confirmPurchase', () => {
-        it('grants credits and writes a purchase ledger entry', async () => {
-            db.tenantUser.findUnique.mockResolvedValue({ role: 'OWNER' });
-            db.smsPackage.findUnique.mockResolvedValue({
-                id: 'pkg-1',
-                name: 'Starter',
-                credits: 500,
-                price: 250,
-                currency: 'BDT',
-                is_active: true,
-            });
-            db.tenant.update.mockResolvedValue({ sms_credits: 600 });
-            db.smsTransaction.create.mockResolvedValue({ id: 'tx-1' });
+    describe('getActivePackage', () => {
+        it('rejects unknown and retired packages', async () => {
+            db.smsPackage.findUnique.mockResolvedValueOnce(null);
+            await expect(service.getActivePackage('missing')).rejects.toBeInstanceOf(BadRequestException);
 
-            const result = await service.confirmPurchase(tenantCtx(), {
-                packageId: 'pkg-1',
-                reference: 'sms_ref',
-            });
-
-            expect(result).toEqual(
-                expect.objectContaining({ purchased: true, credits_added: 500, balance: 600 }),
-            );
-            expect(db.tenant.update).toHaveBeenCalledWith({
-                where: { id: 'tenant-1' },
-                data: { sms_credits: { increment: 500 } },
-                select: { sms_credits: true },
-            });
-            expect(db.smsTransaction.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({ type: 'PURCHASE', credits: 500, balance_after: 600 }),
-            });
+            db.smsPackage.findUnique.mockResolvedValueOnce({ id: 'pkg-1', is_active: false });
+            await expect(service.getActivePackage('pkg-1')).rejects.toBeInstanceOf(BadRequestException);
         });
+    });
+
+    it('has no method a tenant could call to add credits for free', () => {
+        // The old self-serve "Buy" flow granted credits on click with no
+        // payment behind it. Credits are now added only by platform-admin
+        // paths (an approved top-up request, or an admin sale).
+        expect((service as any).createPurchase).toBeUndefined();
+        expect((service as any).confirmPurchase).toBeUndefined();
     });
 });

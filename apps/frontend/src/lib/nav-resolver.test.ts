@@ -275,6 +275,8 @@ describe('nav-resolver', () => {
             // The manual-activation queue sits next to the tenants it acts on,
             // ahead of the ledger an approval posts into.
             '/admin/activation-requests',
+            // bKash payments for messaging credits, verified the same way.
+            '/admin/credit-topups',
             '/admin/tenants/ledger',
             '/admin/tenants/reminders',
         ]);

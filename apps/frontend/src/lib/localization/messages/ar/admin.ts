@@ -59,13 +59,14 @@ export const adminMessages = {
         },
         actions: {
             viewEdit: 'عرض / تحرير المنشأة',
-            sellSmsCredits: 'بيع رصيد رسائل',
+            sellSmsCredits: 'بيع رصيد المراسلة',
             sellAiCredits: 'بيع رصيد ذكاء اصطناعي',
         },
         sellCredits: {
-            smsTitle: 'بيع رصيد رسائل',
+            smsTitle: 'بيع رصيد المراسلة',
             aiTitle: 'بيع رصيد ذكاء اصطناعي',
             creditsLabel: 'الرصيد المراد إضافته',
+            channelLabel: 'القناة',
             creditsPlaceholder: 'مثال: 500',
             creditsRequired: 'أدخل قيمة رصيد صحيحة.',
             amountLabel: 'مبلغ الدفع (تاكا، اختياري)',
@@ -77,7 +78,7 @@ export const adminMessages = {
             confirm: 'إضافة الرصيد',
             saving: 'جارٍ الحفظ…',
             failed: 'تعذّرت إضافة الرصيد',
-            smsSuccess: 'أُضيف {credits} من رصيد الرسائل إلى {name}',
+            smsSuccess: 'أُضيف {credits} من رصيد {channel} إلى {name}',
             aiSuccess: 'أُضيف {credits} من رصيد الذكاء الاصطناعي إلى {name}',
         },
         payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                 subscription_fee: 'رسوم اشتراك',
                 sms_credit_sale_payment: 'بيع رصيد رسائل',
                 ai_credit_sale_payment: 'بيع رصيد ذكاء اصطناعي',
+                whatsapp_credit_sale_payment: 'بيع رصيد واتساب',
+                email_credit_sale_payment: 'بيع رصيد البريد الإلكتروني',
             },
             paymentModal: {
                 title: 'تسجيل دفعة',

@@ -59,13 +59,14 @@ export const adminMessages = {
         },
         actions: {
             viewEdit: 'View / edit tenant',
-            sellSmsCredits: 'Sell SMS credits',
+            sellSmsCredits: 'Sell messaging credits',
             sellAiCredits: 'Sell AI credits',
         },
         sellCredits: {
-            smsTitle: 'Sell SMS Credits',
+            smsTitle: 'Sell Messaging Credits',
             aiTitle: 'Sell AI Credits',
             creditsLabel: 'Credits to add',
+            channelLabel: 'Channel',
             creditsPlaceholder: 'e.g. 500',
             creditsRequired: 'Enter a valid credit amount.',
             amountLabel: 'Payment amount (BDT, optional)',
@@ -77,7 +78,7 @@ export const adminMessages = {
             confirm: 'Add credits',
             saving: 'Saving…',
             failed: 'Failed to add credits',
-            smsSuccess: 'Added {credits} SMS credits to {name}',
+            smsSuccess: 'Added {credits} {channel} credits to {name}',
             aiSuccess: 'Added {credits} AI credits to {name}',
         },
         payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                 subscription_fee: 'Subscription fee',
                 sms_credit_sale_payment: 'SMS credit sale',
                 ai_credit_sale_payment: 'AI credit sale',
+                whatsapp_credit_sale_payment: 'WhatsApp credit sale',
+                email_credit_sale_payment: 'Email credit sale',
             },
             paymentModal: {
                 title: 'Record Payment',

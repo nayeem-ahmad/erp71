@@ -87,9 +87,7 @@ export const OPEN_ROUTES: Record<string, string> = {
     'NotificationsController.markAllRead': "self-scoped: acts only on the signed-in member’s own data", // PATCH /notifications/read-all
     'NotificationsController.markRead': "self-scoped: acts only on the signed-in member’s own data", // PATCH /notifications/:id/read
     'SalesSettingsController.get': "shell read: the POS flags every page needs to lay out the sales menu", // GET /sales-settings
-    'SmsCreditController.getSummary': "balance is shown wherever SMS is sent; purchases assert MANAGE_USERS in the service", // GET /sms-credits/summary
-    'SmsCreditController.createPurchase': "balance is shown wherever SMS is sent; purchases assert MANAGE_USERS in the service", // POST /sms-credits/purchase
-    'SmsCreditController.confirmPurchase': "balance is shown wherever SMS is sent; purchases assert MANAGE_USERS in the service", // POST /sms-credits/confirm
+    'SmsCreditController.getSummary': "messaging balances are shown wherever a message is sent; submitting a top-up requires MANAGE_USERS and only a platform admin grants credits", // GET /sms-credits/summary
     'SupportController.listThreads': "the shop-wide support inbox is shared by every member by design (revisit: TODO.md)", // GET /support/threads
     'SupportController.stream': "the shop-wide support inbox is shared by every member by design (revisit: TODO.md)", // GET /support/stream
     'SupportController.createThread': "the shop-wide support inbox is shared by every member by design (revisit: TODO.md)", // POST /support/threads

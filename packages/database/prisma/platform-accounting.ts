@@ -66,6 +66,8 @@ export const PLATFORM_ACCOUNT = {
     ADDON_REVENUE: 'Add-on Module Revenue',
     SMS_REVENUE: 'SMS Credit Revenue',
     AI_REVENUE: 'AI Credit Revenue',
+    WHATSAPP_REVENUE: 'WhatsApp Credit Revenue',
+    EMAIL_REVENUE: 'Email Credit Revenue',
     OTHER_REVENUE: 'Other Platform Revenue',
     /**
      * Contra-revenue: a refund is a reversal of revenue, not a cost of running
@@ -210,6 +212,8 @@ export const PLATFORM_ACCOUNTING_TEMPLATE: DefaultAccountingGroupDefinition[] = 
                 accounts: [
                     { name: PLATFORM_ACCOUNT.SMS_REVENUE, code: '410201', type: AccountType.REVENUE, category: AccountCategory.GENERAL },
                     { name: PLATFORM_ACCOUNT.AI_REVENUE, code: '410202', type: AccountType.REVENUE, category: AccountCategory.GENERAL },
+                    { name: PLATFORM_ACCOUNT.WHATSAPP_REVENUE, code: '410203', type: AccountType.REVENUE, category: AccountCategory.GENERAL },
+                    { name: PLATFORM_ACCOUNT.EMAIL_REVENUE, code: '410204', type: AccountType.REVENUE, category: AccountCategory.GENERAL },
                 ],
             },
             {

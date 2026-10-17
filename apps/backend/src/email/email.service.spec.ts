@@ -3,6 +3,8 @@ import { EmailService } from './email.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
+import { SmsCreditService } from '../sms/sms-credit.service';
+import { InsufficientMessagingCreditsError } from '../sms/messaging-channel';
 
 describe('EmailService', () => {
     let service: EmailService;
@@ -23,6 +25,10 @@ describe('EmailService', () => {
         resolveEmailIdentity: jest.fn().mockResolvedValue(null),
     };
 
+    const credits = {
+        consume: jest.fn().mockResolvedValue({ allowed: true, balance: 99 }),
+    };
+
     beforeEach(async () => {
         process.env = { ...originalEnv };
         global.fetch = jest.fn();
@@ -33,6 +39,7 @@ describe('EmailService', () => {
                 { provide: PlatformSettingsService, useValue: platformSettings },
                 { provide: CircuitBreakerRegistry, useValue: breakers },
                 { provide: TenantMessagingIdentityService, useValue: tenantIdentity },
+                { provide: SmsCreditService, useValue: credits },
             ],
         }).compile();
 
@@ -135,6 +142,54 @@ describe('EmailService', () => {
 
             expect(tenantIdentity.resolveEmailIdentity).toHaveBeenCalledWith(undefined);
             expect(brevoBody().sender).toEqual({ email: 'notify@erp71.com', name: 'ERP71' });
+        });
+    });
+
+    describe('email credits', () => {
+        beforeEach(() => {
+            process.env.SMTP_PASS = 'xkeysib-test-key';
+            process.env.EMAIL_FROM = 'notify@erp71.com';
+            (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 201, text: async () => '' });
+            credits.consume.mockResolvedValue({ allowed: true, balance: 99 });
+        });
+
+        it('bills one email credit to the tenant for a campaign email', async () => {
+            await service.sendCustom('c@example.com', 'Hi', '<p>Hi</p>', { tenantId: 'tenant-1', purpose: 'CRM campaign' });
+
+            expect(credits.consume).toHaveBeenCalledWith('tenant-1', 1, {
+                channel: 'EMAIL',
+                recipient: 'c@example.com',
+                description: 'CRM campaign',
+            });
+            expect(global.fetch).toHaveBeenCalled();
+        });
+
+        it('does not send a campaign email the balance cannot cover', async () => {
+            credits.consume.mockResolvedValue({ allowed: false, balance: 0 });
+
+            await expect(
+                service.sendCustom('c@example.com', 'Hi', '<p>Hi</p>', { tenantId: 'tenant-1' }),
+            ).rejects.toBeInstanceOf(InsufficientMessagingCreditsError);
+            expect(global.fetch).not.toHaveBeenCalled();
+        });
+
+        it('skips a sale receipt quietly when the shop is out of email credits', async () => {
+            credits.consume.mockResolvedValue({ allowed: false, balance: 0 });
+
+            await service.sendBillingInvoice('customer@example.com', 'Shop', 500, 'BDT', undefined, {
+                billTenantId: 'tenant-1',
+                purpose: 'Sale receipt',
+            });
+
+            expect(credits.consume).toHaveBeenCalledWith('tenant-1', 1, expect.objectContaining({ channel: 'EMAIL' }));
+            expect(global.fetch).not.toHaveBeenCalled();
+        });
+
+        it('never bills platform mail', async () => {
+            await service.sendPasswordReset('user@example.com', 'raw-token');
+            await service.sendBillingInvoice('owner@example.com', 'Shop', 500, 'BDT');
+
+            expect(credits.consume).not.toHaveBeenCalled();
         });
     });
 });

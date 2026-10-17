@@ -59,13 +59,14 @@ export const adminMessages = {
         },
         actions: {
             viewEdit: "Ver / editar espacio",
-            sellSmsCredits: "Vender créditos SMS",
+            sellSmsCredits: "Vender créditos de mensajería",
             sellAiCredits: "Vender créditos de IA",
         },
         sellCredits: {
-            smsTitle: "Vender créditos SMS",
+            smsTitle: "Vender créditos de mensajería",
             aiTitle: "Vender créditos de IA",
             creditsLabel: "Créditos a añadir",
+            channelLabel: "Canal",
             creditsPlaceholder: "p. ej. 500",
             creditsRequired: "Introduzca una cantidad de créditos válida.",
             amountLabel: "Importe del pago (BDT, opcional)",
@@ -77,7 +78,7 @@ export const adminMessages = {
             confirm: "Añadir créditos",
             saving: "Guardando…",
             failed: "No se pudieron añadir los créditos",
-            smsSuccess: "Se añadieron {credits} créditos SMS a {name}",
+            smsSuccess: "Se añadieron {credits} créditos de {channel} a {name}",
             aiSuccess: "Se añadieron {credits} créditos de IA a {name}",
         },
         payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                 subscription_fee: "Cuota de suscripción",
                 sms_credit_sale_payment: "Venta de créditos SMS",
                 ai_credit_sale_payment: "Venta de créditos de IA",
+                whatsapp_credit_sale_payment: "Venta de créditos de WhatsApp",
+                email_credit_sale_payment: "Venta de créditos de correo",
             },
             paymentModal: {
                 title: "Registrar pago",

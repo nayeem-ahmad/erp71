@@ -4,6 +4,8 @@ import type { LedgerEvent } from './types';
 export const CREDIT_LEDGER_EVENT_TYPES = [
     'manual_payment',
     'sms_credit_sale_payment',
+    'whatsapp_credit_sale_payment',
+    'email_credit_sale_payment',
     'ai_credit_sale_payment',
 ] as const;
 

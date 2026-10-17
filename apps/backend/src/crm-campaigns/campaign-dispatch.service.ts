@@ -321,16 +321,21 @@ export class CampaignDispatchService {
 
         if (campaign.channel === 'WHATSAPP') {
             if (!recipient.phone) throw new Error('Recipient has no phone number');
-            await this.whatsapp.sendMessage(recipient.phone, message, { tenantId: campaign.tenant_id });
+            const result = await this.whatsapp.sendMessage(recipient.phone, message, {
+                tenantId: campaign.tenant_id,
+                purpose: 'CRM campaign',
+            });
+            if (!result.sent) throw new Error('Insufficient WhatsApp credits');
             return;
         }
 
         if (!recipient.email) throw new Error('Recipient has no email address');
+        // Throws InsufficientMessagingCreditsError when the email balance is empty.
         await this.email.sendCustom(
             recipient.email,
             subject,
             renderCampaignBody(message, campaign.body_format),
-            { tenantId: campaign.tenant_id },
+            { tenantId: campaign.tenant_id, purpose: 'CRM campaign' },
         );
     }
 

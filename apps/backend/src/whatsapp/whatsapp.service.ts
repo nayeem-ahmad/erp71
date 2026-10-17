@@ -1,13 +1,22 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
+import { SmsCreditService } from '../sms/sms-credit.service';
 
 export interface SendWhatsAppOptions {
     /**
-     * Sends from this tenant's own WhatsApp Business number when a platform
-     * admin has configured and enabled one; otherwise the platform number.
+     * The tenant sending. Sends from its own WhatsApp Business number when a
+     * platform admin has configured and enabled one, otherwise the platform
+     * number — and either way bills one credit to its WhatsApp balance.
      */
     tenantId?: string | null;
+    /** Short label stored on the usage ledger entry (e.g. "CRM campaign"). */
+    purpose?: string;
+}
+
+export interface SendWhatsAppResult {
+    sent: boolean;
+    reason?: 'INSUFFICIENT_WHATSAPP_CREDITS';
 }
 
 @Injectable()
@@ -17,6 +26,7 @@ export class WhatsAppService {
     constructor(
         private readonly platformSettings: PlatformSettingsService,
         private readonly tenantIdentity: TenantMessagingIdentityService,
+        private readonly credits: SmsCreditService,
     ) {}
 
     private normalizePhone(phone: string): string {
@@ -53,13 +63,28 @@ export class WhatsAppService {
         };
     }
 
-    async sendMessage(to: string, message: string, options?: SendWhatsAppOptions): Promise<void> {
+    async sendMessage(to: string, message: string, options?: SendWhatsAppOptions): Promise<SendWhatsAppResult> {
         const phone = this.normalizePhone(to);
+
+        // Metered like SMS: one credit per message, taken before sending, and
+        // no credit means no message rather than a send the platform pays for.
+        if (options?.tenantId) {
+            const { allowed } = await this.credits.consume(options.tenantId, 1, {
+                channel: 'WHATSAPP',
+                recipient: phone,
+                description: options.purpose ?? 'WhatsApp sent',
+            });
+            if (!allowed) {
+                this.logger.warn(`Skipping WhatsApp to ${phone} for tenant ${options.tenantId}: insufficient WhatsApp credits.`);
+                return { sent: false, reason: 'INSUFFICIENT_WHATSAPP_CREDITS' };
+            }
+        }
+
         const { accessToken, phoneNumberId, apiVersion } = await this.getCredentials(options?.tenantId);
 
         if (!accessToken || !phoneNumberId) {
             this.logger.log(`[WhatsApp] To: ${phone} | Message: ${message}`);
-            return;
+            return { sent: true };
         }
 
         try {
@@ -83,7 +108,7 @@ export class WhatsAppService {
             if (!response.ok) {
                 const errBody = await response.text().catch(() => '');
                 this.logger.error(`WhatsApp API ${response.status} for ${phone}: ${errBody}`);
-                return;
+                return { sent: true };
             }
 
             const result: any = await response.json().catch(() => ({}));
@@ -91,6 +116,7 @@ export class WhatsAppService {
         } catch (err) {
             this.logger.error(`Failed to send WhatsApp to ${phone}: ${err}`);
         }
+        return { sent: true };
     }
 
     async sendBulk(recipients: Array<{ phone: string; message: string }>): Promise<void> {
