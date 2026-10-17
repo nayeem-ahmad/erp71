@@ -61,6 +61,16 @@ const SETTINGS_SCHEMA: Record<string, Record<string, SettingMeta>> = {
         /// format to put in the bKash reference field.
         instructions:     { isSecret: false },
     },
+    // Where a shop sends money for SMS, WhatsApp and email credits. Shown on the
+    // shop's Messaging Credits screen; an admin checks the TrxID the shop submits
+    // against this wallet before approving. Editable from Admin › Credit
+    // Top-ups so a wrong number can be corrected without a redeploy.
+    credit_topups: {
+        bkash_number: { isSecret: false, default: '0714111977' },
+        /// Optional extra line under the payment steps, e.g. what to put in the
+        /// bKash reference field.
+        instructions: { isSecret: false },
+    },
     whatsapp: {
         access_token:    { isSecret: true },
         phone_number_id: { isSecret: false },

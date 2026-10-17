@@ -101,39 +101,27 @@ async function main() {
         },
     });
 
-    // ── SMS top-up packages + starter credits for the demo tenant ────────────
-    const smsPackages = [
-        { name: 'Starter — 500 SMS', credits: 500, price: 250 },
-        { name: 'Business — 2,000 SMS', credits: 2000, price: 900 },
-        { name: 'Pro — 5,000 SMS', credits: 5000, price: 2000 },
-        { name: 'Enterprise — 20,000 SMS', credits: 20000, price: 7000 },
-    ];
-    for (const [index, pkg] of smsPackages.entries()) {
-        const existing = await prisma.smsPackage.findFirst({ where: { name: pkg.name } });
-        if (existing) {
-            await prisma.smsPackage.update({
-                where: { id: existing.id },
-                data: { credits: pkg.credits, price: pkg.price, is_active: true, sort_order: index },
-            });
-        } else {
-            await prisma.smsPackage.create({
-                data: { ...pkg, currency: 'BDT', is_active: true, sort_order: index },
-            });
-        }
-    }
-
-    if (tenant.sms_credits === 0) {
+    // ── Starter messaging credits for the demo tenant ─────────────────────────
+    // The top-up packages themselves come from seedPlatformReferenceData above.
+    const starterCredits = [
+        { channel: 'SMS', column: 'sms_credits', current: tenant.sms_credits },
+        { channel: 'WHATSAPP', column: 'whatsapp_credits', current: tenant.whatsapp_credits },
+        { channel: 'EMAIL', column: 'email_credits', current: tenant.email_credits },
+    ] as const;
+    for (const { channel, column, current } of starterCredits) {
+        if (current !== 0) continue;
         await prisma.tenant.update({
             where: { id: tenant.id },
-            data: { sms_enabled: true, sms_credits: 1000 },
+            data: { [column]: 1000, ...(channel === 'SMS' ? { sms_enabled: true } : {}) },
         });
         await prisma.smsTransaction.create({
             data: {
                 tenant_id: tenant.id,
+                channel,
                 type: 'ADJUSTMENT',
                 credits: 1000,
                 balance_after: 1000,
-                description: 'Seed starter SMS credits',
+                description: `Seed starter ${channel} credits`,
             },
         });
     }

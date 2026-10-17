@@ -59,13 +59,14 @@ export const adminMessages = {
         },
         actions: {
             viewEdit: "Mandant ansehen/bearbeiten",
-            sellSmsCredits: "SMS-Credits verkaufen",
+            sellSmsCredits: "Nachrichten-Credits verkaufen",
             sellAiCredits: "KI-Credits verkaufen",
         },
         sellCredits: {
-            smsTitle: "SMS-Credits verkaufen",
+            smsTitle: "Nachrichten-Credits verkaufen",
             aiTitle: "KI-Credits verkaufen",
             creditsLabel: "Hinzuzufügende Credits",
+            channelLabel: "Kanal",
             creditsPlaceholder: "z. B. 500",
             creditsRequired: "Geben Sie eine gültige Credit-Menge ein.",
             amountLabel: "Zahlungsbetrag (BDT, optional)",
@@ -77,7 +78,7 @@ export const adminMessages = {
             confirm: "Credits hinzufügen",
             saving: "Wird gespeichert…",
             failed: "Die Credits konnten nicht hinzugefügt werden",
-            smsSuccess: "{credits} SMS-Credits zu {name} hinzugefügt",
+            smsSuccess: "{credits} {channel}-Credits zu {name} hinzugefügt",
             aiSuccess: "{credits} KI-Credits zu {name} hinzugefügt",
         },
         payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                 subscription_fee: "Abo-Gebühr",
                 sms_credit_sale_payment: "SMS-Credit-Verkauf",
                 ai_credit_sale_payment: "KI-Credit-Verkauf",
+                whatsapp_credit_sale_payment: "WhatsApp-Credit-Verkauf",
+                email_credit_sale_payment: "E-Mail-Credit-Verkauf",
             },
             paymentModal: {
                 title: "Zahlung erfassen",

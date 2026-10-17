@@ -571,6 +571,7 @@ export class SuppliersService {
             include: {
                 supplier: { select: { id: true, name: true, phone: true, due_balance: true } },
                 creator: { select: { id: true, name: true } },
+                store: { select: { id: true, name: true, address: true } },
             },
         });
         if (!payment) throw new NotFoundException('Supplier payment not found');
@@ -802,6 +803,7 @@ export class SuppliersService {
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
                     creator: { select: { id: true, name: true } },
+                    store: { select: { id: true, name: true, address: true } },
                 },
                 orderBy: { created_at: 'desc' },
                 skip,
@@ -934,6 +936,7 @@ export class SuppliersService {
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
                     creator: { select: { id: true, name: true } },
+                    store: { select: { id: true, name: true, address: true } },
                 },
             });
 
@@ -1065,6 +1068,7 @@ export class SuppliersService {
                 include: {
                     supplier: { select: { id: true, name: true, phone: true } },
                     creator: { select: { id: true, name: true } },
+                    store: { select: { id: true, name: true, address: true } },
                 },
             });
 

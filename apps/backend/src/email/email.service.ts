@@ -3,6 +3,8 @@ import * as nodemailer from 'nodemailer';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
+import { SmsCreditService } from '../sms/sms-credit.service';
+import { InsufficientMessagingCreditsError } from '../sms/messaging-channel';
 import { formatEmailAddress, parseEmailAddress } from './address.util';
 import { formatZonedDate } from '../common/tenant-time.util';
 import { getPlatformAdminEmails } from '../auth/platform-admin.util';
@@ -34,6 +36,18 @@ export interface SendEmailOptions {
      * billing, verification) — those must stay on the platform address.
      */
     tenantId?: string | null;
+    /**
+     * Bills one credit to this tenant's email balance before sending — set on
+     * every message a shop sends to its own customers (campaigns, receipts),
+     * never on platform mail. Separate from `tenantId` because billing and the
+     * sender identity are different questions: a receipt is the shop's message
+     * but still goes out from the platform address. With no credit the email is
+     * skipped, or `InsufficientMessagingCreditsError` is thrown under
+     * `throwOnError`.
+     */
+    billTenantId?: string | null;
+    /** Short label stored on the usage ledger entry (e.g. "CRM campaign"). */
+    purpose?: string;
 }
 
 @Injectable()
@@ -44,6 +58,7 @@ export class EmailService {
         private readonly platformSettings: PlatformSettingsService,
         private readonly breakers: CircuitBreakerRegistry,
         private readonly tenantIdentity: TenantMessagingIdentityService,
+        private readonly credits: SmsCreditService,
     ) {}
 
     /** Prefer an explicit DB value; otherwise fall back to env, then schema default. */
@@ -337,14 +352,30 @@ ${details}
         });
     }
 
-    async sendBillingInvoice(to: string, tenantName: string, amount: number, currency: string, invoiceUrl?: string): Promise<void> {
-        await this.send({
-            to,
-            subject: `Invoice for ${tenantName} — ERP71`,
-            html: `<h2>Invoice</h2>
+    /**
+     * A payment confirmation. Sent by the platform to a shop owner for its own
+     * subscription, and by a shop to its customer after a sale — pass
+     * `billTenantId` for the second, which is metered against the shop's email
+     * credits.
+     */
+    async sendBillingInvoice(
+        to: string,
+        tenantName: string,
+        amount: number,
+        currency: string,
+        invoiceUrl?: string,
+        options?: { billTenantId?: string | null; purpose?: string },
+    ): Promise<void> {
+        await this.send(
+            {
+                to,
+                subject: `Invoice for ${tenantName} — ERP71`,
+                html: `<h2>Invoice</h2>
 <p>A payment of <strong>${currency} ${amount.toFixed(2)}</strong> has been processed for <strong>${tenantName}</strong>.</p>
 ${invoiceUrl ? `<p><a href="${invoiceUrl}">View Invoice</a></p>` : ''}`,
-        });
+            },
+            { billTenantId: options?.billTenantId, purpose: options?.purpose },
+        );
     }
 
     async sendPaymentFailure(to: string, tenantName: string, amount: number, currency: string): Promise<void> {
@@ -631,6 +662,39 @@ ${link}`,
     }
 
     /**
+     * Tells the platform team a shop has paid for messaging credits by bKash.
+     * The support ticket is the record; this is the nudge to go and look.
+     */
+    async sendCreditTopupRequestAlert(options: {
+        tenantName: string;
+        packageName: string;
+        amount: number;
+        transactionId: string;
+        senderNumber?: string | null;
+        ticketNumber?: number | null;
+        reviewUrl?: string | null;
+    }): Promise<void> {
+        const recipients = getPlatformAdminEmails();
+        if (recipients.length === 0) return;
+
+        const link = options.reviewUrl
+            ? `<p><a href="${options.reviewUrl}">Review credit top-ups</a></p>`
+            : '';
+        const ticket = options.ticketNumber ? ` (ticket #${options.ticketNumber})` : '';
+
+        await this.sendSystemAlert(
+            recipients,
+            `Credit top-up to verify: ${options.tenantName} — ৳${options.amount.toFixed(2)}`,
+            `<h2>A workspace has paid for messaging credits${escapeHtml(ticket)}</h2>
+<p><strong>${escapeHtml(options.tenantName)}</strong> says they sent <strong>৳${options.amount.toFixed(2)}</strong> by bKash for <strong>${escapeHtml(options.packageName)}</strong>.</p>
+<p>Transaction ID: <strong>${escapeHtml(options.transactionId)}</strong><br>
+From: ${escapeHtml(options.senderNumber || '—')}</p>
+<p>Find the payment in the bKash app before approving — approving adds the credits.</p>
+${link}`,
+        );
+    }
+
+    /**
      * Sends a platform-operational alert (e.g. system-health degradation) to
      * one or more recipients. Public wrapper around the internal transport.
      */
@@ -639,14 +703,27 @@ ${link}`,
         await Promise.all(recipients.map((addr) => this.send({ to: addr, subject, html })));
     }
 
-    /** Sends an arbitrary subject/body email, e.g. a CRM campaign blast. Surfaces send failures to the caller. */
+    /**
+     * Sends an arbitrary subject/body email, e.g. a CRM campaign blast, from the
+     * tenant's own sender identity when it has one. Metered: one credit from the
+     * tenant's email balance. Surfaces send failures — and an empty balance —
+     * to the caller.
+     */
     async sendCustom(
         to: string,
         subject: string,
         html: string,
-        options?: { tenantId?: string | null },
+        options?: { tenantId?: string | null; purpose?: string },
     ): Promise<void> {
-        await this.send({ to, subject, html }, { throwOnError: true, tenantId: options?.tenantId });
+        await this.send(
+            { to, subject, html },
+            {
+                throwOnError: true,
+                tenantId: options?.tenantId,
+                billTenantId: options?.tenantId,
+                purpose: options?.purpose,
+            },
+        );
     }
 
     /** Sends a test message and surfaces SMTP errors to the caller (admin UI). */
@@ -722,6 +799,21 @@ ${link}`,
         opts: { to: string; subject: string; html: string },
         options?: SendEmailOptions,
     ): Promise<void> {
+        if (options?.billTenantId) {
+            const { allowed } = await this.credits.consume(options.billTenantId, 1, {
+                channel: 'EMAIL',
+                recipient: opts.to,
+                description: options.purpose ?? 'Email sent',
+            });
+            if (!allowed) {
+                this.logger.warn(
+                    `Skipping email to ${opts.to} for tenant ${options.billTenantId}: insufficient email credits.`,
+                );
+                if (options.throwOnError) throw new InsufficientMessagingCreditsError('EMAIL');
+                return;
+            }
+        }
+
         const config = await this.getTransportConfig(options?.tenantId);
         const resendKey = process.env.RESEND_API_KEY?.trim();
         const brevoKey = this.resolveBrevoApiKey(config.pass);

@@ -205,6 +205,8 @@ const ACTION_PHRASES: Record<string, string> = {
     'tenant.addon.grant': 'Granted an add-on module',
     'tenant.addon.revoke': 'Revoked an add-on module',
     'tenant.sms_credits.sell': 'Sold SMS credits',
+    'tenant.whatsapp_credits.sell': 'Sold WhatsApp credits',
+    'tenant.email_credits.sell': 'Sold email credits',
     'tenant.ai_credits.sell': 'Sold AI credits',
     'tenant.subscription.discount': 'Applied a subscription discount',
     'user.promote': 'Made someone a platform admin',

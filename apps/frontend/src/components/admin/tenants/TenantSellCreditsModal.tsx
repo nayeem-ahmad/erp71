@@ -6,7 +6,9 @@ import type { TenantRecord } from './types';
 import { api } from '@/lib/api';
 import { formatMessage, useI18n } from '@/lib/i18n';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import { CHANNEL_LABEL, MESSAGING_CHANNELS, type MessagingChannel } from '@/lib/messaging-credits';
 
+/** `sms` opens the messaging sale (SMS, WhatsApp or email); `ai` the AI one. */
 type CreditKind = 'sms' | 'ai';
 
 type Props = {
@@ -21,6 +23,7 @@ export default function TenantSellCreditsModal({ open, kind, tenant, onClose, on
     const { t } = useI18n();
     const sc = t.admin.tenants.sellCredits;
 
+    const [channel, setChannel] = useState<MessagingChannel>('SMS');
     const [credits, setCredits] = useState('');
     const [amount, setAmount] = useState('');
     const [notes, setNotes] = useState('');
@@ -43,7 +46,8 @@ export default function TenantSellCreditsModal({ open, kind, tenant, onClose, on
         try {
             const parsedAmount = amount.trim() ? parseFloat(amount) : undefined;
             if (kind === 'sms') {
-                await api.sellTenantSmsCredits(tenant.id, {
+                await api.sellTenantMessagingCredits(tenant.id, {
+                    channel,
                     credits: parsedCredits,
                     amount: parsedAmount,
                     notes: notes || undefined,
@@ -57,6 +61,7 @@ export default function TenantSellCreditsModal({ open, kind, tenant, onClose, on
             }
             onSuccess(formatMessage(kind === 'sms' ? sc.smsSuccess : sc.aiSuccess, {
                 credits: String(parsedCredits),
+                channel: CHANNEL_LABEL[channel],
                 name: tenant.name,
             }));
             setCredits('');
@@ -78,6 +83,22 @@ export default function TenantSellCreditsModal({ open, kind, tenant, onClose, on
                 {error && (
                     <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                         {error}
+                    </div>
+                )}
+
+                {kind === 'sms' && (
+                    <div className="space-y-2">
+                        <label htmlFor="sell-credits-channel" className="text-xs font-medium text-gray-500">{sc.channelLabel}</label>
+                        <select
+                            id="sell-credits-channel"
+                            value={channel}
+                            onChange={(e) => setChannel(e.target.value as MessagingChannel)}
+                            className="w-full rounded-md border border-gray-100 bg-gray-50 px-4 py-3 text-sm outline-none"
+                        >
+                            {MESSAGING_CHANNELS.map((key) => (
+                                <option key={key} value={key}>{CHANNEL_LABEL[key]}</option>
+                            ))}
+                        </select>
                     </div>
                 )}
 

@@ -1298,6 +1298,8 @@ export class SalesService {
                             tenant.name,
                             totalAmount,
                             'BDT',
+                            undefined,
+                            { billTenantId: tenantId, purpose: 'Sale receipt' },
                         ),
                     );
                 }

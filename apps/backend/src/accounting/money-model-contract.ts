@@ -200,7 +200,8 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     // books — which is the whole reason this is a separate table.
     { model: 'ActivationRequest', exempt: 'Tenant-submitted payment claim awaiting manual verification; the manual_payment BillingEvent an approval writes is the money event.' },
     { model: 'AddonModule', exempt: 'Platform add-on catalog.' },
-    { model: 'SmsPackage', exempt: 'Platform SMS-credit catalog.' },
+    { model: 'SmsPackage', exempt: 'Platform messaging-credit catalog (SMS, WhatsApp, email).' },
+    { model: 'CreditTopupRequest', exempt: 'Tenant-submitted bKash payment claim for a messaging-credit package, awaiting manual verification; the *_credit_sale_payment BillingEvent an approval writes is the money event.' },
     { model: 'Referee', exempt: 'Referral-program config (rates).' },
     { model: 'RefereePayment', exempt: 'Referral payout at the platform level, not the tenant GL. Recorded in the platform books as an ordinary PlatformExpense under Referral Commission, rather than posting itself.' },
     // A request is an intent, not a movement: raising one changes no commission and

@@ -32,6 +32,7 @@ import { PasswordPolicyService } from '../password-policy/password-policy.servic
 import { getPlatformAdminEmails, isPlatformAdminEmail } from '../auth/platform-admin.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
+import { CHANNEL_LABEL, CHANNEL_SALE_EVENT_TYPE } from '../sms/messaging-channel';
 import { DemoDataService } from '../demo-data/demo-data.service';
 import type { DemoDataOptionsInput } from '../demo-data/generator/options';
 import { AddonModulesService } from '../addon-modules/addon-modules.service';
@@ -62,6 +63,7 @@ import {
     UpdatePlatformAdminUserDto,
     AdminResetPlatformUserPasswordDto,
     AdminSellSmsCreditsDto,
+    AdminSellMessagingCreditsDto,
     AdminSellAiCreditsDto,
     AdminGrantTenantAddonDto,
     SetAdminTenantBusinessTypeDto,
@@ -1803,32 +1805,55 @@ export class AdminTenantsService {
     }
 
     async sellSmsCredits(tenantId: string, dto: AdminSellSmsCreditsDto, adminUserId: string) {
+        const result = await this.sellMessagingCredits(tenantId, { ...dto, channel: 'SMS' }, adminUserId);
+        return {
+            credits_added: result.credits_added,
+            sms_credits: result.balance,
+            payment_event_id: result.payment_event_id,
+        };
+    }
+
+    /**
+     * Sell or grant SMS, WhatsApp or email credits by hand — a payment taken
+     * outside a top-up request, or a goodwill top-up when `amount` is omitted.
+     */
+    async sellMessagingCredits(tenantId: string, dto: AdminSellMessagingCreditsDto, adminUserId: string) {
         const tenant = await this.db.tenant.findFirst({
             where: { id: tenantId, ...ACTIVE_TENANT_FILTER },
             select: { id: true, name: true },
         });
         if (!tenant) throw new NotFoundException('Tenant not found');
 
+        const label = CHANNEL_LABEL[dto.channel];
         const grant = await this.smsCreditService.adminGrantCredits(tenantId, dto.credits, {
-            description: dto.notes ?? `Admin sale: ${dto.credits} SMS credits`,
+            channel: dto.channel,
+            description: dto.notes ?? `Admin sale: ${dto.credits} ${label} credits`,
             recordedBy: adminUserId,
         });
 
         const paymentEvent = await this.recordOptionalSalePayment(tenantId, adminUserId, {
             amount: dto.amount,
-            notes: dto.notes ?? `SMS credit sale (${dto.credits} credits)`,
-            eventType: 'sms_credit_sale_payment',
+            notes: dto.notes ?? `${label} credit sale (${dto.credits} credits)`,
+            eventType: CHANNEL_SALE_EVENT_TYPE[dto.channel],
         });
 
-        await this.auditService.log('tenant.sms_credits.sell', 'Tenant', { userId: adminUserId, tenantId }, tenantId, {
-            credits: dto.credits,
-            amount: dto.amount ?? null,
-            balance: grant.balance,
-        });
+        await this.auditService.log(
+            `tenant.${dto.channel.toLowerCase()}_credits.sell`,
+            'Tenant',
+            { userId: adminUserId, tenantId },
+            tenantId,
+            {
+                channel: dto.channel,
+                credits: dto.credits,
+                amount: dto.amount ?? null,
+                balance: grant.balance,
+            },
+        );
 
         return {
+            channel: dto.channel,
             credits_added: dto.credits,
-            sms_credits: grant.balance,
+            balance: grant.balance,
             payment_event_id: paymentEvent?.id ?? null,
         };
     }
@@ -1962,6 +1987,8 @@ export class AdminTenantsService {
             store_count: tenant.stores.length,
             user_count: tenant.users.length,
             sms_credits: tenant.sms_credits ?? 0,
+            whatsapp_credits: tenant.whatsapp_credits ?? 0,
+            email_credits: tenant.email_credits ?? 0,
             // Non-null means the workspace is frozen for non-payment: reads work,
             // every write is refused by BillingSuspensionGuard.
             billing_suspended_at: tenant.billing_suspended_at ?? null,

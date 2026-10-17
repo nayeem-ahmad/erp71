@@ -12,9 +12,10 @@
  * period it posts, so a voided period is not normally revisited; the tombstone
  * is the belt to that braces, and still matters if a period is ever replayed.
  *
- * The credit-sale payments stay locked: each is the money half of an SMS/AI
- * credit grant that has already landed in the tenant's balance, and nothing
- * here can claw those credits back. Correct one with an offsetting entry.
+ * The credit-sale payments stay locked: each is the money half of an SMS,
+ * WhatsApp, email or AI credit grant that has already landed in the tenant's
+ * balance, and nothing here can claw those credits back. Correct one with an
+ * offsetting entry.
  */
 export const EDITABLE_LEDGER_EVENT_TYPES = [
     'manual_payment',
@@ -43,6 +44,8 @@ export function ledgerEventDelta(eventType: string, amount: number | null | unde
     switch (eventType) {
         case 'manual_payment':
         case 'sms_credit_sale_payment':
+        case 'whatsapp_credit_sale_payment':
+        case 'email_credit_sale_payment':
         case 'ai_credit_sale_payment':
             return value;
         case 'manual_refund':

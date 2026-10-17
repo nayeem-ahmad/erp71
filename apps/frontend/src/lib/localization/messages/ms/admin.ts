@@ -59,13 +59,14 @@ export const adminMessages = {
             },
             actions: {
                 viewEdit: 'Lihat / edit penyewa',
-                sellSmsCredits: 'Jual kredit SMS',
+                sellSmsCredits: 'Jual kredit pemesejan',
                 sellAiCredits: 'Jual kredit AI',
             },
             sellCredits: {
-                smsTitle: 'Jual Kredit SMS',
+                smsTitle: 'Jual Kredit Pemesejan',
                 aiTitle: 'Jual Kredit AI',
                 creditsLabel: 'Kredit untuk ditambah',
+                channelLabel: 'Saluran',
                 creditsPlaceholder: 'cth. 500',
                 creditsRequired: 'Masukkan jumlah kredit yang sah.',
                 amountLabel: 'Jumlah bayaran (BDT, pilihan)',
@@ -77,7 +78,7 @@ export const adminMessages = {
                 confirm: 'Tambah kredit',
                 saving: 'Menyimpan…',
                 failed: 'Gagal menambah kredit',
-                smsSuccess: 'Ditambah {credits} kredit SMS kepada {name}',
+                smsSuccess: 'Ditambah {credits} kredit {channel} kepada {name}',
                 aiSuccess: 'Ditambah {credits} kredit AI kepada {name}',
             },
             payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                     subscription_fee: 'Yuran langganan',
                     sms_credit_sale_payment: 'Jualan kredit SMS',
                     ai_credit_sale_payment: 'Jualan kredit AI',
+                    whatsapp_credit_sale_payment: 'Jualan kredit WhatsApp',
+                    email_credit_sale_payment: 'Jualan kredit e-mel',
                 },
                 paymentModal: {
                     title: 'Rekod Pembayaran',

@@ -1,16 +1,7 @@
-import {
-    BadRequestException,
-    ForbiddenException,
-    Injectable,
-    Logger,
-    NotFoundException,
-} from '@nestjs/common';
-import { StorePermission } from '@erp71/shared-types';
-import { hasStorePermission } from '../auth/permission.util';
-import { TenantContext } from '../database/tenant.decorator';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
-import { AuditService } from '../audit/audit.service';
-import { ConfirmSmsCreditsPurchaseDto, PurchaseSmsCreditsDto } from './sms-credit.dto';
+import { CHANNEL_BALANCE_COLUMN, MESSAGING_CHANNELS, type MessagingChannel } from './messaging-channel';
 
 /**
  * Number of characters a single SMS segment can hold. Messages containing
@@ -27,14 +18,24 @@ const GSM_BASIC =
     '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ ÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
 const GSM_EXTENSION = '^{}\\[~]|€';
 
+type Db = DatabaseService | Prisma.TransactionClient;
+
+export type MessagingBalances = Record<MessagingChannel, number>;
+
+/**
+ * The prepaid messaging balances — SMS, WhatsApp and email — and their ledger.
+ *
+ * Named for SMS because it predates the other two channels. It only moves
+ * balances: spending them (`consume`, called by every metered send) and adding
+ * to them (`grantCredits`, called only by platform-admin paths — an approved
+ * top-up or an admin sale). Nothing a tenant calls grants credits; see
+ * CreditTopupService for how a tenant asks for them.
+ */
 @Injectable()
 export class SmsCreditService {
     private readonly logger = new Logger(SmsCreditService.name);
 
-    constructor(
-        private readonly db: DatabaseService,
-        private readonly audit: AuditService,
-    ) {}
+    constructor(private readonly db: DatabaseService) {}
 
     /** True when every character is part of the GSM 03.38 charset. */
     private isGsmEncodable(message: string): boolean {
@@ -72,38 +73,34 @@ export class SmsCreditService {
     }
 
     /**
-     * Atomically consume credits for an SMS send. Returns whether the send is
-     * allowed (i.e. the tenant had enough balance). When allowed, the balance
-     * is decremented and a USAGE ledger entry is written.
+     * Atomically consume credits for a send on one channel (SMS unless
+     * `meta.channel` says otherwise). Returns whether the send is allowed (i.e.
+     * the tenant had enough balance). When allowed, the balance is decremented
+     * and a USAGE ledger entry is written.
      */
     async consume(
         tenantId: string,
         credits: number,
-        meta: { recipient?: string; description?: string } = {},
+        meta: { channel?: MessagingChannel; recipient?: string; description?: string } = {},
     ): Promise<{ allowed: boolean; balance: number }> {
+        const channel = meta.channel ?? 'SMS';
+        const column = CHANNEL_BALANCE_COLUMN[channel];
+
         if (credits <= 0) {
-            const tenant = await this.db.tenant.findUnique({
-                where: { id: tenantId },
-                select: { sms_credits: true },
-            });
-            return { allowed: true, balance: tenant?.sms_credits ?? 0 };
+            return { allowed: true, balance: await this.getBalance(tenantId, channel) };
         }
 
         // Conditional decrement: only succeeds when the balance is sufficient.
         const updated = await this.db.tenant.updateMany({
-            where: { id: tenantId, sms_credits: { gte: credits } },
-            data: { sms_credits: { decrement: credits } },
+            where: { id: tenantId, [column]: { gte: credits } },
+            data: { [column]: { decrement: credits } },
         });
 
-        const tenant = await this.db.tenant.findUnique({
-            where: { id: tenantId },
-            select: { sms_credits: true },
-        });
-        const balance = tenant?.sms_credits ?? 0;
+        const balance = await this.getBalance(tenantId, channel);
 
         if (updated.count === 0) {
             this.logger.warn(
-                `Insufficient SMS credits for tenant ${tenantId} (needed ${credits}, have ${balance}).`,
+                `Insufficient ${channel} credits for tenant ${tenantId} (needed ${credits}, have ${balance}).`,
             );
             return { allowed: false, balance };
         }
@@ -111,6 +108,7 @@ export class SmsCreditService {
         await this.db.smsTransaction.create({
             data: {
                 tenant_id: tenantId,
+                channel,
                 type: 'USAGE',
                 credits: -credits,
                 balance_after: balance,
@@ -122,220 +120,123 @@ export class SmsCreditService {
         return { allowed: true, balance };
     }
 
-    /** Balance, available top-up packages, and recent ledger entries. */
-    async getSummary(ctx: TenantContext) {
-        const membership = await this.requireTenantMembership(ctx.userId, ctx.tenantId);
-        const [tenant, packages, transactions] = await Promise.all([
-            this.db.tenant.findUnique({
-                where: { id: ctx.tenantId },
-                select: { id: true, name: true, sms_credits: true, sms_enabled: true },
-            }),
-            this.db.smsPackage.findMany({
-                where: { is_active: true },
-                orderBy: [{ sort_order: 'asc' }, { price: 'asc' }],
-            }),
-            this.db.smsTransaction.findMany({
-                where: { tenant_id: ctx.tenantId },
-                orderBy: { created_at: 'desc' },
-                take: 20,
-            }),
-        ]);
+    async getBalance(tenantId: string, channel: MessagingChannel): Promise<number> {
+        const balances = await this.getBalances(tenantId);
+        return balances[channel];
+    }
 
-        if (!tenant) {
-            throw new NotFoundException('Tenant not found');
-        }
-
+    async getBalances(tenantId: string): Promise<MessagingBalances> {
+        const tenant = await this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { sms_credits: true, whatsapp_credits: true, email_credits: true },
+        });
         return {
-            tenant: { id: tenant.id, name: tenant.name },
-            role: membership.role,
-            can_manage_billing: await this.canManageBilling(ctx),
-            sms_enabled: tenant.sms_enabled,
-            balance: tenant.sms_credits,
-            low_balance: tenant.sms_credits < 20,
-            packages: packages.map((pkg) => this.mapPackage(pkg)),
-            transactions: transactions.map((tx) => this.mapTransaction(tx)),
+            SMS: tenant?.sms_credits ?? 0,
+            WHATSAPP: tenant?.whatsapp_credits ?? 0,
+            EMAIL: tenant?.email_credits ?? 0,
         };
     }
 
-    /**
-     * Start a top-up purchase. In manual mode the credits are granted only
-     * after `confirmPurchase`; the response tells the frontend to confirm.
-     */
-    async createPurchase(ctx: TenantContext, dto: PurchaseSmsCreditsDto) {
-        await this.requireTenantMembership(ctx.userId, ctx.tenantId);
-        await this.assertBillingAccess(ctx);
-
-        const pkg = await this.getActivePackage(dto.packageId);
-        const reference = `sms_${ctx.tenantId.slice(0, 8)}_${Date.now()}`;
-
-        await this.recordBillingEvent({
-            tenantId: ctx.tenantId,
-            externalEventId: reference,
-            eventType: 'SMS_TOPUP_CREATED',
-            status: 'PENDING',
-            referenceId: reference,
-            amount: Number(pkg.price),
-            currency: pkg.currency,
-            payload: { packageId: pkg.id, credits: pkg.credits },
-        });
-
-        return {
-            reference,
-            requires_confirmation: true,
-            package: this.mapPackage(pkg),
-            amount: Number(pkg.price),
-            currency: pkg.currency,
-        };
-    }
-
-    /** Grant the purchased credits and write the PURCHASE ledger entry. */
-    async confirmPurchase(ctx: TenantContext, dto: ConfirmSmsCreditsPurchaseDto) {
-        await this.requireTenantMembership(ctx.userId, ctx.tenantId);
-        await this.assertBillingAccess(ctx);
-
-        const pkg = await this.getActivePackage(dto.packageId);
-        const reference = dto.reference || `sms_${ctx.tenantId}_${Date.now()}`;
-
-        const result = await this.grantCredits(ctx.tenantId, pkg.credits, {
-            type: 'PURCHASE',
-            reference,
-            description: `Purchased ${pkg.name} (${pkg.credits} SMS credits)`,
-        });
-
-        await this.recordBillingEvent({
-            tenantId: ctx.tenantId,
-            externalEventId: `${reference}:confirmed`,
-            eventType: 'SMS_TOPUP_CONFIRMED',
-            status: 'COMPLETED',
-            referenceId: reference,
-            amount: Number(pkg.price),
-            currency: pkg.currency,
-            payload: { packageId: pkg.id, credits: pkg.credits },
-        });
-
-        this.audit
-            .log('SMS_CREDITS_PURCHASED', 'SmsTransaction', { userId: ctx.userId, tenantId: ctx.tenantId }, result.transactionId, {
-                packageId: pkg.id,
-                credits: pkg.credits,
-                amount: Number(pkg.price),
-                currency: pkg.currency,
-                reference,
-            })
-            .catch(() => {});
-
-        return {
-            purchased: true,
-            credits_added: pkg.credits,
-            balance: result.balance,
-            reference,
-        };
-    }
-
-    /** Platform admin grants prepaid SMS credits (sale or adjustment). */
+    /** Platform admin grants prepaid credits outside a top-up request (sale or adjustment). */
     async adminGrantCredits(
         tenantId: string,
         credits: number,
-        meta: { description?: string; recordedBy?: string },
+        meta: { channel?: MessagingChannel; description?: string; recordedBy?: string },
     ) {
-        return this.grantCredits(tenantId, credits, {
+        return this.grantCredits(tenantId, meta.channel ?? 'SMS', credits, {
             type: 'ADJUSTMENT',
-            description: meta.description ?? 'Admin SMS credit grant',
+            description: meta.description ?? 'Admin credit grant',
             reference: meta.recordedBy ? `admin:${meta.recordedBy}` : 'admin',
         });
     }
 
-    /** Add credits to the balance and record a ledger entry. */
-    private async grantCredits(
+    /**
+     * Add credits to one balance and record a ledger entry. Platform-admin paths
+     * only. Pass `db` to run inside a caller's transaction, so the grant and
+     * whatever authorised it commit or fail together.
+     */
+    async grantCredits(
         tenantId: string,
+        channel: MessagingChannel,
         credits: number,
         meta: { type: string; reference?: string; description?: string; recipient?: string },
+        db: Db = this.db,
     ): Promise<{ balance: number; transactionId: string }> {
-        const tenant = await this.db.tenant.update({
+        const column = CHANNEL_BALANCE_COLUMN[channel];
+        const tenant = await db.tenant.update({
             where: { id: tenantId },
-            data: { sms_credits: { increment: credits } },
-            select: { sms_credits: true },
+            data: { [column]: { increment: credits } },
+            select: { [column]: true } as Record<typeof column, true>,
         });
+        const balance = Number((tenant as Record<string, unknown>)[column] ?? 0);
 
-        const transaction = await this.db.smsTransaction.create({
+        const transaction = await db.smsTransaction.create({
             data: {
                 tenant_id: tenantId,
+                channel,
                 type: meta.type,
                 credits,
-                balance_after: tenant.sms_credits,
+                balance_after: balance,
                 description: meta.description ?? null,
                 reference: meta.reference ?? null,
                 recipient: meta.recipient ?? null,
             },
         });
 
-        return { balance: tenant.sms_credits, transactionId: transaction.id };
+        return { balance, transactionId: transaction.id };
     }
 
-    private async getActivePackage(packageId: string) {
+    /** Every package a tenant can buy right now, every channel. */
+    async listActivePackages() {
+        const packages = await this.db.smsPackage.findMany({
+            where: { is_active: true, channel: { in: [...MESSAGING_CHANNELS] } },
+            orderBy: [{ sort_order: 'asc' }, { price: 'asc' }],
+        });
+        return packages.map((pkg) => this.mapPackage(pkg));
+    }
+
+    async getActivePackage(packageId: string) {
         const pkg = await this.db.smsPackage.findUnique({ where: { id: packageId } });
         if (!pkg || !pkg.is_active) {
-            throw new BadRequestException('Selected SMS package is not available.');
+            throw new BadRequestException('Selected credit package is not available.');
         }
         return pkg;
     }
 
-    private async recordBillingEvent(input: {
-        tenantId: string;
-        externalEventId: string;
-        eventType: string;
-        status: string;
-        referenceId?: string;
-        amount?: number;
-        currency?: string;
-        payload: unknown;
-    }) {
-        return this.db.billingEvent.upsert({
-            where: {
-                provider_name_external_event_id: {
-                    provider_name: 'sms-credits',
-                    external_event_id: input.externalEventId,
-                },
-            },
-            update: {
-                status: input.status,
-                event_type: input.eventType,
-                reference_id: input.referenceId,
-                amount: input.amount,
-                currency: input.currency,
-                payload: input.payload as any,
-            },
-            create: {
-                tenant_id: input.tenantId,
-                provider_name: 'sms-credits',
-                external_event_id: input.externalEventId,
-                event_type: input.eventType,
-                status: input.status,
-                reference_id: input.referenceId,
-                amount: input.amount,
-                currency: input.currency,
-                payload: input.payload as any,
-            },
+    async listTransactions(tenantId: string, take = 30) {
+        const transactions = await this.db.smsTransaction.findMany({
+            where: { tenant_id: tenantId },
+            orderBy: { created_at: 'desc' },
+            take,
         });
+        return transactions.map((tx) => this.mapTransaction(tx));
     }
 
-    private mapPackage(pkg: {
+    mapPackage(pkg: {
         id: string;
+        channel: string;
         name: string;
         credits: number;
         price: unknown;
         currency: string;
+        is_active?: boolean;
+        sort_order?: number;
     }) {
         return {
             id: pkg.id,
+            channel: pkg.channel,
             name: pkg.name,
             credits: pkg.credits,
             price: Number(pkg.price),
             currency: pkg.currency,
+            is_active: pkg.is_active ?? true,
+            sort_order: pkg.sort_order ?? 0,
         };
     }
 
     private mapTransaction(tx: {
         id: string;
+        channel: string;
         type: string;
         credits: number;
         balance_after: number;
@@ -346,6 +247,7 @@ export class SmsCreditService {
     }) {
         return {
             id: tx.id,
+            channel: tx.channel,
             type: tx.type,
             credits: tx.credits,
             balance_after: tx.balance_after,
@@ -354,27 +256,5 @@ export class SmsCreditService {
             reference: tx.reference,
             created_at: tx.created_at,
         };
-    }
-
-    private async requireTenantMembership(userId: string, tenantId: string) {
-        const membership = await this.db.tenantUser.findUnique({
-            where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } },
-        });
-
-        if (!membership) {
-            throw new ForbiddenException('Invalid tenant context');
-        }
-
-        return membership;
-    }
-
-    private async canManageBilling(ctx: TenantContext): Promise<boolean> {
-        return hasStorePermission(this.db, ctx, StorePermission.MANAGE_USERS);
-    }
-
-    private async assertBillingAccess(ctx: TenantContext): Promise<void> {
-        if (!(await this.canManageBilling(ctx))) {
-            throw new ForbiddenException('You do not have permission to purchase SMS credits.');
-        }
     }
 }

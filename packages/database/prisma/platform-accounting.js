@@ -23,6 +23,8 @@ const PLATFORM_ACCOUNT = {
 	ADDON_REVENUE: 'Add-on Module Revenue',
 	SMS_REVENUE: 'SMS Credit Revenue',
 	AI_REVENUE: 'AI Credit Revenue',
+	WHATSAPP_REVENUE: 'WhatsApp Credit Revenue',
+	EMAIL_REVENUE: 'Email Credit Revenue',
 	OTHER_REVENUE: 'Other Platform Revenue',
 	REFUNDS: 'Refunds & Chargebacks',
 
@@ -160,6 +162,8 @@ const PLATFORM_ACCOUNTING_TEMPLATE = [
 				accounts: [
 					revenue(PLATFORM_ACCOUNT.SMS_REVENUE, '410201'),
 					revenue(PLATFORM_ACCOUNT.AI_REVENUE, '410202'),
+					revenue(PLATFORM_ACCOUNT.WHATSAPP_REVENUE, '410203'),
+					revenue(PLATFORM_ACCOUNT.EMAIL_REVENUE, '410204'),
 				],
 			},
 			{

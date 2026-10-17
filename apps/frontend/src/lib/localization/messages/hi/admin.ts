@@ -59,13 +59,14 @@ export const adminMessages = {
         },
         actions: {
             viewEdit: "टेनेंट देखें / संपादित करें",
-            sellSmsCredits: "SMS क्रेडिट बेचें",
+            sellSmsCredits: "मैसेजिंग क्रेडिट बेचें",
             sellAiCredits: "AI क्रेडिट बेचें",
         },
         sellCredits: {
-            smsTitle: "SMS क्रेडिट बेचें",
+            smsTitle: "मैसेजिंग क्रेडिट बेचें",
             aiTitle: "AI क्रेडिट बेचें",
             creditsLabel: "जोड़े जाने वाले क्रेडिट",
+            channelLabel: "चैनल",
             creditsPlaceholder: "जैसे 500",
             creditsRequired: "वैध क्रेडिट राशि दर्ज करें।",
             amountLabel: "भुगतान राशि (BDT, वैकल्पिक)",
@@ -77,7 +78,7 @@ export const adminMessages = {
             confirm: "क्रेडिट जोड़ें",
             saving: "सहेजा जा रहा है…",
             failed: "क्रेडिट नहीं जोड़े जा सके",
-            smsSuccess: "{name} में {credits} SMS क्रेडिट जोड़े गए",
+            smsSuccess: "{name} में {credits} {channel} क्रेडिट जोड़े गए",
             aiSuccess: "{name} में {credits} AI क्रेडिट जोड़े गए",
         },
         payments: {
@@ -404,6 +405,8 @@ export const adminMessages = {
                 subscription_fee: "सदस्यता शुल्क",
                 sms_credit_sale_payment: "SMS क्रेडिट बिक्री",
                 ai_credit_sale_payment: "AI क्रेडिट बिक्री",
+                whatsapp_credit_sale_payment: "WhatsApp क्रेडिट बिक्री",
+                email_credit_sale_payment: "ईमेल क्रेडिट बिक्री",
             },
             paymentModal: {
                 title: "भुगतान दर्ज करें",

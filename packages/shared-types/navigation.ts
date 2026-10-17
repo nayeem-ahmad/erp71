@@ -331,6 +331,9 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   // Payments a workspace says it sent, queued for a human to check against the
   // bKash/Nagad merchant app. Sits beside the ledger it posts into once approved.
   'admin.tenant-management.activation-requests': { id: 'admin.tenant-management.activation-requests', kind: 'link', icon: 'ShieldCheck', labelKey: 'sidebar.items.activationRequests', href: '/admin/activation-requests' },
+  // bKash payments a workspace says it sent for SMS, WhatsApp or email credits,
+  // queued for a human to verify. Approving is what adds the credits.
+  'admin.tenant-management.credit-topups': { id: 'admin.tenant-management.credit-topups', kind: 'link', icon: 'HandCoins', labelKey: 'sidebar.items.creditTopups', href: '/admin/credit-topups' },
   // The platform's own books, in the admin console. Hidden unless the
   // `platformAccounting` switch is on — like `projects` under platform-admin,
   // this is the operator's own tooling rather than anything a shop is sold.
@@ -743,8 +746,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
   layoutNode('admin.tenant-management.activation-requests', 'admin.tenant-management', 1),
-  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 2),
-  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 3),
+  layoutNode('admin.tenant-management.credit-topups', 'admin.tenant-management', 2),
+  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 3),
+  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 4),
   layoutNode('admin.users', 'admin', 2),
   layoutNode('admin.feedback', 'admin', 3),
   layoutNode('admin.support', 'admin', 4),
@@ -788,8 +792,9 @@ export const DEFAULT_PLATFORM_ADMIN_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('admin.tenant-management', 'admin', 1),
   layoutNode('admin.tenant-management.tenants', 'admin.tenant-management', 0),
   layoutNode('admin.tenant-management.activation-requests', 'admin.tenant-management', 1),
-  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 2),
-  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 3),
+  layoutNode('admin.tenant-management.credit-topups', 'admin.tenant-management', 2),
+  layoutNode('admin.tenant-management.ledger', 'admin.tenant-management', 3),
+  layoutNode('admin.tenant-management.reminders', 'admin.tenant-management', 4),
 
   // Directly under Tenant Management: the books are read alongside the tenant
   // ledger they are projected from, not filed away under Platform.

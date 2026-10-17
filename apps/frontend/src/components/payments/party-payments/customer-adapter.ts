@@ -84,12 +84,14 @@ export const customerPaymentsAdapter: PartyPaymentsAdapter = {
     },
     update: async (paymentId, input) => withVoucher(await api.updateCustomerCreditPayment(paymentId, input)),
     remove: (paymentId) => api.deleteCustomerCreditPayment(paymentId),
-    print: (payment, { businessName, headerConfig, locale, t }) => {
+    print: (payment, { businessName, headerConfig, paperSize, locale, t }) => {
         const copy = t.customerPayments;
         const customer = payment.customer;
         printCustomerPaymentReceipt({
             businessName,
             headerConfig,
+            storeName: payment.store?.name,
+            storeAddress: payment.store?.address ?? undefined,
             paymentNumber: payment.payment_number ?? payment.id,
             date: formatDateTime(payment.created_at, locale),
             direction: payment.type === 'PAYOUT' ? 'pay' : 'receive',
@@ -120,6 +122,6 @@ export const customerPaymentsAdapter: PartyPaymentsAdapter = {
                 payTitle: copy.print.payTitle,
                 footer: copy.print.footer,
             },
-        });
+        }, paperSize);
     },
 };
