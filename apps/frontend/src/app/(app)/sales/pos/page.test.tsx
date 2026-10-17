@@ -2,6 +2,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import POSPage from './page';
 import { setWorkspaceItem } from '@/lib/session-store';
+import { printPOSReceipt } from '@/lib/pos-receipt-printer';
+import { mockBrowserPaper } from '@/test-utils/print-paper';
+
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+jest.mock('@/lib/pos-receipt-printer', () => ({ printPOSReceipt: jest.fn().mockResolvedValue(undefined) }));
 
 jest.mock('@/components/HelpTooltip', () => ({
   HelpTooltip: () => null,
@@ -295,5 +300,21 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
       expect(screen.getByText('SL-00001')).toBeInTheDocument();
       expect(screen.getByText('Walk-in Customer')).toBeInTheDocument();
     });
+  });
+
+  it.each([
+    ['Thermal58', 'Thermal58'],
+    ['Thermal80', 'Thermal80'],
+    ['A4', 'Thermal80'],
+  ] as const)('prints the receipt for a till set to %s on %s', async (chosen, roll) => {
+    mockBrowserPaper(chosen);
+    render(<POSPage />);
+    await waitFor(() => screen.getByText('Coffee Beans'));
+    fireEvent.click(screen.getByText('Coffee Beans').closest('div[class*="cursor-pointer"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /complete checkout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm transaction/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /print pos receipt/i }));
+
+    await waitFor(() => expect(printPOSReceipt).toHaveBeenCalledWith(expect.anything(), roll));
   });
 });

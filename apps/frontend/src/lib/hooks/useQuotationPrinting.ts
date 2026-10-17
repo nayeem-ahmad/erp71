@@ -7,6 +7,7 @@ import { quotationQrDataUrl } from '@/lib/invoice-qr';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { printSalesQuotation, type PrintableQuotation } from '@/lib/sales-quotation-printer';
 import { useInvoicePrintPrefs } from './useInvoicePrintPrefs';
+import { useSalePrintPrefs } from './useSalePrintPrefs';
 import { printedByName } from './useSalePrinting';
 
 /**
@@ -15,13 +16,15 @@ import { printedByName } from './useSalePrinting';
  *
  * Everything is resolved on the click, for the quotation in hand: its own
  * branch's letterhead (a proforma's from the Proforma Invoice template), the
- * member's invoice layout, who is printing and the QR code.
+ * member's invoice layout, who is printing and the QR code. It prints on the
+ * paper this browser prints sales on, the one Print settings sets.
  */
 export function useQuotationPrinting() {
     const { t, locale } = useI18n();
     const quoteHeader = usePrintHeader('QUOTE', { eager: false });
     const proformaHeader = usePrintHeader('PROFORMA_INVOICE', { eager: false });
     const { resolve: resolveLayout } = useInvoicePrintPrefs();
+    const { paperSize } = useSalePrintPrefs();
     /** The quotation being prepared for print, so its trigger can wait. */
     const [printingId, setPrintingId] = useState<string | null>(null);
 
@@ -47,6 +50,7 @@ export function useQuotationPrinting() {
                         unknownProductLabel: t.shared.unknownProduct,
                         printedBy,
                         qrDataUrl,
+                        paperSize,
                     },
                     layout,
                 );
@@ -55,7 +59,7 @@ export function useQuotationPrinting() {
                 setPrintingId(null);
             }
         },
-        [quoteHeader, proformaHeader, resolveLayout, locale, t],
+        [quoteHeader, proformaHeader, resolveLayout, paperSize, locale, t],
     );
 
     return { printQuotation, printingId };

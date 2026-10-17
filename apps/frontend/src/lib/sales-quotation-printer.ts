@@ -1,8 +1,8 @@
 import { DEFAULT_INVOICE_PRINT_PREFS, type InvoicePrintPrefs } from '@erp71/shared-types';
 import { takaInWords } from './amount-in-words';
 import { formatCurrency, formatDate } from './format';
-import { escapeHtml as esc, openPrintWindow, renderHeaderHtml } from './print';
-import type { DeepPartial, HeaderContext, PrintHeaderConfig } from './print';
+import { escapeHtml as esc, openPrintWindow, renderHeaderHtml, sheetPaper } from './print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from './print';
 import { warrantyLabel } from './sale-print-actions';
 import {
     TAKA,
@@ -88,6 +88,11 @@ export interface QuotationPrintContext {
     printedAt?: string;
     /** A code that opens the quotation in the app; not printed when omitted. */
     qrDataUrl?: string;
+    /**
+     * The paper this browser prints sales on (see `useSalePrintPrefs`); A4 when
+     * omitted, and for a till roll, which a quotation never prints on.
+     */
+    paperSize?: PaperSize;
 }
 
 const toPaisa = (value: number) => Math.round(value * 100) / 100;
@@ -154,8 +159,9 @@ const QUOTATION_STYLES = `
 `;
 
 /**
- * Prints the quotation on A4 — a quotation is a trade document, never a till
- * roll. Null when the browser blocked the window.
+ * Prints the quotation on the chosen sheet, with the letterhead designed for
+ * that paper — on A4 for a till roll, since a quotation is a trade document.
+ * Null when the browser blocked the window.
  *
  * @param layout The printing member's invoice layout (see
  *   `useInvoicePrintPrefs`); the built-in one when omitted. Its `layout` choice
@@ -174,6 +180,7 @@ export function printSalesQuotation(
     const printedAt = ctx.printedAt ?? formatPrintStamp();
     const who = ctx.printedBy?.trim();
     const total = num(quote.total_amount);
+    const paperSize = sheetPaper(ctx.paperSize ?? 'A4');
 
     const items: InvoiceItem[] = quote.items.map((item) => ({
         name: item.product?.name || ctx.unknownProductLabel,
@@ -211,7 +218,7 @@ export function printSalesQuotation(
         context,
         headerConfig: ctx.headerConfig,
         // The QR code in place of the number and date, which the box says.
-        headerHtml: renderHeaderHtml(ctx.headerConfig, { ...context, docQr: ctx.qrDataUrl, hideDocMeta: true }, 'A4'),
+        headerHtml: renderHeaderHtml(ctx.headerConfig, { ...context, docQr: ctx.qrDataUrl, hideDocMeta: true }, paperSize),
         bodyHtml: detailedItemsHtml(items, layout, infoBox, money),
         endHtml: detailedEndHtml({
             // Spelled out in taka only — the words name the currency.
@@ -223,7 +230,7 @@ export function printSalesQuotation(
         }),
         footerHtml: detailedFooterHtml(layout.footer_text ?? THANK_YOU),
         title: `${title} ${quote.quote_number}`,
-        paperSize: 'A4',
+        paperSize,
         styles: detailedSheetStyles(layout) + QUOTATION_STYLES,
         repeatHeader: true,
         pinFooter: true,

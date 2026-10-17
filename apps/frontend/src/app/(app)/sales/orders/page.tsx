@@ -11,9 +11,10 @@ import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/dat
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { compactDensity } from '@/lib/ui/compact-density';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
-import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -60,6 +61,8 @@ export default function OrdersPage() {
     const { t, locale } = useI18n();
     const branch = useBranchScope();
     const printHeader = usePrintHeader('SALES_ORDER');
+    // This browser's paper, as invoices print on; A4 for a till roll.
+    const paper = sheetPaper(useSalePrintPrefs().paperSize);
     const router = useRouter();
     const searchParams = useSearchParams();
     const activeTab: OrdersTab = searchParams.get('tab') === 'online' ? 'online' : 'sales';
@@ -120,9 +123,9 @@ export default function OrdersPage() {
         openPrintWindow({
             context: headerContext,
             title: order.order_number,
-            paperSize: 'A4',
+            paperSize: paper,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,

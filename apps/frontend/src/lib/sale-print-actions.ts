@@ -6,7 +6,7 @@ import { roundMoney, storedInvoiceExtras } from '@/lib/sale-extras';
 import { printSalesInvoice, printSalesInvoices, type InvoiceData, type PaperSize } from '@/lib/sales-invoice-printer';
 import { printDeliveryChallan } from '@/lib/delivery-challan-printer';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
-import { paperSizeLabel } from '@/lib/print';
+import { paperSizeLabel, receiptRoll } from '@/lib/print';
 import type { PrintPreviewOptions } from '@/lib/print';
 import type { DeepPartial, PrintHeaderConfig } from '@/lib/print';
 import type { InvoicePrintPrefs } from '@erp71/shared-types';
@@ -412,7 +412,7 @@ export async function printSaleReceipt(
         },
         // A receipt on A4 wastes a page — the till roll is the sensible default
         // whatever the invoice is set to, unless a roll was already chosen.
-        size === 'Thermal58' ? size : 'Thermal80',
+        receiptRoll(size),
         previewFor('receipt', size, ctx, skipPreview),
     );
 }

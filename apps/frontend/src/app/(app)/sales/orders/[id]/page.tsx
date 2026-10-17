@@ -5,9 +5,10 @@ import { Package, DollarSign, Printer, Save, Pencil, X, Trash2, Search, PackageC
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
-import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -50,6 +51,8 @@ function formatDateForInput(value?: string | Date | null) {
 function OrderDetailsPageContent() {
     const { t, locale } = useI18n();
     const printHeader = usePrintHeader('SALES_ORDER');
+    // This browser's paper, as invoices print on; A4 for a till roll.
+    const paper = sheetPaper(useSalePrintPrefs().paperSize);
     const { id } = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -222,9 +225,9 @@ function OrderDetailsPageContent() {
         openPrintWindow({
             context: headerContext,
             title: `${t.shared.print.salesOrder} ${order?.order_number ?? ''}`,
-            paperSize: 'A4',
+            paperSize: paper,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,

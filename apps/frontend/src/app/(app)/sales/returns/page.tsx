@@ -11,9 +11,10 @@ import { compactDensity } from '@/lib/ui/compact-density';
 import { routes } from '@/lib/routes';
 import { PostingBadge } from '@/components/PostingBadge';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
-import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -46,6 +47,8 @@ export default function ReturnsPage() {
     const { t, locale } = useI18n();
     const branch = useBranchScope();
     const printHeader = usePrintHeader('SALES_RETURN');
+    // This browser's paper, as invoices print on; A4 for a till roll.
+    const paper = sheetPaper(useSalePrintPrefs().paperSize);
     const [returns, setReturns] = useState<SalesReturn[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
@@ -91,9 +94,9 @@ export default function ReturnsPage() {
         openPrintWindow({
             context: headerContext,
             title: ret.return_number,
-            paperSize: 'A4',
+            paperSize: paper,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,

@@ -9,9 +9,10 @@ import { routes } from '@/lib/routes';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
-import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import {
     canCancelExchange,
     exchangeSettlementSentence,
@@ -48,6 +49,8 @@ function ExchangeDetailPageContent() {
     const exchangeId = params.id as string;
     const openedSlip = useRef(false);
     const printHeader = usePrintHeader('SALES_EXCHANGE');
+    // This browser's paper, as invoices print on; A4 for a till roll.
+    const paper = sheetPaper(useSalePrintPrefs().paperSize);
     const { permissions, role } = useTenantPlanFeatures();
 
     const [exchange, setExchange] = useState<any>(null);
@@ -117,9 +120,9 @@ function ExchangeDetailPageContent() {
         openPrintWindow({
             context: headerContext,
             title: exchange.exchange_number,
-            paperSize: 'A4',
+            paperSize: paper,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,

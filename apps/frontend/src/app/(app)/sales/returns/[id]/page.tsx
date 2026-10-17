@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { Printer, Save, Package, FileCheck, FileText, Pencil, X, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
-import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml } from '@/lib/print';
+import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
@@ -27,6 +28,8 @@ interface EditItem {
 function ReturnDetailPageContent() {
     const { t, locale } = useI18n();
     const printHeader = usePrintHeader('SALES_RETURN');
+    // This browser's paper, as invoices print on; A4 for a till roll.
+    const paper = sheetPaper(useSalePrintPrefs().paperSize);
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -141,9 +144,9 @@ function ReturnDetailPageContent() {
         openPrintWindow({
             context: headerContext,
             title: `${t.shared.print.returnProcessed} ${ret?.return_number ?? ''}`,
-            paperSize: 'A4',
+            paperSize: paper,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
+            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
             styles: SIMPLE_DOC_STYLES,
             compactable: true,
             repeatHeader: true,

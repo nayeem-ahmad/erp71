@@ -424,6 +424,22 @@ export function isThermalPaper(paperSize: PaperSize): boolean {
     return paperSize === 'Thermal80' || paperSize === 'Thermal58';
 }
 
+/**
+ * The sheet a sheet-only document (a quotation, an order, a return) prints on:
+ * the paper this browser chose, or A4 when it chose a till roll.
+ */
+export function sheetPaper(paperSize: PaperSize): PaperSize {
+    return isThermalPaper(paperSize) ? 'A4' : paperSize;
+}
+
+/**
+ * The roll a till receipt prints on: 58mm when this browser chose it, 80mm
+ * otherwise — a receipt on a sheet wastes a page.
+ */
+export function receiptRoll(paperSize: PaperSize): PaperSize {
+    return paperSize === 'Thermal58' ? 'Thermal58' : 'Thermal80';
+}
+
 export const FONT_STACKS: Record<PrintFontFamily, string> = {
     sans: "Arial, Helvetica, sans-serif",
     serif: "Georgia, 'Times New Roman', Times, serif",

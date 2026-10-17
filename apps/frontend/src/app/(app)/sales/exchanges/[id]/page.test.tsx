@@ -28,14 +28,17 @@ jest.mock('@/lib/use-tenant-plan-features', () => ({
 }));
 
 jest.mock('@/lib/print/use-print-header', () => ({
-    usePrintHeader: () => ({ resolve: jest.fn() }),
+    usePrintHeader: () => ({ resolve: jest.fn().mockResolvedValue({ companyName: 'Life Tech' }) }),
 }));
 
 jest.mock('@/lib/api', () => ({
     api: { getExchange: jest.fn(), cancelExchange: jest.fn() },
 }));
 
-import { render, screen, waitFor } from '@testing-library/react';
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+jest.mock('@/lib/print', () => require('@/test-utils/print-paper').printModuleSpy());
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { mockBrowserPaper, printedPaper } from '@/test-utils/print-paper';
 import ExchangeDetailPage from './page';
 import { api } from '@/lib/api';
 
@@ -91,5 +94,24 @@ describe('ExchangeDetailPage cancel', () => {
         render(<ExchangeDetailPage />);
         await waitFor(() => expect(screen.getByRole('heading', { name: 'EXC-1' })).toBeInTheDocument());
         expect(screen.queryByRole('button', { name: 'Cancel exchange' })).not.toBeInTheDocument();
+    });
+
+    describe('printing on the browser’s paper', () => {
+        let openSpy: jest.SpyInstance;
+        beforeEach(() => {
+            openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+        });
+        afterEach(() => openSpy.mockRestore());
+
+        it.each([
+            ['A5', 'A5'],
+            ['Letter', 'Letter'],
+            ['Thermal80', 'A4'],
+        ] as const)('prints an exchange chosen as %s on %s, with that paper’s letterhead', async (chosen, printed) => {
+            mockBrowserPaper(chosen);
+            render(<ExchangeDetailPage />);
+            fireEvent.click(await screen.findByRole('button', { name: /print slip/i }));
+            await waitFor(() => expect(printedPaper()).toEqual({ page: printed, letterhead: printed }));
+        });
     });
 });
