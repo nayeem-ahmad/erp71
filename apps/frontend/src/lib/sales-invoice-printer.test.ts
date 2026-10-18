@@ -673,6 +673,41 @@ describe('detailed invoice layout', () => {
         expect(html).toContain('<td>Sub Total (৳):</td><td>6,936.00</td>');
     });
 
+    // As `saleToInvoiceData` hands over a posted sale that recorded transport
+    // and labour: the 10 of discount the stored split does not explain rides
+    // on the rounding.
+    const delivered: InvoiceData = { ...posted, total: 7636, transportCost: 500, laborCost: 200, rounding: -10 };
+
+    it('prints a posted sale’s transport and labour on their own rows, not as an adjustment', () => {
+        const html = render(delivered, 'A4', detailed);
+        expect(html).toContain('<td>Sub Total (excl. tax) (৳):</td><td>6,030.00</td>');
+        expect(html).toContain('<td>Total Tax (৳):</td><td>906.00</td>');
+        expect(html).toContain('<td>Transport (৳):</td><td>500.00</td>');
+        expect(html).toContain('<td>Labour (৳):</td><td>200.00</td>');
+        expect(html).toContain('<tr class="memo"><td>Discount, already deducted (৳):</td><td>10.00</td></tr>');
+        expect(html).toContain('<td>Total (৳):</td><td>7,636.00</td>');
+        expect(html).not.toContain('Adjustment');
+        // Sub total, tax, transport and labour foot to the total.
+        expect(6030 + 906 + 500 + 200).toBe(7636);
+    });
+
+    it('prints transport and labour on their own rows for a posted sale with no tax', () => {
+        const html = render({ ...delivered, taxIncluded: 0, subtotal: 6936, rounding: undefined }, 'A4', detailed);
+        expect(html).toContain('<td>Sub Total (৳):</td><td>6,936.00</td>');
+        expect(html).toContain('<td>Transport (৳):</td><td>500.00</td>');
+        expect(html).toContain('<td>Labour (৳):</td><td>200.00</td>');
+        expect(html).toContain('<td>Total (৳):</td><td>7,636.00</td>');
+        expect(html).not.toContain('Adjustment');
+        expect(html).not.toContain('Discount');
+    });
+
+    it('still prints what transport and labour do not explain as an adjustment', () => {
+        const html = render({ ...delivered, taxIncluded: 0, subtotal: 6936, total: 7686, rounding: 50 }, 'A4', detailed);
+        expect(html).toContain('<td>Transport (৳):</td><td>500.00</td>');
+        expect(html).toContain('<td>Labour (৳):</td><td>200.00</td>');
+        expect(html).toContain('<td>Adjustment (৳):</td><td>50.00</td>');
+    });
+
     it('adds tax and takes the discount off for an invoice still on the entry screen', () => {
         const entry: InvoiceData = {
             ...posted,
