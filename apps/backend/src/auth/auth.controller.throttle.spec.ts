@@ -23,6 +23,11 @@ import { applyProxyTrust } from '../common/trust-proxy.util';
  * ceiling, and the account dimension.
  */
 describe('AuthController rate limits', () => {
+    // Each test sends hundreds of real HTTP requests one after another. Alone
+    // that is well under a second, but on a CI runner shared with 400-odd
+    // parallel suites it has run past jest's 5s default (2026-10-17, PR #855).
+    jest.setTimeout(30_000);
+
     let app: INestApplication;
 
     beforeEach(async () => {
