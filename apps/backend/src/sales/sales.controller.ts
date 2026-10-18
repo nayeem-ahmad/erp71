@@ -128,7 +128,7 @@ export class SalesController {
     @TrackHistory('SALE', { action: 'UPDATE' })
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSaleDto) {
-        return this.salesService.update(tenant.tenantId, id, dto);
+        return this.salesService.update(tenant.tenantId, tenant.userId, id, dto);
     }
 
     /**
