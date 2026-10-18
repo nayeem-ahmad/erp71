@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
         "withinBranchOnly": "एक शाखा के भीतर",
         "withinBranch": "वही शाखा",
         "crossBranchNotice": "यह स्थानांतरण शाखाओं के बीच है, इसलिए यह अनुमोदन की प्रतीक्षा करेगा — अनुमोदन मिलने तक स्रोत गोदाम से कोई स्टॉक नहीं जाएगा।",
+        "availableAtSource": "स्रोत में उपलब्ध: {qty}",
+        "inStockTotal": "स्टॉक में (सभी गोदाम): {qty}",
+        "atDestination": "गंतव्य पर: {qty}",
+        "exceedsSourceStock": "स्रोत में मौजूद मात्रा से अधिक",
         "columns": {
             "transferNumber": "स्थानांतरण #",
             "source": "स्रोत",

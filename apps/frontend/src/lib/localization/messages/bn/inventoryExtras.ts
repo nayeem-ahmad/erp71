@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
             withinBranchOnly: "এক শাখার ভিতরে",
             withinBranch: "একই শাখা",
             crossBranchNotice: "এই ট্রান্সফার দুই শাখার মধ্যে, তাই এটি অনুমোদনের অপেক্ষায় থাকবে — অনুমোদন না পাওয়া পর্যন্ত উৎস গুদাম থেকে কোনো স্টক যাবে না।",
+            availableAtSource: "উৎসে আছে: {qty}",
+            inStockTotal: "স্টকে আছে (সব গুদাম): {qty}",
+            atDestination: "গন্তব্যে আছে: {qty}",
+            exceedsSourceStock: "উৎসে যা আছে তার চেয়ে বেশি",
             columns: {
                 transferNumber: "ট্রান্সফার #",
                 source: "উৎস",

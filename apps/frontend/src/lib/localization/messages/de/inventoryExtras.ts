@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
         "withinBranchOnly": "Innerhalb einer Filiale",
         "withinBranch": "Gleiche Filiale",
         "crossBranchNotice": "Diese Umlagerung geht über Filialgrenzen und wartet daher auf Genehmigung — bis zur Freigabe verlässt kein Bestand das Quelllager.",
+        "availableAtSource": "Verfügbar im Quelllager: {qty}",
+        "inStockTotal": "Bestand (alle Lager): {qty}",
+        "atDestination": "Im Ziellager: {qty}",
+        "exceedsSourceStock": "Mehr als das Quelllager hat",
         "columns": {
             "transferNumber": "Umlagerungsnr.",
             "source": "Quelle",
