@@ -146,6 +146,17 @@ describe('MushakService', () => {
             ).toBe(1000);
         });
 
+        it('declares the goods, not the transport billed beside them', async () => {
+            // 1000 of discounted goods plus 400 of transport bills 1400 — above
+            // the 1380 lines. The document must still declare the 1000.
+            db.sale.findFirst.mockResolvedValue(postedSale({ total_amount: 1400, transport_cost: '400.00' }));
+
+            const doc = await service.getTaxInvoice('t1', 'sale-1');
+
+            expect(doc.totals.inclusiveTotal).toBe(1000);
+            expect(doc.totals.vatAmount).toBeLessThan(180);
+        });
+
         it('carries the issuer and buyer blocks rule 40 requires', async () => {
             db.sale.findFirst.mockResolvedValue(postedSale());
 

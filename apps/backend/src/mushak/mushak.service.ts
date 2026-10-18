@@ -8,6 +8,7 @@ import {
     mushakSupplyUnit,
     resolveTaxRate,
     roundMoney,
+    saleGoodsValue,
     type MushakIssuerReadiness,
 } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
@@ -655,10 +656,10 @@ export class MushakService {
      *
      * The rates come from the snapshot taken when the sale was posted — that is
      * what makes a reprint a reprint. The money is then re-derived from those
-     * rates against `total_amount`, rather than read straight off the line, so
-     * that an invoice-level reduction (a promo code, redeemed points, a typed
-     * discount) is spread over the lines here exactly as it was at posting
-     * time. `price_at_sale * quantity` is the *undiscounted* price, so a
+     * rates against the goods part of `total_amount` (`saleGoodsValue`),
+     * rather than read straight off the line, so that an invoice-level
+     * reduction (a promo code, redeemed points, a typed discount) is spread
+     * over the lines here exactly as it was at posting time. `price_at_sale * quantity` is the *undiscounted* price, so a
      * document built from it would declare more value and more output VAT than
      * the invoice it is supposed to reproduce, and would not foot to its own
      * total.
@@ -696,7 +697,13 @@ export class MushakService {
                         ? Number(item.product.sd_rate)
                         : 0,
             })),
-            Number(sale.total_amount),
+            // The goods part of the total, as the snapshot was taken against:
+            // transport, labour and an upward adjustment are not a supply.
+            saleGoodsValue(Number(sale.total_amount), {
+                transportCost: sale.transport_cost,
+                laborCost: sale.labor_cost,
+                rounding: sale.rounding,
+            }),
         );
 
         const lines: MushakDocumentLine[] = sale.items.map((item: any, index: number) => {

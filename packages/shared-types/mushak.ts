@@ -364,8 +364,9 @@ export function allocateProRata(target: number, weights: number[]): number[] {
  * is worked out; otherwise the 6.3 would declare more output VAT than the
  * business collected and would not foot to its own total.
  *
- * Omit `invoiceTotal` (or pass a larger one — surcharges are not a supply
- * value and are not taxed here) to tax the lines as they stand.
+ * Omit `invoiceTotal` (or pass a larger one) to tax the lines as they stand.
+ * Pass the goods value, not the billed total: transport, labour and an upward
+ * adjustment are not a supply value, and `saleGoodsValue` takes them off.
  */
 export function computeSaleTax(
   lines: MushakSaleLineInput[],
@@ -381,9 +382,8 @@ export function computeSaleTax(
       ? gross
       : roundMoney(invoiceTotal);
 
-  // Only a genuine reduction is spread. A total *above* the lines is transport,
-  // labour or a rounding-up adjustment, which the entry form keeps outside the
-  // line values and which is not part of the value of these supplies.
+  // Only a genuine reduction is spread. A total *above* the lines is left
+  // alone: the lines are taxed as they stand.
   const adjusted =
     billed < gross && billed >= 0 ? allocateProRata(billed, grossPerLine) : grossPerLine;
 
@@ -409,6 +409,39 @@ export function computeSaleTax(
     vatAmount: roundMoney(taxed.reduce((sum, l) => sum + l.vatAmount, 0)),
     inclusiveTotal: roundMoney(taxed.reduce((sum, l) => sum + l.inclusiveTotal, 0)),
   };
+}
+
+/** Transport, labour and the free-form adjustment a sale bills beside its lines. */
+export interface SaleInvoiceExtras {
+  transportCost?: unknown;
+  laborCost?: unknown;
+  rounding?: unknown;
+}
+
+function extraAmount(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * The part of a sale's total that is the value of its goods — the figure to
+ * hand `computeSaleTax`.
+ *
+ * Transport, labour and an upward adjustment are charged on top of the goods
+ * and are not part of the value of these supplies, so they come off before
+ * the comparison with the lines. Left in, they mask the discount: ৳1,000 of
+ * goods less ৳100, plus ৳200 of transport, bills ৳1,100 — above the lines, so
+ * nothing was spread and VAT was declared on the undiscounted ৳1,000.
+ *
+ * A downward adjustment stays in: taking money off the invoice lowers the
+ * consideration, exactly as a discount does.
+ */
+export function saleGoodsValue(total: number, extras: SaleInvoiceExtras): number {
+  const surcharges =
+    extraAmount(extras.transportCost) +
+    extraAmount(extras.laborCost) +
+    Math.max(extraAmount(extras.rounding), 0);
+  return Math.max(0, roundMoney(total - surcharges));
 }
 
 /**

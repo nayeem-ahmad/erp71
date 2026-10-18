@@ -15,7 +15,13 @@ import type { VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
 import type { SalesRepOption } from '@/lib/hooks/useSalesReps';
 import { useI18n } from '@/lib/i18n';
-import { computeEntryTax, computeSaleTax, resolveTaxRate, type MushakTaxRates } from '@erp71/shared-types';
+import {
+    computeEntryTax,
+    computeSaleTax,
+    resolveTaxRate,
+    saleGoodsValue,
+    type MushakTaxRates,
+} from '@erp71/shared-types';
 import { roundMoney, type StoredInvoiceExtras } from '@/lib/sale-extras';
 
 /**
@@ -137,11 +143,14 @@ export function computeSaleTotals(
         + (adjustments.rounding || 0);
     const total = entry.total + extras;
 
-    // An edited sale carries whatever separates its lines from its stored total
-    // as one adjustment; the server taxes the edited total, so the VAT inside
-    // follows it rather than the lines alone.
-    const tax = pricing.pricesIncludeVat && Math.abs(extras) > 0.005
-        ? computeSaleTax(lines, total)
+    // The server taxes the goods value (`saleGoodsValue`): transport, labour
+    // and an upward adjustment are not part of the supply, so they leave the
+    // VAT inside the discounted lines alone. A downward adjustment — which is
+    // also where an edited sale carries whatever separates its lines from its
+    // stored total — lowers the consideration, so the VAT follows it.
+    const goodsValue = saleGoodsValue(total, adjustments);
+    const tax = pricing.pricesIncludeVat && Math.abs(goodsValue - entry.total) > 0.005
+        ? computeSaleTax(lines, goodsValue)
         : { vatAmount: entry.vatAmount, sdAmount: entry.sdAmount };
 
     const rates = new Set(lines.map((line) => line.vatRate));
