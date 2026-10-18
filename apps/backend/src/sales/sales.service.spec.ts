@@ -501,6 +501,33 @@ describe('SalesService', () => {
       );
     });
 
+    it('keeps transport out of the VAT, so it cannot hide the discount', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 1200 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.product.findMany.mockResolvedValue([
+        { id: 'prod-1', name: 'Product 1', warranty_enabled: false, vat_rate: 15, sd_rate: null },
+      ]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1200,
+        amountPaid: 1200,
+        discountAmount: 150,
+        transportCost: 200,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
+      });
+
+      // ৳1,000 of goods carry 130.43 of VAT. Taxed as the ৳1,200 billed —
+      // above the ৳1,150 lines — the discount vanished and 150 was declared.
+      expect(tx.sale.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ total_amount: 1200, vat_amount: 130.43, transport_cost: 200 }),
+        }),
+      );
+    });
+
     it('should create a sale and atomically decrement stock', async () => {
       const sale = { id: 'sale-1', total_amount: 30 };
       tx.sale.create.mockResolvedValue(sale);
@@ -1966,6 +1993,27 @@ describe('SalesService', () => {
         transport_cost: 10,
         labor_cost: 0,
         rounding: 0,
+      }));
+    });
+
+    it('takes the transport a sale was saved with out of the edited VAT', async () => {
+      // The edit sends a new total but not the transport, which stays as saved.
+      tx.sale.findFirst.mockResolvedValue({
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 1200,
+        customer_id: null, transport_cost: '200', labor_cost: '0', rounding: '0',
+      });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+      tx.product.findMany.mockResolvedValue([{ id: 'prod-1', vat_rate: 15, sd_rate: null }]);
+      tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
+
+      await service.update('tenant-1', 's1', {
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
+        totalAmount: 1200,
+      });
+
+      expect(tx.sale.update.mock.calls[0][0].data).toEqual(expect.objectContaining({
+        total_amount: 1200,
+        vat_amount: 130.43,
       }));
     });
 

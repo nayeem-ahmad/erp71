@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { Injectable, BadRequestException, ConflictException, HttpException, NotFoundException, Logger } from '@nestjs/common';
+import { saleGoodsValue } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
 import {
@@ -648,7 +649,8 @@ export class SalesService {
         }
 
         // VAT and supplementary duty for the Mushak 6.3, worked out against
-        // `computedTotal` — the amount actually billed — so an invoice-level
+        // the goods part of `computedTotal` — the amount actually billed, less
+        // transport, labour and an upward adjustment — so an invoice-level
         // discount or a loyalty redemption reduces the declared value of the
         // supply instead of leaving the business declaring tax it never
         // collected. See `snapshotSaleTax` for why this is stored, not derived.
@@ -660,7 +662,7 @@ export class SalesService {
                 quantity: item.quantity,
                 priceAtSale: item.priceAtSale,
             })),
-            computedTotal,
+            saleGoodsValue(computedTotal, dto),
         );
 
         return {
@@ -1051,7 +1053,7 @@ export class SalesService {
                     quantity: item.quantity,
                     priceAtSale: item.priceAtSale,
                 })),
-                dto.totalAmount,
+                saleGoodsValue(dto.totalAmount, dto),
             );
 
             const sale = await tx.sale.create({
@@ -1581,11 +1583,19 @@ export class SalesService {
                     productIds: dto.items.map((i) => i.productId),
                 });
 
-                // The total the edit settles on, which is what the tax has to
-                // be worked out against. An explicit `totalAmount` carries the
-                // entry form's adjustments; without one the lines are the total.
-                const editedTotal = dto.totalAmount
-                    ?? dto.items.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0);
+                // The goods value the edit settles on, which is what the tax
+                // has to be worked out against. An explicit `totalAmount`
+                // carries the entry form's adjustments, so the transport,
+                // labour and adjustment come off it — the ones the edit sends,
+                // else the ones the sale was saved with. Without a total the
+                // lines are the total.
+                const editedTotal = dto.totalAmount !== undefined
+                    ? saleGoodsValue(dto.totalAmount, {
+                        transportCost: dto.transportCost ?? sale.transport_cost,
+                        laborCost: dto.laborCost ?? sale.labor_cost,
+                        rounding: dto.rounding ?? sale.rounding,
+                    })
+                    : dto.items.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0);
                 editedTax = await snapshotSaleTax(
                     tx,
                     tenantId,

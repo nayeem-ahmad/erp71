@@ -11,6 +11,7 @@ import {
   mushakSupplyUnit,
   resolveTaxRate,
   roundMoney,
+  saleGoodsValue,
   splitTaxInclusive,
   toBengaliDigits,
 } from './mushak';
@@ -170,6 +171,43 @@ describe('computeSaleTax', () => {
     const tax = computeSaleTax([{ key: 'z', quantity: 0, unitPrice: 115, vatRate: 15, sdRate: 0 }]);
     expect(tax.lines[0].unitPrice).toBe(115);
     expect(tax.inclusiveTotal).toBe(0);
+  });
+});
+
+describe('saleGoodsValue', () => {
+  const lines = [{ key: 'a', quantity: 1, unitPrice: 1000, vatRate: 15, sdRate: 0 }];
+  // ৳1,000 of goods less a ৳100 discount: the VAT inside ৳900.
+  const discountedVat = computeSaleTax(lines, 900).vatAmount;
+
+  it('takes transport, labour and an upward adjustment off the total', () => {
+    expect(saleGoodsValue(1350, { transportCost: 200, laborCost: 50, rounding: 0.4 })).toBe(1099.6);
+  });
+
+  it('keeps a downward adjustment in, since it lowers the consideration', () => {
+    expect(saleGoodsValue(895, { rounding: -5 })).toBe(895);
+  });
+
+  it('leaves a total without extras as it is', () => {
+    expect(saleGoodsValue(900, {})).toBe(900);
+    expect(saleGoodsValue(900, { transportCost: null, laborCost: undefined })).toBe(900);
+  });
+
+  it('reads the decimal strings a database row hands back', () => {
+    expect(saleGoodsValue(1100, { transportCost: '200.00', laborCost: '0', rounding: '0' })).toBe(900);
+  });
+
+  it('never goes below zero', () => {
+    expect(saleGoodsValue(100, { transportCost: 150 })).toBe(0);
+  });
+
+  it('keeps transport from hiding a discount', () => {
+    // Billed ৳1,100 is above the lines; taxed as billed, the discount vanished.
+    expect(computeSaleTax(lines, saleGoodsValue(1100, { transportCost: 200 })).vatAmount).toBe(discountedVat);
+  });
+
+  it('keeps transport out of the taxable value under a discount', () => {
+    // Billed ৳950 is below the lines; taxed as billed, ৳50 of transport was taxed.
+    expect(computeSaleTax(lines, saleGoodsValue(950, { transportCost: 50 })).vatAmount).toBe(discountedVat);
   });
 });
 
