@@ -79,30 +79,43 @@ export { row as detailedRow };
  * the sub total is the total *less* the stored tax, and a discount — already
  * deducted from that total — is listed as information rather than subtracted
  * twice. When it carries none there is nothing to back out, so the block reads
- * sub total, discount, total, and foots as it stands. An invoice built on the
- * entry screen still has its tax and discount to add and take off.
+ * sub total, discount, total, and foots as it stands. Either way the transport
+ * and labour the sale recorded are on rows of their own, and only what they do
+ * not explain is a discount or an adjustment. An invoice built on the entry
+ * screen still has its tax and discount to add and take off.
  */
 function invoiceTotalsRows(data: InvoiceData, paid: number): string {
     const inclusive = data.taxIncluded !== undefined;
     const tax = inclusive ? data.taxIncluded! : (data.vat ?? 0);
     const hasTax = tax > 0.005;
+    const charges = (data.transportCost ?? 0) + (data.laborCost ?? 0);
     const rows: string[] = [];
+    const chargeRows = () => {
+        if (data.transportCost) rows.push(row('Transport (৳):', amount(data.transportCost)));
+        if (data.laborCost) rows.push(row('Labour (৳):', amount(data.laborCost)));
+    };
 
     if (inclusive && hasTax) {
-        rows.push(row('Sub Total (excl. tax) (৳):', amount(data.total - tax)));
+        // Transport and labour carry no tax, so they come out of the sub total
+        // along with it.
+        rows.push(row('Sub Total (excl. tax) (৳):', amount(data.total - tax - charges)));
         rows.push(row('Total Tax (৳):', amount(tax)));
+        chargeRows();
 
-        // The lines add up to more than the total: the difference is the
-        // reduction taken off the invoice. Less, and it was added to it.
-        const gap = toPaisa(data.subtotal - data.total);
+        // The lines and the charges add up to more than the total: the
+        // difference is the reduction taken off the invoice. Less, and it was
+        // added to it.
+        const gap = toPaisa(data.subtotal + charges - data.total);
         if (gap > 0.005) rows.push(row('Discount, already deducted (৳):', amount(gap), 'memo'));
         else if (gap < -0.005) rows.push(row('Adjustment, included (৳):', amount(-gap), 'memo'));
     } else if (inclusive) {
         // No tax inside the total, so nothing needs backing out: the sub total
-        // is the lines themselves — what the column above adds up to — and the
-        // reduction is taken off it, so the block foots on its face.
+        // is the lines themselves — what the column above adds up to — the
+        // charges are added and the reduction is taken off, so the block foots
+        // on its face.
         rows.push(row('Sub Total (৳):', amount(data.subtotal)));
-        const gap = toPaisa(data.subtotal - data.total);
+        chargeRows();
+        const gap = toPaisa(data.subtotal + charges - data.total);
         if (gap > 0.005) rows.push(row('Discount (৳):', `-${amount(gap)}`, 'neg'));
         else if (gap < -0.005) rows.push(row('Adjustment (৳):', amount(-gap)));
     } else {
@@ -115,8 +128,7 @@ function invoiceTotalsRows(data: InvoiceData, paid: number): string {
                 'neg',
             ));
         }
-        if (data.transportCost) rows.push(row('Transport (৳):', amount(data.transportCost)));
-        if (data.laborCost) rows.push(row('Labour (৳):', amount(data.laborCost)));
+        chargeRows();
         if (data.rounding) rows.push(row('Rounding (৳):', amount(data.rounding)));
     }
 
