@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { Injectable, BadRequestException, ConflictException, HttpException, NotFoundException, Logger } from '@nestjs/common';
-import { saleGoodsValue } from '@erp71/shared-types';
+import { roundMoney, saleGoodsValue } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { CreateSaleDto, CreateSalesFromQuotationsDto, FinalizeSaleDto, UpdateSaleDto } from './sale.dto';
 import {
@@ -19,7 +19,12 @@ import {
     usableWarehouseIds,
 } from '../database/inventory.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
-import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
+import {
+    autoPostFromRules,
+    postingIdempotencyKey,
+    voidAutoPostedVoucher,
+    type AutoPostResult,
+} from '../accounting/posting.utils';
 import { classifyPaymentMode } from './classify-payment-mode';
 import { completedExchangeLinesInclude } from './open-sale-quantity';
 import { paymentRecordData } from './payment-record-data';
@@ -184,6 +189,42 @@ function invoiceExtraPatch(dto: {
         ...(dto.laborCost !== undefined && { labor_cost: dto.laborCost }),
         ...(dto.rounding !== undefined && { rounding: dto.rounding }),
     };
+}
+
+/** The same tender, however it was capitalised or padded when typed. */
+function samePaymentMethod(a?: string | null, b?: string | null): boolean {
+    return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+}
+
+/** The date a posted voucher carries, so a re-post lands in the same period. */
+async function postedVoucherDate(
+    tx: any,
+    tenantId: string,
+    eventType: 'sale' | 'customer_payment',
+    sourceId: string,
+    legKey?: string,
+): Promise<Date | null> {
+    const event = await tx.postingEvent.findUnique({
+        where: {
+            tenant_id_idempotency_key: {
+                tenant_id: tenantId,
+                idempotency_key: postingIdempotencyKey(tenantId, eventType, sourceId, legKey),
+            },
+        },
+        select: { voucher: { select: { date: true } } },
+    });
+    return event?.voucher?.date ?? null;
+}
+
+/** A row a sale wrote on its customer's ledger: its CREDIT_SALE, or the receipt for an overpayment. */
+interface SaleLedgerRow {
+    id: string;
+    customer_id: string;
+    type: string;
+    amount: unknown;
+    discount_amount: unknown;
+    created_at: Date;
+    payment_number: string | null;
 }
 
 @Injectable()
@@ -888,25 +929,14 @@ export class SalesService {
                 data: { due_balance: balanceAfter },
             });
 
-            // The tender the sale's own voucher posts to, so the excess lands
-            // in the same cash, bank or wallet account as the rest of it.
-            const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
-            await autoPostFromRules({
-                tx,
-                tenantId,
-                eventType: 'customer_payment',
-                conditionKey: 'payment_direction',
-                conditionValue: 'receive',
-                sourceModule: 'customers',
-                sourceType: 'customer_payment',
-                sourceId: receipt.id,
+            await this.postSaleReceiptVoucher(tx, tenantId, {
+                receiptId: receipt.id,
+                paymentNumber,
                 amount: accountPayment,
-                description: `Customer payment — ${accountCustomerName ?? 'customer'}`,
-                referenceNumber: paymentNumber,
+                customerId: dto.customerId,
+                customerName: accountCustomerName,
                 storeId: dto.storeId,
-                partyType: 'CUSTOMER',
-                partyId: dto.customerId,
-                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+                primaryPaymentMethod: dto.payments?.[0]?.paymentMethod ?? 'cash',
             });
 
             accountReceipt = {
@@ -917,71 +947,16 @@ export class SalesService {
             };
         }
 
-        let posting: AutoPostResult = { postingStatus: 'skipped' };
-
-        if (balanceDue > 0.005) {
-            posting = await autoPostFromRules({
-                tx,
-                tenantId,
-                eventType: 'sale',
-                conditionKey: 'payment_mode',
-                conditionValue: 'credit',
-                sourceModule: 'sales',
-                sourceType: 'sale',
-                sourceId: sale.id,
-                amount: balanceDue,
-                description: `Auto-posted credit portion — sale ${sale.serial_number}`,
-                referenceNumber: sale.serial_number,
-                storeId: dto.storeId,
-                partyType: 'CUSTOMER',
-                partyId: dto.customerId,
-            });
-
-            if (dto.amountPaid > 0.005) {
-                const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
-                // A partial down-payment on a credit sale: cash actually came in,
-                // so it must post too. legKey 'paid' gives it a distinct
-                // idempotency key from the credit (receivable) leg above, which
-                // otherwise shares this Sale's key and silently swallowed it.
-                // The mode account is the debit leg (Dr <mode> / Cr Revenue), so
-                // a configured PaymentMethod account overrides that side.
-                await autoPostFromRules({
-                    tx,
-                    tenantId,
-                    eventType: 'sale',
-                    conditionKey: 'payment_mode',
-                    conditionValue: classifyPaymentMode(primaryPaymentMethod),
-                    sourceModule: 'sales',
-                    sourceType: 'sale',
-                    sourceId: sale.id,
-                    legKey: 'paid',
-                    amount: dto.amountPaid,
-                    description: `Auto-posted paid portion — sale ${sale.serial_number}`,
-                    referenceNumber: sale.serial_number,
-                    storeId: dto.storeId,
-                    overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
-                });
-            }
-        } else {
-            const primaryPaymentMethod = dto.payments?.[0]?.paymentMethod ?? 'cash';
-            const paymentMode = classifyPaymentMode(primaryPaymentMethod);
-
-            posting = await autoPostFromRules({
-                tx,
-                tenantId,
-                eventType: 'sale',
-                conditionKey: 'payment_mode',
-                conditionValue: paymentMode,
-                sourceModule: 'sales',
-                sourceType: 'sale',
-                sourceId: sale.id,
-                amount: Number(sale.total_amount),
-                description: `Auto-posted sale ${sale.serial_number}`,
-                referenceNumber: sale.serial_number,
-                storeId: dto.storeId,
-                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
-            });
-        }
+        const posting = await this.postSaleVouchers(tx, tenantId, {
+            saleId: sale.id,
+            serialNumber: sale.serial_number,
+            storeId: dto.storeId,
+            customerId: dto.customerId,
+            total: Number(sale.total_amount),
+            amountPaid: dto.amountPaid,
+            balanceDue,
+            primaryPaymentMethod: dto.payments?.[0]?.paymentMethod ?? 'cash',
+        });
 
         return {
             ...sale,
@@ -996,6 +971,147 @@ export class SalesService {
             change_returned: changeReturned,
             account_payment: accountReceipt,
         };
+    }
+
+    /**
+     * The sale's own vouchers. Shared by posting a sale and by restating one
+     * after an edit, so an edited sale posts exactly as it would have been
+     * posted had it been entered that way. `date` is left out at the counter,
+     * where the voucher is dated today.
+     */
+    private async postSaleVouchers(
+        tx: any,
+        tenantId: string,
+        input: {
+            saleId: string;
+            serialNumber: string;
+            storeId: string;
+            customerId?: string | null;
+            total: number;
+            amountPaid: number;
+            balanceDue: number;
+            primaryPaymentMethod: string;
+            date?: Date;
+        },
+    ): Promise<AutoPostResult> {
+        const { saleId, serialNumber, storeId, primaryPaymentMethod, date } = input;
+
+        if (input.balanceDue <= 0.005) {
+            return autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'sale',
+                conditionKey: 'payment_mode',
+                conditionValue: classifyPaymentMode(primaryPaymentMethod),
+                sourceModule: 'sales',
+                sourceType: 'sale',
+                sourceId: saleId,
+                amount: input.total,
+                description: `Auto-posted sale ${serialNumber}`,
+                referenceNumber: serialNumber,
+                date,
+                storeId,
+                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+            });
+        }
+
+        const posting = await autoPostFromRules({
+            tx,
+            tenantId,
+            eventType: 'sale',
+            conditionKey: 'payment_mode',
+            conditionValue: 'credit',
+            sourceModule: 'sales',
+            sourceType: 'sale',
+            sourceId: saleId,
+            amount: input.balanceDue,
+            description: `Auto-posted credit portion — sale ${serialNumber}`,
+            referenceNumber: serialNumber,
+            date,
+            storeId,
+            partyType: 'CUSTOMER',
+            partyId: input.customerId ?? undefined,
+        });
+
+        if (input.amountPaid > 0.005) {
+            // A partial down-payment on a credit sale: cash actually came in,
+            // so it must post too. legKey 'paid' gives it a distinct
+            // idempotency key from the credit (receivable) leg above, which
+            // otherwise shares this Sale's key and silently swallowed it.
+            // The mode account is the debit leg (Dr <mode> / Cr Revenue), so
+            // a configured PaymentMethod account overrides that side.
+            await autoPostFromRules({
+                tx,
+                tenantId,
+                eventType: 'sale',
+                conditionKey: 'payment_mode',
+                conditionValue: classifyPaymentMode(primaryPaymentMethod),
+                sourceModule: 'sales',
+                sourceType: 'sale',
+                sourceId: saleId,
+                legKey: 'paid',
+                amount: input.amountPaid,
+                description: `Auto-posted paid portion — sale ${serialNumber}`,
+                referenceNumber: serialNumber,
+                date,
+                storeId,
+                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+            });
+        }
+
+        return posting;
+    }
+
+    /**
+     * The voucher for money paid with a sale beyond its total, posted exactly
+     * as a receipt taken on the customer payments screen: Dr <tender> / Cr AR,
+     * keyed to the receipt row. The tender is the sale's own, so the excess
+     * lands in the same cash, bank or wallet account as the rest of it.
+     */
+    private async postSaleReceiptVoucher(
+        tx: any,
+        tenantId: string,
+        input: {
+            receiptId: string;
+            paymentNumber: string | null;
+            amount: number;
+            customerId: string;
+            customerName: string | null;
+            storeId: string;
+            primaryPaymentMethod: string;
+            date?: Date;
+        },
+    ) {
+        await autoPostFromRules({
+            tx,
+            tenantId,
+            eventType: 'customer_payment',
+            conditionKey: 'payment_direction',
+            conditionValue: 'receive',
+            sourceModule: 'customers',
+            sourceType: 'customer_payment',
+            sourceId: input.receiptId,
+            amount: input.amount,
+            description: `Customer payment — ${input.customerName ?? 'customer'}`,
+            referenceNumber: input.paymentNumber ?? undefined,
+            date: input.date,
+            storeId: input.storeId,
+            partyType: 'CUSTOMER',
+            partyId: input.customerId,
+            overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, input.primaryPaymentMethod),
+        });
+    }
+
+    /**
+     * Takes back a sale's overpayment receipt voucher, both legs. The last
+     * one is the receipt an imported sale posts, keyed to the sale rather than
+     * to its row (see `applySaleOverpayment`), so restating the row does not
+     * leave the old voucher standing beside the new one.
+     */
+    private async voidSaleReceiptVouchers(tx: any, tenantId: string, saleId: string, receiptId: string) {
+        await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', receiptId);
+        await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', receiptId, CUSTOMER_PAYMENT_DISCOUNT_LEG);
+        await voidAutoPostedVoucher(tx, tenantId, 'customer_payment', saleId, 'overpaid');
     }
 
     /**
@@ -1494,7 +1610,7 @@ export class SalesService {
         }));
     }
 
-    async update(tenantId: string, id: string, dto: UpdateSaleDto) {
+    async update(tenantId: string, userId: string, id: string, dto: UpdateSaleDto) {
         return this.db.$transaction(async (tx) => {
             const sale = await tx.sale.findFirst({
                 where: { id, tenant_id: tenantId },
@@ -1698,9 +1814,22 @@ export class SalesService {
                 }
             }
 
+            // 5. The customer's account and the books follow the edit (a draft
+            // has posted to neither).
+            if (!isDraft) {
+                await this.restateSaleAccount(tx, tenantId, userId, sale, {
+                    customerId: dto.customerId !== undefined ? dto.customerId || null : sale.customer_id,
+                    total: totalAmount ?? Number(sale.total_amount),
+                    amountPaid: amountPaid ?? Number(sale.amount_paid ?? 0),
+                    primaryPaymentMethod: dto.payments
+                        ? dto.payments[0]?.paymentMethod ?? 'cash'
+                        : sale.payments[0]?.payment_method ?? 'cash',
+                });
+            }
+
             const salesRepId = await checkedSalesRepId(tx, tenantId, dto.salesRepId);
 
-            // 5. Update sale record
+            // 6. Update sale record
             return tx.sale.update({
                 where: { id },
                 data: {
@@ -1730,6 +1859,304 @@ export class SalesService {
                 },
             });
         });
+    }
+
+    /**
+     * Brings a posted sale's mark on its customer's account and on the books
+     * into line with an edit to its total, what was paid, the tender or whose
+     * sale it is. Before this an edit changed the invoice and nothing else:
+     * the customer's ledger, their due and the receivable voucher all kept the
+     * figures the sale was first saved with.
+     *
+     * The ledger is restated as if the sale had been entered this way, not
+     * patched with an adjustment at the bottom: the sale's own rows change
+     * where they stand, and every row after them carries the new running
+     * balance. Both vouchers are reposted on the date they already carry.
+     *
+     * Refused, as a new sale is, when the edit adds due with nobody to owe it
+     * or takes the customer past their credit limit. Only due the edit adds is
+     * checked, so a sale already on the books does not become uneditable
+     * because the customer's limit was lowered after it.
+     */
+    private async restateSaleAccount(
+        tx: any,
+        tenantId: string,
+        userId: string,
+        sale: {
+            id: string;
+            store_id: string;
+            serial_number: string;
+            reference_number: string | null;
+            customer_id: string | null;
+            total_amount: unknown;
+            amount_paid?: unknown;
+            created_at: Date;
+            sale_date?: Date | null;
+            payments: { payment_method: string }[];
+        },
+        next: { customerId: string | null; total: number; amountPaid: number; primaryPaymentMethod: string },
+    ) {
+        const oldTotal = Number(sale.total_amount);
+        const oldPaid = Number(sale.amount_paid ?? 0);
+        const customerChanged = next.customerId !== sale.customer_id;
+        const tenderChanged = !samePaymentMethod(
+            next.primaryPaymentMethod,
+            sale.payments[0]?.payment_method ?? 'cash',
+        );
+        const moneyChanged = Math.abs(next.total - oldTotal) > 0.005
+            || Math.abs(next.amountPaid - oldPaid) > 0.005
+            || (next.amountPaid > 0.005 && tenderChanged);
+        if (!moneyChanged && !customerChanged) return;
+
+        const balanceDue = creditDueAmount(next.total, next.amountPaid);
+        const { accountPayment } = splitSaleOverpayment({
+            total: next.total,
+            amountPaid: next.amountPaid,
+            hasCustomer: !!next.customerId,
+        });
+
+        const ownRows: SaleLedgerRow[] = await tx.customerCreditTransaction.findMany({
+            where: { tenant_id: tenantId, reference_type: 'SALE', reference_id: sale.id },
+            select: {
+                id: true,
+                customer_id: true,
+                type: true,
+                amount: true,
+                discount_amount: true,
+                created_at: true,
+                payment_number: true,
+            },
+            orderBy: { created_at: 'asc' },
+        });
+
+        const dueAlreadyHeld = customerChanged
+            ? 0
+            : next.customerId
+                ? ownRows
+                    .filter((row) => row.type === 'CREDIT_SALE' && row.customer_id === next.customerId)
+                    .reduce((sum, row) => sum + Number(row.amount), 0)
+                : creditDueAmount(oldTotal, oldPaid);
+        if (balanceDue > dueAlreadyHeld + 0.005) {
+            const holder = next.customerId
+                ? await tx.customer.findFirst({
+                    where: { id: next.customerId, tenant_id: tenantId, deleted_at: null },
+                    select: { due_balance: true, credit_limit: true },
+                })
+                : null;
+            if (next.customerId && !holder) {
+                throw new NotFoundException('Customer not found');
+            }
+            assertCustomerCreditForSale(
+                holder && {
+                    due_balance: Number(holder.due_balance) - dueAlreadyHeld,
+                    credit_limit: holder.credit_limit != null ? Number(holder.credit_limit) : null,
+                },
+                balanceDue,
+            );
+        }
+
+        // Read before anything is voided, so the repost keeps the period.
+        const voucherDate = await postedVoucherDate(tx, tenantId, 'sale', sale.id)
+            ?? await postedVoucherDate(tx, tenantId, 'sale', sale.id, 'paid')
+            ?? sale.sale_date
+            ?? sale.created_at;
+
+        // Every customer the sale is on now or was on before: moving a sale to
+        // someone else takes its rows off the first ledger and onto the second.
+        const holders = new Set(ownRows.map((row) => row.customer_id));
+        if (next.customerId && (balanceDue > 0.005 || accountPayment > 0)) {
+            holders.add(next.customerId);
+        }
+        for (const customerId of holders) {
+            const isHolder = customerId === next.customerId;
+            await this.restateSaleLedger(tx, tenantId, userId, {
+                sale,
+                customerId,
+                rows: ownRows.filter((row) => row.customer_id === customerId),
+                // Where the sale sits on a ledger (see resolveSalePreviousDue):
+                // a row this edit adds goes there too, not to the bottom.
+                postedAt: ownRows[0]?.created_at ?? sale.created_at,
+                credit: isHolder ? balanceDue : 0,
+                receipt: isHolder ? accountPayment : 0,
+                primaryPaymentMethod: next.primaryPaymentMethod,
+                tenderChanged,
+                voucherDate,
+            });
+        }
+
+        // The customer is on the receivable leg only, so moving a sale paid in
+        // full leaves its voucher — and a period closed since — alone.
+        if (!moneyChanged && balanceDue <= 0.005) return;
+        await voidAutoPostedVoucher(tx, tenantId, 'sale', sale.id);
+        await voidAutoPostedVoucher(tx, tenantId, 'sale', sale.id, 'paid');
+        await this.postSaleVouchers(tx, tenantId, {
+            saleId: sale.id,
+            serialNumber: sale.serial_number,
+            storeId: sale.store_id,
+            customerId: next.customerId,
+            total: next.total,
+            amountPaid: next.amountPaid,
+            balanceDue,
+            primaryPaymentMethod: next.primaryPaymentMethod,
+            date: voucherDate,
+        });
+    }
+
+    /**
+     * One customer's part of restating a sale. Its CREDIT_SALE and receipt
+     * rows are rewritten in place to `credit` and `receipt` (zero drops the
+     * row), then every later row's running balance, and the customer's due,
+     * move by however much that changed what the sale adds to the account.
+     */
+    private async restateSaleLedger(
+        tx: any,
+        tenantId: string,
+        userId: string,
+        input: {
+            sale: { id: string; store_id: string; serial_number: string; reference_number: string | null };
+            customerId: string;
+            rows: SaleLedgerRow[];
+            postedAt: Date;
+            credit: number;
+            receipt: number;
+            primaryPaymentMethod: string;
+            tenderChanged: boolean;
+            voucherDate: Date;
+        },
+    ) {
+        const { sale, customerId, rows, postedAt, credit, receipt } = input;
+        const customer = await tx.customer.findFirst({
+            where: { id: customerId, tenant_id: tenantId },
+            select: { name: true, due_balance: true },
+        });
+        if (!customer) {
+            throw new NotFoundException('Customer not found');
+        }
+
+        const ownIds = rows.map((row) => row.id);
+        const laterWhere = {
+            tenant_id: tenantId,
+            customer_id: customerId,
+            created_at: { gt: postedAt },
+            id: { notIn: ownIds },
+        };
+        const movedByOwn = rows.reduce(
+            (sum, row) => sum + customerLedgerDueDelta(row.type, Number(row.amount), Number(row.discount_amount ?? 0)),
+            0,
+        );
+        const laterByType = await tx.customerCreditTransaction.groupBy({
+            by: ['type'],
+            where: laterWhere,
+            _sum: { amount: true, discount_amount: true },
+        });
+        const movedByLater = laterByType.reduce(
+            (sum: number, group: { type: string; _sum: { amount: unknown; discount_amount: unknown } }) =>
+                sum + customerLedgerDueDelta(group.type, Number(group._sum.amount ?? 0), Number(group._sum.discount_amount ?? 0)),
+            0,
+        );
+        // What the customer owed just before the sale: the previous due its
+        // invoice prints, and the balance its own rows now run on from.
+        const opening = roundMoney(Number(customer.due_balance) - movedByOwn - movedByLater);
+        let running = opening;
+
+        const creditRow = credit > 0.005 ? rows.find((row) => row.type === 'CREDIT_SALE') : undefined;
+        const receiptRow = receipt > 0.005 ? rows.find((row) => row.type === 'PAYMENT') : undefined;
+
+        if (credit > 0.005) {
+            running = roundMoney(running + credit);
+            if (creditRow) {
+                await tx.customerCreditTransaction.update({
+                    where: { id: creditRow.id },
+                    data: { amount: credit, balance_after: running },
+                });
+            } else {
+                await tx.customerCreditTransaction.create({
+                    data: {
+                        tenant_id: tenantId,
+                        customer_id: customerId,
+                        store_id: await customerBranchId(tx, customerId),
+                        type: 'CREDIT_SALE',
+                        amount: credit,
+                        balance_after: running,
+                        reference_type: 'SALE',
+                        reference_id: sale.id,
+                        created_by: userId,
+                        created_at: postedAt,
+                    },
+                });
+            }
+        }
+
+        if (receipt > 0.005) {
+            running = roundMoney(running - receipt);
+            const voucher = {
+                amount: receipt,
+                customerId,
+                customerName: customer.name,
+                storeId: sale.store_id,
+                primaryPaymentMethod: input.primaryPaymentMethod,
+            };
+            if (receiptRow) {
+                await tx.customerCreditTransaction.update({
+                    where: { id: receiptRow.id },
+                    data: { amount: receipt, balance_after: running },
+                });
+                if (Math.abs(Number(receiptRow.amount) - receipt) > 0.005 || input.tenderChanged) {
+                    const date = await postedVoucherDate(tx, tenantId, 'customer_payment', receiptRow.id) ?? input.voucherDate;
+                    await this.voidSaleReceiptVouchers(tx, tenantId, sale.id, receiptRow.id);
+                    await this.postSaleReceiptVoucher(tx, tenantId, {
+                        ...voucher,
+                        receiptId: receiptRow.id,
+                        paymentNumber: receiptRow.payment_number,
+                        date,
+                    });
+                }
+            } else {
+                const paymentNumber = await nextCustomerCreditNumber(tenantId, tx, 'PAYMENT');
+                const created = await tx.customerCreditTransaction.create({
+                    data: {
+                        tenant_id: tenantId,
+                        customer_id: customerId,
+                        store_id: await customerBranchId(tx, customerId),
+                        type: 'PAYMENT',
+                        amount: receipt,
+                        balance_after: running,
+                        reference_type: 'SALE',
+                        reference_id: sale.id,
+                        payment_number: paymentNumber,
+                        notes: `Paid with sale ${sale.reference_number || sale.serial_number}`,
+                        created_by: userId,
+                        created_at: postedAt,
+                    },
+                });
+                await this.postSaleReceiptVoucher(tx, tenantId, {
+                    ...voucher,
+                    receiptId: created.id,
+                    paymentNumber,
+                    date: input.voucherDate,
+                });
+            }
+        }
+
+        for (const row of rows) {
+            if (row === creditRow || row === receiptRow) continue;
+            await tx.customerCreditTransaction.delete({ where: { id: row.id } });
+            if (row.type === 'PAYMENT') {
+                await this.voidSaleReceiptVouchers(tx, tenantId, sale.id, row.id);
+            }
+        }
+
+        const shift = roundMoney(running - opening - movedByOwn);
+        if (Math.abs(shift) > 0.005) {
+            await tx.customerCreditTransaction.updateMany({
+                where: laterWhere,
+                data: { balance_after: { increment: shift } },
+            });
+            await tx.customer.update({
+                where: { id: customerId },
+                data: { due_balance: { increment: shift } },
+            });
+        }
     }
 
     /**

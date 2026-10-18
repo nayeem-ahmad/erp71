@@ -51,6 +51,7 @@ function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
 jest.mock('../accounting/posting.utils', () => ({
   autoPostFromRules: jest.fn(),
   voidAutoPostedVoucher: jest.fn(),
+  postingIdempotencyKey: jest.requireActual('../accounting/posting.utils').postingIdempotencyKey,
 }));
 
 // The numbering engine has its own spec; here it only matters which number the
@@ -122,6 +123,16 @@ describe('SalesService', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        updateMany: jest.fn(),
+        // What moved the customer's due after a sale: nothing, by default.
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      // A voucher's posted date, read before an edit reposts it. None by
+      // default: the repost falls back to the sale's own date.
+      postingEvent: {
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       tenant: {
         findUnique: jest.fn(),
@@ -1040,7 +1051,7 @@ describe('SalesService', () => {
     });
 
     it('does not move stock when a draft is edited', async () => {
-      await service.update('tenant-1', 'draft-1', {
+      await service.update('tenant-1', 'user-1', 'draft-1', {
         items: [{ productId: 'prod-1', quantity: 5, priceAtSale: 15 }],
       });
 
@@ -1050,7 +1061,7 @@ describe('SalesService', () => {
 
     it('refuses to complete a draft through the update path', async () => {
       await expect(
-        service.update('tenant-1', 'draft-1', { status: 'COMPLETED' }),
+        service.update('tenant-1', 'user-1', 'draft-1', { status: 'COMPLETED' }),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -1898,7 +1909,7 @@ describe('SalesService', () => {
       tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
       tx.sale.update.mockResolvedValue({ id: 's1', note: 'Updated note' });
 
-      const result = await service.update('tenant-1', 's1', { note: 'Updated note' });
+      const result = await service.update('tenant-1', 'user-1', 's1', { note: 'Updated note' });
 
       expect(tx.sale.update).toHaveBeenCalledWith({
         where: { id: 's1' },
@@ -1914,14 +1925,14 @@ describe('SalesService', () => {
     it('should throw NotFoundException when sale to update is not found', async () => {
       tx.sale.findFirst.mockResolvedValue(null);
 
-      await expect(service.update('tenant-1', 'bad-id', { note: 'x' })).rejects.toThrow(NotFoundException);
+      await expect(service.update('tenant-1', 'user-1', 'bad-id', { note: 'x' })).rejects.toThrow(NotFoundException);
     });
 
     it('persists a provided saleDate into sale_date on update', async () => {
       tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
       tx.sale.update.mockResolvedValue({ id: 's1' });
 
-      await service.update('tenant-1', 's1', { saleDate: '2026-01-15T10:00:00.000Z' });
+      await service.update('tenant-1', 'user-1', 's1', { saleDate: '2026-01-15T10:00:00.000Z' });
 
       const updateArg = tx.sale.update.mock.calls[0][0];
       expect(updateArg.data.sale_date).toEqual(new Date('2026-01-15T10:00:00.000Z'));
@@ -1931,7 +1942,7 @@ describe('SalesService', () => {
       tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
       tx.sale.update.mockResolvedValue({ id: 's1' });
 
-      await service.update('tenant-1', 's1', { note: 'no date' });
+      await service.update('tenant-1', 'user-1', 's1', { note: 'no date' });
 
       const updateArg = tx.sale.update.mock.calls[0][0];
       expect(updateArg.data).not.toHaveProperty('sale_date');
@@ -1944,7 +1955,7 @@ describe('SalesService', () => {
       tx.sale.update.mockResolvedValue({ id: 's1' });
       tx.paymentRecord.create.mockResolvedValue({});
 
-      await service.update('tenant-1', 's1', {
+      await service.update('tenant-1', 'user-1', 's1', {
         payments: [{
           paymentMethod: 'Bank',
           amount: 100,
@@ -1976,16 +1987,18 @@ describe('SalesService', () => {
 
     it('keeps a transport charge on its own column when the edit sends one', async () => {
       tx.sale.findFirst.mockResolvedValue({
-        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, customer_id: null,
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, amount_paid: 100,
+        customer_id: null,
       });
       tx.sale.update.mockResolvedValue({ id: 's1' });
 
-      await service.update('tenant-1', 's1', {
+      await service.update('tenant-1', 'user-1', 's1', {
         items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 100 }],
         totalAmount: 110,
         transportCost: 10,
         laborCost: 0,
         rounding: 0,
+        payments: [{ paymentMethod: 'Cash', amount: 110 }],
       });
 
       expect(tx.sale.update.mock.calls[0][0].data).toEqual(expect.objectContaining({
@@ -2006,7 +2019,7 @@ describe('SalesService', () => {
       tx.product.findMany.mockResolvedValue([{ id: 'prod-1', vat_rate: 15, sd_rate: null }]);
       tx.tenant.findUnique.mockResolvedValue({ default_vat_rate: 15 });
 
-      await service.update('tenant-1', 's1', {
+      await service.update('tenant-1', 'user-1', 's1', {
         items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1150 }],
         totalAmount: 1200,
       });
@@ -2021,16 +2034,297 @@ describe('SalesService', () => {
       // The entry form's adjustments (VAT, transport, rounding) are not on the
       // lines — recomputing from lines alone would silently drop them.
       tx.sale.findFirst.mockResolvedValue({
-        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, customer_id: null,
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 100, amount_paid: 100,
+        customer_id: null,
       });
       tx.sale.update.mockResolvedValue({ id: 's1' });
 
-      await service.update('tenant-1', 's1', {
+      await service.update('tenant-1', 'user-1', 's1', {
         items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 50 }],
         totalAmount: 115,
+        payments: [{ paymentMethod: 'Cash', amount: 115 }],
       });
 
       expect(tx.sale.update.mock.calls[0][0].data.total_amount).toBe(115);
+    });
+  });
+
+  describe('update() — the customer ledger follows the edit', () => {
+    const postedAt = new Date('2026-09-01T10:00:00.000Z');
+    const voucherDate = new Date('2026-09-01T00:00:00.000Z');
+
+    // ৳10,000 on credit with ৳4,000 down: a ৳6,000 CREDIT_SALE row. The
+    // customer owed ৳2,000 before it and has paid ৳1,000 since, so owes ৳7,000.
+    const creditSale = {
+      id: 's1',
+      store_id: 'store-1',
+      serial_number: 'INV-1',
+      reference_number: null,
+      status: 'COMPLETED',
+      customer_id: 'cust-1',
+      total_amount: 10000,
+      amount_paid: 4000,
+      created_at: postedAt,
+      sale_date: postedAt,
+      items: [],
+      payments: [{ payment_method: 'Cash', amount: 4000 }],
+    };
+    const creditRow = {
+      id: 'row-1',
+      customer_id: 'cust-1',
+      type: 'CREDIT_SALE',
+      amount: 6000,
+      discount_amount: 0,
+      created_at: postedAt,
+      payment_number: null,
+    };
+
+    function onLedger(rows: unknown[], customer: Record<string, unknown> = {}) {
+      tx.sale.findFirst.mockResolvedValue(creditSale);
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+      tx.customerCreditTransaction.findMany.mockResolvedValue(rows);
+      tx.customerCreditTransaction.groupBy.mockResolvedValue([
+        { type: 'PAYMENT', _sum: { amount: 1000, discount_amount: 0 } },
+      ]);
+      tx.customer.findFirst.mockResolvedValue({
+        name: 'Rahim Traders', due_balance: 7000, credit_limit: 20000, ...customer,
+      });
+      tx.postingEvent.findUnique.mockResolvedValue({ voucher: { date: voucherDate } });
+    }
+
+    /** The entry screen's save: the total with ৳500 transport, the same ৳4,000 down. */
+    const addTransport = {
+      totalAmount: 10500,
+      transportCost: 500,
+      payments: [{ paymentMethod: 'Cash', amount: 4000 }],
+    };
+
+    it('puts added transport on the credit row, every later balance and the customer due', async () => {
+      onLedger([creditRow]);
+
+      await service.update('tenant-1', 'user-1', 's1', addTransport);
+
+      expect(tx.customerCreditTransaction.update).toHaveBeenCalledWith({
+        where: { id: 'row-1' },
+        // ৳2,000 owed before the sale, plus the ৳6,500 it now leaves due.
+        data: { amount: 6500, balance_after: 8500 },
+      });
+      expect(tx.customerCreditTransaction.updateMany).toHaveBeenCalledWith({
+        where: {
+          tenant_id: 'tenant-1',
+          customer_id: 'cust-1',
+          created_at: { gt: postedAt },
+          id: { notIn: ['row-1'] },
+        },
+        data: { balance_after: { increment: 500 } },
+      });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { due_balance: { increment: 500 } },
+      });
+    });
+
+    it('reposts the receivable at the new due, on the date it was first posted', async () => {
+      onLedger([creditRow]);
+
+      await service.update('tenant-1', 'user-1', 's1', addTransport);
+
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'sale', 's1');
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'sale', 's1', 'paid');
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'sale',
+        conditionValue: 'credit',
+        sourceId: 's1',
+        amount: 6500,
+        partyType: 'CUSTOMER',
+        partyId: 'cust-1',
+        date: voucherDate,
+      }));
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'sale',
+        legKey: 'paid',
+        amount: 4000,
+        date: voucherDate,
+      }));
+    });
+
+    it('refuses an edit that takes the customer past their credit limit', async () => {
+      // ৳7,000 owed, ৳6,000 of it this sale: ৳6,500 would make it ৳7,500.
+      onLedger([creditRow], { credit_limit: 7300 });
+
+      await expect(service.update('tenant-1', 'user-1', 's1', addTransport))
+        .rejects.toThrow('Credit limit exceeded');
+      expect(tx.customerCreditTransaction.update).not.toHaveBeenCalled();
+      expect(autoPostFromRules).not.toHaveBeenCalled();
+      expect(tx.sale.update).not.toHaveBeenCalled();
+    });
+
+    it('lets an edit that lowers the due through for a customer already over their limit', async () => {
+      onLedger([creditRow], { credit_limit: 5000 });
+
+      await service.update('tenant-1', 'user-1', 's1', {
+        totalAmount: 9800,
+        payments: [{ paymentMethod: 'Cash', amount: 4000 }],
+      });
+
+      expect(tx.customerCreditTransaction.update).toHaveBeenCalledWith({
+        where: { id: 'row-1' },
+        data: { amount: 5800, balance_after: 7800 },
+      });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { due_balance: { increment: -200 } },
+      });
+    });
+
+    it('takes the credit row away when the edit settles the sale in full', async () => {
+      onLedger([creditRow]);
+
+      await service.update('tenant-1', 'user-1', 's1', {
+        totalAmount: 10500,
+        payments: [{ paymentMethod: 'Cash', amount: 10500 }],
+      });
+
+      expect(tx.customerCreditTransaction.delete).toHaveBeenCalledWith({ where: { id: 'row-1' } });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { due_balance: { increment: -6000 } },
+      });
+      expect(autoPostFromRules).toHaveBeenCalledTimes(1);
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'sale',
+        conditionValue: 'cash',
+        amount: 10500,
+      }));
+    });
+
+    it('adds a credit row where the sale stands when a paid sale is edited to leave due', async () => {
+      onLedger([]);
+      tx.sale.findFirst.mockResolvedValue({
+        ...creditSale, amount_paid: 10000, payments: [{ payment_method: 'Cash', amount: 10000 }],
+      });
+
+      await service.update('tenant-1', 'user-1', 's1', {
+        totalAmount: 10500,
+        transportCost: 500,
+        payments: [{ paymentMethod: 'Cash', amount: 10000 }],
+      });
+
+      // ৳7,000 owed now, ৳1,000 of it paid since: ৳8,000 before the sale.
+      expect(tx.customerCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          customer_id: 'cust-1',
+          type: 'CREDIT_SALE',
+          amount: 500,
+          balance_after: 8500,
+          reference_type: 'SALE',
+          reference_id: 's1',
+          created_by: 'user-1',
+          created_at: postedAt,
+        }),
+      });
+      expect(tx.customerCreditTransaction.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        data: { balance_after: { increment: 500 } },
+      }));
+    });
+
+    it('moves the credit row to the new customer when the sale changes hands', async () => {
+      onLedger([creditRow]);
+      tx.customer.findFirst.mockImplementation(async ({ where }: any) => (
+        where.id === 'cust-2'
+          ? { name: 'Karim Store', due_balance: 1000, credit_limit: 50000 }
+          : { name: 'Rahim Traders', due_balance: 7000, credit_limit: 20000 }
+      ));
+      tx.customerCreditTransaction.groupBy.mockImplementation(async ({ where }: any) => (
+        where.customer_id === 'cust-1' ? [{ type: 'PAYMENT', _sum: { amount: 1000, discount_amount: 0 } }] : []
+      ));
+
+      await service.update('tenant-1', 'user-1', 's1', {
+        customerId: 'cust-2',
+        totalAmount: 10000,
+        payments: [{ paymentMethod: 'Cash', amount: 4000 }],
+      });
+
+      expect(tx.customerCreditTransaction.delete).toHaveBeenCalledWith({ where: { id: 'row-1' } });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { due_balance: { increment: -6000 } },
+      });
+      expect(tx.customerCreditTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          customer_id: 'cust-2', type: 'CREDIT_SALE', amount: 6000, balance_after: 7000, created_at: postedAt,
+        }),
+      });
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-2' },
+        data: { due_balance: { increment: 6000 } },
+      });
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        conditionValue: 'credit', amount: 6000, partyId: 'cust-2',
+      }));
+    });
+
+    it('restates the receipt for an overpayment and reposts it under the same number', async () => {
+      // ৳1,000 sale paid with ৳1,200: ৳200 went on the customer's account.
+      onLedger([{
+        id: 'rcpt-1', customer_id: 'cust-1', type: 'PAYMENT', amount: 200, discount_amount: 0,
+        created_at: postedAt, payment_number: 'CPY-0001',
+      }]);
+      tx.sale.findFirst.mockResolvedValue({
+        ...creditSale, total_amount: 1000, amount_paid: 1200, payments: [{ payment_method: 'Cash', amount: 1200 }],
+      });
+
+      await service.update('tenant-1', 'user-1', 's1', {
+        totalAmount: 1100,
+        transportCost: 100,
+        payments: [{ paymentMethod: 'Cash', amount: 1200 }],
+      });
+
+      expect(tx.customerCreditTransaction.update).toHaveBeenCalledWith({
+        where: { id: 'rcpt-1' },
+        // ৳7,000 owed now: ৳8,200 before the receipt and the later payment.
+        data: { amount: 100, balance_after: 8100 },
+      });
+      expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'customer_payment', 'rcpt-1');
+      expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: 'customer_payment',
+        sourceId: 'rcpt-1',
+        amount: 100,
+        referenceNumber: 'CPY-0001',
+        partyId: 'cust-1',
+      }));
+      expect(tx.customer.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { due_balance: { increment: 100 } },
+      });
+    });
+
+    it('refuses an edit that leaves due on a walk-in sale', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        ...creditSale, customer_id: null, total_amount: 100, amount_paid: 100,
+        payments: [{ payment_method: 'Cash', amount: 100 }],
+      });
+
+      await expect(service.update('tenant-1', 'user-1', 's1', {
+        totalAmount: 110,
+        transportCost: 10,
+        payments: [{ paymentMethod: 'Cash', amount: 100 }],
+      })).rejects.toThrow('Select a customer to keep due on this sale.');
+    });
+
+    it('leaves the ledger and the books alone when the money does not change', async () => {
+      onLedger([creditRow]);
+
+      await service.update('tenant-1', 'user-1', 's1', {
+        note: 'Delivered to the back gate',
+        totalAmount: 10000,
+        payments: [{ paymentMethod: 'Cash', amount: 4000 }],
+      });
+
+      expect(tx.customerCreditTransaction.findMany).not.toHaveBeenCalled();
+      expect(tx.customer.update).not.toHaveBeenCalled();
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(autoPostFromRules).not.toHaveBeenCalled();
     });
   });
 

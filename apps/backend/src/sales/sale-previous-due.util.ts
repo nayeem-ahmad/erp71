@@ -52,8 +52,8 @@ export async function resolveSalePreviousDue(
     if (sale.status === 'DRAFT') return toPaisa(customerDueNow);
 
     // Scoped to the sale's current customer: an entry edited over to someone
-    // else leaves its credit row with the first customer, and that row says
-    // nothing about what the second one owed.
+    // else before edits restated the ledger left its credit row with the first
+    // customer, and that row says nothing about what the second one owed.
     const ownRows = await db.customerCreditTransaction.findMany({
         where: {
             tenant_id: tenantId,
