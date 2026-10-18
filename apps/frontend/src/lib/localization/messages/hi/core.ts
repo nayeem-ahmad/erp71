@@ -323,6 +323,7 @@ export const coreMessages = {
             allSales: "बिक्री",
             newSalesEntry: "नई बिक्री प्रविष्टि",
             dueAging: "बकाया आयु विश्लेषण",
+            customerDuesSummary: "ग्राहक बकाया सारांश",
             badDebts: "डूबत ऋण",
             crmFollowUps: "फ़ॉलो-अप",
             crmActivities: "गतिविधियाँ",

@@ -866,6 +866,24 @@ export interface BulkTaskOutcome {
     skipped: { id: string; reason: string }[];
 }
 
+/** A row of `GET /customers/reports/dues-summary`. */
+export interface CustomerDuesRow {
+    id: string;
+    name: string;
+    customer_code: string | null;
+    phone: string | null;
+    /** What the customer owes now; negative when they have paid in advance. */
+    due_balance: number;
+    store: { id: string; name: string } | null;
+    sales_rep: { id: string; name: string } | null;
+}
+
+export interface CustomerDuesSummary {
+    /** The viewer's own employee record; null when their login is linked to none. */
+    me: { id: string; name: string } | null;
+    rows: CustomerDuesRow[];
+}
+
 export interface Paginated<T = any> {
     items: T[];
     total: number;
@@ -2199,6 +2217,12 @@ export const api = {
     reverseCustomerWriteOff: (writeOffId: string) =>
         fetchWithAuth(`/customers/credit/write-offs/${writeOffId}/reverse`, { method: 'POST' }),
     getDueAgingReport: () => fetchWithAuth('/customers/reports/due-aging'),
+    /** Every customer of the branch (`storeId`, or `all`) with their current due. */
+    getCustomerDuesSummary: (params?: { storeId?: string }): Promise<CustomerDuesSummary> => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        return fetchWithAuth(`/customers/reports/dues-summary${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     // CRM Interactions
     getCrmInteractions: (params?: { customerId?: string; page?: number; limit?: number }) => {
         const query = new URLSearchParams();

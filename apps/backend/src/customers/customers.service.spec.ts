@@ -1931,6 +1931,84 @@ describe('CustomersService', () => {
     });
   });
 
+  describe('getDuesSummary', () => {
+    const customer = (over: Record<string, unknown> = {}) => ({
+      id: 'cust-1',
+      name: 'Rahim Traders',
+      customer_code: 'CUST-00001',
+      phone: '01700000001',
+      due_balance: { toString: () => '1500.50' },
+      store: { id: 'branch-a', name: 'Branch A' },
+      salesRep: { id: 'emp-1', name: 'Karim' },
+      ...over,
+    });
+
+    it('lists every customer in scope with their current due as a number', async () => {
+      db.customer.findMany.mockResolvedValue([
+        customer(),
+        customer({ id: 'cust-2', name: 'Square', due_balance: 0, salesRep: null }),
+        customer({ id: 'cust-3', name: 'Paid ahead', due_balance: -200 }),
+      ]);
+
+      const result = await service.getDuesSummary('tenant-1', 'user-1', ['branch-a']);
+
+      const args = db.customer.findMany.mock.calls[0][0];
+      expect(args.where).toEqual({
+        tenant_id: 'tenant-1',
+        deleted_at: null,
+        AND: [customerInBranchesWhere(['branch-a'])],
+      });
+      // Zero and in-credit customers are listed too: "all customers".
+      expect(result.rows.map((r: any) => [r.id, r.due_balance])).toEqual([
+        ['cust-1', 1500.5],
+        ['cust-2', 0],
+        ['cust-3', -200],
+      ]);
+      expect(result.rows[0]).toMatchObject({
+        name: 'Rahim Traders',
+        customer_code: 'CUST-00001',
+        phone: '01700000001',
+        store: { id: 'branch-a', name: 'Branch A' },
+        sales_rep: { id: 'emp-1', name: 'Karim' },
+      });
+      expect(result.rows[1].sales_rep).toBeNull();
+    });
+
+    it('lists the whole tenant when unscoped', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+
+      await service.getDuesSummary('tenant-1', 'user-1', null);
+
+      expect(db.customer.findMany.mock.calls[0][0].where).toEqual({ tenant_id: 'tenant-1', deleted_at: null });
+    });
+
+    it("names the caller's own employee record, so the page can offer their customers", async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.employee.findFirst.mockResolvedValue({ id: 'emp-1', name: 'Karim' });
+
+      const result = await service.getDuesSummary('tenant-1', 'user-1', null);
+
+      expect(db.employee.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: { tenant_id: 'tenant-1', user_id: 'user-1', deleted_at: null },
+      }));
+      expect(result.me).toEqual({ id: 'emp-1', name: 'Karim' });
+    });
+
+    it('has no "me" for a login linked to no employee', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+      db.employee.findFirst.mockResolvedValue(null);
+
+      await expect(service.getDuesSummary('tenant-1', 'user-1', null)).resolves.toMatchObject({ me: null });
+    });
+
+    it('does not look an employee up without a user', async () => {
+      db.customer.findMany.mockResolvedValue([]);
+
+      await expect(service.getDuesSummary('tenant-1', undefined, null)).resolves.toMatchObject({ me: null });
+      expect(db.employee.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
   describe('ensureCustomerPaymentPostingSetup — Accounts Receivable dependency', () => {
       it('is provisioned by the default template', async () => {
           // Regression: the template had no 'Accounts Receivable' account, so
