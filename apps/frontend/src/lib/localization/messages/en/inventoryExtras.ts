@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
         "withinBranchOnly": "Within one branch",
         "withinBranch": "Same branch",
         "crossBranchNotice": "This transfer crosses branches, so it waits for approval — no stock leaves the source until someone with approval rights releases it.",
+        "availableAtSource": "Available at source: {qty}",
+        "inStockTotal": "In stock (all warehouses): {qty}",
+        "atDestination": "At destination: {qty}",
+        "exceedsSourceStock": "More than the source holds",
         "columns": {
             "transferNumber": "Transfer #",
             "source": "Source",

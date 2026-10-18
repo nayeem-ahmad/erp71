@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
         "withinBranchOnly": "Dentro de una sucursal",
         "withinBranch": "Misma sucursal",
         "crossBranchNotice": "Este traspaso cruza sucursales, por lo que espera aprobación: no sale existencia del almacén de origen hasta que alguien con permiso lo libere.",
+        "availableAtSource": "Disponible en origen: {qty}",
+        "inStockTotal": "En existencia (todos los almacenes): {qty}",
+        "atDestination": "En destino: {qty}",
+        "exceedsSourceStock": "Más de lo que tiene el origen",
         "columns": {
             "transferNumber": "N.º de traslado",
             "source": "Origen",

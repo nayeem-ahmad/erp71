@@ -148,6 +148,10 @@ export const inventoryExtrasMessages = {
         "withinBranchOnly": "داخل فرع واحد",
         "withinBranch": "نفس الفرع",
         "crossBranchNotice": "هذا التحويل يتجاوز الفروع، لذا ينتظر الموافقة — لا يخرج أي مخزون من المستودع المصدر حتى يُصرِّح به من يملك حق الموافقة.",
+        "availableAtSource": "المتاح في المصدر: {qty}",
+        "inStockTotal": "المخزون (كل المستودعات): {qty}",
+        "atDestination": "في الوجهة: {qty}",
+        "exceedsSourceStock": "أكثر مما يحتويه المصدر",
         "columns": {
             "transferNumber": "رقم التحويل",
             "source": "المصدر",

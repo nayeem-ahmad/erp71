@@ -15,6 +15,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
 import { IdSearchSelect } from '@/components/document-entry/PartySearchSelect';
+import { availableQtyOf } from '@/components/document-entry/ProductSearch';
 
 interface WarehouseTransfer {
     id: string;
@@ -144,6 +145,9 @@ export default function InventoryTransfersPage() {
                 })),
             });
             setMessage(t.inventoryTransfers.transferCreated);
+            // A sent transfer has moved stock out of the source, so the on-hand
+            // figures shown against each line are stale until reloaded.
+            void loadOptions();
             setForm({
                 sourceWarehouseId: '',
                 destinationWarehouseId: '',
@@ -215,6 +219,22 @@ export default function InventoryTransfersPage() {
         const destination = warehouses.find((warehouse) => warehouse.id === form.destinationWarehouseId);
         return Boolean(source && destination && source.store_id !== destination.store_id);
     }, [warehouses, form.sourceWarehouseId, form.destinationWarehouseId]);
+
+    const productsById = useMemo(
+        () => new Map<string, any>(products.map((product: any) => [product.id, product])),
+        [products],
+    );
+
+    /**
+     * What a line's product has on hand where the transfer draws from — the
+     * source warehouse once one is chosen, every warehouse until then.
+     */
+    const stockHint = (product: any): string => {
+        const quantity = availableQtyOf(product, form.sourceWarehouseId || undefined);
+        return (form.sourceWarehouseId
+            ? t.inventoryTransfers.availableAtSource
+            : t.inventoryTransfers.inStockTotal).replace('{qty}', String(quantity));
+    };
 
     const statusLabels: Record<string, string> = useMemo(() => ({
         DRAFT: t.inventoryTransfers.statuses.draft,
@@ -410,29 +430,47 @@ export default function InventoryTransfersPage() {
                     ) : null}
 
                     <div className="space-y-3">
-                        {form.items.map((item: any, index: number) => (
-                            <div key={index} className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-end">
-                                <div>
-                                    <IdSearchSelect
-                                        items={products}
-                                        value={item.productId}
-                                        onChange={(id) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: id } : line) }))}
-                                        label={t.common.product}
-                                        placeholder={t.inventoryTransfers.selectProduct}
-                                        emptyLabel={t.pos.searchPlaceholder}
-                                        noMatchLabel={t.common.noData}
-                                        subtitle={(product) => product.sku ?? ''}
-                                    />
+                        {form.items.map((item: any, index: number) => {
+                            const product = productsById.get(item.productId);
+                            const sourceQty = product && form.sourceWarehouseId ? availableQtyOf(product, form.sourceWarehouseId) : null;
+                            const overStock = sourceQty !== null && Number(item.quantity) > sourceQty;
+                            return (
+                                <div key={index} className="space-y-1">
+                                <div className="grid md:grid-cols-[1fr_160px_120px] gap-3 items-end">
+                                    <div>
+                                        <IdSearchSelect
+                                            items={products}
+                                            value={item.productId}
+                                            onChange={(id) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, productId: id } : line) }))}
+                                            label={t.common.product}
+                                            placeholder={t.inventoryTransfers.selectProduct}
+                                            emptyLabel={t.pos.searchPlaceholder}
+                                            noMatchLabel={t.common.noData}
+                                            subtitle={(option) => [option.sku, stockHint(option)].filter(Boolean).join(' · ')}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.quantity}</label>
+                                        <input type="number" min="1" value={item.quantity} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, quantity: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
+                                    </div>
+                                    <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: current.items.length === 1 ? current.items : current.items.filter((_: any, lineIndex: number) => lineIndex !== index) }))} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl text-sm font-bold">
+                                        {t.inventoryShrinkage.remove}
+                                    </button>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.quantity}</label>
-                                    <input type="number" min="1" value={item.quantity} onChange={(e) => setForm((current: any) => ({ ...current, items: current.items.map((line: any, lineIndex: number) => lineIndex === index ? { ...line, quantity: e.target.value } : line) }))} className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium" />
+                                {product ? (
+                                    <p className="ms-1 text-xs text-gray-500" data-testid={`transfer-line-stock-${index}`}>
+                                        {stockHint(product)}
+                                        {form.destinationWarehouseId ? (
+                                            <> · {t.inventoryTransfers.atDestination.replace('{qty}', String(availableQtyOf(product, form.destinationWarehouseId)))}</>
+                                        ) : null}
+                                        {overStock ? (
+                                            <span className="text-amber-700"> · {t.inventoryTransfers.exceedsSourceStock}</span>
+                                        ) : null}
+                                    </p>
+                                ) : null}
                                 </div>
-                                <button type="button" onClick={() => setForm((current: any) => ({ ...current, items: current.items.length === 1 ? current.items : current.items.filter((_: any, lineIndex: number) => lineIndex !== index) }))} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl text-sm font-bold">
-                                    {t.inventoryShrinkage.remove}
-                                </button>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     <div className="flex items-center justify-between">
