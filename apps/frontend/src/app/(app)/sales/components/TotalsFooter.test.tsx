@@ -65,6 +65,26 @@ describe('computeSaleTotals — how the shop prices VAT', () => {
         expect(totals.vatRate).toBeNull();
     });
 
+    it('keeps transport and labour out of the VAT inside the discounted prices', () => {
+        const totals = computeSaleTotals(
+            CART,
+            { ...EMPTY_ADJUSTMENTS, discountMode: 'AMOUNT', discountAmount: 100, transportCost: 200, laborCost: 30 },
+            INCLUDED_15,
+        );
+
+        // The VAT inside ৳900 of goods — not the undiscounted ৳1,000 the
+        // ৳1,130 billed would otherwise have been taxed as.
+        expect(totals.total).toBe(1130);
+        expect(totals.vat).toBe(117.39);
+    });
+
+    it('lowers the VAT inside the prices by a downward adjustment', () => {
+        const totals = computeSaleTotals(CART, { ...EMPTY_ADJUSTMENTS, rounding: -10 }, INCLUDED_15);
+
+        expect(totals.total).toBe(990);
+        expect(totals.vat).toBe(129.13);
+    });
+
     it('carries supplementary duty under the VAT', () => {
         const withSd: LineItem = { ...line(1000, 1), sdRate: 10 };
         const totals = computeSaleTotals([withSd], EMPTY_ADJUSTMENTS, ON_TOP_15);
