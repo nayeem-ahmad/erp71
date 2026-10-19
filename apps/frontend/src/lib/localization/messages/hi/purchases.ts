@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: "भुगतान माध्यम जोड़ें",
         noPaymentsRecorded: "कोई भुगतान दर्ज नहीं है।",
         paymentExceedsTotal: "भुगतान खरीद के कुल से अधिक नहीं हो सकता।",
+        paymentLayout: {
+            customise: "अनुकूलित करें",
+            title: "इस स्क्रीन पर भुगतान माध्यम",
+            reset: "डिफ़ॉल्ट पर रीसेट करें",
+            save: "सहेजें",
+            cancel: "रद्द करें",
+            moveUp: "{method} ऊपर ले जाएँ",
+            moveDown: "{method} नीचे ले जाएँ",
+            showMethod: "{method} दिखाएँ",
+            saveFailed: "भुगतान व्यवस्था सहेजी नहीं जा सकी",
+        },
         paymentInstrument: {
             toggle: "+ बैंक / चेक विवरण",
             toggleAlt: "+ भुगतान विवरण",

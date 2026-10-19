@@ -1,10 +1,14 @@
 import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { useState } from 'react';
 import PaymentSection from './PaymentSection';
+import type { Payment } from '@/lib/hooks/useNewSaleCart';
 
 jest.mock('@/lib/api', () => ({
     api: {
         getPaymentLayout: jest.fn(),
         getPaymentMethods: jest.fn(),
+        savePaymentLayout: jest.fn(),
+        resetPaymentLayout: jest.fn(),
     },
 }));
 
@@ -569,6 +573,108 @@ describe('PaymentSection', () => {
                     amount: 100,
                 },
             ]);
+        });
+    });
+
+    describe('Customise', () => {
+        /** A parent that keeps the payments, as every entry screen does. */
+        function Harness({ onChange }: { onChange?: (p: Payment[]) => void }) {
+            const [payments, setPayments] = useState<Payment[]>([]);
+            return (
+                <PaymentSection
+                    {...strip}
+                    payments={payments}
+                    total={500}
+                    onPaymentChange={(next) => { setPayments(next); onChange?.(next); }}
+                />
+            );
+        }
+
+        it('amounts already typed survive a layout save', async () => {
+            const { api } = require('@/lib/api');
+            mockMethods({ visible: [CASH, BKASH], available: [CASH, BKASH, NAGAD] });
+            (api.savePaymentLayout as jest.Mock).mockResolvedValue({
+                customised: true,
+                visible: [BKASH, CASH, NAGAD],
+                available: [CASH, BKASH, NAGAD],
+            });
+            const onChange = jest.fn();
+            render(<Harness onChange={onChange} />);
+            await waitFor(() => expect(amountBoxes()).toEqual(['Cash amount', 'bKash amount']));
+            fireEvent.change(screen.getByLabelText('bKash amount'), { target: { value: '120' } });
+
+            fireEvent.click(screen.getByText('Customise'));
+            fireEvent.click(screen.getByLabelText('Move bKash up'));
+            fireEvent.click(screen.getByLabelText('Show Nagad'));
+            fireEvent.click(screen.getByText('Save'));
+
+            await waitFor(() => expect(amountBoxes()).toEqual(['bKash amount', 'Cash amount', 'Nagad amount']));
+            expect(api.savePaymentLayout).toHaveBeenCalledWith('store-1', 'sale', {
+                order: ['pm-bkash', 'pm-cash', 'pm-nagad'],
+                hidden: [],
+            });
+            expect(screen.getByLabelText('bKash amount')).toHaveValue(120);
+            expect(onChange.mock.calls.at(-1)![0]).toEqual([
+                expect.objectContaining({ label: 'bKash', paymentMethodId: 'pm-bkash', amount: 120 }),
+            ]);
+            // The modal closed itself.
+            expect(screen.queryByText('Payment methods on this screen')).not.toBeInTheDocument();
+        });
+
+        it('lists the shown methods in order, then the hidden ones, unchecked', async () => {
+            mockMethods({ visible: [BKASH, CASH], available: [CASH, BKASH, NAGAD, CARD] });
+            render(<Harness />);
+            await waitFor(() => expect(amountBoxes()).toEqual(['bKash amount', 'Cash amount']));
+
+            fireEvent.click(screen.getByText('Customise'));
+
+            const boxes = screen.getAllByRole('checkbox');
+            expect(boxes.map((b) => b.getAttribute('aria-label')))
+                .toEqual(['Show bKash', 'Show Cash', 'Show Nagad', 'Show Card']);
+            expect(boxes.map((b) => (b as HTMLInputElement).checked)).toEqual([true, true, false, false]);
+        });
+
+        it('Reset asks the server for the default layout and applies it', async () => {
+            const { api } = require('@/lib/api');
+            mockMethods({ visible: [BKASH], available: [CASH, BKASH] });
+            (api.resetPaymentLayout as jest.Mock).mockResolvedValue({
+                customised: false,
+                visible: [CASH, BKASH],
+                available: [CASH, BKASH],
+            });
+            render(<Harness />);
+            await waitFor(() => expect(amountBoxes()).toEqual(['bKash amount']));
+
+            fireEvent.click(screen.getByText('Customise'));
+            fireEvent.click(screen.getByText('Reset to default'));
+
+            await waitFor(() => expect(amountBoxes()).toEqual(['Cash amount', 'bKash amount']));
+            expect(api.resetPaymentLayout).toHaveBeenCalledWith('store-1', 'sale');
+        });
+
+        it('no Customise button when readOnly', async () => {
+            render(<PaymentSection {...strip} payments={[]} total={100} onPaymentChange={jest.fn()} readOnly />);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(screen.queryByText('Customise')).not.toBeInTheDocument();
+        });
+
+        it('no Customise button while the layout is loading, or without a branch', async () => {
+            const { api } = require('@/lib/api');
+            (api.getPaymentLayout as jest.Mock).mockReturnValue(new Promise(() => {}));
+            (api.getPaymentMethods as jest.Mock).mockReturnValue(new Promise(() => {}));
+            const { rerender } = render(<PaymentSection {...strip} payments={[]} total={100} onPaymentChange={jest.fn()} />);
+            expect(screen.queryByText('Customise')).not.toBeInTheDocument();
+
+            rerender(<PaymentSection {...strip} storeId="" payments={[]} total={100} onPaymentChange={jest.fn()} />);
+            expect(screen.queryByText('Customise')).not.toBeInTheDocument();
+        });
+
+        it('shows the button once the layout has loaded', async () => {
+            render(<PaymentSection {...strip} payments={[]} total={100} onPaymentChange={jest.fn()} />);
+            await settle();
+
+            expect(screen.getByText('Customise')).toBeInTheDocument();
         });
     });
 

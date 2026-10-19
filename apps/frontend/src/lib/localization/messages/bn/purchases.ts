@@ -57,6 +57,17 @@ export const purchasesMessages = {
             addPaymentMethod: "পেমেন্ট মাধ্যম যোগ করুন",
             noPaymentsRecorded: "কোনো পেমেন্ট রেকর্ড করা হয়নি।",
             paymentExceedsTotal: "পেমেন্ট ক্রয়ের মোট পরিমাণের বেশি হতে পারে না।",
+            paymentLayout: {
+                customise: "কাস্টমাইজ",
+                title: "এই স্ক্রিনের পেমেন্ট মাধ্যম",
+                reset: "ডিফল্টে ফিরুন",
+                save: "সংরক্ষণ",
+                cancel: "বাতিল",
+                moveUp: "{method} উপরে নিন",
+                moveDown: "{method} নিচে নিন",
+                showMethod: "{method} দেখান",
+                saveFailed: "পেমেন্ট বিন্যাস সংরক্ষণ করা যায়নি",
+            },
             paymentInstrument: {
                 toggle: "+ ব্যাংক / চেকের বিবরণ",
                 toggleAlt: "+ পেমেন্ট বিবরণ",

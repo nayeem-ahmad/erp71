@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { PaymentLayoutContext, PaymentLayoutResponse } from '@erp71/shared-types';
+import type { PaymentLayoutContext, PaymentLayoutEntry, PaymentLayoutResponse } from '@erp71/shared-types';
 import { api, type PaymentMethodRow } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import type { Payment, PaymentInstrument } from '@/lib/hooks/useNewSaleCart';
 import { instrumentSummary, paymentInstrumentSummary, pickInstrument } from '@/lib/payment-instrument';
+import { Button } from '@/components/ui';
+import PaymentLayoutModal, { type PaymentLayoutModalLabels } from './PaymentLayoutModal';
 import { canonicalFor, matchPaymentToMethod } from './payment-match';
 
 /**
@@ -172,7 +174,7 @@ function amountsToPayments(
 }
 
 /** Every string the strip renders. `{amount}` / `{method}` are substituted. */
-export interface PaymentSectionLabels {
+export interface PaymentSectionLabels extends PaymentLayoutModalLabels {
     title: string;
     settled: string;
     /** Balance left unpaid when that is NOT permitted — shown in red. */
@@ -186,6 +188,8 @@ export interface PaymentSectionLabels {
     addMethod: string;
     addMethodAria: string;
     noPayments: string;
+    /** The strip's button that opens the layout editor. */
+    customise: string;
 
     // The cheque / transfer details panel, only rendered when the caller opts
     // into `captureInstrument`. Which boxes it shows, and so which of these
@@ -217,6 +221,15 @@ export const DEFAULT_PAYMENT_SECTION_LABELS: PaymentSectionLabels = {
     addMethod: '+ Add method…',
     addMethodAria: 'Add payment method',
     noPayments: 'No payments recorded.',
+    customise: 'Customise',
+    customiseTitle: 'Payment methods on this screen',
+    resetLayout: 'Reset to default',
+    saveLayout: 'Save',
+    cancelLayout: 'Cancel',
+    moveUp: 'Move {method} up',
+    moveDown: 'Move {method} down',
+    showMethod: 'Show {method}',
+    layoutSaveFailed: 'Could not save the payment layout',
     instrumentToggle: '+ Bank / cheque details',
     instrumentToggleAlt: '+ Payment details',
     instrumentBank: 'Bank',
@@ -291,6 +304,7 @@ export default function PaymentSection({
     const [added, setAdded] = useState<string[]>([]); // ids explicitly added via picker
     const [carried, setCarried] = useState<string[]>([]); // ids that carry money on the document
     const [legacy, setLegacy] = useState<Distribution['legacy']>([]);
+    const [customising, setCustomising] = useState(false);
 
     const copy = useMemo(() => ({ ...DEFAULT_PAYMENT_SECTION_LABELS, ...labels }), [labels]);
 
@@ -332,6 +346,34 @@ export default function PaymentSection({
     // method. They are shown, but locked. Once loading has finished with no
     // active method, the generic boxes are the strip and take input.
     const loading = !readOnly && !!storeId && !ready;
+
+    // What the Customise modal edits: the branch's methods with the user's
+    // shown ones first, in order, and the tucked-away ones after.
+    const layoutMethods = useMemo(() => {
+        const shown = new Set(visible.map((m) => m.id));
+        return [...visible, ...available.filter((m) => !shown.has(m.id))];
+    }, [visible, available]);
+    const hiddenIds = useMemo(() => {
+        const shown = new Set(visible.map((m) => m.id));
+        return available.filter((m) => !shown.has(m.id)).map((m) => m.id);
+    }, [visible, available]);
+    const canCustomise = !readOnly && !!storeId && ready && layoutMethods.length > 0;
+
+    // The answer replaces the layout as a whole, keyed like the one it
+    // supersedes; the typed amounts live in their own state, keyed by method,
+    // so they carry over to wherever their row lands.
+    // An answer that lands after the branch or screen changed must not
+    // overwrite the new one's layout.
+    const applyLayout = (key: string, layout: PaymentLayoutResponse<PaymentMethodRow>) =>
+        setLayoutState((prev) => (prev && prev.key !== key ? prev : { key, layout }));
+    const saveLayout = async (entry: PaymentLayoutEntry) => {
+        const key = layoutKey;
+        applyLayout(key, await api.savePaymentLayout(storeId, context, entry));
+    };
+    const resetLayout = async () => {
+        const key = layoutKey;
+        applyLayout(key, await api.resetPaymentLayout(storeId, context));
+    };
 
     // Fall back to generic methods whenever the branch offers no *usable*
     // (active) method — not only when none are defined — so an all-inactive
@@ -515,13 +557,20 @@ export default function PaymentSection({
         <div className="space-y-2">
             <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{copy.title}</h3>
-                <span
-                    className={`text-xs font-semibold ${
-                        paymentValid ? 'text-emerald-600' : balance > 0 ? 'text-red-600' : 'text-amber-600'
-                    }`}
-                >
-                    {statusText}
-                </span>
+                <div className="flex items-center gap-2">
+                    {canCustomise && (
+                        <Button variant="ghost" onClick={() => setCustomising(true)}>
+                            {copy.customise}
+                        </Button>
+                    )}
+                    <span
+                        className={`text-xs font-semibold ${
+                            paymentValid ? 'text-emerald-600' : balance > 0 ? 'text-red-600' : 'text-amber-600'
+                        }`}
+                    >
+                        {statusText}
+                    </span>
+                </div>
             </div>
 
             {balance > 0.01 && hint}
@@ -565,6 +614,17 @@ export default function PaymentSection({
                         ))}
                     </select>
                 </div>
+            )}
+
+            {customising && canCustomise && (
+                <PaymentLayoutModal
+                    methods={layoutMethods}
+                    hiddenIds={hiddenIds}
+                    onSave={saveLayout}
+                    onReset={resetLayout}
+                    onClose={() => setCustomising(false)}
+                    labels={copy}
+                />
             )}
         </div>
     );

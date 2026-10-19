@@ -41,6 +41,7 @@ export default function PurchasePaymentSection({
     const { t, locale } = useI18n();
     const copy = t.purchaseShared;
     const instrument = copy.paymentInstrument;
+    const layout = copy.paymentLayout;
 
     return (
         <DocumentPaymentSection
@@ -63,6 +64,15 @@ export default function PurchasePaymentSection({
                 addMethod: copy.addPaymentMethodOption,
                 addMethodAria: copy.addPaymentMethod,
                 noPayments: copy.noPaymentsRecorded,
+                customise: layout.customise,
+                customiseTitle: layout.title,
+                resetLayout: layout.reset,
+                saveLayout: layout.save,
+                cancelLayout: layout.cancel,
+                moveUp: layout.moveUp,
+                moveDown: layout.moveDown,
+                showMethod: layout.showMethod,
+                layoutSaveFailed: layout.saveFailed,
                 instrumentToggle: instrument.toggle,
                 instrumentToggleAlt: instrument.toggleAlt,
                 instrumentBank: instrument.bank,

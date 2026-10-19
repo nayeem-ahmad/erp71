@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: "إضافة طريقة دفع",
         noPaymentsRecorded: "لا توجد مدفوعات مسجلة.",
         paymentExceedsTotal: "لا يمكن أن يتجاوز الدفع إجمالي المشتريات.",
+        paymentLayout: {
+            customise: "تخصيص",
+            title: "طرق الدفع في هذه الشاشة",
+            reset: "إعادة التعيين إلى الافتراضي",
+            save: "حفظ",
+            cancel: "إلغاء",
+            moveUp: "نقل {method} للأعلى",
+            moveDown: "نقل {method} للأسفل",
+            showMethod: "إظهار {method}",
+            saveFailed: "تعذّر حفظ ترتيب طرق الدفع",
+        },
         paymentInstrument: {
             toggle: "+ تفاصيل المصرف / الشيك",
             toggleAlt: "+ تفاصيل الدفع",

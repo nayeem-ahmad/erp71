@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: 'Add payment method',
         noPaymentsRecorded: 'No payments recorded.',
         paymentExceedsTotal: 'Payment cannot exceed the purchase total.',
+        paymentLayout: {
+            customise: 'Customise',
+            title: 'Payment methods on this screen',
+            reset: 'Reset to default',
+            save: 'Save',
+            cancel: 'Cancel',
+            moveUp: 'Move {method} up',
+            moveDown: 'Move {method} down',
+            showMethod: 'Show {method}',
+            saveFailed: 'Could not save the payment layout',
+        },
         paymentInstrument: {
             toggle: '+ Bank / cheque details',
             toggleAlt: '+ Payment details',

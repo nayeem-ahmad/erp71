@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: "Ajouter un mode de paiement",
         noPaymentsRecorded: "Aucun paiement enregistré.",
         paymentExceedsTotal: "Le paiement ne peut pas dépasser le total de l'achat.",
+        paymentLayout: {
+            customise: "Personnaliser",
+            title: "Modes de paiement sur cet écran",
+            reset: "Rétablir par défaut",
+            save: "Enregistrer",
+            cancel: "Annuler",
+            moveUp: "Monter {method}",
+            moveDown: "Descendre {method}",
+            showMethod: "Afficher {method}",
+            saveFailed: "Impossible d'enregistrer la disposition des paiements",
+        },
         paymentInstrument: {
             toggle: "+ Détails banque / chèque",
             toggleAlt: "+ Détails du paiement",

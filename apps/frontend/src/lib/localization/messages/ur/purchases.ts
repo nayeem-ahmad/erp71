@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: "ادائیگی کا طریقہ شامل کریں",
         noPaymentsRecorded: "کوئی ادائیگی درج نہیں ہے۔",
         paymentExceedsTotal: "ادائیگی خریداری کے کل سے زیادہ نہیں ہو سکتی۔",
+        paymentLayout: {
+            customise: "حسبِ ضرورت بنائیں",
+            title: "اس اسکرین پر ادائیگی کے طریقے",
+            reset: "ڈیفالٹ پر واپس لائیں",
+            save: "محفوظ کریں",
+            cancel: "منسوخ کریں",
+            moveUp: "{method} اوپر لے جائیں",
+            moveDown: "{method} نیچے لے جائیں",
+            showMethod: "{method} دکھائیں",
+            saveFailed: "ادائیگی کی ترتیب محفوظ نہیں ہو سکی",
+        },
         paymentInstrument: {
             toggle: "+ بینک / چیک کی تفصیلات",
             toggleAlt: "+ ادائیگی کی تفصیلات",

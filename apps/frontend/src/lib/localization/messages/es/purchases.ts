@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: "Añadir método de pago",
         noPaymentsRecorded: "No hay pagos registrados.",
         paymentExceedsTotal: "El pago no puede superar el total de la compra.",
+        paymentLayout: {
+            customise: "Personalizar",
+            title: "Métodos de pago en esta pantalla",
+            reset: "Restablecer valores predeterminados",
+            save: "Guardar",
+            cancel: "Cancelar",
+            moveUp: "Subir {method}",
+            moveDown: "Bajar {method}",
+            showMethod: "Mostrar {method}",
+            saveFailed: "No se pudo guardar la disposición de pagos",
+        },
         paymentInstrument: {
             toggle: "+ Detalles de banco / cheque",
             toggleAlt: "+ Detalles del pago",
