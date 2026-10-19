@@ -563,6 +563,8 @@ Spec `docs/superpowers/specs/2026-10-10-branch-attached-parties-design.md`, plan
 
 ### Customer Dues Summary report — LANDED 2026-10-18, follow-ups below
 
+Released in PR #862 (merge `1020e075`), live on production 2026-10-19 — the deploy's health check reported that commit.
+
 - [ ] **Add the sidebar link to saved nav layouts after the deploy** — a tenant with a saved layout does not grow new nodes: run `npx tsx prisma/sync-nav-layout.ts --nodes=sales.receivables.dues-summary` in `packages/database` against production, as for the earlier new nodes. Until then the report is reached from the Sales hub's Reports section only.
 - [ ] **Not checked in a browser** — unit tests, typecheck and lint only (local login 500s). After deploy: an owner on "All branches", a one-branch member, and a member whose login is linked to an employee who is some customers' sales rep (should open on "My customers").
 - [ ] **A limited member with several branches cannot see all of theirs at once** — the shared `BranchFilter` offers "All branches" only to owners and `VIEW_CONSOLIDATED_REPORTS` holders, so such a member picks one branch at a time. The endpoint already answers "every branch of mine" when `storeId` is omitted; the page would need an "All my branches" option.
