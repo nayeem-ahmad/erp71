@@ -1990,3 +1990,4 @@ export * from './invoice-print';
 export * from './document-numbering';
 export * from './platform-roles';
 export * from './record-history';
+export * from './payment-layout';
