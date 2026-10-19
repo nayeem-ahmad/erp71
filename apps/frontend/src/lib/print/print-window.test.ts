@@ -314,6 +314,82 @@ describe('a job of several documents', () => {
     });
 });
 
+/*
+ * A bulk print can span branches whose templates differ. Each sheet already
+ * carries its own letterhead markup; its fonts, colours and footer placement
+ * must come from its own template too, not from the first sheet's.
+ */
+describe('a job whose documents use different templates', () => {
+    const gulshan = { company: { color: '#111111' }, title: { uppercase: true } };
+    const dhanmondi = {
+        company: { color: '#222222' },
+        title: { uppercase: false },
+        footer: {
+            show: true,
+            lines: [{ text: 'Dhanmondi branch' }],
+            images: [],
+            rule: { show: false },
+            spacingMm: 4,
+            repeatOnEveryPage: true,
+        },
+    };
+    const sheets = [
+        { headerHtml: '<div>HEAD-1</div>', bodyHtml: '<p>body-1</p>', headerConfig: gulshan },
+        { headerHtml: '<div>HEAD-2</div>', bodyHtml: '<p>body-2</p>', headerConfig: dhanmondi },
+        { headerHtml: '<div>HEAD-3</div>', bodyHtml: '<p>body-3</p>', headerConfig: gulshan },
+    ];
+    const build = (extra: Record<string, unknown> = {}) => buildPrintDocument({
+        title: 'Invoices',
+        paperSize: 'A4',
+        sheets,
+        headerConfig: gulshan,
+        repeatHeader: true,
+        ...extra,
+    });
+    const cssRule = (html: string, selector: string) => {
+        const at = html.indexOf(`${selector} {`);
+        return at < 0 ? '' : html.slice(at, html.indexOf('}', at));
+    };
+
+    it('marks each document with its template', () => {
+        const html = build();
+
+        expect(html.match(/<section class="p71-job p71-tpl-0">/g)).toHaveLength(2);
+        expect(html.match(/<section class="p71-job p71-tpl-1">/g)).toHaveLength(1);
+    });
+
+    it('styles each document from its own template', () => {
+        const html = build();
+
+        expect(cssRule(html, ':where(.p71-tpl-0) .p71-hd-name')).toContain('#111111');
+        expect(cssRule(html, ':where(.p71-tpl-1) .p71-hd-name')).toContain('#222222');
+        expect(cssRule(html, ':where(.p71-tpl-0) .p71-hd-title')).toContain('text-transform: uppercase');
+        expect(cssRule(html, ':where(.p71-tpl-1) .p71-hd-title')).not.toContain('text-transform');
+    });
+
+    it('leaves no template rule unscoped, so one cannot leak onto another\u2019s documents', () => {
+        const html = build();
+
+        expect(html).not.toMatch(/^\s*\.p71-hd-name \{/m);
+        expect(html).not.toMatch(/^\s*\.p71-ft \{/m);
+    });
+
+    it('lays out each document\u2019s footer by its own template', () => {
+        const html = build();
+        const jobs = html.split(/<section class="p71-job p71-tpl-\d">/).slice(1);
+
+        expect(jobs[0]).not.toContain('<tfoot>');
+        expect(jobs[1]).toContain('<tfoot><tr><td><div class="p71-ft">');
+        expect(jobs[2]).not.toContain('<tfoot>');
+    });
+
+    it('scopes the preview sheets too', () => {
+        const html = build({ preview: { title: '3 invoices — A4', printLabel: 'Print', closeLabel: 'Close' } });
+
+        expect(html.match(/<div class="p71-pv-sheet p71-job"><div class="p71-wrap p71-tpl-1">/g)).toHaveLength(1);
+    });
+});
+
 describe('a footer pinned to the page bottom', () => {
     const footer = {
         show: true,

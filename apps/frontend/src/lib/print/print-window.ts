@@ -208,8 +208,10 @@ export interface PrintDocumentOptions {
      * browser would block after the first. When given, the top-level
      * `headerHtml`, `bodyHtml`, `footerHtml` and `context` are not used.
      *
-     * Header and footer CSS still come from the top-level `headerConfig`: the
-     * template's rules are global class names, so a job can only carry one set.
+     * Header and footer CSS come from each sheet's `headerConfig` (the
+     * top-level one when a sheet has none). One template's rules print once,
+     * unscoped; a job mixing templates gets each template's rules scoped to its
+     * own sheets — see `scopeTemplateCss`.
      */
     sheets?: PrintSheet[];
 }
@@ -231,7 +233,7 @@ export interface PrintSheet {
     footerHtml?: string;
     /** Values this sheet's tenant footer {{tokens}} resolve against. */
     context?: HeaderContext;
-    /** This sheet's template, for its footer's content; the job's when omitted. */
+    /** This sheet's template — its styling and its footer; the job's when omitted. */
     headerConfig?: DeepPartial<PrintHeaderConfig>;
 }
 
@@ -429,6 +431,51 @@ function layoutDocument(parts: {
     return `${header}${bodyHtml}${footer}`;
 }
 
+/** The preview's paper-shaped sheet — an ancestor of every scoped sheet. */
+const PREVIEW_SHEET = '.p71-pv-sheet';
+
+/**
+ * One template's header and footer rules, limited to the sheets that print
+ * with it — for a batch whose documents use different templates.
+ *
+ * The scope is a `:where()`, which adds no specificity, so every rule keeps
+ * the weight it has unscoped and the document's own rules (a pinned footer's
+ * `margin-top: auto`, the compact sizes) still override it as they do on a
+ * single print. Written for what `headerCss` emits: rules and `@media`
+ * wrappers, with no braces inside values.
+ */
+function scopeTemplateCss(css: string, scope: string): string {
+    const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    let out = '';
+    let at = 0;
+    while (at < text.length) {
+        const open = text.indexOf('{', at);
+        if (open < 0) break;
+        const prelude = text.slice(at, open).trim();
+        let depth = 1;
+        let close = open + 1;
+        for (; close < text.length && depth > 0; close++) {
+            if (text[close] === '{') depth++;
+            else if (text[close] === '}') depth--;
+        }
+        const body = text.slice(open + 1, close - 1);
+        out += prelude.startsWith('@')
+            ? `${prelude} {\n${scopeTemplateCss(body, scope)}}\n`
+            : `${prelude.split(',').map((selector) => scopeSelector(selector.trim(), scope)).join(', ')} {${body}}\n`;
+        at = close;
+    }
+    return out;
+}
+
+function scopeSelector(selector: string, scope: string): string {
+    const where = `:where(${scope})`;
+    // A rule written from the preview sheet keeps it first: the sheet holds
+    // the scoped element, not the other way round.
+    return selector.startsWith(`${PREVIEW_SHEET} `)
+        ? `${PREVIEW_SHEET} ${where} ${selector.slice(PREVIEW_SHEET.length + 1)}`
+        : `${where} ${selector}`;
+}
+
 /** Builds the full HTML document. Exported for tests and the settings preview. */
 export function buildPrintDocument(opts: PrintDocumentOptions): string {
     const thermal = isThermalPaper(opts.paperSize);
@@ -444,6 +491,25 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         },
     ];
 
+    // The template each sheet prints with. A job usually has one — a single
+    // document, or a batch from one branch — and its rules are emitted once,
+    // unscoped, as they always were. A batch spanning templates scopes each
+    // template's rules to its own sheets, so one cannot style another's.
+    const sheetConfig = (sheet: PrintSheet) => sheet.headerConfig ?? opts.headerConfig;
+    const templateKeys: string[] = [];
+    const templateConfigs: (DeepPartial<PrintHeaderConfig> | undefined)[] = [];
+    const templateOf = sheets.map((sheet) => {
+        const config = sheetConfig(sheet);
+        const key = JSON.stringify(config ?? null);
+        if (!templateKeys.includes(key)) {
+            templateKeys.push(key);
+            templateConfigs.push(config);
+        }
+        return templateKeys.indexOf(key);
+    });
+    const scoped = templateKeys.length > 1;
+    const templateClass = (index: number) => (scoped ? ` p71-tpl-${templateOf[index]}` : '');
+
     // Each sheet is laid out on its own, so a document prints the same in a
     // batch as it does alone. The flags that choose CSS are the job's: true if
     // any sheet needs the rules, which are inert on a sheet that does not.
@@ -453,18 +519,20 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     let endRowAny = false;
     const contents = sheets.map((sheet) => {
         const header = sheet.headerHtml ?? '';
+        // Where the footer goes follows the sheet's own template, like its content.
+        const config = sheetConfig(sheet);
 
         // Rendered here rather than by each caller so every print path picks up a
         // tenant-designed footer without threading it through 13 printers.
         const tenantFooter = renderFooterHtml(
-            sheet.headerConfig ?? opts.headerConfig,
+            config,
             sheet.context ?? {},
             opts.paperSize,
         );
         const footer = tenantFooter || (sheet.footerHtml ?? '');
 
         const repeatHeader = !!opts.repeatHeader && !!header;
-        const repeatFooter = !!tenantFooter && footerRepeats(opts.headerConfig, opts.paperSize);
+        const repeatFooter = !!tenantFooter && footerRepeats(config, opts.paperSize);
 
         // Pinning stretches the table to a full page so the browser pushes the
         // `<tfoot>` down to the bottom edge. Only possible on a fixed-height sheet,
@@ -472,7 +540,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         const pinFooter = !!footer
             && !!pageHeightMm
             && (tenantFooter
-                ? footerPinsToBottom(opts.headerConfig, opts.paperSize)
+                ? footerPinsToBottom(config, opts.paperSize)
                 : !!opts.pinFooter);
 
         // Repeating and pinning are independent settings answering different
@@ -484,7 +552,7 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
         // anywhere else it is just the end of the body.
         const endRow = flexPin && !!sheet.endHtml;
 
-        bleeds ||= !!tenantFooter && footerBleeds(opts.headerConfig, opts.paperSize);
+        bleeds ||= !!tenantFooter && footerBleeds(config, opts.paperSize);
         pinnedTable ||= pinFooter && repeatFooter;
         flexPinAny ||= flexPin && !endRow;
         endRowAny ||= endRow;
@@ -515,10 +583,10 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
     const onSheet = !!opts.preview || !!opts.sheet;
     const body = onSheet
         ? contents
-            .map((c) => `<div class="p71-pv-sheet${jobClass}"><div class="p71-wrap">${c}</div></div>`)
+            .map((c, i) => `<div class="p71-pv-sheet${jobClass}"><div class="p71-wrap${templateClass(i)}">${c}</div></div>`)
             .join('\n')
         : `<div class="p71-wrap">${batch
-            ? contents.map((c) => `<section class="p71-job">${c}</section>`).join('\n')
+            ? contents.map((c, i) => `<section class="p71-job${templateClass(i)}">${c}</section>`).join('\n')
             : contents[0]}</div>`;
 
     return `<!DOCTYPE html>
@@ -599,7 +667,11 @@ export function buildPrintDocument(opts: PrintDocumentOptions): string {
             html, body { height: 100%; }
             .p71-wrap { min-height: 100%; }
         }` : ''}
-        ${headerCss(opts.headerConfig, opts.paperSize)}
+        ${scoped
+            ? templateConfigs
+                .map((config, i) => scopeTemplateCss(headerCss(config, opts.paperSize), `.p71-tpl-${i}`))
+                .join('\n')
+            : headerCss(opts.headerConfig, opts.paperSize)}
         ${pageCss(opts.paperSize)}
         ${opts.pageStamp && !thermal
             ? pageStampCss(opts.pageStamp, bleeds ? 'top' : 'bottom', !!opts.pageStamp.pageNumbers && sheets.length === 1)

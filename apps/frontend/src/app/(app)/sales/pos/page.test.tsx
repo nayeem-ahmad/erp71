@@ -3,10 +3,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import POSPage from './page';
 import { setWorkspaceItem } from '@/lib/session-store';
 import { printPOSReceipt } from '@/lib/pos-receipt-printer';
+import { printMushakReceipt } from '@/lib/mushak-receipt-printer';
 import { mockBrowserPaper } from '@/test-utils/print-paper';
 
 jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
 jest.mock('@/lib/pos-receipt-printer', () => ({ printPOSReceipt: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('@/lib/mushak-receipt-printer', () => ({ printMushakReceipt: jest.fn().mockResolvedValue(undefined) }));
 
 jest.mock('@/components/HelpTooltip', () => ({
   HelpTooltip: () => null,
@@ -64,6 +66,7 @@ jest.mock('@/lib/api', () => ({
     getProducts: jest.fn(),
     getInventorySettings: jest.fn(),
     createSale: jest.fn(),
+    getMushakTaxInvoice: jest.fn(),
     getSales: jest.fn(),
     getSalesPage: jest.fn(),
   },
@@ -316,5 +319,32 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
     fireEvent.click(await screen.findByRole('button', { name: /print pos receipt/i }));
 
     await waitFor(() => expect(printPOSReceipt).toHaveBeenCalledWith(expect.anything(), roll));
+  });
+
+  it('prints the Mushak 6.3 receipt with the footer of the sale\u2019s own branch', async () => {
+    const { api, fetchWithAuth } = require('@/lib/api');
+    (fetchWithAuth as jest.Mock).mockImplementation((url: string) => {
+      if (url === '/tenants/tax-settings') return Promise.resolve({ mushak_enabled: true, mushak_pos_receipt: true });
+      if (url === '/print-templates/resolve?docType=POS_RECEIPT&storeId=store-sale') {
+        return Promise.resolve({ template_id: 'b', name: 'Branch', config: { layout: 'text-only' } });
+      }
+      return Promise.resolve(null);
+    });
+    api.createSale.mockResolvedValue({ id: 'sale-1', store_id: 'store-sale' });
+    api.getMushakTaxInvoice.mockResolvedValue({ issuer: { name: 'Acme' }, invoice: { serialNumber: 'M-1' } });
+
+    render(<POSPage />);
+    await waitFor(() => screen.getByText('Coffee Beans'));
+    fireEvent.click(screen.getByText('Coffee Beans').closest('div[class*="cursor-pointer"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /complete checkout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm transaction/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /print mushak 6\.3/i }));
+
+    await waitFor(() => expect(printMushakReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({ headerConfig: { layout: 'text-only' } }),
+      'Thermal80',
+    ));
+    (fetchWithAuth as jest.Mock).mockReset();
+    (fetchWithAuth as jest.Mock).mockResolvedValue(null);
   });
 });

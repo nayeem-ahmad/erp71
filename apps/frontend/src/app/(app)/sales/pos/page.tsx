@@ -650,14 +650,19 @@ export default function POSPage() {
 
         setPrintingMushak(true);
         try {
-            const doc = await api.getMushakTaxInvoice(sale.id);
+            // The footer comes from the template of the store the sale was rung
+            // up at, as the ordinary receipt's letterhead does.
+            const [doc, header] = await Promise.all([
+                api.getMushakTaxInvoice(sale.id),
+                printHeader.resolve(sale.store_id || undefined),
+            ]);
             await printMushakReceipt({
                 ...doc,
                 date: formatDateTime(doc.invoice?.issuedAt ?? sale.created_at ?? new Date()),
                 payments: payments.map((p: any) => ({ method: p.paymentMethod, amount: p.amount })),
                 amountPaid: paid,
-                storeName: printHeader.companyName,
-                headerConfig: printHeader.headerConfig,
+                storeName: header.companyName,
+                headerConfig: header.headerConfig,
             }, receiptRoll(paperSize));
         } catch (err: any) {
             addNotification(err?.message || t.pos.notifications.mushakPrintFailed, 'error');
