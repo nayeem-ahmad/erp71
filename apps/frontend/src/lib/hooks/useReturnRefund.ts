@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PaymentMethodRow } from '@/lib/api';
 import type { Payment } from '@/lib/hooks/useNewSaleCart';
+import { canonicalFor, matchPaymentToMethod } from '@/components/document-entry/payment-match';
 import { refundPrefill } from '@/lib/return-refund-prefill';
 
 interface UseReturnRefundInput {
@@ -65,11 +66,18 @@ export function useReturnRefund({ context, docKey, total, partyDue, originalTend
 
     useEffect(() => {
         if (!docKey || !layout || layout.docKey !== docKey || touched.current) return;
-        // The sale's own way of paying only stands if the branch still takes it
-        // (the server refuses a method not offered there); a tender with no
-        // method id is matched by name there and left alone here.
-        const offered = new Set(layout.available.map((m) => m.id));
-        const usable = originalTenders.filter((t) => !t.paymentMethodId || offered.has(t.paymentMethodId));
+        // The sale's FIRST tender stands if the branch still offers its method
+        // (the server refuses one that is not), else the refund goes in the
+        // user's first visible method — a later tender is never promoted. It is
+        // resolved against the offered methods the way the strip does, so a
+        // sale saved before methods were recorded (no id) lands on the method
+        // the user sees in the strip and goes out with that method's id,
+        // rather than being left for the server to classify by type.
+        const original = originalTenders[0];
+        const match = original ? matchPaymentToMethod(layout.available, original) : undefined;
+        const usable: Payment[] = original && match
+            ? [{ ...original, method: canonicalFor(match.type), label: match.name, paymentMethodId: match.id }]
+            : [];
         const first = layout.visible[0];
         setPayments(
             refundPrefill({

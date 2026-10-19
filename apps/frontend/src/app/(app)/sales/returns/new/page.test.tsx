@@ -316,6 +316,49 @@ describe('NewSalesReturnPage', () => {
         await waitFor(() => expect(cash.value).toBe('300'));
     });
 
+    it('a sale saved before methods were recorded refunds on the method the strip shows, with its id', async () => {
+        // The tender has a name but no method id, as every pre-feature sale does.
+        (api.getSale as jest.Mock).mockResolvedValue({
+            ...bkashSaleOf(0),
+            payments: [
+                { payment_method: 'Mobile Wallet', payment_method_name: 'bKash', payment_method_id: null, amount: '500.00' },
+            ],
+        });
+        await act(async () => { render(<NewSalesReturnPage />); });
+        await findSale();
+
+        const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
+        await waitFor(() => expect(bkash.value).toBe('300'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled());
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Create Return/i }));
+        });
+
+        await waitFor(() => expect(api.createReturn).toHaveBeenCalledTimes(1));
+        expect((api.createReturn as jest.Mock).mock.calls[0][0].payments).toEqual([
+            { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 300 },
+        ]);
+    });
+
+    it('uses the first visible method, not the sale\'s second tender, when its first is not offered', async () => {
+        const CARD = method({ id: 'pm-card', name: 'Card', type: 'Card', sort_order: 3 });
+        // Paid bKash (no longer offered here) and then Cash (offered).
+        (api.getSale as jest.Mock).mockResolvedValue({
+            ...bkashSaleOf(0),
+            payments: [
+                { payment_method: 'Mobile Wallet', payment_method_name: 'bKash', payment_method_id: 'pm-bkash', amount: '200.00' },
+                { payment_method: 'Cash', payment_method_name: 'Cash', payment_method_id: 'pm-cash', amount: '300.00' },
+            ],
+        });
+        mockLayout([CARD, CASH]);
+        await act(async () => { render(<NewSalesReturnPage />); });
+        await findSale();
+
+        const card = (await screen.findByLabelText('Card amount')) as HTMLInputElement;
+        await waitFor(() => expect(card.value).toBe('300'));
+        expect((screen.getByLabelText('Cash amount') as HTMLInputElement).value).toBe('');
+    });
+
     it('never overwrites what the user typed', async () => {
         (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(0));
         await act(async () => { render(<NewSalesReturnPage />); });

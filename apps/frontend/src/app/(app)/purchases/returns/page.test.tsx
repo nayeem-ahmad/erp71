@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PurchaseReturnsPage from './page';
+import CreatePurchaseReturnModal from './CreatePurchaseReturnModal';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
 
@@ -162,6 +163,36 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
         // Exactly the DTO's fields: the server rejects a `label` or an `accountId`.
         expect(sent.payments).toEqual([{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 10 }]);
         expect(Object.keys(sent.payments[0]).sort()).toEqual(['amount', 'paymentMethod', 'paymentMethodId']);
+    });
+
+    it('reopening the modal on the same purchase starts from a fresh pre-fill', async () => {
+        const { api } = require('@/lib/api');
+        const [purchase] = await api.getPurchases();
+        api.getPurchases.mockResolvedValue([
+            { ...purchase, supplier_id: 'sup-1', supplier: { name: 'Fresh Farms', due_balance: '500.00' } },
+        ]);
+        const props = { onClose: jest.fn(), onSuccess: jest.fn(), initialPurchaseId: 'purchase-1' };
+
+        const { rerender } = render(<CreatePurchaseReturnModal isOpen {...props} />);
+        await waitFor(() => expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument());
+        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+        const first = (await screen.findByLabelText(/bKash/)) as HTMLInputElement;
+        fireEvent.change(first, { target: { value: '10' } });
+        expect(first.value).toBe('10');
+
+        // Cancelled, then opened again from the same row.
+        rerender(<CreatePurchaseReturnModal isOpen={false} {...props} />);
+        rerender(<CreatePurchaseReturnModal isOpen {...props} />);
+        await waitFor(() => expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument());
+        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+
+        // Nothing received: the ৳10 typed last time is gone from the strip and the payload.
+        expect(await screen.findByText(/^Adjusted against payable ৳\s*24\.00$/)).toBeInTheDocument();
+        expect((screen.getByLabelText(/bKash/) as HTMLInputElement).value).toBe('');
+        await waitFor(() => expect(screen.getByRole('button', { name: /create purchase return/i })).toBeEnabled());
+        fireEvent.click(screen.getByRole('button', { name: /create purchase return/i }));
+        await waitFor(() => expect(api.createPurchaseReturn).toHaveBeenCalledTimes(1));
+        expect(api.createPurchaseReturn.mock.calls[0][0].payments).toEqual([]);
     });
 
     it('with no supplier the whole total is received in the first method, and cannot be less', async () => {

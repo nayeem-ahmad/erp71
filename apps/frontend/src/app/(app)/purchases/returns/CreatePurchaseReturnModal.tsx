@@ -186,7 +186,10 @@ export default function CreatePurchaseReturnModal({
     const partyDue: number | null = hasSupplier ? Number(selectedPurchase?.supplier?.due_balance ?? 0) : null;
     const refund = useReturnRefund({
         context: 'purchase_return',
-        docKey: selectedPurchase?.id ?? null,
+        // The modal stays mounted while closed, so the open session is part of
+        // the key: reopening the same purchase must not bring back what was
+        // typed last time.
+        docKey: isOpen ? selectedPurchase?.id ?? null : null,
         total: totalAmount,
         partyDue,
     });
