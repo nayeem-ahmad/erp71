@@ -100,7 +100,11 @@ export interface TenderInput {
     amount: number;
 }
 
-/** A tender row the document already carries (PaymentRecord and its siblings). */
+/**
+ * A tender row the document already carries (PaymentRecord and its siblings).
+ * Passed to `resolveTenders` as `stored`, its `account_id` and
+ * `payment_method_name` are what a kept tender reposts with on an edit.
+ */
 export interface StoredTender {
     payment_method: string;
     payment_method_id: string | null;
@@ -114,7 +118,10 @@ export interface ResolvedTender {
     paymentMethod: string;
     methodId: string | null;
     methodName: string | null;
-    /** The method's linked account; null leaves the posting rule's account for `mode`. */
+    /**
+     * The method's linked account — for a tender the document already carries,
+     * the account it was saved with. Null leaves the posting rule's account for `mode`.
+     */
     accountId: string | null;
     /** classifyPaymentMode(methodName ?? paymentMethod). */
     mode: PaymentMode;
@@ -137,9 +144,16 @@ type TenderMethod = Prisma.PaymentMethodGetPayload<{ select: typeof TENDER_METHO
  * enforcing the branch rule (spec §4). Returns one result per tender, in order.
  *
  * - **With an id:** the tenant's method, or 400. A new tender must be on a
- *   method available at `storeId`; one the document already carries (its id is
- *   among `stored`) keeps its method even after the method moved branch or was
- *   switched off, so editing an old sale never forces a different tender.
+ *   method available at `storeId` and takes the method's current name and
+ *   linked account.
+ * - **A tender the document already carries** (its id is among `stored`) keeps
+ *   its method even after the method moved branch or was switched off, so
+ *   editing an old sale never forces a different tender. It also keeps what it
+ *   was saved with: the stored row's `account_id` (null stays null, so a
+ *   deleted account falls back to the rule's) and its `payment_method_name`,
+ *   else the method's name. Relinking or renaming a method changes new tenders,
+ *   never what an edit reposts for an old one. With several stored rows on one
+ *   method, the first answers.
  * - **Without an id** (POS, offline-queued sales, external sync, imports, the
  *   mobile app): a case-insensitive name match among the methods available at
  *   the branch — which is what lets POS's 'BKASH' reach the bKash method —
@@ -179,25 +193,40 @@ export async function resolveTenders(
         : [];
 
     const methodsById = new Map(byId.map((m) => [m.id, m]));
-    const storedIds = new Set(stored.flatMap((s) => (s.payment_method_id ? [s.payment_method_id] : [])));
+    const storedById = new Map<string, StoredTender>();
+    for (const row of stored) {
+        if (row.payment_method_id && !storedById.has(row.payment_method_id)) {
+            storedById.set(row.payment_method_id, row);
+        }
+    }
 
     return tenders.map((tender) => {
         let method: TenderMethod | undefined;
+        let methodName: string | null;
+        let accountId: string | null;
         if (tender.paymentMethodId) {
             method = methodsById.get(tender.paymentMethodId);
             if (!method) throw new BadRequestException(PAYMENT_METHOD_MISSING);
-            if (!storedIds.has(method.id) && !isAvailableAt(method, storeId)) {
-                throw new BadRequestException(PAYMENT_METHOD_NOT_AT_BRANCH);
+            const kept = storedById.get(method.id);
+            if (kept) {
+                methodName = kept.payment_method_name ?? method.name;
+                accountId = kept.account_id;
+            } else {
+                if (!isAvailableAt(method, storeId)) throw new BadRequestException(PAYMENT_METHOD_NOT_AT_BRANCH);
+                methodName = method.name;
+                accountId = method.account_id;
             }
         } else {
             method = matchByName(named, tender.paymentMethod, storeId);
+            methodName = method?.name ?? null;
+            accountId = method?.account_id ?? null;
         }
         return {
             paymentMethod: tender.paymentMethod,
             methodId: method?.id ?? null,
-            methodName: method?.name ?? null,
-            accountId: method?.account_id ?? null,
-            mode: classifyPaymentMode(method?.name ?? tender.paymentMethod),
+            methodName,
+            accountId,
+            mode: classifyPaymentMode(methodName ?? tender.paymentMethod),
             amount: tender.amount,
         };
     });
@@ -216,7 +245,11 @@ function matchByName(candidates: TenderMethod[], name: string, storeId: string):
     return atBranch.find((m) => m.name === name) ?? atBranch[0] ?? sameName.find((m) => m.name === name);
 }
 
-/** A document's stored tender rows as inputs, for an edit that sends no payments. */
+/**
+ * A document's stored tender rows as inputs, for an edit that sends no
+ * payments. Pass the same rows as `resolveTenders`' `stored` so each keeps the
+ * account and name it was saved with.
+ */
 export function storedToTenderInputs(rows: StoredTender[]): TenderInput[] {
     return rows.map((row) => ({
         paymentMethod: row.payment_method,

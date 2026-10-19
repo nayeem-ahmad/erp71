@@ -180,6 +180,94 @@ describe('payment-account.util', () => {
             ]);
         });
 
+        describe('a stored tender posts as it was saved', () => {
+            const storedRow = (row: Partial<StoredTender> & Pick<StoredTender, 'payment_method_id'>): StoredTender => ({
+                payment_method: 'Mobile Wallet',
+                payment_method_name: 'bKash',
+                account_id: 'acc-wallet-a',
+                amount: new Prisma.Decimal(200),
+                ...row,
+            });
+
+            it('a stored tender keeps the account it was posted with after the method is relinked', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-wallet-b' })]);
+                const stored = [storedRow({ payment_method_id: 'pm-bkash', account_id: 'acc-wallet-a' })];
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+                ], stored);
+
+                expect(tender).toMatchObject({ methodId: 'pm-bkash', accountId: 'acc-wallet-a' });
+            });
+
+            it('a stored tender keeps its saved name after the method is renamed', async () => {
+                // "Wallet One" would classify as bank; the saved "bKash" keeps it bkash.
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'Wallet One', account_id: 'acc-wallet-a' })]);
+
+                const [kept] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+                ], [storedRow({ payment_method_id: 'pm-bkash', payment_method_name: 'bKash' })]);
+                expect(kept).toMatchObject({ methodName: 'bKash', mode: 'bkash' });
+
+                // A row saved before names were stored falls back to the method's name.
+                const [legacy] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+                ], [storedRow({ payment_method_id: 'pm-bkash', payment_method_name: null })]);
+                expect(legacy).toMatchObject({ methodName: 'Wallet One', mode: 'bank' });
+            });
+
+            it('a stored tender whose account was deleted (account_id null) resolves to no account', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-new' })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+                ], [storedRow({ payment_method_id: 'pm-bkash', account_id: null })]);
+
+                expect(tender).toMatchObject({ methodId: 'pm-bkash', accountId: null, mode: 'bkash' });
+            });
+
+            it('a new tender on the same method (not in stored) uses the current link', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash Merchant', account_id: 'acc-wallet-b' })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+                ], [storedRow({ payment_method_id: 'pm-other', payment_method_name: 'bKash', account_id: 'acc-wallet-a' })]);
+
+                expect(tender).toMatchObject({ methodName: 'bKash Merchant', accountId: 'acc-wallet-b' });
+            });
+
+            it('several stored rows on one method answer with the first', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-wallet-c' })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+                ], [
+                    storedRow({ payment_method_id: 'pm-bkash', account_id: 'acc-wallet-a' }),
+                    storedRow({ payment_method_id: 'pm-bkash', account_id: 'acc-wallet-b' }),
+                ]);
+
+                expect(tender.accountId).toBe('acc-wallet-a');
+            });
+
+            it('round-trips stored rows through storedToTenderInputs with their saved account and name', async () => {
+                const client = methodsDb([
+                    method({ id: 'pm-bkash', name: 'Wallet One', account_id: 'acc-wallet-b' }),
+                    method({ id: 'pm-cash', name: 'Cash', account_id: 'acc-cash-new', all_branches: false, stores: [{ store_id: 's2' }] }),
+                ]);
+                const rows: StoredTender[] = [
+                    { payment_method: 'CASH', payment_method_id: 'pm-cash', payment_method_name: 'Cash Counter', account_id: 'acc-cash', amount: new Prisma.Decimal(1000) },
+                    { payment_method: 'Mobile Wallet', payment_method_id: 'pm-bkash', payment_method_name: 'bKash', account_id: 'acc-wallet-a', amount: new Prisma.Decimal(100) },
+                ];
+
+                const tenders = await resolveTenders(client as any, 't1', 's1', storedToTenderInputs(rows), rows);
+
+                expect(tenders).toEqual([
+                    { paymentMethod: 'CASH', methodId: 'pm-cash', methodName: 'Cash Counter', accountId: 'acc-cash', mode: 'cash', amount: 1000 },
+                    { paymentMethod: 'Mobile Wallet', methodId: 'pm-bkash', methodName: 'bKash', accountId: 'acc-wallet-a', mode: 'bkash', amount: 100 },
+                ]);
+            });
+        });
+
         it("matches POS's BKASH by name at the branch before tenant-wide", async () => {
             // Names are unique per tenant only case-sensitively, so "BKASH" (an
             // exact match, but limited to another branch) can sit beside "bKash".
