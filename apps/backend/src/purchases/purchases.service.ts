@@ -6,7 +6,7 @@ import { createdAtRange } from '../common/created-range.util';
 import { zonedDayRange } from '../common/tenant-time.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
-import { CreatePurchaseDto, PurchaseBillDto, UpdatePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, CreatePurchasePaymentDto, PurchaseBillDto, UpdatePurchaseDto } from './purchase.dto';
 import { applyInventoryMovement, resolveEntryWarehouses } from '../database/inventory.utils';
 import { costBehaviourFor } from '../database/product-cost.utils';
 import { allocateLandedCost } from '../database/landed-cost.utils';
@@ -14,7 +14,7 @@ import { autoPostFromRules, postingIdempotencyKey, voidAutoPostedVoucher } from 
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolveInlineSupplier } from '../suppliers/resolve-inline-supplier.util';
 import { nextSupplierPaymentNumber } from '../suppliers/supplier-payment-number.util';
-import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
+import { allocateTenders, resolveTenders, sameTenders, storedToTenderInputs, type ResolvedTender } from '../accounting/payment-account.util';
 import { paymentInstrumentData } from '../common/payment-instrument.util';
 import { purchasePaymentStatus } from './purchase-status';
 import { loadPreparerNames, preparerOf } from '../sales/sale-preparer.util';
@@ -28,6 +28,30 @@ const PURCHASE_SORTABLE: SortableMap = {
 const PURCHASE_DEFAULT_ORDER = { created_at: 'desc' as const };
 
 const EPSILON = 0.005;
+
+/** What the supplier's statement calls a tender: the method's own name. */
+const tenderLabel = (tender: ResolvedTender) => tender.methodName ?? tender.paymentMethod;
+
+/**
+ * One row of a `PurchasePayment` as the tender it stands for. The method id,
+ * name and account are the server's resolution (`resolveTenders`), never the
+ * client's `accountId`.
+ */
+function purchasePaymentData(
+    purchaseId: string,
+    payment: CreatePurchasePaymentDto,
+    tender: ResolvedTender,
+) {
+    return {
+        purchase_id: purchaseId,
+        payment_method: payment.paymentMethod,
+        payment_method_id: tender.methodId,
+        payment_method_name: tender.methodName,
+        account_id: tender.accountId,
+        amount: payment.amount,
+        ...paymentInstrumentData(payment),
+    };
+}
 
 /** What an allocation against a bill is read with, to tell the entry's own payment from later ones. */
 const ALLOCATION_SELECT = {
@@ -196,6 +220,9 @@ export class PurchasesService {
                 dto.items.map((item) => item.warehouseId),
                 'purchase',
             );
+            // Each tender's method, name and linked account, checked against
+            // the bill's own branch before anything is written.
+            const tenders = await resolveTenders(tx, tenantId, dto.storeId, payments);
             let supplierId = dto.supplierId;
 
             if (dto.newSupplier) {
@@ -300,12 +327,7 @@ export class PurchasesService {
             // record of what went out.
             if (payments.length > 0) {
                 await tx.purchasePayment.createMany({
-                    data: payments.map((payment) => ({
-                        purchase_id: purchase.id,
-                        payment_method: payment.paymentMethod,
-                        amount: payment.amount,
-                        ...paymentInstrumentData(payment),
-                    })),
+                    data: payments.map((payment, index) => purchasePaymentData(purchase.id, payment, tenders[index])),
                 });
             }
 
@@ -357,7 +379,7 @@ export class PurchasesService {
                             reference_type: 'PURCHASE',
                             reference_id: purchase.id,
                             payment_number: await nextSupplierPaymentNumber(tenantId, tx, 'PAYMENT'),
-                            notes: `Paid on purchase ${purchase.purchase_number} (${payments.map((p) => p.paymentMethod).join(', ')})`,
+                            notes: `Paid on purchase ${purchase.purchase_number} (${tenders.map(tenderLabel).join(', ')})`,
                             created_by: userId,
                             created_at: purchaseDate,
                         },
@@ -400,7 +422,7 @@ export class PurchasesService {
                     amount: paidAmount,
                     storeId: dto.storeId,
                     supplierId,
-                    paymentMethod: payments[0].paymentMethod,
+                    tenders,
                     date: purchaseDate,
                 });
             }
@@ -508,20 +530,16 @@ export class PurchasesService {
      * vouchers cannot overwrite each other and the purchase stays the primary
      * posting event for status reads.
      *
-     * The mode account is the CREDIT leg here (money going out), the mirror of
-     * the sale's paid leg, so a tenant-configured PaymentMethod account
-     * overrides that side.
-     *
-     * One voucher for the whole tender, keyed on the first method, the same
-     * simplification the sale screen makes: split a bill across cash and bKash
-     * and the cash account carries both. Splitting the leg per method is a
-     * change to the rules engine, not to this caller, so it is not smuggled in
-     * here.
+     * The cash side is one credit line per tender account (`tenderLegs`,
+     * money going out, the mirror of a sale's paid leg), so a bill paid half by
+     * cash and half by bKash credits Cash in Hand and bKash Account by what
+     * each carried. A tender whose method has no linked account falls back to
+     * the supplier_payment rule's own Cash in Hand.
      */
     private async postPaidVoucher(
         tx: Prisma.TransactionClient,
         tenantId: string,
-        paid: { purchaseId: string; purchaseNumber: string; amount: number; storeId: string; supplierId?: string | null; paymentMethod: string; date?: Date },
+        paid: { purchaseId: string; purchaseNumber: string; amount: number; storeId: string; supplierId?: string | null; tenders: ResolvedTender[]; date?: Date },
     ) {
         return autoPostFromRules({
             tx,
@@ -539,7 +557,7 @@ export class PurchasesService {
             storeId: paid.storeId,
             partyType: 'SUPPLIER',
             partyId: paid.supplierId ?? undefined,
-            overrideCreditAccountId: await resolvePaymentMethodAccountId(tx, tenantId, paid.paymentMethod),
+            tenderLegs: { side: 'credit', lines: allocateTenders(paid.tenders, paid.amount).lines },
             ...(paid.date ? { date: paid.date } : {}),
         });
     }
@@ -887,13 +905,21 @@ export class PurchasesService {
             // The tender the screen showed. An imported bill has no tender rows,
             // and its paid-with-the-goods went out as cash.
             const oldTender = purchase.payments.length > 0
-                ? purchase.payments.map((payment) => ({ method: payment.payment_method, amount: Number(payment.amount) }))
-                : oldEntryPaid > EPSILON ? [{ method: 'Cash', amount: oldEntryPaid }] : [];
+                ? storedToTenderInputs(purchase.payments)
+                : oldEntryPaid > EPSILON ? [{ paymentMethod: 'Cash', amount: oldEntryPaid }] : [];
             const oldTenderPaid = oldTender.reduce((sum, payment) => sum + payment.amount, 0);
             const newPaid = bill.paidAmount;
-            const sameMethod = (a?: string, b?: string) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+            // The tenders, resolved against the bill's own branch before
+            // anything is written. One the bill already carries keeps its
+            // method and the account it was saved with, wherever the method
+            // has moved since; a new one must be offered at the branch. The
+            // old ones are resolved too, so the two sides are compared method
+            // for method — a row saved before methods were linked carries no
+            // id and must not look changed.
+            const oldTenders = await resolveTenders(tx, tenantId, purchase.store_id, oldTender, purchase.payments);
+            const tenders = await resolveTenders(tx, tenantId, purchase.store_id, bill.payments, purchase.payments);
             const paymentChanged = Math.abs(newPaid - oldTenderPaid) > EPSILON
-                || (newPaid > EPSILON && !sameMethod(bill.payments[0]?.paymentMethod, oldTender[0]?.method));
+                || (newPaid > EPSILON && !sameTenders(tenders, oldTenders));
 
             let supplierId: string | null = dto.supplierId ?? null;
             if (dto.newSupplier) {
@@ -1002,12 +1028,7 @@ export class PurchasesService {
             await tx.purchasePayment.deleteMany({ where: { purchase_id: id } });
             if (bill.payments.length > 0) {
                 await tx.purchasePayment.createMany({
-                    data: bill.payments.map((payment) => ({
-                        purchase_id: id,
-                        payment_method: payment.paymentMethod,
-                        amount: payment.amount,
-                        ...paymentInstrumentData(payment),
-                    })),
+                    data: bill.payments.map((payment, index) => purchasePaymentData(id, payment, tenders[index])),
                 });
             }
 
@@ -1049,7 +1070,7 @@ export class PurchasesService {
                     },
                 });
             };
-            const paidNote = `Paid on purchase ${purchaseNumber} (${bill.payments.map((p) => p.paymentMethod).join(', ')})`;
+            const paidNote = `Paid on purchase ${purchaseNumber} (${tenders.map(tenderLabel).join(', ')})`;
             const recordEntryPayment = async (onSupplierId: string) => {
                 const payment = await writeRow(onSupplierId, {
                     type: 'PAYMENT',
@@ -1162,7 +1183,7 @@ export class PurchasesService {
                         amount: newPaid,
                         storeId: purchase.store_id,
                         supplierId,
-                        paymentMethod: bill.payments[0].paymentMethod,
+                        tenders,
                         date,
                     });
                 }
