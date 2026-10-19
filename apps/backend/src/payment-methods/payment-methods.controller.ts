@@ -22,6 +22,7 @@ import {
   PaymentMethodType,
 } from './payment-methods.dto';
 import { ImportRowsDto } from '../common/import.dto';
+import { BranchScopeService } from '../database/branch-scope.service';
 
 import { StorePermissionGuard } from '../auth/store-permission.guard';
 import { RequireAnyStorePermission } from '../auth/store-permission.decorator';
@@ -30,7 +31,10 @@ import { PAYMENT_ACCOUNTS_READ, SETTINGS_ADMIN, TENDER_READ } from '../auth/perm
 @UseGuards(JwtAuthGuard, StorePermissionGuard)
 @UseInterceptors(TenantInterceptor)
 export class PaymentMethodsController {
-  constructor(private readonly paymentMethodsService: PaymentMethodsService) {}
+  constructor(
+    private readonly paymentMethodsService: PaymentMethodsService,
+    private readonly branchScope: BranchScopeService,
+  ) {}
 
   @RequireAnyStorePermission(...SETTINGS_ADMIN)
   @Post()
@@ -52,8 +56,19 @@ export class PaymentMethodsController {
   async findAll(
     @Tenant() tenant: TenantContext,
     @Query('type') type?: PaymentMethodType,
+    @Query('storeId') storeId?: string,
   ): Promise<PaymentMethodResponseDto[]> {
-    return this.paymentMethodsService.findAll(tenant.tenantId, type);
+    let storeIds: string[] | undefined;
+    if (storeId?.trim()) {
+      // A branch id, or `all`: both go through the shared access check.
+      const resolved = await this.branchScope.resolveStoreId(tenant, storeId, { permissions: TENDER_READ });
+      storeIds = resolved ? [resolved] : undefined;
+    } else if (!(await this.branchScope.canSeeAllBranches(tenant))) {
+      // Old clients send no branch. Owners and consolidated holders keep getting
+      // every method; everyone else only what is offered at one of their branches.
+      storeIds = await this.branchScope.memberStoreIds(tenant);
+    }
+    return this.paymentMethodsService.findAll(tenant.tenantId, { type, storeIds });
   }
 
   // Must stay above @Get(':id'), which would otherwise swallow 'accounts'.

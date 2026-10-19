@@ -8,6 +8,10 @@ import {
   PaymentMethodType,
 } from './payment-methods.dto';
 import { runImport, ImportResult } from '../common/import.util';
+import { availableAt } from './payment-method-branches';
+
+/** Loaded with every method so responses can say which branches it is limited to. */
+const WITH_STORES = { stores: { select: { store_id: true } } } as const;
 
 @Injectable()
 export class PaymentMethodsService {
@@ -40,27 +44,51 @@ export class PaymentMethodsService {
       }
     }
 
-    const paymentMethod = await this.db.paymentMethod.create({
-      data: {
-        tenant_id: tenantId,
-        type: dto.type,
-        name: dto.name,
-        account_id: dto.account_id || null,
-        is_active: dto.is_active ?? true,
-        sort_order: dto.sort_order ?? 0,
-        show_on_entry: dto.show_on_entry ?? true,
-      },
+    const allBranches = dto.all_branches ?? true;
+    const storeIds = allBranches ? [] : await this.validatedStoreIds(tenantId, dto.store_ids);
+
+    // The join rows go in with the method: a limited method must never exist
+    // for a moment without its branches.
+    const paymentMethod = await this.db.$transaction(async (tx) => {
+      const created = await tx.paymentMethod.create({
+        data: {
+          tenant_id: tenantId,
+          type: dto.type,
+          name: dto.name,
+          account_id: dto.account_id || null,
+          is_active: dto.is_active ?? true,
+          sort_order: dto.sort_order ?? 0,
+          show_on_entry: dto.show_on_entry ?? true,
+          all_branches: allBranches,
+        },
+      });
+      if (storeIds.length) {
+        await tx.paymentMethodStore.createMany({
+          data: storeIds.map((store_id) => ({ tenant_id: tenantId, payment_method_id: created.id, store_id })),
+        });
+      }
+      return created;
     });
 
-    return this.mapToResponse(paymentMethod);
+    return this.mapToResponse({ ...paymentMethod, all_branches: allBranches, stores: storeIds.map((store_id) => ({ store_id })) });
   }
 
-  async findAll(tenantId: string, type?: PaymentMethodType): Promise<PaymentMethodResponseDto[]> {
+  /**
+   * `storeIds` undefined lists every method, active or not (the settings page);
+   * given, only the methods available at one of those branches.
+   */
+  async findAll(
+    tenantId: string,
+    opts: { type?: PaymentMethodType; storeIds?: string[] } = {},
+  ): Promise<PaymentMethodResponseDto[]> {
+    const { type, storeIds } = opts;
     const paymentMethods = await this.db.paymentMethod.findMany({
       where: {
         tenant_id: tenantId,
         ...(type && { type }),
+        ...(storeIds && availableAt(storeIds)),
       },
+      include: WITH_STORES,
       orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
     });
 
@@ -116,6 +144,7 @@ export class PaymentMethodsService {
         id,
         tenant_id: tenantId,
       },
+      include: WITH_STORES,
     });
 
     if (!paymentMethod) {
@@ -135,6 +164,7 @@ export class PaymentMethodsService {
         id,
         tenant_id: tenantId,
       },
+      include: WITH_STORES,
     });
 
     if (!paymentMethod) {
@@ -172,19 +202,48 @@ export class PaymentMethodsService {
     const nextAccountId =
       dto.account_id === undefined ? paymentMethod.account_id : dto.account_id || null;
 
-    const updated = await this.db.paymentMethod.update({
-      where: { id },
-      data: {
-        type: dto.type,
-        name: dto.name,
-        account_id: nextAccountId,
-        is_active: dto.is_active ?? paymentMethod.is_active,
-        sort_order: dto.sort_order ?? paymentMethod.sort_order,
-        show_on_entry: dto.show_on_entry ?? paymentMethod.show_on_entry,
-      },
+    // Omitted all_branches / store_ids leave the stored values alone. A method
+    // that ends up for all branches carries no join rows.
+    const nextAllBranches = dto.all_branches ?? paymentMethod.all_branches;
+    const currentStoreIds: string[] = paymentMethod.stores.map((row: { store_id: string }) => row.store_id);
+    const replaceRows = nextAllBranches ? currentStoreIds.length > 0 : dto.store_ids !== undefined;
+    let nextStoreIds: string[];
+    if (nextAllBranches) {
+      nextStoreIds = [];
+    } else if (dto.store_ids !== undefined) {
+      nextStoreIds = await this.validatedStoreIds(tenantId, dto.store_ids);
+    } else {
+      nextStoreIds = currentStoreIds;
+      if (!nextStoreIds.length) {
+        throw new BadRequestException('Pick at least one branch, or offer the payment method at all branches');
+      }
+    }
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const row = await tx.paymentMethod.update({
+        where: { id },
+        data: {
+          type: dto.type,
+          name: dto.name,
+          account_id: nextAccountId,
+          is_active: dto.is_active ?? paymentMethod.is_active,
+          sort_order: dto.sort_order ?? paymentMethod.sort_order,
+          show_on_entry: dto.show_on_entry ?? paymentMethod.show_on_entry,
+          all_branches: nextAllBranches,
+        },
+      });
+      if (replaceRows) {
+        await tx.paymentMethodStore.deleteMany({ where: { payment_method_id: id } });
+        if (nextStoreIds.length) {
+          await tx.paymentMethodStore.createMany({
+            data: nextStoreIds.map((store_id) => ({ tenant_id: tenantId, payment_method_id: id, store_id })),
+          });
+        }
+      }
+      return row;
     });
 
-    return this.mapToResponse(updated);
+    return this.mapToResponse({ ...updated, all_branches: nextAllBranches, stores: nextStoreIds.map((store_id) => ({ store_id })) });
   }
 
   async delete(id: string, tenantId: string): Promise<void> {
@@ -246,12 +305,33 @@ export class PaymentMethodsService {
         type,
         is_active: true,
       },
+      include: WITH_STORES,
       orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
     });
 
     return paymentMethod ? this.mapToResponse(paymentMethod) : null;
   }
 
+  /**
+   * Branch ids for a limited method: at least one, each the tenant's own (one
+   * lookup for all of them), duplicates collapsed.
+   */
+  private async validatedStoreIds(tenantId: string, storeIds: string[] | undefined): Promise<string[]> {
+    const ids = [...new Set(storeIds ?? [])];
+    if (!ids.length) {
+      throw new BadRequestException('Pick at least one branch, or offer the payment method at all branches');
+    }
+    const stores = await this.db.store.findMany({
+      where: { tenant_id: tenantId, id: { in: ids } },
+      select: { id: true },
+    });
+    if (stores.length !== ids.length) {
+      throw new BadRequestException('One or more branches do not belong to this tenant');
+    }
+    return ids;
+  }
+
+  /** `store_ids` reads `[]` for a row that was not loaded with its branches. */
   private mapToResponse(pm: any): PaymentMethodResponseDto {
     return {
       id: pm.id,
@@ -262,6 +342,8 @@ export class PaymentMethodsService {
       is_active: pm.is_active,
       sort_order: pm.sort_order,
       show_on_entry: pm.show_on_entry,
+      all_branches: pm.all_branches,
+      store_ids: (pm.stores ?? []).map((row: { store_id: string }) => row.store_id),
       created_at: pm.created_at,
       updated_at: pm.updated_at,
     };

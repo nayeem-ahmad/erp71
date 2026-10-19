@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsInt, IsEnum, IsArray } from 'class-validator';
 import { PaymentMethodType } from '@erp71/shared-types';
 
 // Re-exported so existing importers (controller, specs) keep working. The
@@ -30,6 +30,17 @@ export class CreatePaymentMethodDto {
   @IsOptional()
   @IsBoolean()
   show_on_entry?: boolean;
+
+  /** Offered at every branch (the default). When false, only at `store_ids`. */
+  @IsOptional()
+  @IsBoolean()
+  all_branches?: boolean;
+
+  /** The branches a limited method is offered at; ignored when all_branches is true. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  store_ids?: string[];
 }
 
 export class UpdatePaymentMethodDto {
@@ -56,6 +67,17 @@ export class UpdatePaymentMethodDto {
   @IsOptional()
   @IsBoolean()
   show_on_entry?: boolean;
+
+  /** Offered at every branch (the default). When false, only at `store_ids`. */
+  @IsOptional()
+  @IsBoolean()
+  all_branches?: boolean;
+
+  /** The branches a limited method is offered at; ignored when all_branches is true. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  store_ids?: string[];
 }
 
 export class PaymentMethodResponseDto {
@@ -67,6 +89,10 @@ export class PaymentMethodResponseDto {
   is_active: boolean;
   sort_order: number;
   show_on_entry: boolean;
+  /** Offered at every branch; when false, only at `store_ids`. */
+  all_branches: boolean;
+  /** The branches a limited method is offered at; empty when all_branches. */
+  store_ids: string[];
   created_at: Date;
   updated_at: Date;
   /** The linked ledger account; only the list endpoint fills it in. */
