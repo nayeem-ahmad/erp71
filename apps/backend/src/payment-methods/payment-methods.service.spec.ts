@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentMethodsService } from './payment-methods.service';
 import { DatabaseService } from '../database/database.service';
 import { PaymentMethodType } from './payment-methods.dto';
-import { availableAt } from './payment-method-branches';
+import { offeredAt } from './payment-method-branches';
 import { BadRequestException } from '@nestjs/common';
 
 describe('PaymentMethodsService', () => {
@@ -262,12 +262,11 @@ describe('PaymentMethodsService', () => {
       expect(updateMock).not.toHaveBeenCalled();
     });
 
-    it('findAll with storeIds filters to methods available there', async () => {
+    it('findAll with storeIds filters by branch only, so inactive methods stay listed', async () => {
       await service.findAll(tenantId, { storeIds: ['s1'] });
-      expect(db.paymentMethod.findMany.mock.calls[0][0].where).toEqual({
-        tenant_id: tenantId,
-        ...availableAt(['s1']),
-      });
+      const where = db.paymentMethod.findMany.mock.calls[0][0].where;
+      expect(where).toEqual({ tenant_id: tenantId, ...offeredAt(['s1']) });
+      expect(where).not.toHaveProperty('is_active');
     });
 
     it('findAll without storeIds returns every method, with its branches', async () => {

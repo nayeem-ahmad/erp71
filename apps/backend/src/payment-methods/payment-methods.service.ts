@@ -8,7 +8,7 @@ import {
   PaymentMethodType,
 } from './payment-methods.dto';
 import { runImport, ImportResult } from '../common/import.util';
-import { availableAt } from './payment-method-branches';
+import { offeredAt } from './payment-method-branches';
 
 /** Loaded with every method so responses can say which branches it is limited to. */
 const WITH_STORES = { stores: { select: { store_id: true } } } as const;
@@ -74,8 +74,10 @@ export class PaymentMethodsService {
   }
 
   /**
-   * `storeIds` undefined lists every method, active or not (the settings page);
-   * given, only the methods available at one of those branches.
+   * Filters by branch only, never by `is_active`: the settings page must see
+   * inactive methods to reactivate them, and old saved payments match against
+   * them. `storeIds` undefined lists every method; given, only the methods
+   * offered at one of those branches.
    */
   async findAll(
     tenantId: string,
@@ -86,7 +88,7 @@ export class PaymentMethodsService {
       where: {
         tenant_id: tenantId,
         ...(type && { type }),
-        ...(storeIds && availableAt(storeIds)),
+        ...(storeIds && offeredAt(storeIds)),
       },
       include: WITH_STORES,
       orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],

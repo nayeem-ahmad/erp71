@@ -1,4 +1,20 @@
-import { availableAt, isAvailableAt } from './payment-method-branches';
+import { availableAt, isAvailableAt, offeredAt, isOfferedAt } from './payment-method-branches';
+
+describe('offeredAt', () => {
+  it('is all branches or a join row at one of the ids, with no is_active', () => {
+    expect(offeredAt(['s1', 's2'])).toEqual({
+      OR: [{ all_branches: true }, { stores: { some: { store_id: { in: ['s1', 's2'] } } } }],
+    });
+  });
+});
+
+describe('isOfferedAt', () => {
+  it('includes an inactive method offered at the branch and excludes one limited to another', () => {
+    expect(isOfferedAt({ all_branches: false, stores: [{ store_id: 's1' }] }, 's1')).toBe(true);
+    expect(isOfferedAt({ all_branches: false, stores: [{ store_id: 's2' }] }, 's1')).toBe(false);
+    expect(isOfferedAt({ all_branches: true, stores: [] }, 's1')).toBe(true);
+  });
+});
 
 describe('availableAt', () => {
   it('is active and (all branches or a join row at one of the ids)', () => {
