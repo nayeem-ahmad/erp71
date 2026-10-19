@@ -77,6 +77,24 @@ describe('printSaleInvoice', () => {
         expect(fromCart.payments[0]).toMatchObject({ method: 'CASH', amount: 3000 });
     });
 
+    it('prints the saved method name, not the type it shares', async () => {
+        await printSaleInvoice(
+            {
+                ...listShapedSale,
+                payments: [
+                    { payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: '2000' },
+                    { payment_method: 'Mobile Wallet', payment_method_name: null, amount: '1000' },
+                ],
+            },
+            'A4',
+            ctx,
+            true,
+        );
+        const data = (printSalesInvoice as jest.Mock).mock.calls[0][0];
+
+        expect(data.payments.map((p: { method: string }) => p.method)).toEqual(['bKash', 'Mobile Wallet']);
+    });
+
     it('prints at the size it is given', async () => {
         await printSaleInvoice(listShapedSale, 'Thermal80', ctx, true);
         expect(printSalesInvoice).toHaveBeenCalledWith(

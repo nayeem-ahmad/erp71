@@ -65,6 +65,24 @@ describe('printPurchaseInvoiceFromRecord', () => {
         expect(data.payments[0].reference).toContain('CHQ-1');
     });
 
+    it('prints the saved method name, not the type it shares', () => {
+        printPurchaseInvoiceFromRecord(
+            {
+                ...purchase,
+                payments: [
+                    { payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: '10' },
+                    { payment_method: 'Mobile Wallet', payment_method_name: null, amount: '10' },
+                ],
+            },
+            'A4',
+            ctx,
+            true,
+        );
+        const data = (printPurchaseInvoice as jest.Mock).mock.calls[0][0];
+
+        expect(data.payments.map((p: { method: string }) => p.method)).toEqual(['bKash', 'Mobile Wallet']);
+    });
+
     it('prints at the size it is given', () => {
         printPurchaseInvoiceFromRecord(purchase, 'Thermal80', ctx, true);
         expect(printPurchaseInvoice).toHaveBeenCalledWith(
