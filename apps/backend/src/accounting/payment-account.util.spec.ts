@@ -24,6 +24,7 @@ interface MethodRow {
     all_branches: boolean;
     stores: { store_id: string }[];
     sort_order: number;
+    type: string;
 }
 
 const method = (row: Partial<MethodRow> & Pick<MethodRow, 'id' | 'name'>): MethodRow => ({
@@ -33,13 +34,14 @@ const method = (row: Partial<MethodRow> & Pick<MethodRow, 'id' | 'name'>): Metho
     all_branches: true,
     stores: [],
     sort_order: 0,
+    type: 'Mobile Wallet',
     ...row,
 });
 
 /**
  * A paymentMethod.findMany that answers the way Postgres would for the
  * filters the resolver uses: tenant, `id: { in }`, `is_active`, and an OR of
- * case-insensitive name matches. Anything else in `where` fails the test, so
+ * case-insensitive name matches and exact `type` matches. Anything else in `where` fails the test, so
  * a change of query shape is noticed rather than silently matching all rows.
  */
 function methodsDb(rows: MethodRow[]) {
@@ -52,8 +54,9 @@ function methodsDb(rows: MethodRow[]) {
             if (row.tenant_id !== where.tenant_id) return false;
             if (where.id?.in && !where.id.in.includes(row.id)) return false;
             if (where.is_active !== undefined && row.is_active !== where.is_active) return false;
-            if (where.OR && !where.OR.some((c: any) => c.name.mode === 'insensitive'
-                && c.name.equals.toLowerCase() === row.name.toLowerCase())) return false;
+            if (where.OR && !where.OR.some((c: any) => (c.name
+                ? c.name.mode === 'insensitive' && c.name.equals.toLowerCase() === row.name.toLowerCase()
+                : c.type === row.type))) return false;
             return true;
         });
         return orderBy ? [...matched].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)) : matched;
@@ -265,6 +268,142 @@ describe('payment-account.util', () => {
                     { paymentMethod: 'CASH', methodId: 'pm-cash', methodName: 'Cash Counter', accountId: 'acc-cash', mode: 'cash', amount: 1000 },
                     { paymentMethod: 'Mobile Wallet', methodId: 'pm-bkash', methodName: 'bKash', accountId: 'acc-wallet-a', mode: 'bkash', amount: 100 },
                 ]);
+            });
+        });
+
+        describe('a legacy stored row (no method id) keeps the method it names editable', () => {
+            const legacyRow = (row: Partial<StoredTender> & Pick<StoredTender, 'payment_method'>): StoredTender => ({
+                payment_method_id: null,
+                payment_method_name: null,
+                account_id: 'acc-old',
+                amount: new Prisma.Decimal(100),
+                ...row,
+            });
+            const limited = { all_branches: false, stores: [{ store_id: 's2' }] };
+
+            it('a legacy stored row (no method id) exempts the method it names from the branch check', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash', ...limited })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 100 },
+                ], [legacyRow({ payment_method: 'bKash' })]);
+
+                // The method's current link, not the client-sent legacy account.
+                expect(tender).toMatchObject({ methodId: 'pm-bkash', methodName: 'bKash', accountId: 'acc-bkash', mode: 'bkash' });
+            });
+
+            it("a legacy POS row 'BKASH' exempts the bKash method", async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash', ...limited })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'BKASH', paymentMethodId: 'pm-bkash', amount: 100 },
+                ], [legacyRow({ payment_method: 'BKASH' })]);
+
+                expect(tender).toMatchObject({ methodId: 'pm-bkash', accountId: 'acc-bkash' });
+            });
+
+            it("a legacy POS row 'NAGAD' exempts the Nagad method", async () => {
+                const client = methodsDb([method({ id: 'pm-nagad', name: 'Nagad', account_id: 'acc-nagad', ...limited })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'NAGAD', paymentMethodId: 'pm-nagad', amount: 100 },
+                ], [legacyRow({ payment_method: 'NAGAD' })]);
+
+                expect(tender).toMatchObject({ methodId: 'pm-nagad', accountId: 'acc-nagad' });
+            });
+
+            it("a legacy POS row 'CASH' exempts the lowest-sorted method of type Cash", async () => {
+                const client = methodsDb([
+                    method({ id: 'pm-till-2', name: 'Till 2', type: 'Cash', sort_order: 2, account_id: 'acc-till-2', ...limited }),
+                    method({ id: 'pm-till-1', name: 'Till 1', type: 'Cash', sort_order: 1, account_id: 'acc-till-1', ...limited }),
+                ]);
+                const stored = [legacyRow({ payment_method: 'CASH' })];
+
+                const [first] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'CASH', paymentMethodId: 'pm-till-1', amount: 100 },
+                ], stored);
+                expect(first).toMatchObject({ methodId: 'pm-till-1', accountId: 'acc-till-1' });
+
+                // The legacy row answers for the lowest-sorted Cash method only.
+                await expect(resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'CASH', paymentMethodId: 'pm-till-2', amount: 100 },
+                ], stored)).rejects.toThrow(BRANCH_REFUSAL);
+            });
+
+            it('a legacy row keeps its saved name, and the match ignores case', async () => {
+                const client = methodsDb([method({ id: 'pm-wallet', name: 'Wallet One', account_id: 'acc-w', ...limited })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-wallet', amount: 100 },
+                ], [legacyRow({ payment_method: 'Mobile Wallet', payment_method_name: 'WALLET one' })]);
+
+                expect(tender).toMatchObject({ methodId: 'pm-wallet', methodName: 'WALLET one', accountId: 'acc-w' });
+            });
+
+            it('a legacy row naming a switched-off method still exempts it', async () => {
+                const client = methodsDb([method({ id: 'pm-upay', name: 'Upay', account_id: 'acc-upay', is_active: false })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-upay', amount: 100 },
+                ], [legacyRow({ payment_method: 'Mobile Wallet', payment_method_name: 'Upay' })]);
+
+                expect(tender).toMatchObject({ methodId: 'pm-upay', accountId: 'acc-upay' });
+            });
+
+            it('a legacy row that matches no method exempts nothing', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash', ...limited })]);
+
+                const attempt = resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 100 },
+                ], [legacyRow({ payment_method: 'Rocket' })]);
+
+                await expect(attempt).rejects.toThrow(new BadRequestException(BRANCH_REFUSAL));
+            });
+
+            it('a row with a method id keeps its stored account even beside a legacy row for the same method', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-new', ...limited })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 100 },
+                ], [
+                    legacyRow({ payment_method: 'bKash' }),
+                    legacyRow({ payment_method: 'Mobile Wallet', payment_method_id: 'pm-bkash', payment_method_name: 'bKash', account_id: 'acc-saved' }),
+                ]);
+
+                expect(tender).toMatchObject({ accountId: 'acc-saved' });
+            });
+
+            it('no extra query when no stored row is legacy', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' })]);
+
+                await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 100 },
+                ], [{
+                    payment_method: 'Mobile Wallet', payment_method_id: 'pm-bkash', payment_method_name: 'bKash',
+                    account_id: 'acc-bkash', amount: new Prisma.Decimal(100),
+                }]);
+
+                expect(client.paymentMethod.findMany).toHaveBeenCalledTimes(1);
+            });
+
+            it('looks every legacy name up in one extra query', async () => {
+                const client = methodsDb([
+                    method({ id: 'pm-bkash', name: 'bKash', ...limited }),
+                    method({ id: 'pm-nagad', name: 'Nagad', ...limited }),
+                    method({ id: 'pm-till', name: 'Till', type: 'Cash', ...limited }),
+                ]);
+
+                await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'BKASH', paymentMethodId: 'pm-bkash', amount: 1 },
+                    { paymentMethod: 'NAGAD', paymentMethodId: 'pm-nagad', amount: 1 },
+                    { paymentMethod: 'CASH', paymentMethodId: 'pm-till', amount: 1 },
+                ], [
+                    legacyRow({ payment_method: 'BKASH' }),
+                    legacyRow({ payment_method: 'NAGAD' }),
+                    legacyRow({ payment_method: 'CASH' }),
+                ]);
+
+                expect(client.paymentMethod.findMany).toHaveBeenCalledTimes(2);
             });
         });
 

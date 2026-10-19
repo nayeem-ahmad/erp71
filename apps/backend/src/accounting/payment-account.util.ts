@@ -102,8 +102,14 @@ export interface TenderInput {
 
 /**
  * A tender row the document already carries (PaymentRecord and its siblings).
- * Passed to `resolveTenders` as `stored`, its `account_id` and
- * `payment_method_name` are what a kept tender reposts with on an edit.
+ * Passed to `resolveTenders` as `stored`.
+ *
+ * - With a `payment_method_id`, its `account_id` and `payment_method_name` are
+ *   what a kept tender reposts with on an edit.
+ * - Without one (a row written before payment methods were linked), the row
+ *   names its method only by `payment_method_name ?? payment_method`; see
+ *   `resolveTenders` for how that name is matched. Its `account_id` was
+ *   client-sent and never posted, so it is ignored.
  */
 export interface StoredTender {
     payment_method: string;
@@ -139,6 +145,17 @@ const TENDER_METHOD_SELECT = {
 
 type TenderMethod = Prisma.PaymentMethodGetPayload<{ select: typeof TENDER_METHOD_SELECT }>;
 
+const LEGACY_METHOD_SELECT = {
+    ...TENDER_METHOD_SELECT,
+    type: true,
+} satisfies Prisma.PaymentMethodSelect;
+
+type LegacyMethod = Prisma.PaymentMethodGetPayload<{ select: typeof LEGACY_METHOD_SELECT }>;
+
+/** The legacy canonical keys that name a method by something other than its own name. */
+const LEGACY_KEY_NAMES: Record<string, string> = { BKASH: 'bKash', NAGAD: 'Nagad' };
+const LEGACY_CASH_KEY = 'CASH';
+
 /**
  * Turns submitted tenders into method, name, linked account and posting mode,
  * enforcing the branch rule (spec §4). Returns one result per tender, in order.
@@ -146,21 +163,32 @@ type TenderMethod = Prisma.PaymentMethodGetPayload<{ select: typeof TENDER_METHO
  * - **With an id:** the tenant's method, or 400. A new tender must be on a
  *   method available at `storeId` and takes the method's current name and
  *   linked account.
- * - **A tender the document already carries** (its id is among `stored`) keeps
- *   its method even after the method moved branch or was switched off, so
- *   editing an old sale never forces a different tender. It also keeps what it
- *   was saved with: the stored row's `account_id` (null stays null, so a
- *   deleted account falls back to the rule's) and its `payment_method_name`,
- *   else the method's name. Relinking or renaming a method changes new tenders,
- *   never what an edit reposts for an old one. With several stored rows on one
- *   method, the first answers.
+ * - **A tender the document already carries** is exempt from the branch and
+ *   `is_active` check, so editing an old sale never forces a different tender.
+ *   Two kinds of stored row carry a method:
+ *   - A row with a `payment_method_id` keeps what it was saved with: its
+ *     `account_id` (null stays null, so a deleted account falls back to the
+ *     rule's) and its `payment_method_name`, else the method's name. Relinking
+ *     or renaming a method changes new tenders, never what an edit reposts for
+ *     an old one. With several stored rows on one method, the first answers.
+ *   - A legacy row (`payment_method_id` null) carries the method it names:
+ *     `payment_method_name ?? payment_method` equal, ignoring case, to a method
+ *     name of the tenant — at any branch, active or not — with the canonical
+ *     keys `CASH` (the tenant's lowest-`sort_order` method of type Cash),
+ *     `BKASH` (bKash) and `NAGAD` (Nagad) mapped as the frontend does. No match,
+ *     no exemption. It takes the method's current `account_id` (the row's own
+ *     was client-sent and never posted) and the row's `payment_method_name`,
+ *     else the method's name. A row with a method id wins over a legacy row
+ *     for the same method.
  * - **Without an id** (POS, offline-queued sales, external sync, imports, the
  *   mobile app): a case-insensitive name match among the methods available at
  *   the branch — which is what lets POS's 'BKASH' reach the bKash method —
  *   then the old tenant-wide exact-name match. No match leaves the method
  *   fields null and the posting uses the rule for `mode`.
  *
- * At most two queries, whatever the number of tenders.
+ * At most two queries, whatever the number of tenders, plus one more for the
+ * legacy names, and only when a stored row is legacy and a tender names a
+ * method the document does not already carry by id.
  */
 export async function resolveTenders(
     db: Client,
@@ -199,6 +227,12 @@ export async function resolveTenders(
             storedById.set(row.payment_method_id, row);
         }
     }
+    // Legacy rows (no method id), matched by name to the methods they name. Only
+    // worth a query when a tender could use the answer.
+    const legacyRows = stored.filter((row) => !row.payment_method_id);
+    const legacyById = ids.some((id) => !storedById.has(id)) && legacyRows.length
+        ? await matchLegacyRows(db, tenantId, legacyRows)
+        : new Map<string, StoredTender>();
 
     return tenders.map((tender) => {
         let method: TenderMethod | undefined;
@@ -208,9 +242,13 @@ export async function resolveTenders(
             method = methodsById.get(tender.paymentMethodId);
             if (!method) throw new BadRequestException(PAYMENT_METHOD_MISSING);
             const kept = storedById.get(method.id);
+            const legacy = kept ? undefined : legacyById.get(method.id);
             if (kept) {
                 methodName = kept.payment_method_name ?? method.name;
                 accountId = kept.account_id;
+            } else if (legacy) {
+                methodName = legacy.payment_method_name ?? method.name;
+                accountId = method.account_id;
             } else {
                 if (!isAvailableAt(method, storeId)) throw new BadRequestException(PAYMENT_METHOD_NOT_AT_BRANCH);
                 methodName = method.name;
@@ -230,6 +268,53 @@ export async function resolveTenders(
             amount: tender.amount,
         };
     });
+}
+
+/**
+ * Which method each legacy stored row (no `payment_method_id`) names, keyed by
+ * method id; the first row that names a method answers for it. One query over
+ * the tenant's methods at any branch and `is_active` — a method limited to
+ * other branches or switched off since the sale was made still counts.
+ */
+async function matchLegacyRows(
+    db: Client,
+    tenantId: string,
+    rows: StoredTender[],
+): Promise<Map<string, StoredTender>> {
+    const keyOf = (row: StoredTender) => row.payment_method_name ?? row.payment_method;
+    const wantsCash = rows.some((row) => keyOf(row) === LEGACY_CASH_KEY);
+    const names = [...new Set(rows.flatMap((row) => {
+        const key = keyOf(row);
+        if (!key || key === LEGACY_CASH_KEY) return [];
+        return [LEGACY_KEY_NAMES[key] ?? key];
+    }))];
+    const clauses: Prisma.PaymentMethodWhereInput[] = names.map((name) => ({
+        name: { equals: name, mode: Prisma.QueryMode.insensitive },
+    }));
+    if (wantsCash) clauses.push({ type: 'Cash' });
+    if (!clauses.length) return new Map();
+
+    const methods: LegacyMethod[] = await db.paymentMethod.findMany({
+        where: { tenant_id: tenantId, OR: clauses },
+        select: LEGACY_METHOD_SELECT,
+        orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+    });
+
+    const matched = new Map<string, StoredTender>();
+    for (const row of rows) {
+        const key = keyOf(row);
+        if (!key) continue;
+        let method: LegacyMethod | undefined;
+        if (key === LEGACY_CASH_KEY) {
+            method = methods.find((m) => m.type === 'Cash');
+        } else {
+            const name = (LEGACY_KEY_NAMES[key] ?? key).toLowerCase();
+            const sameName = methods.filter((m) => m.name.toLowerCase() === name);
+            method = sameName.find((m) => m.name === (LEGACY_KEY_NAMES[key] ?? key)) ?? sameName[0];
+        }
+        if (method && !matched.has(method.id)) matched.set(method.id, row);
+    }
+    return matched;
 }
 
 /**
