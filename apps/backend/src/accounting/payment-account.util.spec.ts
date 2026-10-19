@@ -1,5 +1,74 @@
 import { BadRequestException } from '@nestjs/common';
-import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from './payment-account.util';
+import { Prisma } from '@prisma/client';
+import {
+    allocateTenders,
+    cashLegOverride,
+    resolveCreditPaymentMethod,
+    resolveTenders,
+    ResolvedTender,
+    sameTenders,
+    storedPaymentMethodAccountId,
+    storedToTenderInputs,
+    StoredTender,
+} from './payment-account.util';
+
+const BRANCH_REFUSAL = "That payment method isn't available at this branch.";
+const MISSING = 'That payment method does not exist or is switched off.';
+
+interface MethodRow {
+    id: string;
+    tenant_id: string;
+    name: string;
+    account_id: string | null;
+    is_active: boolean;
+    all_branches: boolean;
+    stores: { store_id: string }[];
+    sort_order: number;
+}
+
+const method = (row: Partial<MethodRow> & Pick<MethodRow, 'id' | 'name'>): MethodRow => ({
+    tenant_id: 't1',
+    account_id: null,
+    is_active: true,
+    all_branches: true,
+    stores: [],
+    sort_order: 0,
+    ...row,
+});
+
+/**
+ * A paymentMethod.findMany that answers the way Postgres would for the
+ * filters the resolver uses: tenant, `id: { in }`, `is_active`, and an OR of
+ * case-insensitive name matches. Anything else in `where` fails the test, so
+ * a change of query shape is noticed rather than silently matching all rows.
+ */
+function methodsDb(rows: MethodRow[]) {
+    const findMany = jest.fn().mockImplementation(async ({ where, orderBy }: any) => {
+        const known = new Set(['tenant_id', 'id', 'is_active', 'OR']);
+        for (const key of Object.keys(where)) {
+            if (!known.has(key)) throw new Error(`unexpected filter ${key}`);
+        }
+        const matched = rows.filter((row) => {
+            if (row.tenant_id !== where.tenant_id) return false;
+            if (where.id?.in && !where.id.in.includes(row.id)) return false;
+            if (where.is_active !== undefined && row.is_active !== where.is_active) return false;
+            if (where.OR && !where.OR.some((c: any) => c.name.mode === 'insensitive'
+                && c.name.equals.toLowerCase() === row.name.toLowerCase())) return false;
+            return true;
+        });
+        return orderBy ? [...matched].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)) : matched;
+    });
+    return { paymentMethod: { findMany, findFirst: jest.fn() } };
+}
+
+const resolved = (row: Partial<ResolvedTender> & Pick<ResolvedTender, 'amount'>): ResolvedTender => ({
+    paymentMethod: 'CASH',
+    methodId: null,
+    methodName: null,
+    accountId: null,
+    mode: 'cash',
+    ...row,
+});
 
 describe('payment-account.util', () => {
     const db = () => ({ paymentMethod: { findFirst: jest.fn() } });
@@ -41,6 +110,220 @@ describe('payment-account.util', () => {
 
             client.paymentMethod.findFirst.mockResolvedValue({ account_id: null });
             await expect(storedPaymentMethodAccountId(client as any, 't1', 'pm-cash')).resolves.toBeUndefined();
+        });
+    });
+
+    describe('resolveTenders()', () => {
+        it('resolves an id to its name and linked account', async () => {
+            const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' })]);
+
+            await expect(resolveTenders(client as any, 't1', 's1', [
+                { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+            ])).resolves.toEqual([{
+                paymentMethod: 'Mobile Wallet',
+                methodId: 'pm-bkash',
+                methodName: 'bKash',
+                accountId: 'acc-bkash',
+                mode: 'bkash',
+                amount: 200,
+            }]);
+            expect(client.paymentMethod.findMany.mock.calls[0][0].where.tenant_id).toBe('t1');
+        });
+
+        it('refuses a foreign id', async () => {
+            const client = methodsDb([method({ id: 'pm-x', name: 'bKash', tenant_id: 't2' })]);
+
+            const attempt = resolveTenders(client as any, 't1', 's1', [
+                { paymentMethod: 'BKASH', paymentMethodId: 'pm-x', amount: 100 },
+            ]);
+            await expect(attempt).rejects.toThrow(BadRequestException);
+            await expect(attempt).rejects.toThrow(MISSING);
+        });
+
+        it('refuses a new tender on a method not available at the branch', async () => {
+            const client = methodsDb([method({
+                id: 'pm-nagad-s2', name: 'Nagad Banani', all_branches: false, stores: [{ store_id: 's2' }],
+            })]);
+
+            const attempt = resolveTenders(client as any, 't1', 's1', [
+                { paymentMethod: 'NAGAD', paymentMethodId: 'pm-nagad-s2', amount: 100 },
+            ]);
+            await expect(attempt).rejects.toThrow(BadRequestException);
+            await expect(attempt).rejects.toThrow(new BadRequestException(BRANCH_REFUSAL));
+        });
+
+        it('refuses a new tender on a switched-off method', async () => {
+            const client = methodsDb([method({ id: 'pm-old', name: 'Old Wallet', is_active: false })]);
+
+            const attempt = resolveTenders(client as any, 't1', 's1', [
+                { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-old', amount: 100 },
+            ]);
+            await expect(attempt).rejects.toThrow(BadRequestException);
+            await expect(attempt).rejects.toThrow(BRANCH_REFUSAL);
+        });
+
+        it('accepts a stored tender whose method moved branch or was switched off', async () => {
+            const client = methodsDb([
+                method({ id: 'pm-moved', name: 'bKash Gulshan', account_id: 'acc-bkash-g', all_branches: false, stores: [{ store_id: 's2' }] }),
+                method({ id: 'pm-off', name: 'Upay', account_id: 'acc-upay', is_active: false }),
+            ]);
+            const stored: StoredTender[] = [
+                { payment_method: 'Mobile Wallet', payment_method_id: 'pm-moved', payment_method_name: 'bKash Gulshan', account_id: 'acc-bkash-g', amount: new Prisma.Decimal(300) },
+                { payment_method: 'Mobile Wallet', payment_method_id: 'pm-off', payment_method_name: 'Upay', account_id: 'acc-upay', amount: new Prisma.Decimal(50) },
+            ];
+
+            const tenders = await resolveTenders(client as any, 't1', 's1', storedToTenderInputs(stored), stored);
+
+            expect(tenders.map((t) => [t.methodId, t.accountId, t.amount])).toEqual([
+                ['pm-moved', 'acc-bkash-g', 300],
+                ['pm-off', 'acc-upay', 50],
+            ]);
+        });
+
+        it("matches POS's BKASH by name at the branch before tenant-wide", async () => {
+            // Names are unique per tenant only case-sensitively, so "BKASH" (an
+            // exact match, but limited to another branch) can sit beside "bKash".
+            const rows = [
+                method({ id: 'pm-upper', name: 'BKASH', account_id: 'acc-upper', all_branches: false, stores: [{ store_id: 's2' }] }),
+                method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash', all_branches: false, stores: [{ store_id: 's1' }] }),
+            ];
+
+            const [atBranch] = await resolveTenders(methodsDb(rows) as any, 't1', 's1', [{ paymentMethod: 'BKASH', amount: 100 }]);
+            expect(atBranch).toMatchObject({ paymentMethod: 'BKASH', methodId: 'pm-bkash', accountId: 'acc-bkash', mode: 'bkash' });
+
+            // Nothing by that name at s3: today's tenant-wide exact-name match.
+            const [tenantWide] = await resolveTenders(methodsDb(rows) as any, 't1', 's3', [{ paymentMethod: 'BKASH', amount: 100 }]);
+            expect(tenantWide).toMatchObject({ methodId: 'pm-upper', accountId: 'acc-upper' });
+
+            // The tenant-wide fallback is exact-name only, as resolvePaymentMethodAccountId was.
+            const [none] = await resolveTenders(methodsDb(rows) as any, 't1', 's3', [{ paymentMethod: 'Bkash', amount: 100 }]);
+            expect(none).toMatchObject({ methodId: null, accountId: null, mode: 'bkash' });
+        });
+
+        it('prefers the exact name when two methods at the branch differ only in case', async () => {
+            const client = methodsDb([
+                method({ id: 'pm-lower', name: 'bkash', sort_order: 0 }),
+                method({ id: 'pm-exact', name: 'bKash', sort_order: 1 }),
+            ]);
+
+            const [tender] = await resolveTenders(client as any, 't1', 's1', [{ paymentMethod: 'bKash', amount: 10 }]);
+            expect(tender.methodId).toBe('pm-exact');
+        });
+
+        it('leaves account null for an unknown name; mode comes from the name', async () => {
+            const client = methodsDb([]);
+
+            await expect(resolveTenders(client as any, 't1', 's1', [
+                { paymentMethod: 'Upay', amount: 50 },
+                { paymentMethod: 'bKash', amount: 20 },
+            ])).resolves.toEqual([
+                { paymentMethod: 'Upay', methodId: null, methodName: null, accountId: null, mode: 'cash', amount: 50 },
+                { paymentMethod: 'bKash', methodId: null, methodName: null, accountId: null, mode: 'bkash', amount: 20 },
+            ]);
+        });
+
+        it('keeps input order and looks every method up in at most two queries', async () => {
+            const client = methodsDb([
+                method({ id: 'pm-cash', name: 'Cash', account_id: 'acc-cash' }),
+                method({ id: 'pm-bank', name: 'Bank', account_id: 'acc-bank' }),
+                method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' }),
+            ]);
+
+            const tenders = await resolveTenders(client as any, 't1', 's1', [
+                { paymentMethod: 'BKASH', amount: 1 },
+                { paymentMethod: 'CASH', paymentMethodId: 'pm-cash', amount: 2 },
+                { paymentMethod: 'CARD', amount: 3 },
+                { paymentMethod: 'BANK', paymentMethodId: 'pm-bank', amount: 4 },
+            ]);
+
+            expect(tenders.map((t) => [t.paymentMethod, t.methodId, t.amount])).toEqual([
+                ['BKASH', 'pm-bkash', 1],
+                ['CASH', 'pm-cash', 2],
+                ['CARD', null, 3],
+                ['BANK', 'pm-bank', 4],
+            ]);
+            expect(client.paymentMethod.findMany.mock.calls.length).toBeLessThanOrEqual(2);
+            expect(client.paymentMethod.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('makes no query for no tenders', async () => {
+            const client = methodsDb([]);
+            await expect(resolveTenders(client as any, 't1', 's1', [])).resolves.toEqual([]);
+            expect(client.paymentMethod.findMany).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('storedToTenderInputs()', () => {
+        it('reads stored rows back as tender inputs', () => {
+            expect(storedToTenderInputs([
+                { payment_method: 'CASH', payment_method_id: 'pm-cash', payment_method_name: 'Cash', account_id: 'acc-cash', amount: new Prisma.Decimal('1000.50') },
+                { payment_method: 'BKASH', payment_method_id: null, payment_method_name: null, account_id: null, amount: '20' },
+            ])).toEqual([
+                { paymentMethod: 'CASH', paymentMethodId: 'pm-cash', amount: 1000.5 },
+                { paymentMethod: 'BKASH', paymentMethodId: null, amount: 20 },
+            ]);
+        });
+    });
+
+    describe('allocateTenders()', () => {
+        const cash = resolved({ paymentMethod: 'CASH', methodId: 'pm-cash', accountId: 'acc-cash', mode: 'cash', amount: 1000 });
+        const bkash = resolved({ paymentMethod: 'BKASH', methodId: 'pm-bkash', accountId: 'acc-bkash', mode: 'bkash', amount: 200 });
+
+        it('caps at the amount and returns the tail', () => {
+            expect(allocateTenders([cash, bkash], 1100)).toEqual({
+                lines: [
+                    { accountId: 'acc-cash', mode: 'cash', amount: 1000 },
+                    { accountId: 'acc-bkash', mode: 'bkash', amount: 100 },
+                ],
+                rest: [{ ...bkash, amount: 100 }],
+            });
+        });
+
+        it('pads a shortfall with a cash line', () => {
+            expect(allocateTenders([{ ...cash, amount: 300 }], 500)).toEqual({
+                lines: [
+                    { accountId: 'acc-cash', mode: 'cash', amount: 300 },
+                    { accountId: null, mode: 'cash', amount: 200 },
+                ],
+                rest: [],
+            });
+            expect(allocateTenders([], 50).lines).toEqual([{ accountId: null, mode: 'cash', amount: 50 }]);
+        });
+
+        it('rounds to two decimals', () => {
+            const { lines, rest } = allocateTenders([
+                { ...cash, amount: 0.1 },
+                { ...bkash, amount: 0.2 },
+            ], 0.3);
+            expect(lines.map((l) => l.amount)).toEqual([0.1, 0.2]);
+            expect(rest).toEqual([]);
+        });
+    });
+
+    describe('sameTenders()', () => {
+        it('true for the same tenders in another order', () => {
+            expect(sameTenders(
+                [
+                    { methodId: 'pm-cash', paymentMethod: 'CASH', amount: 100 },
+                    { methodId: null, paymentMethod: 'BKASH', amount: 50 },
+                ],
+                [
+                    { methodId: null, paymentMethod: 'bKash', amount: 50.001 },
+                    { methodId: 'pm-cash', paymentMethod: 'Cash', amount: 100 },
+                ],
+            )).toBe(true);
+        });
+
+        it('false when an amount or method differs', () => {
+            const base = [
+                { methodId: 'pm-cash', paymentMethod: 'CASH', amount: 100 },
+                { methodId: 'pm-cash', paymentMethod: 'CASH', amount: 40 },
+            ];
+            expect(sameTenders(base, [base[0], { ...base[1], amount: 41 }])).toBe(false);
+            expect(sameTenders(base, [base[0], { ...base[1], methodId: 'pm-bank' }])).toBe(false);
+            expect(sameTenders(base, [base[0]])).toBe(false);
+            // A multiset: one 100 cannot answer for two.
+            expect(sameTenders(base, [base[0], base[0]])).toBe(false);
         });
     });
 

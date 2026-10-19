@@ -1,7 +1,15 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { isAvailableAt } from '../payment-methods/payment-method-branches';
+import { classifyPaymentMode, PaymentMode } from '../sales/classify-payment-mode';
+import type { TenderLegLine } from './posting.utils';
 
 type Client = PrismaClient | Prisma.TransactionClient;
+
+/** The 400 for a method id that is not the tenant's (or no longer exists). */
+export const PAYMENT_METHOD_MISSING = 'That payment method does not exist or is switched off.';
+/** The 400 for a new tender on a method not available at the document's branch. */
+export const PAYMENT_METHOD_NOT_AT_BRANCH = "That payment method isn't available at this branch.";
 
 /**
  * Resolves the GL account a tenant configured for a payment method, so a posting
@@ -47,7 +55,7 @@ export async function resolveCreditPaymentMethod(
         select: { id: true, name: true, account_id: true },
     });
     if (!method) {
-        throw new BadRequestException('That payment method does not exist or is switched off.');
+        throw new BadRequestException(PAYMENT_METHOD_MISSING);
     }
     return method;
 }
@@ -83,4 +91,190 @@ export function cashLegOverride(
 ): { overrideDebitAccountId?: string; overrideCreditAccountId?: string } {
     if (!accountId) return {};
     return flow === 'in' ? { overrideDebitAccountId: accountId } : { overrideCreditAccountId: accountId };
+}
+
+/** A tender as a write submits it. `paymentMethod` is the canonical type string. */
+export interface TenderInput {
+    paymentMethod: string;
+    paymentMethodId?: string | null;
+    amount: number;
+}
+
+/** A tender row the document already carries (PaymentRecord and its siblings). */
+export interface StoredTender {
+    payment_method: string;
+    payment_method_id: string | null;
+    payment_method_name: string | null;
+    account_id: string | null;
+    amount: unknown;
+}
+
+export interface ResolvedTender {
+    /** The canonical string as submitted — what PaymentRecord.payment_method stores. */
+    paymentMethod: string;
+    methodId: string | null;
+    methodName: string | null;
+    /** The method's linked account; null leaves the posting rule's account for `mode`. */
+    accountId: string | null;
+    /** classifyPaymentMode(methodName ?? paymentMethod). */
+    mode: PaymentMode;
+    amount: number;
+}
+
+const TENDER_METHOD_SELECT = {
+    id: true,
+    name: true,
+    account_id: true,
+    is_active: true,
+    all_branches: true,
+    stores: { select: { store_id: true } },
+} satisfies Prisma.PaymentMethodSelect;
+
+type TenderMethod = Prisma.PaymentMethodGetPayload<{ select: typeof TENDER_METHOD_SELECT }>;
+
+/**
+ * Turns submitted tenders into method, name, linked account and posting mode,
+ * enforcing the branch rule (spec §4). Returns one result per tender, in order.
+ *
+ * - **With an id:** the tenant's method, or 400. A new tender must be on a
+ *   method available at `storeId`; one the document already carries (its id is
+ *   among `stored`) keeps its method even after the method moved branch or was
+ *   switched off, so editing an old sale never forces a different tender.
+ * - **Without an id** (POS, offline-queued sales, external sync, imports, the
+ *   mobile app): a case-insensitive name match among the methods available at
+ *   the branch — which is what lets POS's 'BKASH' reach the bKash method —
+ *   then the old tenant-wide exact-name match. No match leaves the method
+ *   fields null and the posting uses the rule for `mode`.
+ *
+ * At most two queries, whatever the number of tenders.
+ */
+export async function resolveTenders(
+    db: Client,
+    tenantId: string,
+    storeId: string,
+    tenders: TenderInput[],
+    stored: StoredTender[] = [],
+): Promise<ResolvedTender[]> {
+    const ids = [...new Set(tenders.flatMap((t) => (t.paymentMethodId ? [t.paymentMethodId] : [])))];
+    const names = [...new Set(tenders.flatMap((t) => (!t.paymentMethodId && t.paymentMethod ? [t.paymentMethod] : [])))];
+
+    const byId = ids.length
+        ? await db.paymentMethod.findMany({
+            where: { tenant_id: tenantId, id: { in: ids } },
+            select: TENDER_METHOD_SELECT,
+        })
+        : [];
+    // Every active method any name matches case-insensitively: a superset of
+    // both the branch match and the tenant-wide exact match, picked apart below.
+    const named = names.length
+        ? await db.paymentMethod.findMany({
+            where: {
+                tenant_id: tenantId,
+                is_active: true,
+                OR: names.map((name) => ({ name: { equals: name, mode: Prisma.QueryMode.insensitive } })),
+            },
+            select: TENDER_METHOD_SELECT,
+            orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+        })
+        : [];
+
+    const methodsById = new Map(byId.map((m) => [m.id, m]));
+    const storedIds = new Set(stored.flatMap((s) => (s.payment_method_id ? [s.payment_method_id] : [])));
+
+    return tenders.map((tender) => {
+        let method: TenderMethod | undefined;
+        if (tender.paymentMethodId) {
+            method = methodsById.get(tender.paymentMethodId);
+            if (!method) throw new BadRequestException(PAYMENT_METHOD_MISSING);
+            if (!storedIds.has(method.id) && !isAvailableAt(method, storeId)) {
+                throw new BadRequestException(PAYMENT_METHOD_NOT_AT_BRANCH);
+            }
+        } else {
+            method = matchByName(named, tender.paymentMethod, storeId);
+        }
+        return {
+            paymentMethod: tender.paymentMethod,
+            methodId: method?.id ?? null,
+            methodName: method?.name ?? null,
+            accountId: method?.account_id ?? null,
+            mode: classifyPaymentMode(method?.name ?? tender.paymentMethod),
+            amount: tender.amount,
+        };
+    });
+}
+
+/**
+ * The branch's method by that name, ignoring case (the exact spelling wins a
+ * tie), else the tenant's active method of exactly that name — the match
+ * `resolvePaymentMethodAccountId` has always made.
+ */
+function matchByName(candidates: TenderMethod[], name: string, storeId: string): TenderMethod | undefined {
+    if (!name) return undefined;
+    const lower = name.toLowerCase();
+    const sameName = candidates.filter((m) => m.name.toLowerCase() === lower);
+    const atBranch = sameName.filter((m) => isAvailableAt(m, storeId));
+    return atBranch.find((m) => m.name === name) ?? atBranch[0] ?? sameName.find((m) => m.name === name);
+}
+
+/** A document's stored tender rows as inputs, for an edit that sends no payments. */
+export function storedToTenderInputs(rows: StoredTender[]): TenderInput[] {
+    return rows.map((row) => ({
+        paymentMethod: row.payment_method,
+        paymentMethodId: row.payment_method_id,
+        amount: Number(row.amount),
+    }));
+}
+
+function round2(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+/**
+ * Splits tenders across a posting of `amount`, in order: each tender gives
+ * `min(remaining, its amount)` to `lines`, and whatever is left of a tender
+ * past `amount` goes to `rest` (the overpayment, which posts on its own
+ * voucher). Tenders that fall short are padded with an unlinked cash line —
+ * the `'cash'` a sale posted with no payments has always used.
+ */
+export function allocateTenders(
+    tenders: ResolvedTender[],
+    amount: number,
+): { lines: TenderLegLine[]; rest: ResolvedTender[] } {
+    const lines: TenderLegLine[] = [];
+    const rest: ResolvedTender[] = [];
+    let remaining = round2(amount);
+    for (const tender of tenders) {
+        const tendered = round2(tender.amount);
+        const take = round2(Math.max(0, Math.min(remaining, tendered)));
+        if (take > 0) {
+            lines.push({ accountId: tender.accountId, mode: tender.mode, amount: take });
+            remaining = round2(remaining - take);
+        }
+        const left = round2(tendered - take);
+        if (left > 0) rest.push({ ...tender, amount: left });
+    }
+    if (remaining > 0) lines.push({ accountId: null, mode: 'cash', amount: remaining });
+    return { lines, rest };
+}
+
+/**
+ * Whether two tender lists are the same multiset — same methods, same
+ * amounts, in any order. A tender is keyed by its method id, else by its
+ * canonical string ignoring case; amounts match within half a paisa.
+ */
+export function sameTenders(
+    a: { methodId: string | null; paymentMethod: string; amount: number }[],
+    b: typeof a,
+): boolean {
+    if (a.length !== b.length) return false;
+    const keyOf = (t: (typeof a)[number]) => t.methodId ?? t.paymentMethod.toLowerCase();
+    const unmatched = [...b];
+    for (const tender of a) {
+        const index = unmatched.findIndex(
+            (other) => keyOf(other) === keyOf(tender) && Math.abs(other.amount - tender.amount) <= 0.005,
+        );
+        if (index === -1) return false;
+        unmatched.splice(index, 1);
+    }
+    return true;
 }
