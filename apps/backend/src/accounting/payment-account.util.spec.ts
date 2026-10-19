@@ -421,6 +421,101 @@ describe('payment-account.util', () => {
             });
         });
 
+        describe('a payment whose method was deleted keeps its name and account', () => {
+            // Deleting a method nulls payment_method_id on its payments
+            // (SetNull); the row still says what it was taken on and where it
+            // posted, and the client, having no method to match, re-sends the
+            // canonical type alone.
+            const orphan = (row: Partial<StoredTender> = {}): StoredTender => ({
+                payment_method: 'Mobile Wallet',
+                payment_method_id: null,
+                payment_method_name: 'Upay',
+                account_id: 'acc-upay',
+                amount: new Prisma.Decimal(100),
+                ...row,
+            });
+
+            it('an edit that re-sends the type alone carries the saved name and account', async () => {
+                const client = methodsDb([method({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', amount: 100 },
+                ], [orphan()]);
+
+                expect(tender).toEqual({
+                    paymentMethod: 'Mobile Wallet',
+                    methodId: null,
+                    methodName: 'Upay',
+                    accountId: 'acc-upay',
+                    mode: 'bank',
+                    amount: 100,
+                });
+            });
+
+            it('wins over a current method named like the type', async () => {
+                // "DBBL" is gone; the default "Bank" method must not take its payment over.
+                const client = methodsDb([method({ id: 'pm-bank', name: 'Bank', type: 'Bank', account_id: 'acc-main-bank' })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [{ paymentMethod: 'Bank', amount: 100 }], [
+                    orphan({ payment_method: 'Bank', payment_method_name: 'DBBL', account_id: 'acc-dbbl' }),
+                ]);
+
+                expect(tender).toMatchObject({ methodId: null, methodName: 'DBBL', accountId: 'acc-dbbl', mode: 'bank' });
+            });
+
+            it('uses each saved row once, in order, and only for the same type', async () => {
+                const client = methodsDb([]);
+
+                const tenders = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', amount: 1 },
+                    { paymentMethod: 'Bank', amount: 2 },
+                    { paymentMethod: 'Mobile Wallet', amount: 3 },
+                    { paymentMethod: 'Mobile Wallet', amount: 4 },
+                ], [
+                    orphan(),
+                    orphan({ payment_method_name: 'Rocket', account_id: 'acc-rocket' }),
+                ]);
+
+                expect(tenders.map((t) => [t.paymentMethod, t.methodName, t.accountId])).toEqual([
+                    ['Mobile Wallet', 'Upay', 'acc-upay'],
+                    ['Bank', null, null],
+                    ['Mobile Wallet', 'Rocket', 'acc-rocket'],
+                    ['Mobile Wallet', null, null],
+                ]);
+            });
+
+            it('changes nothing while a current method still has that name', async () => {
+                const client = methodsDb([
+                    method({ id: 'pm-upay', name: 'Upay', account_id: 'acc-upay-now', is_active: false }),
+                ]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', amount: 100 },
+                ], [orphan()]);
+
+                expect(tender).toMatchObject({ methodId: null, methodName: null, accountId: null });
+            });
+
+            it('a row saved before methods had names carries nothing', async () => {
+                const client = methodsDb([]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Mobile Wallet', amount: 100 },
+                ], [orphan({ payment_method_name: null, account_id: 'acc-client-sent' })]);
+
+                expect(tender).toMatchObject({ methodName: null, accountId: null });
+            });
+
+            it('an edit that sends no payments keeps them too', async () => {
+                const client = methodsDb([]);
+                const rows = [orphan()];
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', storedToTenderInputs(rows), rows);
+
+                expect(tender).toMatchObject({ methodId: null, methodName: 'Upay', accountId: 'acc-upay', amount: 100 });
+            });
+        });
+
         it("matches POS's BKASH by name at the branch before tenant-wide", async () => {
             // Names are unique per tenant only case-sensitively, so "BKASH" (an
             // exact match, but limited to another branch) can sit beside "bKash".

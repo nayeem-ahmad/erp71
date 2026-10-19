@@ -124,6 +124,10 @@ export interface TenderInput {
  *   names its method only by `payment_method_name ?? payment_method`; see
  *   `resolveTenders` for how that name is matched. Its `account_id` was
  *   client-sent and never posted, so it is ignored.
+ * - Without one but with a `payment_method_name` no method has any more, the
+ *   row's method was deleted (the id is nulled on delete; rows saved before
+ *   methods were linked carry no name). Its name and `account_id` are what it
+ *   was saved and posted with, and a no-id tender of its type keeps them.
  */
 export interface StoredTender {
     payment_method: string;
@@ -199,10 +203,18 @@ const LEGACY_CASH_KEY = 'CASH';
  *   the branch — which is what lets POS's 'BKASH' reach the bKash method —
  *   then the old tenant-wide exact-name match. No match leaves the method
  *   fields null and the posting uses the rule for `mode`.
+ * - **A payment whose method was deleted** (its `payment_method_id` nulled,
+ *   its `payment_method_name` kept) comes back from an edit as a tender with
+ *   no id — the client has no method to match it to. A no-id tender takes the
+ *   first such stored row of the same canonical `payment_method` whose name no
+ *   method of the tenant still has (at any branch, active or not), and keeps
+ *   that row's name and account, ahead of the name match above. Each row is
+ *   used once. While a method by that name exists, nothing changes.
  *
  * At most two queries, whatever the number of tenders, plus one more for the
- * legacy names, and only when a stored row is legacy and a tender names a
- * method the document does not already carry by id.
+ * legacy names, and only when a stored row is legacy and a tender could use
+ * it: one with an id the document does not already carry by id, or one
+ * without an id of the type of a legacy row that has a name.
  */
 export async function resolveTenders(
     db: Client,
@@ -244,9 +256,20 @@ export async function resolveTenders(
     // Legacy rows (no method id), matched by name to the methods they name. Only
     // worth a query when a tender could use the answer.
     const legacyRows = stored.filter((row) => !row.payment_method_id);
-    const legacyById = ids.some((id) => !storedById.has(id)) && legacyRows.length
+    // A row whose method was deleted lost its id but kept its name; a tender
+    // without an id of the same type may be that payment sent back.
+    const idlessTypes = new Set(tenders.flatMap((t) => (t.paymentMethodId ? [] : [t.paymentMethod])));
+    const namedLegacyRows = legacyRows.filter((row) => row.payment_method_name && idlessTypes.has(row.payment_method));
+    const legacy = legacyRows.length && (ids.some((id) => !storedById.has(id)) || namedLegacyRows.length)
         ? await matchLegacyRows(db, tenantId, legacyRows)
-        : new Map<string, StoredTender>();
+        : { byMethod: new Map<string, StoredTender>(), naming: new Set<StoredTender>() };
+    const legacyById = legacy.byMethod;
+    // The ones naming no method of the tenant's any more, used once each, in order.
+    const deletedMethodRows = namedLegacyRows.filter((row) => !legacy.naming.has(row));
+    const takeDeletedMethodRow = (paymentMethod: string): StoredTender | undefined => {
+        const index = deletedMethodRows.findIndex((row) => row.payment_method === paymentMethod);
+        return index === -1 ? undefined : deletedMethodRows.splice(index, 1)[0];
+    };
 
     return tenders.map((tender) => {
         let method: TenderMethod | undefined;
@@ -269,9 +292,17 @@ export async function resolveTenders(
                 accountId = method.account_id;
             }
         } else {
-            method = matchByName(named, tender.paymentMethod, storeId);
-            methodName = method?.name ?? null;
-            accountId = method?.account_id ?? null;
+            const deleted = takeDeletedMethodRow(tender.paymentMethod);
+            if (deleted) {
+                // Its method is gone: it keeps the name and account it was saved
+                // with, rather than losing both or passing to a namesake of its type.
+                methodName = deleted.payment_method_name;
+                accountId = deleted.account_id;
+            } else {
+                method = matchByName(named, tender.paymentMethod, storeId);
+                methodName = method?.name ?? null;
+                accountId = method?.account_id ?? null;
+            }
         }
         return {
             paymentMethod: tender.paymentMethod,
@@ -301,16 +332,17 @@ function tenderMode(methodName: string | null, paymentMethod: string): PaymentMo
 }
 
 /**
- * Which method each legacy stored row (no `payment_method_id`) names, keyed by
- * method id; the first row that names a method answers for it. One query over
- * the tenant's methods at any branch and `is_active` — a method limited to
- * other branches or switched off since the sale was made still counts.
+ * Which method each legacy stored row (no `payment_method_id`) names:
+ * `byMethod` keyed by method id, where the first row that names a method
+ * answers for it, and `naming`, every row that names one. One query over the
+ * tenant's methods at any branch and `is_active` — a method limited to other
+ * branches or switched off since the sale was made still counts.
  */
 async function matchLegacyRows(
     db: Client,
     tenantId: string,
     rows: StoredTender[],
-): Promise<Map<string, StoredTender>> {
+): Promise<{ byMethod: Map<string, StoredTender>; naming: Set<StoredTender> }> {
     const keyOf = (row: StoredTender) => row.payment_method_name ?? row.payment_method;
     const wantsCash = rows.some((row) => keyOf(row) === LEGACY_CASH_KEY);
     const names = [...new Set(rows.flatMap((row) => {
@@ -322,7 +354,9 @@ async function matchLegacyRows(
         name: { equals: name, mode: Prisma.QueryMode.insensitive },
     }));
     if (wantsCash) clauses.push({ type: 'Cash' });
-    if (!clauses.length) return new Map();
+    const matched = new Map<string, StoredTender>();
+    const naming = new Set<StoredTender>();
+    if (!clauses.length) return { byMethod: matched, naming };
 
     const methods: LegacyMethod[] = await db.paymentMethod.findMany({
         where: { tenant_id: tenantId, OR: clauses },
@@ -330,7 +364,6 @@ async function matchLegacyRows(
         orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
     });
 
-    const matched = new Map<string, StoredTender>();
     for (const row of rows) {
         const key = keyOf(row);
         if (!key) continue;
@@ -342,9 +375,11 @@ async function matchLegacyRows(
             const sameName = methods.filter((m) => m.name.toLowerCase() === name);
             method = sameName.find((m) => m.name === (LEGACY_KEY_NAMES[key] ?? key)) ?? sameName[0];
         }
-        if (method && !matched.has(method.id)) matched.set(method.id, row);
+        if (!method) continue;
+        naming.add(row);
+        if (!matched.has(method.id)) matched.set(method.id, row);
     }
-    return matched;
+    return { byMethod: matched, naming };
 }
 
 /**
