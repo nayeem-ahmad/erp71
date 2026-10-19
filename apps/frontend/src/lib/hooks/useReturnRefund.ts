@@ -15,6 +15,8 @@ interface UseReturnRefundInput {
     total: number;
     /** The customer's or supplier's current due; null = the document has no party. */
     partyDue: number | null;
+    /** Sales return: the sale's own unpaid balance (total − paid); see `refundPrefill`. */
+    saleBalance?: number;
     /** The original sale's payments. Keep the array stable between renders of one sale. */
     originalTenders?: Payment[];
 }
@@ -37,7 +39,14 @@ const NO_TENDERS: Payment[] = [];
  * submit until `ready`, and key
  * the strip by `docKey` so a new document announces its layout afresh.
  */
-export function useReturnRefund({ context, docKey, total, partyDue, originalTenders = NO_TENDERS }: UseReturnRefundInput) {
+export function useReturnRefund({
+    context,
+    docKey,
+    total,
+    partyDue,
+    saleBalance = 0,
+    originalTenders = NO_TENDERS,
+}: UseReturnRefundInput) {
     const [payments, setPayments] = useState<Payment[]>([]);
     const [layout, setLayout] = useState<{
         docKey: string | null;
@@ -85,10 +94,11 @@ export function useReturnRefund({ context, docKey, total, partyDue, originalTend
                 total,
                 originalTenders: usable,
                 partyDue,
+                saleBalance,
                 firstVisible: first ? { id: first.id, name: first.name, type: first.type } : null,
             }),
         );
-    }, [context, docKey, layout, total, partyDue, originalTenders]);
+    }, [context, docKey, layout, total, partyDue, saleBalance, originalTenders]);
 
     // False until the strip has answered for this document. A return submitted
     // before then would carry no refund, which reads as "all against the due".

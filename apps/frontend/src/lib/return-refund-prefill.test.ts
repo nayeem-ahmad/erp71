@@ -7,12 +7,13 @@ const BKASH_TENDER: Payment = { method: 'Mobile Wallet', label: 'bKash', payment
 
 describe('refundPrefill', () => {
     describe('sale_return', () => {
-        it('refunds the part of the total the customer does not owe, in the sale\'s first tender', () => {
+        it('on a sale with a balance, settles min(total, due) against the due and refunds the rest in the sale\'s first tender', () => {
             const result = refundPrefill({
                 context: 'sale_return',
                 total: 300,
                 originalTenders: [BKASH_TENDER, { method: 'Cash', amount: 10 }],
                 partyDue: 100,
+                saleBalance: 300,
                 firstVisible: CASH,
             });
             expect(result).toEqual([
@@ -20,16 +21,69 @@ describe('refundPrefill', () => {
             ]);
         });
 
-        it('refunds nothing when the due covers the whole total', () => {
+        it('credit sale with a balance: the due takes min(total, due) and the rest is refunded', () => {
+            expect(
+                refundPrefill({
+                    context: 'sale_return',
+                    total: 500,
+                    originalTenders: [BKASH_TENDER],
+                    partyDue: 200,
+                    saleBalance: 500,
+                    firstVisible: CASH,
+                }),
+            ).toEqual([{ method: 'Mobile Wallet', label: 'bKash', paymentMethodId: 'pm-bkash', amount: 300 }]);
+        });
+
+        it('refunds nothing when the due covers the whole total of a sale with a balance', () => {
             expect(
                 refundPrefill({
                     context: 'sale_return',
                     total: 300,
                     originalTenders: [BKASH_TENDER],
                     partyDue: 900,
+                    saleBalance: 300,
                     firstVisible: CASH,
                 }),
             ).toEqual([]);
+        });
+
+        it('paid sale, customer owes ৳5,000 on other sales, return ৳500 → the whole ৳500 in the sale\'s tender', () => {
+            expect(
+                refundPrefill({
+                    context: 'sale_return',
+                    total: 500,
+                    originalTenders: [BKASH_TENDER],
+                    partyDue: 5000,
+                    saleBalance: 0,
+                    firstVisible: CASH,
+                }),
+            ).toEqual([{ method: 'Mobile Wallet', label: 'bKash', paymentMethodId: 'pm-bkash', amount: 500 }]);
+        });
+
+        it('a paid sale whose tender is not offered refunds the whole total in the first visible method', () => {
+            expect(
+                refundPrefill({
+                    context: 'sale_return',
+                    total: 500,
+                    originalTenders: [],
+                    partyDue: 5000,
+                    saleBalance: 0,
+                    firstVisible: CASH,
+                }),
+            ).toEqual([{ method: 'Cash', label: 'Cash', paymentMethodId: 'pm-cash', amount: 500 }]);
+        });
+
+        it('a balance under half a paisa is a paid sale; no balance given is one too', () => {
+            const paid = (saleBalance?: number) => refundPrefill({
+                context: 'sale_return',
+                total: 500,
+                originalTenders: [BKASH_TENDER],
+                partyDue: 5000,
+                ...(saleBalance !== undefined && { saleBalance }),
+                firstVisible: CASH,
+            });
+            expect(paid(0.004)).toEqual([{ method: 'Mobile Wallet', label: 'bKash', paymentMethodId: 'pm-bkash', amount: 500 }]);
+            expect(paid()).toEqual([{ method: 'Mobile Wallet', label: 'bKash', paymentMethodId: 'pm-bkash', amount: 500 }]);
         });
 
         it('falls back to the first visible method when the sale had no tender', () => {
@@ -39,6 +93,7 @@ describe('refundPrefill', () => {
                     total: 300,
                     originalTenders: [],
                     partyDue: 100,
+                    saleBalance: 300,
                     firstVisible: BKASH,
                 }),
             ).toEqual([
@@ -52,6 +107,7 @@ describe('refundPrefill', () => {
                 total: 300,
                 originalTenders: [BKASH_TENDER],
                 partyDue: 0,
+                saleBalance: 300,
                 firstVisible: CASH,
             });
             expect(result).toEqual([
@@ -65,6 +121,7 @@ describe('refundPrefill', () => {
                 total: 300,
                 originalTenders: [],
                 partyDue: -50,
+                saleBalance: 300,
                 firstVisible: CASH,
             });
             expect(result).toEqual([{ method: 'Cash', label: 'Cash', paymentMethodId: 'pm-cash', amount: 300 }]);

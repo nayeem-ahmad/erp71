@@ -71,10 +71,14 @@ function NewSalesReturnPageContent() {
         setWarehouseId((current) => current || defaultWarehouseId);
     }, [defaultWarehouseId]);
 
-    // The refund opens the way the sale was paid, less whatever the customer
-    // still owes (that part comes off the due instead). No customer, no due.
+    // The refund opens the way the sale was paid. A sale left with a balance
+    // settles against the customer's due first (that part comes off the due
+    // instead); a paid one refunds in full. No customer, no due.
     const originalTenders = useMemo(() => paymentsFromRecords(sale?.payments), [sale]);
     const partyDue: number | null = sale?.customer_id ? Number(sale.customer?.due_balance ?? 0) : null;
+    const saleBalance = sale
+        ? Math.round((Number(sale.total_amount ?? 0) - Number(sale.amount_paid ?? 0)) * 100) / 100
+        : 0;
 
     const totals = useMemo(() => {
         const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
@@ -95,6 +99,7 @@ function NewSalesReturnPageContent() {
         docKey: sale?.id ?? null,
         total: totals.total,
         partyDue,
+        saleBalance,
         originalTenders,
     });
     const refunded = refund.payments.reduce((sum, p) => sum + p.amount, 0);

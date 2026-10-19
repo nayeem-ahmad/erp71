@@ -48,11 +48,16 @@ function mockLayout(visible = [CASH, BKASH], available = visible) {
     (api.getPaymentMethods as jest.Mock).mockResolvedValue(available);
 }
 
-/** The sale was paid on bKash by a customer who owes `due`. */
-const bkashSaleOf = (due: number) => ({
+/**
+ * ৳500 paid on bKash by a customer who owes `due` in all. With a `balance`
+ * the sale itself was not paid in full: it came to ৳500 + balance.
+ */
+const bkashSaleOf = (due: number, { balance = 0 }: { balance?: number } = {}) => ({
     ...SALE,
     customer_id: 'cust-1',
     customer: { id: 'cust-1', name: 'Rahim', due_balance: String(due) },
+    total_amount: (500 + balance).toFixed(2),
+    amount_paid: '500.00',
     payments: [
         { payment_method: 'Mobile Wallet', payment_method_name: 'bKash', payment_method_id: 'pm-bkash', amount: '500.00' },
     ],
@@ -295,7 +300,8 @@ describe('NewSalesReturnPage', () => {
     });
 
     it('sales return chip reads "Adjusted against due ৳…" for a partial refund', async () => {
-        (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(120));
+        // The sale left ৳400 unpaid; the customer owes ৳120 of it now.
+        (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(120, { balance: 400 }));
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
 
@@ -304,6 +310,26 @@ describe('NewSalesReturnPage', () => {
         await waitFor(() => expect(bkash.value).toBe('180'));
         expect(screen.getByText(/^Adjusted against due ৳\s*120\.00$/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled();
+    });
+
+    it('a paid sale refunds the whole return in its tender, whatever the customer owes on other sales', async () => {
+        // Paid in full on bKash; the customer owes ৳5,000 on other sales.
+        (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(5000));
+        await act(async () => { render(<NewSalesReturnPage />); });
+        await findSale();
+
+        const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
+        await waitFor(() => expect(bkash.value).toBe('300'));
+        expect(screen.queryByText(/Adjusted against due/)).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled());
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Create Return/i }));
+        });
+        await waitFor(() => expect(api.createReturn).toHaveBeenCalledTimes(1));
+        expect((api.createReturn as jest.Mock).mock.calls[0][0].payments).toEqual([
+            { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 300 },
+        ]);
     });
 
     it('falls back to the first method the user sees when the sale\'s own is no longer offered', async () => {

@@ -12,6 +12,12 @@ interface RefundPrefillInput {
     originalTenders: Payment[];
     /** The customer's or supplier's current due. `null` means the document has no party. */
     partyDue: number | null;
+    /**
+     * Sales return: what the sale itself still has unpaid (total − paid). Only a
+     * sale left with a balance settles against the customer's due; a paid one
+     * (0, or left out) refunds in full. Not read for a purchase return.
+     */
+    saleBalance?: number;
     /** The first method the signed-in user's strip shows, or null when the branch offers none. */
     firstVisible: { id: string; name: string; type: string } | null;
 }
@@ -20,11 +26,13 @@ interface RefundPrefillInput {
  * The tenders a return opens with, chosen so that a cashier who changes nothing
  * gets what the return did before tenders could be picked.
  *
- * - **Sales return.** With a party, the customer's due is settled first: what
- *   the due cannot take (`total − min(total, due)`) goes back as a refund, in
- *   the way the original sale was paid, else in the user's first visible
- *   method. With no due the whole total is refunded. With no party there is no
- *   due to settle against, so the whole total is refunded in the first visible
+ * - **Sales return.** A sale left with a balance settles against the
+ *   customer's due first: what the due cannot take (`total − min(total, due)`)
+ *   goes back as a refund, in the way the original sale was paid, else in the
+ *   user's first visible method. A paid sale refunds the whole total that way —
+ *   whatever the customer owes on other sales is not this sale's to settle —
+ *   and so does one whose customer owes nothing. With no party there is no due
+ *   to settle against, so the whole total is refunded in the first visible
  *   method — the server refuses a partial refund then.
  * - **Purchase return.** With a supplier nothing is received: the whole total
  *   comes off what is payable. With none, the supplier's payable cannot take
@@ -38,11 +46,13 @@ interface RefundPrefillInput {
  * what the strip's generic cash box is for — the row is a plain cash one.
  */
 export function refundPrefill(input: RefundPrefillInput): Payment[] {
-    const { context, total, originalTenders, partyDue, firstVisible } = input;
+    const { context, total, originalTenders, partyDue, saleBalance = 0, firstVisible } = input;
     if (!(total > 0)) return [];
     if (context === 'purchase_return' && partyDue != null) return [];
 
-    const due = partyDue != null ? Math.max(0, partyDue) : 0;
+    // Only a sale with a balance of its own has a due to settle against.
+    const settlesDue = context === 'sale_return' && partyDue != null && saleBalance > 0.005;
+    const due = settlesDue ? Math.max(0, partyDue) : 0;
     const refund = round2(total - Math.min(total, due));
     if (refund <= 0) return [];
 
