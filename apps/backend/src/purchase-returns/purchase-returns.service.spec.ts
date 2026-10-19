@@ -1101,6 +1101,126 @@ describe('PurchaseReturnsService — money received back, edit and delete', () =
         expect(returnRow.tenders_recorded).toBe(true);
     });
 
+    describe('the edit screen sends every line back on each save', () => {
+        /** Nothing reached the stock, the due or the books. */
+        const expectBooksUntouched = () => {
+            expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+            expect(tx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
+            expect(tx.purchaseReturnItem.createMany).not.toHaveBeenCalled();
+            expect(tx.purchaseReturnPayment.deleteMany).not.toHaveBeenCalled();
+            expect(tx.purchaseReturnPayment.createMany).not.toHaveBeenCalled();
+            expect(tx.supplier.update).not.toHaveBeenCalled();
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+        };
+
+        it('the same lines and tenders with new notes write only the notes', async () => {
+            supplier.due_balance = 1000;
+            await createReturn(3, [cash(200), bkash(100)]);
+            const before = [voucherRows(BILL), voucherRows(RECEIVED)];
+            jest.clearAllMocks();
+
+            await service.update(
+                'tenant-1',
+                'pret-1',
+                { notes: 'Wrong size', items: lines(3), payments: [cash(200), bkash(100)] } as any,
+                'user-1',
+            );
+
+            expect(tx.purchaseReturn.update).toHaveBeenCalledTimes(1);
+            expect(tx.purchaseReturn.update).toHaveBeenCalledWith({ where: { id: 'pret-1' }, data: { notes: 'Wrong size' } });
+            expectBooksUntouched();
+            expect([voucherRows(BILL), voucherRows(RECEIVED)]).toEqual(before);
+            expect(ledger).toHaveLength(0);
+        });
+
+        it('the same lines with new notes go through in a closed period', async () => {
+            await createReturn(3, [cash(300)]);
+            tx.fiscalPeriod.findFirst.mockResolvedValue(LOCKED);
+            jest.clearAllMocks();
+
+            await service.update('tenant-1', 'pret-1', { notes: 'Wrong size', items: lines(3), payments: [cash(300)] } as any, 'user-1');
+
+            expect(returnRow.notes).toBe('Wrong size');
+            expectBooksUntouched();
+        });
+
+        it('a legacy clamped return re-sent with the same lines and new notes leaves the due alone', async () => {
+            // Saved before tenders: the supplier was owed 100, so the clamp took 100 of the 300.
+            supplier.due_balance = 100;
+            await createReturn(3);
+            expect(supplier.due_balance).toBe(0);
+            const before = voucherRows(BILL);
+            // ৳500 more has been bought on credit since.
+            supplier.due_balance = 500;
+            jest.clearAllMocks();
+
+            await service.update('tenant-1', 'pret-1', { notes: 'Wrong size', items: lines(3) } as any, 'user-1');
+
+            expect(returnRow.notes).toBe('Wrong size');
+            expectBooksUntouched();
+            // Re-clamped against today's ৳500 the due would have fallen to ৳300.
+            expect(supplier.due_balance).toBe(500);
+            expect(ledger).toHaveLength(1);
+            expect(voucherRows(BILL)).toEqual(before);
+        });
+
+        it('a line sent with the warehouse it already sits in is unchanged', async () => {
+            await createReturn(3, [cash(300)]);
+            jest.clearAllMocks();
+
+            // Stored with no warehouse of its own, so it sits in the return's (wh-1).
+            await service.update(
+                'tenant-1',
+                'pret-1',
+                { notes: 'Wrong size', items: [{ ...lines(3)[0], warehouseId: 'wh-1' }], payments: [cash(300)] } as any,
+                'user-1',
+            );
+
+            expectBooksUntouched();
+        });
+
+        it('a real quantity change still unwinds and re-settles', async () => {
+            supplier.due_balance = 1000;
+            await createReturn(3, [cash(100)]);
+            jest.clearAllMocks();
+
+            await service.update('tenant-1', 'pret-1', { notes: 'Wrong size', items: lines(2), payments: [cash(100)] } as any, 'user-1');
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalled();
+            expect(applyInventoryMovement).toHaveBeenCalledWith(
+                tx,
+                expect.objectContaining({ movementType: 'PURCHASE_RETURN_EDIT', quantityDelta: -2 }),
+            );
+            expect(voucherRows(BILL)).toEqual([
+                ['payable', 200, 0],
+                ['purchases', 0, 200],
+            ]);
+            // 200 back now: 100 received, the other 100 off the payable.
+            expect(supplier.due_balance).toBe(900);
+            expect(returnRow.total_amount).toBe(200);
+            expect(returnRow.notes).toBe('Wrong size');
+        });
+
+        it('a line moved to another warehouse is a line edit', async () => {
+            await createReturn(3, [cash(300)]);
+            jest.clearAllMocks();
+
+            await service.update(
+                'tenant-1',
+                'pret-1',
+                { items: [{ ...lines(3)[0], warehouseId: 'wh-annex' }], payments: [cash(300)] } as any,
+                'user-1',
+            );
+
+            expect(applyInventoryMovement).toHaveBeenCalledWith(
+                tx,
+                expect.objectContaining({ movementType: 'PURCHASE_RETURN_EDIT', warehouseId: 'wh-annex', quantityDelta: -3 }),
+            );
+        });
+    });
+
     it('remove unwinds vouchers and due', async () => {
         supplier.due_balance = 1000;
         await createReturn(3, [cash(100)]);
@@ -1276,6 +1396,30 @@ describe('PurchaseReturnsService — money received back, edit and delete', () =
             expect(returnRow.notes).toBe('Supplier credit note received');
             expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
             expect(ledger).toHaveLength(1);
+            expect(voucherRows(BILL)).toEqual([
+                ['payable', 300, 0],
+                ['purchases', 0, 300],
+            ]);
+        });
+
+        it('a notes edit that re-sends its lines unchanged is allowed', async () => {
+            await importReturn();
+
+            // What the edit screen sends: the lines as they stand, with the new notes.
+            await service.update('tenant-1', 'pret-1', { notes: 'Supplier credit note received', items: lines(3) } as any, 'user-1');
+
+            expect(returnRow.notes).toBe('Supplier credit note received');
+            expect(tx.purchaseReturn.update).toHaveBeenCalledTimes(1);
+            expect(tx.purchaseReturn.update).toHaveBeenCalledWith({
+                where: { id: 'pret-1' },
+                data: { notes: 'Supplier credit note received' },
+            });
+            expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+            expect(autoPostFromRules).not.toHaveBeenCalled();
+            expect(applyInventoryMovement).not.toHaveBeenCalled();
+            expect(tx.supplierCreditTransaction.create).not.toHaveBeenCalled();
+            expect(ledger).toHaveLength(1);
+            expect(supplier.due_balance).toBe(-200);
             expect(voucherRows(BILL)).toEqual([
                 ['payable', 300, 0],
                 ['purchases', 0, 300],

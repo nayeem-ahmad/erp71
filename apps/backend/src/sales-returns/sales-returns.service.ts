@@ -26,6 +26,7 @@ import {
     sameReturnPaymentRows,
     type ReturnTender,
 } from '../common/return-tenders.util';
+import { sameReturnLines } from '../common/return-lines.util';
 
 /** The 400 for refund tenders that add up to more than the goods coming back. */
 const REFUND_ABOVE_TOTAL = 'The refund is more than the return total.';
@@ -349,7 +350,12 @@ export class SalesReturnsService {
             const updateData: any = {};
             if (dto.reason !== undefined) updateData.reason = dto.reason;
 
-            const itemsChanged = Boolean(dto.items && dto.items.length > 0);
+            // The edit screen sends every line back on each save. Lines that
+            // are the ones already stored are no line edit at all, and are
+            // treated exactly as if none had been sent — decided before the
+            // import guard, the unchanged-tenders check and the unwind.
+            const lineEdit = dto.items?.length && !this.keepsLines(existing, dto) ? dto.items : null;
+            const itemsChanged = lineEdit !== null;
 
             // A reason-only edit leaves the stock, the due and the vouchers alone.
             if (!itemsChanged && !dto.payments) {
@@ -403,8 +409,8 @@ export class SalesReturnsService {
             await this.unwindSalesReturn(tx, tenantId, existing, userId);
             let total = Number(existing.total_refund);
 
-            // If items are provided, recalculate everything
-            if (dto.items && dto.items.length > 0) {
+            // If the lines changed, recalculate everything
+            if (lineEdit) {
                 // A parentless return has no sale to take the store from.
                 const storeId = existing.sale?.store_id ?? existing.store_id;
                 const warehouses = await resolveEntryWarehouses(
@@ -412,7 +418,7 @@ export class SalesReturnsService {
                     tenantId,
                     storeId,
                     dto.warehouseId ?? existing.warehouse_id ?? undefined,
-                    dto.items.map((item) => item.warehouseId),
+                    lineEdit.map((item) => item.warehouseId),
                 );
                 updateData.warehouse_id = warehouses.entryWarehouseId;
 
@@ -449,10 +455,10 @@ export class SalesReturnsService {
                 const editCosts = await resolveProductCosts(tx, {
                     tenantId,
                     storeId: existing.sale?.store_id ?? existing.store_id,
-                    productIds: dto.items.map((item) => item.productId).filter((pid): pid is string => Boolean(pid)),
+                    productIds: lineEdit.map((item) => item.productId).filter((pid): pid is string => Boolean(pid)),
                 });
 
-                for (const newItem of dto.items) {
+                for (const newItem of lineEdit) {
                     if (newItem.quantity <= 0) continue;
 
                     // A return recorded without a sale keeps its lines
@@ -640,6 +646,44 @@ export class SalesReturnsService {
             where: { id, tenant_id: tenantId },
             include: { sale: true, items: { include: { product: true } }, payments: PAYMENTS_IN_ORDER },
         });
+    }
+
+    /**
+     * Whether an edit's lines are the ones the return already holds (see
+     * `sameReturnLines`). Matched as the edit matches them: by sale line, or
+     * by product on a return with no sale, where the sent price counts too.
+     * Lines of no quantity are dropped by the edit, so they are not lines
+     * here either; a new return warehouse is a change of its own.
+     */
+    private keepsLines(
+        existing: {
+            warehouse_id: string | null;
+            sale: unknown;
+            items: { sale_item_id: string | null; product_id: string; quantity: number; warehouse_id: string | null; refund_amount: unknown }[];
+        },
+        dto: UpdateSalesReturnDto,
+    ): boolean {
+        if (dto.warehouseId !== undefined && dto.warehouseId !== existing.warehouse_id) return false;
+        const standalone = !existing.sale;
+        return sameReturnLines(
+            existing.items.map((item) => ({
+                key: standalone ? item.product_id : item.sale_item_id,
+                productId: item.product_id,
+                quantity: item.quantity,
+                warehouseId: item.warehouse_id,
+                amount: Number(item.refund_amount),
+            })),
+            (dto.items ?? [])
+                .filter((item) => item.quantity > 0)
+                .map((item) => ({
+                    key: standalone ? item.productId : item.saleItemId,
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    warehouseId: item.warehouseId,
+                    amount: standalone && item.unitPrice != null ? item.unitPrice * item.quantity : undefined,
+                })),
+            existing.warehouse_id,
+        );
     }
 
     /**

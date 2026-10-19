@@ -21,6 +21,7 @@ import {
     sameReturnPaymentRows,
     type ReturnTender,
 } from '../common/return-tenders.util';
+import { sameReturnLines } from '../common/return-lines.util';
 
 /** The 400 for money received that adds up to more than the goods going back. */
 const RECEIVED_ABOVE_TOTAL = 'The amount received is more than the return total.';
@@ -276,8 +277,14 @@ export class PurchaseReturnsService {
                 updateData.notes = dto.notes;
             }
 
+            // The edit screen sends every line back on each save. Lines that
+            // are the ones already stored are no line edit at all, and are
+            // treated exactly as if none had been sent — decided before the
+            // import guard, the unchanged-tenders check and the unwind.
+            const lineEdit = dto.items && !this.keepsLines(existingReturn, dto) ? dto.items : null;
+
             // A notes-only edit leaves the stock, the due and the vouchers alone.
-            if (!dto.items && !dto.payments) {
+            if (!lineEdit && !dto.payments) {
                 await tx.purchaseReturn.update({
                     where: { id },
                     data: updateData,
@@ -303,7 +310,7 @@ export class PurchaseReturnsService {
             // sale edit compares its tenders. Only a return saved with tenders
             // qualifies — one saved before them has no rows, which is not the
             // same as nothing received.
-            if (requested && !dto.items && existingReturn.tenders_recorded) {
+            if (requested && !lineEdit && existingReturn.tenders_recorded) {
                 const stored = await resolveStoredReturnTenders(tx, tenantId, existingReturn.store_id, existingReturn.payments);
                 if (sameTenders(requested, stored)) {
                     // A cheque number or date corrected, or the order changed:
@@ -327,7 +334,7 @@ export class PurchaseReturnsService {
             await this.unwindPurchaseReturn(tx, tenantId, existingReturn, userId);
             let total = Number(existingReturn.total_amount);
 
-            if (dto.items) {
+            if (lineEdit) {
                 // A parentless return has no purchase to take the store from.
                 const storeId = existingReturn.purchase?.store_id ?? existingReturn.store_id;
 
@@ -341,8 +348,8 @@ export class PurchaseReturnsService {
                     warehouseId && inheritable.has(warehouseId) ? warehouseId : null;
 
                 const newItems = existingReturn.purchase
-                    ? this.buildReturnItemData(existingReturn.purchase.items, dto.items, id, inherited)
-                    : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
+                    ? this.buildReturnItemData(existingReturn.purchase.items, lineEdit, id, inherited)
+                    : await this.buildStandaloneReturnItemData(tx, tenantId, lineEdit);
 
                 const warehouses = await resolveEntryWarehouses(
                     tx,
@@ -497,6 +504,42 @@ export class PurchaseReturnsService {
             where: { id, tenant_id: tenantId },
             include: this.returnInclude(true),
         });
+    }
+
+    /**
+     * Whether an edit's lines are the ones the return already holds (see
+     * `sameReturnLines`). Matched as the edit matches them: by purchase line,
+     * or by product on a return with no purchase, where the sent cost counts
+     * too. A new return warehouse is a change of its own.
+     */
+    private keepsLines(
+        existing: {
+            warehouse_id: string | null;
+            purchase: unknown;
+            items: { purchase_item_id: string | null; product_id: string; quantity: number; warehouse_id: string | null; line_total: unknown }[];
+        },
+        dto: UpdatePurchaseReturnDto,
+    ): boolean {
+        if (dto.warehouseId !== undefined && dto.warehouseId !== existing.warehouse_id) return false;
+        const standalone = !existing.purchase;
+        return sameReturnLines(
+            existing.items.map((item) => ({
+                key: standalone ? item.product_id : item.purchase_item_id,
+                productId: item.product_id,
+                quantity: item.quantity,
+                warehouseId: item.warehouse_id,
+                amount: Number(item.line_total),
+            })),
+            (dto.items ?? []).map((item) => ({
+                key: standalone ? item.productId : item.purchaseItemId,
+                // A purchase line names its own product; the sent one is not read.
+                productId: standalone ? item.productId : undefined,
+                quantity: item.quantity,
+                warehouseId: item.warehouseId,
+                amount: standalone && item.unitCost != null ? item.unitCost * item.quantity : undefined,
+            })),
+            existing.warehouse_id,
+        );
     }
 
     /**

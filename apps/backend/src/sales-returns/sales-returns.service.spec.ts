@@ -1111,6 +1111,122 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
     expect(customer.total_spent).toBe(4700);
   });
 
+  describe('the edit screen sends every line back on each save', () => {
+    /** Nothing reached the stock, the due or the books. */
+    const expectBooksUntouched = () => {
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(autoPostFromRules).not.toHaveBeenCalled();
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+      expect(tx.salesReturnItem.deleteMany).not.toHaveBeenCalled();
+      expect(tx.salesReturnPayment.deleteMany).not.toHaveBeenCalled();
+      expect(tx.salesReturnPayment.createMany).not.toHaveBeenCalled();
+      expect(tx.customer.update).not.toHaveBeenCalled();
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+    };
+
+    it('the same lines and tenders with a new reason write only the reason', async () => {
+      await createReturn(3, [cash(200), bkash(100)]);
+      const before = voucherRows();
+      jest.clearAllMocks();
+
+      await service.update(
+        'tenant-1',
+        'ret-1',
+        { reason: 'Wrong size', items: lines(3), payments: [cash(200), bkash(100)] } as any,
+        'user-1',
+      );
+
+      expect(tx.salesReturn.update).toHaveBeenCalledTimes(1);
+      expect(tx.salesReturn.update).toHaveBeenCalledWith({ where: { id: 'ret-1' }, data: { reason: 'Wrong size' } });
+      expectBooksUntouched();
+      expect(voucherRows()).toEqual(before);
+      expect(ledger).toEqual([]);
+    });
+
+    it('the same lines with a new reason go through in a closed period', async () => {
+      await createReturn(3, [cash(300)]);
+      tx.fiscalPeriod.findFirst.mockResolvedValue(LOCKED);
+      jest.clearAllMocks();
+
+      await service.update('tenant-1', 'ret-1', { reason: 'Wrong size', items: lines(3), payments: [cash(300)] } as any, 'user-1');
+
+      expect(returnRow.reason).toBe('Wrong size');
+      expectBooksUntouched();
+    });
+
+    it('a legacy clamped return re-sent with the same lines and a new reason leaves the due alone', async () => {
+      // Saved before tenders: the customer owed 100, so the clamp took 100 of the 300.
+      saleRow = creditSale();
+      customer.due_balance = 100;
+      await createReturn(3);
+      expect(customer.due_balance).toBe(0);
+      const before = voucherRows();
+      // They have bought ৳500 more on credit since.
+      customer.due_balance = 500;
+      jest.clearAllMocks();
+
+      await service.update('tenant-1', 'ret-1', { reason: 'Wrong size', items: lines(3) } as any, 'user-1');
+
+      expect(returnRow.reason).toBe('Wrong size');
+      expectBooksUntouched();
+      // Re-clamped against today's ৳500 the due would have fallen to ৳300.
+      expect(customer.due_balance).toBe(500);
+      expect(ledger).toHaveLength(1);
+      expect(voucherRows()).toEqual(before);
+    });
+
+    it('a line sent with the warehouse it already sits in is unchanged', async () => {
+      await createReturn(3, [cash(300)]);
+      jest.clearAllMocks();
+
+      // Stored with no warehouse of its own, so it sits in the return's (wh-1).
+      await service.update(
+        'tenant-1',
+        'ret-1',
+        { reason: 'Wrong size', items: [{ ...lines(3)[0], warehouseId: 'wh-1' }], payments: [cash(300)] } as any,
+        'user-1',
+      );
+
+      expectBooksUntouched();
+    });
+
+    it('a real quantity change still unwinds and re-settles', async () => {
+      await createReturn(3, [cash(300)]);
+      jest.clearAllMocks();
+
+      await service.update('tenant-1', 'ret-1', { reason: 'Wrong size', items: lines(2), payments: [cash(200)] } as any, 'user-1');
+
+      expect(voidAutoPostedVoucher).toHaveBeenCalled();
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ movementType: 'SALES_RETURN_EDIT', quantityDelta: 2 }),
+      );
+      expect(voucherRows()).toEqual([
+        ['revenue', 200, 0],
+        ['cash-in-hand', 0, 200],
+      ]);
+      expect(returnRow.total_refund).toBe(200);
+      expect(returnRow.reason).toBe('Wrong size');
+    });
+
+    it('a line moved to another warehouse is a line edit', async () => {
+      await createReturn(3, [cash(300)]);
+      jest.clearAllMocks();
+
+      await service.update(
+        'tenant-1',
+        'ret-1',
+        { items: [{ ...lines(3)[0], warehouseId: 'wh-annex' }], payments: [cash(300)] } as any,
+        'user-1',
+      );
+
+      expect(applyInventoryMovement).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({ movementType: 'SALES_RETURN_EDIT', warehouseId: 'wh-annex', quantityDelta: 3 }),
+      );
+    });
+  });
+
   it('remove unwinds vouchers and due', async () => {
     saleRow = creditSale();
     customer.due_balance = 1000;
@@ -1320,6 +1436,30 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
       expect(returnRow.reason).toBe('Customer changed their mind');
       expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
       expect(ledger).toHaveLength(1);
+      expect(voucherRows()).toEqual([
+        ['revenue', 300, 0],
+        ['ar', 0, 300],
+      ]);
+    });
+
+    it('a reason edit that re-sends its lines unchanged is allowed', async () => {
+      await importReturn();
+
+      // What the edit screen sends: the lines as they stand, with the new reason.
+      await service.update('tenant-1', 'ret-1', { reason: 'Customer changed their mind', items: lines(3) } as any, 'user-1');
+
+      expect(returnRow.reason).toBe('Customer changed their mind');
+      expect(tx.salesReturn.update).toHaveBeenCalledTimes(1);
+      expect(tx.salesReturn.update).toHaveBeenCalledWith({
+        where: { id: 'ret-1' },
+        data: { reason: 'Customer changed their mind' },
+      });
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(autoPostFromRules).not.toHaveBeenCalled();
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+      expect(ledger).toHaveLength(1);
+      expect(customer.due_balance).toBe(-200);
       expect(voucherRows()).toEqual([
         ['revenue', 300, 0],
         ['ar', 0, 300],
