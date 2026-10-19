@@ -1,9 +1,14 @@
+import type { PaymentLayoutContext } from '@erp71/shared-types';
 import { formatBDT } from '@/lib/format';
 import DocumentPaymentSection from '@/components/document-entry/PaymentSection';
 import { Payment } from '@/lib/hooks/useNewSaleCart';
 import { canKeepDue, creditDueAmount, availableCustomerCredit, saleOverpayment } from '@/lib/customer-credit';
 
 interface PaymentSectionProps {
+    /** Which of the user's layouts to show (see the shared strip). */
+    context: PaymentLayoutContext;
+    /** The sale's branch — the methods offered there are the ones shown. */
+    storeId: string;
     payments: Payment[];
     total: number;
     customer?: any;
@@ -36,6 +41,8 @@ interface PaymentSectionProps {
  * into `PurchasePayment`.)
  */
 export default function PaymentSection({
+    context,
+    storeId,
     payments,
     total,
     customer,
@@ -62,6 +69,8 @@ export default function PaymentSection({
     return (
         <div className="space-y-2">
             <DocumentPaymentSection
+                context={context}
+                storeId={storeId}
                 payments={payments}
                 total={total}
                 onPaymentChange={onPaymentChange}

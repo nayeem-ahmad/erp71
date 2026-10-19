@@ -31,6 +31,7 @@ jest.mock('@/lib/api', () => ({
         getProductRateHistory: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getInventorySettings: jest.fn(),
+        getPaymentLayout: jest.fn(),
         getPaymentMethods: jest.fn(),
         getSalesSettings: jest.fn().mockResolvedValue({}),
     },
@@ -88,6 +89,7 @@ describe('PurchaseDetailPage', () => {
         (api.getProductRateHistory as jest.Mock).mockResolvedValue({ type: 'purchase', forParty: [], recent: [], summary: null });
         (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
         (api.getInventorySettings as jest.Mock).mockResolvedValue({ default_purchase_warehouse_id: null });
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue({ customised: false, visible: [CASH_METHOD], available: [CASH_METHOD] });
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH_METHOD]);
         window.sessionStorage.setItem('store_id', 'store-1');
         clearRateHistoryCache();
@@ -153,6 +155,33 @@ describe('PurchaseDetailPage', () => {
         expect((api.updatePurchase as jest.Mock).mock.calls[0][1]).not.toHaveProperty('purchaseDate');
         expect(screen.queryByLabelText('Transaction date')).not.toHaveAttribute('type');
         expect(push).toHaveBeenCalledWith('/purchases/purchase-1');
+    });
+
+    it('lays the payment strip out for the bill\'s own branch, not the header\'s', async () => {
+        (api.getPurchase as jest.Mock).mockResolvedValue(recordedPurchase({ store_id: 'store-banani' }));
+        searchParams = new URLSearchParams('edit=true');
+        await renderPage();
+
+        await waitFor(() => expect(api.getPaymentLayout).toHaveBeenCalledWith('store-banani', 'purchase'));
+        expect(api.getPaymentMethods).toHaveBeenCalledWith(undefined, 'store-banani');
+    });
+
+    it('sends a reopened payment back with the method it was saved on', async () => {
+        (api.getPurchase as jest.Mock).mockResolvedValue(recordedPurchase({
+            payments: [{ id: 'pp-1', payment_method: 'Cash', payment_method_id: 'pm-1', payment_method_name: 'Cash', amount: '400' }],
+        }));
+        searchParams = new URLSearchParams('edit=true');
+        await renderPage();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        });
+
+        await waitFor(() => {
+            expect(api.updatePurchase).toHaveBeenCalledWith('purchase-1', expect.objectContaining({
+                payments: [expect.objectContaining({ paymentMethod: 'Cash', paymentMethodId: 'pm-1', amount: 400 })],
+            }));
+        });
     });
 
     it('keeps an imported bill\'s paid-with-the-goods, which has no tender rows', async () => {

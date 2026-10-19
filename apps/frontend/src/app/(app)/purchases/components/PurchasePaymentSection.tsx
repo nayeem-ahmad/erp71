@@ -1,10 +1,15 @@
 'use client';
 
+import type { PaymentLayoutContext } from '@erp71/shared-types';
 import DocumentPaymentSection from '@/components/document-entry/PaymentSection';
 import type { Payment } from '@/lib/hooks/useNewSaleCart';
 import { useI18n } from '@/lib/i18n';
 
 interface PurchasePaymentSectionProps {
+    /** Which of the user's layouts to show (see the shared strip). */
+    context: PaymentLayoutContext;
+    /** The bill's branch — the methods offered there are the ones shown. */
+    storeId: string;
     payments: Payment[];
     total: number;
     onPaymentChange: (payments: Payment[]) => void;
@@ -26,6 +31,8 @@ interface PurchasePaymentSectionProps {
  * paid by one. They are stored per tender on the bill's `PurchasePayment` rows.
  */
 export default function PurchasePaymentSection({
+    context,
+    storeId,
     payments,
     total,
     onPaymentChange,
@@ -37,6 +44,8 @@ export default function PurchasePaymentSection({
 
     return (
         <DocumentPaymentSection
+            context={context}
+            storeId={storeId}
             payments={payments}
             total={total}
             onPaymentChange={onPaymentChange}

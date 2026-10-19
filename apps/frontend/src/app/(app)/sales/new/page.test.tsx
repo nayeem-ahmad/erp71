@@ -23,6 +23,7 @@ jest.mock('@/lib/api', () => ({
         getCustomers: jest.fn(),
         searchProductsByQuantity: jest.fn(),
         getProductRateHistory: jest.fn(),
+        getPaymentLayout: jest.fn(),
         getPaymentMethods: jest.fn(),
         getQuotation: jest.fn(),
         getOrder: jest.fn(),
@@ -61,6 +62,9 @@ const ANNEX_WAREHOUSE = {
     is_active: true,
 };
 
+/** No payment methods at the branch: the strip shows its generic Cash / Mobile Wallet / Card / Bank. */
+const EMPTY_PAYMENT_LAYOUT = { customised: false, visible: [], available: [] };
+
 /** The rate hint renders on every staged product; most cases don't exercise it. */
 const EMPTY_RATE_HISTORY = { type: 'sale', forParty: [], recent: [], summary: null };
 
@@ -88,6 +92,7 @@ describe('NewSalePage — editable sale date', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue(EMPTY_PAYMENT_LAYOUT);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
             {
@@ -226,6 +231,37 @@ describe('NewSalePage — editable sale date', () => {
             );
         });
     });
+
+    it('sends each tender\'s paymentMethodId, laid out for the header branch', async () => {
+        const cash = { id: 'pm-cash', name: 'Cash', type: 'Cash', account_id: 'acc-cash', is_active: true, sort_order: 1, show_on_entry: true, all_branches: true, store_ids: [] };
+        const bkash = { ...cash, id: 'pm-bkash', name: 'bKash', type: 'Mobile Wallet', account_id: 'acc-bkash', sort_order: 2 };
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue({ customised: false, visible: [cash, bkash], available: [cash, bkash] });
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([cash, bkash]);
+
+        await act(async () => {
+            render(<NewSalePage />);
+        });
+        await waitFor(() => expect(api.getPaymentLayout).toHaveBeenCalledWith('store-1', 'sale'));
+
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        fireEvent.change(await screen.findByLabelText('Cash amount'), { target: { value: '60' } });
+        fireEvent.change(screen.getByLabelText('bKash amount'), { target: { value: '40' } });
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Create Sale'));
+        });
+
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        expect((api.createNewSale as jest.Mock).mock.lastCall[0].payments).toEqual([
+            expect.objectContaining({ paymentMethod: 'Cash', paymentMethodId: 'pm-cash', amount: 60 }),
+            expect.objectContaining({ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 40 }),
+        ]);
+    });
 });
 
 describe('NewSalePage — product staging and drafts', () => {
@@ -237,6 +273,7 @@ describe('NewSalePage — product staging and drafts', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue(EMPTY_PAYMENT_LAYOUT);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
             {
@@ -467,6 +504,7 @@ describe('NewSalePage — converting a quotation or sales order', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue(EMPTY_PAYMENT_LAYOUT);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([]);
         (api.getQuotation as jest.Mock).mockResolvedValue(quotation);
@@ -611,6 +649,7 @@ describe('NewSalePage — duplicating an existing sale', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue(EMPTY_PAYMENT_LAYOUT);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([]);
         (api.getSale as jest.Mock).mockResolvedValue(sale);
@@ -709,6 +748,7 @@ describe('NewSalePage — overall discount in taka', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue(EMPTY_PAYMENT_LAYOUT);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
             { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '100.00', stocks: [{ quantity: 7 }] },
@@ -784,6 +824,7 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue(EMPTY_PAYMENT_LAYOUT);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
             { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '100.00', stocks: [{ quantity: 7 }] },
@@ -974,6 +1015,7 @@ describe('NewSalePage — VAT from the shop\u2019s tax settings', () => {
         (api.getCurrentUser as jest.Mock).mockResolvedValue({ id: 'user-1', name: 'Test User' });
         (api.getCustomers as jest.Mock).mockResolvedValue([]);
         (api.getPaymentMethods as jest.Mock).mockResolvedValue([]);
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue(EMPTY_PAYMENT_LAYOUT);
         (api.getProductRateHistory as jest.Mock).mockResolvedValue(EMPTY_RATE_HISTORY);
         (api.searchProductsByQuantity as jest.Mock).mockResolvedValue([
             { id: 'prod-1', name: 'Rice 5kg', sku: 'R5KG', price: '100.00', vat_rate: null, stocks: [{ quantity: 7 }] },

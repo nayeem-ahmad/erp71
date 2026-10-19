@@ -159,6 +159,7 @@ function NewPurchasePageContent() {
             ) : undefined}
             onSubmit={handleSubmit}
             currentUser={currentUser}
+            storeId={getWorkspaceItem('store_id') || ''}
             transactionDate={transactionDate}
             setTransactionDate={pickTransactionDate}
             transactionDateEditable

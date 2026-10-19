@@ -446,6 +446,7 @@ function NewSalePageContent() {
         saleDate: saleDatePicked && saleDate ? new Date(saleDate).toISOString() : undefined,
         payments: payments.map((p) => ({
             paymentMethod: p.method,
+            paymentMethodId: p.paymentMethodId,
             amount: p.amount,
             accountId: p.accountId,
             // The cheque / transfer details typed against this tender, if any.
@@ -629,6 +630,7 @@ function NewSalePageContent() {
             setSalesRepId={setSalesRepId}
             salesReps={salesReps}
             salesRepName={salesRepName}
+            storeId={getWorkspaceItem('store_id') || ''}
             payments={payments}
             onPaymentChange={updatePayment}
             warehouses={warehouses}

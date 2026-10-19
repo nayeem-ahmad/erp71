@@ -268,6 +268,8 @@ function PurchaseDetailPageContent() {
                 purchaseNumber={purchase.purchase_number}
                 transactionDate={purchase.purchase_date ?? purchase.created_at}
                 createdAt={purchase.created_at}
+                // The bill's own branch, which an edit cannot change.
+                storeId={purchase.store_id ?? ''}
                 previousPayable={previousPayable}
                 actions={editing ? editActions : viewActions}
                 headerActions={headerActions}

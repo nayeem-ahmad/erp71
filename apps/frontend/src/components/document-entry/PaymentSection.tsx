@@ -1,15 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api } from '@/lib/api';
+import type { PaymentLayoutContext, PaymentLayoutResponse } from '@erp71/shared-types';
+import { api, type PaymentMethodRow } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import type { Payment, PaymentInstrument } from '@/lib/hooks/useNewSaleCart';
 import { instrumentSummary, paymentInstrumentSummary, pickInstrument } from '@/lib/payment-instrument';
+import { canonicalFor, matchPaymentToMethod } from './payment-match';
 
 /**
  * The tender strip shared by sale and purchase entry: one amount box per
- * payment method the tenant put on the entry form, a picker for the rest, and a
- * running "is this settled?" chip.
+ * payment method on the signed-in user's layout for this branch and screen, a
+ * picker for the rest the branch offers, and a running "is this settled?"
+ * chip.
  *
  * It was the sale screen's own component until purchase entry needed the same
  * thing — a shopkeeper paying a supplier in cash at the counter is the same
@@ -21,36 +24,12 @@ import { instrumentSummary, paymentInstrumentSummary, pickInstrument } from '@/l
  * balance is permitted, so both arrive as props: a sale can be blocked by the
  * customer's credit limit, whereas a purchase balance is simply what the
  * supplier is still owed.
+ *
+ * Editing a saved document never drops a payment. Besides the layout, the
+ * strip shows every method that carries money on the document — hidden from
+ * this user, switched off, whatever — and a payment that matches no method at
+ * all keeps a row of its own (see `distribute`).
  */
-
-interface DefinedMethod {
-    id: string;
-    name: string;
-    type: string;
-    account_id?: string;
-    is_active: boolean;
-    sort_order?: number;
-    show_on_entry: boolean;
-}
-
-// Backend classifies a payment for accounting by substring-matching the method
-// string (bank/card/wallet/credit → "bank", else "cash"). Keep the submitted
-// `method` canonical so accounting posting stays correct regardless of the
-// friendly name the tenant gave a defined method.
-// Keyed by the `type` values actually stored on PaymentMethod, which are the
-// backend PaymentMethodType enum values ('Cash' | 'Mobile Wallet' | 'Card' |
-// 'Bank'). Legacy uppercase keys are kept so rows written before the settings
-// form was aligned to the enum still classify correctly.
-const TYPE_TO_CANONICAL: Record<string, string> = {
-    'Cash': 'Cash',
-    'Mobile Wallet': 'Mobile Wallet',
-    'Card': 'Card',
-    'Bank': 'Bank',
-    CASH: 'Cash',
-    MOBILE_WALLET: 'Mobile Wallet',
-    CARD: 'Card',
-    BANK: 'Bank',
-};
 
 const GENERIC_METHODS = [
     { name: 'Cash', type: 'Cash' },
@@ -59,17 +38,38 @@ const GENERIC_METHODS = [
     { name: 'Bank', type: 'Bank' },
 ];
 
-const canonicalFor = (type: string) => TYPE_TO_CANONICAL[type] ?? 'Cash';
+/** One row of the strip. */
+type PickMethod = {
+    key: string;
+    name: string;
+    type: string;
+    /** The tenant's method behind the row; absent on the generic fallback. */
+    methodId?: string;
+    account_id?: string;
+    inactive?: boolean;
+    /**
+     * A saved payment that matches no method here. Its row edits the amount
+     * only, and it is sent back otherwise exactly as saved, so the server
+     * reads it the way it always has (by name).
+     */
+    legacy?: Payment;
+};
 
-type PickMethod = { key: string; name: string; type: string; account_id?: string; inactive?: boolean };
+/** A row as `matchPaymentToMethod` reads it. */
+type Candidate = PickMethod & { id: string; is_active: boolean };
 
-const toPick = (m: DefinedMethod): PickMethod => ({
+const NO_METHODS: PaymentMethodRow[] = [];
+
+const toPick = (m: PaymentMethodRow): PickMethod => ({
     key: m.id,
     name: m.name,
     type: m.type,
-    account_id: m.account_id,
+    methodId: m.id,
+    account_id: m.account_id ?? undefined,
     inactive: !m.is_active,
 });
+
+const asCandidate = (m: PickMethod): Candidate => ({ ...m, id: m.key, is_active: !m.inactive });
 
 const genericPicks: PickMethod[] = GENERIC_METHODS.map((m) => ({
     key: `generic-${m.type}`,
@@ -113,53 +113,62 @@ const INSTRUMENT_FIELDS: Record<string, InstrumentField[]> = {
 
 const instrumentFieldsFor = (canonical: string): InstrumentField[] => INSTRUMENT_FIELDS[canonical] ?? [];
 
+interface Distribution {
+    amounts: Record<string, number>;
+    instruments: Record<string, PaymentInstrument>;
+    /** Keys of the methods that carry money on the document. */
+    carried: string[];
+    /** Payments that match no method, each with its own row. */
+    legacy: { key: string; payment: Payment }[];
+}
+
 /**
- * Prefer the exact defined method (name + classification). A payment reloaded
- * from a saved document carries only the canonical method string, so fall back
- * to the first method of that classification — otherwise an amount taken via
- * "bKash" would come back blank on the edit form.
+ * Puts each payment's amount (and cheque details) in its method's box — see
+ * `matchPaymentToMethod` for the order. A payment that matches nothing gets a
+ * row of its own, keyed by its position, rather than being dropped.
  */
-function matchMethod(methods: PickMethod[], p: Payment): PickMethod | undefined {
-    return methods.find((m) => m.name === (p.label || p.method) && canonicalFor(m.type) === p.method)
-        ?? methods.find((m) => canonicalFor(m.type) === p.method);
-}
-
-function paymentsToAmounts(methods: PickMethod[], payments: Payment[]): Record<string, number> {
-    const next: Record<string, number> = {};
-    for (const p of payments) {
-        const match = matchMethod(methods, p);
-        if (match) next[match.key] = (next[match.key] || 0) + p.amount;
-    }
-    return next;
-}
-
-function paymentsToInstruments(methods: PickMethod[], payments: Payment[]): Record<string, PaymentInstrument> {
-    const next: Record<string, PaymentInstrument> = {};
-    for (const p of payments) {
-        const match = matchMethod(methods, p);
-        if (!match) continue;
+function distribute(pool: Candidate[], payments: Payment[]): Distribution {
+    const next: Distribution = { amounts: {}, instruments: {}, carried: [], legacy: [] };
+    payments.forEach((p, index) => {
+        const match = matchPaymentToMethod(pool, p);
+        if (!match) {
+            if (p.amount > 0) {
+                const key = `legacy-${index}`;
+                next.legacy.push({ key, payment: p });
+                next.amounts[key] = p.amount;
+            }
+            return;
+        }
+        next.amounts[match.key] = (next.amounts[match.key] || 0) + p.amount;
+        if (p.amount > 0 && !next.carried.includes(match.key)) next.carried.push(match.key);
         const detail = pickInstrument(p);
-        if (Object.keys(detail).length > 0) next[match.key] = detail;
-    }
+        if (Object.keys(detail).length > 0) next.instruments[match.key] = detail;
+    });
     return next;
 }
 
 function amountsToPayments(
-    methods: PickMethod[],
+    rows: PickMethod[],
     amounts: Record<string, number>,
     instruments: Record<string, PaymentInstrument>,
 ): Payment[] {
-    return methods
+    return rows
         .filter((m) => (amounts[m.key] || 0) > 0)
-        .map((m) => ({
-            method: canonicalFor(m.type),
-            label: m.name,
-            accountId: m.account_id,
-            amount: amounts[m.key],
-            // Only where the tender can have one. A row switched back to cash
-            // must not carry a cheque number that is no longer on screen.
-            ...(instrumentFieldsFor(canonicalFor(m.type)).length > 0 ? instruments[m.key] ?? {} : {}),
-        }));
+        .map((m) => {
+            if (m.legacy) return { ...m.legacy, amount: amounts[m.key] };
+            const method = canonicalFor(m.type);
+            return {
+                method,
+                label: m.name,
+                // The server posts the tender to this method's linked account.
+                ...(m.methodId ? { paymentMethodId: m.methodId } : {}),
+                accountId: m.account_id,
+                amount: amounts[m.key],
+                // Only where the tender can have one. A row switched back to cash
+                // must not carry a cheque number that is no longer on screen.
+                ...(instrumentFieldsFor(method).length > 0 ? instruments[m.key] ?? {} : {}),
+            };
+        });
 }
 
 /** Every string the strip renders. `{amount}` / `{method}` are substituted. */
@@ -223,6 +232,13 @@ export const DEFAULT_PAYMENT_SECTION_LABELS: PaymentSectionLabels = {
 };
 
 interface PaymentSectionProps {
+    /** Which screen's layout to show — each user arranges each screen apart. */
+    context: PaymentLayoutContext;
+    /**
+     * The document's branch: the header branch on a new document, the
+     * document's own on an edit. Only the methods offered there are shown.
+     */
+    storeId: string;
     payments: Payment[];
     total: number;
     onPaymentChange: (payments: Payment[]) => void;
@@ -249,6 +265,8 @@ interface PaymentSectionProps {
 }
 
 export default function PaymentSection({
+    context,
+    storeId,
     payments,
     total,
     onPaymentChange,
@@ -259,52 +277,93 @@ export default function PaymentSection({
     hint,
     captureInstrument = false,
 }: PaymentSectionProps) {
-    const [definedMethods, setDefinedMethods] = useState<DefinedMethod[]>([]);
+    // Each answer remembers what it was asked for, so one that lands after the
+    // branch or screen changed is never shown for the new one. A failed
+    // request settles as empty, so the other answer is still used.
+    const [layoutState, setLayoutState] = useState<{
+        key: string;
+        layout: PaymentLayoutResponse<PaymentMethodRow> | null;
+    } | null>(null);
+    const [listState, setListState] = useState<{ storeId: string; methods: PaymentMethodRow[] } | null>(null);
     const [amounts, setAmounts] = useState<Record<string, number>>({});
     const [instruments, setInstruments] = useState<Record<string, PaymentInstrument>>({});
     const [openInstruments, setOpenInstruments] = useState<string[]>([]); // keys whose panel is expanded
     const [added, setAdded] = useState<string[]>([]); // ids explicitly added via picker
+    const [carried, setCarried] = useState<string[]>([]); // ids that carry money on the document
+    const [legacy, setLegacy] = useState<Distribution['legacy']>([]);
 
     const copy = useMemo(() => ({ ...DEFAULT_PAYMENT_SECTION_LABELS, ...labels }), [labels]);
 
+    const layoutKey = `${storeId}:${context}`;
     useEffect(() => {
         // Read-only renders the recorded payments verbatim — no picker to fill.
-        if (readOnly) return;
-        api.getPaymentMethods()
-            .then((data) => setDefinedMethods(data ?? []))
-            .catch((err) => console.error('Failed to load payment methods', err));
-    }, [readOnly]);
+        // Without a branch there is no layout to ask for; the strip falls back
+        // to the generic methods.
+        if (readOnly || !storeId) return;
+        let current = true;
+        const key = `${storeId}:${context}`;
+        api.getPaymentLayout(storeId, context)
+            .catch((err) => {
+                console.error('Failed to load the payment layout', err);
+                return null;
+            })
+            .then((layout) => { if (current) setLayoutState({ key, layout: layout ?? null }); });
+        // The branch's whole list, switched-off methods included: a saved
+        // payment on one of those still has to find its row.
+        api.getPaymentMethods(undefined, storeId)
+            .catch((err) => {
+                console.error('Failed to load payment methods', err);
+                return [];
+            })
+            .then((methods) => {
+                if (current) setListState({ storeId, methods: Array.isArray(methods) ? methods : [] });
+            });
+        return () => { current = false; };
+    }, [readOnly, storeId, context]);
 
-    const activeSorted = useMemo(
-        () => definedMethods
-            .filter((m) => m.is_active)
+    // Laid out once both answers are in, so a saved payment moves from the
+    // generic boxes to its own method's box in one step rather than two.
+    const ready = layoutState?.key === layoutKey && listState?.storeId === storeId;
+    const visible = (ready && layoutState.layout?.visible) || NO_METHODS;
+    const available = (ready && layoutState.layout?.available) || NO_METHODS;
+    const branchMethods = ready ? listState.methods : NO_METHODS;
+
+    // Fall back to generic methods whenever the branch offers no *usable*
+    // (active) method — not only when none are defined — so an all-inactive
+    // tenant can still take payment.
+    const hasUsableMethods = available.length > 0;
+    const baseRows = useMemo(
+        () => (hasUsableMethods ? visible.map(toPick) : genericPicks),
+        [hasUsableMethods, visible],
+    );
+    // What a saved payment can match: what the branch offers first (so a guess
+    // by type lands on a method it still takes), then its switched-off ones.
+    const pool = useMemo(() => {
+        const offered = hasUsableMethods ? available.map(toPick) : genericPicks;
+        const offeredKeys = new Set(offered.map((m) => m.key));
+        const others = branchMethods
+            .filter((m) => !offeredKeys.has(m.id))
             .slice()
             .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-            .map(toPick),
-        [definedMethods],
-    );
-    const defaultVisible = useMemo(
-        () => definedMethods
-            .filter((m) => m.is_active && m.show_on_entry)
-            .slice()
-            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-            .map(toPick),
-        [definedMethods],
-    );
-    // Fall back to generic methods whenever there are no *usable* (active) methods —
-    // not only when zero are defined — so an all-inactive tenant can still take payment.
-    const hasUsableMethods = activeSorted.length > 0;
-    const visibleMethods = useMemo(() => {
-        if (!hasUsableMethods) return genericPicks; // no active methods → generic fallback
-        const base = defaultVisible;
-        const extra = activeSorted.filter((m) => added.includes(m.key) && !base.some((b) => b.key === m.key));
-        return [...base, ...extra];
-    }, [hasUsableMethods, defaultVisible, activeSorted, added]);
+            .map(toPick);
+        return [...offered, ...others].map(asCandidate);
+    }, [hasUsableMethods, available, branchMethods]);
+
+    const rows = useMemo(() => {
+        const shown = new Set(baseRows.map((m) => m.key));
+        const extra = pool.filter((m) => !shown.has(m.key) && (carried.includes(m.key) || added.includes(m.key)));
+        const unmatched: PickMethod[] = legacy.map(({ key, payment }) => ({
+            key,
+            name: payment.label || payment.method,
+            type: payment.method,
+            legacy: payment,
+        }));
+        return [...baseRows, ...extra, ...unmatched];
+    }, [baseRows, pool, carried, added, legacy]);
     const addableMethods = useMemo(
-        () => activeSorted.filter((m) => !visibleMethods.some((v) => v.key === m.key)),
-        [activeSorted, visibleMethods],
+        () => available.filter((m) => !rows.some((r) => r.key === m.id)).map(toPick),
+        [available, rows],
     );
-    const allMethods = useMemo(() => (hasUsableMethods ? activeSorted : genericPicks), [hasUsableMethods, activeSorted]);
 
     // The last array this strip emitted, so the effect below can tell the
     // parent echoing our own change back from the parent handing us a
@@ -312,29 +371,39 @@ export default function PaymentSection({
     // method sends no payments both when the cart is cleared and when the
     // operator empties the amount box to retype a figure.
     const lastEmitted = useRef<Payment[] | null>(null);
+    // The match list the boxes were last filled from.
+    const reconciledPool = useRef<Candidate[] | null>(null);
 
     const emitPayments = useCallback(
         (nextAmounts: Record<string, number>, nextInstruments: Record<string, PaymentInstrument>) => {
-            const next = amountsToPayments(allMethods, nextAmounts, nextInstruments);
+            const next = amountsToPayments(rows, nextAmounts, nextInstruments);
             lastEmitted.current = next;
             onPaymentChange(next);
         },
-        [allMethods, onPaymentChange],
+        [rows, onPaymentChange],
     );
 
     // Reconcile local inputs when payments reset (e.g. after checkout) or methods load.
     useEffect(() => {
-        setAmounts(paymentsToAmounts(allMethods, payments));
-
-        const next = paymentsToInstruments(allMethods, payments);
         const echo = lastEmitted.current === payments;
-        // Our own change coming back keeps whatever is being typed, so an
-        // amount cleared for a keystroke does not take the cheque entered
-        // against it. Anything else — a cart cleared after checkout, a saved
-        // sale loaded for editing — replaces the panel outright.
-        setInstruments((prev) => (echo ? { ...prev, ...next } : next));
+        const poolChanged = reconciledPool.current !== pool;
+        reconciledPool.current = pool;
+        // Our own change coming back: the boxes already show it. Reading it
+        // again would drop the row of an amount just emptied to retype it.
+        if (echo && !poolChanged) return;
+
+        const next = distribute(pool, payments);
+        setAmounts(next.amounts);
+        setLegacy(next.legacy);
+        // Our own payments re-read against methods that just loaded keep
+        // whatever is being typed, so an amount cleared for a keystroke does
+        // not take the cheque entered against it, nor its row. Anything else —
+        // a cart cleared after checkout, a saved sale loaded for editing —
+        // replaces the strip outright.
+        setInstruments((prev) => (echo ? { ...prev, ...next.instruments } : next.instruments));
+        setCarried((prev) => (echo ? [...new Set([...prev, ...next.carried])] : next.carried));
         if (!echo) setOpenInstruments((open) => (open.length > 0 ? [] : open));
-    }, [payments, allMethods]);
+    }, [payments, pool]);
 
     const updateAmount = (key: string, value: number) => {
         const nextAmounts = { ...amounts, [key]: value };
@@ -366,7 +435,9 @@ export default function PaymentSection({
 
     const renderMethodRow = (m: PickMethod) => {
         const canonical = canonicalFor(m.type);
-        const fields = captureInstrument ? instrumentFieldsFor(canonical) : [];
+        // An unmatched payment's details travel with it untouched.
+        const fields = captureInstrument && !m.legacy ? instrumentFieldsFor(canonical) : [];
+        const legacySummary = m.legacy ? paymentInstrumentSummary(m.legacy) : '';
         const detail = instruments[m.key];
         const summary = instrumentSummary(detail);
         const expanded = openInstruments.includes(m.key);
@@ -397,6 +468,7 @@ export default function PaymentSection({
                         className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end"
                     />
                 </div>
+                {legacySummary && <p className="text-[11px] text-gray-500">{legacySummary}</p>}
 
                 {offerInstrument && (
                     <>
@@ -449,7 +521,7 @@ export default function PaymentSection({
             )}
 
             <div className="space-y-1.5 rounded border p-2">
-                {!readOnly && visibleMethods.map(renderMethodRow)}
+                {!readOnly && rows.map(renderMethodRow)}
                 {readOnly && payments.length === 0 && (
                     <p className="text-sm text-gray-400">{copy.noPayments}</p>
                 )}

@@ -156,6 +156,10 @@ function SaleDetailPageContent() {
             refNumber: sale.reference_number || '',
             payments: (sale.payments || []).map((p: any) => ({
                 method: p.payment_method,
+                // The method it was taken on and its name then, so the strip
+                // puts it back in that method's box and an edit keeps it there.
+                label: p.payment_method_name ?? undefined,
+                paymentMethodId: p.payment_method_id ?? undefined,
                 amount: parseFloat(p.amount),
                 ...instrumentFromRecord(p),
             })),
@@ -236,6 +240,7 @@ function SaleDetailPageContent() {
                 })),
                 payments: payments.map((p) => ({
                     paymentMethod: p.method,
+                    paymentMethodId: p.paymentMethodId,
                     amount: p.amount,
                     accountId: p.accountId,
                     bankName: p.bankName,
@@ -618,6 +623,8 @@ function SaleDetailPageContent() {
             salesReps={salesReps}
             salesRepName={sale.salesRep?.name ?? undefined}
             adjustmentLabel="Adjustment"
+            // The sale's own branch, which an edit cannot change.
+            storeId={sale.store_id ?? ''}
             payments={payments}
             onPaymentChange={updatePayment}
             // Editing a posted sale's payments rewrites its tenders and nothing
