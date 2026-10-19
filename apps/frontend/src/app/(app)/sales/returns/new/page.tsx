@@ -17,10 +17,16 @@ import {
     buildVoiceEntryMessages,
     type VoiceEntryResult,
 } from '@/lib/voice-entry';
+import PaymentSection from '@/components/document-entry/PaymentSection';
 import { useNewSaleCart, type LineItem } from '@/lib/hooks/useNewSaleCart';
+import { useReturnRefund } from '@/lib/hooks/useReturnRefund';
+import { paymentsFromRecords, returnPaymentsPayload } from '@/lib/return-refund-prefill';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
 import { openSaleLineQty } from '@/lib/open-sale-line';
 import { toast } from '@/lib/toast';
+
+/** The server's refusal of a partial refund when no customer's due can take the rest. */
+const REFUND_NEEDS_CUSTOMER = "Refund the full amount, or pick the customer's sale";
 
 /** Units of a sale line not already covered by an earlier return or exchange. */
 function returnableQty(saleItem: any): number {
@@ -65,6 +71,11 @@ function NewSalesReturnPageContent() {
         setWarehouseId((current) => current || defaultWarehouseId);
     }, [defaultWarehouseId]);
 
+    // The refund opens the way the sale was paid, less whatever the customer
+    // still owes (that part comes off the due instead). No customer, no due.
+    const originalTenders = useMemo(() => paymentsFromRecords(sale?.payments), [sale]);
+    const partyDue: number | null = sale?.customer_id ? Number(sale.customer?.due_balance ?? 0) : null;
+
     const totals = useMemo(() => {
         const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
         return {
@@ -78,6 +89,20 @@ function NewSalesReturnPageContent() {
             total: subtotal,
         };
     }, [items]);
+
+    const refund = useReturnRefund({
+        context: 'sale_return',
+        docKey: sale?.id ?? null,
+        total: totals.total,
+        partyDue,
+        originalTenders,
+    });
+    const refunded = refund.payments.reduce((sum, p) => sum + p.amount, 0);
+    // What the tenders leave unrefunded comes off the customer's due, so with
+    // no customer the strip must cover the whole total — and never exceed it.
+    const refundBalanced = partyDue !== null
+        ? refunded - totals.total < 0.01
+        : Math.abs(totals.total - refunded) < 0.01;
 
     /** Loads a fetched sale's still-returnable lines into the cart. */
     const acceptSale = (fullSale: any) => {
@@ -214,6 +239,15 @@ function NewSalesReturnPageContent() {
             return;
         }
 
+        if (!refundBalanced) {
+            toast.error(
+                partyDue === null && refunded < totals.total
+                    ? REFUND_NEEDS_CUSTOMER
+                    : 'The refund is more than the return total',
+            );
+            return;
+        }
+
         setSubmitting(true);
         try {
             await api.createReturn({
@@ -228,6 +262,7 @@ function NewSalesReturnPageContent() {
                     warehouseId: perLineWarehouse ? item.warehouseId : undefined,
                 })),
                 reason: description || undefined,
+                payments: returnPaymentsPayload(refund.payments),
             });
 
             clearCart();
@@ -342,13 +377,31 @@ function NewSalesReturnPageContent() {
                 />
             }
             panel={
-                <TotalsFooter
-                    totals={totals}
-                    onTotalsChange={() => {}}
-                    tenantVatRate={0}
-                    showAdjustments={false}
-                    totalLabel="Refund Total"
-                />
+                <>
+                    <TotalsFooter
+                        totals={totals}
+                        onTotalsChange={() => {}}
+                        tenantVatRate={0}
+                        showAdjustments={false}
+                        totalLabel="Refund Total"
+                    />
+                    {sale && (
+                        <div className="border-t pt-3">
+                            <PaymentSection
+                                key={sale.id}
+                                context="sale_return"
+                                storeId={sale.store_id}
+                                payments={refund.payments}
+                                total={totals.total}
+                                onPaymentChange={refund.onPaymentChange}
+                                onLayoutReady={refund.onLayoutReady}
+                                captureInstrument
+                                labels={{ title: 'Refund', keepingDue: 'Adjusted against due {amount}' }}
+                                blockedReason={partyDue === null ? REFUND_NEEDS_CUSTOMER : undefined}
+                            />
+                        </div>
+                    )}
+                </>
             }
             actions={
                 <>
@@ -360,7 +413,7 @@ function NewSalesReturnPageContent() {
                     </Link>
                     <button
                         type="submit"
-                        disabled={submitting || items.length === 0}
+                        disabled={submitting || items.length === 0 || (!!sale && (!refund.ready || !refundBalanced))}
                         className="flex-1 px-3 py-2 bg-danger text-white rounded hover:bg-red-700 disabled:bg-gray-400 text-sm font-medium"
                     >
                         {submitting ? 'Processing…' : 'Create Return'}

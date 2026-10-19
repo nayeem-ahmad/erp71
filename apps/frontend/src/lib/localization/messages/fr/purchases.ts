@@ -374,6 +374,11 @@ export const purchasesMessages = {
             createReturn: "Créer le retour fournisseur",
             creating: "Création...",
         },
+        refund: {
+            title: "Argent reçu du fournisseur",
+            keepingDue: "Imputé sur les dettes fournisseurs {amount}",
+            needsSupplier: "Encaissez le montant total ou choisissez l'achat d'un fournisseur",
+        },
         detail: {
             loadFailed: "Impossible de charger le retour fournisseur",
             saveFailed: "Impossible d'enregistrer le retour fournisseur",

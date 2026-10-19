@@ -374,6 +374,11 @@ export const purchasesMessages = {
                 createReturn: "ক্রয় রিটার্ন তৈরি করুন",
                 creating: "তৈরি হচ্ছে...",
             },
+            refund: {
+                title: "সরবরাহকারীর কাছ থেকে প্রাপ্ত টাকা",
+                keepingDue: "প্রদেয় বকেয়ার সাথে সমন্বয় {amount}",
+                needsSupplier: "পুরো টাকা গ্রহণ করুন, অথবা সরবরাহকারীর ক্রয় বেছে নিন",
+            },
             detail: {
                 loadFailed: "ক্রয় রিটার্ন লোড করতে ব্যর্থ",
                 saveFailed: "ক্রয় রিটার্ন সংরক্ষণ করতে ব্যর্থ",

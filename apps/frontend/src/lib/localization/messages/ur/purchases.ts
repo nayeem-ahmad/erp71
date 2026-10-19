@@ -374,6 +374,11 @@ export const purchasesMessages = {
             createReturn: "خریداری کی واپسی بنائیں",
             creating: "بنایا جا رہا ہے...",
         },
+        refund: {
+            title: "سپلائر سے موصول رقم",
+            keepingDue: "واجب الادا رقم میں ایڈجسٹ {amount}",
+            needsSupplier: "پوری رقم وصول کریں، یا سپلائر کی خریداری منتخب کریں",
+        },
         detail: {
             loadFailed: "خریداری کی واپسی لوڈ کرنے میں ناکامی",
             saveFailed: "خریداری کی واپسی محفوظ کرنے میں ناکامی",

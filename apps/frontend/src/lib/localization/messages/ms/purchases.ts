@@ -374,6 +374,11 @@ export const purchasesMessages = {
                 createReturn: 'Cipta Pulangan Pembelian',
                 creating: 'Mencipta...',
             },
+            refund: {
+                title: 'Wang diterima daripada pembekal',
+                keepingDue: 'Dilaraskan terhadap hutang belum bayar {amount}',
+                needsSupplier: 'Terima jumlah penuh, atau pilih pembelian pembekal',
+            },
             detail: {
                 loadFailed: 'Gagal memuatkan pulangan pembelian',
                 saveFailed: 'Gagal menyimpan pulangan pembelian',

@@ -374,6 +374,11 @@ export const purchasesMessages = {
             createReturn: "खरीद वापसी बनाएँ",
             creating: "बनाया जा रहा है...",
         },
+        refund: {
+            title: "आपूर्तिकर्ता से प्राप्त राशि",
+            keepingDue: "देय राशि में समायोजित {amount}",
+            needsSupplier: "पूरी राशि प्राप्त करें, या आपूर्तिकर्ता की खरीद चुनें",
+        },
         detail: {
             loadFailed: "खरीद वापसी लोड नहीं हो सकी",
             saveFailed: "खरीद वापसी सहेजी नहीं जा सकी",

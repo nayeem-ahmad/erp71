@@ -374,6 +374,11 @@ export const purchasesMessages = {
             createReturn: "Einkaufsretoure anlegen",
             creating: "Wird angelegt...",
         },
+        refund: {
+            title: "Vom Lieferanten erhaltenes Geld",
+            keepingDue: "Mit Verbindlichkeit verrechnet {amount}",
+            needsSupplier: "Den vollen Betrag annehmen oder den Einkauf eines Lieferanten wählen",
+        },
         detail: {
             loadFailed: "Einkaufsretoure konnte nicht geladen werden",
             saveFailed: "Einkaufsretoure konnte nicht gespeichert werden",

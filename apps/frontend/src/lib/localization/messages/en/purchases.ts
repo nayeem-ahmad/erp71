@@ -374,6 +374,11 @@ export const purchasesMessages = {
             createReturn: 'Create Purchase Return',
             creating: 'Creating...',
         },
+        refund: {
+            title: 'Money received from supplier',
+            keepingDue: 'Adjusted against payable {amount}',
+            needsSupplier: 'Receive the full amount, or pick the supplier\'s purchase',
+        },
         detail: {
             loadFailed: 'Failed to load purchase return',
             saveFailed: 'Failed to save purchase return',

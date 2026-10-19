@@ -374,6 +374,11 @@ export const purchasesMessages = {
             createReturn: "إنشاء مرتجع الشراء",
             creating: "جارٍ الإنشاء...",
         },
+        refund: {
+            title: "المبلغ المستلم من المورّد",
+            keepingDue: "مسوّى مقابل الذمم الدائنة {amount}",
+            needsSupplier: "استلم المبلغ كاملاً، أو اختر مشتريات المورّد",
+        },
         detail: {
             loadFailed: "تعذّر تحميل مرتجع الشراء",
             saveFailed: "تعذّر حفظ مرتجع الشراء",

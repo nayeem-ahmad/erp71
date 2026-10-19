@@ -374,6 +374,11 @@ export const purchasesMessages = {
             createReturn: "Crear devolución de compra",
             creating: "Creando...",
         },
+        refund: {
+            title: "Dinero recibido del proveedor",
+            keepingDue: "Ajustado contra cuentas por pagar {amount}",
+            needsSupplier: "Reciba el importe completo o elija la compra de un proveedor",
+        },
         detail: {
             loadFailed: "No se pudo cargar la devolución de compra",
             saveFailed: "No se pudo guardar la devolución de compra",

@@ -1,7 +1,8 @@
 'use client';
 
 import type { PaymentLayoutContext } from '@erp71/shared-types';
-import DocumentPaymentSection from '@/components/document-entry/PaymentSection';
+import DocumentPaymentSection, { type PaymentSectionLabels } from '@/components/document-entry/PaymentSection';
+import type { PaymentMethodRow } from '@/lib/api';
 import type { Payment } from '@/lib/hooks/useNewSaleCart';
 import { useI18n } from '@/lib/i18n';
 
@@ -14,6 +15,12 @@ interface PurchasePaymentSectionProps {
     total: number;
     onPaymentChange: (payments: Payment[]) => void;
     readOnly?: boolean;
+    /** Wording for a screen with its own idea of the unpaid rest, e.g. a purchase return. */
+    labels?: Partial<PaymentSectionLabels>;
+    /** Why the unpaid rest may not stand (a return with no supplier); see the shared strip. */
+    blockedReason?: string;
+    /** See the shared strip: told which methods this user sees, once the layout lands. */
+    onLayoutReady?: (visible: PaymentMethodRow[], available: PaymentMethodRow[]) => void;
 }
 
 /**
@@ -37,6 +44,9 @@ export default function PurchasePaymentSection({
     total,
     onPaymentChange,
     readOnly = false,
+    labels,
+    blockedReason,
+    onLayoutReady,
 }: PurchasePaymentSectionProps) {
     const { t, locale } = useI18n();
     const copy = t.purchaseShared;
@@ -53,6 +63,8 @@ export default function PurchasePaymentSection({
             readOnly={readOnly}
             locale={locale}
             captureInstrument
+            blockedReason={blockedReason}
+            onLayoutReady={onLayoutReady}
             labels={{
                 title: copy.payment,
                 settled: copy.paymentSettled,
@@ -85,6 +97,7 @@ export default function PurchasePaymentSection({
                 instrumentApprovalNo: instrument.approvalNo,
                 instrumentTransactionId: instrument.transactionId,
                 instrumentPaymentDate: instrument.paymentDate,
+                ...labels,
             }}
         />
     );

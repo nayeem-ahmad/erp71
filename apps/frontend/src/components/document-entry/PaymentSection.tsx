@@ -275,6 +275,20 @@ interface PaymentSectionProps {
      * `PurchasePayment`, so both turn it on.
      */
     captureInstrument?: boolean;
+    /**
+     * Told which methods the strip shows this user (`visible`, in order) and
+     * which the branch offers at all (`available`) once the layout has landed,
+     * and again whenever either changes — a saved layout, or a different
+     * branch. A failed layout request settles as two empty lists, so a caller
+     * waiting on this is never left waiting.
+     *
+     * For a screen that fills the strip itself, such as a return pre-filling
+     * its refund in "the first method this user sees": it can read the answer
+     * the strip already fetched instead of asking the server for the layout a
+     * second time. Never called in `readOnly`, which shows recorded payments
+     * and loads no layout.
+     */
+    onLayoutReady?: (visible: PaymentMethodRow[], available: PaymentMethodRow[]) => void;
 }
 
 export default function PaymentSection({
@@ -289,6 +303,7 @@ export default function PaymentSection({
     blockedReason,
     hint,
     captureInstrument = false,
+    onLayoutReady,
 }: PaymentSectionProps) {
     // Each answer remembers what it was asked for, so one that lands after the
     // branch or screen changed is never shown for the new one. A failed
@@ -346,6 +361,14 @@ export default function PaymentSection({
     // method. They are shown, but locked. Once loading has finished with no
     // active method, the generic boxes are the strip and take input.
     const loading = !readOnly && !!storeId && !ready;
+
+    // Through a ref so a parent passing a fresh function each render does not
+    // re-announce a layout that has not changed.
+    const layoutReadyRef = useRef(onLayoutReady);
+    layoutReadyRef.current = onLayoutReady;
+    useEffect(() => {
+        if (ready) layoutReadyRef.current?.(visible, available);
+    }, [ready, visible, available]);
 
     // What the Customise modal edits: the branch's methods with the user's
     // shown ones first, in order, and the tucked-away ones after.
