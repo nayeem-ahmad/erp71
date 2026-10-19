@@ -13,16 +13,14 @@ import {
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostInput, type AutoPostResult } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
+import { allocateTenders, sameTenders } from '../accounting/payment-account.util';
 import {
-    allocateTenders,
-    resolveTenders,
-    sameTenders,
-    storedToTenderInputs,
-    type ResolvedTender,
-    type StoredTender,
-} from '../accounting/payment-account.util';
-import { paymentInstrumentData, type PaymentInstrumentColumns } from '../common/payment-instrument.util';
-import type { ReturnPaymentDto } from '../common/return-payment.dto';
+    resolveReturnTenders,
+    resolveStoredReturnTenders,
+    returnPaymentRow,
+    sameReturnPaymentRows,
+    type ReturnTender,
+} from '../common/return-tenders.util';
 
 /** The 400 for money received that adds up to more than the goods going back. */
 const RECEIVED_ABOVE_TOTAL = 'The amount received is more than the return total.';
@@ -41,46 +39,6 @@ const PAYMENTS_IN_ORDER = { orderBy: { created_at: 'asc' } } as const;
 
 function round2(value: number): number {
     return Math.round(value * 100) / 100;
-}
-
-/** A tender received back, as resolved, with the instrument details its row stores. */
-type ReceivedTender = ResolvedTender & { instrument: PaymentInstrumentColumns };
-
-/** A `PurchaseReturnPayment` row, as an edit reads it back. */
-type StoredReceivedRow = StoredTender & PaymentInstrumentColumns;
-
-/** The `PurchaseReturnPayment` row a resolved tender is saved as. */
-function receivedPaymentRow(returnId: string, tender: ReceivedTender) {
-    return {
-        return_id: returnId,
-        payment_method: tender.paymentMethod,
-        payment_method_id: tender.methodId,
-        payment_method_name: tender.methodName,
-        account_id: tender.accountId,
-        amount: tender.amount,
-        ...tender.instrument,
-    };
-}
-
-/**
- * Whether the saved rows already say exactly what `tenders` would write, in
- * the same order — method, amount and every instrument detail. Used once the
- * tenders are known to be the same money, to tell a cheque number corrected
- * from nothing changed at all.
- */
-function sameReceivedRows(rows: StoredReceivedRow[], tenders: ReceivedTender[]): boolean {
-    const time = (date: Date | null) => date?.getTime() ?? null;
-    return rows.length === tenders.length && rows.every((row, index) => {
-        const tender = tenders[index];
-        return row.payment_method === tender.paymentMethod
-            && row.payment_method_id === tender.methodId
-            && Math.abs(Number(row.amount) - tender.amount) <= EPSILON
-            && row.bank_name === tender.instrument.bank_name
-            && row.bank_branch === tender.instrument.bank_branch
-            && row.bank_account_number === tender.instrument.bank_account_number
-            && row.reference_no === tender.instrument.reference_no
-            && time(row.instrument_date) === time(tender.instrument.instrument_date);
-    });
 }
 
 /** What settling a return reads off the purchase the goods go back against. */
@@ -160,7 +118,7 @@ export class PurchaseReturnsService {
             // Resolved at the purchase's branch, where its tenders are offered.
             // Omitted, the whole return comes off the payable as it always has.
             const tenders = dto.payments
-                ? await this.receivedTenders(tx, tenantId, storeId, dto.payments)
+                ? await resolveReturnTenders(tx, tenantId, storeId, dto.payments)
                 : null;
 
             const count = await tx.purchaseReturn.count({ where: { tenant_id: tenantId } });
@@ -337,7 +295,7 @@ export class PurchaseReturnsService {
             // The return's own branch. Tenders it already carries are exempt
             // from the branch check and keep the account they were saved with.
             const requested = dto.payments
-                ? await this.receivedTenders(tx, tenantId, existingReturn.store_id, dto.payments, existingReturn.payments)
+                ? await resolveReturnTenders(tx, tenantId, existingReturn.store_id, dto.payments, existingReturn.payments)
                 : null;
 
             // The money it already records, sent back with the same lines:
@@ -346,14 +304,14 @@ export class PurchaseReturnsService {
             // qualifies — one saved before them has no rows, which is not the
             // same as nothing received.
             if (requested && !dto.items && existingReturn.tenders_recorded) {
-                const stored = await this.storedReceivedTenders(tx, tenantId, existingReturn.store_id, existingReturn.payments);
+                const stored = await resolveStoredReturnTenders(tx, tenantId, existingReturn.store_id, existingReturn.payments);
                 if (sameTenders(requested, stored)) {
                     // A cheque number or date corrected, or the order changed:
                     // the rows follow, the vouchers and the due do not.
-                    if (!sameReceivedRows(existingReturn.payments, requested)) {
+                    if (!sameReturnPaymentRows(existingReturn.payments, requested)) {
                         await tx.purchaseReturnPayment.deleteMany({ where: { return_id: id } });
                         await tx.purchaseReturnPayment.createMany({
-                            data: requested.map((tender) => receivedPaymentRow(id, tender)),
+                            data: requested.map((tender) => returnPaymentRow(id, tender)),
                         });
                     }
                     await tx.purchaseReturn.update({
@@ -450,7 +408,7 @@ export class PurchaseReturnsService {
                 data: updateData,
             });
 
-            let tenders: ReceivedTender[] | null;
+            let tenders: ReturnTender[] | null;
             if (requested) {
                 tenders = requested;
             } else if (existingReturn.tenders_recorded) {
@@ -458,7 +416,7 @@ export class PurchaseReturnsService {
                 // and whatever they no longer cover comes off the payable.
                 const stored = existingReturn.payments.reduce((sum, row) => sum + Number(row.amount), 0);
                 if (stored - total > EPSILON) throw new BadRequestException(STORED_RECEIVED_ABOVE_TOTAL);
-                tenders = await this.storedReceivedTenders(tx, tenantId, existingReturn.store_id, existingReturn.payments);
+                tenders = await resolveStoredReturnTenders(tx, tenantId, existingReturn.store_id, existingReturn.payments);
             } else {
                 // Saved before tenders existed: settled the way it was then.
                 tenders = null;
@@ -566,56 +524,6 @@ export class PurchaseReturnsService {
     }
 
     /**
-     * The client's tenders received, resolved at `storeId` (see
-     * `resolveTenders`): each one's method, name, linked account and posting
-     * mode. `stored` is the return's saved tenders on an edit, so the ones it
-     * already carries keep what they were saved with.
-     */
-    private async receivedTenders(
-        tx: Prisma.TransactionClient,
-        tenantId: string,
-        storeId: string,
-        payments: ReturnPaymentDto[],
-        stored: StoredTender[] = [],
-    ): Promise<ReceivedTender[]> {
-        const resolved = await resolveTenders(
-            tx,
-            tenantId,
-            storeId,
-            payments.map((payment) => ({
-                paymentMethod: payment.paymentMethod,
-                paymentMethodId: payment.paymentMethodId,
-                amount: payment.amount,
-            })),
-            stored,
-        );
-        return resolved.map((tender, index) => ({ ...tender, instrument: paymentInstrumentData(payments[index]) }));
-    }
-
-    /**
-     * A return's saved tenders, for an edit that sent none: each keeps its
-     * method, name, account and instrument details.
-     */
-    private async storedReceivedTenders(
-        tx: Prisma.TransactionClient,
-        tenantId: string,
-        storeId: string,
-        rows: StoredReceivedRow[],
-    ): Promise<ReceivedTender[]> {
-        const resolved = await resolveTenders(tx, tenantId, storeId, storedToTenderInputs(rows), rows);
-        return resolved.map((tender, index) => ({
-            ...tender,
-            instrument: {
-                bank_name: rows[index].bank_name,
-                bank_branch: rows[index].bank_branch,
-                bank_account_number: rows[index].bank_account_number,
-                reference_no: rows[index].reference_no,
-                instrument_date: rows[index].instrument_date,
-            },
-        }));
-    }
-
-    /**
      * What a return does to its supplier and the ledger once its lines are
      * saved. Shared by create and by an edit (after `unwindPurchaseReturn`), so
      * an edited return settles exactly as if it had been entered that way.
@@ -639,7 +547,7 @@ export class PurchaseReturnsService {
         tenantId: string,
         userId: string | undefined,
         ret: SettledReturn,
-        input: { total: number; tenders: ReceivedTender[] | null; purchase: ReturnPurchase | null; date?: Date },
+        input: { total: number; tenders: ReturnTender[] | null; purchase: ReturnPurchase | null; date?: Date },
     ): Promise<AutoPostResult> {
         const { tenders, purchase, date } = input;
         if (tenders === null) return this.settleUnrecordedReturn(tx, tenantId, userId, ret, input);
@@ -681,7 +589,7 @@ export class PurchaseReturnsService {
 
         if (tenders.length) {
             await tx.purchaseReturnPayment.createMany({
-                data: tenders.map((tender) => receivedPaymentRow(ret.id, tender)),
+                data: tenders.map((tender) => returnPaymentRow(ret.id, tender)),
             });
         }
         if (!ret.tenders_recorded) {
