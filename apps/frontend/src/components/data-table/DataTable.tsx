@@ -62,9 +62,11 @@ import {
     PINNED_LAST_COLUMN_ID,
 } from './column-order';
 import { exportToCSV, exportToExcel, exportToPDF, printTable, buildExportMatrix, exportableColumnLabel, isExportableColumnId, valueFromColumn } from './export-utils';
-import { renderHeaderHtml } from '@/lib/print';
+import { renderHeaderHtml, sheetPaper } from '@/lib/print';
 import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { printBranch } from '@/lib/print/print-branch';
+import { resolvePrintPaper } from '@/lib/hooks/useSalePrintPrefs';
 import BulkActionBar, { type BulkAction } from './BulkActionBar';
 import ExportDialog, { type ExportFormat, type ExportRowScope } from './ExportDialog';
 import { toast } from '@/lib/toast';
@@ -879,16 +881,24 @@ export default function DataTable<T>({
                         {/* Print */}
                         <button
                             onClick={async () => {
-                                const header = await printHeader.resolve();
+                                // The branch the page is filtered to; company
+                                // paper under "All branches" or with no filter.
+                                const [header, chosenPaper] = await Promise.all([
+                                    printHeader.resolve(printBranch()),
+                                    resolvePrintPaper(),
+                                ]);
+                                // The paper Print settings chose on this browser; a
+                                // table has no roll layout, so a roll prints on A4.
+                                const printPaper = sheetPaper(chosenPaper);
                                 const headerContext: HeaderContext = {
                                     docTitle: title,
                                     companyName: header.companyName,
                                 };
                                 printTable(table, title, {
-                                    html: renderHeaderHtml(header.headerConfig, headerContext, 'A4'),
+                                    html: renderHeaderHtml(header.headerConfig, headerContext, printPaper),
                                     config: header.headerConfig,
                                     context: headerContext,
-                                });
+                                }, printPaper);
                             }}
                             className={toolbarBtnBase}
                             title={t.common.dataTable.print}

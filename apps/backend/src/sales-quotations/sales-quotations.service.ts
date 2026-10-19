@@ -519,6 +519,9 @@ export class SalesQuotationsService {
                 // USD proforma has no business being shown what the seller
                 // expects to book it at.
                 customer: { select: { name: true } },
+                // The branch picks the letterhead, as on the paper copy; like
+                // `tenant_id`, `toPublicQuotation` does not copy it to the page.
+                store_id: true,
                 // `address` joins `name` for the letterhead's {{address}} token —
                 // the branch the document was written at, not the workspace.
                 store: { select: { name: true, address: true } },
@@ -573,8 +576,8 @@ export class SalesQuotationsService {
     }
 
     /**
-     * The letterhead a shared quotation prints on: the tenant's template for
-     * this document kind, falling back — inside `PrintTemplatesService` — to one
+     * The letterhead a shared quotation prints on: its branch's template for
+     * this document kind, else the tenant's, falling back — inside `PrintTemplatesService` — to one
      * derived from their branding, so a seller who has never opened the template
      * editor still gets their logo and accent colour.
      *
@@ -585,6 +588,7 @@ export class SalesQuotationsService {
      */
     private async shareLetterhead(quote: {
         tenant_id: string;
+        store_id?: string | null;
         doc_kind: string | null;
         store: { name: string; address: string | null } | null;
         tenant: {
@@ -600,6 +604,8 @@ export class SalesQuotationsService {
                 quote.doc_kind === 'PROFORMA'
                     ? PrintDocType.PROFORMA_INVOICE
                     : PrintDocType.QUOTE,
+                // The quotation's branch pin first, then company paper.
+                quote.store_id ?? undefined,
             );
 
             return toPublicLetterhead(config, {

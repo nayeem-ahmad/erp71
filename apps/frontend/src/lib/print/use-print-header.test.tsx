@@ -56,6 +56,19 @@ describe('usePrintHeader', () => {
         expect(result.current.headerConfig.logo?.url).toBe('https://cdn.example.com/brand.png');
     });
 
+    it('asks again on the next print after a failed request', async () => {
+        mockFetch.mockRejectedValueOnce(new Error('offline'));
+        mockFetch.mockResolvedValueOnce({ template_id: 'b', name: 'Branch', config: { layout: 'logo-right' } });
+        const { result } = renderHook(() => usePrintHeader('VOUCHER', { eager: false }));
+
+        const first = await result.current.resolve('s1');
+        const second = await result.current.resolve('s1');
+
+        expect(first.headerConfig.logo?.url).toBe('https://cdn.example.com/brand.png');
+        expect(second.headerConfig.layout).toBe('logo-right');
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('requests each document type once across components', async () => {
         mockFetch.mockResolvedValue({ template_id: 't', name: 'n', config: {} });
 

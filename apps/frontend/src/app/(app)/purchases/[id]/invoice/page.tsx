@@ -11,6 +11,7 @@ import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
 import { instrumentFromRecord, instrumentSummary, type PaymentInstrumentRecord } from '@/lib/payment-instrument';
+import { usePurchasePrinting } from '@/lib/hooks/usePurchasePrinting';
 
 interface InvoiceData {
     purchase: {
@@ -66,6 +67,10 @@ export default function PurchaseInvoicePage() {
     const [data, setData] = useState<InvoiceData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    // Printed by the purchases list's printer: the purchase's own branch
+    // letterhead, on the paper this browser prints on. The page below is only
+    // what is read on screen.
+    const { paperSize, busyId, printInvoice } = usePurchasePrinting();
 
     useEffect(() => {
         if (!params.id) return;
@@ -112,7 +117,7 @@ export default function PurchaseInvoicePage() {
                     #invoice-printable, #invoice-printable * { visibility: visible !important; }
                     #invoice-printable { position: fixed; top: 0; left: 0; width: 100%; margin: 0; padding: 24px; }
                     .no-print { display: none !important; }
-                    @page { size: A4; margin: 15mm; }
+                    @page { margin: 15mm; }
                 }
             `}</style>
 
@@ -139,14 +144,17 @@ export default function PurchaseInvoicePage() {
                                     {t.common.duplicate}
                                 </Link>
                                 <button
-                                    onClick={() => window.print()}
+                                    onClick={() => void printInvoice(purchase.id, paperSize)}
+                                    disabled={busyId === purchase.id}
                                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
                                 >
                                     <Printer className="h-4 w-4" />
                                     {t.purchases.invoice.print}
                                 </button>
+                                {/* The print preview saves as PDF, from the same document. */}
                                 <button
-                                    onClick={() => window.print()}
+                                    onClick={() => void printInvoice(purchase.id, paperSize)}
+                                    disabled={busyId === purchase.id}
                                     className="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium shadow-sm transition-colors"
                                     style={{ backgroundColor: primaryColor }}
                                 >

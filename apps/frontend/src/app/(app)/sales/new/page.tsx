@@ -22,6 +22,7 @@ import {
     type PaperSize,
 } from '@/lib/sales-invoice-printer';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { invoiceQrDataUrl } from '@/lib/invoice-qr';
 import { useInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 import { useTaxPricing } from '@/lib/hooks/useTaxPricing';
@@ -93,7 +94,9 @@ function NewSalePageContent() {
     const [submitting, setSubmitting] = useState(false);
     const [savingDraft, setSavingDraft] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
-    const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+    // The paper this browser prints sales on — the one Print settings and the
+    // sales list use — and a change here is remembered for them too.
+    const { paperSize, setPaperSize } = useSalePrintPrefs();
     const [saleDate, setSaleDate] = useState<string>(() => toDatetimeLocal(new Date()));
     // The field is seeded when the page opens, and a counter keeps it open all
     // shift. Until the operator picks a date, none is sent and the server stamps
@@ -262,10 +265,6 @@ function NewSalePageContent() {
             ]);
             setSalesSettings(settings);
             setCurrentUser(user);
-            // Use default paper size from settings if available
-            if (settings?.default_paper_size) {
-                setPaperSize(settings.default_paper_size as PaperSize);
-            }
         } catch (error) {
             console.error('Failed to load page data', error);
         } finally {

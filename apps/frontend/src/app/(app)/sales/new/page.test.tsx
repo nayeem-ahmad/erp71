@@ -907,6 +907,28 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'Thermal80', undefined, DEFAULT_INVOICE_PRINT_PREFS);
     });
 
+    it('starts on the paper this browser chose in Print settings', async () => {
+        (window.localStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+            key === 'erp71:sales-print:paper-size' ? 'A5' : 'store-1');
+        await sellOneItem();
+        await screen.findByRole('dialog');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
+        });
+
+        expect(printSalesInvoice).toHaveBeenCalledWith(expect.anything(), 'A5', undefined, DEFAULT_INVOICE_PRINT_PREFS);
+    });
+
+    it('remembers a paper picked here for the next print on this browser', async () => {
+        await sellOneItem();
+        await screen.findByRole('dialog');
+
+        fireEvent.change(screen.getByLabelText('Paper size'), { target: { value: 'Letter' } });
+
+        expect(window.localStorage.setItem).toHaveBeenCalledWith('erp71:sales-print:paper-size', 'Letter');
+    });
+
     it('prints nothing when the operator declines', async () => {
         await sellOneItem();
         await screen.findByRole('dialog');

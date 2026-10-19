@@ -1,17 +1,20 @@
 import { act, renderHook } from '@testing-library/react';
 import { useSalePrinting } from './useSalePrinting';
-import { printSaleChallan, printSaleInvoice, printSaleInvoices } from '@/lib/sale-print-actions';
+import { printSaleChallan, printSaleInvoice, printSaleInvoices, printSaleReceipt } from '@/lib/sale-print-actions';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 
 const invoiceResolve = jest.fn();
 const challanResolve = jest.fn();
+const receiptResolve = jest.fn();
 
 jest.mock('@/lib/print/use-print-header', () => ({
     usePrintHeader: (docType: string) => ({
         headerConfig: { layout: 'session' },
         companyName: 'Acme',
-        resolve: docType === 'DELIVERY_CHALLAN' ? challanResolve : invoiceResolve,
+        resolve: docType === 'DELIVERY_CHALLAN'
+            ? challanResolve
+            : docType === 'POS_RECEIPT' ? receiptResolve : invoiceResolve,
     }),
 }));
 
@@ -72,6 +75,7 @@ describe('useSalePrinting', () => {
         jest.clearAllMocks();
         invoiceResolve.mockResolvedValue({ headerConfig: { layout: 'gulshan-invoice' }, companyName: 'Acme' });
         challanResolve.mockResolvedValue({ headerConfig: { layout: 'gulshan-challan' }, companyName: 'Acme' });
+        receiptResolve.mockResolvedValue({ headerConfig: { layout: 'gulshan-receipt' }, companyName: 'Acme' });
         resolveLayout.mockResolvedValue(memberLayout);
     });
 
@@ -146,6 +150,22 @@ describe('useSalePrinting', () => {
             'A4',
             expect.objectContaining({
                 challanHeader: expect.objectContaining({ headerConfig: { layout: 'gulshan-challan' } }),
+            }),
+            true,
+        );
+    });
+
+    it('reprints a receipt on the POS receipt letterhead of the sale’s store', async () => {
+        const { result } = renderHook(() => useSalePrinting({ resolve: async () => gulshanSale }));
+
+        await act(() => result.current.printReceipt('sale-1', 'Thermal80'));
+
+        expect(receiptResolve).toHaveBeenCalledWith('gulshan');
+        expect(printSaleReceipt).toHaveBeenCalledWith(
+            gulshanSale,
+            'Thermal80',
+            expect.objectContaining({
+                receiptHeader: expect.objectContaining({ headerConfig: { layout: 'gulshan-receipt' } }),
             }),
             true,
         );

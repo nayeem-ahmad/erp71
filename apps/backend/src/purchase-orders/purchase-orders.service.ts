@@ -187,7 +187,8 @@ export class PurchaseOrdersService {
                 where: { id, tenant_id: tenantId },
                 include: {
                     supplier: true,
-                    store: { select: { name: true } },
+                    // The branch's name and address print on its letterhead.
+                    store: { select: { name: true, address: true } },
                     items: { include: { product: true } },
                 },
             }),

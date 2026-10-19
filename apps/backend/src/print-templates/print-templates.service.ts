@@ -131,8 +131,15 @@ export class PrintTemplatesService {
             where: { tenant_id: tenantId },
         });
 
+        // Several templates may claim one document type, and the rows come
+        // back in no promised order: the company default wins, then the
+        // oldest, so the same document always prints the same letterhead.
         const assigned = docType
-            ? templates.find((template) => template.doc_types.includes(docType))
+            ? templates
+                .filter((template) => template.doc_types.includes(docType))
+                .sort((a, b) =>
+                    Number(b.is_default) - Number(a.is_default)
+                    || a.created_at.getTime() - b.created_at.getTime())[0]
             : undefined;
         const match = assigned ?? templates.find((template) => template.is_default);
 

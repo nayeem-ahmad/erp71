@@ -614,8 +614,8 @@ export function printSalesInvoices(
         sheets: invoices.map((data) => invoiceSheet(data, paperSize, layout, printedAt)),
         title: `Invoices (${invoices.length}) — ${paperSizeLabel(paperSize)}`,
         paperSize,
-        // The template's CSS is global, so a job carries one: the first
-        // invoice's. Each sheet's own letterhead content still prints.
+        // Each sheet carries its own branch's template; this is the job's
+        // fallback for a sheet without one.
         headerConfig: invoices[0].headerConfig,
         styles: buildStyles(isThermal, layout),
         repeatHeader: !isThermal,

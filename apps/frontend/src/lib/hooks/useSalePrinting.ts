@@ -37,6 +37,9 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
     // Its own template, so a shop can put a plainer letterhead on the copy a
     // rider carries than on the invoice the customer keeps.
     const challanHeader = usePrintHeader('DELIVERY_CHALLAN');
+    // The till receipt's template, the one the POS prints with. Resolved on the
+    // click: a receipt is the rare print from here.
+    const receiptHeader = usePrintHeader('POS_RECEIPT', { eager: false });
     const { paperSize, setPaperSize, skipPreview, setSkipPreview, density, setDensity, typeScale, setTypeScale } =
         useSalePrintPrefs();
     const { resolve: resolveInvoiceLayout } = useInvoicePrintPrefs();
@@ -110,8 +113,11 @@ export function useSalePrinting({ resolve }: UseSalePrintingOptions) {
 
     const printReceipt = useCallback(
         (saleId: string, size: PaperSize) =>
-            withSale(saleId, (sale, saleCtx) => printSaleReceipt(sale, size, saleCtx, skipPreview)),
-        [withSale, skipPreview],
+            withSale(saleId, async (sale, saleCtx) => {
+                const receipt = await receiptHeader.resolve(saleStoreId(sale));
+                await printSaleReceipt(sale, size, { ...saleCtx, receiptHeader: receipt }, skipPreview);
+            }),
+        [withSale, receiptHeader, skipPreview],
     );
 
     /**

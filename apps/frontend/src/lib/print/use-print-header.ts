@@ -44,14 +44,17 @@ function resolveTemplate(docType?: PrintDocType, storeId?: string): Promise<Reso
         if (docType) params.set('docType', docType);
         if (storeId) params.set('storeId', storeId);
         const query = params.toString() ? `?${params.toString()}` : '';
-        cache.set(
-            key,
-            Promise.resolve()
-                .then(() => fetchWithAuth(`/print-templates/resolve${query}`))
-                .then((data: any) => (data?.config ? (data as ResolvedTemplate) : null))
-                // Printing must still work when the request fails — fall back to branding.
-                .catch(() => null),
-        );
+        const request: Promise<ResolvedTemplate | null> = Promise.resolve()
+            .then(() => fetchWithAuth(`/print-templates/resolve${query}`))
+            .then((data: any) => (data?.config ? (data as ResolvedTemplate) : null))
+            // Printing must still work when the request fails — fall back to
+            // branding for this print, and forget the failure so the next
+            // print asks again rather than keeping branding until a reload.
+            .catch(() => {
+                if (cache.get(key) === request) cache.delete(key);
+                return null;
+            });
+        cache.set(key, request);
     }
     return cache.get(key)!;
 }
