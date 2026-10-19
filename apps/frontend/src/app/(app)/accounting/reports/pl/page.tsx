@@ -22,6 +22,8 @@ import { useBranding } from '@/lib/branding';
 import { formatBDT, formatDateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { sheetPaper } from '@/lib/print';
+import { resolvePrintPaper } from '@/lib/hooks/useSalePrintPrefs';
 import { printStatementReport, reportContextLines } from '@/lib/statement-printer';
 import {
     getDefaultHideZero,
@@ -148,7 +150,13 @@ export default function ProfitLossPage() {
         // Resolve on click rather than on mount: the template is only needed by
         // the people who actually print, and this page loads for everyone.
         // One branch prints on that branch's paper; company and compare do not.
-        const header = await printHeader.resolve(scope === 'branch' && storeId ? storeId : undefined);
+        const [header, chosenPaper] = await Promise.all([
+            printHeader.resolve(scope === 'branch' && storeId ? storeId : undefined),
+            resolvePrintPaper(),
+        ]);
+        // The paper Print settings chose on this browser; a statement has no
+        // roll layout, so a till roll prints it on A4.
+        const paper = sheetPaper(chosenPaper);
 
         printStatementReport(
             {
@@ -195,6 +203,7 @@ export default function ProfitLossPage() {
                 },
             ],
             { account: printCopy.account, amount: printCopy.amount, noRows: printCopy.noRows },
+            paper,
         );
     }, [
         data, isCompare, printHeader, businessName, t, period, scope, stores, storeId, level,

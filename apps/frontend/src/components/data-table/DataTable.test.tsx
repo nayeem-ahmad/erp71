@@ -3,6 +3,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DataTable from './DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
+import { fetchWithAuth } from '@/lib/api';
+import { clearPrintTemplateCache } from '@/lib/print/use-print-header';
+import { publishPrintBranch, withdrawPrintBranch } from '@/lib/print/print-branch';
+import { mockBrowserPaper } from '@/test-utils/print-paper';
 
 // ── Mocks ─────────────────────────────────────────────────────────
 
@@ -26,6 +30,14 @@ jest.mock('./export-utils', () => {
         printTable: jest.fn(),
     };
 });
+
+// The letterhead is resolved on click; the request it makes says which branch.
+jest.mock('@/lib/api', () => ({
+    ...jest.requireActual('@/lib/api'),
+    fetchWithAuth: jest.fn().mockResolvedValue(null),
+}));
+
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
 
 // DnD kit needs pointer sensor support in jsdom — mock the whole context
 jest.mock('@dnd-kit/core', () => ({
@@ -348,6 +360,61 @@ describe('DataTable', () => {
         const [, title, header] = (printTable as jest.Mock).mock.calls[0];
         expect(title).toBe('Test Table');
         expect(header.html).toContain('Test Table');
+    });
+
+    describe('print letterhead and paper', () => {
+        const page = Symbol('list page');
+
+        beforeEach(() => {
+            clearPrintTemplateCache();
+            (fetchWithAuth as jest.Mock).mockClear();
+            mockBrowserPaper('A4');
+        });
+
+        afterEach(() => withdrawPrintBranch(page));
+
+        it('prints the letterhead of the branch the page is filtered to', async () => {
+            publishPrintBranch(page, 's2');
+            const { printTable } = require('./export-utils');
+            render(<DataTable {...defaultProps} />);
+
+            fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+            await waitFor(() => expect(printTable).toHaveBeenCalled());
+            expect(fetchWithAuth).toHaveBeenCalledWith('/print-templates/resolve?docType=LIST_REPORT&storeId=s2');
+        });
+
+        it('prints on company paper when the page has no single branch', async () => {
+            const { printTable } = require('./export-utils');
+            render(<DataTable {...defaultProps} />);
+
+            fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+            await waitFor(() => expect(printTable).toHaveBeenCalled());
+            expect(fetchWithAuth).toHaveBeenCalledWith('/print-templates/resolve?docType=LIST_REPORT');
+        });
+
+        it('prints on the paper chosen in Print settings', async () => {
+            mockBrowserPaper('Letter');
+            const { printTable } = require('./export-utils');
+            render(<DataTable {...defaultProps} />);
+
+            fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+            await waitFor(() => expect(printTable).toHaveBeenCalled());
+            expect((printTable as jest.Mock).mock.calls[0][3]).toBe('Letter');
+        });
+
+        it('prints on A4 when this browser prints on a till roll', async () => {
+            mockBrowserPaper('Thermal80');
+            const { printTable } = require('./export-utils');
+            render(<DataTable {...defaultProps} />);
+
+            fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+            await waitFor(() => expect(printTable).toHaveBeenCalled());
+            expect((printTable as jest.Mock).mock.calls[0][3]).toBe('A4');
+        });
     });
 
     it('renders custom toolbar actions', () => {

@@ -18,6 +18,8 @@ import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 import { fetchMe } from '@/hooks/use-me';
 import { useBranding } from '@/lib/branding';
 import { usePrintHeader } from '@/lib/print/use-print-header';
+import { sheetPaper } from '@/lib/print';
+import { resolvePrintPaper } from '@/lib/hooks/useSalePrintPrefs';
 import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { printVoucher } from '@/lib/voucher-printer';
@@ -153,7 +155,13 @@ function AccountingVouchersListPageContent() {
         try {
             const detail = await api.getVoucher(voucher.id);
             // The voucher's branch letterhead when it has one; company paper otherwise.
-            const header = await printHeader.resolve(detail.store_id ?? undefined);
+            const [header, chosenPaper] = await Promise.all([
+                printHeader.resolve(detail.store_id ?? undefined),
+                resolvePrintPaper(),
+            ]);
+            // The paper Print settings chose on this browser; a voucher has no
+            // roll layout, so a till roll prints it on A4.
+            const paper = sheetPaper(chosenPaper);
             printVoucher({
                 businessName,
                 headerConfig: header.headerConfig,
@@ -183,7 +191,7 @@ function AccountingVouchersListPageContent() {
                     total: t.accountingShared.amount,
                     footer: t.vouchers.list.printFooter,
                 },
-            });
+            }, paper);
         } catch {
             toast.error(t.vouchers.list.printFailed);
         }

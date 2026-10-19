@@ -6,6 +6,7 @@ import { useMe } from '@/hooks/use-me';
 import { hasPermission, isOwner, tenantFromMe } from '@/lib/permissions';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { toast } from '@/lib/toast';
+import { publishPrintBranch, withdrawPrintBranch } from '@/lib/print/print-branch';
 
 /**
  * The page-level branch filter. Spec:
@@ -173,6 +174,16 @@ export function useBranchScope(opts: { allowAll?: boolean; startOnAll?: boolean 
     );
 
     const resetToHeader = useCallback(() => setValue(''), [setValue]);
+
+    // A list's Print button cannot be handed the branch, so the page's single
+    // branch is published for it: its letterhead is that branch's, and "All
+    // branches" prints on company paper.
+    const [printOwner] = useState(() => Symbol('branch-scope'));
+    const printStoreId = state.ready && state.value !== ALL_BRANCHES ? state.value || undefined : undefined;
+    useEffect(() => {
+        publishPrintBranch(printOwner, printStoreId);
+    }, [printOwner, printStoreId]);
+    useEffect(() => () => withdrawPrintBranch(printOwner), [printOwner]);
 
     return { ...state, setValue, resetToHeader };
 }

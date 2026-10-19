@@ -93,6 +93,8 @@ export interface PrintableSale {
 export interface SalePrintContext {
     invoiceHeader: { companyName?: string; headerConfig?: DeepPartial<PrintHeaderConfig> };
     challanHeader: { companyName?: string; headerConfig?: DeepPartial<PrintHeaderConfig> };
+    /** The till receipt's own template (POS Receipt); the invoice's when omitted. */
+    receiptHeader?: { companyName?: string; headerConfig?: DeepPartial<PrintHeaderConfig> };
     locale: string;
     /** `t.sales.challan` — the challan renders its own labels. */
     challanLabels: any;
@@ -388,14 +390,16 @@ export async function printSaleReceipt(
         unitPrice: unitPrice(i),
     }));
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+    // The receipt the POS prints, so a reprint matches the original.
+    const header = ctx.receiptHeader ?? ctx.invoiceHeader;
 
     await printPOSReceipt(
         {
             invoiceId: sale.id,
             serialNumber: sale.serial_number,
-            companyName: ctx.invoiceHeader.companyName,
+            companyName: header.companyName,
             storeName: sale.store?.name,
-            headerConfig: ctx.invoiceHeader.headerConfig,
+            headerConfig: header.headerConfig,
             date: formatDateTime(sale.sale_date ?? sale.created_at, ctx.locale),
             customerName: sale.customer?.name,
             items,

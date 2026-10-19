@@ -1,9 +1,13 @@
+import { printVoucher } from '@/lib/voucher-printer';
+import { mockBrowserPaper } from '@/test-utils/print-paper';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AccountingVouchersListPage from './page';
 import { api } from '@/lib/api';
 import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
+jest.mock('@/lib/voucher-printer', () => ({ printVoucher: jest.fn() }));
 
 jest.mock('next/navigation', () => ({
     useRouter: () => ({ replace: jest.fn() }),
@@ -235,6 +239,43 @@ describe('AccountingVouchersListPage', () => {
 
         const duplicate = await screen.findByTitle('Duplicate voucher');
         expect(duplicate).toHaveAttribute('href', '/accounting/vouchers/new?duplicate=voucher-1');
+    });
+
+    describe('print', () => {
+        const row = {
+            id: 'voucher-1',
+            voucher_number: 'CP-00001',
+            voucher_type: 'cash_payment',
+            reference_number: null,
+            date: '2026-03-21T00:00:00.000Z',
+            description: 'Office rent for March',
+            total_amount: 125,
+        };
+
+        beforeEach(() => {
+            (api.getVouchers as jest.Mock).mockResolvedValue({ data: [row], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+            (api.getVoucher as jest.Mock).mockResolvedValue({ ...row, store_id: 's1', details: [] });
+        });
+
+        it('prints on the paper chosen in Print settings', async () => {
+            mockBrowserPaper('A5');
+            render(<AccountingVouchersListPage />);
+
+            fireEvent.click(await screen.findByTitle('Print voucher'));
+
+            await waitFor(() => expect(printVoucher).toHaveBeenCalled());
+            expect((printVoucher as jest.Mock).mock.calls[0][1]).toBe('A5');
+        });
+
+        it('prints on A4 when this browser prints on a till roll', async () => {
+            mockBrowserPaper('Thermal58');
+            render(<AccountingVouchersListPage />);
+
+            fireEvent.click(await screen.findByTitle('Print voucher'));
+
+            await waitFor(() => expect(printVoucher).toHaveBeenCalled());
+            expect((printVoucher as jest.Mock).mock.calls[0][1]).toBe('A4');
+        });
     });
 
     it('badges an unapproved voucher and filters the list down to the approval queue', async () => {

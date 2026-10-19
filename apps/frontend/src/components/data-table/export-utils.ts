@@ -1,6 +1,6 @@
 import type { Column, Table } from '@tanstack/react-table';
 import { SIMPLE_DOC_STYLES, openPrintWindow } from '@/lib/print';
-import type { DeepPartial, HeaderContext, PrintHeaderConfig } from '@/lib/print';
+import type { DeepPartial, HeaderContext, PaperSize, PrintHeaderConfig } from '@/lib/print';
 import { formatDateTime } from '@/lib/format';
 import { isPinnedColumnId } from './column-order';
 
@@ -178,7 +178,7 @@ export interface PrintTableHeader {
     context?: HeaderContext;
 }
 
-export function printTable<T>(table: Table<T>, title: string, header?: PrintTableHeader) {
+export function printTable<T>(table: Table<T>, title: string, header?: PrintTableHeader, paperSize: PaperSize = 'A4') {
     const headers = table
         .getVisibleLeafColumns()
         .filter((c) => c.id !== 'actions' && c.id !== 'select')
@@ -196,7 +196,7 @@ export function printTable<T>(table: Table<T>, title: string, header?: PrintTabl
 
     openPrintWindow({
         title,
-        paperSize: 'A4',
+        paperSize,
         headerConfig: header?.config,
         headerHtml: header?.html,
         context: header?.context,

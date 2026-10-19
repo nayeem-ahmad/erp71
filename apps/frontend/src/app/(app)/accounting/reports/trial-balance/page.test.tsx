@@ -3,9 +3,11 @@ import TrialBalancePage from './page';
 import { api } from '@/lib/api';
 import { printTrialBalanceReport } from '@/lib/statement-printer';
 import { setWorkspaceItem } from '@/lib/session-store';
+import { mockBrowserPaper } from '@/test-utils/print-paper';
 import { mockBranchScope } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -55,6 +57,28 @@ describe('TrialBalancePage — print', () => {
             tenants: [{ id: 'tenant-1', role: 'OWNER', stores: mockStores }],
         });
         (api.getTrialBalance as jest.Mock).mockResolvedValue(RESPONSE);
+    });
+
+    it('prints on the paper chosen in Print settings', async () => {
+        mockBrowserPaper('A5');
+        render(<TrialBalancePage />);
+        await screen.findByText('Cash in Hand');
+
+        fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+        await waitFor(() => expect(printTrialBalanceReport).toHaveBeenCalled());
+        expect((printTrialBalanceReport as jest.Mock).mock.calls[0][4]).toBe('A5');
+    });
+
+    it('prints on A4 when this browser prints on a till roll', async () => {
+        mockBrowserPaper('Thermal80');
+        render(<TrialBalancePage />);
+        await screen.findByText('Cash in Hand');
+
+        fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+        await waitFor(() => expect(printTrialBalanceReport).toHaveBeenCalled());
+        expect((printTrialBalanceReport as jest.Mock).mock.calls[0][4]).toBe('A4');
     });
 
     it('prints every column, the server totals, and the balanced status', async () => {

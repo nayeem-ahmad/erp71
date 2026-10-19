@@ -178,6 +178,34 @@ describe('PrintTemplatesService', () => {
             expect(result.template_id).toBe('invoice');
         });
 
+        /*
+         * The editor lets several templates tick the same document type, and
+         * the rows come back in no promised order — so without a rule the
+         * letterhead could change between two prints of the same invoice.
+         */
+        it('picks the company default when several templates claim the type', async () => {
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'press-club', is_default: false, doc_types: ['SALES_INVOICE'], created_at: new Date('2026-06-01') }),
+                template({ id: 'babu-bazar', is_default: true, doc_types: ['SALES_INVOICE'], created_at: new Date('2026-07-01') }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.SALES_INVOICE);
+
+            expect(result.template_id).toBe('babu-bazar');
+        });
+
+        it('picks the oldest when several non-default templates claim the type', async () => {
+            db.printTemplate.findMany.mockResolvedValue([
+                template({ id: 'default', is_default: true }),
+                template({ id: 'newer', is_default: false, doc_types: ['VOUCHER'], created_at: new Date('2026-08-01') }),
+                template({ id: 'older', is_default: false, doc_types: ['VOUCHER'], created_at: new Date('2026-05-01') }),
+            ]);
+
+            const result = await service.resolve('ten1', PrintDocType.VOUCHER);
+
+            expect(result.template_id).toBe('older');
+        });
+
         it('resolves DAILY_REPORT against the default template', async () => {
             db.printTemplate.findMany.mockResolvedValue([
                 template({ id: 'default', is_default: true }),

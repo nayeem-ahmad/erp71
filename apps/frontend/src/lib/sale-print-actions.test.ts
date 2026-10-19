@@ -204,6 +204,22 @@ describe('the sale\u2019s store on the letterhead', () => {
     });
 });
 
+describe('the receipt letterhead', () => {
+    it('prints on the POS receipt template, not the invoice one', async () => {
+        await printSaleReceipt(listShapedSale, 'Thermal80', {
+            ...ctx,
+            invoiceHeader: { companyName: 'Acme Traders', headerConfig: { layout: 'logo-left' } },
+            receiptHeader: { companyName: 'Acme Traders', headerConfig: { layout: 'text-only' } },
+        }, true);
+
+        expect(printPOSReceipt).toHaveBeenCalledWith(
+            expect.objectContaining({ headerConfig: { layout: 'text-only' } }),
+            'Thermal80',
+            undefined,
+        );
+    });
+});
+
 describe('the detailed invoice\u2019s data', () => {
     const detailedCtx: SalePrintContext = {
         ...ctx,

@@ -593,6 +593,7 @@ describe('SalesQuotationsService', () => {
         notes: null,
         total_amount: '100.00',
         doc_kind: 'QUOTE',
+        store_id: 'store-1',
         customer: { name: 'Rahim Traders' },
         store: { name: 'Main Branch', address: '12 Motijheel C/A' },
         tenant: {
@@ -611,10 +612,9 @@ describe('SalesQuotationsService', () => {
 
       const result = await service.findByShareToken('some-token');
 
-      expect(printTemplates.resolve).toHaveBeenCalledWith('tenant-1', 'QUOTE');
-      // Company paper on the public link: no store id, so a branch's pinned
-      // letterhead never reaches a page anyone with the token can open.
-      expect(printTemplates.resolve.mock.calls[0]).toHaveLength(2);
+      // The quotation's own branch, so a branch's pinned letterhead prints on
+      // the link as it does on the paper copy.
+      expect(printTemplates.resolve).toHaveBeenCalledWith('tenant-1', 'QUOTE', 'store-1');
       expect(result.letterhead?.config).toEqual({ lines: [{ text: '{{address}}' }] });
       // The design prints the address and nothing else, so the VAT number and
       // TIN this tenant holds stay off a page anyone with the link can open.
@@ -644,7 +644,8 @@ describe('SalesQuotationsService', () => {
 
       await service.findByShareToken('some-token');
 
-      expect(printTemplates.resolve).toHaveBeenCalledWith('tenant-1', 'PROFORMA_INVOICE');
+      // No branch on the row: company paper.
+      expect(printTemplates.resolve).toHaveBeenCalledWith('tenant-1', 'PROFORMA_INVOICE', undefined);
     });
 
     it('still serves the document when the letterhead cannot be resolved', async () => {

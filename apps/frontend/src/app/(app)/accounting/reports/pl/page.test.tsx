@@ -3,9 +3,11 @@ import ProfitLossPage from './page';
 import { api } from '@/lib/api';
 import { printStatementReport } from '@/lib/statement-printer';
 import { setWorkspaceItem } from '@/lib/session-store';
+import { mockBrowserPaper } from '@/test-utils/print-paper';
 import { mockBranchScope, resetToHeaderSpy } from '@/test-utils/branch-scope';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -217,6 +219,28 @@ describe('ProfitLossPage — print', () => {
             tenants: [{ id: 'tenant-1', role: 'OWNER', stores: mockStores }],
         });
         (api.getProfitLoss as jest.Mock).mockResolvedValue(response);
+    });
+
+    it('prints on the paper chosen in Print settings', async () => {
+        mockBrowserPaper('A5');
+        render(<ProfitLossPage />);
+        await screen.findByText('Sales Revenue');
+
+        fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+        await waitFor(() => expect(printStatementReport).toHaveBeenCalled());
+        expect((printStatementReport as jest.Mock).mock.calls[0][4]).toBe('A5');
+    });
+
+    it('prints on A4 when this browser prints on a till roll', async () => {
+        mockBrowserPaper('Thermal80');
+        render(<ProfitLossPage />);
+        await screen.findByText('Sales Revenue');
+
+        fireEvent.click(screen.getByRole('button', { name: /print/i }));
+
+        await waitFor(() => expect(printStatementReport).toHaveBeenCalled());
+        expect((printStatementReport as jest.Mock).mock.calls[0][4]).toBe('A4');
     });
 
     it('prints the figures on screen, with the period and branch it was run for', async () => {

@@ -34,6 +34,32 @@ function writeStored(key: string, value: string): void {
     }
 }
 
+function storedPaper(): PaperSize | null {
+    const stored = readStored(PAPER_SIZE_KEY);
+    return stored && VALID_SIZES.includes(stored as PaperSize) ? (stored as PaperSize) : null;
+}
+
+/** The shop's `default_paper_size`, or null when it has none or cannot be read. */
+async function tenantPaper(): Promise<PaperSize | null> {
+    try {
+        const settings: any = await api.getSalesSettings?.();
+        const fallback = settings?.default_paper_size ?? settings?.paper_size;
+        return fallback && VALID_SIZES.includes(fallback as PaperSize) ? (fallback as PaperSize) : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The same answer as `useSalePrintPrefs().paperSize`, read at the moment of
+ * printing — for a print button on a screen that should not spend a request
+ * on the shop's settings every time it loads (every list has one). This
+ * browser's choice, else the shop default, else A4.
+ */
+export async function resolvePrintPaper(): Promise<PaperSize> {
+    return storedPaper() ?? (await tenantPaper()) ?? 'A4';
+}
+
 export interface SalePrintPrefs {
     paperSize: PaperSize;
     /** Persists the choice, so the next print starts from the same size. */
@@ -79,26 +105,18 @@ export function useSalePrintPrefs(): SalePrintPrefs {
     // renders on the server first, where there is no localStorage, and a
     // mismatched first paint is a hydration error.
     useEffect(() => {
-        const storedSize = readStored(PAPER_SIZE_KEY);
-        if (storedSize && VALID_SIZES.includes(storedSize as PaperSize)) {
-            setPaperSizeState(storedSize as PaperSize);
+        const storedSize = storedPaper();
+        if (storedSize) {
+            setPaperSizeState(storedSize);
         } else {
-            // No local override — fall back to what the tenant configured.
-            // Wrapped rather than chained straight off the call: a print
-            // preference must never be the thing that takes the sale screen
-            // down, and this runs in a passive effect where a synchronous
-            // throw is unrecoverable.
-            void (async () => {
-                try {
-                    const settings: any = await api.getSalesSettings?.();
-                    const fallback = settings?.default_paper_size ?? settings?.paper_size;
-                    if (fallback && VALID_SIZES.includes(fallback as PaperSize)) {
-                        setPaperSizeState(fallback as PaperSize);
-                    }
-                } catch {
-                    // Settings unreachable — A4 is the safe default.
-                }
-            })();
+            // No local override — fall back to what the tenant configured, or
+            // stay on A4 when it cannot be read. `tenantPaper` never throws: a
+            // print preference must never be the thing that takes the sale
+            // screen down, and this runs in a passive effect where a
+            // synchronous throw is unrecoverable.
+            void tenantPaper().then((fallback) => {
+                if (fallback) setPaperSizeState(fallback);
+            });
         }
 
         setSkipPreviewState(readStored(SKIP_PREVIEW_KEY) === 'true');

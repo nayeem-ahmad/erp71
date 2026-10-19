@@ -33,6 +33,7 @@ export function salePrintPrefsModuleMock() {
             typeScale: 'normal',
             setTypeScale: jest.fn(),
         }),
+        resolvePrintPaper: () => Promise.resolve(browserPaper),
     };
 }
 
