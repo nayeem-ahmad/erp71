@@ -199,6 +199,14 @@ function invoiceExtraPatch(dto: {
     };
 }
 
+/**
+ * A sale's payments in the order they were taken. An edit, a draft's
+ * finalize and the repost read them back this way, and a return's pre-fill
+ * refunds on the first one, so the order must not be whatever the database
+ * returns.
+ */
+const PAYMENTS_IN_ORDER = { orderBy: { created_at: 'asc' } } as const;
+
 /** A sale body's payments as `resolveTenders` takes them. */
 function tenderInputs(payments: { paymentMethod: string; paymentMethodId?: string; amount: number }[]): TenderInput[] {
     return payments.map((payment) => ({
@@ -1289,7 +1297,7 @@ export class SalesService {
         const result = await this.db.$transaction(async (tx) => {
             const draft = await tx.sale.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true, payments: true },
+                include: { items: true, payments: PAYMENTS_IN_ORDER },
             });
 
             if (!draft) {
@@ -1578,7 +1586,7 @@ export class SalesService {
             where: { id, tenant_id: tenantId },
             include: {
                 items: { include: { product: true, returns: true, exchangeLines: completedExchangeLinesInclude } },
-                payments: true,
+                payments: PAYMENTS_IN_ORDER,
                 customer: true,
                 // Just enough to name the document this entry was converted
                 // from and link back to it.
@@ -1657,7 +1665,7 @@ export class SalesService {
         return this.db.$transaction(async (tx) => {
             const sale = await tx.sale.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true, payments: true },
+                include: { items: true, payments: PAYMENTS_IN_ORDER },
             });
 
             if (!sale) {

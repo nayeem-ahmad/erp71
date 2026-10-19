@@ -945,6 +945,12 @@ describe('SalesService', () => {
       expect(result.status).toBe('COMPLETED');
     });
 
+    it('reads the parked payments in the order they were saved', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(tx.sale.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
+
     it('issues the invoice number when the draft is completed, not when it was parked', async () => {
       tx.cashierSession.findFirst.mockResolvedValue({ id: 'session-1', counter_id: 'counter-3' });
       const parkedOn = new Date('2026-07-02T04:00:00.000Z');
@@ -1731,6 +1737,14 @@ describe('SalesService', () => {
       await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+    it('returns the payments in the order they were saved, which edits and return pre-fills read', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });
+
+      await service.findOne('tenant-1', 's1');
+
+      expect(db.sale.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
+
     it('loads the sale’s store, so its documents print that branch’s name and address', async () => {
       db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });
 
@@ -1942,6 +1956,15 @@ describe('SalesService', () => {
         },
       });
       expect(result).toBeDefined();
+    });
+
+    it('reads the stored payments in the order they were saved', async () => {
+      tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
+      tx.sale.update.mockResolvedValue({ id: 's1', note: 'Updated note' });
+
+      await service.update('tenant-1', 'user-1', 's1', { note: 'Updated note' });
+
+      expect(tx.sale.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
     });
 
     it('should throw NotFoundException when sale to update is not found', async () => {

@@ -355,6 +355,15 @@ describe('PurchasesService', () => {
         await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+    it('returns the payments in the order they were saved, which edits and return pre-fills read', async () => {
+        db.postingEvent = { findMany: jest.fn().mockResolvedValue([]) };
+        db.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', paid_amount: 0, items: [], payments: [], paymentAllocations: [] });
+
+        await service.findOne('tenant-1', 'purchase-1');
+
+        expect(db.purchase.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
+
     it('splits what was paid with the bill from what was paid on it later', async () => {
         db.postingEvent = { findMany: jest.fn().mockResolvedValue([]) };
         db.purchase.findFirst.mockResolvedValue({
@@ -1142,6 +1151,12 @@ describe('PurchasesService', () => {
             }));
             // Nothing was paid before or after, so there is no cash leg to touch.
             expect(voidAutoPostedVoucher).not.toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
+        });
+
+        it('reads the stored payments in the order they were saved', async () => {
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({ notes: 'Delivered late' }));
+
+            expect(tx.purchase.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
         });
 
         it('touches neither stock, nor the account, nor the books when only the note changed', async () => {

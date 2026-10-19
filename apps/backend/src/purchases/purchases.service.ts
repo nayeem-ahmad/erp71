@@ -29,6 +29,13 @@ const PURCHASE_DEFAULT_ORDER = { created_at: 'desc' as const };
 
 const EPSILON = 0.005;
 
+/**
+ * A bill's payments in the order they were made. An edit reads them back and
+ * reposts them in this order, and the bill's page shows them so, so the order
+ * must not be whatever the database returns.
+ */
+const PAYMENTS_IN_ORDER = { orderBy: { created_at: 'asc' } } as const;
+
 /** What the supplier's statement calls a tender: the method's own name. */
 const tenderLabel = (tender: ResolvedTender) => tender.methodName ?? tender.paymentMethod;
 
@@ -851,7 +858,7 @@ export class PurchasesService {
                 include: {
                     items: { select: { id: true, jobCosts: { select: { id: true } } } },
                     returns: { select: { id: true } },
-                    payments: true,
+                    payments: PAYMENTS_IN_ORDER,
                     paymentAllocations: { select: ALLOCATION_SELECT },
                     importShipment: { select: { id: true } },
                 },
@@ -1270,7 +1277,7 @@ export class PurchasesService {
                 items: {
                     include: { product: true, returnItems: true },
                 },
-                payments: true,
+                payments: PAYMENTS_IN_ORDER,
                 paymentAllocations: { select: ALLOCATION_SELECT },
             },
         });
