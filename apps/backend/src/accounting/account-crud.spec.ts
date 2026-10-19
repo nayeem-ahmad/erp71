@@ -42,6 +42,10 @@ describe('AccountingService — chart of accounts update/delete', () => {
         recurringVoucherLine: { count: jest.fn() },
         voucherTemplateLine: { count: jest.fn() },
         paymentRecord: { count: jest.fn() },
+        paymentMethod: { count: jest.fn() },
+        purchasePayment: { count: jest.fn() },
+        salesReturnPayment: { count: jest.fn() },
+        purchaseReturnPayment: { count: jest.fn() },
     };
 
     /** No relation references the account unless a test says otherwise. */
@@ -53,6 +57,10 @@ describe('AccountingService — chart of accounts update/delete', () => {
         db.recurringVoucherLine.count.mockResolvedValue(0);
         db.voucherTemplateLine.count.mockResolvedValue(0);
         db.paymentRecord.count.mockResolvedValue(0);
+        db.paymentMethod.count.mockResolvedValue(0);
+        db.purchasePayment.count.mockResolvedValue(0);
+        db.salesReturnPayment.count.mockResolvedValue(0);
+        db.purchaseReturnPayment.count.mockResolvedValue(0);
     };
 
     beforeEach(async () => {
@@ -110,6 +118,35 @@ describe('AccountingService — chart of accounts update/delete', () => {
                 /payment record/,
             );
             expect(db.account.delete).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['paymentMethod', 'a payment method links to'],
+            ['purchasePayment', 'a purchase payment points at'],
+            ['salesReturnPayment', 'a sales return refund points at'],
+            ['purchaseReturnPayment', 'a purchase return receipt points at'],
+        ] as const)('refuses to delete an account %s', async (relation, _label) => {
+            // These account_id columns are onDelete: SetNull: the database would
+            // accept the delete and silently drop the posting link.
+            noReferences();
+            db[relation].count.mockResolvedValue(1);
+
+            await expect(service.deleteAccount('tenant-1', 'account-1')).rejects.toBeInstanceOf(
+                ConflictException,
+            );
+            expect(db.account.delete).not.toHaveBeenCalled();
+        });
+
+        it('names the payment method, purchase payment and return payments that block a delete', async () => {
+            noReferences();
+            db.paymentMethod.count.mockResolvedValue(2);
+            db.purchasePayment.count.mockResolvedValue(1);
+            db.salesReturnPayment.count.mockResolvedValue(3);
+            db.purchaseReturnPayment.count.mockResolvedValue(4);
+
+            await expect(service.deleteAccount('tenant-1', 'account-1')).rejects.toThrow(
+                /2 payment method\(s\), 1 purchase payment\(s\), 3 sales return payment\(s\), 4 purchase return payment\(s\)/,
+            );
         });
 
         it('reports every blocking relation at once', async () => {

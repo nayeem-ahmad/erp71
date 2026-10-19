@@ -257,6 +257,15 @@ step sync:party-branch \
 step sync:purchase-date \
     env DIRECT_URL="$DATABASE_URL" npm run sync:purchase-date --workspace=@erp71/database
 
+# sync:payment-method-account-fk runs BEFORE db push. PaymentMethod.account_id was
+# a bare string with no foreign key; db push now adds one to accounts, and
+# Postgres refuses while a method names an account that has been deleted. This
+# nulls only those dangling values (they already pointed nowhere; posting falls
+# back to the type's default account) and is a no-op on a fresh database. See
+# prisma/sync-payment-method-account-fk.ts.
+step sync:payment-method-account-fk \
+    env DIRECT_URL="$DATABASE_URL" npm run sync:payment-method-account-fk --workspace=@erp71/database
+
 # ---- The schema itself -----------------------------------------------------
 
 # --accept-data-loss: see "Running while the old code serves" above.
@@ -283,6 +292,14 @@ step db:seed:platform \
 # tenants would post to a stale rule set, which must be loud, not skipped.
 step sync:accounting \
     npm run sync:accounting --workspace=@erp71/database
+
+# sync:payment-method-accounts links each existing tenant's default payment
+# methods (Cash, Bank, bKash, Nagad, Card) to the default account they post to,
+# now that a tender posts to its method's own account. After sync:accounting so
+# every default account exists. Idempotent: reads only unlinked methods, never
+# overwrites an owner's choice. See prisma/sync-payment-method-accounts.ts.
+step sync:payment-method-accounts \
+    npm run sync:payment-method-accounts --workspace=@erp71/database
 
 # sync:store-code gives every branch without one a code (S1, S2, ...), which a
 # document number format prints for {STORE}. Store.code is nullable, so db push

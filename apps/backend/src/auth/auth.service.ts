@@ -8,7 +8,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditRequestMeta } from '../audit/audit-route.util';
 import { AssetsService } from '../assets/assets.service';
 import { avatarFolder, type CloudinaryUploadDto } from '../assets/direct-upload.util';
-import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
+import { bootstrapDefaultAccountingForTenant, linkDefaultPaymentMethodAccounts, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { SignupDto, LoginDto, UpdateProfileDto, ChangePasswordDto, GoogleSignInDto, MobileSignInDto } from './auth.dto';
@@ -1424,6 +1424,7 @@ export class AuthService {
         });
 
         await bootstrapDefaultAccountingForTenant(tx, tenant.id);
+        await linkDefaultPaymentMethodAccounts(tx, tenant.id);
 
         if (dto.referralCode?.trim()) {
             const referee = await tx.referee.findFirst({

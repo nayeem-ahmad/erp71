@@ -769,7 +769,19 @@ export class AccountingService {
         // Every relation that would either be orphaned or silently null-ed out.
         // PaymentRecord.account_id is `onDelete: SetNull`, so the database would
         // accept the delete and quietly drop the payment's accounting link.
-        const [postings, rules, budgets, recurringJournalLines, recurringVoucherLines, templateLines, payments] =
+        const [
+            postings,
+            rules,
+            budgets,
+            recurringJournalLines,
+            recurringVoucherLines,
+            templateLines,
+            payments,
+            paymentMethods,
+            purchasePayments,
+            salesReturnPayments,
+            purchaseReturnPayments,
+        ] =
             await Promise.all([
                 this.db.voucherDetail.count({ where: { account_id: id } }),
                 this.db.postingRule.count({
@@ -780,6 +792,13 @@ export class AccountingService {
                 this.db.recurringVoucherLine.count({ where: { account_id: id } }),
                 this.db.voucherTemplateLine.count({ where: { account_id: id } }),
                 this.db.paymentRecord.count({ where: { account_id: id } }),
+                // Same SetNull trap: PaymentMethod.account_id decides where every
+                // tender posts, and the purchase / return payments carry the
+                // account they were posted to.
+                this.db.paymentMethod.count({ where: { account_id: id } }),
+                this.db.purchasePayment.count({ where: { account_id: id } }),
+                this.db.salesReturnPayment.count({ where: { account_id: id } }),
+                this.db.purchaseReturnPayment.count({ where: { account_id: id } }),
             ]);
 
         const blockers: string[] = [];
@@ -790,6 +809,10 @@ export class AccountingService {
         if (recurringVoucherLines > 0) blockers.push(`${recurringVoucherLines} recurring voucher line(s)`);
         if (templateLines > 0) blockers.push(`${templateLines} voucher template line(s)`);
         if (payments > 0) blockers.push(`${payments} payment record(s)`);
+        if (paymentMethods > 0) blockers.push(`${paymentMethods} payment method(s)`);
+        if (purchasePayments > 0) blockers.push(`${purchasePayments} purchase payment(s)`);
+        if (salesReturnPayments > 0) blockers.push(`${salesReturnPayments} sales return payment(s)`);
+        if (purchaseReturnPayments > 0) blockers.push(`${purchaseReturnPayments} purchase return payment(s)`);
 
         if (blockers.length > 0) {
             throw new ConflictException(
