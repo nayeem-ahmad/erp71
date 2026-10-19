@@ -644,6 +644,30 @@ describe('CashierSessionsService', () => {
       expect(summary.expectedCash).toBe(680); // 500 + 300 - 120
     });
 
+    it('takes only the cash tender of a return saved with tenders off expected cash', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+      db.sale.findMany.mockResolvedValue([]);
+      db.salesReturn.findMany.mockResolvedValue([
+        {
+          total_refund: 700,
+          tenders_recorded: true,
+          payments: [
+            { payment_method: 'CASH', amount: 500 },
+            { payment_method: 'BKASH', amount: 200 },
+          ],
+        },
+        // fully adjusted against the customer's due: no cash left the drawer
+        { total_refund: 300, tenders_recorded: true, payments: [] },
+        // legacy return: whole total as before
+        { total_refund: 100, tenders_recorded: false, payments: [] },
+      ]);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.refunds).toBe(600);
+      expect(summary.expectedCash).toBe(-100); // 500 float - 600
+    });
+
     it('adds an exchange cash difference and ignores a non-cash one', async () => {
       db.cashierSession.findUnique.mockResolvedValue(openSession);
       db.sale.findMany.mockResolvedValue([]);

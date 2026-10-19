@@ -6,6 +6,7 @@ import { CloseSessionDto } from './dto/close-session.dto';
 import { CountersService } from '../counters/counters.service';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
+import { returnCashOut } from '../sales-returns/return-cash.util';
 import { startOfZonedToday } from '../common/tenant-time.util';
 
 // CashTransaction.type values that move cash out of the till and must post.
@@ -361,7 +362,11 @@ export class CashierSessionsService {
           session_id: sessionId,
           status: { not: 'CANCELLED' },
         },
-        select: { total_refund: true },
+        select: {
+          total_refund: true,
+          tenders_recorded: true,
+          payments: { select: { payment_method: true, amount: true } },
+        },
       }),
       this.db.cashTransaction.findMany({
         where: { tenant_id: tenantId, session_id: sessionId },
@@ -394,9 +399,11 @@ export class CashierSessionsService {
       }
     }
 
-    // A return settles in cash — `SalesReturnsService` has no other tender to
-    // give it back through — so the whole refund comes out of this drawer.
-    const refunds = salesReturns.reduce((sum, ret) => sum + money(ret.total_refund), 0);
+    // Only the cash tenders of a return saved with tenders come out of this
+    // drawer; a bKash/bank refund or the part adjusted against the customer's
+    // due never touched it. A legacy return has no tenders and was always paid
+    // in cash, so its whole total still counts (`returnCashOut`).
+    const refunds = salesReturns.reduce((sum, ret) => sum + returnCashOut(ret), 0);
     const exchangeCash = exchanges.reduce((sum, row) => sum + money(row.cash_delta), 0);
 
     const cashIn = cashTransactions
