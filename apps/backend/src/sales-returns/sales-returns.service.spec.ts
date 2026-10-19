@@ -579,6 +579,8 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
   let saleRow: any;
   let returnRow: any;
   let paymentRows: any[];
+  /** External-sync mapping rows (entity_type, internal_id). */
+  let mappings: any[];
 
   const keyOf = (legKey?: string) => actualPosting.postingIdempotencyKey('tenant-1', 'sale_return', 'ret-1', legKey);
   const voucherOn = (legKey?: string) => {
@@ -634,6 +636,7 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
     vouchers = new Map();
     ledger = [];
     paymentRows = [];
+    mappings = [];
     returnRow = null;
     saleRow = sale();
     customer = { id: 'cust-1', due_balance: 0, total_spent: 5000, store_id: 'store-1' };
@@ -741,6 +744,19 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
         delete: jest.fn(async ({ where }: any) => {
           for (const [key, event] of events) if (event.id === where.id) events.delete(key);
         }),
+        findFirst: jest.fn(async ({ where }: any) =>
+          [...events.values()].find((event) =>
+            event.tenant_id === where.tenant_id
+            && event.source_module === where.source_module
+            && event.source_type === where.source_type
+            && event.source_id === where.source_id) ?? null),
+      },
+      externalSyncMapping: {
+        findFirst: jest.fn(async ({ where }: any) =>
+          mappings.find((row) =>
+            row.tenant_id === where.tenant_id
+            && row.entity_type === where.entity_type
+            && row.internal_id === where.internal_id) ?? null),
       },
       voucher: {
         create: jest.fn(async ({ data }: any) => {
@@ -1132,5 +1148,204 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
       ['revenue', 300, 0],
       ['cash-in-hand', 0, 300],
     ]);
+  });
+  it('re-sending the stored tenders unchanged with a new reason writes only the reason', async () => {
+    await createReturn(3, [cash(200), bkash(100, { referenceNo: 'TX-1' })]);
+    const before = voucherRows();
+    jest.clearAllMocks();
+
+    await service.update(
+      'tenant-1',
+      'ret-1',
+      { reason: 'Wrong size', payments: [cash(200), bkash(100, { referenceNo: 'TX-1' })] } as any,
+      'user-1',
+    );
+
+    expect(tx.salesReturn.update).toHaveBeenCalledTimes(1);
+    expect(tx.salesReturn.update).toHaveBeenCalledWith({ where: { id: 'ret-1' }, data: { reason: 'Wrong size' } });
+    expect(returnRow.reason).toBe('Wrong size');
+    expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+    expect(autoPostFromRules).not.toHaveBeenCalled();
+    expect(tx.customer.update).not.toHaveBeenCalled();
+    expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+    expect(tx.salesReturnPayment.deleteMany).not.toHaveBeenCalled();
+    expect(tx.salesReturnPayment.createMany).not.toHaveBeenCalled();
+    expect(voucherRows()).toEqual(before);
+  });
+
+  it('a corrected reference on the same tenders rewrites the rows, not the books', async () => {
+    await createReturn(3, [cash(200), bkash(100, { referenceNo: 'TX-1' })]);
+    const before = voucherRows();
+    jest.clearAllMocks();
+
+    await service.update('tenant-1', 'ret-1', { payments: [cash(200), bkash(100, { referenceNo: 'TX-9' })] } as any, 'user-1');
+
+    expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+    expect(autoPostFromRules).not.toHaveBeenCalled();
+    expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+    expect(paymentRows).toEqual([
+      expect.objectContaining({ payment_method_id: 'pm-cash', account_id: 'cash-in-hand', amount: 200, reference_no: null }),
+      expect.objectContaining({ payment_method_id: 'pm-bkash', account_id: 'bkash-acct', amount: 100, reference_no: 'TX-9' }),
+    ]);
+    expect(voucherRows()).toEqual(before);
+  });
+
+  it('a legacy return given an empty refund is re-settled, not taken for unchanged tenders', async () => {
+    saleRow = creditSale();
+    customer.due_balance = 1000;
+    await createReturn(3);
+
+    await service.update('tenant-1', 'ret-1', { payments: [] } as any, 'user-1');
+
+    // Its missing rows meant "refund unknown", not "refunded nothing".
+    expect(voidAutoPostedVoucher).toHaveBeenCalled();
+    expect(ledger.map((row) => row.amount)).toEqual([-300, 300, -300]);
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['ar', 0, 300],
+    ]);
+    expect(returnRow.tenders_recorded).toBe(true);
+  });
+
+  describe('a return external sync imported', () => {
+    const IMPORTED = 'This return came from an import — change it in the source system and re-sync.';
+
+    /**
+     * The return as the importer leaves it (external-sync.impacts.ts
+     * applySaleReturnCredit): no tender rows, the whole total off the due
+     * unclamped (100 owed → −200), a credit voucher posted from
+     * 'external-sync', and a mapping row while the connection exists.
+     */
+    const importReturn = async ({ mapped = true } = {}) => {
+      saleRow = creditSale();
+      customer.due_balance = -200;
+      returnRow = {
+        id: 'ret-1',
+        tenant_id: 'tenant-1',
+        store_id: 'store-1',
+        sale_id: 'sale-1',
+        session_id: null,
+        return_number: 'DZ-RET-7',
+        total_refund: 300,
+        reason: 'Imported',
+        tenders_recorded: false,
+        created_at: createdAt,
+        warehouse_id: null,
+        items: [{ id: 'ri-0', return_id: 'ret-1', sale_item_id: 'si-1', product_id: 'p-1', quantity: 3, refund_amount: 300, warehouse_id: null }],
+      };
+      ledger.push({
+        tenant_id: 'tenant-1',
+        customer_id: 'cust-1',
+        store_id: 'store-1',
+        type: 'ADJUSTMENT',
+        amount: -300,
+        balance_after: -200,
+        reference_type: 'SALES_RETURN',
+        reference_id: 'ret-1',
+        notes: 'Imported sale return DZ-RET-7',
+      });
+      await actualPosting.autoPostFromRules({
+        tx,
+        tenantId: 'tenant-1',
+        eventType: 'sale_return',
+        conditionKey: 'payment_mode',
+        conditionValue: 'credit',
+        sourceModule: 'external-sync',
+        sourceType: 'sale_return',
+        sourceId: 'ret-1',
+        amount: 300,
+        description: 'Imported sale return DZ-RET-7',
+        referenceNumber: 'DZ-RET-7',
+        date: createdAt,
+        storeId: 'store-1',
+        partyType: 'CUSTOMER',
+        partyId: 'cust-1',
+      });
+      if (mapped) {
+        mappings.push({ tenant_id: 'tenant-1', entity_type: 'SALE_RETURN', external_id: 'dz-7', internal_id: 'ret-1' });
+      }
+      jest.clearAllMocks();
+    };
+
+    const expectUntouched = () => {
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(autoPostFromRules).not.toHaveBeenCalled();
+      expect(applyInventoryMovement).not.toHaveBeenCalled();
+      expect(tx.salesReturn.update).not.toHaveBeenCalled();
+      expect(tx.salesReturnItem.deleteMany).not.toHaveBeenCalled();
+      expect(tx.salesReturnPayment.createMany).not.toHaveBeenCalled();
+      expect(tx.salesReturnPayment.deleteMany).not.toHaveBeenCalled();
+      expect(tx.customer.update).not.toHaveBeenCalled();
+      expect(tx.customerCreditTransaction.create).not.toHaveBeenCalled();
+      expect(voucherRows()).toEqual([
+        ['revenue', 300, 0],
+        ['ar', 0, 300],
+      ]);
+      expect(ledger).toHaveLength(1);
+      expect(customer.due_balance).toBe(-200);
+    };
+
+    it('an edit to its lines is refused before anything is written', async () => {
+      await importReturn();
+
+      await expect(service.update('tenant-1', 'ret-1', { items: lines(2) } as any, 'user-1')).rejects.toThrow(
+        new BadRequestException(IMPORTED),
+      );
+      expectUntouched();
+    });
+
+    it('an edit to its refund is refused', async () => {
+      await importReturn();
+
+      await expect(service.update('tenant-1', 'ret-1', { payments: [cash(300)] } as any, 'user-1')).rejects.toThrow(
+        new BadRequestException(IMPORTED),
+      );
+      expectUntouched();
+    });
+
+    it('is still recognised by its voucher once the connection, and with it the mapping, is gone', async () => {
+      await importReturn({ mapped: false });
+
+      await expect(service.update('tenant-1', 'ret-1', { items: lines(2) } as any, 'user-1')).rejects.toThrow(
+        new BadRequestException(IMPORTED),
+      );
+      expectUntouched();
+    });
+
+    it('a reason-only edit is allowed', async () => {
+      await importReturn();
+
+      await service.update('tenant-1', 'ret-1', { reason: 'Customer changed their mind' } as any, 'user-1');
+
+      expect(returnRow.reason).toBe('Customer changed their mind');
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(ledger).toHaveLength(1);
+      expect(voucherRows()).toEqual([
+        ['revenue', 300, 0],
+        ['ar', 0, 300],
+      ]);
+    });
+
+    it('delete voids its voucher and reverses its ADJUSTMENT exactly', async () => {
+      await importReturn();
+
+      await service.remove('tenant-1', 'ret-1', 'user-1');
+
+      expect(vouchers.size).toBe(0);
+      expect(events.size).toBe(0);
+      expect(ledger).toEqual([
+        expect.objectContaining({ amount: -300, balance_after: -200 }),
+        expect.objectContaining({
+          type: 'ADJUSTMENT',
+          amount: 300,
+          balance_after: 100,
+          reference_type: 'SALES_RETURN',
+          reference_id: 'ret-1',
+          notes: 'Reversed return DZ-RET-7',
+        }),
+      ]);
+      expect(customer.due_balance).toBe(100);
+      expect(returnRow).toBeNull();
+    });
   });
 });

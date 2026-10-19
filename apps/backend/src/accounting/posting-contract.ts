@@ -75,14 +75,14 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
 
     // ── sales returns ────────────────────────────────────────────────────────
     // settleSalesReturn: a full refund is one voucher on its first tender's
-    // mode (:792); a partial one posts AR for what came off the due (:767) and
-    // the refund on legKey 'paid' (:779). Without tenders the mode is guessed
-    // from the sale, as before (:865).
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-returns.service.ts:792 / :779 / :865', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-returns.service.ts:792 / :779 / :865', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'sales-returns.service.ts:792 / :779 / :865', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'sales-returns.service.ts:792 / :779 / :865', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-returns.service.ts:767 / :865', expectation: 'rule' },
+    // mode (:880); a partial one posts AR for what came off the due (:855) and
+    // the refund on legKey 'paid' (:867). Without tenders the mode is guessed
+    // from the sale, as before (:953).
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-returns.service.ts:880 / :867 / :953', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-returns.service.ts:880 / :867 / :953', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'sales-returns.service.ts:880 / :867 / :953', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'sales-returns.service.ts:880 / :867 / :953', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-returns.service.ts:855 / :953', expectation: 'rule' },
     // An exchange posts the same sale / sale_return tuples. No new rule.
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },

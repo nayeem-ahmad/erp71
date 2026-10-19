@@ -17,6 +17,7 @@ import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../a
 import {
     allocateTenders,
     resolveTenders,
+    sameTenders,
     storedToTenderInputs,
     type ResolvedTender,
     type StoredTender,
@@ -34,6 +35,8 @@ const REFUND_ABOVE_TOTAL = 'The refund is more than the return total.';
 const REFUND_NEEDS_CUSTOMER = "Refund the full amount, or pick the customer's sale";
 /** The 400 for an edit that shrinks a return below the refund it already records. */
 const STORED_REFUND_ABOVE_TOTAL = 'The refund is more than the new return total — change the refund too.';
+/** The 400 for changing the lines or refund of a return external sync wrote. */
+const IMPORTED_RETURN = 'This return came from an import — change it in the source system and re-sync.';
 
 /** Below half a paisa two amounts are the same money. */
 const EPSILON = 0.005;
@@ -50,6 +53,40 @@ type RefundTender = ResolvedTender & { instrument: PaymentInstrumentColumns };
 
 /** A `SalesReturnPayment` row, as an edit reads it back. */
 type StoredRefundRow = StoredTender & PaymentInstrumentColumns;
+
+/** The `SalesReturnPayment` row a resolved tender is saved as. */
+function refundPaymentRow(returnId: string, tender: RefundTender) {
+    return {
+        return_id: returnId,
+        payment_method: tender.paymentMethod,
+        payment_method_id: tender.methodId,
+        payment_method_name: tender.methodName,
+        account_id: tender.accountId,
+        amount: tender.amount,
+        ...tender.instrument,
+    };
+}
+
+/**
+ * Whether the saved rows already say exactly what `tenders` would write, in
+ * the same order — method, amount and every instrument detail. Used once the
+ * tenders are known to be the same money, to tell a cheque number corrected
+ * from nothing changed at all.
+ */
+function sameRefundRows(rows: StoredRefundRow[], tenders: RefundTender[]): boolean {
+    const time = (date: Date | null) => date?.getTime() ?? null;
+    return rows.length === tenders.length && rows.every((row, index) => {
+        const tender = tenders[index];
+        return row.payment_method === tender.paymentMethod
+            && row.payment_method_id === tender.methodId
+            && Math.abs(Number(row.amount) - tender.amount) <= EPSILON
+            && row.bank_name === tender.instrument.bank_name
+            && row.bank_branch === tender.instrument.bank_branch
+            && row.bank_account_number === tender.instrument.bank_account_number
+            && row.reference_no === tender.instrument.reference_no
+            && time(row.instrument_date) === time(tender.instrument.instrument_date);
+    });
+}
 
 /** What settling a return reads off the sale it came back from. */
 interface ReturnSale {
@@ -365,6 +402,44 @@ export class SalesReturnsService {
                 return this.findEdited(tx, tenantId, id);
             }
 
+            // An import booked this return its own way — the whole total off
+            // the due, any cash handed back as a separate customer payment —
+            // which unwinding and settling it here would double. Checked
+            // before anything is written.
+            if (await this.isImportedReturn(tx, tenantId, id)) {
+                throw new BadRequestException(IMPORTED_RETURN);
+            }
+
+            // The return's own branch. Tenders it already carries are exempt
+            // from the branch check and keep the account they were saved with.
+            const requested = dto.payments
+                ? await this.refundTenders(tx, tenantId, existing.store_id, dto.payments, existing.payments)
+                : null;
+
+            // The refund it already records, sent back with the same lines:
+            // nothing for the books to do. Resolved against each other, as a
+            // sale edit compares its tenders. Only a return saved with tenders
+            // qualifies — one saved before them has no rows, which is not the
+            // same as refunding nothing.
+            if (requested && !itemsChanged && existing.tenders_recorded) {
+                const stored = await this.storedRefundTenders(tx, tenantId, existing.store_id, existing.payments);
+                if (sameTenders(requested, stored)) {
+                    // A cheque number or date corrected, or the order changed:
+                    // the rows follow, the vouchers and the due do not.
+                    if (!sameRefundRows(existing.payments, requested)) {
+                        await tx.salesReturnPayment.deleteMany({ where: { return_id: id } });
+                        await tx.salesReturnPayment.createMany({
+                            data: requested.map((tender) => refundPaymentRow(id, tender)),
+                        });
+                    }
+                    await tx.salesReturn.update({
+                        where: { id },
+                        data: updateData,
+                    });
+                    return this.findEdited(tx, tenantId, id);
+                }
+            }
+
             // Take back everything the return did to the books, then settle it
             // afresh below as if it had been entered this way.
             await this.unwindSalesReturn(tx, tenantId, existing, userId);
@@ -533,11 +608,8 @@ export class SalesReturnsService {
             }
 
             let tenders: RefundTender[] | null;
-            if (dto.payments) {
-                // The return's own branch. Tenders it already carries are
-                // exempt from the branch check and keep the account they
-                // were saved with.
-                tenders = await this.refundTenders(tx, tenantId, existing.store_id, dto.payments, existing.payments);
+            if (requested) {
+                tenders = requested;
             } else if (existing.tenders_recorded) {
                 // New lines, same refund: the tenders stay as they were, and
                 // whatever they no longer cover comes off the due.
@@ -610,6 +682,30 @@ export class SalesReturnsService {
             where: { id, tenant_id: tenantId },
             include: { sale: true, items: { include: { product: true } }, payments: PAYMENTS_IN_ORDER },
         });
+    }
+
+    /**
+     * Whether external sync wrote this return. Either marker settles it,
+     * because each alone has a gap:
+     *
+     * - a `SALE_RETURN` mapping row pointing at it — the importer writes one
+     *   for every return it creates, but mappings cascade away when the
+     *   connection is deleted while the imported documents stay;
+     * - a posting event for it from `external-sync` — written in the same
+     *   transaction as the return whenever the import books its impacts, and
+     *   never removed, but absent when impacts are off.
+     */
+    private async isImportedReturn(tx: Prisma.TransactionClient, tenantId: string, id: string): Promise<boolean> {
+        const mapping = await tx.externalSyncMapping.findFirst({
+            where: { tenant_id: tenantId, entity_type: 'SALE_RETURN', internal_id: id },
+            select: { id: true },
+        });
+        if (mapping) return true;
+        const event = await tx.postingEvent.findFirst({
+            where: { tenant_id: tenantId, source_module: 'external-sync', source_type: 'sale_return', source_id: id },
+            select: { id: true },
+        });
+        return Boolean(event);
     }
 
     /**
@@ -731,15 +827,7 @@ export class SalesReturnsService {
         // against the due) counts nothing, unlike one saved before tenders.
         if (tenders.length) {
             await tx.salesReturnPayment.createMany({
-                data: tenders.map((tender) => ({
-                    return_id: ret.id,
-                    payment_method: tender.paymentMethod,
-                    payment_method_id: tender.methodId,
-                    payment_method_name: tender.methodName,
-                    account_id: tender.accountId,
-                    amount: tender.amount,
-                    ...tender.instrument,
-                })),
+                data: tenders.map((tender) => refundPaymentRow(ret.id, tender)),
             });
         }
         if (!ret.tenders_recorded) {
