@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
@@ -11,12 +12,65 @@ import {
     usableWarehouseIds,
 } from '../database/inventory.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostInput, type AutoPostResult } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
+import {
+    allocateTenders,
+    resolveTenders,
+    storedToTenderInputs,
+    type ResolvedTender,
+    type StoredTender,
+} from '../accounting/payment-account.util';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { creditDueAmount } from '../customers/customer-credit.utils';
 import { findOpenSessionForUser } from '../cashier-sessions/active-session.util';
 import { committedReturnQuantity, completedExchangeLinesInclude } from '../sales/open-sale-quantity';
+import { paymentInstrumentData, type PaymentInstrumentColumns } from '../common/payment-instrument.util';
+import type { ReturnPaymentDto } from '../common/return-payment.dto';
+
+/** The 400 for refund tenders that add up to more than the goods coming back. */
+const REFUND_ABOVE_TOTAL = 'The refund is more than the return total.';
+/** The 400 for a partial refund with no customer whose due could take the rest. */
+const REFUND_NEEDS_CUSTOMER = "Refund the full amount, or pick the customer's sale";
+/** The 400 for an edit that shrinks a return below the refund it already records. */
+const STORED_REFUND_ABOVE_TOTAL = 'The refund is more than the new return total — change the refund too.';
+
+/** Below half a paisa two amounts are the same money. */
+const EPSILON = 0.005;
+
+/** The refund tenders in the order they were saved, the order they post in. */
+const PAYMENTS_IN_ORDER = { orderBy: { created_at: 'asc' } } as const;
+
+function round2(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+/** A refund tender as resolved, with the instrument details its row stores. */
+type RefundTender = ResolvedTender & { instrument: PaymentInstrumentColumns };
+
+/** A `SalesReturnPayment` row, as an edit reads it back. */
+type StoredRefundRow = StoredTender & PaymentInstrumentColumns;
+
+/** What settling a return reads off the sale it came back from. */
+interface ReturnSale {
+    store_id: string;
+    customer_id: string | null;
+    total_amount: unknown;
+    amount_paid: unknown;
+    /** In `created_at` order: the legacy path refunds the way the sale was first paid. */
+    payments?: { payment_method: string }[];
+}
+
+/** The return being settled or unwound. */
+interface SettledReturn {
+    id: string;
+    return_number: string;
+    store_id: string;
+    /** The total as stored. The legacy path posts this, as it always has. */
+    total_refund: unknown;
+    /** Already set when the return was saved, or last edited, with tenders. */
+    tenders_recorded?: boolean;
+}
 
 @Injectable()
 export class SalesReturnsService {
@@ -146,6 +200,14 @@ export class SalesReturnsService {
                 });
             }
 
+            // How the refund was paid, when the client says. Resolved at the
+            // return's branch — the sale's, which is where the original
+            // tenders were offered. Omitted, the refund is guessed from the
+            // sale as it always has been.
+            const tenders = dto.payments
+                ? await this.refundTenders(tx, tenantId, sale?.store_id ?? dto.storeId, dto.payments)
+                : null;
+
             // 3. Create the return record first, so movements can reference its
             //    row id (every other caller passes the id, not the RET- string).
             // The drawer this refund comes out of is whichever one the person
@@ -164,6 +226,7 @@ export class SalesReturnsService {
                     reason: dto.reason,
                     created_by: userId,
                     warehouse_id: warehouses.entryWarehouseId,
+                    ...(tenders && { tenders_recorded: true }),
                     items: {
                         create: returnItemData
                     }
@@ -184,77 +247,10 @@ export class SalesReturnsService {
                 });
             }
 
-            // Refund the way the customer paid. An unpaid balance was a receivable,
-            // so its return credits AR rather than handing back cash.
-            //
-            // With no sale there is nothing to mirror: no customer, no payment
-            // history, no receivable. Such a return settles in cash, which is
-            // the only defensible default when the original tender is unknown.
-            const balanceDue = sale ? creditDueAmount(Number(sale.total_amount), Number(sale.amount_paid)) : 0;
-            const returnPaymentMode = !sale
-                ? 'cash'
-                : balanceDue > 0.005
-                    ? 'credit'
-                    : classifyPaymentMode(sale.payments?.[0]?.payment_method ?? 'cash');
-
-            // 5. If the sale had a customer, keep their balances consistent:
-            //    reduce total_spent, and — for a credit sale — reduce what they
-            //    still owe and record a matching credit-ledger entry, so a
-            //    returned credit sale no longer leaves them owing for the goods.
-            if (sale?.customer_id) {
-                await tx.customer.update({
-                    where: { id: sale.customer_id },
-                    data: { total_spent: { decrement: totalRefund } },
-                });
-
-                if (returnPaymentMode === 'credit') {
-                    const customer = await tx.customer.findUnique({
-                        where: { id: sale.customer_id },
-                        select: { due_balance: true, store_id: true },
-                    });
-                    const currentDue = Number(customer?.due_balance ?? 0);
-                    const creditReduction = Math.min(totalRefund, currentDue);
-                    if (creditReduction > 0.005) {
-                        const balanceAfter = currentDue - creditReduction;
-                        await tx.customerCreditTransaction.create({
-                            data: {
-                                tenant_id: tenantId,
-                                customer_id: sale.customer_id,
-                                store_id: customer!.store_id,
-                                type: 'ADJUSTMENT',
-                                amount: -creditReduction,
-                                balance_after: balanceAfter,
-                                reference_type: 'SALES_RETURN',
-                                reference_id: salesReturn.id,
-                                notes: `Credit sale return ${returnNumber}`,
-                                created_by: userId,
-                            },
-                        });
-                        await tx.customer.update({
-                            where: { id: sale.customer_id },
-                            data: { due_balance: balanceAfter },
-                        });
-                    }
-                }
-            }
-
-            const posting = await autoPostFromRules({
-                tx,
-                tenantId,
-                eventType: 'sale_return',
-                conditionKey: 'payment_mode',
-                conditionValue: returnPaymentMode,
-                sourceModule: 'sales',
-                sourceType: 'sale_return',
-                sourceId: salesReturn.id,
-                amount: Number(salesReturn.total_refund),
-                description: `Auto-posted sales return ${salesReturn.return_number}`,
-                referenceNumber: salesReturn.return_number,
-                storeId: sale?.store_id ?? dto.storeId,
-                // Only the credit return touches AR; a cash return's legs are not
-                // control accounts, so this tags nothing and is a safe no-op there.
-                partyType: 'CUSTOMER',
-                partyId: sale?.customer_id ?? undefined,
+            const posting = await this.settleSalesReturn(tx, tenantId, userId, salesReturn, {
+                total: totalRefund,
+                tenders,
+                sale,
             });
 
             return {
@@ -278,7 +274,7 @@ export class SalesReturnsService {
             findMany: (args) =>
                 this.db.salesReturn.findMany({
                     ...(args as object),
-                    include: { sale: true, items: { include: { product: true } } },
+                    include: { sale: true, items: { include: { product: true } }, payments: PAYMENTS_IN_ORDER },
                 }),
             count: (args) => this.db.salesReturn.count(args as any),
             where: { tenant_id: tenantId, ...(opts?.storeId ? { store_id: opts.storeId } : {}), ...(created ? { created_at: created } : {}) },
@@ -310,6 +306,7 @@ export class SalesReturnsService {
             include: {
                 sale: { include: { items: { include: { product: true, returns: true, exchangeLines: completedExchangeLinesInclude } } } },
                 items: { include: { product: true } },
+                payments: PAYMENTS_IN_ORDER,
             }
         });
 
@@ -323,17 +320,43 @@ export class SalesReturnsService {
         };
     }
 
-    async update(tenantId: string, id: string, dto: UpdateSalesReturnDto) {
+    async update(tenantId: string, id: string, dto: UpdateSalesReturnDto, userId?: string) {
         return this.db.$transaction(async (tx) => {
             const existing = await tx.salesReturn.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true, sale: { include: { items: { include: { returns: true, exchangeLines: completedExchangeLinesInclude } } } } },
+                include: {
+                    items: true,
+                    payments: PAYMENTS_IN_ORDER,
+                    sale: {
+                        include: {
+                            items: { include: { returns: true, exchangeLines: completedExchangeLinesInclude } },
+                            // The legacy path refunds the way the sale was first paid.
+                            payments: PAYMENTS_IN_ORDER,
+                        },
+                    },
+                },
             });
             if (!existing) throw new BadRequestException('Return not found');
 
             // Update reason
             const updateData: any = {};
             if (dto.reason !== undefined) updateData.reason = dto.reason;
+
+            const itemsChanged = Boolean(dto.items && dto.items.length > 0);
+
+            // A reason-only edit leaves the stock, the due and the vouchers alone.
+            if (!itemsChanged && !dto.payments) {
+                await tx.salesReturn.update({
+                    where: { id },
+                    data: updateData,
+                });
+                return this.findEdited(tx, tenantId, id);
+            }
+
+            // Take back everything the return did to the books, then settle it
+            // afresh below as if it had been entered this way.
+            await this.unwindSalesReturn(tx, tenantId, existing, userId);
+            let total = Number(existing.total_refund);
 
             // If items are provided, recalculate everything
             if (dto.items && dto.items.length > 0) {
@@ -369,13 +392,7 @@ export class SalesReturnsService {
                     });
                 }
 
-                // 2. Reverse old customer total_spent decrement
-                if (existing.sale?.customer_id) {
-                    await tx.customer.update({
-                        where: { id: existing.sale.customer_id },
-                        data: { total_spent: { increment: Number(existing.total_refund) } },
-                    });
-                }
+                // 2. The old total_spent decrement was reversed by the unwind.
 
                 // 3. Validate new items and calculate new total
                 let newTotalRefund = 0;
@@ -482,35 +499,58 @@ export class SalesReturnsService {
                     },
                 });
 
-                // 6. Re-apply customer total_spent decrement
-                if (existing.sale?.customer_id) {
-                    await tx.customer.update({
-                        where: { id: existing.sale.customer_id },
-                        data: { total_spent: { decrement: newTotalRefund } },
-                    });
-                }
+                // 6. The new total_spent decrement is the settle's, below.
+                total = newTotalRefund;
             } else {
-                // Only updating reason
+                // New tenders on the same goods.
                 await tx.salesReturn.update({
                     where: { id },
                     data: updateData,
                 });
             }
 
-            return tx.salesReturn.findFirst({
-                where: { id, tenant_id: tenantId },
-                include: { sale: true, items: { include: { product: true } } },
-            });
+            let tenders: RefundTender[] | null;
+            if (dto.payments) {
+                // The return's own branch. Tenders it already carries are
+                // exempt from the branch check and keep the account they
+                // were saved with.
+                tenders = await this.refundTenders(tx, tenantId, existing.store_id, dto.payments, existing.payments);
+            } else if (existing.tenders_recorded) {
+                // New lines, same refund: the tenders stay as they were, and
+                // whatever they no longer cover comes off the due.
+                const stored = existing.payments.reduce((sum, row) => sum + Number(row.amount), 0);
+                if (stored - total > EPSILON) throw new BadRequestException(STORED_REFUND_ABOVE_TOTAL);
+                tenders = await this.storedRefundTenders(tx, tenantId, existing.store_id, existing.payments);
+            } else {
+                // Saved before tenders existed: settled the way it was then.
+                tenders = null;
+            }
+
+            await this.settleSalesReturn(
+                tx,
+                tenantId,
+                userId,
+                { ...existing, total_refund: total },
+                // The return's own date, so the edit reposts in the period
+                // the return was entered in rather than today's.
+                { total, tenders, sale: existing.sale, date: existing.created_at },
+            );
+
+            return this.findEdited(tx, tenantId, id);
         });
     }
 
-    async remove(tenantId: string, id: string) {
+    async remove(tenantId: string, id: string, userId?: string) {
         return this.db.$transaction(async (tx) => {
             const ret = await tx.salesReturn.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true },
+                include: { items: true, sale: { select: { customer_id: true } } },
             });
             if (!ret) throw new BadRequestException('Return not found');
+
+            // Vouchers, due and total_spent first: a return in a closed period
+            // is refused here, before any stock moves.
+            await this.unwindSalesReturn(tx, tenantId, ret, userId);
 
             // Reverse stock increments, out of the warehouse each line was put
             // into rather than wherever the default points today.
@@ -538,5 +578,365 @@ export class SalesReturnsService {
 
             return { deleted: true };
         });
+    }
+
+    /** The return as an edit answers with it. */
+    private findEdited(tx: Prisma.TransactionClient, tenantId: string, id: string) {
+        return tx.salesReturn.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: { sale: true, items: { include: { product: true } }, payments: PAYMENTS_IN_ORDER },
+        });
+    }
+
+    /**
+     * The client's refund tenders, resolved at `storeId` (see `resolveTenders`):
+     * each one's method, name, linked account and posting mode. `stored` is the
+     * return's saved tenders on an edit, so the ones it already carries keep
+     * what they were saved with.
+     */
+    private async refundTenders(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        storeId: string,
+        payments: ReturnPaymentDto[],
+        stored: StoredTender[] = [],
+    ): Promise<RefundTender[]> {
+        const resolved = await resolveTenders(
+            tx,
+            tenantId,
+            storeId,
+            payments.map((payment) => ({
+                paymentMethod: payment.paymentMethod,
+                paymentMethodId: payment.paymentMethodId,
+                amount: payment.amount,
+            })),
+            stored,
+        );
+        return resolved.map((tender, index) => ({ ...tender, instrument: paymentInstrumentData(payments[index]) }));
+    }
+
+    /**
+     * A return's saved tenders, for an edit that sent none: each keeps its
+     * method, name, account and instrument details.
+     */
+    private async storedRefundTenders(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        storeId: string,
+        rows: StoredRefundRow[],
+    ): Promise<RefundTender[]> {
+        const resolved = await resolveTenders(tx, tenantId, storeId, storedToTenderInputs(rows), rows);
+        return resolved.map((tender, index) => ({
+            ...tender,
+            instrument: {
+                bank_name: rows[index].bank_name,
+                bank_branch: rows[index].bank_branch,
+                bank_account_number: rows[index].bank_account_number,
+                reference_no: rows[index].reference_no,
+                instrument_date: rows[index].instrument_date,
+            },
+        }));
+    }
+
+    /**
+     * What a return does to its customer and the ledger once its lines are
+     * saved. Shared by create and by an edit (after `unwindSalesReturn`), so an
+     * edited return settles exactly as if it had been entered that way.
+     *
+     * - `tenders === null` — the client sent no payments, or an edit of a
+     *   return saved before tenders existed: the refund is guessed from the sale,
+     *   exactly as it always has been (`settleGuessedRefund`).
+     * - With tenders, `refunded` is what they add up to and `adjusted`, the rest
+     *   of the total, comes off the sale customer's due — not clamped to it, so
+     *   any excess becomes an advance. The posting mirrors
+     *   `SalesService.postSaleVouchers`: with `adjusted` the primary voucher is
+     *   the AR credit for it (party-tagged) and the refund posts on
+     *   `legKey 'paid'`, a credit line per tender account; a full refund is one
+     *   keyless voucher.
+     *
+     * Returns the primary posting.
+     */
+    private async settleSalesReturn(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        userId: string | undefined,
+        ret: SettledReturn,
+        input: { total: number; tenders: RefundTender[] | null; sale: ReturnSale | null; date?: Date },
+    ): Promise<AutoPostResult> {
+        const { tenders, sale, date } = input;
+        if (tenders === null) return this.settleGuessedRefund(tx, tenantId, userId, ret, input);
+
+        const total = round2(input.total);
+        const refunded = round2(tenders.reduce((sum, tender) => sum + tender.amount, 0));
+        if (refunded - total > EPSILON) throw new BadRequestException(REFUND_ABOVE_TOTAL);
+        const adjusted = round2(total - refunded);
+        const customerId = sale?.customer_id ?? null;
+        // With no customer there is no due for the rest to come off.
+        if (adjusted > EPSILON && !customerId) throw new BadRequestException(REFUND_NEEDS_CUSTOMER);
+
+        if (customerId) {
+            await tx.customer.update({
+                where: { id: customerId },
+                data: { total_spent: { decrement: total } },
+            });
+
+            if (adjusted > EPSILON) {
+                const customer = await tx.customer.findUnique({
+                    where: { id: customerId },
+                    select: { due_balance: true, store_id: true },
+                });
+                const balanceAfter = round2(Number(customer?.due_balance ?? 0) - adjusted);
+                await tx.customerCreditTransaction.create({
+                    data: {
+                        tenant_id: tenantId,
+                        customer_id: customerId,
+                        store_id: customer!.store_id,
+                        type: 'ADJUSTMENT',
+                        amount: -adjusted,
+                        balance_after: balanceAfter,
+                        reference_type: 'SALES_RETURN',
+                        reference_id: ret.id,
+                        notes: `Return ${ret.return_number} adjusted against due`,
+                        created_by: userId,
+                    },
+                });
+                await tx.customer.update({
+                    where: { id: customerId },
+                    data: { due_balance: balanceAfter },
+                });
+            }
+        }
+
+        // The drawer counts the cash ones; a return recorded with none (all
+        // against the due) counts nothing, unlike one saved before tenders.
+        if (tenders.length) {
+            await tx.salesReturnPayment.createMany({
+                data: tenders.map((tender) => ({
+                    return_id: ret.id,
+                    payment_method: tender.paymentMethod,
+                    payment_method_id: tender.methodId,
+                    payment_method_name: tender.methodName,
+                    account_id: tender.accountId,
+                    amount: tender.amount,
+                    ...tender.instrument,
+                })),
+            });
+        }
+        if (!ret.tenders_recorded) {
+            await tx.salesReturn.update({
+                where: { id: ret.id },
+                data: { tenders_recorded: true },
+            });
+        }
+
+        const posting = {
+            tx,
+            tenantId,
+            eventType: 'sale_return',
+            conditionKey: 'payment_mode',
+            sourceModule: 'sales',
+            sourceType: 'sale_return',
+            sourceId: ret.id,
+            referenceNumber: ret.return_number,
+            storeId: sale?.store_id ?? ret.store_id,
+            ...(date && { date }),
+        } satisfies Partial<AutoPostInput>;
+
+        if (adjusted > EPSILON) {
+            // Dr Sales Revenue / Cr Accounts Receivable for what came off the due.
+            const primary = await autoPostFromRules({
+                ...posting,
+                conditionValue: 'credit',
+                amount: adjusted,
+                description: `Auto-posted sales return ${ret.return_number} — adjusted against due`,
+                partyType: 'CUSTOMER',
+                partyId: customerId!,
+            });
+            if (refunded > EPSILON) {
+                // Dr Sales Revenue / Cr each tender's account. The 'paid' leg
+                // key keeps it off the primary voucher's idempotency key.
+                const { lines } = allocateTenders(tenders, refunded);
+                await autoPostFromRules({
+                    ...posting,
+                    conditionValue: lines[0]?.mode ?? 'cash',
+                    legKey: 'paid',
+                    amount: refunded,
+                    description: `Auto-posted refund — sales return ${ret.return_number}`,
+                    tenderLegs: { side: 'credit', lines },
+                });
+            }
+            return primary;
+        }
+
+        const { lines } = allocateTenders(tenders, total);
+        return autoPostFromRules({
+            ...posting,
+            conditionValue: lines[0]?.mode ?? 'cash',
+            amount: total,
+            description: `Auto-posted sales return ${ret.return_number}`,
+            tenderLegs: { side: 'credit', lines },
+            // No control account on either side, so this tags nothing — kept
+            // as the guessed path has always passed it.
+            partyType: 'CUSTOMER',
+            partyId: customerId ?? undefined,
+        });
+    }
+
+    /**
+     * The refund as it was settled before tenders existed, unchanged: guessed
+     * from the sale, with the credit part clamped to the customer's due.
+     */
+    private async settleGuessedRefund(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        userId: string | undefined,
+        ret: SettledReturn,
+        input: { total: number; sale: ReturnSale | null; date?: Date },
+    ): Promise<AutoPostResult> {
+        const { total: totalRefund, sale, date } = input;
+
+        // Refund the way the customer paid. An unpaid balance was a receivable,
+        // so its return credits AR rather than handing back cash.
+        //
+        // With no sale there is nothing to mirror: no customer, no payment
+        // history, no receivable. Such a return settles in cash, which is
+        // the only defensible default when the original tender is unknown.
+        const balanceDue = sale ? creditDueAmount(Number(sale.total_amount), Number(sale.amount_paid)) : 0;
+        const returnPaymentMode = !sale
+            ? 'cash'
+            : balanceDue > 0.005
+                ? 'credit'
+                : classifyPaymentMode(sale.payments?.[0]?.payment_method ?? 'cash');
+
+        // If the sale had a customer, keep their balances consistent:
+        // reduce total_spent, and — for a credit sale — reduce what they
+        // still owe and record a matching credit-ledger entry, so a
+        // returned credit sale no longer leaves them owing for the goods.
+        if (sale?.customer_id) {
+            await tx.customer.update({
+                where: { id: sale.customer_id },
+                data: { total_spent: { decrement: totalRefund } },
+            });
+
+            if (returnPaymentMode === 'credit') {
+                const customer = await tx.customer.findUnique({
+                    where: { id: sale.customer_id },
+                    select: { due_balance: true, store_id: true },
+                });
+                const currentDue = Number(customer?.due_balance ?? 0);
+                const creditReduction = Math.min(totalRefund, currentDue);
+                if (creditReduction > 0.005) {
+                    const balanceAfter = currentDue - creditReduction;
+                    await tx.customerCreditTransaction.create({
+                        data: {
+                            tenant_id: tenantId,
+                            customer_id: sale.customer_id,
+                            store_id: customer!.store_id,
+                            type: 'ADJUSTMENT',
+                            amount: -creditReduction,
+                            balance_after: balanceAfter,
+                            reference_type: 'SALES_RETURN',
+                            reference_id: ret.id,
+                            notes: `Credit sale return ${ret.return_number}`,
+                            created_by: userId,
+                        },
+                    });
+                    await tx.customer.update({
+                        where: { id: sale.customer_id },
+                        data: { due_balance: balanceAfter },
+                    });
+                }
+            }
+        }
+
+        return autoPostFromRules({
+            tx,
+            tenantId,
+            eventType: 'sale_return',
+            conditionKey: 'payment_mode',
+            conditionValue: returnPaymentMode,
+            sourceModule: 'sales',
+            sourceType: 'sale_return',
+            sourceId: ret.id,
+            amount: Number(ret.total_refund),
+            description: `Auto-posted sales return ${ret.return_number}`,
+            referenceNumber: ret.return_number,
+            storeId: sale?.store_id ?? ret.store_id,
+            // Only the credit return touches AR; a cash return's legs are not
+            // control accounts, so this tags nothing and is a safe no-op there.
+            partyType: 'CUSTOMER',
+            partyId: sale?.customer_id ?? undefined,
+            ...(date && { date }),
+        });
+    }
+
+    /**
+     * Takes back what a return did to the books, before an edit re-settles it
+     * or a delete removes it. It reads what was written, not what would be
+     * posted now, so a return saved before refund tenders existed unwinds just
+     * the same:
+     *
+     * - its vouchers, the primary and the `'paid'` refund leg — voiding applies
+     *   the fiscal-period lock, so a return in a closed month stops here;
+     * - its net on each customer's ledger (every row referencing it), reversed
+     *   by an opposite ADJUSTMENT that references it too, so the rows always
+     *   net to what the return currently holds;
+     * - the total_spent decrement, so a re-settle does not take it twice;
+     * - its tender rows.
+     */
+    private async unwindSalesReturn(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        ret: { id: string; return_number: string; total_refund: unknown; sale: { customer_id: string | null } | null },
+        userId?: string,
+    ): Promise<void> {
+        await voidAutoPostedVoucher(tx, tenantId, 'sale_return', ret.id);
+        await voidAutoPostedVoucher(tx, tenantId, 'sale_return', ret.id, 'paid');
+
+        const rows = await tx.customerCreditTransaction.findMany({
+            where: { tenant_id: tenantId, reference_type: 'SALES_RETURN', reference_id: ret.id },
+            select: { customer_id: true, amount: true },
+        });
+        const netByCustomer = new Map<string, number>();
+        for (const row of rows) {
+            netByCustomer.set(row.customer_id, (netByCustomer.get(row.customer_id) ?? 0) + Number(row.amount));
+        }
+        for (const [customerId, sum] of netByCustomer) {
+            const net = round2(sum);
+            if (Math.abs(net) <= EPSILON) continue;
+            const customer = await tx.customer.findUnique({
+                where: { id: customerId },
+                select: { due_balance: true, store_id: true },
+            });
+            if (!customer) continue;
+            const balanceAfter = round2(Number(customer.due_balance) - net);
+            await tx.customerCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    customer_id: customerId,
+                    store_id: customer.store_id,
+                    type: 'ADJUSTMENT',
+                    amount: -net,
+                    balance_after: balanceAfter,
+                    reference_type: 'SALES_RETURN',
+                    reference_id: ret.id,
+                    notes: `Reversed return ${ret.return_number}`,
+                    created_by: userId,
+                },
+            });
+            await tx.customer.update({
+                where: { id: customerId },
+                data: { due_balance: balanceAfter },
+            });
+        }
+
+        if (ret.sale?.customer_id) {
+            await tx.customer.update({
+                where: { id: ret.sale.customer_id },
+                data: { total_spent: { increment: Number(ret.total_refund) } },
+            });
+        }
+
+        await tx.salesReturnPayment.deleteMany({ where: { return_id: ret.id } });
     }
 }

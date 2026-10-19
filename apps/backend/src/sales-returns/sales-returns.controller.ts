@@ -51,13 +51,13 @@ export class SalesReturnsController {
     @TrackHistory('SALES_RETURN', { action: 'UPDATE' })
     @Patch(':id')
     async update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateSalesReturnDto) {
-        return this.returnsService.update(tenant.tenantId, id, dto);
+        return this.returnsService.update(tenant.tenantId, id, dto, tenant.userId);
     }
 
     @RequireAnyStorePermission(...SALES_RETURN_WRITE)
     @TrackHistory('SALES_RETURN', { action: 'DELETE' })
     @Delete(':id')
     async remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.returnsService.remove(tenant.tenantId, id);
+        return this.returnsService.remove(tenant.tenantId, id, tenant.userId);
     }
 }

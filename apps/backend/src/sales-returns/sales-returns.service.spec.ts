@@ -9,7 +9,7 @@ import {
     reversalWarehouseResolver,
     usableWarehouseIds,
 } from '../database/inventory.utils';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 
 jest.mock('../database/inventory.utils', () => ({
   applyInventoryMovement: jest.fn(),
@@ -45,6 +45,8 @@ function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
 
 jest.mock('../accounting/posting.utils', () => ({
   autoPostFromRules: jest.fn(),
+  voidAutoPostedVoucher: jest.fn(),
+  postingIdempotencyKey: jest.requireActual('../accounting/posting.utils').postingIdempotencyKey,
 }));
 
 describe('SalesReturnsService', () => {
@@ -318,7 +320,11 @@ describe('SalesReturnsService', () => {
     expect(db.salesReturn.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { tenant_id: 'tenant-1' },
-        include: { sale: true, items: { include: { product: true } } },
+        include: {
+          sale: true,
+          items: { include: { product: true } },
+          payments: { orderBy: { created_at: 'asc' } },
+        },
         orderBy: { created_at: 'desc' },
       }),
     );
@@ -349,6 +355,12 @@ describe('SalesReturnsService', () => {
     const res = await service.findOne('tenant-1', 'ret-1');
     expect(db.salesReturn.findFirst).toHaveBeenCalled();
     expect(res.id).toEqual('ret-1');
+  });
+
+  it('findOne() includes the refund tenders, in the order they were saved', async () => {
+    db.salesReturn.findFirst.mockResolvedValue({ id: 'ret-1' });
+    await service.findOne('tenant-1', 'ret-1');
+    expect(db.salesReturn.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
   });
 });
 
@@ -529,4 +541,572 @@ describe('SalesReturnsService — posting condition value', () => {
         const findUniqueArgs = tx.sale.findUnique.mock.calls.at(-1)![0];
         expect(findUniqueArgs.include.payments).toEqual({ orderBy: { created_at: 'asc' } });
     });
+});
+
+describe('SalesReturnsService — refund tenders, edit and delete', () => {
+  const actualPosting = jest.requireActual('../accounting/posting.utils');
+  const LOCKED = { is_locked: true, period_label: 'October 2026' };
+
+  // The rules' own accounts are deliberately not the ones the methods link
+  // to — bKash's mode credits `bkash-rule` on its own — so a voucher shows
+  // whether a tender reached its method's link or only its mode's fallback.
+  const RULES: Record<string, { debit_account_id: string; credit_account_id: string }> = {
+    'sale_return:payment_mode:cash': { debit_account_id: 'revenue', credit_account_id: 'cash-in-hand' },
+    'sale_return:payment_mode:bank': { debit_account_id: 'revenue', credit_account_id: 'main-bank' },
+    'sale_return:payment_mode:bkash': { debit_account_id: 'revenue', credit_account_id: 'bkash-rule' },
+    'sale_return:payment_mode:credit': { debit_account_id: 'revenue', credit_account_id: 'ar' },
+  };
+  const ACCOUNTS: Record<string, string | null> = {
+    'cash-in-hand': null,
+    'main-bank': null,
+    'bkash-rule': null,
+    'bkash-acct': null,
+    'bkash-new': null,
+    revenue: null,
+    ar: 'CUSTOMER',
+  };
+  const createdAt = new Date('2026-10-01T06:00:00.000Z');
+
+  let service: SalesReturnsService;
+  let tx: any;
+  let seq: number;
+  let methods: any[];
+  /** Posting events by idempotency key, and the vouchers they point at by id. */
+  let events: Map<string, any>;
+  let vouchers: Map<string, any>;
+  let ledger: any[];
+  let customer: { id: string; due_balance: number; total_spent: number; store_id: string };
+  let saleRow: any;
+  let returnRow: any;
+  let paymentRows: any[];
+
+  const keyOf = (legKey?: string) => actualPosting.postingIdempotencyKey('tenant-1', 'sale_return', 'ret-1', legKey);
+  const voucherOn = (legKey?: string) => {
+    const event = events.get(keyOf(legKey));
+    return event?.voucher_id ? vouchers.get(event.voucher_id) : undefined;
+  };
+  /** The live voucher on that leg as [account, debit, credit] rows; undefined when there is none. */
+  const voucherRows = (legKey?: string) =>
+    voucherOn(legKey)?.details.map((d: any) => [d.account_id, Number(d.debit_amount), Number(d.credit_amount)]);
+  const partyOn = (legKey: string | undefined, accountId: string) =>
+    voucherOn(legKey)?.details.find((d: any) => d.account_id === accountId)?.party_id ?? null;
+
+  const sale = (overrides: Record<string, unknown> = {}) => ({
+    id: 'sale-1',
+    store_id: 'store-1',
+    customer_id: 'cust-1',
+    total_amount: 1000,
+    amount_paid: 1000,
+    warehouse_id: null,
+    payments: [{ payment_method: 'Cash', amount: 1000 }],
+    items: [
+      { id: 'si-1', product_id: 'p-1', quantity: 10, price_at_sale: 100, unit_cost_at_sale: 60, warehouse_id: null, returns: [], exchangeLines: [] },
+    ],
+    ...overrides,
+  });
+  /** Nothing paid at the counter: the customer owes the whole sale. */
+  const creditSale = () => sale({ amount_paid: 0, payments: [] });
+
+  const cash = (amount: number, extra: Record<string, unknown> = {}) =>
+    ({ paymentMethod: 'Cash', paymentMethodId: 'pm-cash', amount, ...extra });
+  const bkash = (amount: number, extra: Record<string, unknown> = {}) =>
+    ({ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount, ...extra });
+
+  /** Returns `quantity` of the sale's one line (100 each), refunded by `payments` when given. */
+  const createReturn = (quantity: number, payments?: Record<string, unknown>[]) =>
+    service.create('tenant-1', 'user-1', {
+      storeId: 'store-1',
+      saleId: 'sale-1',
+      items: [{ saleItemId: 'si-1', quantity }],
+      ...(payments && { payments }),
+    } as any);
+  const lines = (quantity: number) => [{ saleItemId: 'si-1', productId: 'p-1', quantity }];
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    seq = 0;
+    events = new Map();
+    vouchers = new Map();
+    ledger = [];
+    paymentRows = [];
+    returnRow = null;
+    saleRow = sale();
+    customer = { id: 'cust-1', due_balance: 0, total_spent: 5000, store_id: 'store-1' };
+    methods = [
+      { id: 'pm-cash', name: 'Cash', account_id: 'cash-in-hand', all_branches: true, stores: [], sort_order: 1 },
+      { id: 'pm-bkash', name: 'bKash', account_id: 'bkash-acct', all_branches: true, stores: [], sort_order: 3 },
+    ].map((method) => ({ tenant_id: 'tenant-1', is_active: true, ...method }));
+
+    tx = {
+      sale: { findUnique: jest.fn(async () => saleRow) },
+      cashierSession: { findFirst: jest.fn().mockResolvedValue(null) },
+      product: { findFirst: jest.fn().mockResolvedValue({ id: 'p-9' }) },
+      inventorySettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      productCost: { findMany: jest.fn().mockResolvedValue([]) },
+      productPrice: { findMany: jest.fn().mockResolvedValue([]) },
+      salesReturn: {
+        create: jest.fn(async ({ data }: any) => {
+          const { items, ...scalars } = data;
+          returnRow = {
+            id: 'ret-1',
+            tenders_recorded: false,
+            created_at: createdAt,
+            ...scalars,
+            items: items.create.map((item: any, index: number) => ({ id: `ri-${index}`, return_id: 'ret-1', ...item })),
+          };
+          return { ...returnRow };
+        }),
+        update: jest.fn(async ({ data }: any) => {
+          const { items, ...scalars } = data;
+          Object.assign(returnRow, scalars);
+          if (items?.create) returnRow.items = items.create.map((item: any) => ({ return_id: 'ret-1', ...item }));
+          return { ...returnRow };
+        }),
+        findFirst: jest.fn(async () => returnRow && { ...returnRow, sale: saleRow, payments: [...paymentRows] }),
+        deleteMany: jest.fn(async () => {
+          returnRow = null;
+        }),
+      },
+      salesReturnItem: {
+        deleteMany: jest.fn(async () => {
+          returnRow.items = [];
+        }),
+      },
+      salesReturnPayment: {
+        createMany: jest.fn(async ({ data }: any) => {
+          paymentRows.push(...data.map((row: any) => ({ id: `rp-${++seq}`, ...row })));
+        }),
+        deleteMany: jest.fn(async () => {
+          paymentRows = [];
+        }),
+      },
+      customer: {
+        findUnique: jest.fn(async () => ({ ...customer })),
+        update: jest.fn(async ({ data }: any) => {
+          if (data.total_spent?.decrement !== undefined) customer.total_spent -= Number(data.total_spent.decrement);
+          if (data.total_spent?.increment !== undefined) customer.total_spent += Number(data.total_spent.increment);
+          if (data.due_balance !== undefined) customer.due_balance = Number(data.due_balance);
+          return { ...customer };
+        }),
+      },
+      customerCreditTransaction: {
+        create: jest.fn(async ({ data }: any) => {
+          ledger.push({ ...data, amount: Number(data.amount), balance_after: Number(data.balance_after) });
+          return data;
+        }),
+        findMany: jest.fn(async ({ where }: any) =>
+          ledger.filter((row) =>
+            row.tenant_id === where.tenant_id
+            && row.reference_type === where.reference_type
+            && row.reference_id === where.reference_id)),
+      },
+      // Answers the filters resolveTenders uses the way Postgres would.
+      paymentMethod: {
+        findMany: jest.fn(async ({ where, orderBy }: any) => {
+          const matched = methods.filter((method) => {
+            if (method.tenant_id !== where.tenant_id) return false;
+            if (where.id?.in && !where.id.in.includes(method.id)) return false;
+            if (where.is_active !== undefined && method.is_active !== where.is_active) return false;
+            if (where.OR && !where.OR.some((c: any) => c.name?.equals?.toLowerCase() === method.name.toLowerCase())) {
+              return false;
+            }
+            return true;
+          });
+          return orderBy ? [...matched].sort((a, b) => a.sort_order - b.sort_order) : matched;
+        }),
+      },
+      // The posting engine's tables, kept as state so a void really removes
+      // what a post wrote.
+      postingEvent: {
+        findUnique: jest.fn(async ({ where }: any) => {
+          const event = events.get(where.tenant_id_idempotency_key.idempotency_key);
+          return event ? { ...event, voucher: event.voucher_id ? vouchers.get(event.voucher_id) ?? null : null } : null;
+        }),
+        create: jest.fn(async ({ data }: any) => {
+          const event = { id: `pe-${++seq}`, voucher_id: null, ...data };
+          events.set(data.idempotency_key, event);
+          return event;
+        }),
+        update: jest.fn(async ({ where, data }: any) => {
+          const event = [...events.values()].find((e) => e.id === where.id);
+          if (data.status !== undefined) event.status = data.status;
+          if (data.voucher_id !== undefined) event.voucher_id = data.voucher_id;
+          return event;
+        }),
+        delete: jest.fn(async ({ where }: any) => {
+          for (const [key, event] of events) if (event.id === where.id) events.delete(key);
+        }),
+      },
+      voucher: {
+        create: jest.fn(async ({ data }: any) => {
+          const voucher = {
+            id: `v-${++seq}`,
+            voucher_number: `V-${seq}`,
+            voucher_type: data.voucher_type,
+            date: data.date ?? new Date(),
+            idempotency_key: data.idempotency_key,
+            details: data.details.create,
+          };
+          vouchers.set(voucher.id, voucher);
+          return voucher;
+        }),
+        delete: jest.fn(async ({ where }: any) => {
+          vouchers.delete(where.id);
+        }),
+      },
+      voucherDetail: { deleteMany: jest.fn() },
+      fiscalPeriod: { findFirst: jest.fn().mockResolvedValue(null) },
+      postingRule: {
+        findFirst: jest.fn(async ({ where }: any) =>
+          RULES[`${where.event_type}:${where.condition_key}:${where.condition_value}`] ?? null),
+      },
+      account: {
+        findMany: jest.fn(async ({ where }: any) =>
+          Object.entries(ACCOUNTS)
+            .filter(([id]) => where.id.in.includes(id))
+            .map(([id, party_type]) => ({ id, party_type }))),
+      },
+      voucherSequence: {
+        upsert: jest.fn().mockResolvedValue({ next_number: 1, prefix: 'V' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      accountingSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const db = { $transaction: jest.fn(async (fn: any) => fn(tx)) };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [SalesReturnsService, { provide: DatabaseService, useValue: db }],
+    }).compile();
+    service = module.get<SalesReturnsService>(SalesReturnsService);
+    stubWarehouseResolution();
+    (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
+    // The real posting engine, so these tests read the vouchers it writes and
+    // the voids it makes.
+    (autoPostFromRules as jest.Mock).mockImplementation(actualPosting.autoPostFromRules);
+    (voidAutoPostedVoucher as jest.Mock).mockImplementation(actualPosting.voidAutoPostedVoucher);
+  });
+
+  it('split full refund: one keyless voucher crediting Cash and bKash accounts; drawer-relevant payment rows saved; tenders_recorded true', async () => {
+    await createReturn(3, [cash(200), bkash(100, { referenceNo: ' TX-1 ' })]);
+
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['cash-in-hand', 0, 200],
+      ['bkash-acct', 0, 100],
+    ]);
+    expect(voucherRows('paid')).toBeUndefined();
+    expect(vouchers.size).toBe(1);
+    // The canonical type is what the drawer classifies; the method, its name
+    // and the account it posted to ride alongside.
+    expect(paymentRows).toEqual([
+      expect.objectContaining({
+        return_id: 'ret-1',
+        payment_method: 'Cash',
+        payment_method_id: 'pm-cash',
+        payment_method_name: 'Cash',
+        account_id: 'cash-in-hand',
+        amount: 200,
+        reference_no: null,
+      }),
+      expect.objectContaining({
+        return_id: 'ret-1',
+        payment_method: 'Mobile Wallet',
+        payment_method_id: 'pm-bkash',
+        payment_method_name: 'bKash',
+        account_id: 'bkash-acct',
+        amount: 100,
+        reference_no: 'TX-1',
+      }),
+    ]);
+    expect(returnRow.tenders_recorded).toBe(true);
+    // Refunded in full: nothing comes off the due.
+    expect(ledger).toEqual([]);
+    expect(customer.total_spent).toBe(4700);
+  });
+
+  it("partial refund on a credit sale: AR voucher for the adjusted part + 'paid' voucher for the refund", async () => {
+    saleRow = creditSale();
+    customer.due_balance = 1000;
+
+    await createReturn(3, [cash(100)]);
+
+    expect(voucherRows()).toEqual([
+      ['revenue', 200, 0],
+      ['ar', 0, 200],
+    ]);
+    expect(partyOn(undefined, 'ar')).toBe('cust-1');
+    expect(partyOn(undefined, 'revenue')).toBeNull();
+    expect(voucherRows('paid')).toEqual([
+      ['revenue', 100, 0],
+      ['cash-in-hand', 0, 100],
+    ]);
+    expect(ledger).toEqual([
+      expect.objectContaining({
+        customer_id: 'cust-1',
+        type: 'ADJUSTMENT',
+        amount: -200,
+        balance_after: 800,
+        reference_type: 'SALES_RETURN',
+        reference_id: 'ret-1',
+        created_by: 'user-1',
+      }),
+    ]);
+    expect(customer.due_balance).toBe(800);
+    expect(customer.total_spent).toBe(4700);
+  });
+
+  it('credit sale, due 100, return 300, refund 0 → due −200 and an AR leg of 300', async () => {
+    saleRow = creditSale();
+    customer.due_balance = 100;
+
+    await createReturn(3, []);
+
+    // Not clamped to the due: the excess is an advance the customer holds.
+    expect(ledger).toEqual([expect.objectContaining({ amount: -300, balance_after: -200 })]);
+    expect(customer.due_balance).toBe(-200);
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['ar', 0, 300],
+    ]);
+    expect(partyOn(undefined, 'ar')).toBe('cust-1');
+    expect(voucherRows('paid')).toBeUndefined();
+    // Recorded with no tenders: the drawer counts nothing for it.
+    expect(paymentRows).toEqual([]);
+    expect(returnRow.tenders_recorded).toBe(true);
+  });
+
+  it('no customer and a partial refund → 400 with the exact copy', async () => {
+    saleRow = sale({ customer_id: null });
+    await expect(createReturn(3, [cash(100)])).rejects.toThrow(
+      new BadRequestException("Refund the full amount, or pick the customer's sale"),
+    );
+
+    // A return with no sale has no customer either.
+    await expect(
+      service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        items: [{ productId: 'p-9', quantity: 1, unitPrice: 300 }],
+        payments: [cash(100)],
+      } as any),
+    ).rejects.toThrow(new BadRequestException("Refund the full amount, or pick the customer's sale"));
+  });
+
+  it('refund above total → 400', async () => {
+    await expect(createReturn(3, [cash(250), bkash(100)])).rejects.toThrow(
+      new BadRequestException('The refund is more than the return total.'),
+    );
+  });
+
+  it('a new tender on a method not offered at the branch → 400', async () => {
+    methods[1].all_branches = false;
+    await expect(createReturn(3, [bkash(300)])).rejects.toThrow(
+      new BadRequestException("That payment method isn't available at this branch."),
+    );
+  });
+
+  it('omitted payments posts exactly as today', async () => {
+    saleRow = creditSale();
+    customer.due_balance = 100;
+
+    await createReturn(3);
+
+    expect(autoPostFromRules).toHaveBeenCalledTimes(1);
+    const posting = (autoPostFromRules as jest.Mock).mock.calls[0][0];
+    expect(posting).toEqual(expect.objectContaining({
+      eventType: 'sale_return',
+      conditionKey: 'payment_mode',
+      conditionValue: 'credit',
+      sourceId: 'ret-1',
+      amount: 300,
+      partyType: 'CUSTOMER',
+      partyId: 'cust-1',
+    }));
+    expect(posting.tenderLegs).toBeUndefined();
+    expect(posting.legKey).toBeUndefined();
+    expect(posting.date).toBeUndefined();
+    // Today's clamp: only what the customer owed comes off.
+    expect(ledger).toEqual([expect.objectContaining({ amount: -100, balance_after: 0 })]);
+    expect(tx.salesReturnPayment.createMany).not.toHaveBeenCalled();
+    expect(tx.paymentMethod.findMany).not.toHaveBeenCalled();
+    expect(returnRow.tenders_recorded).toBe(false);
+  });
+
+  it('omitted payments on a bKash sale still refunds through the bKash rule', async () => {
+    saleRow = sale({ payments: [{ payment_method: 'bKash', amount: 1000 }] });
+
+    await createReturn(3);
+
+    expect((autoPostFromRules as jest.Mock).mock.calls[0][0].conditionValue).toBe('bkash');
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['bkash-rule', 0, 300],
+    ]);
+  });
+
+  it('update re-settles: old vouchers voided, opposite ADJUSTMENT written, total_spent not double-decremented', async () => {
+    saleRow = creditSale();
+    customer.due_balance = 1000;
+    await createReturn(3, [cash(100)]);
+    const returnNumber = returnRow.return_number;
+
+    await service.update('tenant-1', 'ret-1', { payments: [bkash(300)] } as any, 'user-2');
+
+    // Refunded in full now: one keyless voucher, the old AR and 'paid' legs gone.
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['bkash-acct', 0, 300],
+    ]);
+    expect(voucherRows('paid')).toBeUndefined();
+    expect(vouchers.size).toBe(1);
+    // Reposted on the return's own date, so the edit does not move its period.
+    expect(voucherOn().date).toEqual(createdAt);
+    expect(ledger).toEqual([
+      expect.objectContaining({ amount: -200, balance_after: 800 }),
+      expect.objectContaining({
+        type: 'ADJUSTMENT',
+        amount: 200,
+        balance_after: 1000,
+        reference_type: 'SALES_RETURN',
+        reference_id: 'ret-1',
+        notes: `Reversed return ${returnNumber}`,
+        created_by: 'user-2',
+      }),
+    ]);
+    expect(customer.due_balance).toBe(1000);
+    expect(customer.total_spent).toBe(4700);
+    expect(paymentRows).toEqual([
+      expect.objectContaining({ payment_method_id: 'pm-bkash', account_id: 'bkash-acct', amount: 300 }),
+    ]);
+  });
+
+  it('update of a legacy return unwinds its legacy ADJUSTMENT and voucher', async () => {
+    saleRow = creditSale();
+    customer.due_balance = 1000;
+    await createReturn(3);
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['ar', 0, 300],
+    ]);
+    const returnNumber = returnRow.return_number;
+
+    await service.update('tenant-1', 'ret-1', { payments: [cash(300)] } as any, 'user-1');
+
+    expect(ledger).toEqual([
+      expect.objectContaining({ amount: -300, balance_after: 700 }),
+      expect.objectContaining({ amount: 300, balance_after: 1000, notes: `Reversed return ${returnNumber}` }),
+    ]);
+    expect(customer.due_balance).toBe(1000);
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['cash-in-hand', 0, 300],
+    ]);
+    expect(vouchers.size).toBe(1);
+    expect(customer.total_spent).toBe(4700);
+    expect(returnRow.tenders_recorded).toBe(true);
+  });
+
+  it('update of a legacy return with new lines and no payments settles it the legacy way again', async () => {
+    saleRow = creditSale();
+    customer.due_balance = 1000;
+    await createReturn(3);
+
+    await service.update('tenant-1', 'ret-1', { items: lines(2) } as any, 'user-1');
+
+    expect(ledger.map((row) => [row.amount, row.balance_after])).toEqual([
+      [-300, 700],
+      [300, 1000],
+      [-200, 800],
+    ]);
+    expect(customer.due_balance).toBe(800);
+    expect(voucherRows()).toEqual([
+      ['revenue', 200, 0],
+      ['ar', 0, 200],
+    ]);
+    expect(customer.total_spent).toBe(4800);
+    expect(returnRow.tenders_recorded).toBe(false);
+    expect(paymentRows).toEqual([]);
+  });
+
+  it('update with items only keeps stored payments', async () => {
+    customer.due_balance = 500;
+    await createReturn(3, [cash(200), bkash(100, { referenceNo: 'TX-1' })]);
+    // bKash has since been linked elsewhere: a kept tender reposts where it was saved.
+    methods[1].account_id = 'bkash-new';
+
+    await service.update('tenant-1', 'ret-1', { items: lines(4) } as any, 'user-1');
+
+    // 400 back now: the 300 refunded as before, the other 100 against the due.
+    expect(voucherRows()).toEqual([
+      ['revenue', 100, 0],
+      ['ar', 0, 100],
+    ]);
+    expect(voucherRows('paid')).toEqual([
+      ['revenue', 300, 0],
+      ['cash-in-hand', 0, 200],
+      ['bkash-acct', 0, 100],
+    ]);
+    expect(paymentRows).toEqual([
+      expect.objectContaining({ payment_method_id: 'pm-cash', account_id: 'cash-in-hand', amount: 200 }),
+      expect.objectContaining({ payment_method_id: 'pm-bkash', account_id: 'bkash-acct', amount: 100, reference_no: 'TX-1' }),
+    ]);
+    expect(customer.due_balance).toBe(400);
+    expect(customer.total_spent).toBe(4600);
+    expect(returnRow.total_refund).toBe(400);
+  });
+
+  it('update with items only refuses when the stored payments exceed the new total', async () => {
+    await createReturn(3, [cash(300)]);
+
+    await expect(service.update('tenant-1', 'ret-1', { items: lines(2) } as any, 'user-1')).rejects.toThrow(
+      new BadRequestException('The refund is more than the new return total — change the refund too.'),
+    );
+  });
+
+  it('a reason-only update touches nothing', async () => {
+    await createReturn(3, [cash(300)]);
+    const before = voucherRows();
+
+    await service.update('tenant-1', 'ret-1', { reason: 'Damaged box' } as any, 'user-1');
+
+    expect(returnRow.reason).toBe('Damaged box');
+    expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+    expect(voucherRows()).toEqual(before);
+    expect(paymentRows).toHaveLength(1);
+    expect(customer.total_spent).toBe(4700);
+  });
+
+  it('remove unwinds vouchers and due', async () => {
+    saleRow = creditSale();
+    customer.due_balance = 1000;
+    await createReturn(3, [cash(100)]);
+    const returnNumber = returnRow.return_number;
+
+    await service.remove('tenant-1', 'ret-1', 'user-1');
+
+    expect(vouchers.size).toBe(0);
+    expect(events.size).toBe(0);
+    expect(ledger.at(-1)).toEqual(expect.objectContaining({
+      amount: 200,
+      balance_after: 1000,
+      reference_id: 'ret-1',
+      notes: `Reversed return ${returnNumber}`,
+    }));
+    expect(customer.due_balance).toBe(1000);
+    expect(customer.total_spent).toBe(5000);
+    expect(paymentRows).toEqual([]);
+    expect(returnRow).toBeNull();
+  });
+
+  it('a return in a closed fiscal period cannot be edited', async () => {
+    await createReturn(3, [cash(300)]);
+    tx.fiscalPeriod.findFirst.mockResolvedValue(LOCKED);
+
+    await expect(service.update('tenant-1', 'ret-1', { payments: [bkash(300)] } as any, 'user-1')).rejects.toThrow(
+      /FISCAL_PERIOD_LOCKED/,
+    );
+    await expect(service.remove('tenant-1', 'ret-1', 'user-1')).rejects.toThrow(/FISCAL_PERIOD_LOCKED/);
+    expect(voucherRows()).toEqual([
+      ['revenue', 300, 0],
+      ['cash-in-hand', 0, 300],
+    ]);
+  });
 });
