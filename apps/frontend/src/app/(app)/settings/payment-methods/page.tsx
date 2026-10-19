@@ -186,7 +186,7 @@ function MethodForm({ initial, accounts, accountsError, branches, onSave, onCanc
                                 All branches
                             </label>
                             {!allBranches && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 pl-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 ps-6">
                                     {branches.map((branch) => (
                                         <label
                                             key={branch.id}
