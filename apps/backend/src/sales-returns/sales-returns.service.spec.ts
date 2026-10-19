@@ -621,6 +621,11 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
       ...(payments && { payments }),
     } as any);
   const lines = (quantity: number) => [{ saleItemId: 'si-1', productId: 'p-1', quantity }];
+  /** Every write to the customer's total_spent since the last mockClear, as Prisma was asked. */
+  const totalSpentWrites = () =>
+    (tx.customer.update as jest.Mock).mock.calls
+      .map(([args]: any[]) => args.data.total_spent)
+      .filter((write: unknown) => write !== undefined);
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -942,11 +947,12 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
     ]);
   });
 
-  it('update re-settles: old vouchers voided, opposite ADJUSTMENT written, total_spent not double-decremented', async () => {
+  it('update re-settles: old vouchers voided, opposite ADJUSTMENT written; an unchanged total leaves total_spent untouched', async () => {
     saleRow = creditSale();
     customer.due_balance = 1000;
     await createReturn(3, [cash(100)]);
     const returnNumber = returnRow.return_number;
+    (tx.customer.update as jest.Mock).mockClear();
 
     await service.update('tenant-1', 'ret-1', { payments: [bkash(300)] } as any, 'user-2');
 
@@ -972,10 +978,25 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
       }),
     ]);
     expect(customer.due_balance).toBe(1000);
+    // Still ৳300 back: not restored and taken again, not touched at all.
+    expect(totalSpentWrites()).toEqual([]);
     expect(customer.total_spent).toBe(4700);
     expect(paymentRows).toEqual([
       expect.objectContaining({ payment_method_id: 'pm-bkash', account_id: 'bkash-acct', amount: 300 }),
     ]);
+  });
+
+  it('update of a return from ৳300 to ৳200 increments total_spent by 100 (net)', async () => {
+    await createReturn(3, [cash(300)]);
+    expect(customer.total_spent).toBe(4700);
+    (tx.customer.update as jest.Mock).mockClear();
+
+    await service.update('tenant-1', 'ret-1', { items: lines(2), payments: [cash(200)] } as any, 'user-1');
+
+    // One write for the difference — nothing records whether the return
+    // lowered total_spent when it was saved (an imported one never did).
+    expect(totalSpentWrites()).toEqual([{ decrement: -100 }]);
+    expect(customer.total_spent).toBe(4800);
   });
 
   it('update of a legacy return unwinds its legacy ADJUSTMENT and voucher', async () => {
@@ -1079,6 +1100,7 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
     customer.due_balance = 1000;
     await createReturn(3, [cash(100)]);
     const returnNumber = returnRow.return_number;
+    (tx.customer.update as jest.Mock).mockClear();
 
     await service.remove('tenant-1', 'ret-1', 'user-1');
 
@@ -1091,7 +1113,9 @@ describe('SalesReturnsService — refund tenders, edit and delete', () => {
       notes: `Reversed return ${returnNumber}`,
     }));
     expect(customer.due_balance).toBe(1000);
-    expect(customer.total_spent).toBe(5000);
+    // A statistic, left as it is, as a delete always has.
+    expect(totalSpentWrites()).toEqual([]);
+    expect(customer.total_spent).toBe(4700);
     expect(paymentRows).toEqual([]);
     expect(returnRow).toBeNull();
   });

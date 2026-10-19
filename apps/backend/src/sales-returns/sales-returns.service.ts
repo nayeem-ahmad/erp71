@@ -247,6 +247,18 @@ export class SalesReturnsService {
                 });
             }
 
+            // 5. What the customer has spent falls by the goods coming back. A
+            //    statistic, not the ledger: a new return moves it by its whole
+            //    total and an edit by the difference (see update), since
+            //    nothing records whether an existing return — an imported one,
+            //    say — ever moved it.
+            if (sale?.customer_id) {
+                await tx.customer.update({
+                    where: { id: sale.customer_id },
+                    data: { total_spent: { decrement: totalRefund } },
+                });
+            }
+
             const posting = await this.settleSalesReturn(tx, tenantId, userId, salesReturn, {
                 total: totalRefund,
                 tenders,
@@ -392,7 +404,8 @@ export class SalesReturnsService {
                     });
                 }
 
-                // 2. The old total_spent decrement was reversed by the unwind.
+                // 2. total_spent moves by the difference once the new total
+                //    is known, below.
 
                 // 3. Validate new items and calculate new total
                 let newTotalRefund = 0;
@@ -499,8 +512,18 @@ export class SalesReturnsService {
                     },
                 });
 
-                // 6. The new total_spent decrement is the settle's, below.
                 total = newTotalRefund;
+
+                // 6. Only the difference: whether this return lowered
+                //    total_spent when it was saved is not recorded (an imported
+                //    one never did), so it is never restored and taken again.
+                const totalSpentDelta = round2(newTotalRefund - Number(existing.total_refund));
+                if (existing.sale?.customer_id && Math.abs(totalSpentDelta) > EPSILON) {
+                    await tx.customer.update({
+                        where: { id: existing.sale.customer_id },
+                        data: { total_spent: { decrement: totalSpentDelta } },
+                    });
+                }
             } else {
                 // New tenders on the same goods.
                 await tx.salesReturn.update({
@@ -544,12 +567,13 @@ export class SalesReturnsService {
         return this.db.$transaction(async (tx) => {
             const ret = await tx.salesReturn.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true, sale: { select: { customer_id: true } } },
+                include: { items: true },
             });
             if (!ret) throw new BadRequestException('Return not found');
 
-            // Vouchers, due and total_spent first: a return in a closed period
-            // is refused here, before any stock moves.
+            // Vouchers and due first: a return in a closed period is refused
+            // here, before any stock moves. total_spent is left as it is, as
+            // it always has been on a delete.
             await this.unwindSalesReturn(tx, tenantId, ret, userId);
 
             // Reverse stock increments, out of the warehouse each line was put
@@ -654,6 +678,9 @@ export class SalesReturnsService {
      *   `legKey 'paid'`, a credit line per tender account; a full refund is one
      *   keyless voucher.
      *
+     * `total_spent` is not touched here: create lowers it by the total and an
+     * edit by the difference.
+     *
      * Returns the primary posting.
      */
     private async settleSalesReturn(
@@ -674,37 +701,30 @@ export class SalesReturnsService {
         // With no customer there is no due for the rest to come off.
         if (adjusted > EPSILON && !customerId) throw new BadRequestException(REFUND_NEEDS_CUSTOMER);
 
-        if (customerId) {
+        if (customerId && adjusted > EPSILON) {
+            const customer = await tx.customer.findUnique({
+                where: { id: customerId },
+                select: { due_balance: true, store_id: true },
+            });
+            const balanceAfter = round2(Number(customer?.due_balance ?? 0) - adjusted);
+            await tx.customerCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    customer_id: customerId,
+                    store_id: customer!.store_id,
+                    type: 'ADJUSTMENT',
+                    amount: -adjusted,
+                    balance_after: balanceAfter,
+                    reference_type: 'SALES_RETURN',
+                    reference_id: ret.id,
+                    notes: `Return ${ret.return_number} adjusted against due`,
+                    created_by: userId,
+                },
+            });
             await tx.customer.update({
                 where: { id: customerId },
-                data: { total_spent: { decrement: total } },
+                data: { due_balance: balanceAfter },
             });
-
-            if (adjusted > EPSILON) {
-                const customer = await tx.customer.findUnique({
-                    where: { id: customerId },
-                    select: { due_balance: true, store_id: true },
-                });
-                const balanceAfter = round2(Number(customer?.due_balance ?? 0) - adjusted);
-                await tx.customerCreditTransaction.create({
-                    data: {
-                        tenant_id: tenantId,
-                        customer_id: customerId,
-                        store_id: customer!.store_id,
-                        type: 'ADJUSTMENT',
-                        amount: -adjusted,
-                        balance_after: balanceAfter,
-                        reference_type: 'SALES_RETURN',
-                        reference_id: ret.id,
-                        notes: `Return ${ret.return_number} adjusted against due`,
-                        created_by: userId,
-                    },
-                });
-                await tx.customer.update({
-                    where: { id: customerId },
-                    data: { due_balance: balanceAfter },
-                });
-            }
         }
 
         // The drawer counts the cash ones; a return recorded with none (all
@@ -808,44 +828,37 @@ export class SalesReturnsService {
                 ? 'credit'
                 : classifyPaymentMode(sale.payments?.[0]?.payment_method ?? 'cash');
 
-        // If the sale had a customer, keep their balances consistent:
-        // reduce total_spent, and — for a credit sale — reduce what they
-        // still owe and record a matching credit-ledger entry, so a
-        // returned credit sale no longer leaves them owing for the goods.
-        if (sale?.customer_id) {
-            await tx.customer.update({
+        // For a credit sale, reduce what the customer still owes and record a
+        // matching credit-ledger entry, so a returned credit sale no longer
+        // leaves them owing for the goods. (total_spent is the caller's: see
+        // create and update.)
+        if (sale?.customer_id && returnPaymentMode === 'credit') {
+            const customer = await tx.customer.findUnique({
                 where: { id: sale.customer_id },
-                data: { total_spent: { decrement: totalRefund } },
+                select: { due_balance: true, store_id: true },
             });
-
-            if (returnPaymentMode === 'credit') {
-                const customer = await tx.customer.findUnique({
-                    where: { id: sale.customer_id },
-                    select: { due_balance: true, store_id: true },
+            const currentDue = Number(customer?.due_balance ?? 0);
+            const creditReduction = Math.min(totalRefund, currentDue);
+            if (creditReduction > 0.005) {
+                const balanceAfter = currentDue - creditReduction;
+                await tx.customerCreditTransaction.create({
+                    data: {
+                        tenant_id: tenantId,
+                        customer_id: sale.customer_id,
+                        store_id: customer!.store_id,
+                        type: 'ADJUSTMENT',
+                        amount: -creditReduction,
+                        balance_after: balanceAfter,
+                        reference_type: 'SALES_RETURN',
+                        reference_id: ret.id,
+                        notes: `Credit sale return ${ret.return_number}`,
+                        created_by: userId,
+                    },
                 });
-                const currentDue = Number(customer?.due_balance ?? 0);
-                const creditReduction = Math.min(totalRefund, currentDue);
-                if (creditReduction > 0.005) {
-                    const balanceAfter = currentDue - creditReduction;
-                    await tx.customerCreditTransaction.create({
-                        data: {
-                            tenant_id: tenantId,
-                            customer_id: sale.customer_id,
-                            store_id: customer!.store_id,
-                            type: 'ADJUSTMENT',
-                            amount: -creditReduction,
-                            balance_after: balanceAfter,
-                            reference_type: 'SALES_RETURN',
-                            reference_id: ret.id,
-                            notes: `Credit sale return ${ret.return_number}`,
-                            created_by: userId,
-                        },
-                    });
-                    await tx.customer.update({
-                        where: { id: sale.customer_id },
-                        data: { due_balance: balanceAfter },
-                    });
-                }
+                await tx.customer.update({
+                    where: { id: sale.customer_id },
+                    data: { due_balance: balanceAfter },
+                });
             }
         }
 
@@ -881,13 +894,16 @@ export class SalesReturnsService {
      * - its net on each customer's ledger (every row referencing it), reversed
      *   by an opposite ADJUSTMENT that references it too, so the rows always
      *   net to what the return currently holds;
-     * - the total_spent decrement, so a re-settle does not take it twice;
      * - its tender rows.
+     *
+     * Not `total_spent`: nothing records whether the return lowered it (an
+     * imported one never did), so an edit moves it by the difference and a
+     * delete leaves it alone.
      */
     private async unwindSalesReturn(
         tx: Prisma.TransactionClient,
         tenantId: string,
-        ret: { id: string; return_number: string; total_refund: unknown; sale: { customer_id: string | null } | null },
+        ret: { id: string; return_number: string },
         userId?: string,
     ): Promise<void> {
         await voidAutoPostedVoucher(tx, tenantId, 'sale_return', ret.id);
@@ -927,13 +943,6 @@ export class SalesReturnsService {
             await tx.customer.update({
                 where: { id: customerId },
                 data: { due_balance: balanceAfter },
-            });
-        }
-
-        if (ret.sale?.customer_id) {
-            await tx.customer.update({
-                where: { id: ret.sale.customer_id },
-                data: { total_spent: { increment: Number(ret.total_refund) } },
             });
         }
 
