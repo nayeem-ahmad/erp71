@@ -296,8 +296,10 @@ step sync:accounting \
 # sync:payment-method-accounts links each existing tenant's default payment
 # methods (Cash, Bank, bKash, Nagad, Card) to the default account they post to,
 # now that a tender posts to its method's own account. After sync:accounting so
-# every default account exists. Idempotent: reads only unlinked methods, never
-# overwrites an owner's choice. See prisma/sync-payment-method-accounts.ts.
+# every default account exists. Runs ONCE per database: the first successful run
+# stores a marker in platform_settings and later deploys skip it. New tenants are
+# linked at signup; a link an owner clears stays cleared (--force re-runs it by
+# hand). See prisma/sync-payment-method-accounts.ts.
 step sync:payment-method-accounts \
     npm run sync:payment-method-accounts --workspace=@erp71/database
 
