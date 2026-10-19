@@ -281,7 +281,9 @@ describe('PaymentSection', () => {
             const { rerender } = render(
                 <PaymentSection {...strip} payments={[]} total={100} onPaymentChange={onPaymentChange} />,
             );
-            await waitFor(() => expect(screen.getByLabelText('Cash amount')).toBeInTheDocument());
+            // The generic Cash box is there from the start, but locked until the branch's methods land.
+            await settle();
+            expect(screen.getByLabelText('Cash amount')).toBeEnabled();
 
             fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '100' } });
             rerender(
@@ -441,6 +443,49 @@ describe('PaymentSection', () => {
         const [payment] = onPaymentChange.mock.calls.at(-1)![0];
         expect(payment).toMatchObject({ method: 'Cash', label: 'Cash', amount: 100 });
         expect(payment).not.toHaveProperty('paymentMethodId');
+    });
+
+    it('locks the boxes until the layout and the branch\'s methods have loaded', async () => {
+        const { api } = require('@/lib/api');
+        let answerLayout!: (value: unknown) => void;
+        (api.getPaymentLayout as jest.Mock).mockImplementationOnce(
+            () => new Promise((resolve) => { answerLayout = resolve; }),
+        );
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH, BKASH, NAGAD]);
+        const onPaymentChange = jest.fn();
+        render(
+            <PaymentSection
+                {...strip}
+                payments={[{ method: 'Mobile Wallet', label: 'Nagad', amount: 40 }]}
+                total={100}
+                onPaymentChange={onPaymentChange}
+            />,
+        );
+
+        // The generic boxes stand in meanwhile, but take no input: a figure
+        // typed here would send the Nagad payment out as "Mobile Wallet".
+        const generic = screen.getAllByRole('spinbutton');
+        expect(generic.length).toBeGreaterThan(0);
+        generic.forEach((input) => expect(input).toBeDisabled());
+        fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '5' } });
+        expect(onPaymentChange).not.toHaveBeenCalled();
+
+        await act(async () => {
+            answerLayout({ customised: false, visible: [CASH, BKASH], available: [CASH, BKASH, NAGAD] });
+        });
+        await settle();
+        expect(amountBoxes()).toEqual(['Cash amount', 'bKash amount', 'Nagad amount']);
+        expect(screen.getByLabelText('Nagad amount')).toHaveValue(40);
+        screen.getAllByRole('spinbutton').forEach((input) => expect(input).toBeEnabled());
+    });
+
+    it('leaves the generic boxes usable once loading finds no active method', async () => {
+        mockMethods({ visible: [], available: [] });
+        render(<PaymentSection {...strip} payments={[]} total={100} onPaymentChange={jest.fn()} />);
+        await settle();
+
+        expect(amountBoxes()).toEqual(['Cash amount', 'Mobile Wallet amount', 'Card amount', 'Bank amount']);
+        screen.getAllByRole('spinbutton').forEach((input) => expect(input).toBeEnabled());
     });
 
     describe('the user\'s layout', () => {
@@ -661,6 +706,27 @@ describe('PaymentSection', () => {
             expect(onPaymentChange.mock.calls.at(-1)![0]).toEqual([
                 expect.objectContaining({ label: 'Cash', amount: 30 }),
                 { ...legacy, amount: 60 },
+            ]);
+        });
+
+        it('a payment saved under a name another method now has keeps its own row and original id', async () => {
+            // Taken on bKash (pm-x), since renamed "bKash Gulshan" and limited
+            // to Gulshan; the "bKash" here is a new method for this branch.
+            const newBkash = method({ id: 'pm-y', name: 'bKash', type: 'Mobile Wallet', account_id: 'acc-y', sort_order: 2 });
+            mockMethods({ visible: [CASH, newBkash] });
+            const onPaymentChange = jest.fn();
+            const saved = { method: 'Mobile Wallet', label: 'bKash', paymentMethodId: 'pm-x', amount: 40 };
+            render(<PaymentSection {...strip} payments={[saved]} total={100} onPaymentChange={onPaymentChange} />);
+            await settle();
+
+            // This branch's bKash stays empty; the saved payment has a row of its own.
+            expect(screen.getAllByLabelText('bKash amount').map((input) => (input as HTMLInputElement).value))
+                .toEqual(['', '40']);
+
+            fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '60' } });
+            expect(onPaymentChange.mock.calls.at(-1)![0]).toEqual([
+                expect.objectContaining({ paymentMethodId: 'pm-cash', amount: 60 }),
+                saved,
             ]);
         });
 

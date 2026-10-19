@@ -327,6 +327,11 @@ export default function PaymentSection({
     const visible = (ready && layoutState.layout?.visible) || NO_METHODS;
     const available = (ready && layoutState.layout?.available) || NO_METHODS;
     const branchMethods = ready ? listState.methods : NO_METHODS;
+    // Until then the boxes are the generic ones, and a figure typed into one
+    // would go out under the generic name, taking a saved payment off its
+    // method. They are shown, but locked. Once loading has finished with no
+    // active method, the generic boxes are the strip and take input.
+    const loading = !readOnly && !!storeId && !ready;
 
     // Fall back to generic methods whenever the branch offers no *usable*
     // (active) method — not only when none are defined — so an all-inactive
@@ -406,12 +411,14 @@ export default function PaymentSection({
     }, [payments, pool]);
 
     const updateAmount = (key: string, value: number) => {
+        if (loading) return;
         const nextAmounts = { ...amounts, [key]: value };
         setAmounts(nextAmounts);
         emitPayments(nextAmounts, instruments);
     };
 
     const updateInstrument = (key: string, field: keyof PaymentInstrument, value: string) => {
+        if (loading) return;
         const nextInstruments = { ...instruments, [key]: { ...instruments[key], [field]: value } };
         setInstruments(nextInstruments);
         emitPayments(amounts, nextInstruments);
@@ -463,9 +470,10 @@ export default function PaymentSection({
                         step="0.01"
                         value={amounts[m.key] || ''}
                         onChange={(e) => updateAmount(m.key, parseFloat(e.target.value) || 0)}
+                        disabled={loading}
                         placeholder="0.00"
                         aria-label={copy.amount.replace('{method}', m.name)}
-                        className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end"
+                        className="w-24 flex-shrink-0 px-2 py-1 border rounded text-sm text-end disabled:bg-gray-50"
                     />
                 </div>
                 {legacySummary && <p className="text-[11px] text-gray-500">{legacySummary}</p>}
@@ -489,6 +497,7 @@ export default function PaymentSection({
                                             type={field.type ?? 'text'}
                                             value={detail?.[field.key] ?? ''}
                                             onChange={(e) => updateInstrument(m.key, field.key, e.target.value)}
+                                            disabled={loading}
                                             aria-label={`${m.name} ${copy[field.label]}`}
                                             className="mt-0.5 w-full rounded border px-2 py-1 text-sm text-gray-900 max-md:min-h-touch"
                                         />
@@ -545,6 +554,7 @@ export default function PaymentSection({
                 <div>
                     <select
                         aria-label={copy.addMethodAria}
+                        disabled={loading}
                         value=""
                         onChange={(e) => { if (e.target.value) setAdded((a) => [...a, e.target.value]); }}
                         className="w-full px-2 py-1.5 border rounded text-sm text-gray-600"

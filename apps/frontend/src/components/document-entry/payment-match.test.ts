@@ -73,6 +73,24 @@ describe('matchPaymentToMethod', () => {
         })).toBeUndefined();
     });
 
+    it.each(['bKash', 'BKASH'])(
+        'a payment whose saved label equals a local method\'s name but carries another method\'s id keeps its own row and id (%s)',
+        (label) => {
+            // Taken on bKash (pm-x), since renamed "bKash Gulshan" and limited
+            // to Gulshan; this branch's new "bKash" is another method.
+            expect(matchPaymentToMethod(METHODS, {
+                method: 'Mobile Wallet',
+                label,
+                paymentMethodId: 'pm-x',
+                amount: 10,
+            })).toBeUndefined();
+        },
+    );
+
+    it('reads a legacy string only on a payment without an id', () => {
+        expect(matchPaymentToMethod(METHODS, { method: 'CASH', paymentMethodId: 'pm-x', amount: 10 })).toBeUndefined();
+    });
+
     it('matches nothing for a string that names no method or type', () => {
         expect(matchPaymentToMethod(METHODS, { method: 'Old Wallet', amount: 10 })).toBeUndefined();
     });
