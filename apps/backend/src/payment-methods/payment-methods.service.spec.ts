@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentMethodsService } from './payment-methods.service';
 import { DatabaseService } from '../database/database.service';
 import { PaymentMethodType } from './payment-methods.dto';
-import { offeredAt } from './payment-method-branches';
-import { BadRequestException } from '@nestjs/common';
+import { availableAt, offeredAt } from './payment-method-branches';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('PaymentMethodsService', () => {
   let service: PaymentMethodsService;
@@ -61,6 +61,11 @@ describe('PaymentMethodsService', () => {
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      tenantUser: {
+        findUnique: jest.fn().mockResolvedValue({ payment_method_prefs: null }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
       // Callback form: the transaction client is the same mock, so ordering
       // across tables can be read off one call log.
       $transaction: jest.fn((fn: (tx: any) => unknown) => fn(db)),
@@ -351,6 +356,119 @@ describe('PaymentMethodsService', () => {
       const [account] = await service.findLinkableAccounts(tenantId);
 
       expect(account.code).toBeNull();
+    });
+  });
+
+  describe('per-user layout', () => {
+    const ctxA = { tenantId, userId: 'user-a', storeId: 's1' } as any;
+    const ctxB = { tenantId, userId: 'user-b', storeId: 's1' } as any;
+    const row = (id: string, sort_order: number, show_on_entry = true) => ({
+      id,
+      tenant_id: tenantId,
+      type: PaymentMethodType.CASH,
+      name: id,
+      account_id: null,
+      is_active: true,
+      sort_order,
+      show_on_entry,
+      all_branches: true,
+      stores: [],
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    const entry = { order: ['bkash', 'cash'], hidden: ['bank'] };
+
+    beforeEach(() => {
+      db.paymentMethod.findMany.mockResolvedValue([row('cash', 1), row('bank', 2), row('bkash', 3)]);
+    });
+
+    it("user A's saved layout does not reach user B", async () => {
+      db.tenantUser.findUnique.mockImplementation(({ where }: any) =>
+        Promise.resolve({
+          payment_method_prefs: where.tenant_id_user_id.user_id === 'user-a' ? { s1: { sale: entry } } : null,
+        }));
+
+      const a = await service.getLayout(ctxA, 's1', 'sale');
+      const b = await service.getLayout(ctxB, 's1', 'sale');
+
+      expect(a.customised).toBe(true);
+      expect(a.visible.map((m) => m.id)).toEqual(['bkash', 'cash']);
+      expect(b.customised).toBe(false);
+      expect(b.visible.map((m) => m.id)).toEqual(['cash', 'bank', 'bkash']);
+      expect(b.available).toHaveLength(3);
+    });
+
+    it("branch A's layout does not show in branch B", async () => {
+      db.tenantUser.findUnique.mockResolvedValue({ payment_method_prefs: { s1: { sale: entry } } });
+
+      expect((await service.getLayout(ctxA, 's1', 'sale')).customised).toBe(true);
+      expect((await service.getLayout(ctxA, 's2', 'sale')).customised).toBe(false);
+      expect((await service.getLayout(ctxA, 's1', 'purchase')).customised).toBe(false);
+    });
+
+    it('lists available methods through availableAt for that branch only', async () => {
+      await service.getLayout(ctxA, 's2', 'sale');
+      expect(db.paymentMethod.findMany.mock.calls[0][0].where).toEqual({
+        tenant_id: tenantId,
+        ...availableAt(['s2']),
+      });
+    });
+
+    it('a user who is not a member is refused', async () => {
+      db.tenantUser.findUnique.mockResolvedValue(null);
+      await expect(service.getLayout(ctxA, 's1', 'sale')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('save refuses an id not available at the branch', async () => {
+      await expect(
+        service.saveLayout(ctxA, 's1', 'sale', { order: ['cash', 'elsewhere'], hidden: [] }),
+      ).rejects.toThrow("That payment method isn't available at this branch.");
+      await expect(
+        service.saveLayout(ctxA, 's1', 'sale', { order: ['cash'], hidden: ['elsewhere'] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(db.tenantUser.update).not.toHaveBeenCalled();
+    });
+
+    it('save locks the membership row before writing', async () => {
+      await service.saveLayout(ctxA, 's1', 'sale', entry);
+
+      expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(db.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(db.tenantUser.update.mock.invocationCallOrder[0]);
+      const sql = (db.$queryRaw.mock.calls[0][0] as string[]).join('?');
+      expect(sql).toContain('FOR UPDATE');
+      expect(db.$queryRaw.mock.calls[0].slice(1)).toEqual([tenantId, 'user-a']);
+    });
+
+    it('save writes only that branch and context, keeping the rest', async () => {
+      const other = { order: ['cash'], hidden: [] };
+      db.tenantUser.findUnique.mockResolvedValue({
+        payment_method_prefs: { s1: { purchase: other }, s2: { sale: other } },
+      });
+
+      const res = await service.saveLayout(ctxA, 's1', 'sale', entry);
+
+      expect(db.tenantUser.update.mock.calls[0][0].data.payment_method_prefs).toEqual({
+        s1: { purchase: other, sale: entry },
+        s2: { sale: other },
+      });
+      expect(res.customised).toBe(true);
+      expect(res.visible.map((m) => m.id)).toEqual(['bkash', 'cash']);
+    });
+
+    it('reset removes only that branch/context', async () => {
+      const other = { order: ['cash'], hidden: [] };
+      db.tenantUser.findUnique.mockResolvedValue({
+        payment_method_prefs: { s1: { sale: entry, purchase: other }, s2: { sale: other } },
+      });
+
+      const res = await service.resetLayout(ctxA, 's1', 'sale');
+
+      expect(db.tenantUser.update.mock.calls[0][0].data.payment_method_prefs).toEqual({
+        s1: { purchase: other },
+        s2: { sale: other },
+      });
+      expect(res.customised).toBe(false);
+      expect(res.visible.map((m) => m.id)).toEqual(['cash', 'bank', 'bkash']);
     });
   });
 });

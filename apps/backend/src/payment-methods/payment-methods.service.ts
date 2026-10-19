@@ -1,5 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import type { TenantContext } from '../database/tenant.decorator';
+import type { PaymentLayoutContext, PaymentLayoutEntry, PaymentLayoutResponse } from '@erp71/shared-types';
 import {
   CreatePaymentMethodDto,
   UpdatePaymentMethodDto,
@@ -8,7 +10,8 @@ import {
   PaymentMethodType,
 } from './payment-methods.dto';
 import { runImport, ImportResult } from '../common/import.util';
-import { offeredAt } from './payment-method-branches';
+import { availableAt, offeredAt } from './payment-method-branches';
+import { readLayoutEntry, resolvePaymentLayout, setLayoutEntry } from './payment-layout';
 
 /** Loaded with every method so responses can say which branches it is limited to. */
 const WITH_STORES = { stores: { select: { store_id: true } } } as const;
@@ -110,6 +113,91 @@ export class PaymentMethodsService {
       ...this.mapToResponse(pm),
       account: (pm.account_id && byId.get(pm.account_id)) || null,
     }));
+  }
+
+  /** The member's own layout for one screen at one branch. */
+  async getLayout(
+    ctx: TenantContext,
+    storeId: string,
+    context: PaymentLayoutContext,
+  ): Promise<PaymentLayoutResponse<PaymentMethodResponseDto>> {
+    const member = await this.db.tenantUser.findUnique({
+      where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: ctx.userId } },
+      select: { payment_method_prefs: true },
+    });
+    if (!member) throw new NotFoundException('Not a member of this workspace.');
+    return this.layoutResponse(ctx.tenantId, storeId, readLayoutEntry(member.payment_method_prefs, storeId, context));
+  }
+
+  /**
+   * Replaces one branch/screen entry. The membership row is locked and the
+   * prefs re-read inside the transaction, so two devices saving different
+   * screens each keep the other's change.
+   */
+  async saveLayout(
+    ctx: TenantContext,
+    storeId: string,
+    context: PaymentLayoutContext,
+    entry: PaymentLayoutEntry,
+  ): Promise<PaymentLayoutResponse<PaymentMethodResponseDto>> {
+    const available = await this.availableAtBranch(ctx.tenantId, storeId);
+    const availableIds = new Set(available.map((m) => m.id));
+    if ([...entry.order, ...entry.hidden].some((id) => !availableIds.has(id))) {
+      throw new BadRequestException("That payment method isn't available at this branch.");
+    }
+    const clean: PaymentLayoutEntry = { order: [...new Set(entry.order)], hidden: [...new Set(entry.hidden)] };
+    await this.writeLayout(ctx, storeId, context, clean);
+    return this.layoutResponse(ctx.tenantId, storeId, clean, available);
+  }
+
+  /** Drops the entry; the screen goes back to the tenant default. */
+  async resetLayout(
+    ctx: TenantContext,
+    storeId: string,
+    context: PaymentLayoutContext,
+  ): Promise<PaymentLayoutResponse<PaymentMethodResponseDto>> {
+    await this.writeLayout(ctx, storeId, context, null);
+    return this.layoutResponse(ctx.tenantId, storeId, undefined);
+  }
+
+  private async writeLayout(
+    ctx: TenantContext,
+    storeId: string,
+    context: PaymentLayoutContext,
+    entry: PaymentLayoutEntry | null,
+  ): Promise<void> {
+    await this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "TenantUser" WHERE tenant_id = ${ctx.tenantId} AND user_id = ${ctx.userId} FOR UPDATE`;
+      const member = await tx.tenantUser.findUnique({
+        where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: ctx.userId } },
+        select: { payment_method_prefs: true },
+      });
+      if (!member) throw new NotFoundException('Not a member of this workspace.');
+      await tx.tenantUser.update({
+        where: { tenant_id_user_id: { tenant_id: ctx.tenantId, user_id: ctx.userId } },
+        data: { payment_method_prefs: setLayoutEntry(member.payment_method_prefs, storeId, context, entry) as any },
+      });
+    });
+  }
+
+  private async availableAtBranch(tenantId: string, storeId: string): Promise<PaymentMethodResponseDto[]> {
+    const rows = await this.db.paymentMethod.findMany({
+      where: { tenant_id: tenantId, ...availableAt([storeId]) },
+      include: WITH_STORES,
+      orderBy: [{ sort_order: 'asc' }, { created_at: 'asc' }],
+    });
+    return rows.map((row: any) => this.mapToResponse(row));
+  }
+
+  private async layoutResponse(
+    tenantId: string,
+    storeId: string,
+    saved: PaymentLayoutEntry | undefined,
+    preloaded?: PaymentMethodResponseDto[],
+  ): Promise<PaymentLayoutResponse<PaymentMethodResponseDto>> {
+    const available = preloaded ?? (await this.availableAtBranch(tenantId, storeId));
+    const { customised, visible } = resolvePaymentLayout(available, saved);
+    return { customised, visible, available };
   }
 
   /**

@@ -67,3 +67,38 @@ describe('PaymentMethodsController — list branch scope', () => {
     expect(service.findAll).toHaveBeenCalledWith('t1', { type: undefined, storeIds: ['s1'] });
   });
 });
+
+describe('PaymentMethodsController — layout branch scope', () => {
+  const member = { tenantId: 't1', storeId: 's1', userId: 'u1', userRole: 'MANAGER' } as any;
+  const layout = { customised: false, visible: [], available: [] };
+  const service = {
+    getLayout: jest.fn().mockResolvedValue(layout),
+    saveLayout: jest.fn().mockResolvedValue(layout),
+    resetLayout: jest.fn().mockResolvedValue(layout),
+  };
+  const branchScope = { resolveStoreId: jest.fn() };
+  const controller = new PaymentMethodsController(service as any, branchScope as any);
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('a member cannot read a layout for a branch they have no access to', async () => {
+    branchScope.resolveStoreId.mockRejectedValue(new ForbiddenException());
+    await expect(controller.getLayout(member, { storeId: 'foreign', context: 'sale' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(branchScope.resolveStoreId).toHaveBeenCalledWith(member, 'foreign', {
+      permissions: TENDER_READ,
+      allowAll: false,
+    });
+    expect(service.getLayout).not.toHaveBeenCalled();
+  });
+
+  it('save and reset are scoped the same way and pass the resolved branch', async () => {
+    branchScope.resolveStoreId.mockResolvedValue('s2');
+    await controller.saveLayout(member, { storeId: 's2', context: 'purchase' }, { order: ['a'], hidden: [] });
+    await controller.resetLayout(member, { storeId: 's2', context: 'purchase' });
+    expect(service.saveLayout).toHaveBeenCalledWith(member, 's2', 'purchase', { order: ['a'], hidden: [] });
+    expect(service.resetLayout).toHaveBeenCalledWith(member, 's2', 'purchase');
+    expect(branchScope.resolveStoreId).toHaveBeenCalledTimes(2);
+  });
+});

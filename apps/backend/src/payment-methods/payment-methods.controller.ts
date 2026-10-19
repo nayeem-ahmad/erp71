@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Put,
   Query,
   UseGuards,
   UseInterceptors,
@@ -20,7 +21,10 @@ import {
   PaymentMethodAccountDto,
   PaymentMethodResponseDto,
   PaymentMethodType,
+  PaymentLayoutQueryDto,
+  SavePaymentLayoutDto,
 } from './payment-methods.dto';
+import type { PaymentLayoutResponse } from '@erp71/shared-types';
 import { ImportRowsDto } from '../common/import.dto';
 import { BranchScopeService } from '../database/branch-scope.service';
 
@@ -80,6 +84,42 @@ export class PaymentMethodsController {
     return this.paymentMethodsService.findLinkableAccounts(tenant.tenantId);
   }
 
+  /**
+   * The caller's own layout of the method strip at one branch. The branch is
+   * required and checked against the caller's access; `all` is refused. These
+   * three routes must stay above @Get(':id'), which would swallow 'layout'.
+   */
+  @RequireAnyStorePermission(...TENDER_READ)
+  @Get('layout')
+  async getLayout(
+    @Tenant() tenant: TenantContext,
+    @Query() query: PaymentLayoutQueryDto,
+  ): Promise<PaymentLayoutResponse<PaymentMethodResponseDto>> {
+    const storeId = await this.layoutStoreId(tenant, query.storeId);
+    return this.paymentMethodsService.getLayout(tenant, storeId, query.context);
+  }
+
+  @RequireAnyStorePermission(...TENDER_READ)
+  @Put('layout')
+  async saveLayout(
+    @Tenant() tenant: TenantContext,
+    @Query() query: PaymentLayoutQueryDto,
+    @Body() dto: SavePaymentLayoutDto,
+  ): Promise<PaymentLayoutResponse<PaymentMethodResponseDto>> {
+    const storeId = await this.layoutStoreId(tenant, query.storeId);
+    return this.paymentMethodsService.saveLayout(tenant, storeId, query.context, dto);
+  }
+
+  @RequireAnyStorePermission(...TENDER_READ)
+  @Delete('layout')
+  async resetLayout(
+    @Tenant() tenant: TenantContext,
+    @Query() query: PaymentLayoutQueryDto,
+  ): Promise<PaymentLayoutResponse<PaymentMethodResponseDto>> {
+    const storeId = await this.layoutStoreId(tenant, query.storeId);
+    return this.paymentMethodsService.resetLayout(tenant, storeId, query.context);
+  }
+
   @RequireAnyStorePermission(...TENDER_READ)
   @Get('default/:type')
   async getDefault(
@@ -115,5 +155,13 @@ export class PaymentMethodsController {
     @Param('id') id: string,
   ): Promise<void> {
     return this.paymentMethodsService.delete(id, tenant.tenantId);
+  }
+
+  private async layoutStoreId(tenant: TenantContext, storeId: string): Promise<string> {
+    const resolved = await this.branchScope.resolveStoreId(tenant, storeId, {
+      permissions: TENDER_READ,
+      allowAll: false,
+    });
+    return resolved as string;
   }
 }

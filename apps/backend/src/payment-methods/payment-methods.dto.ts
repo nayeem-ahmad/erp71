@@ -1,5 +1,5 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsEnum, IsArray } from 'class-validator';
-import { PaymentMethodType } from '@erp71/shared-types';
+import { IsString, IsOptional, IsBoolean, IsInt, IsEnum, IsArray, IsIn } from 'class-validator';
+import { PaymentMethodType, PAYMENT_LAYOUT_CONTEXTS, PaymentLayoutContext } from '@erp71/shared-types';
 
 // Re-exported so existing importers (controller, specs) keep working. The
 // values live in @erp71/shared-types so the settings form validates against
@@ -110,4 +110,24 @@ export class PaymentMethodAccountDto {
   code: string | null;
   type: string;
   category: string;
+}
+
+/** Which branch and screen a layout belongs to; both required on every layout route. */
+export class PaymentLayoutQueryDto {
+  @IsString()
+  storeId: string;
+
+  @IsIn(PAYMENT_LAYOUT_CONTEXTS as PaymentLayoutContext[])
+  context: PaymentLayoutContext;
+}
+
+/** A member's arrangement of one screen: method ids in order, and the ones tucked away. */
+export class SavePaymentLayoutDto {
+  @IsArray()
+  @IsString({ each: true })
+  order: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  hidden: string[];
 }
