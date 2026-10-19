@@ -5723,9 +5723,14 @@ export const api = {
         fetchWithAuth(`/ai/chat/conversations/${id}`),
     deleteAiConversation: (id: string) => fetchWithAuth(`/ai/chat/conversations/${id}`, { method: 'DELETE' }),
     // Payment Methods
-    getPaymentMethods: (type?: string) => {
-        const q = type ? `?type=${type}` : '';
-        return fetchWithAuth(`/payment-methods${q}`);
+    // `storeId` is a branch id, or `all` (owners / consolidated holders): the
+    // methods offered there. Omitted, the server picks the caller's default.
+    getPaymentMethods: (type?: string, storeId?: string) => {
+        const params = new URLSearchParams();
+        if (type) params.set('type', type);
+        if (storeId) params.set('storeId', storeId);
+        const q = params.toString();
+        return fetchWithAuth(`/payment-methods${q ? `?${q}` : ''}`);
     },
     // Separate from getAccounts(): that one hits the accounting module, which is
     // entitlement-gated, so it 403s on plans that still get payment methods.
