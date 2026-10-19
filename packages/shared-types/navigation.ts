@@ -71,6 +71,7 @@ export const NAV_REGISTRY: Record<string, NavRegistryEntry> = {
   'sales.receivables.customer-payments': { id: 'sales.receivables.customer-payments', kind: 'link', icon: 'Wallet', labelKey: 'sidebar.items.customerPayment', href: '/sales/customer-payments' },
   'sales.receivables.customer-ledger': { id: 'sales.receivables.customer-ledger', kind: 'link', icon: 'BookOpen', labelKey: 'sidebar.items.customerLedger', href: '/sales/customer-ledger' },
   'sales.receivables.due-aging': { id: 'sales.receivables.due-aging', kind: 'link', icon: 'Clock', labelKey: 'sidebar.items.dueAging', href: '/sales/customers/reports/due-aging' },
+  'sales.receivables.dues-summary': { id: 'sales.receivables.dues-summary', kind: 'link', icon: 'HandCoins', labelKey: 'sidebar.items.customerDuesSummary', href: '/sales/customers/reports/dues-summary' },
   'sales.receivables.bad-debts': { id: 'sales.receivables.bad-debts', kind: 'link', icon: 'Ban', labelKey: 'sidebar.items.badDebts', href: '/sales/customers/reports/bad-debts' },
   'sales.order-flow': { id: 'sales.order-flow', kind: 'subgroup', icon: 'ClipboardList', labelKey: 'sales.hub.orderFlow' },
   'sales.order-flow.quotes': { id: 'sales.order-flow.quotes', kind: 'link', icon: 'FileText', labelKey: 'sidebar.items.salesQuotations', href: '/sales/quotes' },
@@ -455,6 +456,14 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
   'sales.order-flow.returns': ['CREATE_RETURN'],
   'sales.order-flow.exchanges': ['CREATE_RETURN'],
   'sales.daily-report': ['VIEW_FINANCIAL_REPORTS'],
+  // The API's CUSTOMER_CREDIT_READ: who may read what customers owe.
+  'sales.receivables.dues-summary': [
+    'VIEW_CUSTOMER_CREDIT',
+    'MANAGE_CUSTOMER_CREDIT',
+    'WRITE_OFF_CUSTOMER_DEBT',
+    'VIEW_FINANCIAL_REPORTS',
+    'CREATE_SALE',
+  ],
 
   storefront: [
     'MANAGE_STOREFRONT_PAGES',
@@ -550,6 +559,10 @@ export const NAV_PERMISSIONS: Record<string, readonly string[]> = {
  * The 2026-10-13 sales exchange added `sales.order-flow.exchanges` next to
  * Returns. A saved layout does not grow new nodes on its own:
  * `npx tsx prisma/sync-nav-layout.ts --nodes=sales.order-flow.exchanges`.
+ *
+ * The 2026-10-18 Customer Dues Summary added `sales.receivables.dues-summary`
+ * under Reports, after Due Aging:
+ * `npx tsx prisma/sync-nav-layout.ts --nodes=sales.receivables.dues-summary`.
  */
 export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('dashboard', null, 0),
@@ -578,8 +591,9 @@ export const DEFAULT_TENANT_NAV_LAYOUT: NavLayoutNode[] = [
   layoutNode('sales.reports.gross-profit-bridge', 'sales.reports', 8),
   layoutNode('sales.receivables.customer-ledger', 'sales.reports', 9),
   layoutNode('sales.receivables.due-aging', 'sales.reports', 10),
-  layoutNode('sales.customers.loyalty', 'sales.reports', 11),
-  layoutNode('sales.receivables.bad-debts', 'sales.reports', 12),
+  layoutNode('sales.receivables.dues-summary', 'sales.reports', 11),
+  layoutNode('sales.customers.loyalty', 'sales.reports', 12),
+  layoutNode('sales.receivables.bad-debts', 'sales.reports', 13),
   layoutNode('sales.setup', 'sales', 13),
   layoutNode('sales.setup.customer-groups', 'sales.setup', 0),
   layoutNode('sales.setup.price-lists', 'sales.setup', 1),

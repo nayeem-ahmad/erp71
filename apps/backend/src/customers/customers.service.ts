@@ -1338,6 +1338,50 @@ export class CustomersService {
     }
 
     /**
+     * Customer Dues Summary: every customer in `scope` with what they owe now.
+     *
+     * The due is `due_balance`, the live balance the Customers list shows and a
+     * sale's "previous due" is worked back from. Square and in-credit customers
+     * are listed too — the page decides what to hide.
+     *
+     * `me` is the caller's own employee record, so the page can offer the
+     * customers they are the sales rep for; null when their login is linked to
+     * no employee.
+     */
+    async getDuesSummary(tenantId: string, userId: string | undefined, scope: CustomerScope = null) {
+        const [customers, me] = await Promise.all([
+            this.db.customer.findMany({
+                where: { tenant_id: tenantId, deleted_at: null, ...customerScopeWhere(scope) },
+                select: {
+                    id: true,
+                    name: true,
+                    customer_code: true,
+                    phone: true,
+                    due_balance: true,
+                    store: { select: { id: true, name: true } },
+                    salesRep: { select: SALES_REP_SELECT },
+                },
+                orderBy: [{ due_balance: 'desc' }, { name: 'asc' }],
+            }),
+            userId
+                ? this.db.employee.findFirst({
+                    where: { tenant_id: tenantId, user_id: userId, deleted_at: null },
+                    select: SALES_REP_SELECT,
+                })
+                : null,
+        ]);
+
+        return {
+            me: me ?? null,
+            rows: customers.map(({ salesRep, due_balance, ...customer }) => ({
+                ...customer,
+                due_balance: Number(due_balance),
+                sales_rep: salesRep ?? null,
+            })),
+        };
+    }
+
+    /**
      * Who owes money, and how old each unpaid taka is.
      *
      * Aged from the SAME ledger that produces `due_balance`, not from credit

@@ -561,6 +561,13 @@ Spec `docs/superpowers/specs/2026-10-10-branch-attached-parties-design.md`, plan
 
 ---
 
+### Customer Dues Summary report — LANDED 2026-10-18, follow-ups below
+
+- [ ] **Add the sidebar link to saved nav layouts after the deploy** — a tenant with a saved layout does not grow new nodes: run `npx tsx prisma/sync-nav-layout.ts --nodes=sales.receivables.dues-summary` in `packages/database` against production, as for the earlier new nodes. Until then the report is reached from the Sales hub's Reports section only.
+- [ ] **Not checked in a browser** — unit tests, typecheck and lint only (local login 500s). After deploy: an owner on "All branches", a one-branch member, and a member whose login is linked to an employee who is some customers' sales rep (should open on "My customers").
+- [ ] **A limited member with several branches cannot see all of theirs at once** — the shared `BranchFilter` offers "All branches" only to owners and `VIEW_CONSOLIDATED_REPORTS` holders, so such a member picks one branch at a time. The endpoint already answers "every branch of mine" when `storeId` is omitted; the page would need an "All my branches" option.
+- [ ] **"My customers" needs the login linked to an employee** — a sales rep whose user has no `Employee.user_id` link is offered no "My customers"; they can still pick their own name from the sales-rep list.
+
 ### Re-ports salvaged from closed PRs (2026-10-01)
 
 Found while clearing the open PR list. Each fix below is still missing on `dev`, but its branch had drifted too far to merge, so the PR was closed and the work is recorded here. The original commits remain reachable through the closed PRs (`refs/pull/<n>/head`).
@@ -2055,6 +2062,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **Customer Dues Summary report** — done 2026-10-18. Asked for as "a new report for sales, Customer Dues Summary, where all customers of the selected branch(s) will be loaded with the current dues; a user should be able to see the customers they are sales rep for". New `GET /customers/reports/dues-summary?storeId=` (`CUSTOMER_CREDIT_READ`, like Due Aging): every customer in the branch scope (`CustomerScopeService` — `all` for owners/consolidated, a branch id, or omitted = the member's branches), zero and in-credit customers included, ordered by due; the due is `due_balance`, the live balance the Customers list shows; the response also names the caller's own employee record (`me`, via `Employee.user_id`). Page `/sales/customers/reports/dues-summary` (Sales hub › Reports, sidebar `sales.receivables.dues-summary` after Due Aging, tagged with the same permissions): `BranchFilter` starting on "All branches" for those who may; a sales-rep filter (All / My customers / each rep of the loaded customers / No sales rep) that opens on "My customers" when the viewer is the rep of any customer listed; "Only customers who owe"; tiles for customers, customers with due, total due and paid in advance, all following the filters; customer name links to the customer; export/print come with `DataTable`. Strings in all 9 locales. Tests: 5 service, 10 page; backend customers + route-authorization 202/202, frontend nav/i18n/hub suites 201/201, shared-types nav 37/37; backend `tsc` at its 21 pre-existing spec errors, frontend `tsc` at 3 pre-existing test-file errors; lint clean. Not checked in a browser.
 
 - [x] **Detailed invoice printed a posted sale's transport and labour as "Adjustment"** — done 2026-10-18. `saleToInvoiceData` already handed the stored transport and labour to the printer (since 2b324ece), but the detailed design's totals block only wrote them for an invoice still on the entry screen; for a posted (tax-inclusive) sale it lumped total − lines into one "Adjustment" row. `invoiceTotalsRows` now prints Transport and Labour on their own rows in both posted branches, takes them out of "Sub Total (excl. tax)" (they carry no tax), and leaves only what they do not explain as the discount or adjustment. Tests: three new detailed-layout cases (posted with tax, posted without tax, leftover adjustment), watched failing first; sales-invoice, sale-print-actions, quotation and purchase-invoice printer suites 167/167, tsc clean for the changed files. **Not done:** not printed on paper or opened in a browser.
 

@@ -324,6 +324,13 @@ export class CustomersController {
         return this.customersService.getDueAgingReport(tenant.tenantId, await this.scope(tenant));
     }
 
+    /** Every customer of the page's branch with their current due — see `getDuesSummary`. */
+    @RequireAnyStorePermission(...CUSTOMER_CREDIT_READ)
+    @Get('reports/dues-summary')
+    async getDuesSummary(@Tenant() tenant: TenantContext, @Query('storeId') storeId?: string) {
+        return this.customersService.getDuesSummary(tenant.tenantId, tenant.userId, await this.scope(tenant, storeId));
+    }
+
     @RequireAnyStorePermission(...CUSTOMER_WRITE)
     @TrackHistory('CUSTOMER', { action: 'UPDATE' })
     @Patch(':id')

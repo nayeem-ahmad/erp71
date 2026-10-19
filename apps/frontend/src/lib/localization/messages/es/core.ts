@@ -323,6 +323,7 @@ export const coreMessages = {
             allSales: "Ventas",
             newSalesEntry: "Nueva entrada de venta",
             dueAging: "Antigüedad de saldos",
+            customerDuesSummary: "Resumen de deudas de clientes",
             badDebts: "Deudas incobrables",
             crmFollowUps: "Seguimientos",
             crmActivities: "Actividades",

@@ -55,6 +55,7 @@ export const routes = {
         customerDetail: (id: string) => `/sales/customers/${id}` as const,
         customerHistory: (id: string) => `/sales/customers/${id}/history` as const,
         customerDueAging: '/sales/customers/reports/due-aging',
+        customerDuesSummary: '/sales/customers/reports/dues-summary',
         customerBadDebts: '/sales/customers/reports/bad-debts',
         customerGroups: '/sales/customer-groups',
         priceLists: '/sales/price-lists',

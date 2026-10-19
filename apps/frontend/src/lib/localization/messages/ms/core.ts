@@ -323,6 +323,7 @@ export const coreMessages = {
                 allSales: "Jualan",
                 newSalesEntry: "Entri Jualan Baharu",
                 dueAging: "Penuaan Hutang",
+                customerDuesSummary: "Ringkasan Hutang Pelanggan",
                 badDebts: "Hutang Lapuk",
             crmFollowUps: "Susulan",
             crmActivities: 'Aktiviti',
