@@ -434,6 +434,9 @@ describe('PaymentMethodsService', () => {
 
       expect(db.$queryRaw).toHaveBeenCalledTimes(1);
       expect(db.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(db.tenantUser.update.mock.invocationCallOrder[0]);
+      // The lock must precede the re-read of prefs, or a concurrent save is lost.
+      expect(db.tenantUser.findUnique).toHaveBeenCalledTimes(1);
+      expect(db.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(db.tenantUser.findUnique.mock.invocationCallOrder[0]);
       const sql = (db.$queryRaw.mock.calls[0][0] as string[]).join('?');
       expect(sql).toContain('FOR UPDATE');
       expect(db.$queryRaw.mock.calls[0].slice(1)).toEqual([tenantId, 'user-a']);
