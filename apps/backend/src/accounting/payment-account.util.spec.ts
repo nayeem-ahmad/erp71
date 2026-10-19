@@ -11,6 +11,7 @@ import {
     storedToTenderInputs,
     StoredTender,
 } from './payment-account.util';
+import { availableAt } from '../payment-methods/payment-method-branches';
 
 const BRANCH_REFUSAL = "That payment method isn't available at this branch.";
 const MISSING = 'That payment method does not exist or is switched off.';
@@ -77,14 +78,14 @@ describe('payment-account.util', () => {
     const db = () => ({ paymentMethod: { findFirst: jest.fn() } });
 
     describe('resolveCreditPaymentMethod()', () => {
-        it('returns the tenant\'s active method with its account', async () => {
+        it('returns the tenant\'s method available at the party\'s branch, with its account', async () => {
             const client = db();
             client.paymentMethod.findFirst.mockResolvedValue({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' });
 
-            await expect(resolveCreditPaymentMethod(client as any, 't1', 'pm-bkash'))
+            await expect(resolveCreditPaymentMethod(client as any, 't1', 'pm-bkash', 'store-1'))
                 .resolves.toEqual({ id: 'pm-bkash', name: 'bKash', account_id: 'acc-bkash' });
             expect(client.paymentMethod.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-                where: { id: 'pm-bkash', tenant_id: 't1', is_active: true },
+                where: { id: 'pm-bkash', tenant_id: 't1', ...availableAt(['store-1']) },
             }));
         });
 
@@ -92,8 +93,21 @@ describe('payment-account.util', () => {
             const client = db();
             client.paymentMethod.findFirst.mockResolvedValue(null);
 
-            await expect(resolveCreditPaymentMethod(client as any, 't1', 'pm-other'))
+            await expect(resolveCreditPaymentMethod(client as any, 't1', 'pm-other', 'store-1'))
                 .rejects.toThrow(BadRequestException);
+        });
+
+        it('refuses a method not available at the party\'s branch', async () => {
+            const client = db();
+            client.paymentMethod.findFirst.mockResolvedValue(null);
+
+            await expect(resolveCreditPaymentMethod(client as any, 't1', 'pm-dhaka-only', 'store-2'))
+                .rejects.toThrow(BRANCH_REFUSAL);
+            expect(client.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({
+                id: 'pm-dhaka-only', tenant_id: 't1',
+                is_active: true,
+                OR: [{ all_branches: true }, { stores: { some: { store_id: { in: ['store-2'] } } } }],
+            });
         });
     });
 

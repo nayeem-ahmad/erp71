@@ -7,6 +7,7 @@ import { formatBDT, formatDateTime } from '@/lib/format';
 import { formatMessage } from '@/lib/i18n';
 import type { MessageDictionary } from '@/lib/localization/messages';
 import { isFutureLocal, isoToTenantLocal, nowLocal, tenantLocalToIso } from '@/lib/schedule-time';
+import { getWorkspaceItem } from '@/lib/session-store';
 import { toast } from '@/lib/toast';
 import { Alert, Button, Field, Input, Textarea } from '@/components/ui';
 import { ModalFooter } from '@/components/ModalShell';
@@ -17,7 +18,7 @@ import { BillAllocationField } from './BillAllocationField';
 import { allocateOldestFirst, allocationTotal, allocationsToSend, type BillAllocations } from './bill-allocation';
 import { DueFlowCard } from './DueFlowCard';
 import { PaymentMethodChips } from './PaymentMethodChips';
-import { defaultPaymentMethodId, type PaymentMethodOption } from './usePaymentMethods';
+import { defaultPaymentMethodId, usePaymentMethods, type PaymentMethodOption } from './usePaymentMethods';
 import type { MoneyFlow, OpenBill, PartyOption, PartyPayment, PartyPaymentsAdapter, PartyPaymentsLabels } from './types';
 
 export type PartiesStatus = 'loading' | 'ready' | 'error';
@@ -35,7 +36,9 @@ interface PaymentEntryFormProps {
     parties: PartyOption[];
     partiesStatus: PartiesStatus;
     onRetryParties: () => void;
+    /** The workspace's methods, for the branch `methodsStoreId`; used as is when the party sits there. */
     methods: PaymentMethodOption[];
+    methodsStoreId?: string;
     onSaved: (payment: PartyPayment, options: { print: boolean }) => void;
     onCancel: () => void;
     onDuplicate?: (payment: PartyPayment) => void;
@@ -77,7 +80,8 @@ export function PaymentEntryForm({
     parties,
     partiesStatus,
     onRetryParties,
-    methods,
+    methods: workspaceMethods,
+    methodsStoreId,
     onSaved,
     onCancel,
     onDuplicate,
@@ -104,6 +108,15 @@ export function PaymentEntryForm({
     const [serial, setSerial] = useState<string | null>(null);
     const [serialError, setSerialError] = useState<string | null>(null);
     const [serialOpen, setSerialOpen] = useState(false);
+    // A method is offered per branch, and a payment belongs to its party's
+    // branch: the chips list that branch's methods, not the header's.
+    const party = parties.find((p) => p.id === partyId) ?? null;
+    const partyStoreId = typeof party?.store_id === 'string' ? party.store_id : null;
+    const branchId = (isEdit ? source?.store_id : null) ?? partyStoreId ?? getWorkspaceItem('store_id') ?? undefined;
+    const sharesWorkspaceList = !branchId || branchId === methodsStoreId;
+    const own = usePaymentMethods(branchId, { skip: sharesWorkspaceList });
+    const methods = sharesWorkspaceList ? workspaceMethods : own.methods;
+
     const [methodId, setMethodId] = useState<string | null>(() => {
         if (isEdit) return source?.payment_method_id ?? null;
         const copied = source?.payment_method_id;
@@ -119,12 +132,23 @@ export function PaymentEntryForm({
     const [allocations, setAllocations] = useState<BillAllocations>({});
     const [allocationsTouched, setAllocationsTouched] = useState(false);
 
-    // Methods arrive after the form on a cold page; pick the default then.
+    // Methods arrive after the form on a cold page, and change with the party's
+    // branch; pick the default then. A pick the new list does not offer would
+    // be refused by the server, so it goes too.
     useEffect(() => {
-        if (isEdit || methodTouched.current || methodId) return;
+        if (isEdit) return;
+        if (methodId && methods.some((m) => m.id === methodId)) return;
+        if (methodId) {
+            if (methods.length === 0 && sharesWorkspaceList) return;
+            // The old pick is gone with the old branch: start over on the new list.
+            methodTouched.current = false;
+            setMethodId(defaultPaymentMethodId(methods));
+            return;
+        }
+        if (methodTouched.current) return;
         const fallback = defaultPaymentMethodId(methods);
         if (fallback) setMethodId(fallback);
-    }, [isEdit, methodId, methods]);
+    }, [isEdit, methodId, methods, sharesWorkspaceList]);
 
     const { preview: serialPreview, refresh: refreshSerialPreview } = useNextPaymentNumber(
         !isEdit,
@@ -136,7 +160,6 @@ export function PaymentEntryForm({
     const discountApplies = isPrimary;
     const billsApply = !isEdit && isPrimary && !!adapter.openBills;
 
-    const party = parties.find((p) => p.id === partyId) ?? null;
     const partyFromPayment = source ? adapter.partyOf(source) : null;
 
     // What the party owed before this payment. On an edit that is today's due

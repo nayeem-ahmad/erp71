@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { isAvailableAt } from '../payment-methods/payment-method-branches';
+import { availableAt, isAvailableAt } from '../payment-methods/payment-method-branches';
 import { classifyPaymentMode, PaymentMode } from '../sales/classify-payment-mode';
 import type { TenderLegLine } from './posting.utils';
 
@@ -41,21 +41,23 @@ export interface CreditPaymentMethod {
 
 /**
  * The tender a customer or supplier payment was taken by, checked against the
- * tenant. An unknown, foreign or switched-off method is a 400 rather than a
- * quiet fall back to Cash in Hand: the operator picked one, and the money has
- * to land where they think it did.
+ * tenant and the party's branch (`storeId`). An unknown, foreign, switched-off
+ * or not-offered-here method is a 400 (one message for every miss, as in
+ * `resolveTenders`) rather than a quiet fall back to Cash in Hand: the operator
+ * picked one, and the money has to land where they think it did.
  */
 export async function resolveCreditPaymentMethod(
     db: Client,
     tenantId: string,
     methodId: string,
+    storeId: string,
 ): Promise<CreditPaymentMethod> {
     const method = await db.paymentMethod.findFirst({
-        where: { id: methodId, tenant_id: tenantId, is_active: true },
+        where: { id: methodId, tenant_id: tenantId, ...availableAt([storeId]) },
         select: { id: true, name: true, account_id: true },
     });
     if (!method) {
-        throw new BadRequestException(PAYMENT_METHOD_MISSING);
+        throw new BadRequestException(PAYMENT_METHOD_NOT_AT_BRANCH);
     }
     return method;
 }

@@ -5,6 +5,7 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { EncryptionService } from '../common/encryption.service';
 import { CustomerPaymentDirectionDto } from './customer.dto';
 import { customerInBranchesWhere } from './customer-visibility';
+import { availableAt } from '../payment-methods/payment-method-branches';
 
 jest.mock('@erp71/database', () => {
   const actual = jest.requireActual('@erp71/database');
@@ -789,7 +790,7 @@ describe('CustomersService', () => {
 
     beforeEach(() => {
       posting().autoPostFromRules.mockClear();
-      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000, store_id: 'store-1' });
       db.customerCreditTransaction.create.mockResolvedValue({ id: 'pay-1', payment_number: 'CPY-00001' });
       db.$transaction.mockImplementation(async (cb: any) => cb(db));
     });
@@ -803,7 +804,8 @@ describe('CustomersService', () => {
 
       await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 400, paymentMethodId: 'pm-bkash' });
 
-      expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({ id: 'pm-bkash', tenant_id: 'tenant-1', is_active: true });
+      // Checked at the customer's branch, not the caller's.
+      expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({ id: 'pm-bkash', tenant_id: 'tenant-1', ...availableAt(['store-1']) });
       expect(db.customerCreditTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ payment_method_id: 'pm-bkash', payment_method_name: 'bKash' }),
       }));
@@ -855,6 +857,17 @@ describe('CustomersService', () => {
       expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
     });
 
+    it("recording a payment on another branch's method → 400", async () => {
+      db.paymentMethod.findFirst.mockResolvedValue(null);
+
+      await expect(service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100, paymentMethodId: 'pm-other-branch' }))
+        .rejects.toThrow("That payment method isn't available at this branch.");
+      expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual(
+        expect.objectContaining({ id: 'pm-other-branch', ...availableAt(['store-1']) }),
+      );
+      expect(db.customerCreditTransaction.create).not.toHaveBeenCalled();
+    });
+
     it('records no method and overrides nothing when none is sent', async () => {
       await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 100 });
 
@@ -867,7 +880,7 @@ describe('CustomersService', () => {
       const stored = {
         id: 'pay-1', tenant_id: 'tenant-1', customer_id: 'c1', type: 'PAYMENT', amount: 200,
         discount_amount: 0, payment_number: 'CPY-00001', notes: null, created_at: new Date('2026-10-01T05:00:00Z'),
-        payment_method_id: 'pm-bkash', payment_method_name: 'bKash',
+        payment_method_id: 'pm-bkash', payment_method_name: 'bKash', store_id: 'store-2',
       };
 
       beforeEach(() => {
@@ -880,10 +893,29 @@ describe('CustomersService', () => {
 
         await service.updateCreditPayment('tenant-1', 'pay-1', { paymentMethodId: 'pm-bank' });
 
+        // A new method is checked at the payment's own branch.
+        expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({ id: 'pm-bank', tenant_id: 'tenant-1', ...availableAt(['store-2']) });
         expect(db.customerCreditTransaction.update).toHaveBeenCalledWith(expect.objectContaining({
           data: expect.objectContaining({ payment_method_id: 'pm-bank', payment_method_name: 'City Bank' }),
         }));
         expect(cashLeg()).toEqual(expect.objectContaining({ overrideDebitAccountId: 'acc-bank' }));
+      });
+
+      it("refuses switching to another branch's method", async () => {
+        db.paymentMethod.findFirst.mockResolvedValue(null);
+
+        await expect(service.updateCreditPayment('tenant-1', 'pay-1', { paymentMethodId: 'pm-other-branch' }))
+          .rejects.toThrow("That payment method isn't available at this branch.");
+        expect(db.customerCreditTransaction.update).not.toHaveBeenCalled();
+      });
+
+      it('does not branch-check the stored method when it is sent back unchanged', async () => {
+        db.paymentMethod.findFirst.mockResolvedValue({ account_id: 'acc-bkash-2' });
+
+        await service.updateCreditPayment('tenant-1', 'pay-1', { paymentMethodId: 'pm-bkash', amount: 250 });
+
+        expect(db.paymentMethod.findFirst.mock.calls[0][0].where).toEqual({ id: 'pm-bkash', tenant_id: 'tenant-1' });
+        expect(cashLeg()).toEqual(expect.objectContaining({ overrideDebitAccountId: 'acc-bkash-2' }));
       });
 
       it('keeps the stored method and reposts to its current account', async () => {
