@@ -2054,11 +2054,18 @@ export const api = {
     /** Every customer as a flat array — for pickers and id→customer maps. */
     /** Employees a customer's (or a sale's) sales rep can be picked from: id and name. */
     getSalesReps: (): Promise<{ id: string; name: string }[]> => fetchWithAuth('/customers/sales-reps'),
-    getCustomers: (params?: { search?: string; createdFrom?: string; createdTo?: string }) => {
+    getCustomers: (params?: {
+        search?: string;
+        createdFrom?: string;
+        createdTo?: string;
+        /** A branch id or `all`; omitted, every customer the member may see. */
+        storeId?: string;
+    }) => {
         const query = new URLSearchParams();
         if (params?.search) query.set('search', params.search);
         if (params?.createdFrom) query.set('createdFrom', params.createdFrom);
         if (params?.createdTo) query.set('createdTo', params.createdTo);
+        if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/customers${query.toString() ? `?${query.toString()}` : ''}`);
     },
     /** Bounded typeahead lookup — deliberately capped, unlike `getCustomers`. */
@@ -2147,7 +2154,7 @@ export const api = {
         if (params?.from) query.set('from', params.from);
         if (params?.to) query.set('to', params.to);
         return fetchWithAuth(`/customers/${id}/gl-ledger${query.toString() ? `?${query.toString()}` : ''}`).then(
-            (r: { transactions?: unknown[] } | unknown[]) => {
+            (r: { transactions?: unknown[]; customer?: { id: string; name: string; phone: string } } | unknown[]) => {
                 if (Array.isArray(r)) return { transactions: r, opening_balance: 0, closing_balance: 0, due_balance: 0 };
                 const transactions = r?.transactions ?? [];
                 return { ...r, transactions: Array.isArray(transactions) ? transactions : [] };

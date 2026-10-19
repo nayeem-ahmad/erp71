@@ -1,3 +1,5 @@
+jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
+
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('@/lib/localization/messages/en');
 
@@ -14,9 +16,12 @@ jest.mock('@/lib/i18n', () => {
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CustomerLedgerPage from './page';
 import { api } from '@/lib/api';
+import { mockBranchScope } from '@/test-utils/branch-scope';
+
+let searchParams: Record<string, string> = {};
 
 jest.mock('next/navigation', () => ({
-    useSearchParams: () => ({ get: () => null }),
+    useSearchParams: () => ({ get: (key: string) => searchParams[key] ?? null }),
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -44,6 +49,8 @@ const EMPTY_LEDGER = {
 describe('CustomerLedgerPage customer picker', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        searchParams = {};
+        mockBranchScope();
         (api.getCustomers as jest.Mock).mockResolvedValue([ALICE, BOB, KARIM]);
         (api.getCustomerGlLedger as jest.Mock).mockResolvedValue(EMPTY_LEDGER);
     });
@@ -65,5 +72,56 @@ describe('CustomerLedgerPage customer picker', () => {
         await waitFor(() => {
             expect(api.getCustomerGlLedger).toHaveBeenCalledWith('cust-bob', expect.any(Object));
         });
+    });
+});
+
+describe('CustomerLedgerPage branch', () => {
+    // Dhaka (store-1, the header branch) has Alice and Bob; Chattogram has Karim.
+    const BY_BRANCH: Record<string, typeof ALICE[]> = {
+        'store-1': [ALICE, BOB],
+        'store-2': [KARIM],
+        all: [ALICE, BOB, KARIM],
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        searchParams = {};
+        mockBranchScope();
+        (api.getCustomers as jest.Mock).mockImplementation(
+            async ({ storeId }: { storeId?: string } = {}) => BY_BRANCH[storeId ?? 'all'],
+        );
+        (api.getCustomerGlLedger as jest.Mock).mockResolvedValue(EMPTY_LEDGER);
+    });
+
+    it("lists the header branch's customers", async () => {
+        render(<CustomerLedgerPage />);
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: 'store-1' }));
+        await waitFor(() => expect(api.getCustomerGlLedger).toHaveBeenCalledWith('cust-alice', expect.any(Object)));
+    });
+
+    it("reloads the picker on a branch change and opens that branch's first customer", async () => {
+        render(<CustomerLedgerPage />);
+        await waitFor(() => expect(api.getCustomerGlLedger).toHaveBeenCalledWith('cust-alice', expect.any(Object)));
+
+        fireEvent.change(screen.getByLabelText('Branch'), { target: { value: 'store-2' } });
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenLastCalledWith({ storeId: 'store-2' }));
+        await waitFor(() => expect(api.getCustomerGlLedger).toHaveBeenLastCalledWith('cust-karim', expect.any(Object)));
+        expect(screen.getByText('Karim Electronics')).toBeInTheDocument();
+    });
+
+    it('keeps a linked customer of another branch open, named from its ledger', async () => {
+        searchParams = { customerId: 'cust-karim' };
+        (api.getCustomerGlLedger as jest.Mock).mockResolvedValue({
+            ...EMPTY_LEDGER,
+            customer: { id: KARIM.id, name: KARIM.name, phone: KARIM.phone },
+        });
+
+        render(<CustomerLedgerPage />);
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: 'store-1' }));
+        expect(await screen.findByText('Karim Electronics')).toBeInTheDocument();
+        expect(api.getCustomerGlLedger).not.toHaveBeenCalledWith('cust-alice', expect.any(Object));
     });
 });
