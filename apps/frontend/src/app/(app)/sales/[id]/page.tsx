@@ -332,7 +332,8 @@ function SaleDetailPageContent() {
                 // Warranty column reads it off the product the sale was posted with.
                 product: (sale.items || []).find((s: any) => s.product_id === i.productId)?.product ?? null,
             })),
-            payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
+            // The method's own name ("bKash") wins over the type it shares.
+            payments: payments.map((p) => ({ ...p, method: p.label || p.method, amount: p.amount })),
             previous_due: sale.previous_due ?? null,
             // Stored with the sale when it was posted, so they print as posted.
             vat_amount: sale.vat_amount,

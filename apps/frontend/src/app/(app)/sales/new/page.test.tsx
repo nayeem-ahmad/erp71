@@ -894,6 +894,33 @@ describe('NewSalePage — offering to print after the sale is saved', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
+    it('prints a bKash tender as bKash, not Mobile Wallet', async () => {
+        const cash = { id: 'pm-cash', name: 'Cash', type: 'Cash', account_id: 'acc-cash', is_active: true, sort_order: 1, show_on_entry: true, all_branches: true, store_ids: [] };
+        const bkash = { ...cash, id: 'pm-bkash', name: 'bKash', type: 'Mobile Wallet', account_id: 'acc-bkash', sort_order: 2 };
+        (api.getPaymentLayout as jest.Mock).mockResolvedValue({ customised: false, visible: [cash, bkash], available: [cash, bkash] });
+        (api.getPaymentMethods as jest.Mock).mockResolvedValue([cash, bkash]);
+
+        await act(async () => { render(<NewSalePage />); });
+        await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+        const searchInput = screen.getByPlaceholderText(/Add product/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'Rice' } });
+        await waitFor(() => screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByText('Rice 5kg'));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        fireEvent.change(await screen.findByLabelText('bKash amount'), { target: { value: '100' } });
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create Sale' })); });
+        await waitFor(() => expect(api.createNewSale).toHaveBeenCalled());
+        await screen.findByRole('dialog');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /print invoice/i }));
+        });
+
+        const printed = (printSalesInvoice as jest.Mock).mock.calls[0][0];
+        expect(printed.payments).toEqual([expect.objectContaining({ method: 'bKash', amount: 100 })]);
+    });
+
     it('prints the previous due the server worked out when it posted the sale', async () => {
         // The picker's balance may be minutes old by now; the posted figure is
         // what the customer's ledger actually moved on from.

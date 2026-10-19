@@ -304,7 +304,8 @@ function NewSalePageContent() {
             unitPrice: item.price,
             discount: item.discount || 0,
         })),
-        payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
+        // The method's own name ("bKash"), not the type it shares ("Mobile Wallet").
+        payments: payments.map((p) => ({ method: p.label || p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
         subtotal: totals.subtotal,
         discountAmount: totals.discountShown > 0 ? totals.discountShown : undefined,
         // Rounded because a flat discount derives its percentage from the
