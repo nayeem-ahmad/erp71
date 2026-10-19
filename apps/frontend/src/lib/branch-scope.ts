@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMe } from '@/hooks/use-me';
 import { hasPermission, isOwner, tenantFromMe } from '@/lib/permissions';
@@ -259,7 +259,7 @@ export function useBranchForbiddenReset(
 export function useBranchBoundState(
     apiStoreId: string | undefined,
     initial = '',
-): [string, (next: string) => void] {
+): [string, Dispatch<SetStateAction<string>>] {
     const [value, setValue] = useState(initial);
     const [boundTo, setBoundTo] = useState(apiStoreId);
     if (boundTo !== apiStoreId) {

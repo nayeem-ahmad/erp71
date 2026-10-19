@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { BookOpen, Loader2 } from 'lucide-react';
@@ -11,8 +11,9 @@ import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { BranchFilter, PageShell } from '@/components/ui';
 import PartySearchSelect from '@/components/document-entry/PartySearchSelect';
+import { handleBranchForbidden, useBranchBoundState, useBranchScope } from '@/lib/branch-scope';
 
 type CustomerOption = {
     id: string;
@@ -81,10 +82,16 @@ function CustomerLedgerContent() {
     const copy = t.customerLedger;
     const searchParams = useSearchParams();
     const preselectedId = searchParams.get('customerId');
+    // Customers belong to a branch: the picker offers the header branch's, or
+    // the one picked here, and a branch change drops the customer picked under
+    // the old one.
+    const branch = useBranchScope();
+    const branchReady = branch.ready;
+    const branchStoreId = branch.apiStoreId;
 
     const [customers, setCustomers] = useState<CustomerOption[]>([]);
     const [loadingCustomers, setLoadingCustomers] = useState(true);
-    const [customerId, setCustomerId] = useState(preselectedId ?? '');
+    const [customerId, setCustomerId] = useBranchBoundState(branchStoreId, preselectedId ?? '');
     const [fromDate, setFromDate] = useState(defaultFrom());
     const [toDate, setToDate] = useState(defaultTo());
     const [ledgerLoading, setLedgerLoading] = useState(false);
@@ -92,25 +99,38 @@ function CustomerLedgerContent() {
     const [openingBalance, setOpeningBalance] = useState(0);
     const [closingBalance, setClosingBalance] = useState(0);
     const [transactions, setTransactions] = useState<LedgerRow[]>([]);
-
-    const loadCustomers = useCallback(async () => {
-        setLoadingCustomers(true);
-        try {
-            const items: CustomerOption[] = await api.getCustomers();
-            setCustomers(items);
-            if (!preselectedId && items.length > 0) {
-                setCustomerId((prev) => prev || items[0].id);
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoadingCustomers(false);
-        }
-    }, [preselectedId]);
+    // The ledger's own customer, so a deep link to one outside the branch's
+    // list still names who the ledger is for.
+    const [ledgerCustomer, setLedgerCustomer] = useState<CustomerOption | null>(null);
 
     useEffect(() => {
+        if (!branchReady) return;
+        let ignore = false;
+        const loadCustomers = async () => {
+            setLoadingCustomers(true);
+            try {
+                const items: CustomerOption[] = await api.getCustomers({ storeId: branchStoreId });
+                if (ignore) return;
+                setCustomers(items);
+                if (items.length > 0) {
+                    setCustomerId((prev) => prev || items[0].id);
+                }
+            } catch (err) {
+                if (ignore) return;
+                // The server refused the picked branch: say so and go back to the header's.
+                if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
+                console.error(err);
+            } finally {
+                if (!ignore) setLoadingCustomers(false);
+            }
+        };
         void loadCustomers();
-    }, [loadCustomers]);
+        return () => {
+            ignore = true;
+        };
+        // `branch` is read for its reset only; its fields that matter are deps.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branchReady, branchStoreId, setCustomerId, t]);
 
     useEffect(() => {
         if (preselectedId) setCustomerId(preselectedId);
@@ -122,8 +142,11 @@ function CustomerLedgerContent() {
             setDueBalance(0);
             setOpeningBalance(0);
             setClosingBalance(0);
+            setLedgerCustomer(null);
+            setLedgerLoading(false);
             return;
         }
+        let ignore = false;
         const loadLedger = async () => {
             setLedgerLoading(true);
             try {
@@ -133,6 +156,8 @@ function CustomerLedgerContent() {
                     from: fromDate || undefined,
                     to: toDate || undefined,
                 });
+                if (ignore) return;
+                setLedgerCustomer(data.customer ?? null);
                 setDueBalance(Number(data.due_balance ?? 0));
                 setOpeningBalance(Number(data.opening_balance ?? 0));
                 setClosingBalance(Number(data.closing_balance ?? data.opening_balance ?? 0));
@@ -144,15 +169,19 @@ function CustomerLedgerContent() {
                     })),
                 );
             } catch (err) {
+                if (ignore) return;
                 console.error(err);
                 setTransactions([]);
                 setOpeningBalance(0);
                 setClosingBalance(0);
             } finally {
-                setLedgerLoading(false);
+                if (!ignore) setLedgerLoading(false);
             }
         };
         void loadLedger();
+        return () => {
+            ignore = true;
+        };
     }, [customerId, fromDate, toDate]);
 
     const tableData = useMemo<LedgerRow[]>(() => {
@@ -270,7 +299,8 @@ function CustomerLedgerContent() {
         }),
     ], [copy, locale]);
 
-    const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
+    const selectedCustomer = customers.find((c) => c.id === customerId)
+        ?? (ledgerCustomer?.id === customerId ? ledgerCustomer : null);
 
     return (
         <PageShell>
@@ -289,14 +319,17 @@ function CustomerLedgerContent() {
                         'sales',
                     )}
                     actions={
-                        customerId ? (
-                            <Link
-                                href={`/sales/customer-payments?customerId=${customerId}&new=1`}
-                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover"
-                            >
-                                {copy.recordPayment}
-                            </Link>
-                        ) : null
+                        <>
+                            <BranchFilter scope={branch} />
+                            {customerId ? (
+                                <Link
+                                    href={`/sales/customer-payments?customerId=${customerId}&new=1`}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover"
+                                >
+                                    {copy.recordPayment}
+                                </Link>
+                            ) : null}
+                        </>
                     }
                 />
 
