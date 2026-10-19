@@ -500,6 +500,21 @@ describe('PurchaseOrdersService', () => {
             expect(result).toEqual({ purchaseOrder: basePO, tenant: tenantData });
         });
 
+        it('carries the branch name and address its letterhead prints', async () => {
+            db.purchaseOrder.findFirst.mockResolvedValue(basePO);
+            db.tenant.findUnique.mockResolvedValue(tenantData);
+
+            await service.getInvoiceData(tenantId, poId);
+
+            expect(db.purchaseOrder.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    include: expect.objectContaining({
+                        store: { select: { name: true, address: true } },
+                    }),
+                }),
+            );
+        });
+
         it('throws NotFoundException when PO does not exist', async () => {
             db.purchaseOrder.findFirst.mockResolvedValue(null);
             db.tenant.findUnique.mockResolvedValue(tenantData);

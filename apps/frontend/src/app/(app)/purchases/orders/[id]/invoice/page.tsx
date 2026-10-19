@@ -9,6 +9,10 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { useI18n } from '@/lib/i18n';
+import { usePrintHeader } from '@/lib/print/use-print-header';
+import { resolvePrintPaper } from '@/lib/hooks/useSalePrintPrefs';
+import { printPurchaseOrder } from '@/lib/purchase-order-printer';
+import { toast } from '@/lib/toast';
 
 export default function PurchaseOrderInvoicePage() {
     const { t, locale } = useI18n();
@@ -17,6 +21,8 @@ export default function PurchaseOrderInvoicePage() {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const printHeader = usePrintHeader('PURCHASE_ORDER', { eager: false });
+    const [printing, setPrinting] = useState(false);
 
     useEffect(() => {
         if (!params.id) return;
@@ -40,6 +46,49 @@ export default function PurchaseOrderInvoicePage() {
     const total = parseFloat(po.total_amount);
     const hasAdjustments = tax > 0 || discount > 0 || freight > 0;
 
+    /**
+     * The order on its branch's Purchase Order letterhead, on the paper this
+     * browser prints on — the page below is only what is read on screen. The
+     * print preview also saves it as PDF.
+     */
+    const handlePrint = async () => {
+        setPrinting(true);
+        try {
+            const [header, paperSize] = await Promise.all([
+                printHeader.resolve(po.store_id ?? undefined),
+                resolvePrintPaper(),
+            ]);
+            const opened = printPurchaseOrder(po, {
+                headerConfig: header.headerConfig,
+                companyName: header.companyName ?? businessName,
+                paperSize,
+                locale,
+                labels: {
+                    title: t.purchaseOrders.invoiceTitle,
+                    poNumber: 'PO Number',
+                    date: t.common.date,
+                    expectedDate: 'Expected Delivery',
+                    supplier: t.common.supplier,
+                    noSupplier: t.purchases.invoice.noSupplier,
+                    description: t.purchases.invoice.description,
+                    sku: t.purchases.invoice.sku,
+                    qty: t.purchaseShared.qty,
+                    unitCost: t.purchaseShared.unitCost,
+                    lineTotal: t.purchaseShared.lineTotal,
+                    subtotal: t.common.subtotal,
+                    tax: t.common.tax,
+                    freight: t.purchaseShared.freight,
+                    discount: t.common.discount,
+                    total: t.purchases.invoice.total,
+                    note: t.purchases.invoice.notePrefix,
+                },
+            });
+            if (!opened) toast.error(t.sales.printMenu.popupBlocked);
+        } finally {
+            setPrinting(false);
+        }
+    };
+
     return (
         <>
             <style jsx global>{`
@@ -48,7 +97,7 @@ export default function PurchaseOrderInvoicePage() {
                     #po-printable, #po-printable * { visibility: visible !important; }
                     #po-printable { position: fixed; top: 0; left: 0; width: 100%; margin: 0; padding: 24px; }
                     .no-print { display: none !important; }
-                    @page { size: A4; margin: 15mm; }
+                    @page { margin: 15mm; }
                 }
             `}</style>
 
@@ -70,13 +119,15 @@ export default function PurchaseOrderInvoicePage() {
                         actions={(
                             <>
                                 <button
-                                    onClick={() => window.print()}
+                                    onClick={() => void handlePrint()}
+                                    disabled={printing}
                                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm"
                                 >
                                     <Printer className="h-4 w-4" /> Print
                                 </button>
                                 <button
-                                    onClick={() => window.print()}
+                                    onClick={() => void handlePrint()}
+                                    disabled={printing}
                                     className="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium shadow-sm"
                                     style={{ backgroundColor: primaryColor }}
                                 >

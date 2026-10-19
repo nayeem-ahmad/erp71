@@ -15,6 +15,13 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// The purchases list's printer: the purchase's branch letterhead and this
+// browser's paper.
+const mockPrintInvoice = jest.fn();
+jest.mock('@/lib/hooks/usePurchasePrinting', () => ({
+    usePurchasePrinting: () => ({ paperSize: 'A5', busyId: null, printInvoice: mockPrintInvoice }),
+}));
+
 const mockInvoice = {
     purchase: {
         id: 'pur-1',
@@ -158,11 +165,20 @@ describe('PurchaseInvoicePage', () => {
         });
     });
 
-    it('calls window.print when print button clicked', async () => {
+    it('prints through the purchase printer, on this browser\u2019s paper', async () => {
         render(<PurchaseInvoicePage />);
         await waitFor(() => screen.getByRole('button', { name: /print/i }));
         fireEvent.click(screen.getByRole('button', { name: /print/i }));
-        expect(window.print).toHaveBeenCalled();
+        expect(mockPrintInvoice).toHaveBeenCalledWith('pur-1', 'A5');
+        expect(window.print).not.toHaveBeenCalled();
+    });
+
+    it('downloads through the same printer, whose preview saves as PDF', async () => {
+        render(<PurchaseInvoicePage />);
+        await waitFor(() => screen.getByRole('button', { name: /download/i }));
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        expect(mockPrintInvoice).toHaveBeenCalledWith('pur-1', 'A5');
+        expect(window.print).not.toHaveBeenCalled();
     });
 
     it('shows error state when fetch fails', async () => {
