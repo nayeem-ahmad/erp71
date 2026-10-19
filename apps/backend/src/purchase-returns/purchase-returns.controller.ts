@@ -51,13 +51,13 @@ export class PurchaseReturnsController {
     @TrackHistory('PURCHASE_RETURN', { action: 'UPDATE' })
     @Patch(':id')
     update(@Tenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdatePurchaseReturnDto) {
-        return this.purchaseReturnsService.update(tenant.tenantId, id, dto);
+        return this.purchaseReturnsService.update(tenant.tenantId, id, dto, tenant.userId);
     }
 
     @RequireAnyStorePermission(...PURCHASE_RETURN_WRITE)
     @TrackHistory('PURCHASE_RETURN', { action: 'DELETE' })
     @Delete(':id')
     remove(@Tenant() tenant: TenantContext, @Param('id') id: string) {
-        return this.purchaseReturnsService.remove(tenant.tenantId, id);
+        return this.purchaseReturnsService.remove(tenant.tenantId, id, tenant.userId);
     }
 }

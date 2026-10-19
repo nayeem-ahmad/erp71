@@ -107,7 +107,11 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'purchase', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'external-sync.impacts.ts:applyPurchaseImpacts', expectation: 'rule' },
 
     // ── purchase returns ─────────────────────────────────────────────────────
-    { eventType: 'purchase_return', conditionKey: 'none', conditionValue: null, emittedBy: 'purchase-returns.service.ts:83', expectation: 'rule' },
+    // settlePurchaseReturn: the bill posts the whole return, with tenders
+    // (:708) or without them as before (:779); money the supplier hands back
+    // posts on legKey 'received' under the supplier_payment 'receive' tuple
+    // (below).
+    { eventType: 'purchase_return', conditionKey: 'none', conditionValue: null, emittedBy: 'purchase-returns.service.ts:708 / :779', expectation: 'rule' },
 
     // ── expenses ─────────────────────────────────────────────────────────────
     { eventType: 'expense', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'expenses.service.ts:136', expectation: 'rule' },
@@ -143,6 +147,10 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // same rule, same accounts, so the payable is debited whichever screen the
     // money was entered on.
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'purchases.service.ts create (paid leg)', expectation: 'rule' },
+    // A purchase return's money back posts the same 'receive' tuple, on legKey
+    // 'received' against the PurchaseReturn — Dr each tender's account / Cr
+    // Purchase Payable, the paid leg above turned round.
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'purchase-returns.service.ts:721 (received leg)', expectation: 'rule' },
 
     // ── depreciation ─────────────────────────────────────────────────────────
     { eventType: 'depreciation', conditionKey: 'none', conditionValue: null, emittedBy: 'accounting.service.ts:runDepreciation', expectation: 'rule' },
