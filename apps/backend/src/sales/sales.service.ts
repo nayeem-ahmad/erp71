@@ -31,6 +31,7 @@ import { snapshotSaleTax, type SaleTaxSnapshot } from '../mushak/sale-tax.util';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import {
     allocateTenders,
+    paymentDisplayName,
     resolveTenders,
     sameTenders,
     storedToTenderInputs,
@@ -2486,7 +2487,11 @@ export class SalesService {
 
         const preparers = await loadPreparerNames(this.db, [sale]);
 
-        return { sale: { ...sale, previous_due: previousDue, prepared_by: preparerOf(preparers, sale) }, tenant };
+        // The invoice prints each payment's `payment_method`; it carries the
+        // method's name ("bKash") where one was saved, not the type it shares.
+        const payments = sale.payments.map((p) => ({ ...p, payment_method: paymentDisplayName(p) }));
+
+        return { sale: { ...sale, payments, previous_due: previousDue, prepared_by: preparerOf(preparers, sale) }, tenant };
     }
 
     private validateWarrantySerials(

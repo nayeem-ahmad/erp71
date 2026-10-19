@@ -5,6 +5,7 @@ import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { CountersService } from '../counters/counters.service';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { paymentDisplayName } from '../accounting/payment-account.util';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
 import { returnCashOut } from '../sales-returns/return-cash.util';
 import { startOfZonedToday } from '../common/tenant-time.util';
@@ -352,7 +353,7 @@ export class CashierSessionsService {
         select: {
           id: true,
           total_amount: true,
-          payments: { select: { payment_method: true, amount: true } },
+          payments: { select: { payment_method: true, payment_method_name: true, amount: true } },
         },
       }),
       // Refunds this shift paid out, whichever shift made the sale.
@@ -392,7 +393,9 @@ export class CashierSessionsService {
     for (const sale of sales) {
       for (const payment of sale.payments) {
         const amount = money(payment.amount);
-        byMethod.set(payment.payment_method, (byMethod.get(payment.payment_method) ?? 0) + amount);
+        // Labelled by the method's name; whether it is cash still reads the type.
+        const label = paymentDisplayName(payment);
+        byMethod.set(label, (byMethod.get(label) ?? 0) + amount);
         if (isCashTender(payment.payment_method)) {
           cashTakings += amount;
         }

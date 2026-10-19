@@ -391,6 +391,22 @@ describe('PurchasesService', () => {
             expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['user-1'] } } }));
         });
 
+        it('invoice data prints bKash, not Mobile Wallet', async () => {
+            db.purchase.findFirst.mockResolvedValue({
+                id: 'purchase-1',
+                created_by: null,
+                items: [],
+                payments: [
+                    { id: 'p1', payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: '100.00' },
+                    { id: 'p2', payment_method: 'Mobile Wallet', payment_method_name: null, amount: '50.00' },
+                ],
+            });
+
+            const { purchase }: any = await service.getInvoiceData('tenant-1', 'purchase-1');
+
+            expect(purchase.payments.map((p: any) => p.payment_method)).toEqual(['bKash', 'Mobile Wallet']);
+        });
+
         it('leaves Entry By empty for a purchase nobody is recorded against', async () => {
             db.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', created_by: null, items: [], payments: [] });
 

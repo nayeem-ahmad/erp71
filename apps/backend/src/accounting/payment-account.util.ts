@@ -12,6 +12,18 @@ export const PAYMENT_METHOD_MISSING = 'That payment method does not exist or is 
 export const PAYMENT_METHOD_NOT_AT_BRANCH = "That payment method isn't available at this branch.";
 
 /**
+ * What to call a stored payment on a report or a printed invoice: the name of
+ * the method it was taken on ("bKash"), or, for a row saved before methods were
+ * named, the canonical type string it has always shown ("Mobile Wallet"). The
+ * backfill never guesses a name for those rows, so they stay their own bucket.
+ * Grouping and labelling only; classifying a tender (cash or not) keeps reading
+ * `payment_method`.
+ */
+export function paymentDisplayName(row: { payment_method: string; payment_method_name?: string | null }): string {
+    return row.payment_method_name ?? row.payment_method;
+}
+
+/**
  * Resolves the GL account a tenant configured for a payment method, so a posting
  * can send the cash leg there instead of the mode-derived default.
  *

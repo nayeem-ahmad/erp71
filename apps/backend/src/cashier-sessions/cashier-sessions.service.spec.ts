@@ -609,6 +609,34 @@ describe('CashierSessionsService', () => {
       ]);
     });
 
+    it('session breakdown keys by display name', async () => {
+      db.cashierSession.findUnique.mockResolvedValue(openSession);
+      db.sale.findMany.mockResolvedValue([
+        {
+          id: 's1',
+          total_amount: 900,
+          payments: [
+            { payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: 300 },
+            { payment_method: 'Mobile Wallet', payment_method_name: 'Nagad', amount: 200 },
+            // A legacy row keeps the string it always showed.
+            { payment_method: 'Mobile Wallet', payment_method_name: null, amount: 100 },
+            { payment_method: 'Cash', payment_method_name: 'Counter Cash', amount: 300 },
+          ],
+        },
+      ]);
+
+      const summary = await service.getSessionSummary('t1', 'sess-1');
+
+      expect(summary.paymentBreakdown).toEqual([
+        { method: 'bKash', amount: 300 },
+        { method: 'Counter Cash', amount: 300 },
+        { method: 'Nagad', amount: 200 },
+        { method: 'Mobile Wallet', amount: 100 },
+      ]);
+      // Whether it is cash still follows the type, not the name.
+      expect(summary.cashTakings).toBe(300);
+    });
+
     it('reads a renamed tender the same way the ledger does', async () => {
       db.cashierSession.findUnique.mockResolvedValue(openSession);
       db.sale.findMany.mockResolvedValue([

@@ -1886,6 +1886,22 @@ describe('SalesService', () => {
       expect(result.tenant).toEqual({ name: 'Rahim Store' });
     });
 
+    it('invoice data prints bKash, not Mobile Wallet', async () => {
+      db.sale.findFirst.mockResolvedValue({
+        id: 's1',
+        items: [],
+        payments: [
+          { id: 'p1', payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: '100.00' },
+          { id: 'p2', payment_method: 'Mobile Wallet', payment_method_name: null, amount: '50.00' },
+        ],
+      });
+      db.tenant.findUnique.mockResolvedValue({ name: 'Rahim Store' });
+
+      const result = await service.getInvoiceData('tenant-1', 's1');
+
+      expect(result.sale.payments.map((p: any) => p.payment_method)).toEqual(['bKash', 'Mobile Wallet']);
+    });
+
     it('prints no previous due on a cancelled sale', async () => {
       db.sale.findFirst.mockResolvedValue({
         id: 's1',

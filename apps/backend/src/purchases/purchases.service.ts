@@ -14,7 +14,7 @@ import { autoPostFromRules, postingIdempotencyKey, voidAutoPostedVoucher } from 
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
 import { resolveInlineSupplier } from '../suppliers/resolve-inline-supplier.util';
 import { nextSupplierPaymentNumber } from '../suppliers/supplier-payment-number.util';
-import { allocateTenders, resolveTenders, sameTenders, storedToTenderInputs, type ResolvedTender } from '../accounting/payment-account.util';
+import { allocateTenders, paymentDisplayName, resolveTenders, sameTenders, storedToTenderInputs, type ResolvedTender } from '../accounting/payment-account.util';
 import { paymentInstrumentData } from '../common/payment-instrument.util';
 import { purchasePaymentStatus } from './purchase-status';
 import { loadPreparerNames, preparerOf } from '../sales/sale-preparer.util';
@@ -1256,7 +1256,10 @@ export class PurchasesService {
 
         // Who entered it, by name — the detailed receipt's Entry By.
         const preparers = await loadPreparerNames(this.db, [purchase]);
-        return { purchase: { ...purchase, prepared_by: preparerOf(preparers, purchase) }, tenant };
+        // The invoice prints each payment's `payment_method`; it carries the
+        // method's name ("bKash") where one was saved, not the type it shares.
+        const payments = purchase.payments.map((p) => ({ ...p, payment_method: paymentDisplayName(p) }));
+        return { purchase: { ...purchase, payments, prepared_by: preparerOf(preparers, purchase) }, tenant };
     }
 
     async findOne(tenantId: string, id: string) {
