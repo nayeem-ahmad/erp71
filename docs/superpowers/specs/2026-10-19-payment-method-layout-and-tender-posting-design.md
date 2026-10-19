@@ -319,9 +319,13 @@ resolveTender(tx, tenantId, storeId, tender: { paymentMethodId?, paymentMethod }
    today's tenant-wide name match. This is what lets POS's `'BKASH'` reach the
    bKash method's account.
 3. **Nothing found, or the linked account no longer exists:** no account; the
-   caller uses the rule's account for `classifyPaymentMode(name ?? type)`.
-   Classifying by name first means an unlinked "bKash" still lands in bKash
-   Account, not the bank.
+   caller uses the rule's account for the tender's mode: `bkash` when the
+   method's name contains "bkash", `nagad` when it contains "nagad" (ignoring
+   case), else `classifyPaymentMode(type)`. So an unlinked "bKash" still lands
+   in bKash Account, not the bank, while an unlinked Bank method "DBBL" or a
+   wallet "Rocket" posts as bank — classifying any name would fall through to
+   cash, and the drawer, which reads the type, would disagree. *(Amended
+   2026-10-20 by the final review; this read `classifyPaymentMode(name ?? type)`.)*
 
 ### 5. Split tenders in one voucher
 

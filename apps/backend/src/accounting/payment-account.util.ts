@@ -143,7 +143,7 @@ export interface ResolvedTender {
      * the account it was saved with. Null leaves the posting rule's account for `mode`.
      */
     accountId: string | null;
-    /** classifyPaymentMode(methodName ?? paymentMethod). */
+    /** 'bkash' / 'nagad' when `methodName` says so, else classifyPaymentMode(paymentMethod). */
     mode: PaymentMode;
     amount: number;
 }
@@ -278,10 +278,26 @@ export async function resolveTenders(
             methodId: method?.id ?? null,
             methodName,
             accountId,
-            mode: classifyPaymentMode(methodName ?? tender.paymentMethod),
+            mode: tenderMode(methodName, tender.paymentMethod),
             amount: tender.amount,
         };
     });
+}
+
+/**
+ * A tender's posting mode, which decides its account only when its method is
+ * unknown or unlinked. bKash and Nagad share the canonical 'Mobile Wallet', so
+ * a name saying either picks its own wallet account; anything else follows the
+ * canonical type. Classifying every name would send an unlinked Bank method
+ * called "DBBL", or a wallet called "Rocket", to Cash in Hand — `classifyPaymentMode`
+ * falls back to cash for a name it does not know — while the drawer, which
+ * reads the type, counts it as non-cash.
+ */
+function tenderMode(methodName: string | null, paymentMethod: string): PaymentMode {
+    const name = methodName?.toLowerCase() ?? '';
+    if (name.includes('bkash')) return 'bkash';
+    if (name.includes('nagad')) return 'nagad';
+    return classifyPaymentMode(paymentMethod);
 }
 
 /**

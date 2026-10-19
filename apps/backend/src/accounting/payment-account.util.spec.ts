@@ -463,6 +463,65 @@ describe('payment-account.util', () => {
             ]);
         });
 
+        describe("an unlinked method's mode comes from its type, unless its name says bKash or Nagad", () => {
+            // No account on any of these, so the mode alone decides where each posts.
+            const modeOf = async (row: Partial<MethodRow> & Pick<MethodRow, 'id' | 'name'>, paymentMethod: string) => {
+                const client = methodsDb([method(row)]);
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod, paymentMethodId: row.id, amount: 100 },
+                ]);
+                return tender.mode;
+            };
+
+            it('an unlinked Bank method "DBBL" posts as bank', async () => {
+                await expect(modeOf({ id: 'pm-dbbl', name: 'DBBL', type: 'Bank' }, 'Bank')).resolves.toBe('bank');
+            });
+
+            it('an unlinked wallet "Rocket" posts as bank', async () => {
+                await expect(modeOf({ id: 'pm-rocket', name: 'Rocket', type: 'Mobile Wallet' }, 'Mobile Wallet')).resolves.toBe('bank');
+            });
+
+            it('an unlinked Card method "VISA" posts as bank', async () => {
+                await expect(modeOf({ id: 'pm-visa', name: 'VISA', type: 'Card' }, 'Card')).resolves.toBe('bank');
+            });
+
+            it('an unlinked Cash method "Till 2" posts as cash', async () => {
+                await expect(modeOf({ id: 'pm-till-2', name: 'Till 2', type: 'Cash' }, 'Cash')).resolves.toBe('cash');
+            });
+
+            it('an unlinked "bKash" of type Mobile Wallet posts as bkash, and "Nagad Merchant" as nagad', async () => {
+                await expect(modeOf({ id: 'pm-bkash', name: 'bKash', type: 'Mobile Wallet' }, 'Mobile Wallet')).resolves.toBe('bkash');
+                await expect(modeOf({ id: 'pm-nagad', name: 'Nagad Merchant', type: 'Mobile Wallet' }, 'Mobile Wallet')).resolves.toBe('nagad');
+            });
+
+            it('a kept tender and a legacy row follow the same rule', async () => {
+                const client = methodsDb([
+                    method({ id: 'pm-visa', name: 'VISA', type: 'Card' }),
+                    method({ id: 'pm-rocket', name: 'Rocket', type: 'Mobile Wallet', all_branches: false, stores: [{ store_id: 's2' }] }),
+                ]);
+                const tenders = await resolveTenders(client as any, 't1', 's1', [
+                    { paymentMethod: 'Card', paymentMethodId: 'pm-visa', amount: 100 },
+                    { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-rocket', amount: 50 },
+                ], [
+                    { payment_method: 'Card', payment_method_id: 'pm-visa', payment_method_name: 'VISA', account_id: null, amount: new Prisma.Decimal(100) },
+                    { payment_method: 'Mobile Wallet', payment_method_id: null, payment_method_name: 'Rocket', account_id: null, amount: new Prisma.Decimal(50) },
+                ]);
+
+                expect(tenders.map((t) => [t.methodName, t.mode])).toEqual([
+                    ['VISA', 'bank'],
+                    ['Rocket', 'bank'],
+                ]);
+            });
+
+            it('a tender with no id matched by name to an unlinked method posts by the type it was sent with', async () => {
+                const client = methodsDb([method({ id: 'pm-bank', name: 'Bank', type: 'Bank' })]);
+
+                const [tender] = await resolveTenders(client as any, 't1', 's1', [{ paymentMethod: 'Bank', amount: 100 }]);
+
+                expect(tender).toMatchObject({ methodId: 'pm-bank', accountId: null, mode: 'bank' });
+            });
+        });
+
         it('keeps input order and looks every method up in at most two queries', async () => {
             const client = methodsDb([
                 method({ id: 'pm-cash', name: 'Cash', account_id: 'acc-cash' }),

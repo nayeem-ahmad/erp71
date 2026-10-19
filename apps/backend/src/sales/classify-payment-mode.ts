@@ -12,8 +12,9 @@ export type PaymentMode = 'cash' | 'bank' | 'bkash' | 'nagad' | 'credit';
  * only the fallback: `resolveTenders` (accounting/payment-account.util.ts)
  * resolves each tender to its method's linked `account_id`, and
  * `autoPostFromRules`' `tenderLegs` posts it there. The mode decides the account
- * only for a tender whose method is unknown or unlinked, and is classified from
- * the method's name first, so an unlinked "bKash" still lands in bKash Account.
+ * only for a tender whose method is unknown or unlinked: bKash or Nagad when the
+ * method's name says so (so an unlinked "bKash" still lands in bKash Account),
+ * else this classifier over the canonical type.
  */
 export function classifyPaymentMode(method: string): PaymentMode {
     const normalized = method.toLowerCase();
