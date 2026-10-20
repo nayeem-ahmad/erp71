@@ -1332,6 +1332,46 @@ describe('SalesReportsService', () => {
             expect(result.summary.totalOrders).toBe(2);
         });
 
+        it('sales by payment method separates bKash and Nagad saved with names', async () => {
+            db.paymentRecord.findMany.mockResolvedValue([
+                { sale_id: 's1', payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: 60 },
+                { sale_id: 's2', payment_method: 'Mobile Wallet', payment_method_name: 'Nagad', amount: 40 },
+                { sale_id: 's3', payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: 100 },
+            ]);
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'payment_method',
+            }, 'Asia/Dhaka');
+
+            expect(result.rows.map((r) => [r.label, r.revenue, r.orders])).toEqual([
+                ['bKash', 160, 2],
+                ['Nagad', 40, 1],
+            ]);
+            expect(db.paymentRecord.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ select: expect.objectContaining({ payment_method_name: true }) }),
+            );
+        });
+
+        it('a legacy Mobile Wallet row stays its own bucket', async () => {
+            db.paymentRecord.findMany.mockResolvedValue([
+                { sale_id: 's1', payment_method: 'Mobile Wallet', payment_method_name: null, amount: 50 },
+                { sale_id: 's2', payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: 70 },
+            ]);
+
+            const result = await service.getSalesBreakdown(tenantId, {
+                from: '2026-07-01',
+                to: '2026-07-31',
+                groupBy: 'payment_method',
+            }, 'Asia/Dhaka');
+
+            expect(result.rows.map((r) => [r.label, r.revenue])).toEqual([
+                ['bKash', 70],
+                ['Mobile Wallet', 50],
+            ]);
+        });
+
         it('names the staff member behind a sale rather than returning a raw id', async () => {
             db.sale.findMany.mockResolvedValue([
                 { id: 's1', total_amount: 100, sale_date: new Date('2026-07-01T06:00:00Z'), created_by: 'u1', store: { id: 'st1', name: 'A' }, customer: null },

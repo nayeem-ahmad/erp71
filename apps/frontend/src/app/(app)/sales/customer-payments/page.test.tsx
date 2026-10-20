@@ -388,6 +388,37 @@ describe('CustomerPaymentsPage — payment method', () => {
         expect(within(panel).getByRole('radio', { name: 'City Bank' })).toBeInTheDocument();
     });
 
+    it("the method chips list only methods of the picked customer's branch", async () => {
+        const chattogramOnly = [
+            { id: 'pm-ctg', name: 'Chattogram Bank', type: 'Bank', is_active: true, show_on_entry: true, sort_order: 1, account: null },
+        ];
+        (api.getPaymentMethods as jest.Mock).mockImplementation(async (_type?: string, storeId?: string) => (
+            storeId === 'store-2' ? chattogramOnly : methods
+        ));
+        setUp({ customers: [{ ...alice, store_id: 'store-1' }, { ...bob, store_id: 'store-2' }] });
+        (api.getPaymentMethods as jest.Mock).mockImplementation(async (_type?: string, storeId?: string) => (
+            storeId === 'store-2' ? chattogramOnly : methods
+        ));
+        await openReadyForm('Alice Corp');
+        const panel = dialog();
+        await within(panel).findByRole('radio', { name: 'Cash' });
+        // Alice sits at the page's branch: its list is reused, not fetched again.
+        expect(api.getPaymentMethods).toHaveBeenCalledTimes(1);
+        expect(api.getPaymentMethods).toHaveBeenCalledWith(undefined, 'store-1');
+
+        pickCustomer('Bob Traders');
+
+        expect(await within(panel).findByRole('radio', { name: 'Chattogram Bank' })).toHaveAttribute('aria-checked', 'true');
+        expect(within(panel).queryByRole('radio', { name: 'Cash' })).not.toBeInTheDocument();
+        expect(api.getPaymentMethods).toHaveBeenCalledWith(undefined, 'store-2');
+
+        fireEvent.change(within(panel).getByLabelText('Amount'), { target: { value: '100' } });
+        save();
+        await waitFor(() => {
+            expect(api.recordCreditPayment).toHaveBeenCalledWith('cust-2', expect.objectContaining({ paymentMethodId: 'pm-ctg' }));
+        });
+    });
+
     it('warns before saving when the method has no ledger account, and sends the one picked', async () => {
         await openReadyForm();
         const panel = dialog();

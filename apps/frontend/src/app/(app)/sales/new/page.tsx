@@ -304,7 +304,8 @@ function NewSalePageContent() {
             unitPrice: item.price,
             discount: item.discount || 0,
         })),
-        payments: payments.map((p) => ({ method: p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
+        // The method's own name ("bKash"), not the type it shares ("Mobile Wallet").
+        payments: payments.map((p) => ({ method: p.label || p.method, amount: p.amount, reference: paymentInstrumentSummary(p) })),
         subtotal: totals.subtotal,
         discountAmount: totals.discountShown > 0 ? totals.discountShown : undefined,
         // Rounded because a flat discount derives its percentage from the
@@ -446,6 +447,7 @@ function NewSalePageContent() {
         saleDate: saleDatePicked && saleDate ? new Date(saleDate).toISOString() : undefined,
         payments: payments.map((p) => ({
             paymentMethod: p.method,
+            paymentMethodId: p.paymentMethodId,
             amount: p.amount,
             accountId: p.accountId,
             // The cheque / transfer details typed against this tender, if any.
@@ -629,6 +631,7 @@ function NewSalePageContent() {
             setSalesRepId={setSalesRepId}
             salesReps={salesReps}
             salesRepName={salesRepName}
+            storeId={getWorkspaceItem('store_id') || ''}
             payments={payments}
             onPaymentChange={updatePayment}
             warehouses={warehouses}

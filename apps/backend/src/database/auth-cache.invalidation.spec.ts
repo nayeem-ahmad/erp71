@@ -42,6 +42,7 @@ const REVIEWED: Record<string, string> = {
     'auth/verified-mobile.util.ts': 'mobile, firebase_uid and mobile_verified_at only — not cached',
     'blog/blog.service.ts': 'blog_last_seen_at only — not cached',
     'document-numbering/document-numbering.service.ts': 'Store.code only — the cache holds which workspace a branch is in, not its code',
+    'payment-methods/payment-methods.service.ts': 'TenantUser.payment_method_prefs only — not cached',
     'referrals/referrals.service.ts': 'creates a brand-new user, which nothing can have cached',
     'sales-settings/sales-settings.service.ts': 'TenantUser.invoice_print_prefs only — not cached',
     'stores/store-code.util.ts': 'Store.code only — the cache holds which workspace a branch is in, not its code',

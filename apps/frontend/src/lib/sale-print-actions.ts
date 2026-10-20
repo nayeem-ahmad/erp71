@@ -52,7 +52,13 @@ export interface PrintableSale {
         vat_rate?: string | number | null;
         sd_rate?: string | number | null;
     }[];
-    payments?: { payment_method?: string; method?: string; amount: string | number }[];
+    payments?: {
+        payment_method?: string;
+        /** The method's saved name ("bKash"); absent on a row saved before methods were named. */
+        payment_method_name?: string | null;
+        method?: string;
+        amount: string | number;
+    }[];
     /**
      * What the customer owed before this sale, as the sale endpoints report it.
      * Null for a walk-in or a cancelled sale, and then the invoice prints no
@@ -135,7 +141,9 @@ function storedAmount(value: string | number | null | undefined): number | undef
 }
 
 function paymentMethod(p: NonNullable<PrintableSale['payments']>[number]): string {
-    return p.method ?? p.payment_method ?? 'OTHER';
+    // The saved name first: `payment_method` is the type several methods share
+    // ('Mobile Wallet' for bKash and Nagad). A legacy row has no name.
+    return p.payment_method_name ?? p.method ?? p.payment_method ?? 'OTHER';
 }
 
 function paymentAmount(p: NonNullable<PrintableSale['payments']>[number]): number {

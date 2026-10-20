@@ -40,8 +40,9 @@ export class CreatePurchaseItemDto {
  * One tender taken against the bill at entry time — the purchase-side twin of
  * `CreatePaymentDto` on a sale. `paymentMethod` is the canonical, classifiable
  * method string ('Cash', 'Bank', 'Mobile Wallet', 'Card', or a tenant-defined
- * name); `accountId` is the GL account the tenant configured for it, resolved
- * server-side from the method name so a stale client id cannot redirect cash.
+ * name); `paymentMethodId` is the tenant's method the user picked, from which
+ * the server resolves the linked GL account and checks the method is offered at
+ * the bill's branch.
  *
  * The cheque, transfer, card or wallet details it inherits are stored on the
  * bill's `PurchasePayment` row for this tender — the bank the shop's cheque is
@@ -56,6 +57,19 @@ export class CreatePurchasePaymentDto extends PaymentInstrumentDto {
     @Min(0)
     amount: number;
 
+    /**
+     * The tenant's payment method the user picked. Absent from callers that
+     * send only `paymentMethod`, which is then matched by name.
+     */
+    @IsOptional()
+    @IsString()
+    paymentMethodId?: string;
+
+    /**
+     * Ignored: the account is resolved on the server from the method, so a
+     * stale client id cannot redirect cash. Kept so an older client that still
+     * sends it is not refused.
+     */
     @IsOptional()
     @IsString()
     accountId?: string;

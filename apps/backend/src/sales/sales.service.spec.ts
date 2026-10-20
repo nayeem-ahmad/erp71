@@ -76,8 +76,9 @@ describe('SalesService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       paymentMethod: {
-        // No custom account by default → posting keeps the rule's mode account.
-        findFirst: jest.fn().mockResolvedValue(null),
+        // No methods by default: every tender resolves to none and posts on
+        // its mode's rule account.
+        findMany: jest.fn().mockResolvedValue([]),
       },
       sale: {
         create: jest.fn(),
@@ -944,6 +945,12 @@ describe('SalesService', () => {
       expect(result.status).toBe('COMPLETED');
     });
 
+    it('reads the parked payments in the order they were saved', async () => {
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(tx.sale.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
+
     it('issues the invoice number when the draft is completed, not when it was parked', async () => {
       tx.cashierSession.findFirst.mockResolvedValue({ id: 'session-1', counter_id: 'counter-3' });
       const parkedOn = new Date('2026-07-02T04:00:00.000Z');
@@ -1367,6 +1374,9 @@ describe('SalesService', () => {
           payments: {
             create: [{
               payment_method: 'Bank',
+              // No method matched: the default harness has none.
+              payment_method_id: null,
+              payment_method_name: null,
               amount: 100,
               account_id: null,
               bank_name: 'City Bank',
@@ -1399,6 +1409,8 @@ describe('SalesService', () => {
           payments: {
             create: [{
               payment_method: 'Cash',
+              payment_method_id: null,
+              payment_method_name: null,
               amount: 20,
               account_id: null,
               bank_name: null,
@@ -1725,6 +1737,14 @@ describe('SalesService', () => {
       await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+    it('returns the payments in the order they were saved, which edits and return pre-fills read', async () => {
+      db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });
+
+      await service.findOne('tenant-1', 's1');
+
+      expect(db.sale.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
+
     it('loads the sale’s store, so its documents print that branch’s name and address', async () => {
       db.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [] });
 
@@ -1880,6 +1900,22 @@ describe('SalesService', () => {
       expect(result.tenant).toEqual({ name: 'Rahim Store' });
     });
 
+    it('invoice data prints bKash, not Mobile Wallet', async () => {
+      db.sale.findFirst.mockResolvedValue({
+        id: 's1',
+        items: [],
+        payments: [
+          { id: 'p1', payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: '100.00' },
+          { id: 'p2', payment_method: 'Mobile Wallet', payment_method_name: null, amount: '50.00' },
+        ],
+      });
+      db.tenant.findUnique.mockResolvedValue({ name: 'Rahim Store' });
+
+      const result = await service.getInvoiceData('tenant-1', 's1');
+
+      expect(result.sale.payments.map((p: any) => p.payment_method)).toEqual(['bKash', 'Mobile Wallet']);
+    });
+
     it('prints no previous due on a cancelled sale', async () => {
       db.sale.findFirst.mockResolvedValue({
         id: 's1',
@@ -1922,6 +1958,15 @@ describe('SalesService', () => {
       expect(result).toBeDefined();
     });
 
+    it('reads the stored payments in the order they were saved', async () => {
+      tx.sale.findFirst.mockResolvedValue({ id: 's1', items: [], payments: [], total_amount: 20, customer_id: null });
+      tx.sale.update.mockResolvedValue({ id: 's1', note: 'Updated note' });
+
+      await service.update('tenant-1', 'user-1', 's1', { note: 'Updated note' });
+
+      expect(tx.sale.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
+
     it('should throw NotFoundException when sale to update is not found', async () => {
       tx.sale.findFirst.mockResolvedValue(null);
 
@@ -1959,9 +2004,8 @@ describe('SalesService', () => {
         payments: [{
           paymentMethod: 'Bank',
           amount: 100,
-          // Dropped before this went through paymentRecordData: the update path
-          // wrote only the method and the amount, so editing a sale erased the
-          // ledger account the payment had been posted against.
+          // Not stored: the row carries the account the server resolves from
+          // the method (none matches here), never the one the client sends.
           accountId: 'acct-1',
           bankName: 'Dutch-Bangla Bank',
           referenceNo: 'CHQ-100200',
@@ -1974,8 +2018,10 @@ describe('SalesService', () => {
         data: {
           sale_id: 's1',
           payment_method: 'Bank',
+          payment_method_id: null,
+          payment_method_name: null,
           amount: 100,
-          account_id: 'acct-1',
+          account_id: null,
           bank_name: 'Dutch-Bangla Bank',
           bank_branch: null,
           bank_account_number: null,
@@ -2844,6 +2890,440 @@ describe('SalesService', () => {
           quoteNumber: 'QT-B',
           message: 'Something went wrong converting this quotation. Try converting it on its own.',
         },
+      ]);
+    });
+  });
+
+  describe('posting by tender — each tender posts to its method\'s linked account', () => {
+    const actualPosting = jest.requireActual('../accounting/posting.utils');
+    const postedAt = new Date('2026-09-01T10:00:00.000Z');
+
+    // The rules' own accounts are deliberately not the ones the methods link
+    // to — bKash's mode posts to `bkash-rule` on its own — so a voucher shows
+    // whether a tender reached its method's link or only its mode's fallback.
+    const RULES: Record<string, { debit_account_id: string; credit_account_id: string }> = {
+      'sale:payment_mode:cash': { debit_account_id: 'cash-in-hand', credit_account_id: 'revenue' },
+      'sale:payment_mode:bank': { debit_account_id: 'main-bank', credit_account_id: 'revenue' },
+      'sale:payment_mode:bkash': { debit_account_id: 'bkash-rule', credit_account_id: 'revenue' },
+      'sale:payment_mode:credit': { debit_account_id: 'ar', credit_account_id: 'revenue' },
+      'customer_payment:payment_direction:receive': { debit_account_id: 'cash-in-hand', credit_account_id: 'ar' },
+    };
+    const ACCOUNTS: Record<string, string | null> = {
+      'cash-in-hand': null,
+      'main-bank': null,
+      'bkash-rule': null,
+      'bkash-acct': null,
+      'bkash-banani': null,
+      revenue: null,
+      ar: 'CUSTOMER',
+    };
+    const METHODS = [
+      { id: 'pm-cash', name: 'Cash', account_id: 'cash-in-hand', all_branches: true, stores: [], sort_order: 1 },
+      { id: 'pm-bkash', name: 'bKash', account_id: 'bkash-acct', all_branches: true, stores: [], sort_order: 3 },
+      // Offered at the Banani branch (store-2) only.
+      {
+        id: 'pm-bkash-banani',
+        name: 'bKash Banani',
+        account_id: 'bkash-banani',
+        all_branches: false,
+        stores: [{ store_id: 'store-2' }],
+        sort_order: 6,
+      },
+    ].map((method) => ({ tenant_id: 'tenant-1', is_active: true, ...method }));
+    const BRANCH_REFUSAL = "That payment method isn't available at this branch.";
+
+    let vouchers: { key: string; rows: [string, number, number][] }[];
+    /** A posted voucher's details as [account, debit, credit]. */
+    const voucherRows = (eventType: string, sourceId: string, legKey?: string) =>
+      vouchers.find((v) => v.key === actualPosting.postingIdempotencyKey('tenant-1', eventType, sourceId, legKey))?.rows;
+
+    const item = (priceAtSale: number) => [{ productId: 'prod-1', quantity: 1, priceAtSale }];
+    /** A posted walk-in sale at store-1, paid in full by the rows given. */
+    const postedSale = (payments: Record<string, unknown>[], extra: Record<string, unknown> = {}) => ({
+      id: 'sale-1',
+      store_id: 'store-1',
+      serial_number: 'INV-1',
+      reference_number: null,
+      status: 'COMPLETED',
+      customer_id: null,
+      total_amount: 1000,
+      amount_paid: 1000,
+      created_at: postedAt,
+      sale_date: postedAt,
+      items: [{ product_id: 'prod-1', quantity: 1, warehouse_id: null }],
+      payments,
+      ...extra,
+    });
+    const storedRow = (row: Record<string, unknown>) => ({
+      payment_method_id: null,
+      payment_method_name: null,
+      account_id: null,
+      bank_name: null,
+      bank_branch: null,
+      bank_account_number: null,
+      reference_no: null,
+      instrument_date: null,
+      ...row,
+    });
+
+    beforeEach(() => {
+      vouchers = [];
+      // The real posting engine, so these tests read the voucher it writes.
+      (autoPostFromRules as jest.Mock).mockImplementation(actualPosting.autoPostFromRules);
+      // Answers the filters resolveTenders uses the way Postgres would.
+      tx.paymentMethod.findMany = jest.fn().mockImplementation(async ({ where, orderBy }: any) => {
+        const matched = METHODS.filter((method) => {
+          if (method.tenant_id !== where.tenant_id) return false;
+          if (where.id?.in && !where.id.in.includes(method.id)) return false;
+          if (where.is_active !== undefined && method.is_active !== where.is_active) return false;
+          if (where.OR && !where.OR.some((c: any) => c.name.equals.toLowerCase() === method.name.toLowerCase())) {
+            return false;
+          }
+          return true;
+        });
+        return orderBy ? [...matched].sort((a, b) => a.sort_order - b.sort_order) : matched;
+      });
+      tx.postingEvent.create = jest.fn().mockResolvedValue({ id: 'pe-1' });
+      tx.postingEvent.update = jest.fn().mockResolvedValue({ id: 'pe-1' });
+      tx.fiscalPeriod = { findFirst: jest.fn().mockResolvedValue(null) };
+      tx.postingRule = {
+        findFirst: jest.fn().mockImplementation(async ({ where }: any) =>
+          RULES[`${where.event_type}:${where.condition_key}:${where.condition_value}`] ?? null),
+      };
+      tx.account = {
+        findMany: jest.fn().mockImplementation(async ({ where }: any) =>
+          Object.entries(ACCOUNTS)
+            .filter(([id]) => where.id.in.includes(id))
+            .map(([id, party_type]) => ({ id, party_type }))),
+      };
+      tx.voucherSequence = {
+        upsert: jest.fn().mockResolvedValue({ next_number: 1, prefix: 'V' }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      tx.accountingSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+      tx.voucher = {
+        create: jest.fn().mockImplementation(async ({ data }: any) => {
+          vouchers.push({
+            key: data.idempotency_key,
+            rows: data.details.create.map((d: any) => [d.account_id, Number(d.debit_amount), Number(d.credit_amount)]),
+          });
+          return { id: `v-${vouchers.length}`, voucher_number: `V-${vouchers.length}`, voucher_type: data.voucher_type };
+        }),
+      };
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', serial_number: 'INV-1', reference_number: null, total_amount: 1000 });
+      tx.sale.update.mockResolvedValue({ id: 'sale-1' });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.paymentRecord.create.mockResolvedValue({});
+    });
+
+    it('a bKash tender linked to bKash Account debits bKash Account', async () => {
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1000,
+        amountPaid: 1000,
+        items: item(1000),
+        // The strip sends the canonical type, which on its own classifies as
+        // bank: this is the tender that used to land in Main Bank Account.
+        payments: [{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 1000 }],
+      });
+
+      expect(voucherRows('sale', 'sale-1')).toEqual([
+        ['bkash-acct', 1000, 0],
+        ['revenue', 0, 1000],
+      ]);
+    });
+
+    it('cash + bKash split posts two debit lines in one voucher', async () => {
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1000,
+        amountPaid: 1000,
+        items: item(1000),
+        payments: [
+          { paymentMethod: 'Cash', paymentMethodId: 'pm-cash', amount: 600 },
+          { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 400 },
+        ],
+      });
+
+      expect(tx.voucher.create).toHaveBeenCalledTimes(1);
+      expect(voucherRows('sale', 'sale-1')).toEqual([
+        ['cash-in-hand', 600, 0],
+        ['bkash-acct', 400, 0],
+        ['revenue', 0, 1000],
+      ]);
+    });
+
+    it('credit sale with a split down-payment posts the paid leg per tender', async () => {
+      tx.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Rahim Store', due_balance: 0, credit_limit: 50000 });
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '0.00' });
+      tx.customerCreditTransaction.create.mockResolvedValue({ id: 'ct-1' });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 1000,
+        amountPaid: 600,
+        items: item(1000),
+        payments: [
+          { paymentMethod: 'Cash', paymentMethodId: 'pm-cash', amount: 400 },
+          { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+        ],
+      });
+
+      expect(voucherRows('sale', 'sale-1')).toEqual([
+        ['ar', 400, 0],
+        ['revenue', 0, 400],
+      ]);
+      expect(voucherRows('sale', 'sale-1', 'paid')).toEqual([
+        ['cash-in-hand', 400, 0],
+        ['bkash-acct', 200, 0],
+        ['revenue', 0, 600],
+      ]);
+    });
+
+    it('overpaid split: Cash 1000 + bKash 200 on 1100 → sale voucher Cash 1000 / bKash 100, receipt voucher bKash 100', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', serial_number: 'INV-1', reference_number: null, total_amount: 1100 });
+      tx.customer.findFirst.mockResolvedValue({ id: 'cust-1', name: 'Rahim Store' });
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '0.00' });
+      tx.customerCreditTransaction.create.mockResolvedValue({ id: 'ct-receipt' });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 1100,
+        amountPaid: 1200,
+        items: item(1100),
+        payments: [
+          { paymentMethod: 'Cash', paymentMethodId: 'pm-cash', amount: 1000 },
+          { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 200 },
+        ],
+      });
+
+      expect(voucherRows('sale', 'sale-1')).toEqual([
+        ['cash-in-hand', 1000, 0],
+        ['bkash-acct', 100, 0],
+        ['revenue', 0, 1100],
+      ]);
+      // Each account receives exactly what was tendered on it.
+      expect(voucherRows('customer_payment', 'ct-receipt')).toEqual([
+        ['bkash-acct', 100, 0],
+        ['ar', 0, 100],
+      ]);
+    });
+
+    it('stores payment_method_id, name and server-resolved account_id, ignoring the client accountId', async () => {
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 1000,
+        amountPaid: 1000,
+        items: item(1000),
+        payments: [{
+          paymentMethod: 'Mobile Wallet',
+          paymentMethodId: 'pm-bkash',
+          amount: 1000,
+          accountId: 'acct-from-the-client',
+        }],
+      });
+
+      expect(tx.sale.create.mock.calls[0][0].data.payments.create).toEqual([
+        expect.objectContaining({
+          payment_method: 'Mobile Wallet',
+          payment_method_id: 'pm-bkash',
+          payment_method_name: 'bKash',
+          account_id: 'bkash-acct',
+          amount: 1000,
+        }),
+      ]);
+
+      // An edit writes its rows the same way.
+      tx.sale.findFirst.mockResolvedValue(postedSale([storedRow({ payment_method: 'Cash', amount: 1000 })]));
+      await service.update('tenant-1', 'user-1', 'sale-1', {
+        payments: [{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 1000, accountId: 'acct-x' }],
+      });
+
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sale_id: 'sale-1',
+          payment_method: 'Mobile Wallet',
+          payment_method_id: 'pm-bkash',
+          payment_method_name: 'bKash',
+          account_id: 'bkash-acct',
+        }),
+      });
+    });
+
+    it('refuses a new tender on another branch\'s method', async () => {
+      const banani = [{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash-banani', amount: 1000 }];
+
+      await expect(service.create('tenant-1', 'user-1', {
+        storeId: 'store-1', totalAmount: 1000, amountPaid: 1000, items: item(1000), payments: banani,
+      })).rejects.toThrow(BRANCH_REFUSAL);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+
+      // Parked as a draft.
+      tx.product.count = jest.fn().mockResolvedValue(1);
+      await expect(service.create('tenant-1', 'user-1', {
+        storeId: 'store-1', totalAmount: 1000, amountPaid: 1000, items: item(1000), payments: banani, isDraft: true,
+      })).rejects.toThrow(BRANCH_REFUSAL);
+      expect(tx.sale.create).not.toHaveBeenCalled();
+
+      // Added on an edit of a store-1 sale.
+      tx.sale.findFirst.mockResolvedValue(postedSale([
+        storedRow({ payment_method: 'Cash', payment_method_id: 'pm-cash', payment_method_name: 'Cash', account_id: 'cash-in-hand', amount: 1000 }),
+      ]));
+      await expect(service.update('tenant-1', 'user-1', 'sale-1', { payments: banani }))
+        .rejects.toThrow(BRANCH_REFUSAL);
+      expect(tx.paymentRecord.deleteMany).not.toHaveBeenCalled();
+      expect(tx.voucher.create).not.toHaveBeenCalled();
+    });
+
+    it('editing quantity on a sale whose tender\'s method has since moved branch keeps the tender and its account', async () => {
+      // Taken on bKash Banani while it was offered at store-1; it has since
+      // been limited to store-2.
+      tx.sale.findFirst.mockResolvedValue(postedSale([
+        storedRow({
+          payment_method: 'Mobile Wallet',
+          payment_method_id: 'pm-bkash-banani',
+          payment_method_name: 'bKash Banani',
+          account_id: 'bkash-banani',
+          amount: 1000,
+        }),
+      ]));
+
+      await service.update('tenant-1', 'user-1', 'sale-1', {
+        items: [{ productId: 'prod-1', quantity: 2, priceAtSale: 600 }],
+        totalAmount: 1200,
+        payments: [{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash-banani', amount: 1200 }],
+      });
+
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          payment_method_id: 'pm-bkash-banani',
+          payment_method_name: 'bKash Banani',
+          account_id: 'bkash-banani',
+          amount: 1200,
+        }),
+      });
+      expect(voucherRows('sale', 'sale-1')).toEqual([
+        ['bkash-banani', 1200, 0],
+        ['revenue', 0, 1200],
+      ]);
+    });
+
+    it('an edit that sends no payments reposts with the tenders the sale carries', async () => {
+      tx.sale.findFirst.mockResolvedValue(postedSale([
+        storedRow({
+          payment_method: 'Mobile Wallet',
+          payment_method_id: 'pm-bkash-banani',
+          payment_method_name: 'bKash Banani',
+          account_id: 'bkash-banani',
+          amount: 1000,
+        }),
+      ]));
+
+      await service.update('tenant-1', 'user-1', 'sale-1', { totalAmount: 900, rounding: -100 });
+
+      expect(tx.paymentRecord.create).not.toHaveBeenCalled();
+      expect(voucherRows('sale', 'sale-1')).toEqual([
+        ['bkash-banani', 900, 0],
+        ['revenue', 0, 900],
+      ]);
+    });
+
+    it('moving a paid sale to another customer leaves its voucher alone, though its old tender now matches a method', async () => {
+      // A row saved before tenders carried their method: no id, no name.
+      tx.sale.findFirst.mockResolvedValue(postedSale(
+        [storedRow({ payment_method: 'Cash', amount: 1000 })],
+        { customer_id: 'cust-1' },
+      ));
+
+      await service.update('tenant-1', 'user-1', 'sale-1', { customerId: 'cust-2' });
+
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(tx.voucher.create).not.toHaveBeenCalled();
+    });
+
+    it('leaves the books alone when an older client re-sends an old tender unchanged', async () => {
+      tx.sale.findFirst.mockResolvedValue(postedSale([storedRow({ payment_method: 'Cash', amount: 1000 })]));
+
+      await service.update('tenant-1', 'user-1', 'sale-1', {
+        note: 'Delivered',
+        totalAmount: 1000,
+        payments: [{ paymentMethod: 'Cash', amount: 1000 }],
+      });
+
+      expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+      expect(tx.voucher.create).not.toHaveBeenCalled();
+    });
+
+    it('finalizing a draft posts with the stored tenders\' accounts', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 'draft-1',
+        tenant_id: 'tenant-1',
+        store_id: 'store-1',
+        counter_id: null,
+        customer_id: null,
+        serial_number: 'DRAFT-0000000001',
+        reference_number: null,
+        status: 'DRAFT',
+        total_amount: 1000,
+        amount_paid: 1000,
+        note: null,
+        warehouse_id: null,
+        sale_date: postedAt,
+        items: [{ product_id: 'prod-1', quantity: 1, price_at_sale: 1000, warehouse_id: null }],
+        // Parked on bKash Banani, which has since been limited to store-2.
+        payments: [storedRow({
+          payment_method: 'Mobile Wallet',
+          payment_method_id: 'pm-bkash-banani',
+          payment_method_name: 'bKash Banani',
+          account_id: 'bkash-banani',
+          amount: 1000,
+        })],
+      });
+      tx.sale.update.mockImplementation(async ({ data }: any) => ({
+        id: 'draft-1', store_id: 'store-1', serial_number: data.serial_number, total_amount: data.total_amount, customer_id: null,
+      }));
+
+      await service.finalizeDraft('tenant-1', 'user-1', 'draft-1');
+
+      expect(tx.paymentRecord.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sale_id: 'draft-1',
+          payment_method_id: 'pm-bkash-banani',
+          payment_method_name: 'bKash Banani',
+          account_id: 'bkash-banani',
+          amount: 1000,
+        }),
+      });
+      expect(voucherRows('sale', 'draft-1')).toEqual([
+        ['bkash-banani', 1000, 0],
+        ['revenue', 0, 1000],
+      ]);
+    });
+
+    it('a payment with no paymentMethodId (POS \'BKASH\') still posts to bKash\'s linked account', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', serial_number: 'INV-1', reference_number: null, total_amount: 500 });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 500,
+        amountPaid: 500,
+        items: item(500),
+        payments: [{ paymentMethod: 'BKASH', amount: 500 }],
+      });
+
+      expect(tx.sale.create.mock.calls[0][0].data.payments.create).toEqual([
+        expect.objectContaining({
+          payment_method: 'BKASH',
+          payment_method_id: 'pm-bkash',
+          payment_method_name: 'bKash',
+          account_id: 'bkash-acct',
+        }),
+      ]);
+      expect(voucherRows('sale', 'sale-1')).toEqual([
+        ['bkash-acct', 500, 0],
+        ['revenue', 0, 500],
       ]);
     });
   });

@@ -1082,6 +1082,7 @@ model Tenant {
   aiUsageLogs                AiUsageLog[]
   aiConversations            AiConversation[]
   paymentMethods             PaymentMethod[]
+  paymentMethodStores        PaymentMethodStore[]
   salesSettings              SalesSettings?
   accountingSettings         AccountingSettings?
   printTemplates             PrintTemplate[]
@@ -1353,16 +1354,47 @@ model PaymentMethod {
   is_active     Boolean  @default(true)
   show_on_entry Boolean  @default(true)
   sort_order    Int      @default(0)
+  /// Offered at every branch, including branches opened later. When false,
+  /// only at the branches in `stores`. An explicit flag rather than "no rows
+  /// means every branch": a limited method that lost its last branch row must
+  /// become available nowhere, not everywhere.
+  all_branches  Boolean  @default(true)
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  /// The ledger account this method's tenders post to. SetNull so deleting the
+  /// account leaves the method usable (posting falls back to the canonical
+  /// type's default account) instead of blocking the delete.
+  account Account? @relation(fields: [account_id], references: [id], onDelete: SetNull)
 
+  stores                       PaymentMethodStore[]
   customer_credit_transactions CustomerCreditTransaction[]
   supplier_credit_transactions SupplierCreditTransaction[]
+  paymentRecords               PaymentRecord[]
+  purchasePayments             PurchasePayment[]
+  salesReturnPayments          SalesReturnPayment[]
+  purchaseReturnPayments       PurchaseReturnPayment[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id, type, is_active])
+  @@index([account_id])
+}
+
+/// A branch a limited (all_branches = false) payment method is offered at.
+model PaymentMethodStore {
+  id                String   @id @default(uuid())
+  tenant_id         String
+  payment_method_id String
+  store_id          String
+  created_at        DateTime @default(now())
+
+  tenant         Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  payment_method PaymentMethod @relation(fields: [payment_method_id], references: [id], onDelete: Cascade)
+  store          Store         @relation(fields: [store_id], references: [id], onDelete: Cascade)
+
+  @@unique([payment_method_id, store_id])
+  @@index([tenant_id, store_id])
 }
 
 /// Tenant-designed print header (letterhead) applied to printed documents.
@@ -1471,6 +1503,11 @@ model TenantUser {
   /// on the membership so it follows the person to any till, per workspace.
   /// Null means the built-in layout.
   invoice_print_prefs Json?
+  /// How this member orders and hides payment methods on each money screen,
+  /// per branch — a PaymentMethodPrefs JSON (see
+  /// packages/shared-types/payment-layout.ts). Held on the membership so it
+  /// follows the person to any till. Null means the default order everywhere.
+  payment_method_prefs Json?
 
   // Relations
   tenant     Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -1621,6 +1658,8 @@ model Store {
   // I looking at?" with no answer. Case folding is the service's job — Postgres
   // compares these bytewise.
   printTemplateAssignments PrintTemplateStoreAssignment[]
+  /// Limited payment methods offered at this branch.
+  paymentMethodStores      PaymentMethodStore[]
 
   @@unique([tenant_id, name])
   @@unique([tenant_id, code])
@@ -2519,6 +2558,14 @@ model PurchasePayment {
   /// Wallet, Card — not the tenant's friendly name for it.
   payment_method String
   amount         Decimal @db.Decimal(12, 2)
+  /// The tenant's payment method the cashier picked, so posting can use that
+  /// method's linked account. Null on tenders written before this existed.
+  payment_method_id   String?
+  /// The method's name when the tender was saved — survives a rename or delete.
+  payment_method_name String?
+  /// The ledger account this tender posted to, resolved server-side from the
+  /// method. Null on tenders written before this existed.
+  account_id          String?
 
   /// The bank a cheque is drawn on, or the card's issuer.
   bank_name           String?
@@ -2534,9 +2581,13 @@ model PurchasePayment {
 
   created_at DateTime @default(now())
 
-  purchase Purchase @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
+  purchase       Purchase       @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
+  payment_method_ref PaymentMethod? @relation(fields: [payment_method_id], references: [id], onDelete: SetNull)
+  account        Account?       @relation(fields: [account_id], references: [id], onDelete: SetNull)
 
   @@index([purchase_id])
+  @@index([payment_method_id])
+  @@index([account_id])
 }
 
 model PurchaseReturn {
@@ -2557,6 +2608,10 @@ model PurchaseReturn {
   /// Which warehouse the goods went back to the supplier from. Lines may
   /// override it.
   warehouse_id     String?
+  /// True when the return was saved with its refund tenders recorded (possibly
+  /// none), so the drawer counts only its cash tenders; false on returns saved
+  /// before tenders existed.
+  tenders_recorded Boolean  @default(false)
 
   tenant    Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   store     Store                @relation(fields: [store_id], references: [id])
@@ -2564,9 +2619,50 @@ model PurchaseReturn {
   supplier  Supplier?            @relation(fields: [supplier_id], references: [id])
   warehouse Warehouse?           @relation("PurchaseReturnWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   items     PurchaseReturnItem[]
+  payments  PurchaseReturnPayment[]
 
   @@unique([tenant_id, return_number])
   @@index([tenant_id, warehouse_id])
+}
+
+/// One tender received back from the supplier when a purchase return was
+/// recorded — the return-side twin of `PurchasePayment`. The part of the return
+/// total not covered here is adjusted against the supplier's payable.
+model PurchaseReturnPayment {
+  id             String  @id @default(uuid())
+  return_id      String
+  /// The canonical method the posting classifies on: Cash, Bank, Mobile
+  /// Wallet, Card — not the tenant's friendly name for it.
+  payment_method String
+  /// The tenant's payment method picked on the return, so posting can use that
+  /// method's linked account. Null when the client sent only the canonical type.
+  payment_method_id   String?
+  /// The method's name when the tender was saved — survives a rename or delete.
+  payment_method_name String?
+  /// The ledger account this tender posted to, resolved server-side from the
+  /// method.
+  account_id          String?
+  amount         Decimal @db.Decimal(12, 2)
+
+  /// The bank a cheque is drawn on, or the card's issuer.
+  bank_name           String?
+  bank_branch         String?
+  /// The account or wallet number on the instrument, as written.
+  bank_account_number String?
+  /// Cheque number, wallet transaction id, or card approval code.
+  reference_no        String?
+  /// The date written on the instrument.
+  instrument_date     DateTime? @db.Date
+
+  created_at DateTime @default(now())
+
+  return             PurchaseReturn  @relation(fields: [return_id], references: [id], onDelete: Cascade)
+  payment_method_ref PaymentMethod? @relation(fields: [payment_method_id], references: [id], onDelete: SetNull)
+  account            Account?       @relation(fields: [account_id], references: [id], onDelete: SetNull)
+
+  @@index([return_id])
+  @@index([payment_method_id])
+  @@index([account_id])
 }
 
 model PurchaseReturnItem {
@@ -3976,6 +4072,10 @@ model Account {
   recurringVoucherLines RecurringVoucherLine[]
   voucherTemplateLines  VoucherTemplateLine[]
   paymentRecords        PaymentRecord[]
+  paymentMethods        PaymentMethod[]
+  purchasePayments      PurchasePayment[]
+  salesReturnPayments   SalesReturnPayment[]
+  purchaseReturnPayments PurchaseReturnPayment[]
 
   @@unique([tenant_id, name])
   @@index([tenant_id])
@@ -4249,6 +4349,14 @@ model PaymentRecord {
   payment_method String
   amount         Decimal @db.Decimal(12, 2)
   account_id     String? // Links payment to account (for accounting integration)
+  /// The tenant's payment method the cashier picked. `payment_method` above
+  /// stays the canonical type the posting classifies on; this says which of
+  /// the tenant's methods it was, so posting can use that method's linked
+  /// account. Null on tenders written before methods were tracked per row.
+  payment_method_id   String?
+  /// The method's name when the tender was saved, for receipts and history —
+  /// survives a rename or delete of the method.
+  payment_method_name String?
 
   /// What the money actually arrived on, when the tender is not cash. A cheque
   /// is the case that forces these: a shop that takes one has to be able to say
@@ -4277,8 +4385,10 @@ model PaymentRecord {
   // Relations
   sale    Sale     @relation(fields: [sale_id], references: [id], onDelete: Cascade)
   account Account? @relation(fields: [account_id], references: [id], onDelete: SetNull)
+  payment_method_ref PaymentMethod? @relation(fields: [payment_method_id], references: [id], onDelete: SetNull)
 
   @@index([account_id])
+  @@index([payment_method_id])
   // Every read of a sale's tenders filters on sale_id: `include: { payments }`
   // on the sales list, the sale screen, the invoice print, the cashier-session
   // close and the daily report, plus the deleteMany a sale edit runs and the
@@ -4356,6 +4466,10 @@ model SalesReturn {
   /// `Sale.warehouse_id`: stored so an edit or a delete unwinds against the
   /// warehouse the return actually restocked. Lines may override it.
   warehouse_id     String?
+  /// True when the return was saved with its refund tenders recorded (possibly
+  /// none), so the drawer counts only its cash tenders; false on returns saved
+  /// before tenders existed, whose refund is read from `total_refund`.
+  tenders_recorded Boolean  @default(false)
 
   // Relations
   tenant    Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -4364,11 +4478,53 @@ model SalesReturn {
   session   CashierSession?   @relation(fields: [session_id], references: [id])
   warehouse Warehouse?        @relation("SalesReturnWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   items     SalesReturnItem[]
+  payments  SalesReturnPayment[]
 
   @@unique([tenant_id, return_number])
   @@index([tenant_id, reference_number])
   @@index([tenant_id, warehouse_id])
   @@index([tenant_id, session_id])
+}
+
+/// One refund tender handed back when a sales return was recorded — the
+/// return-side twin of `PaymentRecord`. The part of `SalesReturn.total_refund`
+/// not covered here is adjusted against the customer's due, so these rows say
+/// how much cash (or other tender) actually left the till, and on what.
+model SalesReturnPayment {
+  id             String  @id @default(uuid())
+  return_id      String
+  /// The canonical method the posting classifies on: Cash, Bank, Mobile
+  /// Wallet, Card — not the tenant's friendly name for it.
+  payment_method String
+  /// The tenant's payment method picked on the return, so posting can use that
+  /// method's linked account. Null when the client sent only the canonical type.
+  payment_method_id   String?
+  /// The method's name when the tender was saved — survives a rename or delete.
+  payment_method_name String?
+  /// The ledger account this tender posted to, resolved server-side from the
+  /// method.
+  account_id          String?
+  amount         Decimal @db.Decimal(12, 2)
+
+  /// The bank a cheque is drawn on, or the card's issuer.
+  bank_name           String?
+  bank_branch         String?
+  /// The account or wallet number on the instrument, as written.
+  bank_account_number String?
+  /// Cheque number, wallet transaction id, or card approval code.
+  reference_no        String?
+  /// The date written on the instrument.
+  instrument_date     DateTime? @db.Date
+
+  created_at DateTime @default(now())
+
+  return             SalesReturn  @relation(fields: [return_id], references: [id], onDelete: Cascade)
+  payment_method_ref PaymentMethod? @relation(fields: [payment_method_id], references: [id], onDelete: SetNull)
+  account            Account?       @relation(fields: [account_id], references: [id], onDelete: SetNull)
+
+  @@index([return_id])
+  @@index([payment_method_id])
+  @@index([account_id])
 }
 
 model SalesReturnItem {

@@ -28,6 +28,7 @@ jest.mock('@/lib/api', () => ({
         getPurchase: jest.fn(),
         getInventoryWarehouses: jest.fn(),
         getInventorySettings: jest.fn(),
+        getPaymentLayout: jest.fn(),
         getPaymentMethods: jest.fn(),
     },
 }));
@@ -35,6 +36,12 @@ jest.mock('@/lib/api', () => ({
 const CASH_METHOD = { id: 'pm-1', name: 'Cash', type: 'Cash', is_active: true, show_on_entry: true, sort_order: 1 };
 const BKASH_METHOD = { id: 'pm-2', name: 'bKash', type: 'Mobile Wallet', is_active: true, show_on_entry: true, sort_order: 2 };
 const BANK_METHOD = { id: 'pm-3', name: 'City Bank', type: 'Bank', is_active: true, show_on_entry: true, sort_order: 3 };
+
+/** The branch offers exactly these methods, and the user's strip shows them all. */
+function offerMethods(methods: typeof CASH_METHOD[]) {
+    (api.getPaymentLayout as jest.Mock).mockResolvedValue({ customised: false, visible: methods, available: methods });
+    (api.getPaymentMethods as jest.Mock).mockResolvedValue(methods);
+}
 
 const COFFEE = {
     id: 'prod-1',
@@ -100,7 +107,7 @@ describe('NewPurchasePage', () => {
         // and the case where no picker must appear at all.
         (api.getInventoryWarehouses as jest.Mock).mockResolvedValue([MAIN_WAREHOUSE]);
         (api.getInventorySettings as jest.Mock).mockResolvedValue({ default_purchase_warehouse_id: null });
-        (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH_METHOD, BKASH_METHOD]);
+        offerMethods([CASH_METHOD, BKASH_METHOD]);
 
         Object.defineProperty(window, 'localStorage', {
             value: {
@@ -497,6 +504,7 @@ describe('NewPurchasePage', () => {
 
         it('posts what was handed over, by method', async () => {
             await billOf40();
+            expect(api.getPaymentLayout).toHaveBeenCalledWith('store-1', 'purchase');
 
             fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '25' } });
             fireEvent.change(screen.getByLabelText('bKash amount'), { target: { value: '15' } });
@@ -511,8 +519,9 @@ describe('NewPurchasePage', () => {
                         payments: [
                             // The canonical method string, not the friendly
                             // name — that is what the backend classifies on.
-                            { paymentMethod: 'Cash', amount: 25, accountId: undefined },
-                            { paymentMethod: 'Mobile Wallet', amount: 15, accountId: undefined },
+                            // The method itself goes by id, so the server posts to its account.
+                            { paymentMethod: 'Cash', paymentMethodId: 'pm-1', amount: 25, accountId: undefined },
+                            { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-2', amount: 15, accountId: undefined },
                         ],
                     }),
                 );
@@ -528,7 +537,7 @@ describe('NewPurchasePage', () => {
         };
 
         it('records the cheque the supplier was paid with', async () => {
-            (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH_METHOD, BANK_METHOD]);
+            offerMethods([CASH_METHOD, BANK_METHOD]);
             await billOf40();
 
             // Offered once money is going out on that tender, not before.
@@ -544,6 +553,7 @@ describe('NewPurchasePage', () => {
             expect((await postAndReadPayload()).payments).toEqual([
                 {
                     paymentMethod: 'Bank',
+                    paymentMethodId: 'pm-3',
                     amount: 40,
                     accountId: undefined,
                     bankName: 'City Bank',
@@ -565,6 +575,7 @@ describe('NewPurchasePage', () => {
             expect((await postAndReadPayload()).payments).toEqual([
                 expect.objectContaining({
                     paymentMethod: 'Mobile Wallet',
+                    paymentMethodId: 'pm-2',
                     amount: 40,
                     bankAccountNumber: '01711000000',
                     referenceNo: 'TRX9A7',
@@ -573,7 +584,7 @@ describe('NewPurchasePage', () => {
         });
 
         it('does not send a cheque date that was typed and then cleared', async () => {
-            (api.getPaymentMethods as jest.Mock).mockResolvedValue([CASH_METHOD, BANK_METHOD]);
+            offerMethods([CASH_METHOD, BANK_METHOD]);
             await billOf40();
 
             fireEvent.change(screen.getByLabelText('City Bank amount'), { target: { value: '40' } });

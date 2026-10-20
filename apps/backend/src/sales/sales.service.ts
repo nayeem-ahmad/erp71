@@ -25,12 +25,20 @@ import {
     voidAutoPostedVoucher,
     type AutoPostResult,
 } from '../accounting/posting.utils';
-import { classifyPaymentMode } from './classify-payment-mode';
 import { completedExchangeLinesInclude } from './open-sale-quantity';
 import { paymentRecordData } from './payment-record-data';
 import { snapshotSaleTax, type SaleTaxSnapshot } from '../mushak/sale-tax.util';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
-import { resolvePaymentMethodAccountId } from '../accounting/payment-account.util';
+import {
+    allocateTenders,
+    paymentDisplayName,
+    resolveTenders,
+    sameTenders,
+    storedToTenderInputs,
+    type ResolvedTender,
+    type StoredTender,
+    type TenderInput,
+} from '../accounting/payment-account.util';
 import { previewSaleLoyaltyRedemption, recordSaleLoyalty } from '../loyalty/loyalty-sale.utils';
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
 import { resolveSalePreviousDue } from './sale-previous-due.util';
@@ -191,9 +199,21 @@ function invoiceExtraPatch(dto: {
     };
 }
 
-/** The same tender, however it was capitalised or padded when typed. */
-function samePaymentMethod(a?: string | null, b?: string | null): boolean {
-    return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+/**
+ * A sale's payments in the order they were taken. An edit, a draft's
+ * finalize and the repost read them back this way, and a return's pre-fill
+ * refunds on the first one, so the order must not be whatever the database
+ * returns.
+ */
+const PAYMENTS_IN_ORDER = { orderBy: { created_at: 'asc' } } as const;
+
+/** A sale body's payments as `resolveTenders` takes them. */
+function tenderInputs(payments: { paymentMethod: string; paymentMethodId?: string; amount: number }[]): TenderInput[] {
+    return payments.map((payment) => ({
+        paymentMethod: payment.paymentMethod,
+        paymentMethodId: payment.paymentMethodId,
+        amount: payment.amount,
+    }));
 }
 
 /** The date a posted voucher carries, so a re-post lands in the same period. */
@@ -298,7 +318,7 @@ export class SalesService {
                     note: dto.note,
                     created_by: userId,
                     payments: prep.payments ? {
-                        create: prep.payments.map(paymentRecordData)
+                        create: prep.payments.map((payment, index) => paymentRecordData(payment, prep.tenders[index])),
                     } : undefined
                 },
             });
@@ -575,8 +595,12 @@ export class SalesService {
      * warehouse, product costs, warranty serials, totals, loyalty preview and
      * the customer's credit headroom. Shared by create() and finalizeDraft() so
      * a draft is held to exactly the same rules as a direct sale.
+     *
+     * The tenders are resolved against the sale's branch here too, one per
+     * payment row. `stored` is the rows a draft was parked with, so a tender it
+     * already carries keeps its method and account.
      */
-    private async prepareSale(tx: any, tenantId: string, dto: CreateSaleDto) {
+    private async prepareSale(tx: any, tenantId: string, dto: CreateSaleDto, stored: StoredTender[] = []) {
         const warehouses = await resolveEntryWarehouses(
             tx,
             tenantId,
@@ -706,6 +730,13 @@ export class SalesService {
             saleGoodsValue(computedTotal, dto),
         );
 
+        // What the sale and its payment rows record: everything taken, less
+        // any change handed back.
+        const payments = netOfChange(dto.payments, changeReturned);
+        const tenders = payments
+            ? await resolveTenders(tx, tenantId, dto.storeId, tenderInputs(payments), stored)
+            : [];
+
         return {
             warehouses,
             productById,
@@ -716,10 +747,10 @@ export class SalesService {
             balanceDue,
             creditCustomerDueBalance,
             tax,
-            // What the sale and its payment rows record: everything taken,
-            // less any change handed back.
             amountPaid: dto.amountPaid - changeReturned,
-            payments: netOfChange(dto.payments, changeReturned),
+            payments,
+            // One per payment row, in order.
+            tenders,
             changeReturned,
             accountPayment,
             accountCustomerName,
@@ -752,6 +783,7 @@ export class SalesService {
             changeReturned,
             accountPayment,
             accountCustomerName,
+            tenders,
         } = prep;
 
         // 3. Process Items and update stock
@@ -903,7 +935,8 @@ export class SalesService {
         // screen — its own CPY- number, its own Dr <tender> / Cr AR voucher —
         // linked back to this sale so cancelling the sale takes it back too.
         // It settles the previous due first, and anything past that leaves the
-        // customer in advance (a negative due).
+        // customer in advance (a negative due). Its tenders are what is left
+        // of each once the sale's total is taken from them in order.
         let accountReceipt: { id: string; payment_number: string; amount: number; balance_after: number } | null = null;
         if (accountPayment > 0 && dto.customerId) {
             const dueBefore = previousDue ?? 0;
@@ -936,7 +969,7 @@ export class SalesService {
                 customerId: dto.customerId,
                 customerName: accountCustomerName,
                 storeId: dto.storeId,
-                primaryPaymentMethod: dto.payments?.[0]?.paymentMethod ?? 'cash',
+                tenders: allocateTenders(tenders, computedTotal).rest,
             });
 
             accountReceipt = {
@@ -955,7 +988,7 @@ export class SalesService {
             total: Number(sale.total_amount),
             amountPaid: dto.amountPaid,
             balanceDue,
-            primaryPaymentMethod: dto.payments?.[0]?.paymentMethod ?? 'cash',
+            tenders,
         });
 
         return {
@@ -978,6 +1011,10 @@ export class SalesService {
      * after an edit, so an edited sale posts exactly as it would have been
      * posted had it been entered that way. `date` is left out at the counter,
      * where the voucher is dated today.
+     *
+     * The money side is one debit line per tender account (`tenderLegs`), each
+     * tender taking its share of the amount in order. A sale with no tenders
+     * posts the whole amount as cash, as it always has.
      */
     private async postSaleVouchers(
         tx: any,
@@ -990,19 +1027,20 @@ export class SalesService {
             total: number;
             amountPaid: number;
             balanceDue: number;
-            primaryPaymentMethod: string;
+            tenders: ResolvedTender[];
             date?: Date;
         },
     ): Promise<AutoPostResult> {
-        const { saleId, serialNumber, storeId, primaryPaymentMethod, date } = input;
+        const { saleId, serialNumber, storeId, tenders, date } = input;
 
         if (input.balanceDue <= 0.005) {
+            const { lines } = allocateTenders(tenders, input.total);
             return autoPostFromRules({
                 tx,
                 tenantId,
                 eventType: 'sale',
                 conditionKey: 'payment_mode',
-                conditionValue: classifyPaymentMode(primaryPaymentMethod),
+                conditionValue: lines[0]?.mode ?? 'cash',
                 sourceModule: 'sales',
                 sourceType: 'sale',
                 sourceId: saleId,
@@ -1011,7 +1049,7 @@ export class SalesService {
                 referenceNumber: serialNumber,
                 date,
                 storeId,
-                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+                tenderLegs: { side: 'debit', lines },
             });
         }
 
@@ -1038,14 +1076,14 @@ export class SalesService {
             // so it must post too. legKey 'paid' gives it a distinct
             // idempotency key from the credit (receivable) leg above, which
             // otherwise shares this Sale's key and silently swallowed it.
-            // The mode account is the debit leg (Dr <mode> / Cr Revenue), so
-            // a configured PaymentMethod account overrides that side.
+            // Dr each tender's account / Cr Revenue.
+            const { lines } = allocateTenders(tenders, input.amountPaid);
             await autoPostFromRules({
                 tx,
                 tenantId,
                 eventType: 'sale',
                 conditionKey: 'payment_mode',
-                conditionValue: classifyPaymentMode(primaryPaymentMethod),
+                conditionValue: lines[0]?.mode ?? 'cash',
                 sourceModule: 'sales',
                 sourceType: 'sale',
                 sourceId: saleId,
@@ -1055,7 +1093,7 @@ export class SalesService {
                 referenceNumber: serialNumber,
                 date,
                 storeId,
-                overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, primaryPaymentMethod),
+                tenderLegs: { side: 'debit', lines },
             });
         }
 
@@ -1065,8 +1103,10 @@ export class SalesService {
     /**
      * The voucher for money paid with a sale beyond its total, posted exactly
      * as a receipt taken on the customer payments screen: Dr <tender> / Cr AR,
-     * keyed to the receipt row. The tender is the sale's own, so the excess
-     * lands in the same cash, bank or wallet account as the rest of it.
+     * keyed to the receipt row. `tenders` is the overpayment: what is left of
+     * the sale's tenders once its total is taken from them (`allocateTenders`'
+     * `rest`), so each account receives exactly what was tendered on it.
+     * Without any, the rule's own account takes it, as it always has.
      */
     private async postSaleReceiptVoucher(
         tx: any,
@@ -1078,10 +1118,13 @@ export class SalesService {
             customerId: string;
             customerName: string | null;
             storeId: string;
-            primaryPaymentMethod: string;
+            tenders: ResolvedTender[];
             date?: Date;
         },
     ) {
+        // Allocated against the receipt itself, so the lines always add up to
+        // it even when the tenders and the amount paid were sent disagreeing.
+        const lines = input.tenders.length ? allocateTenders(input.tenders, input.amount).lines : null;
         await autoPostFromRules({
             tx,
             tenantId,
@@ -1098,7 +1141,7 @@ export class SalesService {
             storeId: input.storeId,
             partyType: 'CUSTOMER',
             partyId: input.customerId,
-            overrideDebitAccountId: await resolvePaymentMethodAccountId(tx, tenantId, input.primaryPaymentMethod),
+            ...(lines && { tenderLegs: { side: 'debit' as const, lines } }),
         });
     }
 
@@ -1141,6 +1184,12 @@ export class SalesService {
             if (namedWarehouseIds.some((id) => id && !usableIds.has(id))) {
                 throw new BadRequestException('Warehouse not found for this store.');
             }
+
+            // The same goes for a tender: a method another branch uses is
+            // refused now, not when the draft is completed.
+            const draftTenders = dto.payments
+                ? await resolveTenders(tx, tenantId, dto.storeId, tenderInputs(dto.payments))
+                : [];
 
             // A parked draft is picked up again later, so its quick-created
             // customer is saved with it rather than deferred to finalisation.
@@ -1203,7 +1252,7 @@ export class SalesService {
                     note: dto.note,
                     created_by: userId,
                     payments: dto.payments ? {
-                        create: dto.payments.map(paymentRecordData),
+                        create: dto.payments.map((payment, index) => paymentRecordData(payment, draftTenders[index])),
                     } : undefined,
                 },
             });
@@ -1248,7 +1297,7 @@ export class SalesService {
         const result = await this.db.$transaction(async (tx) => {
             const draft = await tx.sale.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true, payments: true },
+                include: { items: true, payments: PAYMENTS_IN_ORDER },
             });
 
             if (!draft) {
@@ -1264,10 +1313,12 @@ export class SalesService {
                 priceAtSale: Number(item.price_at_sale),
                 warehouseId: item.warehouse_id ?? undefined,
             }));
+            // A parked tender comes back with its method, so it keeps the
+            // method and account it was parked with (see prepareSale).
             const payments = dto.payments ?? draft.payments.map((p) => ({
                 paymentMethod: p.payment_method,
+                paymentMethodId: p.payment_method_id ?? undefined,
                 amount: Number(p.amount),
-                accountId: p.account_id ?? undefined,
                 // The cheque the draft was parked with is the cheque the sale
                 // is posted with; only an explicit `dto.payments` replaces it.
                 bankName: p.bank_name ?? undefined,
@@ -1326,7 +1377,7 @@ export class SalesService {
             };
 
             // Validate everything before a single row changes.
-            const prep = await this.prepareSale(tx, tenantId, saleDto);
+            const prep = await this.prepareSale(tx, tenantId, saleDto, draft.payments);
             const finalizeSession = await this.resolveCashierSession(tx, tenantId, userId, saleDto, {
                 enforce: false,
             });
@@ -1335,9 +1386,9 @@ export class SalesService {
             // applySalePostings recreates the items (with unit cost attached).
             await tx.saleItem.deleteMany({ where: { sale_id: id } });
             await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
-            for (const p of prep.payments ?? []) {
+            for (const [index, p] of (prep.payments ?? []).entries()) {
                 await tx.paymentRecord.create({
-                    data: { sale_id: id, ...paymentRecordData(p) },
+                    data: { sale_id: id, ...paymentRecordData(p, prep.tenders[index]) },
                 });
             }
 
@@ -1535,7 +1586,7 @@ export class SalesService {
             where: { id, tenant_id: tenantId },
             include: {
                 items: { include: { product: true, returns: true, exchangeLines: completedExchangeLinesInclude } },
-                payments: true,
+                payments: PAYMENTS_IN_ORDER,
                 customer: true,
                 // Just enough to name the document this entry was converted
                 // from and link back to it.
@@ -1614,7 +1665,7 @@ export class SalesService {
         return this.db.$transaction(async (tx) => {
             const sale = await tx.sale.findFirst({
                 where: { id, tenant_id: tenantId },
-                include: { items: true, payments: true },
+                include: { items: true, payments: PAYMENTS_IN_ORDER },
             });
 
             if (!sale) {
@@ -1641,6 +1692,20 @@ export class SalesService {
                     'Finalize this draft instead of changing its status directly.',
                 );
             }
+
+            // The tenders, resolved against the sale's own branch before
+            // anything is written. A tender the sale already carries keeps its
+            // method and the account it was saved with, wherever the method
+            // has moved since; a new one must be offered at the branch. The
+            // stored ones are resolved too (a draft never posted, so it needs
+            // none), so an edit's tenders are compared method for method with
+            // the ones it replaces — old rows carry no method id.
+            const storedTenders = isDraft
+                ? []
+                : await resolveTenders(tx, tenantId, sale.store_id, storedToTenderInputs(sale.payments), sale.payments);
+            const tenders = dto.payments
+                ? await resolveTenders(tx, tenantId, sale.store_id, tenderInputs(dto.payments), sale.payments)
+                : storedTenders;
 
             // Set when the lines are replaced, which is the only edit that
             // re-posts stock and therefore the only one that can move the sale
@@ -1765,9 +1830,9 @@ export class SalesService {
             // 2. If payments are being replaced
             if (dto.payments) {
                 await tx.paymentRecord.deleteMany({ where: { sale_id: id } });
-                for (const p of dto.payments) {
+                for (const [index, p] of dto.payments.entries()) {
                     await tx.paymentRecord.create({
-                        data: { sale_id: id, ...paymentRecordData(p) },
+                        data: { sale_id: id, ...paymentRecordData(p, tenders[index]) },
                     });
                 }
             }
@@ -1817,13 +1882,11 @@ export class SalesService {
             // 5. The customer's account and the books follow the edit (a draft
             // has posted to neither).
             if (!isDraft) {
-                await this.restateSaleAccount(tx, tenantId, userId, sale, {
+                await this.restateSaleAccount(tx, tenantId, userId, { ...sale, tenders: storedTenders }, {
                     customerId: dto.customerId !== undefined ? dto.customerId || null : sale.customer_id,
                     total: totalAmount ?? Number(sale.total_amount),
                     amountPaid: amountPaid ?? Number(sale.amount_paid ?? 0),
-                    primaryPaymentMethod: dto.payments
-                        ? dto.payments[0]?.paymentMethod ?? 'cash'
-                        : sale.payments[0]?.payment_method ?? 'cash',
+                    tenders,
                 });
             }
 
@@ -1892,17 +1955,15 @@ export class SalesService {
             amount_paid?: unknown;
             created_at: Date;
             sale_date?: Date | null;
-            payments: { payment_method: string }[];
+            /** The tenders it carries now, resolved. */
+            tenders: ResolvedTender[];
         },
-        next: { customerId: string | null; total: number; amountPaid: number; primaryPaymentMethod: string },
+        next: { customerId: string | null; total: number; amountPaid: number; tenders: ResolvedTender[] },
     ) {
         const oldTotal = Number(sale.total_amount);
         const oldPaid = Number(sale.amount_paid ?? 0);
         const customerChanged = next.customerId !== sale.customer_id;
-        const tenderChanged = !samePaymentMethod(
-            next.primaryPaymentMethod,
-            sale.payments[0]?.payment_method ?? 'cash',
-        );
+        const tenderChanged = !sameTenders(next.tenders, sale.tenders);
         const moneyChanged = Math.abs(next.total - oldTotal) > 0.005
             || Math.abs(next.amountPaid - oldPaid) > 0.005
             || (next.amountPaid > 0.005 && tenderChanged);
@@ -1978,7 +2039,7 @@ export class SalesService {
                 postedAt: ownRows[0]?.created_at ?? sale.created_at,
                 credit: isHolder ? balanceDue : 0,
                 receipt: isHolder ? accountPayment : 0,
-                primaryPaymentMethod: next.primaryPaymentMethod,
+                tenders: allocateTenders(next.tenders, next.total).rest,
                 tenderChanged,
                 voucherDate,
             });
@@ -1997,7 +2058,7 @@ export class SalesService {
             total: next.total,
             amountPaid: next.amountPaid,
             balanceDue,
-            primaryPaymentMethod: next.primaryPaymentMethod,
+            tenders: next.tenders,
             date: voucherDate,
         });
     }
@@ -2019,7 +2080,8 @@ export class SalesService {
             postedAt: Date;
             credit: number;
             receipt: number;
-            primaryPaymentMethod: string;
+            /** What was paid beyond the total, by tender: the receipt voucher's lines. */
+            tenders: ResolvedTender[];
             tenderChanged: boolean;
             voucherDate: Date;
         },
@@ -2094,7 +2156,7 @@ export class SalesService {
                 customerId,
                 customerName: customer.name,
                 storeId: sale.store_id,
-                primaryPaymentMethod: input.primaryPaymentMethod,
+                tenders: input.tenders,
             };
             if (receiptRow) {
                 await tx.customerCreditTransaction.update({
@@ -2433,7 +2495,11 @@ export class SalesService {
 
         const preparers = await loadPreparerNames(this.db, [sale]);
 
-        return { sale: { ...sale, previous_due: previousDue, prepared_by: preparerOf(preparers, sale) }, tenant };
+        // The invoice prints each payment's `payment_method`; it carries the
+        // method's name ("bKash") where one was saved, not the type it shares.
+        const payments = sale.payments.map((p) => ({ ...p, payment_method: paymentDisplayName(p) }));
+
+        return { sale: { ...sale, payments, previous_due: previousDue, prepared_by: preparerOf(preparers, sale) }, tenant };
     }
 
     private validateWarrantySerials(

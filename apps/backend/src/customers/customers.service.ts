@@ -934,8 +934,11 @@ export class CustomersService {
         const typedRename = typedSerial(dto.paymentNumber);
         const renamedTo = typedRename && canonicalSerial(typedRename, SERIAL_SERIES);
         const newNumber = renamedTo && renamedTo !== payment.payment_number ? renamedTo : payment.payment_number;
-        const newMethod = dto.paymentMethodId
-            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+        // Resending the stored method is no change: it keeps posting as it was
+        // saved, and is not branch-checked (it may since have been switched
+        // off or withdrawn from the branch).
+        const newMethod = dto.paymentMethodId && dto.paymentMethodId !== payment.payment_method_id
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId, payment.store_id)
             : null;
 
         return this.db.$transaction(async (tx) => {
@@ -1070,7 +1073,7 @@ export class CustomersService {
         // Kept outside the transaction so a unique-index race can name it.
         let serial = typed;
         const method = dto.paymentMethodId
-            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId)
+            ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId, customer.store_id)
             : null;
 
         return this.db.$transaction(async (tx) => {

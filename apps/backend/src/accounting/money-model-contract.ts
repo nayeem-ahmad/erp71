@@ -89,6 +89,8 @@ export const MONEY_MODEL_CONTRACT: MoneyModelEntry[] = [
     { model: 'ProductionJobCost', exempt: 'Cost line of a ProductionJob; periodic inventory reclassification.' },
     { model: 'PaymentRecord', exempt: 'Payment-method breakdown line of a Sale; the Sale posts.' },
     { model: 'PurchasePayment', exempt: 'Payment-method breakdown line of a Purchase; the bill\'s paid leg (supplier_payment) posts the total.' },
+    { model: 'SalesReturnPayment', exempt: 'Refund-tender breakdown line of a SalesReturn; the return posts (sale_return), its refund leg split per tender.' },
+    { model: 'PurchaseReturnPayment', exempt: 'Money-received breakdown line of a PurchaseReturn; the return\'s received leg (supplier_payment) posts the total, split per tender.' },
     { model: 'SupplierPaymentAllocation', exempt: 'Allocation of a supplier payment to bills; the payment (SupplierCreditTransaction) posts.' },
 
     // ── Exempt: catalog / pricing / config (not a transaction) ───────────────

@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: "Ajouter un mode de paiement",
         noPaymentsRecorded: "Aucun paiement enregistré.",
         paymentExceedsTotal: "Le paiement ne peut pas dépasser le total de l'achat.",
+        paymentLayout: {
+            customise: "Personnaliser",
+            title: "Modes de paiement sur cet écran",
+            reset: "Rétablir par défaut",
+            save: "Enregistrer",
+            cancel: "Annuler",
+            moveUp: "Monter {method}",
+            moveDown: "Descendre {method}",
+            showMethod: "Afficher {method}",
+            saveFailed: "Impossible d'enregistrer la disposition des paiements",
+        },
         paymentInstrument: {
             toggle: "+ Détails banque / chèque",
             toggleAlt: "+ Détails du paiement",
@@ -362,6 +373,11 @@ export const purchasesMessages = {
             unknownItem: "Article inconnu",
             createReturn: "Créer le retour fournisseur",
             creating: "Création...",
+        },
+        refund: {
+            title: "Argent reçu du fournisseur",
+            keepingDue: "Imputé sur les dettes fournisseurs {amount}",
+            needsSupplier: "Encaissez le montant total ou choisissez l'achat d'un fournisseur",
         },
         detail: {
             loadFailed: "Impossible de charger le retour fournisseur",

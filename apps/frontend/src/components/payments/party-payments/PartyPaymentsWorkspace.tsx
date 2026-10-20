@@ -54,10 +54,12 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
     const searchParams = useSearchParams();
     const presetPartyId = searchParams.get(adapter.partyParam) ?? '';
     const docked = useMediaQuery('(min-width: 1280px)');
-    const { methods } = usePaymentMethods();
     // Payments belong to their party's branch; the page follows the header
     // branch, or the one picked here.
     const branch = useBranchScope();
+    // The method filter lists what the page's branch offers; the entry form
+    // fetches its own only when its party sits at another branch.
+    const { methods } = usePaymentMethods(branch.apiStoreId);
 
     const [payments, setPayments] = useState<PartyPayment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -383,6 +385,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                                 partiesStatus={partiesStatus}
                                 onRetryParties={() => void loadParties()}
                                 methods={methods}
+                                methodsStoreId={branch.apiStoreId}
                                 onSaved={handleCreated}
                                 onCancel={closePanel}
                             />
@@ -399,6 +402,7 @@ export function PartyPaymentsWorkspace({ adapter }: { adapter: PartyPaymentsAdap
                                 partiesStatus={partiesStatus}
                                 onRetryParties={() => void loadParties()}
                                 methods={methods}
+                                methodsStoreId={branch.apiStoreId}
                                 onSaved={(saved) => handleUpdated(current, saved)}
                                 onCancel={() => setPanel({ kind: 'view', payment: current })}
                                 onDuplicate={(payment) => openCreate(payment)}

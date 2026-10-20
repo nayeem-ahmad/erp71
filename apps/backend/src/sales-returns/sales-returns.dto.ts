@@ -1,4 +1,6 @@
-import { IsString, IsArray, IsNumber, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsString, IsArray, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { ReturnPaymentDto } from '../common/return-payment.dto';
 
 export class CreateReturnItemDto {
     /** Required when the return names a sale; omitted for a standalone return. */
@@ -54,6 +56,18 @@ export class CreateSalesReturnDto {
     @IsOptional()
     @IsString()
     reason?: string;
+
+    /**
+     * How the refund was paid, split across methods. What they leave of the
+     * total comes off the sale customer's due. Omitted (older clients, the
+     * mobile app, imports), the refund follows the original sale as it always
+     * has.
+     */
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ReturnPaymentDto)
+    payments?: ReturnPaymentDto[];
 }
 
 export class UpdateReturnItemDto {
@@ -95,4 +109,14 @@ export class UpdateSalesReturnDto {
     @IsOptional()
     @IsArray()
     items?: UpdateReturnItemDto[];
+
+    /**
+     * Replaces the refund tenders. Omitted on a return saved with tenders, an
+     * edit to its lines keeps the ones it has.
+     */
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ReturnPaymentDto)
+    payments?: ReturnPaymentDto[];
 }

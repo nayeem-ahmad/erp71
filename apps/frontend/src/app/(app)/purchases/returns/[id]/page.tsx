@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil, Printer, Receipt, Save, Trash2, Undo2, X } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -14,6 +14,10 @@ import type { HeaderContext } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
+import type { Payment } from '@/lib/hooks/useNewSaleCart';
+import { paymentsFromRecords, returnPaymentsPayload } from '@/lib/return-refund-prefill';
+import PurchasePaymentSection from '../../components/PurchasePaymentSection';
 
 interface EditItem {
     purchaseItemId: string;
@@ -39,6 +43,11 @@ function PurchaseReturnDetailPageContent() {
     const [editReferenceNumber, setEditReferenceNumber] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [editItems, setEditItems] = useState<EditItem[]>([]);
+    // The money received as recorded, until the user changes it; `paymentsTouched`
+    // says whether they have.
+    const [editPayments, setEditPayments] = useState<Payment[]>([]);
+    const [paymentsTouched, setPaymentsTouched] = useState(false);
+    const recordedPayments = useMemo(() => paymentsFromRecords(purchaseReturn?.payments), [purchaseReturn]);
     const isEditMode = searchParams.get('edit') === 'true';
     const shouldAutoPrint = searchParams.get('print') === 'true';
 
@@ -78,6 +87,8 @@ function PurchaseReturnDetailPageContent() {
         });
 
         setEditItems(items);
+        setEditPayments(recordedPayments);
+        setPaymentsTouched(false);
     }, [isEditMode, purchaseReturn]);
 
     useEffect(() => {
@@ -117,6 +128,19 @@ function PurchaseReturnDetailPageContent() {
 
     const editTotal = editItems.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
 
+    // A return saved before money received was recorded has no tenders, which is
+    // not the same as receiving nothing — its edit leaves that alone unless the
+    // user sets one. A recorded one always sends its strip back: the server
+    // treats unchanged tenders as notes-only.
+    const sendsPayments = !!purchaseReturn?.tenders_recorded || paymentsTouched;
+    // What the tenders leave of the total comes off the supplier's payable, so
+    // without a supplier they must cover all of it; and never more than it.
+    const hasSupplier = !!(purchaseReturn?.purchase?.supplier_id || purchaseReturn?.supplier_id || purchaseReturn?.supplier);
+    const editReceived = editPayments.reduce((sum, p) => sum + p.amount, 0);
+    const refundBalanced = !sendsPayments || (hasSupplier
+        ? editReceived - editTotal < 0.01
+        : Math.abs(editTotal - editReceived) < 0.01);
+
     const handleSave = async () => {
         if (!purchaseReturn) {
             return;
@@ -125,6 +149,15 @@ function PurchaseReturnDetailPageContent() {
         const itemsToSave = editItems.filter((item) => item.quantity > 0);
         if (itemsToSave.length === 0) {
             window.alert('At least one return line must remain with quantity greater than zero.');
+            return;
+        }
+
+        if (!refundBalanced) {
+            toast.error(
+                !hasSupplier && editReceived < editTotal
+                    ? t.purchaseReturns.refund.needsSupplier
+                    : 'The amount received is more than the return total.',
+            );
             return;
         }
 
@@ -137,13 +170,15 @@ function PurchaseReturnDetailPageContent() {
                     purchaseItemId: item.purchaseItemId,
                     quantity: item.quantity,
                 })),
+                ...(sendsPayments ? { payments: returnPaymentsPayload(editPayments) } : {}),
             });
 
             await loadPurchaseReturn(purchaseReturn.id);
             router.push(`/purchases/returns/${purchaseReturn.id}`);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update purchase return', error);
-            window.alert('Failed to save purchase return. Please review the changes and try again.');
+            // The server says why — an imported return, more received than the total.
+            toast.error(error?.message || 'Failed to save purchase return. Please review the changes and try again.');
         } finally {
             setSaving(false);
         }
@@ -279,7 +314,7 @@ function PurchaseReturnDetailPageContent() {
                         <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <button
                                 onClick={handleSave}
-                                disabled={saving || editItems.filter((item) => item.quantity > 0).length === 0}
+                                disabled={saving || editItems.filter((item) => item.quantity > 0).length === 0 || !refundBalanced}
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 rtl:space-x-reverse transition-all disabled:opacity-50"
                             >
                                 <Save className="w-3.5 h-3.5" />
@@ -478,6 +513,28 @@ function PurchaseReturnDetailPageContent() {
                         </div>
                     )}
                 </div>
+
+                {/* Money received from the supplier on this return, and on which method. */}
+                {(isEditMode || recordedPayments.length > 0) && (
+                    <div className="bg-white rounded-lg shadow-sm p-6">
+                        <PurchasePaymentSection
+                            context="purchase_return"
+                            storeId={purchaseReturn.store_id}
+                            payments={isEditMode ? editPayments : recordedPayments}
+                            total={isEditMode ? editTotal : Number(purchaseReturn.total_amount || 0)}
+                            onPaymentChange={(next) => {
+                                setPaymentsTouched(true);
+                                setEditPayments(next);
+                            }}
+                            readOnly={!isEditMode}
+                            blockedReason={hasSupplier ? undefined : t.purchaseReturns.refund.needsSupplier}
+                            labels={{
+                                title: t.purchaseReturns.refund.title,
+                                keepingDue: t.purchaseReturns.refund.keepingDue,
+                            }}
+                        />
+                    </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-white p-5 rounded-lg shadow-sm">

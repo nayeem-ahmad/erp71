@@ -1,14 +1,26 @@
 'use client';
 
-import DocumentPaymentSection from '@/components/document-entry/PaymentSection';
+import type { PaymentLayoutContext } from '@erp71/shared-types';
+import DocumentPaymentSection, { type PaymentSectionLabels } from '@/components/document-entry/PaymentSection';
+import type { PaymentMethodRow } from '@/lib/api';
 import type { Payment } from '@/lib/hooks/useNewSaleCart';
 import { useI18n } from '@/lib/i18n';
 
 interface PurchasePaymentSectionProps {
+    /** Which of the user's layouts to show (see the shared strip). */
+    context: PaymentLayoutContext;
+    /** The bill's branch — the methods offered there are the ones shown. */
+    storeId: string;
     payments: Payment[];
     total: number;
     onPaymentChange: (payments: Payment[]) => void;
     readOnly?: boolean;
+    /** Wording for a screen with its own idea of the unpaid rest, e.g. a purchase return. */
+    labels?: Partial<PaymentSectionLabels>;
+    /** Why the unpaid rest may not stand (a return with no supplier); see the shared strip. */
+    blockedReason?: string;
+    /** See the shared strip: told which methods this user sees, once the layout lands. */
+    onLayoutReady?: (visible: PaymentMethodRow[], available: PaymentMethodRow[]) => void;
 }
 
 /**
@@ -26,23 +38,33 @@ interface PurchasePaymentSectionProps {
  * paid by one. They are stored per tender on the bill's `PurchasePayment` rows.
  */
 export default function PurchasePaymentSection({
+    context,
+    storeId,
     payments,
     total,
     onPaymentChange,
     readOnly = false,
+    labels,
+    blockedReason,
+    onLayoutReady,
 }: PurchasePaymentSectionProps) {
     const { t, locale } = useI18n();
     const copy = t.purchaseShared;
     const instrument = copy.paymentInstrument;
+    const layout = copy.paymentLayout;
 
     return (
         <DocumentPaymentSection
+            context={context}
+            storeId={storeId}
             payments={payments}
             total={total}
             onPaymentChange={onPaymentChange}
             readOnly={readOnly}
             locale={locale}
             captureInstrument
+            blockedReason={blockedReason}
+            onLayoutReady={onLayoutReady}
             labels={{
                 title: copy.payment,
                 settled: copy.paymentSettled,
@@ -54,6 +76,15 @@ export default function PurchasePaymentSection({
                 addMethod: copy.addPaymentMethodOption,
                 addMethodAria: copy.addPaymentMethod,
                 noPayments: copy.noPaymentsRecorded,
+                customise: layout.customise,
+                customiseTitle: layout.title,
+                resetLayout: layout.reset,
+                saveLayout: layout.save,
+                cancelLayout: layout.cancel,
+                moveUp: layout.moveUp,
+                moveDown: layout.moveDown,
+                showMethod: layout.showMethod,
+                layoutSaveFailed: layout.saveFailed,
                 instrumentToggle: instrument.toggle,
                 instrumentToggleAlt: instrument.toggleAlt,
                 instrumentBank: instrument.bank,
@@ -66,6 +97,7 @@ export default function PurchasePaymentSection({
                 instrumentApprovalNo: instrument.approvalNo,
                 instrumentTransactionId: instrument.transactionId,
                 instrumentPaymentDate: instrument.paymentDate,
+                ...labels,
             }}
         />
     );

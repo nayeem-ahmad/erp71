@@ -45,6 +45,8 @@ export interface PrintablePurchase {
     }[];
     payments?: {
         payment_method?: string;
+        /** The method's saved name ("bKash"); absent on a row saved before methods were named. */
+        payment_method_name?: string | null;
         amount: string | number;
         bank_name?: string | null;
         bank_branch?: string | null;
@@ -181,7 +183,7 @@ export function printPurchaseInvoiceFromRecord(
                 unitCost: money(item.unit_cost),
             })),
             payments: (purchase.payments ?? []).map((p) => ({
-                method: p.payment_method ?? 'OTHER',
+                method: p.payment_method_name ?? p.payment_method ?? 'OTHER',
                 amount: money(p.amount),
                 reference: instrumentSummary(instrumentFromRecord(p)) || undefined,
             })),

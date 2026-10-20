@@ -87,6 +87,30 @@ export interface AutoPostInput {
      */
     overrideDebitAccountId?: string;
     overrideCreditAccountId?: string;
+    /**
+     * Replaces the rule's single cash/mode leg with one line per account, so a
+     * split tender (Cash 1000 + bKash 100) posts each part where it went, in one
+     * voucher on the same idempotency key.
+     *
+     * `side` is the tender side: 'debit' for money coming in, 'credit' for money
+     * going out. The rule is still looked up from `conditionValue` and supplies
+     * the opposite side's account (Sales Revenue, Purchase Payable…) and the
+     * voucher type. The override inputs are for callers without `tenderLegs`
+     * and are not consulted here.
+     *
+     * A line without `accountId` takes the tender-side account of the rule for
+     * its own `mode`, else the found rule's. Lines on one account merge, zero
+     * lines drop, and the lines must sum to `amount` (within half a paisa) or the
+     * posting fails AUTO_POSTING_TENDER_SUM_MISMATCH.
+     */
+    tenderLegs?: { side: 'debit' | 'credit'; lines: TenderLegLine[] };
+}
+
+/** One tender's share of a posting; see `AutoPostInput.tenderLegs`. */
+export interface TenderLegLine {
+    accountId?: string | null;
+    mode: string;
+    amount: number;
 }
 
 /** The idempotency key for a posting, optionally disambiguated by leg. */
@@ -394,44 +418,54 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
         return { postingStatus: 'skipped' };
     }
 
-    // A PaymentMethod override replaces the rule's account on the cash/mode leg.
-    const debitAccountId = input.overrideDebitAccountId ?? postingRule.debit_account_id;
-    const creditAccountId = input.overrideCreditAccountId ?? postingRule.credit_account_id;
+    let details: Prisma.VoucherDetailUncheckedCreateWithoutVoucherInput[];
+    if (input.tenderLegs) {
+        details = await tenderLegDetails(input, input.tenderLegs, postingRule, conditionKey, postingEvent.id);
+    } else {
+        // A PaymentMethod override replaces the rule's account on the cash/mode leg.
+        const debitAccountId = input.overrideDebitAccountId ?? postingRule.debit_account_id;
+        const creditAccountId = input.overrideCreditAccountId ?? postingRule.credit_account_id;
 
-    const accounts = await input.tx.account.findMany({
-        where: {
-            tenant_id: input.tenantId,
-            id: { in: [debitAccountId, creditAccountId] },
-        },
-        select: { id: true, party_type: true },
-    });
-
-    // length !== 2 also catches an override account that is not the tenant's, and
-    // === catches an override that collapses both legs onto one account.
-    if (accounts.length !== 2 || debitAccountId === creditAccountId) {
-        await input.tx.postingEvent.update({
-            where: { id: postingEvent.id },
-            data: {
-                status: 'failed',
-                last_error: 'AUTO_POSTING_ACCOUNT_INVALID',
+        const accounts = await input.tx.account.findMany({
+            where: {
+                tenant_id: input.tenantId,
+                id: { in: [debitAccountId, creditAccountId] },
             },
+            select: { id: true, party_type: true },
         });
-        throw new BadRequestException('AUTO_POSTING_ACCOUNT_INVALID');
+
+        // length !== 2 also catches an override account that is not the tenant's, and
+        // === catches an override that collapses both legs onto one account.
+        if (accounts.length !== 2 || debitAccountId === creditAccountId) {
+            await input.tx.postingEvent.update({
+                where: { id: postingEvent.id },
+                data: {
+                    status: 'failed',
+                    last_error: 'AUTO_POSTING_ACCOUNT_INVALID',
+                },
+            });
+            throw new BadRequestException('AUTO_POSTING_ACCOUNT_INVALID');
+        }
+
+        const partyFieldsFor = partyTagger(input, accounts);
+        details = [
+            {
+                account_id: debitAccountId,
+                debit_amount: new Prisma.Decimal(input.amount),
+                credit_amount: new Prisma.Decimal(0),
+                ...partyFieldsFor(debitAccountId),
+            },
+            {
+                account_id: creditAccountId,
+                debit_amount: new Prisma.Decimal(0),
+                credit_amount: new Prisma.Decimal(input.amount),
+                ...partyFieldsFor(creditAccountId),
+            },
+        ];
     }
 
     const voucherType = resolveVoucherType(input.eventType, conditionKey, conditionValue);
     const voucherNumber = await generateVoucherNumber(input.tx, input.tenantId, voucherType);
-
-    // Tag whichever leg hits the control account of the passed party type. Only
-    // that leg — the cash/revenue side must stay party-less so it does not pollute
-    // an unrelated account's subsidiary ledger. If neither account matches (no
-    // party passed, or the rule points at a non-control account), both legs are
-    // untagged and the posting behaves exactly as before.
-    const partyTypeByAccount = new Map(accounts.map((account) => [account.id, account.party_type]));
-    const partyFieldsFor = (accountId: string) =>
-        input.partyId && input.partyType && partyTypeByAccount.get(accountId) === input.partyType
-            ? { party_type: input.partyType, party_id: input.partyId }
-            : {};
 
     // Vouchers other modules post automatically clear approval on their own
     // unless the tenant explicitly asked for them to queue too — see
@@ -456,22 +490,7 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
             store_id: input.storeId ?? null,
             attribution: resolveVoucherAttribution(input),
             counterparty_store_id: input.counterpartyStoreId ?? null,
-            details: {
-                create: [
-                    {
-                        account_id: debitAccountId,
-                        debit_amount: new Prisma.Decimal(input.amount),
-                        credit_amount: new Prisma.Decimal(0),
-                        ...partyFieldsFor(debitAccountId),
-                    },
-                    {
-                        account_id: creditAccountId,
-                        debit_amount: new Prisma.Decimal(0),
-                        credit_amount: new Prisma.Decimal(input.amount),
-                        ...partyFieldsFor(creditAccountId),
-                    },
-                ],
-            },
+            details: { create: details },
         },
     });
 
@@ -490,6 +509,119 @@ export async function autoPostFromRules(input: AutoPostInput): Promise<AutoPostR
         voucherNumber: voucher.voucher_number,
         voucherType: voucher.voucher_type,
     };
+}
+
+/**
+ * Tag whichever leg hits the control account of the passed party type. Only
+ * that leg — the cash/revenue side must stay party-less so it does not pollute
+ * an unrelated account's subsidiary ledger. If no account matches (no party
+ * passed, or the rule points at a non-control account), every leg is untagged
+ * and the posting behaves exactly as before.
+ */
+function partyTagger(input: AutoPostInput, accounts: { id: string; party_type: PartyType | null }[]) {
+    const partyTypeByAccount = new Map(accounts.map((account) => [account.id, account.party_type]));
+    return (accountId: string) =>
+        input.partyId && input.partyType && partyTypeByAccount.get(accountId) === input.partyType
+            ? { party_type: input.partyType, party_id: input.partyId }
+            : {};
+}
+
+/**
+ * The detail rows of a split-tender posting: one per tender account, merged,
+ * plus the rule's opposite account for the total. See `AutoPostInput.tenderLegs`.
+ */
+async function tenderLegDetails(
+    input: AutoPostInput,
+    tenderLegs: NonNullable<AutoPostInput['tenderLegs']>,
+    rule: { debit_account_id: string; credit_account_id: string },
+    conditionKey: NonNullable<AutoPostInput['conditionKey']>,
+    postingEventId: string,
+): Promise<Prisma.VoucherDetailUncheckedCreateWithoutVoucherInput[]> {
+    const fail = async (code: string): Promise<never> => {
+        await input.tx.postingEvent.update({
+            where: { id: postingEventId },
+            data: { status: 'failed', last_error: code },
+        });
+        throw new BadRequestException(code);
+    };
+
+    const onDebit = tenderLegs.side === 'debit';
+    const tenderSideOf = (r: { debit_account_id: string; credit_account_id: string }) =>
+        (onDebit ? r.debit_account_id : r.credit_account_id);
+    const oppositeAccountId = onDebit ? rule.credit_account_id : rule.debit_account_id;
+
+    // An unlinked line posts where its own mode's rule would: an unlinked bKash
+    // tender to bKash Account even when the voucher's rule is cash's. One lookup
+    // per distinct mode.
+    const accountByMode = new Map<string, string>();
+    const accountFor = async (line: TenderLegLine): Promise<string> => {
+        if (line.accountId) return line.accountId;
+        const cached = accountByMode.get(line.mode);
+        if (cached) return cached;
+        const modeRule = await input.tx.postingRule.findFirst({
+            where: {
+                tenant_id: input.tenantId,
+                event_type: input.eventType,
+                is_active: true,
+                condition_key: conditionKey,
+                condition_value: line.mode,
+            },
+            orderBy: [{ priority: 'asc' }, { updated_at: 'desc' }],
+        });
+        const accountId = tenderSideOf(modeRule ?? rule);
+        accountByMode.set(line.mode, accountId);
+        return accountId;
+    };
+
+    // Decimal, not float, so 0.1 + 0.2 sums to exactly 0.3.
+    const merged = new Map<string, Prisma.Decimal>();
+    for (const line of tenderLegs.lines) {
+        const amount = new Prisma.Decimal(line.amount);
+        if (amount.isZero()) continue;
+        const accountId = await accountFor(line);
+        merged.set(accountId, (merged.get(accountId) ?? new Prisma.Decimal(0)).plus(amount));
+    }
+    const tenderRows = [...merged]
+        .map(([accountId, amount]) => ({ accountId, amount: amount.toDecimalPlaces(2) }))
+        .filter((row) => row.amount.greaterThan(0));
+    const total = tenderRows.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
+
+    if (total.minus(input.amount).abs().greaterThan(0.005)) {
+        await fail('AUTO_POSTING_TENDER_SUM_MISMATCH');
+    }
+
+    // Every tender account must be the tenant's, and none may be the opposite
+    // account: a method linked to Sales Revenue would post a sale against itself.
+    const tenderAccountIds = tenderRows.map((row) => row.accountId);
+    const accounts = await input.tx.account.findMany({
+        where: {
+            tenant_id: input.tenantId,
+            id: { in: [...tenderAccountIds, oppositeAccountId] },
+        },
+        select: { id: true, party_type: true },
+    });
+    if (accounts.length !== tenderAccountIds.length + 1 || tenderAccountIds.includes(oppositeAccountId)) {
+        await fail('AUTO_POSTING_ACCOUNT_INVALID');
+    }
+
+    const partyFieldsFor = partyTagger(input, accounts);
+    const zero = new Prisma.Decimal(0);
+    const tenderDetails = tenderRows.map((row) => ({
+        account_id: row.accountId,
+        debit_amount: onDebit ? row.amount : zero,
+        credit_amount: onDebit ? zero : row.amount,
+        ...partyFieldsFor(row.accountId),
+    }));
+    // The opposite row carries the written total rather than `input.amount`, so
+    // the voucher balances to the paisa even when the two differ by float noise.
+    const oppositeDetail = {
+        account_id: oppositeAccountId,
+        debit_amount: onDebit ? zero : total,
+        credit_amount: onDebit ? total : zero,
+        ...partyFieldsFor(oppositeAccountId),
+    };
+    // Debit rows first, the order every two-line voucher has been written in.
+    return onDebit ? [...tenderDetails, oppositeDetail] : [oppositeDetail, ...tenderDetails];
 }
 
 export interface MultiLegInput {

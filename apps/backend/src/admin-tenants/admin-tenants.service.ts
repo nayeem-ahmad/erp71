@@ -8,7 +8,7 @@ import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
-import { bootstrapDefaultAccountingForTenant, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
+import { bootstrapDefaultAccountingForTenant, linkDefaultPaymentMethodAccounts, seedBusinessTypeTemplate, seedDefaultLeadTaxonomy, seedDefaultPaymentMethods, seedDefaultTenantRoles } from '@erp71/database';
 import {
     BUSINESS_TYPES_WITH_TEMPLATE,
     DEFAULT_MOBILE_COUNTRY_CODE,
@@ -1037,6 +1037,7 @@ export class AdminTenantsService {
             });
 
             await bootstrapDefaultAccountingForTenant(tx, tenant.id);
+            await linkDefaultPaymentMethodAccounts(tx, tenant.id);
 
             return { tenant, store };
         });

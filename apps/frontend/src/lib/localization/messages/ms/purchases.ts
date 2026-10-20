@@ -57,6 +57,17 @@ export const purchasesMessages = {
             addPaymentMethod: 'Tambah kaedah pembayaran',
             noPaymentsRecorded: 'Tiada pembayaran direkodkan.',
             paymentExceedsTotal: 'Pembayaran tidak boleh melebihi jumlah belian.',
+            paymentLayout: {
+                customise: 'Suaikan',
+                title: 'Kaedah pembayaran pada skrin ini',
+                reset: 'Tetap semula kepada lalai',
+                save: 'Simpan',
+                cancel: 'Batal',
+                moveUp: 'Alih {method} ke atas',
+                moveDown: 'Alih {method} ke bawah',
+                showMethod: 'Papar {method}',
+                saveFailed: 'Tidak dapat menyimpan susunan pembayaran',
+            },
             paymentInstrument: {
                 toggle: '+ Butiran bank / cek',
                 toggleAlt: '+ Butiran bayaran',
@@ -362,6 +373,11 @@ export const purchasesMessages = {
                 unknownItem: 'Item tidak diketahui',
                 createReturn: 'Cipta Pulangan Pembelian',
                 creating: 'Mencipta...',
+            },
+            refund: {
+                title: 'Wang diterima daripada pembekal',
+                keepingDue: 'Dilaraskan terhadap hutang belum bayar {amount}',
+                needsSupplier: 'Terima jumlah penuh, atau pilih pembelian pembekal',
             },
             detail: {
                 loadFailed: 'Gagal memuatkan pulangan pembelian',

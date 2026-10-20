@@ -87,9 +87,10 @@ describe('PurchasesService', () => {
                 findUnique: jest.fn().mockResolvedValue(null),
             },
             paymentMethod: {
-                // No tenant-configured GL account for the method, so the
-                // supplier_payment rule's own credit account stands.
-                findFirst: jest.fn().mockResolvedValue(null),
+                // No tenant payment methods, so a tender resolves to no linked
+                // account and the supplier_payment rule's own credit account
+                // stands.
+                findMany: jest.fn().mockResolvedValue([]),
             },
             purchase: {
                 count: jest.fn(),
@@ -354,6 +355,15 @@ describe('PurchasesService', () => {
         await expect(service.findOne('tenant-1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+    it('returns the payments in the order they were saved, which edits and return pre-fills read', async () => {
+        db.postingEvent = { findMany: jest.fn().mockResolvedValue([]) };
+        db.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', paid_amount: 0, items: [], payments: [], paymentAllocations: [] });
+
+        await service.findOne('tenant-1', 'purchase-1');
+
+        expect(db.purchase.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+    });
+
     it('splits what was paid with the bill from what was paid on it later', async () => {
         db.postingEvent = { findMany: jest.fn().mockResolvedValue([]) };
         db.purchase.findFirst.mockResolvedValue({
@@ -388,6 +398,22 @@ describe('PurchasesService', () => {
             expect(purchase.prepared_by).toBe('Rina Akter');
             expect(tenant).toEqual({ name: 'Demo Store' });
             expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['user-1'] } } }));
+        });
+
+        it('invoice data prints bKash, not Mobile Wallet', async () => {
+            db.purchase.findFirst.mockResolvedValue({
+                id: 'purchase-1',
+                created_by: null,
+                items: [],
+                payments: [
+                    { id: 'p1', payment_method: 'Mobile Wallet', payment_method_name: 'bKash', amount: '100.00' },
+                    { id: 'p2', payment_method: 'Mobile Wallet', payment_method_name: null, amount: '50.00' },
+                ],
+            });
+
+            const { purchase }: any = await service.getInvoiceData('tenant-1', 'purchase-1');
+
+            expect(purchase.payments.map((p: any) => p.payment_method)).toEqual(['bKash', 'Mobile Wallet']);
         });
 
         it('leaves Entry By empty for a purchase nobody is recorded against', async () => {
@@ -619,13 +645,16 @@ describe('PurchasesService', () => {
         });
 
         it('sends the cash leg to the account the tenant configured for that method', async () => {
-            tx.paymentMethod.findFirst.mockResolvedValue({ account_id: 'acct-bkash' });
+            tx.paymentMethod.findMany.mockResolvedValue([
+                { id: 'pm-bkash', name: 'Mobile Wallet', account_id: 'acct-bkash', is_active: true, all_branches: true, stores: [] },
+            ]);
 
             await cashBill([{ paymentMethod: 'Mobile Wallet', amount: 250 }]);
 
+            // One credit line on the method's account for what was paid.
             expect(autoPostFromRules).toHaveBeenCalledWith(expect.objectContaining({
                 eventType: 'supplier_payment',
-                overrideCreditAccountId: 'acct-bkash',
+                tenderLegs: { side: 'credit', lines: [{ accountId: 'acct-bkash', mode: 'bank', amount: 250 }] },
             }));
         });
 
@@ -666,12 +695,16 @@ describe('PurchasesService', () => {
             ]);
 
             // Trimmed, blank-as-null and UTC-dated exactly as a sale's payment
-            // rows are; cash carries no instrument at all.
+            // rows are; cash carries no instrument at all. No payment methods
+            // exist in this fixture, so no method or account resolves.
             expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
                 data: [
                     {
                         purchase_id: 'purchase-1',
                         payment_method: 'Bank',
+                        payment_method_id: null,
+                        payment_method_name: null,
+                        account_id: null,
                         amount: 600,
                         bank_name: 'City Bank',
                         bank_branch: 'Gulshan',
@@ -682,6 +715,9 @@ describe('PurchasesService', () => {
                     {
                         purchase_id: 'purchase-1',
                         payment_method: 'Cash',
+                        payment_method_id: null,
+                        payment_method_name: null,
+                        account_id: null,
                         amount: 400,
                         bank_name: null,
                         bank_branch: null,
@@ -1117,6 +1153,12 @@ describe('PurchasesService', () => {
             expect(voidAutoPostedVoucher).not.toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
         });
 
+        it('reads the stored payments in the order they were saved', async () => {
+            await service.update('tenant-1', 'user-1', 'purchase-1', edit({ notes: 'Delivered late' }));
+
+            expect(tx.purchase.findFirst.mock.calls[0][0].include.payments).toEqual({ orderBy: { created_at: 'asc' } });
+        });
+
         it('touches neither stock, nor the account, nor the books when only the note changed', async () => {
             await service.update('tenant-1', 'user-1', 'purchase-1', edit({ notes: 'Delivered late' }));
 
@@ -1383,6 +1425,297 @@ describe('PurchasesService', () => {
 
             expect(applyInventoryMovement).toHaveBeenCalledTimes(1);
             expect(applyInventoryMovement).toHaveBeenCalledWith(tx, expect.objectContaining({ quantityDelta: -12, movementType: 'PURCHASE_CANCELLED', unitCost: 140 }));
+        });
+    });
+    describe('posting by tender — each tender credits its method\'s linked account', () => {
+        const actualPosting = jest.requireActual('../accounting/posting.utils');
+        const BRANCH_REFUSAL = "That payment method isn't available at this branch.";
+
+        // The rules' own cash account is deliberately not the one any method
+        // links to, so a voucher shows whether a tender reached its method's
+        // account or only the rule's Cash in Hand.
+        const RULES: Record<string, { debit_account_id: string; credit_account_id: string }> = {
+            'purchase:payment_mode:credit': { debit_account_id: 'inventory', credit_account_id: 'payable' },
+            'supplier_payment:payment_direction:pay': { debit_account_id: 'payable', credit_account_id: 'cash-in-hand' },
+        };
+        const ACCOUNTS: Record<string, string | null> = {
+            inventory: null,
+            payable: 'SUPPLIER',
+            'cash-in-hand': null,
+            'main-bank': null,
+            'bkash-acct': null,
+            'bkash-banani': null,
+        };
+        const METHODS = [
+            { id: 'pm-cash', name: 'Cash', account_id: 'cash-in-hand', all_branches: true, stores: [], sort_order: 1 },
+            { id: 'pm-bank', name: 'Bank', account_id: 'main-bank', all_branches: true, stores: [], sort_order: 2 },
+            { id: 'pm-bkash', name: 'bKash', account_id: 'bkash-acct', all_branches: true, stores: [], sort_order: 3 },
+            // Offered at the Banani branch (store-2) only.
+            { id: 'pm-bkash-banani', name: 'bKash Banani', account_id: 'bkash-banani', all_branches: false, stores: [{ store_id: 'store-2' }], sort_order: 6 },
+        ].map((method) => ({ tenant_id: 'tenant-1', is_active: true, ...method }));
+
+        let vouchers: { key: string; rows: [string, number, number][] }[];
+        /** A posted voucher's details as [account, debit, credit]. */
+        const voucherRows = (eventType: string, sourceId: string, legKey?: string) =>
+            vouchers.find((v) => v.key === actualPosting.postingIdempotencyKey('tenant-1', eventType, sourceId, legKey))?.rows;
+        const storedRow = (row: Record<string, unknown>) => ({
+            payment_method_id: null,
+            payment_method_name: null,
+            account_id: null,
+            bank_name: null,
+            bank_branch: null,
+            bank_account_number: null,
+            reference_no: null,
+            instrument_date: null,
+            ...row,
+        });
+
+        beforeEach(() => {
+            vouchers = [];
+            // The real posting engine, so these tests read the voucher it writes.
+            (autoPostFromRules as jest.Mock).mockImplementation(actualPosting.autoPostFromRules);
+            tx.paymentMethod.findMany = jest.fn().mockImplementation(async ({ where, orderBy }: any) => {
+                const matched = METHODS.filter((method) => {
+                    if (method.tenant_id !== where.tenant_id) return false;
+                    if (where.id?.in && !where.id.in.includes(method.id)) return false;
+                    if (where.is_active !== undefined && method.is_active !== where.is_active) return false;
+                    if (where.OR && !where.OR.some((c: any) => c.name.equals.toLowerCase() === method.name.toLowerCase())) {
+                        return false;
+                    }
+                    return true;
+                });
+                return orderBy ? [...matched].sort((a, b) => a.sort_order - b.sort_order) : matched;
+            });
+            tx.postingEvent.create = jest.fn().mockResolvedValue({ id: 'pe-1' });
+            tx.postingEvent.update = jest.fn().mockResolvedValue({ id: 'pe-1' });
+            tx.fiscalPeriod = { findFirst: jest.fn().mockResolvedValue(null) };
+            tx.postingRule = {
+                findFirst: jest.fn().mockImplementation(async ({ where }: any) =>
+                    RULES[`${where.event_type}:${where.condition_key}:${where.condition_value}`] ?? null),
+            };
+            tx.account = {
+                findMany: jest.fn().mockImplementation(async ({ where }: any) =>
+                    Object.entries(ACCOUNTS)
+                        .filter(([id]) => where.id.in.includes(id))
+                        .map(([id, party_type]) => ({ id, party_type }))),
+            };
+            tx.voucherSequence = {
+                upsert: jest.fn().mockResolvedValue({ next_number: 1, prefix: 'V' }),
+                update: jest.fn().mockResolvedValue({}),
+            };
+            tx.accountingSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+            tx.voucher = {
+                create: jest.fn().mockImplementation(async ({ data }: any) => {
+                    vouchers.push({
+                        key: data.idempotency_key,
+                        rows: data.details.create.map((d: any) => [d.account_id, Number(d.debit_amount), Number(d.credit_amount)]),
+                    });
+                    return { id: `v-${vouchers.length}`, voucher_number: `V-${vouchers.length}`, voucher_type: data.voucher_type };
+                }),
+            };
+            tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Rahim Traders', due_balance: 200, store_id: 'store-1' });
+            tx.supplierCreditTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'txn-1', ...data }));
+        });
+
+        const buy = (payments: any[], storeId = 'store-1') => {
+            db.store.findFirst.mockResolvedValue({ id: storeId, tenant_id: 'tenant-1' });
+            db.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
+            tx.purchase.count.mockResolvedValue(0);
+            tx.purchase.create.mockResolvedValue({ id: 'purchase-1', purchase_number: 'PUR-00001', total_amount: 1000 });
+            tx.purchase.findFirst.mockResolvedValue({ id: 'purchase-1', items: [] });
+
+            return service.create('tenant-1', 'user-1', {
+                storeId,
+                supplierId: 'sup-1',
+                items: [{ productId: 'prod-1', quantity: 10, unitCost: 100 }],
+                payments,
+            });
+        };
+
+        it('a bank tender credits the linked bank account, not Cash in Hand', async () => {
+            await buy([{ paymentMethod: 'Bank', paymentMethodId: 'pm-bank', amount: 1000 }]);
+
+            expect(voucherRows('purchase', 'purchase-1')).toEqual([
+                ['inventory', 1000, 0],
+                ['payable', 0, 1000],
+            ]);
+            expect(voucherRows('supplier_payment', 'purchase-1', 'paid')).toEqual([
+                ['payable', 1000, 0],
+                ['main-bank', 0, 1000],
+            ]);
+        });
+
+        it('cash + bKash split credits two accounts in one voucher', async () => {
+            await buy([
+                { paymentMethod: 'Cash', paymentMethodId: 'pm-cash', amount: 600 },
+                { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 400 },
+            ]);
+
+            // The bill's own voucher and one paid voucher: two in all.
+            expect(tx.voucher.create).toHaveBeenCalledTimes(2);
+            expect(voucherRows('supplier_payment', 'purchase-1', 'paid')).toEqual([
+                ['payable', 1000, 0],
+                ['cash-in-hand', 0, 600],
+                ['bkash-acct', 0, 400],
+            ]);
+        });
+
+        it('a part-payment credits only what was paid, on the tender\'s account', async () => {
+            await buy([{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 250 }]);
+
+            expect(voucherRows('supplier_payment', 'purchase-1', 'paid')).toEqual([
+                ['payable', 250, 0],
+                ['bkash-acct', 0, 250],
+            ]);
+        });
+
+        it('stores method id, name and account on PurchasePayment, ignoring the client accountId', async () => {
+            await buy([{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 1000, accountId: 'acct-from-the-client' }]);
+
+            expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
+                data: [expect.objectContaining({
+                    payment_method: 'Mobile Wallet',
+                    payment_method_id: 'pm-bkash',
+                    payment_method_name: 'bKash',
+                    account_id: 'bkash-acct',
+                    amount: 1000,
+                })],
+            });
+            // The supplier's statement names the method the tenant calls it.
+            expect(tx.supplierCreditTransaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ type: 'PAYMENT', notes: 'Paid on purchase PUR-00001 (bKash)' }),
+            });
+        });
+
+        it('a tender sent with no method id still resolves by name', async () => {
+            await buy([{ paymentMethod: 'bKash', amount: 1000 }]);
+
+            expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
+                data: [expect.objectContaining({ payment_method_id: 'pm-bkash', payment_method_name: 'bKash', account_id: 'bkash-acct' })],
+            });
+            expect(voucherRows('supplier_payment', 'purchase-1', 'paid')).toEqual([
+                ['payable', 1000, 0],
+                ['bkash-acct', 0, 1000],
+            ]);
+        });
+
+        it('refuses a new tender on another branch\'s method', async () => {
+            const banani = [{ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash-banani', amount: 1000 }];
+
+            await expect(buy(banani)).rejects.toThrow(BRANCH_REFUSAL);
+            expect(tx.purchase.create).not.toHaveBeenCalled();
+            expect(tx.voucher.create).not.toHaveBeenCalled();
+
+            // Added on an edit of a store-1 bill.
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst.mockResolvedValueOnce(editable([
+                storedRow({ payment_method: 'Cash', payment_method_id: 'pm-cash', payment_method_name: 'Cash', account_id: 'cash-in-hand', amount: 1000 }),
+            ]));
+            await expect(service.update('tenant-1', 'user-1', 'purchase-1', editBody(banani)))
+                .rejects.toThrow(BRANCH_REFUSAL);
+            expect(tx.purchasePayment.deleteMany).not.toHaveBeenCalled();
+            expect(tx.voucher.create).not.toHaveBeenCalled();
+        });
+
+        // A paid, recorded bill at store-1 carrying the rows given.
+        const editable = (payments: Record<string, unknown>[], paid = 1000) => ({
+            id: 'purchase-1',
+            tenant_id: 'tenant-1',
+            store_id: 'store-1',
+            warehouse_id: 'wh-1',
+            purchase_number: 'PUR-00001',
+            supplier_id: 'sup-1',
+            subtotal_amount: 1000,
+            total_amount: 1000,
+            paid_amount: paid,
+            status: 'RECORDED',
+            notes: null,
+            created_at: new Date('2026-10-01T04:00:00Z'),
+            items: [{ id: 'line-1', jobCosts: [] }],
+            returns: [],
+            payments,
+            paymentAllocations: [{
+                id: 'alloc-1',
+                amount: paid,
+                transaction: { id: 'txn-1', type: 'PAYMENT', amount: paid, payment_number: 'SPY-00003', reference_type: 'PURCHASE', reference_id: 'purchase-1' },
+            }],
+            importShipment: null,
+        });
+        const editBody = (payments?: any[]) => ({
+            supplierId: 'sup-1',
+            items: [{ productId: 'prod-1', quantity: 10, unitCost: 100 }],
+            ...(payments ? { payments } : {}),
+        });
+        const stageEdit = (payments: Record<string, unknown>[], paid = 1000) => {
+            db.product.findMany.mockResolvedValue([{ id: 'prod-1', type: 'STANDARD' }]);
+            tx.inventoryMovement.findMany.mockResolvedValue([
+                { product_id: 'prod-1', warehouse_id: 'wh-1', quantity_delta: 10, unit_cost: 100, movement_type: 'PURCHASE_RECEIPT' },
+            ]);
+            tx.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Rahim Traders', due_balance: 1000 - paid, store_id: 'store-1' });
+            tx.purchase.update.mockResolvedValue({ id: 'purchase-1' });
+            tx.purchase.findFirst.mockReset();
+            tx.purchase.findFirst
+                .mockResolvedValueOnce(editable(payments, paid))
+                .mockResolvedValue({ id: 'purchase-1', items: [] });
+        };
+
+        it('editing a bill whose tender\'s method moved branch keeps it', async () => {
+            // Paid on bKash Banani while it was offered at store-1; it has
+            // since been limited to store-2.
+            stageEdit([storedRow({
+                payment_method: 'Mobile Wallet',
+                payment_method_id: 'pm-bkash-banani',
+                payment_method_name: 'bKash Banani',
+                account_id: 'bkash-banani',
+                amount: 600,
+            })], 600);
+
+            await service.update('tenant-1', 'user-1', 'purchase-1', editBody([
+                { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash-banani', amount: 800 },
+            ]));
+
+            expect(tx.purchasePayment.createMany).toHaveBeenCalledWith({
+                data: [expect.objectContaining({
+                    payment_method_id: 'pm-bkash-banani',
+                    payment_method_name: 'bKash Banani',
+                    account_id: 'bkash-banani',
+                    amount: 800,
+                })],
+            });
+            expect(voucherRows('supplier_payment', 'purchase-1', 'paid')).toEqual([
+                ['payable', 800, 0],
+                ['bkash-banani', 0, 800],
+            ]);
+        });
+
+        it('a tender that kept its method and amount reposts nothing, even on a bill saved before methods were linked', async () => {
+            // No method id, name or account: written before tenders carried them.
+            stageEdit([storedRow({ payment_method: 'Cash', amount: 1000 })]);
+
+            await service.update('tenant-1', 'user-1', 'purchase-1', editBody([{ paymentMethod: 'Cash', amount: 1000 }]));
+
+            expect(voidAutoPostedVoucher).not.toHaveBeenCalled();
+            expect(tx.voucher.create).not.toHaveBeenCalled();
+        });
+
+        it('swapping the tender\'s method at the same amount reposts the cash leg to the new account', async () => {
+            stageEdit([storedRow({
+                payment_method: 'Cash',
+                payment_method_id: 'pm-cash',
+                payment_method_name: 'Cash',
+                account_id: 'cash-in-hand',
+                amount: 1000,
+            })]);
+
+            await service.update('tenant-1', 'user-1', 'purchase-1', editBody([
+                { paymentMethod: 'Bank', paymentMethodId: 'pm-bank', amount: 1000 },
+            ]));
+
+            expect(voidAutoPostedVoucher).toHaveBeenCalledWith(tx, 'tenant-1', 'supplier_payment', 'purchase-1', 'paid');
+            expect(voucherRows('supplier_payment', 'purchase-1', 'paid')).toEqual([
+                ['payable', 1000, 0],
+                ['main-bank', 0, 1000],
+            ]);
         });
     });
 });

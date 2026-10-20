@@ -264,6 +264,11 @@ interface SaleEntryLayoutProps {
      */
     salesRepName?: string;
 
+    /**
+     * The branch the sale posts to: the header branch on a new sale, the
+     * sale's own when editing. The payment strip offers that branch's methods.
+     */
+    storeId: string;
     payments: Payment[];
     onPaymentChange: (payments: Payment[]) => void;
     /**
@@ -333,6 +338,7 @@ export default function SaleEntryLayout({
     onTotalsChange,
     tenantVatRate,
     adjustmentLabel,
+    storeId,
     payments,
     onPaymentChange,
     warnOnOverpayment = true,
@@ -481,6 +487,8 @@ export default function SaleEntryLayout({
                     />
                     <div className="border-t pt-3">
                         <PaymentSection
+                            context="sale"
+                            storeId={storeId}
                             payments={payments}
                             total={totals.total}
                             customer={customer}

@@ -6,6 +6,7 @@ import { ExpensesService } from '../expenses/expenses.service';
 import { AccountingService } from '../accounting/accounting.service';
 import { addCalendarDays, zonedDateString, zonedDayStart } from '../common/tenant-time.util';
 import { classifyPaymentMode } from '../sales/classify-payment-mode';
+import { returnCashOut } from '../sales-returns/return-cash.util';
 import { LOW_STOCK_THRESHOLD } from '../products/products.service';
 import { buildTenders, round2 } from './money';
 import { formatDailyReportWhatsApp } from './format-whatsapp';
@@ -153,7 +154,13 @@ export class DailyReportService {
                         store_id: input.storeId,
                         created_at: dayRange,
                     },
-                    select: { return_number: true, reason: true, total_refund: true },
+                    select: {
+                        return_number: true,
+                        reason: true,
+                        total_refund: true,
+                        tenders_recorded: true,
+                        payments: { select: { payment_method: true, amount: true } },
+                    },
                     orderBy: { created_at: 'desc' },
                 }),
             ),
@@ -336,7 +343,7 @@ export class DailyReportService {
     private cashMovement(
         till: DailyReport['till'],
         tenders: DailyReport['tenders'],
-        returns: Array<{ total_refund?: unknown }>,
+        returns: Array<Parameters<typeof returnCashOut>[0]>,
         exchangeCash: number,
     ): number {
         if (till && till.sessions.length > 0) {
@@ -347,7 +354,7 @@ export class DailyReportService {
         const cashTenders = tenders
             .filter((t) => classifyPaymentMode(t.method) === 'cash')
             .reduce((sum, t) => sum + t.amount, 0);
-        const cashRefunds = returns.reduce((sum, row) => sum + num(row.total_refund), 0);
+        const cashRefunds = returns.reduce((sum, row) => sum + returnCashOut(row), 0);
         return round2(cashTenders - cashRefunds + exchangeCash);
     }
 

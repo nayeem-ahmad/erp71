@@ -57,6 +57,17 @@ export const purchasesMessages = {
             addPaymentMethod: "পেমেন্ট মাধ্যম যোগ করুন",
             noPaymentsRecorded: "কোনো পেমেন্ট রেকর্ড করা হয়নি।",
             paymentExceedsTotal: "পেমেন্ট ক্রয়ের মোট পরিমাণের বেশি হতে পারে না।",
+            paymentLayout: {
+                customise: "কাস্টমাইজ",
+                title: "এই স্ক্রিনের পেমেন্ট মাধ্যম",
+                reset: "ডিফল্টে ফিরুন",
+                save: "সংরক্ষণ",
+                cancel: "বাতিল",
+                moveUp: "{method} উপরে নিন",
+                moveDown: "{method} নিচে নিন",
+                showMethod: "{method} দেখান",
+                saveFailed: "পেমেন্ট বিন্যাস সংরক্ষণ করা যায়নি",
+            },
             paymentInstrument: {
                 toggle: "+ ব্যাংক / চেকের বিবরণ",
                 toggleAlt: "+ পেমেন্ট বিবরণ",
@@ -362,6 +373,11 @@ export const purchasesMessages = {
                 unknownItem: "অজানা আইটেম",
                 createReturn: "ক্রয় রিটার্ন তৈরি করুন",
                 creating: "তৈরি হচ্ছে...",
+            },
+            refund: {
+                title: "সরবরাহকারীর কাছ থেকে প্রাপ্ত টাকা",
+                keepingDue: "প্রদেয় বকেয়ার সাথে সমন্বয় {amount}",
+                needsSupplier: "পুরো টাকা গ্রহণ করুন, অথবা সরবরাহকারীর ক্রয় বেছে নিন",
             },
             detail: {
                 loadFailed: "ক্রয় রিটার্ন লোড করতে ব্যর্থ",

@@ -204,6 +204,7 @@ export function usePurchaseEntry({ seedDefaultWarehouse }: { seedDefaultWarehous
         payments: payments.length
             ? payments.map((payment) => ({
                   paymentMethod: payment.method,
+                  paymentMethodId: payment.paymentMethodId,
                   amount: payment.amount,
                   accountId: payment.accountId,
                   // The cheque / transfer details typed against this tender —
@@ -254,6 +255,10 @@ export function paymentsFromPurchase(purchase: any): Payment[] {
     if (rows.length > 0) {
         return rows.map((payment: any) => ({
             method: payment.payment_method,
+            // The method it was paid with and its name then, so the strip puts
+            // it back in that method's box and an edit keeps it there.
+            label: payment.payment_method_name ?? undefined,
+            paymentMethodId: payment.payment_method_id ?? undefined,
             amount: Number(payment.amount ?? 0),
             ...instrumentFromRecord(payment),
         }));

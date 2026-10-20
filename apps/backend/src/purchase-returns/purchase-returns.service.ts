@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
@@ -10,8 +11,57 @@ import {
     reversalWarehouseResolver,
     usableWarehouseIds,
 } from '../database/inventory.utils';
-import { autoPostFromRules } from '../accounting/posting.utils';
+import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostInput, type AutoPostResult } from '../accounting/posting.utils';
 import { loadPostingSummaries, loadPostingSummary, NO_POSTING_EVENT } from '../accounting/posting-status.util';
+import { allocateTenders, sameTenders } from '../accounting/payment-account.util';
+import {
+    resolveReturnTenders,
+    resolveStoredReturnTenders,
+    returnPaymentRow,
+    sameReturnPaymentRows,
+    type ReturnTender,
+} from '../common/return-tenders.util';
+import { sameReturnLines } from '../common/return-lines.util';
+
+/** The 400 for money received that adds up to more than the goods going back. */
+const RECEIVED_ABOVE_TOTAL = 'The amount received is more than the return total.';
+/** The 400 for a part-received return with no supplier whose payable could take the rest. */
+const RECEIVED_NEEDS_SUPPLIER = "Record the full amount received, or pick the supplier's purchase";
+/** The 400 for an edit that shrinks a return below the money it already records. */
+const STORED_RECEIVED_ABOVE_TOTAL = 'The amount received is more than the new return total — change it too.';
+/** The 400 for changing the lines or money received of a return external sync wrote. */
+const IMPORTED_RETURN = 'This return came from an import — change it in the source system and re-sync.';
+
+/** Below half a paisa two amounts are the same money. */
+const EPSILON = 0.005;
+
+/** The tenders received in the order they were saved, the order they post in. */
+const PAYMENTS_IN_ORDER = { orderBy: { created_at: 'asc' } } as const;
+
+function round2(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+/** What settling a return reads off the purchase the goods go back against. */
+interface ReturnPurchase {
+    store_id: string;
+    supplier_id: string | null;
+    /** The supplier's due as the legacy path clamps to it; read after any unwind. */
+    supplier?: { due_balance: unknown; store_id: string } | null;
+}
+
+/** The return being settled. */
+interface SettledReturn {
+    id: string;
+    return_number: string;
+    store_id: string;
+    /** Set when the purchase named one; an import may set it without a purchase. */
+    supplier_id: string | null;
+    /** The total as stored. The legacy path posts this, as it always has. */
+    total_amount: unknown;
+    /** Already set when the return was saved, or last edited, with tenders. */
+    tenders_recorded?: boolean;
+}
 
 @Injectable()
 export class PurchaseReturnsService {
@@ -64,6 +114,14 @@ export class PurchaseReturnsService {
                 ? this.buildReturnItemData(purchase.items, dto.items, undefined, inherited)
                 : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
             const totalAmount = returnItemData.reduce((sum, item) => sum + item.line_total, 0);
+
+            // The money the supplier handed back, when the client says.
+            // Resolved at the purchase's branch, where its tenders are offered.
+            // Omitted, the whole return comes off the payable as it always has.
+            const tenders = dto.payments
+                ? await resolveReturnTenders(tx, tenantId, storeId, dto.payments)
+                : null;
+
             const count = await tx.purchaseReturn.count({ where: { tenant_id: tenantId } });
             const returnNumber = `PRET-${String(count + 1).padStart(5, '0')}`;
             const warehouses = await resolveEntryWarehouses(
@@ -88,6 +146,7 @@ export class PurchaseReturnsService {
                     notes: dto.notes,
                     created_by: userId,
                     warehouse_id: warehouses.entryWarehouseId,
+                    ...(tenders && { tenders_recorded: true }),
                 },
             });
 
@@ -111,51 +170,10 @@ export class PurchaseReturnsService {
                 });
             }
 
-            // Returning purchased goods reduces what we owe the supplier. Record
-            // the credit-ledger entry and adjust the running balance to match, so
-            // a purchase return no longer leaves the payable overstated.
-            if (purchase?.supplier_id) {
-                const currentDue = Number(purchase.supplier?.due_balance ?? 0);
-                const creditReduction = Math.min(totalAmount, currentDue);
-                if (creditReduction > 0.005) {
-                    const balanceAfter = currentDue - creditReduction;
-                    await tx.supplierCreditTransaction.create({
-                        data: {
-                            tenant_id: tenantId,
-                            supplier_id: purchase.supplier_id,
-                            // A credit row belongs to its supplier's branch.
-                            store_id: purchase.supplier!.store_id,
-                            type: 'ADJUSTMENT',
-                            amount: -creditReduction,
-                            balance_after: balanceAfter,
-                            reference_type: 'PURCHASE_RETURN',
-                            reference_id: purchaseReturn.id,
-                            notes: `Purchase return ${returnNumber}`,
-                            created_by: userId,
-                        },
-                    });
-                    await tx.supplier.update({
-                        where: { id: purchase.supplier_id },
-                        data: { due_balance: balanceAfter },
-                    });
-                }
-            }
-
-            const posting = await autoPostFromRules({
-                tx,
-                tenantId,
-                eventType: 'purchase_return',
-                conditionKey: 'none',
-                conditionValue: null,
-                sourceModule: 'purchases',
-                sourceType: 'purchase_return',
-                sourceId: purchaseReturn.id,
-                amount: Number(purchaseReturn.total_amount),
-                description: `Auto-posted purchase return ${purchaseReturn.return_number}`,
-                referenceNumber: purchaseReturn.return_number,
-                storeId: purchase?.store_id ?? dto.storeId,
-                partyType: 'SUPPLIER',
-                partyId: purchase?.supplier_id ?? undefined,
+            const posting = await this.settlePurchaseReturn(tx, tenantId, userId, purchaseReturn, {
+                total: totalAmount,
+                tenders,
+                purchase,
             });
 
             const purchaseReturnWithDetails = await tx.purchaseReturn.findFirst({
@@ -226,7 +244,7 @@ export class PurchaseReturnsService {
         };
     }
 
-    async update(tenantId: string, id: string, dto: UpdatePurchaseReturnDto) {
+    async update(tenantId: string, id: string, dto: UpdatePurchaseReturnDto, userId?: string) {
         return this.db.$transaction(async (tx) => {
             const existingReturn = await tx.purchaseReturn.findFirst({
                 where: { id, tenant_id: tenantId },
@@ -241,6 +259,7 @@ export class PurchaseReturnsService {
                         },
                     },
                     items: true,
+                    payments: PAYMENTS_IN_ORDER,
                 },
             });
 
@@ -258,7 +277,64 @@ export class PurchaseReturnsService {
                 updateData.notes = dto.notes;
             }
 
-            if (dto.items) {
+            // The edit screen sends every line back on each save. Lines that
+            // are the ones already stored are no line edit at all, and are
+            // treated exactly as if none had been sent — decided before the
+            // import guard, the unchanged-tenders check and the unwind.
+            const lineEdit = dto.items && !this.keepsLines(existingReturn, dto) ? dto.items : null;
+
+            // A notes-only edit leaves the stock, the due and the vouchers alone.
+            if (!lineEdit && !dto.payments) {
+                await tx.purchaseReturn.update({
+                    where: { id },
+                    data: updateData,
+                });
+                return this.findEdited(tx, tenantId, id);
+            }
+
+            // An import booked this return its own way — the whole total off
+            // the payable, unclamped — which unwinding and settling it here
+            // would rewrite. Checked before anything is written.
+            if (await this.isImportedReturn(tx, tenantId, id)) {
+                throw new BadRequestException(IMPORTED_RETURN);
+            }
+
+            // The return's own branch. Tenders it already carries are exempt
+            // from the branch check and keep the account they were saved with.
+            const requested = dto.payments
+                ? await resolveReturnTenders(tx, tenantId, existingReturn.store_id, dto.payments, existingReturn.payments)
+                : null;
+
+            // The money it already records, sent back with the same lines:
+            // nothing for the books to do. Resolved against each other, as a
+            // sale edit compares its tenders. Only a return saved with tenders
+            // qualifies — one saved before them has no rows, which is not the
+            // same as nothing received.
+            if (requested && !lineEdit && existingReturn.tenders_recorded) {
+                const stored = await resolveStoredReturnTenders(tx, tenantId, existingReturn.store_id, existingReturn.payments);
+                if (sameTenders(requested, stored)) {
+                    // A cheque number or date corrected, or the order changed:
+                    // the rows follow, the vouchers and the due do not.
+                    if (!sameReturnPaymentRows(existingReturn.payments, requested)) {
+                        await tx.purchaseReturnPayment.deleteMany({ where: { return_id: id } });
+                        await tx.purchaseReturnPayment.createMany({
+                            data: requested.map((tender) => returnPaymentRow(id, tender)),
+                        });
+                    }
+                    await tx.purchaseReturn.update({
+                        where: { id },
+                        data: updateData,
+                    });
+                    return this.findEdited(tx, tenantId, id);
+                }
+            }
+
+            // Take back everything the return did to the books, then settle it
+            // afresh below as if it had been entered this way.
+            await this.unwindPurchaseReturn(tx, tenantId, existingReturn, userId);
+            let total = Number(existingReturn.total_amount);
+
+            if (lineEdit) {
                 // A parentless return has no purchase to take the store from.
                 const storeId = existingReturn.purchase?.store_id ?? existingReturn.store_id;
 
@@ -272,8 +348,8 @@ export class PurchaseReturnsService {
                     warehouseId && inheritable.has(warehouseId) ? warehouseId : null;
 
                 const newItems = existingReturn.purchase
-                    ? this.buildReturnItemData(existingReturn.purchase.items, dto.items, id, inherited)
-                    : await this.buildStandaloneReturnItemData(tx, tenantId, dto.items);
+                    ? this.buildReturnItemData(existingReturn.purchase.items, lineEdit, id, inherited)
+                    : await this.buildStandaloneReturnItemData(tx, tenantId, lineEdit);
 
                 const warehouses = await resolveEntryWarehouses(
                     tx,
@@ -308,7 +384,8 @@ export class PurchaseReturnsService {
                     });
                 }
 
-                updateData.total_amount = newItems.reduce((sum, item) => sum + item.line_total, 0);
+                total = newItems.reduce((sum, item) => sum + item.line_total, 0);
+                updateData.total_amount = total;
 
                 for (const item of newItems) {
                     await applyInventoryMovement(tx, {
@@ -338,14 +415,48 @@ export class PurchaseReturnsService {
                 data: updateData,
             });
 
-            return tx.purchaseReturn.findFirst({
-                where: { id, tenant_id: tenantId },
-                include: this.returnInclude(true),
-            });
+            let tenders: ReturnTender[] | null;
+            if (requested) {
+                tenders = requested;
+            } else if (existingReturn.tenders_recorded) {
+                // New lines, same money back: the tenders stay as they were,
+                // and whatever they no longer cover comes off the payable.
+                const stored = existingReturn.payments.reduce((sum, row) => sum + Number(row.amount), 0);
+                if (stored - total > EPSILON) throw new BadRequestException(STORED_RECEIVED_ABOVE_TOTAL);
+                tenders = await resolveStoredReturnTenders(tx, tenantId, existingReturn.store_id, existingReturn.payments);
+            } else {
+                // Saved before tenders existed: settled the way it was then.
+                tenders = null;
+            }
+
+            const purchase = existingReturn.purchase && {
+                store_id: existingReturn.purchase.store_id,
+                supplier_id: existingReturn.purchase.supplier_id,
+                // The legacy path clamps to the supplier's due, which the
+                // unwind above may just have moved, so it is read now.
+                supplier: tenders === null && existingReturn.purchase.supplier_id
+                    ? await tx.supplier.findUnique({
+                          where: { id: existingReturn.purchase.supplier_id },
+                          select: { due_balance: true, store_id: true },
+                      })
+                    : null,
+            };
+
+            await this.settlePurchaseReturn(
+                tx,
+                tenantId,
+                userId,
+                { ...existingReturn, total_amount: total },
+                // The return's own date, so the edit reposts in the period
+                // the return was entered in rather than today's.
+                { total, tenders, purchase, date: existingReturn.created_at },
+            );
+
+            return this.findEdited(tx, tenantId, id);
         });
     }
 
-    async remove(tenantId: string, id: string) {
+    async remove(tenantId: string, id: string, userId?: string) {
         return this.db.$transaction(async (tx) => {
             const existingReturn = await tx.purchaseReturn.findFirst({
                 where: { id, tenant_id: tenantId },
@@ -355,6 +466,10 @@ export class PurchaseReturnsService {
             if (!existingReturn) {
                 throw new NotFoundException('Purchase return not found');
             }
+
+            // Vouchers and due first: a return in a closed period is refused
+            // here, before any stock moves.
+            await this.unwindPurchaseReturn(tx, tenantId, existingReturn, userId);
 
             const reversalWarehouseId = reversalWarehouseResolver(
                 tx,
@@ -381,6 +496,317 @@ export class PurchaseReturnsService {
 
             return { deleted: true };
         });
+    }
+
+    /** The return as an edit answers with it. */
+    private findEdited(tx: Prisma.TransactionClient, tenantId: string, id: string) {
+        return tx.purchaseReturn.findFirst({
+            where: { id, tenant_id: tenantId },
+            include: this.returnInclude(true),
+        });
+    }
+
+    /**
+     * Whether an edit's lines are the ones the return already holds (see
+     * `sameReturnLines`). Matched as the edit matches them: by purchase line,
+     * or by product on a return with no purchase, where the sent cost counts
+     * too. A new return warehouse is a change of its own.
+     */
+    private keepsLines(
+        existing: {
+            warehouse_id: string | null;
+            purchase: unknown;
+            items: { purchase_item_id: string | null; product_id: string; quantity: number; warehouse_id: string | null; line_total: unknown }[];
+        },
+        dto: UpdatePurchaseReturnDto,
+    ): boolean {
+        if (dto.warehouseId !== undefined && dto.warehouseId !== existing.warehouse_id) return false;
+        const standalone = !existing.purchase;
+        return sameReturnLines(
+            existing.items.map((item) => ({
+                key: standalone ? item.product_id : item.purchase_item_id,
+                productId: item.product_id,
+                quantity: item.quantity,
+                warehouseId: item.warehouse_id,
+                amount: Number(item.line_total),
+            })),
+            (dto.items ?? []).map((item) => ({
+                key: standalone ? item.productId : item.purchaseItemId,
+                // A purchase line names its own product; the sent one is not read.
+                productId: standalone ? item.productId : undefined,
+                quantity: item.quantity,
+                warehouseId: item.warehouseId,
+                amount: standalone && item.unitCost != null ? item.unitCost * item.quantity : undefined,
+            })),
+            existing.warehouse_id,
+        );
+    }
+
+    /**
+     * Whether external sync wrote this return. Either marker settles it,
+     * because each alone has a gap:
+     *
+     * - a `PURCHASE_RETURN` mapping row pointing at it — the importer writes
+     *   one for every return it creates, but mappings cascade away when the
+     *   connection is deleted while the imported documents stay;
+     * - a posting event for it from `external-sync` — written in the same
+     *   transaction as the return whenever the import books its impacts, and
+     *   never removed, but absent when impacts are off.
+     */
+    private async isImportedReturn(tx: Prisma.TransactionClient, tenantId: string, id: string): Promise<boolean> {
+        const mapping = await tx.externalSyncMapping.findFirst({
+            where: { tenant_id: tenantId, entity_type: 'PURCHASE_RETURN', internal_id: id },
+            select: { id: true },
+        });
+        if (mapping) return true;
+        const event = await tx.postingEvent.findFirst({
+            where: { tenant_id: tenantId, source_module: 'external-sync', source_type: 'purchase_return', source_id: id },
+            select: { id: true },
+        });
+        return Boolean(event);
+    }
+
+    /**
+     * What a return does to its supplier and the ledger once its lines are
+     * saved. Shared by create and by an edit (after `unwindPurchaseReturn`), so
+     * an edited return settles exactly as if it had been entered that way.
+     *
+     * - `tenders === null` — the client sent no payments, or an edit of a
+     *   return saved before tenders existed: settled exactly as it always has
+     *   been (`settleUnrecordedReturn`).
+     * - With tenders, `received` is what they add up to and the rest of the
+     *   total comes off the supplier's due — the purchase's supplier, else the
+     *   return's — not clamped to it, so any excess becomes an advance with the
+     *   supplier. The bill posts as it always has (Dr Purchase Payable / Cr
+     *   Purchases for the whole return); the money back posts on
+     *   `legKey 'received'` under `supplier_payment` / `receive` (Dr each
+     *   tender's account / Cr Purchase Payable), the purchase entry's paid leg
+     *   turned round. Between them the payable falls by what the due does.
+     *
+     * Returns the bill's posting.
+     */
+    private async settlePurchaseReturn(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        userId: string | undefined,
+        ret: SettledReturn,
+        input: { total: number; tenders: ReturnTender[] | null; purchase: ReturnPurchase | null; date?: Date },
+    ): Promise<AutoPostResult> {
+        const { tenders, purchase, date } = input;
+        if (tenders === null) return this.settleUnrecordedReturn(tx, tenantId, userId, ret, input);
+
+        const total = round2(input.total);
+        const received = round2(tenders.reduce((sum, tender) => sum + tender.amount, 0));
+        if (received - total > EPSILON) throw new BadRequestException(RECEIVED_ABOVE_TOTAL);
+        const adjusted = round2(total - received);
+        const supplierId = purchase?.supplier_id ?? ret.supplier_id ?? null;
+        // With no supplier there is no payable for the rest to come off.
+        if (adjusted > EPSILON && !supplierId) throw new BadRequestException(RECEIVED_NEEDS_SUPPLIER);
+
+        if (supplierId && adjusted > EPSILON) {
+            const supplier = await tx.supplier.findUnique({
+                where: { id: supplierId },
+                select: { due_balance: true, store_id: true },
+            });
+            const balanceAfter = round2(Number(supplier?.due_balance ?? 0) - adjusted);
+            await tx.supplierCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    supplier_id: supplierId,
+                    // A credit row belongs to its supplier's branch.
+                    store_id: supplier!.store_id,
+                    type: 'ADJUSTMENT',
+                    amount: -adjusted,
+                    balance_after: balanceAfter,
+                    reference_type: 'PURCHASE_RETURN',
+                    reference_id: ret.id,
+                    notes: `Purchase return ${ret.return_number} adjusted against payable`,
+                    created_by: userId,
+                },
+            });
+            await tx.supplier.update({
+                where: { id: supplierId },
+                data: { due_balance: balanceAfter },
+            });
+        }
+
+        if (tenders.length) {
+            await tx.purchaseReturnPayment.createMany({
+                data: tenders.map((tender) => returnPaymentRow(ret.id, tender)),
+            });
+        }
+        if (!ret.tenders_recorded) {
+            await tx.purchaseReturn.update({
+                where: { id: ret.id },
+                data: { tenders_recorded: true },
+            });
+        }
+
+        const posting = {
+            tx,
+            tenantId,
+            sourceModule: 'purchases',
+            sourceType: 'purchase_return',
+            sourceId: ret.id,
+            referenceNumber: ret.return_number,
+            storeId: purchase?.store_id ?? ret.store_id,
+            partyType: 'SUPPLIER' as const,
+            partyId: supplierId ?? undefined,
+            ...(date && { date }),
+        } satisfies Partial<AutoPostInput>;
+
+        // Dr Purchase Payable / Cr Purchases for the whole return.
+        const bill = await autoPostFromRules({
+            ...posting,
+            eventType: 'purchase_return',
+            conditionKey: 'none',
+            conditionValue: null,
+            amount: total,
+            description: `Auto-posted purchase return ${ret.return_number}`,
+        });
+        if (received > EPSILON) {
+            // Dr each tender's account / Cr Purchase Payable for the money
+            // back. An unlinked tender falls back to the receive rule's Cash in
+            // Hand. The 'received' leg key keeps it off any other voucher's
+            // idempotency key.
+            await autoPostFromRules({
+                ...posting,
+                eventType: 'supplier_payment',
+                conditionKey: 'payment_direction',
+                conditionValue: 'receive',
+                legKey: 'received',
+                amount: received,
+                description: `Auto-posted money received — purchase return ${ret.return_number}`,
+                tenderLegs: { side: 'debit', lines: allocateTenders(tenders, received).lines },
+            });
+        }
+        return bill;
+    }
+
+    /**
+     * The return as it was settled before tenders existed, unchanged: the
+     * purchase's supplier's due comes down by the return, never below zero,
+     * and the bill posts the whole total.
+     */
+    private async settleUnrecordedReturn(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        userId: string | undefined,
+        ret: SettledReturn,
+        input: { total: number; purchase: ReturnPurchase | null; date?: Date },
+    ): Promise<AutoPostResult> {
+        const { total: totalAmount, purchase, date } = input;
+
+        // Returning purchased goods reduces what we owe the supplier. Record
+        // the credit-ledger entry and adjust the running balance to match, so
+        // a purchase return no longer leaves the payable overstated.
+        if (purchase?.supplier_id) {
+            const currentDue = Number(purchase.supplier?.due_balance ?? 0);
+            const creditReduction = Math.min(totalAmount, currentDue);
+            if (creditReduction > 0.005) {
+                const balanceAfter = currentDue - creditReduction;
+                await tx.supplierCreditTransaction.create({
+                    data: {
+                        tenant_id: tenantId,
+                        supplier_id: purchase.supplier_id,
+                        // A credit row belongs to its supplier's branch.
+                        store_id: purchase.supplier!.store_id,
+                        type: 'ADJUSTMENT',
+                        amount: -creditReduction,
+                        balance_after: balanceAfter,
+                        reference_type: 'PURCHASE_RETURN',
+                        reference_id: ret.id,
+                        notes: `Purchase return ${ret.return_number}`,
+                        created_by: userId,
+                    },
+                });
+                await tx.supplier.update({
+                    where: { id: purchase.supplier_id },
+                    data: { due_balance: balanceAfter },
+                });
+            }
+        }
+
+        return autoPostFromRules({
+            tx,
+            tenantId,
+            eventType: 'purchase_return',
+            conditionKey: 'none',
+            conditionValue: null,
+            sourceModule: 'purchases',
+            sourceType: 'purchase_return',
+            sourceId: ret.id,
+            amount: Number(ret.total_amount),
+            description: `Auto-posted purchase return ${ret.return_number}`,
+            referenceNumber: ret.return_number,
+            storeId: purchase?.store_id ?? ret.store_id,
+            partyType: 'SUPPLIER',
+            partyId: purchase?.supplier_id ?? undefined,
+            ...(date && { date }),
+        });
+    }
+
+    /**
+     * Takes back what a return did to the books, before an edit re-settles it
+     * or a delete removes it. It reads what was written, not what would be
+     * posted now, so a return saved before tenders existed — or imported —
+     * unwinds just the same:
+     *
+     * - its vouchers, the bill and the `'received'` money leg — voiding
+     *   applies the fiscal-period lock, so a return in a closed month stops
+     *   here;
+     * - its net on each supplier's ledger (every row referencing it), reversed
+     *   by an opposite ADJUSTMENT that references it too, so the rows always
+     *   net to what the return currently holds;
+     * - its tender rows.
+     */
+    private async unwindPurchaseReturn(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        ret: { id: string; return_number: string },
+        userId?: string,
+    ): Promise<void> {
+        await voidAutoPostedVoucher(tx, tenantId, 'purchase_return', ret.id);
+        await voidAutoPostedVoucher(tx, tenantId, 'supplier_payment', ret.id, 'received');
+
+        const rows = await tx.supplierCreditTransaction.findMany({
+            where: { tenant_id: tenantId, reference_type: 'PURCHASE_RETURN', reference_id: ret.id },
+            select: { supplier_id: true, amount: true },
+        });
+        const netBySupplier = new Map<string, number>();
+        for (const row of rows) {
+            netBySupplier.set(row.supplier_id, (netBySupplier.get(row.supplier_id) ?? 0) + Number(row.amount));
+        }
+        for (const [supplierId, sum] of netBySupplier) {
+            const net = round2(sum);
+            if (Math.abs(net) <= EPSILON) continue;
+            const supplier = await tx.supplier.findUnique({
+                where: { id: supplierId },
+                select: { due_balance: true, store_id: true },
+            });
+            if (!supplier) continue;
+            const balanceAfter = round2(Number(supplier.due_balance) - net);
+            await tx.supplierCreditTransaction.create({
+                data: {
+                    tenant_id: tenantId,
+                    supplier_id: supplierId,
+                    store_id: supplier.store_id,
+                    type: 'ADJUSTMENT',
+                    amount: -net,
+                    balance_after: balanceAfter,
+                    reference_type: 'PURCHASE_RETURN',
+                    reference_id: ret.id,
+                    notes: `Reversed purchase return ${ret.return_number}`,
+                    created_by: userId,
+                },
+            });
+            await tx.supplier.update({
+                where: { id: supplierId },
+                data: { due_balance: balanceAfter },
+            });
+        }
+
+        await tx.purchaseReturnPayment.deleteMany({ where: { return_id: ret.id } });
     }
 
     /**
@@ -510,6 +936,7 @@ export class PurchaseReturnsService {
                     purchaseItem: true,
                 },
             },
+            payments: PAYMENTS_IN_ORDER,
         };
     }
 }

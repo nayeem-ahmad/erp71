@@ -1,4 +1,6 @@
-import { IsArray, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ReturnPaymentDto } from '../common/return-payment.dto';
 
 export class CreatePurchaseReturnItemDto {
     /** Required when the return names a purchase; omitted for a standalone one. */
@@ -56,6 +58,18 @@ export class CreatePurchaseReturnDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    /**
+     * Money the supplier handed back for the goods, split across methods. What
+     * they leave of the total comes off the supplier's payable. Omitted (older
+     * clients, the mobile app, imports), the whole return comes off the
+     * payable as it always has.
+     */
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ReturnPaymentDto)
+    payments?: ReturnPaymentDto[];
 }
 
 export class UpdatePurchaseReturnItemDto {
@@ -103,4 +117,14 @@ export class UpdatePurchaseReturnDto {
     @IsOptional()
     @IsArray()
     items?: UpdatePurchaseReturnItemDto[];
+
+    /**
+     * Replaces the money received. Omitted on a return saved with it, an edit
+     * to the lines keeps what it has.
+     */
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => ReturnPaymentDto)
+    payments?: ReturnPaymentDto[];
 }

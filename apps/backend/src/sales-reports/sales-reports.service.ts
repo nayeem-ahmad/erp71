@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { paymentDisplayName } from '../accounting/payment-account.util';
 import {
     addDays,
     bucketLabel,
@@ -1862,12 +1863,12 @@ export class SalesReportsService {
     private async aggregateByPaymentMethod(saleWhere: Record<string, unknown>): Promise<BreakdownAggregate> {
         const payments = await this.db.paymentRecord.findMany({
             where: { sale: saleWhere },
-            select: { sale_id: true, payment_method: true, amount: true },
+            select: { sale_id: true, payment_method: true, payment_method_name: true, amount: true },
         });
 
         const buckets = new Map<string, { revenue: number; sales: Set<string> }>();
         for (const payment of payments) {
-            const key = (payment.payment_method ?? '').trim() || 'Unrecorded';
+            const key = paymentDisplayName(payment).trim() || 'Unrecorded';
             const entry = buckets.get(key) ?? { revenue: 0, sales: new Set<string>() };
             entry.revenue += Number(payment.amount);
             entry.sales.add(payment.sale_id);

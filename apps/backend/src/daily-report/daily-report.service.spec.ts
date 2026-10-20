@@ -107,6 +107,30 @@ describe('DailyReportService.getReport', () => {
         expect(report.headlines.cashMovement).toBe(450);
     });
 
+    it('moves cash by the cash refund only, while the returns list and net keep the document total', async () => {
+        db.salesReturn.findMany.mockResolvedValue([
+            {
+                total_refund: 200,
+                return_number: 'R1',
+                reason: 'damaged',
+                tenders_recorded: true,
+                payments: [
+                    { payment_method: 'CASH', amount: 50 },
+                    { payment_method: 'BKASH', amount: 100 },
+                ],
+            },
+            // adjusted against due: no cash out
+            { total_refund: 40, return_number: 'R2', reason: null, tenders_recorded: true, payments: [] },
+            // legacy: whole total
+            { total_refund: 10, return_number: 'R3', reason: null, tenders_recorded: false, payments: [] },
+        ]);
+        const report = await service.getReport(input);
+        // no open shift: cash takings 600 - (50 + 0 + 10)
+        expect(report.headlines.cashMovement).toBe(540);
+        expect(report.sales.returnsAmount).toBe(250);
+        expect(report.returns.rows[0]).toEqual({ label: 'damaged', amount: 200 });
+    });
+
     it('counts a 01:00 Asia/Dhaka sale in both net sales and new dues', async () => {
         const todayStart = zonedDayStart('2026-10-01', 'Asia/Dhaka')!;
         db.sale.findMany.mockImplementation(async ({ where }: { where: { sale_date?: { gte?: Date } } }) => {

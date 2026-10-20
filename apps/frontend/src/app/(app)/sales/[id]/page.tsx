@@ -156,6 +156,10 @@ function SaleDetailPageContent() {
             refNumber: sale.reference_number || '',
             payments: (sale.payments || []).map((p: any) => ({
                 method: p.payment_method,
+                // The method it was taken on and its name then, so the strip
+                // puts it back in that method's box and an edit keeps it there.
+                label: p.payment_method_name ?? undefined,
+                paymentMethodId: p.payment_method_id ?? undefined,
                 amount: parseFloat(p.amount),
                 ...instrumentFromRecord(p),
             })),
@@ -236,6 +240,7 @@ function SaleDetailPageContent() {
                 })),
                 payments: payments.map((p) => ({
                     paymentMethod: p.method,
+                    paymentMethodId: p.paymentMethodId,
                     amount: p.amount,
                     accountId: p.accountId,
                     bankName: p.bankName,
@@ -327,7 +332,8 @@ function SaleDetailPageContent() {
                 // Warranty column reads it off the product the sale was posted with.
                 product: (sale.items || []).find((s: any) => s.product_id === i.productId)?.product ?? null,
             })),
-            payments: payments.map((p) => ({ method: p.method, amount: p.amount, ...p })),
+            // The method's own name ("bKash") wins over the type it shares.
+            payments: payments.map((p) => ({ ...p, method: p.label || p.method, amount: p.amount })),
             previous_due: sale.previous_due ?? null,
             // Stored with the sale when it was posted, so they print as posted.
             vat_amount: sale.vat_amount,
@@ -618,6 +624,8 @@ function SaleDetailPageContent() {
             salesReps={salesReps}
             salesRepName={sale.salesRep?.name ?? undefined}
             adjustmentLabel="Adjustment"
+            // The sale's own branch, which an edit cannot change.
+            storeId={sale.store_id ?? ''}
             payments={payments}
             onPaymentChange={updatePayment}
             // Editing a posted sale's payments rewrites its tenders and nothing

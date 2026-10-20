@@ -74,11 +74,15 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales.service.ts:289', expectation: 'rule' },
 
     // ── sales returns ────────────────────────────────────────────────────────
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
-    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-returns.service.ts:94', expectation: 'rule' },
+    // settleSalesReturn: a full refund is one voucher on its first tender's
+    // mode (:788); a partial one posts AR for what came off the due (:763) and
+    // the refund on legKey 'paid' (:775). Without tenders the mode is guessed
+    // from the sale, as before (:861).
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-returns.service.ts:788 / :775 / :861', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-returns.service.ts:788 / :775 / :861', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'bkash', emittedBy: 'sales-returns.service.ts:788 / :775 / :861', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'nagad', emittedBy: 'sales-returns.service.ts:788 / :775 / :861', expectation: 'rule' },
+    { eventType: 'sale_return', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'sales-returns.service.ts:763 / :861', expectation: 'rule' },
     // An exchange posts the same sale / sale_return tuples. No new rule.
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
     { eventType: 'sale', conditionKey: 'payment_mode', conditionValue: 'bank', emittedBy: 'sales-exchanges.service.ts postLegs', expectation: 'rule' },
@@ -103,7 +107,11 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     { eventType: 'purchase', conditionKey: 'payment_mode', conditionValue: 'credit', emittedBy: 'external-sync.impacts.ts:applyPurchaseImpacts', expectation: 'rule' },
 
     // ── purchase returns ─────────────────────────────────────────────────────
-    { eventType: 'purchase_return', conditionKey: 'none', conditionValue: null, emittedBy: 'purchase-returns.service.ts:83', expectation: 'rule' },
+    // settlePurchaseReturn: the bill posts the whole return, with tenders
+    // (:616) or without them as before (:687); money the supplier hands back
+    // posts on legKey 'received' under the supplier_payment 'receive' tuple
+    // (below).
+    { eventType: 'purchase_return', conditionKey: 'none', conditionValue: null, emittedBy: 'purchase-returns.service.ts:616 / :687', expectation: 'rule' },
 
     // ── expenses ─────────────────────────────────────────────────────────────
     { eventType: 'expense', conditionKey: 'payment_mode', conditionValue: 'cash', emittedBy: 'expenses.service.ts:136', expectation: 'rule' },
@@ -139,6 +147,10 @@ export const POSTING_CONTRACT: PostingContractEntry[] = [
     // same rule, same accounts, so the payable is debited whichever screen the
     // money was entered on.
     { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'pay', emittedBy: 'purchases.service.ts create (paid leg)', expectation: 'rule' },
+    // A purchase return's money back posts the same 'receive' tuple, on legKey
+    // 'received' against the PurchaseReturn — Dr each tender's account / Cr
+    // Purchase Payable, the paid leg above turned round.
+    { eventType: 'supplier_payment', conditionKey: 'payment_direction', conditionValue: 'receive', emittedBy: 'purchase-returns.service.ts:629 (received leg)', expectation: 'rule' },
 
     // ── depreciation ─────────────────────────────────────────────────────────
     { eventType: 'depreciation', conditionKey: 'none', conditionValue: null, emittedBy: 'accounting.service.ts:runDepreciation', expectation: 'rule' },
