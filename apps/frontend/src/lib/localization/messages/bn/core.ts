@@ -148,6 +148,9 @@ export const coreMessages = {
                 scrollHint: "আরও কলাম দেখতে সোয়াইপ করুন",
                 filterAll: "সব",
                 removeFilter: "ফিল্টার সরান",
+                selectedCount: "{count}টি নির্বাচিত",
+                clearSelection: "নির্বাচন মুছুন",
+                exportSelected: "নির্বাচিত সারি ({count})",
                 moreFilters: "আরও ফিল্টার",
                 done: "সম্পন্ন",
                 view: {

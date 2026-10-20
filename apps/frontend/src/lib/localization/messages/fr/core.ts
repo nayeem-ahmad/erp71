@@ -148,6 +148,9 @@ export const coreMessages = {
             scrollHint: "Faites glisser pour voir d'autres colonnes",
             filterAll: "Tous",
             removeFilter: "Retirer le filtre",
+            selectedCount: "{count} sélectionné(s)",
+            clearSelection: "Effacer la sélection",
+            exportSelected: "Lignes sélectionnées ({count})",
             moreFilters: "Plus de filtres",
             done: "Terminé",
             view: {

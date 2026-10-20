@@ -228,4 +228,17 @@ describe('DataTable filters', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Remove filter Status' }));
         expect(screen.getByText('Beta')).toBeInTheDocument();
     });
+
+    it('exports just the ticked rows', async () => {
+        const { exportToCSV } = require('./export-utils');
+        render(<DataTable {...props} enableRowSelection getRowId={(row) => row.id} />);
+        fireEvent.click(screen.getAllByRole('checkbox', { name: 'Select row' })[1]);
+        expect(screen.getByText('1 selected')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        await act(async () => {});
+        const [, , rows] = exportToCSV.mock.calls.at(-1);
+        expect(rows).toEqual([['Beta', 'CLOSED', '200']]);
+    });
 });
+

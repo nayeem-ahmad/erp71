@@ -148,6 +148,9 @@ export const coreMessages = {
             scrollHint: "Wischen, um weitere Spalten zu sehen",
             filterAll: "Alle",
             removeFilter: "Filter entfernen",
+            selectedCount: "{count} ausgewählt",
+            clearSelection: "Auswahl aufheben",
+            exportSelected: "Ausgewählte Zeilen ({count})",
             moreFilters: "Weitere Filter",
             done: "Fertig",
             view: {

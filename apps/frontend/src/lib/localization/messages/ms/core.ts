@@ -148,6 +148,9 @@ export const coreMessages = {
                 scrollHint: "Leret untuk lihat lebih banyak lajur",
                 filterAll: "Semua",
                 removeFilter: "Buang penapis",
+                selectedCount: "{count} dipilih",
+                clearSelection: "Kosongkan pilihan",
+                exportSelected: "Baris dipilih ({count})",
                 moreFilters: "Lagi penapis",
                 done: "Selesai",
                 view: {

@@ -894,7 +894,9 @@ export default function DataTable<T>({
 
         let records: T[];
         try {
-            if (opts.rowScope === 'page') {
+            if (opts.rowScope === 'selected') {
+                records = table.getSelectedRowModel().rows.map((r) => r.original);
+            } else if (opts.rowScope === 'page') {
                 records = table.getPaginationRowModel().rows.map((r) => r.original);
             } else if (isServer && serverPagination?.fetchAllRows) {
                 setExportBusy(true);
@@ -1233,7 +1235,10 @@ export default function DataTable<T>({
                                 {table.getRowModel().rows.map((row) => (
                                     <tr
                                         key={row.id}
-                                        className={`${striped ? stripedRowClass : 'hover:bg-gray-50/50 transition-colors'} ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${rowClassName?.(row.original) ?? ''}`}
+                                        className={`${striped ? stripedRowClass : 'hover:bg-gray-50/50 transition-colors'} ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${
+                                            // A ticked row stays marked over its stripe, not just by its box.
+                                            viewOptions && row.getIsSelected() ? '!bg-blue-50' : ''
+                                        } ${rowClassName?.(row.original) ?? ''}`}
                                         onClick={onRowClick ? (event) => {
                                             if (isFromControl(event.target)) return;
                                             onRowClick(row.original);
@@ -1365,6 +1370,7 @@ export default function DataTable<T>({
                 title={title}
                 pageCount={pageRowCount}
                 totalCount={totalRows}
+                selectedCount={enableRowSelection ? selectedRows.length : 0}
                 columns={exportColumns}
                 busy={exportBusy}
                 progress={exportProgress}

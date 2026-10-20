@@ -148,6 +148,9 @@ export const coreMessages = {
             scrollHint: 'مزید کالم دیکھنے کے لیے سوائپ کریں',
             filterAll: 'سب',
             removeFilter: 'فلٹر ہٹائیں',
+            selectedCount: '{count} منتخب',
+            clearSelection: 'انتخاب صاف کریں',
+            exportSelected: 'منتخب قطاریں ({count})',
             moreFilters: 'مزید فلٹر',
             done: 'ہو گیا',
             view: {

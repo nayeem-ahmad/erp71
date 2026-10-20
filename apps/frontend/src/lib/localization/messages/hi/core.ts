@@ -148,6 +148,9 @@ export const coreMessages = {
             scrollHint: "और कॉलम देखने के लिए स्वाइप करें",
             filterAll: "सभी",
             removeFilter: "फ़िल्टर हटाएँ",
+            selectedCount: "{count} चुने गए",
+            clearSelection: "चयन हटाएँ",
+            exportSelected: "चुनी गई पंक्तियाँ ({count})",
             moreFilters: "और फ़िल्टर",
             done: "हो गया",
             view: {

@@ -148,6 +148,9 @@ export const coreMessages = {
             scrollHint: 'اسحب لعرض المزيد من الأعمدة',
             filterAll: 'الكل',
             removeFilter: 'إزالة عامل التصفية',
+            selectedCount: 'المحدد: {count}',
+            clearSelection: 'مسح التحديد',
+            exportSelected: 'الصفوف المحددة ({count})',
             moreFilters: 'مزيد من عوامل التصفية',
             done: 'تم',
             view: {

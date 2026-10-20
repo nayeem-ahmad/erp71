@@ -47,6 +47,7 @@ jest.mock('@/lib/api', () => ({
     api: {
         getOrders: jest.fn(),
         deleteOrder: jest.fn(),
+        updateOrderStatus: jest.fn(),
         createOrder: jest.fn(),
     },
 }));
@@ -60,7 +61,7 @@ jest.mock('@/lib/format', () => ({
 jest.mock('@/components/data-table', () => ({
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
     CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
-    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions }: any) => {
+    DataTable: ({ data, columns, isLoading, emptyMessage, toolbarActions, onRowSelectionChange, bulkActions }: any) => {
         // The row actions are a column definition, so render that cell too —
         // otherwise the per-row buttons are invisible to every assertion.
         const actions = columns?.find((column: any) => column.id === 'actions');
@@ -78,9 +79,28 @@ jest.mock('@/components/data-table', () => ({
                     </div>
                 ))}
                 {toolbarActions && <div data-testid="toolbar">{toolbarActions}</div>}
+                {/* Ticks every row, as the header checkbox would. */}
+                <button type="button" onClick={() => onRowSelectionChange?.(data)}>tick-all</button>
+                <div data-testid="bulk-bar">
+                    {(bulkActions ?? []).map((action: any) => (
+                        <button key={action.label} type="button" onClick={() => action.onClick(data)}>
+                            {action.label}
+                        </button>
+                    ))}
+                </div>
             </div>
         );
     },
+}));
+
+const ordersInEveryStatus = [
+    { id: 'o-draft', order_number: 'SO-D', status: 'DRAFT' },
+    { id: 'o-conf', order_number: 'SO-C', status: 'CONFIRMED' },
+    { id: 'o-proc', order_number: 'SO-P', status: 'PROCESSING' },
+    { id: 'o-deliv', order_number: 'SO-V', status: 'DELIVERED' },
+].map((o) => ({
+    ...o, payment_status: 'UNPAID', total_amount: '100', amount_paid: '0', created_at: '2026-01-10T10:00:00Z',
+    items: [], deposits: [], customer: null,
 }));
 
 const mockOrders = [
@@ -230,6 +250,77 @@ describe('OrdersPage', () => {
         fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
         await waitFor(() => expect(api.deleteOrder).toHaveBeenCalledWith('ord-1'));
         await waitFor(() => expect(screen.queryByTestId('row-ord-1')).not.toBeInTheDocument());
+    });
+
+    describe('bulk actions on ticked orders', () => {
+        beforeEach(() => {
+            const { api } = require('@/lib/api');
+            api.getOrders.mockResolvedValue(ordersInEveryStatus);
+            api.updateOrderStatus.mockResolvedValue({});
+        });
+
+        async function tickAll() {
+            render(<OrdersPage />);
+            await screen.findByTestId('row-o-draft');
+            fireEvent.click(screen.getByRole('button', { name: 'tick-all' }));
+            return within(screen.getByTestId('bulk-bar'));
+        }
+
+        it('offers each step with the number of ticked orders it fits', async () => {
+            const bar = await tickAll();
+            expect(bar.getByRole('button', { name: 'Confirm (1)' })).toBeInTheDocument();
+            expect(bar.getByRole('button', { name: 'Start processing (1)' })).toBeInTheDocument();
+            expect(bar.getByRole('button', { name: 'Mark delivered (1)' })).toBeInTheDocument();
+            // A delivered order is never deleted.
+            expect(bar.getByRole('button', { name: 'Delete (3)' })).toBeInTheDocument();
+        });
+
+        it('offers nothing before any order is ticked', async () => {
+            render(<OrdersPage />);
+            await screen.findByTestId('row-o-draft');
+            expect(within(screen.getByTestId('bulk-bar')).queryAllByRole('button')).toHaveLength(0);
+        });
+
+        it('confirms only the drafts among the ticked orders', async () => {
+            const { api } = require('@/lib/api');
+            const bar = await tickAll();
+            fireEvent.click(bar.getByRole('button', { name: 'Confirm (1)' }));
+            await waitFor(() => expect(api.updateOrderStatus).toHaveBeenCalledTimes(1));
+            expect(api.updateOrderStatus).toHaveBeenCalledWith('o-draft', 'CONFIRMED');
+        });
+
+        it('asks before marking orders delivered, since stock moves', async () => {
+            const { api } = require('@/lib/api');
+            const bar = await tickAll();
+            fireEvent.click(bar.getByRole('button', { name: 'Mark delivered (1)' }));
+            expect(api.updateOrderStatus).not.toHaveBeenCalled();
+            const dialog = await screen.findByRole('dialog');
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Mark delivered (1)' }));
+            await waitFor(() => expect(api.updateOrderStatus).toHaveBeenCalledWith('o-proc', 'DELIVERED'));
+        });
+
+        it('deletes every ticked order but the delivered one, after asking', async () => {
+            const { api } = require('@/lib/api');
+            const bar = await tickAll();
+            fireEvent.click(bar.getByRole('button', { name: 'Delete (3)' }));
+            const dialog = await screen.findByRole('dialog');
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Delete (3)' }));
+            await waitFor(() => expect(api.deleteOrder).toHaveBeenCalledTimes(3));
+            expect(api.deleteOrder).not.toHaveBeenCalledWith('o-deliv');
+        });
+
+        it('names the orders a step could not change and keeps the rest done', async () => {
+            const { api } = require('@/lib/api');
+            const { toast } = require('@/lib/toast');
+            const error = jest.spyOn(toast, 'error');
+            const success = jest.spyOn(toast, 'success');
+            api.deleteOrder.mockImplementation((id: string) => (id === 'o-conf' ? Promise.reject(new Error('no')) : Promise.resolve({})));
+            const bar = await tickAll();
+            fireEvent.click(bar.getByRole('button', { name: 'Delete (3)' }));
+            fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete (3)' }));
+            await waitFor(() => expect(error).toHaveBeenCalledWith('Not changed: SO-C'));
+            expect(success).toHaveBeenCalledWith('Orders deleted: 2');
+        });
     });
 
     describe('printing on the browser’s paper', () => {

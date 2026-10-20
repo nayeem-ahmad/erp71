@@ -148,6 +148,9 @@ export const coreMessages = {
             scrollHint: 'Swipe to see more columns',
             filterAll: 'All',
             removeFilter: 'Remove filter',
+            selectedCount: '{count} selected',
+            clearSelection: 'Clear selection',
+            exportSelected: 'Selected rows ({count})',
             moreFilters: 'More filters',
             done: 'Done',
             view: {

@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ClipboardList, Plus, Eye, Pencil, Printer, Trash2, ReceiptText } from 'lucide-react';
+import { ClipboardList, Plus, Eye, Pencil, Printer, Trash2, ReceiptText, CheckCircle2, PlayCircle, PackageCheck } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, type ListFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type BulkAction, type ListFilter } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { toast } from '@/lib/toast';
@@ -76,6 +76,11 @@ export default function OrdersPage() {
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
     const [pendingDelete, setPendingDelete] = useState<SalesOrder | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [selectedOrders, setSelectedOrders] = useState<SalesOrder[]>([]);
+    const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
+    const [bulkBusy, setBulkBusy] = useState(false);
+    /** A bulk step that needs a yes first: delivery moves stock, delete is final. */
+    const [pendingBulk, setPendingBulk] = useState<{ kind: 'deliver' | 'delete'; rows: SalesOrder[] } | null>(null);
 
     const setActiveTab = useCallback((tab: OrdersTab) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -119,6 +124,40 @@ export default function OrdersPage() {
         } finally {
             setDeleting(false);
         }
+    };
+
+    /**
+     * One step over the ticked orders, one request at a time — delivery moves
+     * stock in a transaction per order, and a burst of them would only queue
+     * behind each other on the server anyway. Orders that fail are named; the
+     * rest stay done.
+     */
+    const runBulk = async (rows: SalesOrder[], step: (order: SalesOrder) => Promise<unknown>, doneMessage: string) => {
+        setBulkBusy(true);
+        const failed: string[] = [];
+        for (const order of rows) {
+            try {
+                await step(order);
+            } catch {
+                failed.push(order.order_number);
+            }
+        }
+        const done = rows.length - failed.length;
+        if (done > 0) toast.success(formatMessage(doneMessage, { count: done }));
+        if (failed.length > 0) toast.error(formatMessage(t.orders.bulk.failed, { numbers: failed.join(', ') }));
+        setBulkBusy(false);
+        setPendingBulk(null);
+        setClearSelectionSignal((n) => n + 1);
+        await loadOrders();
+    };
+
+    const advance = (rows: SalesOrder[], status: string) =>
+        runBulk(rows, (order) => api.updateOrderStatus(order.id, status), t.orders.bulk.updated);
+
+    const confirmBulk = () => {
+        if (!pendingBulk) return;
+        if (pendingBulk.kind === 'deliver') void advance(pendingBulk.rows, 'DELIVERED');
+        else void runBulk(pendingBulk.rows, (order) => api.deleteOrder(order.id), t.orders.bulk.deleted);
     };
 
     const handlePrint = async (order: SalesOrder) => {
@@ -240,6 +279,50 @@ export default function OrdersPage() {
         [t, locale],
     );
 
+    /*
+     * The same forward steps the order page offers, each applied only to the
+     * ticked orders it fits — its count says how many that is, and a step none
+     * of them fits is not offered.
+     */
+    const bulkActions = useMemo<BulkAction<SalesOrder>[]>(() => {
+        const inStatus = (rows: SalesOrder[], status: string) => rows.filter((o) => o.status === status);
+        const deletable = (rows: SalesOrder[]) => rows.filter((o) => o.status !== 'DELIVERED');
+        const steps: { rows: (r: SalesOrder[]) => SalesOrder[]; action: Omit<BulkAction<SalesOrder>, 'label'>; label: string }[] = [
+            {
+                rows: (r) => inStatus(r, 'DRAFT'),
+                label: t.orders.bulk.confirm,
+                action: { icon: <CheckCircle2 className="w-4 h-4" />, onClick: (r) => void advance(inStatus(r, 'DRAFT'), 'CONFIRMED') },
+            },
+            {
+                rows: (r) => inStatus(r, 'CONFIRMED'),
+                label: t.orders.bulk.startProcessing,
+                action: { icon: <PlayCircle className="w-4 h-4" />, onClick: (r) => void advance(inStatus(r, 'CONFIRMED'), 'PROCESSING') },
+            },
+            {
+                rows: (r) => inStatus(r, 'PROCESSING'),
+                label: t.orders.bulk.markDelivered,
+                action: {
+                    icon: <PackageCheck className="w-4 h-4" />,
+                    onClick: (r) => setPendingBulk({ kind: 'deliver', rows: inStatus(r, 'PROCESSING') }),
+                },
+            },
+            {
+                rows: deletable,
+                label: t.orders.bulk.delete,
+                action: {
+                    icon: <Trash2 className="w-4 h-4" />,
+                    tone: 'danger',
+                    onClick: (r) => setPendingBulk({ kind: 'delete', rows: deletable(r) }),
+                },
+            },
+        ];
+        return steps
+            .map((step) => ({ step, count: step.rows(selectedOrders).length }))
+            .filter(({ count }) => count > 0)
+            .map(({ step, count }) => ({ ...step.action, label: formatMessage(step.label, { count }) }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, selectedOrders]);
+
     const filters = useMemo<ListFilter[]>(
         () => [
             {
@@ -318,6 +401,12 @@ export default function OrdersPage() {
                             searchPlaceholder={t.orders.dataTable.searchPlaceholder}
                             filters={filters}
                             viewOptions
+                            enableRowSelection
+                            getRowId={(order) => order.id}
+                            onRowSelectionChange={setSelectedOrders}
+                            clearSelectionSignal={clearSelectionSignal}
+                            bulkActions={bulkActions}
+                            bulkActionsDisabled={bulkBusy}
                         />
                     </>
                 )}
@@ -332,6 +421,24 @@ export default function OrdersPage() {
                     danger
                     onConfirm={() => void confirmDelete()}
                     onCancel={() => { if (!deleting) setPendingDelete(null); }}
+                />
+
+                <ConfirmDialog
+                    open={pendingBulk !== null}
+                    title={pendingBulk?.kind === 'deliver' ? t.orders.bulk.deliverTitle : t.orders.bulk.deleteTitle}
+                    prompt={formatMessage(
+                        pendingBulk?.kind === 'deliver' ? t.orders.bulk.deliverPrompt : t.orders.bulk.deletePrompt,
+                        { count: pendingBulk?.rows.length ?? 0 },
+                    )}
+                    confirmLabel={formatMessage(
+                        pendingBulk?.kind === 'deliver' ? t.orders.bulk.markDelivered : t.orders.bulk.delete,
+                        { count: pendingBulk?.rows.length ?? 0 },
+                    )}
+                    cancelLabel={t.common.cancel}
+                    loading={bulkBusy}
+                    danger={pendingBulk?.kind === 'delete'}
+                    onConfirm={confirmBulk}
+                    onCancel={() => { if (!bulkBusy) setPendingBulk(null); }}
                 />
 
         </PageShell>
