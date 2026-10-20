@@ -203,3 +203,67 @@
         overscroll-behavior-x: contain;
     }
 }
+/*
+ * Lists drawn with the person's view settings (`DataTable` `viewOptions`).
+ *
+ * One text size and weight for every cell, set on the table as
+ * `--dt-font-size`. `td *` outranks a utility class (0,1,1 against 0,1,0), so
+ * a cell's own `text-sm font-bold` cannot make one column louder than the
+ * next — colour still can, which is what links and status badges are for.
+ * Unlayered on purpose: Tailwind would drop an unused `@layer` rule.
+ */
+.dt-view {
+    font-size: var(--dt-font-size, 13px);
+    line-height: 1.4;
+}
+
+.dt-view th,
+.dt-view th * {
+    font-size: calc(var(--dt-font-size, 13px) - 1px);
+}
+
+.dt-view td {
+    font-weight: 400;
+    color: theme('colors.gray.900');
+}
+
+.dt-view td * {
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: inherit;
+}
+
+/*
+ * Compact: every row one line. Stacked content — a date over its time, a name
+ * over a phone number — runs along the line instead, and a value too long for
+ * its column ends in an ellipsis (the cell's tooltip holds the rest). The
+ * actions gutter keeps its own layout.
+ */
+.dt-single-line td {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.dt-single-line td:not([data-actions]) :is(div, p):not(.flex, .inline-flex, .grid, .inline-grid),
+.dt-single-line td:not([data-actions]) .block {
+    display: inline;
+}
+
+.dt-single-line td:not([data-actions]) :is(div, p, .block):not(:first-child) {
+    margin-inline-start: 0.375rem;
+}
+
+.dt-single-line td:not([data-actions]) .flex-col {
+    flex-direction: row;
+    align-items: center;
+    column-gap: 0.375rem;
+}
+
+/* Compact rows are as tall as their tallest control, so the action buttons
+   step down from 28px to 24px — on a desktop only; a phone keeps its 44px. */
+@media (min-width: 768px) {
+    .dt-single-line td[data-actions] :is(a, button, [role='button']) {
+        height: 1.5rem;
+        width: 1.5rem;
+    }
+}

@@ -221,6 +221,17 @@ describe('OrdersPage', () => {
         expect(link).toHaveAttribute('href', '/sales/new?salesOrderId=ord-1');
     });
 
+    it('asks before deleting an order in a dialog, not the browser confirm', async () => {
+        const { api } = require('@/lib/api');
+        render(<OrdersPage />);
+        fireEvent.click(within(await screen.findByTestId('row-ord-1')).getByRole('button', { name: 'Delete' }));
+        expect(window.confirm).not.toHaveBeenCalled();
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+        await waitFor(() => expect(api.deleteOrder).toHaveBeenCalledWith('ord-1'));
+        await waitFor(() => expect(screen.queryByTestId('row-ord-1')).not.toBeInTheDocument());
+    });
+
     describe('printing on the browser’s paper', () => {
         let openSpy: jest.SpyInstance;
         beforeEach(() => {

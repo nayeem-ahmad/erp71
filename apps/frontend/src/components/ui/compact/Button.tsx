@@ -33,6 +33,15 @@ const variantClass: Record<Variant, string> = {
     tinted: 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
 };
 
+/**
+ * The classes a `Button` of this variant and size wears, for an element that
+ * must stay a link — "New order" opens a page, and a `<button>` that pushes
+ * a route loses open-in-new-tab.
+ */
+export function buttonClassName({ variant = 'primary', size = 'sm' }: { variant?: Variant; size?: Size } = {}): string {
+    return `${baseClass} ${sizeClass[size]} ${variantClass[variant]}`;
+}
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
     variant?: Variant;
     size?: Size;
