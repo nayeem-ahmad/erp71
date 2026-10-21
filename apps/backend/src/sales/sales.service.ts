@@ -68,6 +68,18 @@ import {
     nextCustomerCreditNumber,
 } from '../customers/customer-payment-number.util';
 import { netOfChange, splitSaleOverpayment } from './sale-overpayment.util';
+
+/** What the customer should be told about a sale that moved their credit or took a payment on account. */
+export interface SaleCustomerNotice {
+    totalAmount: number;
+    serialNumber: string;
+    /** Paid against this invoice. Money put on account is not included. */
+    paidTowardBill: number;
+    balanceDue: number;
+    /** The customer's due after this credit sale. Null when the sale added no due. */
+    creditBalanceAfter: number | null;
+    accountPayment: { amount: number; paymentNumber: string; balanceAfter: number } | null;
+}
 import { issueDocumentNumber } from '../database/document-number.utils';
 import {
     assertSessionForPosSale,
@@ -328,9 +340,13 @@ export class SalesService {
             return this.applySalePostings(tx, tenantId, userId, dto, sale, prep);
         });
 
-        // Fire-and-forget receipt email (after transaction commits)
+        // Fire-and-forget receipt (after transaction commits)
         if (dto.customerId) {
-            this.sendReceiptEmail(tenantId, dto.customerId, Number(result.total_amount), result.serial_number);
+            this.notifyCustomerOfSale(tenantId, dto.customerId, {
+                totalAmount: Number(result.total_amount),
+                serialNumber: result.serial_number,
+                notice: result.customer_notice ?? null,
+            });
             void this.crmCampaigns.attributeSale(tenantId, dto.customerId, Number(result.total_amount))
                 .catch((err) => this.logger.warn(`CRM attribution failed for customer ${dto.customerId}: ${err}`));
         }
@@ -1003,6 +1019,24 @@ export class SalesService {
             // screen to tell the cashier.
             change_returned: changeReturned,
             account_payment: accountReceipt,
+            customer_notice: dto.customerId
+                ? {
+                    totalAmount: computedTotal,
+                    serialNumber: sale.serial_number,
+                    paidTowardBill: roundMoney(computedTotal - balanceDue),
+                    balanceDue,
+                    creditBalanceAfter: balanceDue > 0.005
+                        ? roundMoney(creditCustomerDueBalance + balanceDue)
+                        : null,
+                    accountPayment: accountReceipt
+                        ? {
+                            amount: accountReceipt.amount,
+                            paymentNumber: accountReceipt.payment_number,
+                            balanceAfter: accountReceipt.balance_after,
+                        }
+                        : null,
+                }
+                : null,
         };
     }
 
@@ -1434,9 +1468,13 @@ export class SalesService {
             return this.applySalePostings(tx, tenantId, userId, saleDto, sale, prep);
         });
 
-        // Fire-and-forget receipt email (after transaction commits)
+        // Fire-and-forget receipt (after transaction commits)
         if (result.customer_id) {
-            this.sendReceiptEmail(tenantId, result.customer_id, Number(result.total_amount), result.serial_number);
+            this.notifyCustomerOfSale(tenantId, result.customer_id, {
+                totalAmount: Number(result.total_amount),
+                serialNumber: result.serial_number,
+                notice: result.customer_notice ?? null,
+            });
             void this.crmCampaigns.attributeSale(tenantId, result.customer_id, Number(result.total_amount))
                 .catch((err) => this.logger.warn(`CRM attribution failed for customer ${result.customer_id}: ${err}`));
         }
@@ -1444,7 +1482,16 @@ export class SalesService {
         return result;
     }
 
-    private sendReceiptEmail(tenantId: string, customerId: string, totalAmount: number, serialNumber: string): void {
+    /**
+     * Email, and at most one SMS. A credit sale or an on-account payment sends
+     * the credit/payment text instead of the plain receipt, so one checkout
+     * does not spend two SMS credits to say the same thing.
+     */
+    private notifyCustomerOfSale(
+        tenantId: string,
+        customerId: string,
+        sale: { totalAmount: number; serialNumber: string; notice: SaleCustomerNotice | null },
+    ): void {
         Promise.all([
             this.db.customer.findUnique({
                 where: { id: customerId },
@@ -1452,20 +1499,51 @@ export class SalesService {
             }),
             this.db.tenant.findUnique({
                 where: { id: tenantId },
-                select: { name: true, sms_on_sale: true },
+                select: { name: true, sms_enabled: true, sms_on_sale: true, sms_on_credit_payment: true },
             }),
         ])
             .then(([customer, tenant]) => {
                 if (!tenant) return;
 
-                const tasks: Promise<void>[] = [];
+                const tasks: Promise<unknown>[] = [];
+                const notice = sale.notice;
+                const creditOn = Boolean(tenant.sms_enabled && tenant.sms_on_credit_payment);
+                let sentLedgerSms = false;
+
+                if (customer?.phone && creditOn && notice && notice.balanceDue > 0.005 && notice.creditBalanceAfter != null) {
+                    sentLedgerSms = true;
+                    tasks.push(this.smsService.sendCreditSaleNotice({
+                        phone: customer.phone,
+                        customerName: customer.name ?? 'Customer',
+                        shopName: tenant.name,
+                        serialNumber: notice.serialNumber,
+                        totalAmount: notice.totalAmount,
+                        paidAmount: notice.paidTowardBill,
+                        dueAmount: notice.balanceDue,
+                        balanceAfter: notice.creditBalanceAfter,
+                        tenantId,
+                    }));
+                } else if (customer?.phone && creditOn && notice?.accountPayment && notice.accountPayment.amount > 0.005) {
+                    sentLedgerSms = true;
+                    tasks.push(this.smsService.sendCustomerPaymentNotice({
+                        phone: customer.phone,
+                        customerName: customer.name ?? 'Customer',
+                        shopName: tenant.name,
+                        amount: notice.accountPayment.amount,
+                        paymentNumber: notice.accountPayment.paymentNumber,
+                        balanceAfter: notice.accountPayment.balanceAfter,
+                        tenantId,
+                        invoiceSerial: notice.serialNumber,
+                        invoiceTotal: notice.totalAmount,
+                    }));
+                }
 
                 if (customer?.email) {
                     tasks.push(
                         this.emailService.sendBillingInvoice(
                             customer.email,
                             tenant.name,
-                            totalAmount,
+                            sale.totalAmount,
                             'BDT',
                             undefined,
                             { billTenantId: tenantId, purpose: 'Sale receipt' },
@@ -1473,13 +1551,13 @@ export class SalesService {
                     );
                 }
 
-                if (tenant.sms_on_sale && customer?.phone) {
+                if (tenant.sms_on_sale && customer?.phone && !sentLedgerSms) {
                     tasks.push(
                         this.smsService.sendSaleReceipt(
                             customer.phone,
                             customer.name ?? 'Customer',
-                            totalAmount,
-                            serialNumber,
+                            sale.totalAmount,
+                            sale.serialNumber,
                             tenantId,
                         ),
                     );

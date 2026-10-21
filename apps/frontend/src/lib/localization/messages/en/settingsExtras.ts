@@ -395,6 +395,10 @@ export const settingsExtrasMessages = {
             label: 'Send SMS for low stock alerts',
             hint: 'Sends the tenant owner an SMS when products fall below their reorder point during the daily stock check.',
         },
+        onCreditPayment: {
+            label: 'SMS the customer on a credit sale and on a payment',
+            hint: 'Texts the customer when a sale leaves a balance due, including any amount paid on that sale, and when a payment is received. Nothing is sent unless the mobile number is valid. Each message uses SMS credit.',
+        },
         saveButton: 'Save SMS Settings',
         saving: 'Saving…',
     },

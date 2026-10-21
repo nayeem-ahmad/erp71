@@ -12,6 +12,7 @@ import { Alert, Button, PageShell } from '@/components/ui';
 type SmsSettings = {
     sms_enabled: boolean;
     sms_on_sale: boolean;
+    sms_on_credit_payment: boolean;
     sms_on_low_stock: boolean;
 };
 
@@ -53,6 +54,7 @@ export default function SmsSettingsPage() {
     const [settings, setSettings] = useState<SmsSettings>({
         sms_enabled: false,
         sms_on_sale: false,
+        sms_on_credit_payment: false,
         sms_on_low_stock: false,
     });
     const [loading, setLoading] = useState(true);
@@ -66,6 +68,7 @@ export default function SmsSettingsPage() {
                     setSettings({
                         sms_enabled: d.sms_enabled ?? false,
                         sms_on_sale: d.sms_on_sale ?? false,
+                        sms_on_credit_payment: d.sms_on_credit_payment ?? false,
                         sms_on_low_stock: d.sms_on_low_stock ?? false,
                     });
                 }
@@ -131,7 +134,7 @@ export default function SmsSettingsPage() {
                                 htmlFor="sms_enabled"
                                 className="block text-sm font-semibold text-gray-800"
                             >
-                                Enable SMS Notifications
+                                {m.enable.label}
                             </label>
                             <p className="mt-0.5 text-xs text-gray-500">
                                 {m.enable.hint}
@@ -155,7 +158,7 @@ export default function SmsSettingsPage() {
                                     settings.sms_enabled ? 'text-gray-800' : 'text-gray-400'
                                 }`}
                             >
-                                Send SMS receipt after each sale
+                                {m.onSale.label}
                             </label>
                             <p className="mt-0.5 text-xs text-gray-500">
                                 {m.onSale.hint}
@@ -171,6 +174,31 @@ export default function SmsSettingsPage() {
 
                     <hr className="border-gray-100" />
 
+                    {/* Credit sale and payment */}
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <label
+                                htmlFor="sms_on_credit_payment"
+                                className={`block text-sm font-semibold ${
+                                    settings.sms_enabled ? 'text-gray-800' : 'text-gray-400'
+                                }`}
+                            >
+                                {m.onCreditPayment.label}
+                            </label>
+                            <p className="mt-0.5 text-xs text-gray-500">
+                                {m.onCreditPayment.hint}
+                            </p>
+                        </div>
+                        <Toggle
+                            id="sms_on_credit_payment"
+                            checked={settings.sms_on_credit_payment}
+                            onChange={(v) => updateSetting('sms_on_credit_payment', v)}
+                            disabled={!settings.sms_enabled}
+                        />
+                    </div>
+
+                    <hr className="border-gray-100" />
+
                     {/* Send SMS for low stock alerts */}
                     <div className="flex items-start justify-between gap-4">
                         <div>
@@ -180,7 +208,7 @@ export default function SmsSettingsPage() {
                                     settings.sms_enabled ? 'text-gray-800' : 'text-gray-400'
                                 }`}
                             >
-                                Send SMS for low stock alerts
+                                {m.onLowStock.label}
                             </label>
                             <p className="mt-0.5 text-xs text-gray-500">
                                 {m.onLowStock.hint}

@@ -925,6 +925,11 @@ model Tenant {
 
   sms_enabled      Boolean @default(false)
   sms_on_sale      Boolean @default(false) // send SMS receipt after each sale
+  /// Text the customer when a sale leaves a balance due (the message includes
+  /// any amount paid on that bill) and when a payment is received. Off until
+  /// an admin turns it on. A number that is not a mobile is skipped, and each
+  /// message spends SMS credit.
+  sms_on_credit_payment Boolean @default(false)
   sms_on_low_stock Boolean @default(false) // send SMS for low stock alerts
   sms_credits      Int     @default(0) // prepaid SMS credit balance (number of message segments remaining)
   whatsapp_credits Int     @default(0) // prepaid WhatsApp credit balance (one per message)

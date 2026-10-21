@@ -90,7 +90,7 @@ export class TenantsController {
     @Patch('sms-settings')
     async updateSmsSettings(
         @Tenant() tenant: TenantContext,
-        @Body() dto: { sms_enabled?: boolean; sms_on_sale?: boolean; sms_on_low_stock?: boolean },
+        @Body() dto: { sms_enabled?: boolean; sms_on_sale?: boolean; sms_on_credit_payment?: boolean; sms_on_low_stock?: boolean },
     ) {
         return this.tenantsService.updateSmsSettings(tenant.tenantId, dto);
     }

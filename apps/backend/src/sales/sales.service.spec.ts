@@ -60,10 +60,19 @@ jest.mock('../database/document-number.utils', () => ({
   issueDocumentNumber: jest.fn(),
 }));
 
+async function flushSideEffects() {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+}
+
 describe('SalesService', () => {
   let service: SalesService;
   let db: any;
   let tx: any;
+  let sms: {
+    sendSaleReceipt: jest.Mock;
+    sendCreditSaleNotice: jest.Mock;
+    sendCustomerPaymentNotice: jest.Mock;
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -201,12 +210,18 @@ describe('SalesService', () => {
       },
     };
 
+    sms = {
+      sendSaleReceipt: jest.fn().mockResolvedValue({ sent: true }),
+      sendCreditSaleNotice: jest.fn().mockResolvedValue({ sent: true }),
+      sendCustomerPaymentNotice: jest.fn().mockResolvedValue({ sent: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SalesService,
         { provide: DatabaseService, useValue: db },
         { provide: EmailService, useValue: { sendBillingInvoice: jest.fn() } },
-        { provide: SmsService, useValue: { sendSaleReceipt: jest.fn() } },
+        { provide: SmsService, useValue: sms },
         { provide: CrmCampaignsService, useValue: { attributeSale: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
@@ -1136,6 +1151,106 @@ describe('SalesService', () => {
       expect(result.previous_due).toBe(1000);
     });
 
+    it('texts the bill, the payment and the balance when credit SMS is on', async () => {
+      tx.customer.findFirst.mockResolvedValue({
+        id: 'cust-1',
+        due_balance: 1000,
+        credit_limit: 5000,
+      });
+      tx.sale.create.mockResolvedValue({ id: 'sale-credit', serial_number: 'SL-1', total_amount: 1000 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: 1000 });
+      tx.customerCreditTransaction.create.mockResolvedValue({});
+      db.customer.findUnique.mockResolvedValue({ name: 'Karim', phone: '01712345678', email: null });
+      db.tenant.findUnique.mockResolvedValue({
+        name: 'Rahim Store',
+        sms_enabled: true,
+        sms_on_sale: true,
+        sms_on_credit_payment: true,
+      });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 1000,
+        amountPaid: 600,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1000 }],
+        payments: [{ paymentMethod: 'CASH', amount: 600 }],
+      });
+      await flushSideEffects();
+
+      expect(sms.sendCreditSaleNotice).toHaveBeenCalledWith({
+        phone: '01712345678',
+        customerName: 'Karim',
+        shopName: 'Rahim Store',
+        serialNumber: 'SL-1',
+        totalAmount: 1000,
+        paidAmount: 600,
+        dueAmount: 400,
+        balanceAfter: 1400,
+        tenantId: 'tenant-1',
+      });
+      // The credit text already names the bill, so the plain receipt is not sent as well.
+      expect(sms.sendSaleReceipt).not.toHaveBeenCalled();
+    });
+
+    it('keeps the plain receipt for a credit sale when the credit switch is off', async () => {
+      tx.customer.findFirst.mockResolvedValue({
+        id: 'cust-1',
+        due_balance: 1000,
+        credit_limit: 5000,
+      });
+      tx.sale.create.mockResolvedValue({ id: 'sale-credit', serial_number: 'SL-1', total_amount: 1000 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.customer.update.mockResolvedValue({});
+      tx.customerCreditTransaction.create.mockResolvedValue({});
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 1000,
+        amountPaid: 600,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 1000 }],
+        payments: [{ paymentMethod: 'CASH', amount: 600 }],
+      });
+      await flushSideEffects();
+
+      expect(sms.sendCreditSaleNotice).not.toHaveBeenCalled();
+      expect(sms.sendSaleReceipt).toHaveBeenCalledWith(
+        '123456789',
+        'Customer 1',
+        1000,
+        'SL-1',
+        'tenant-1',
+      );
+    });
+
+    it('does not send a credit text for a sale paid in full', async () => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-paid', serial_number: 'SL-2', total_amount: 50 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.customer.update.mockResolvedValue({ id: 'cust-1', due_balance: '750.00' });
+      db.tenant.findUnique.mockResolvedValue({
+        name: 'Rahim Store',
+        sms_enabled: true,
+        sms_on_sale: true,
+        sms_on_credit_payment: true,
+      });
+
+      await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        customerId: 'cust-1',
+        totalAmount: 50,
+        amountPaid: 50,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 50 }],
+        payments: [{ paymentMethod: 'CASH', amount: 50 }],
+      });
+      await flushSideEffects();
+
+      expect(sms.sendCreditSaleNotice).not.toHaveBeenCalled();
+      expect(sms.sendCustomerPaymentNotice).not.toHaveBeenCalled();
+      expect(sms.sendSaleReceipt).toHaveBeenCalled();
+    });
+
     it('returns the standing due on a customer sale paid in full', async () => {
       tx.sale.create.mockResolvedValue({ id: 'sale-paid', serial_number: 'SL-2', total_amount: 50 });
       tx.saleItem.create.mockResolvedValue({});
@@ -1268,6 +1383,33 @@ describe('SalesService', () => {
         id: 'ct-receipt', payment_number: 'CPY-00001', amount: 650, balance_after: -250,
       });
       expect(result.change_returned).toBe(0);
+    });
+
+    it('texts the on-account payment when credit SMS is on', async () => {
+      db.customer.findUnique.mockResolvedValue({ name: 'Karim', phone: '01712345678', email: null });
+      db.tenant.findUnique.mockResolvedValue({
+        name: 'Rahim Store',
+        sms_enabled: true,
+        sms_on_sale: true,
+        sms_on_credit_payment: true,
+      });
+
+      await service.create('tenant-1', 'user-1', { ...overpaidSale, customerId: 'cust-1' });
+      await flushSideEffects();
+
+      expect(sms.sendCustomerPaymentNotice).toHaveBeenCalledWith(expect.objectContaining({
+        phone: '01712345678',
+        customerName: 'Karim',
+        shopName: 'Rahim Store',
+        amount: 650,
+        paymentNumber: 'CPY-00001',
+        balanceAfter: -250,
+        invoiceSerial: 'SL-9',
+        invoiceTotal: 850,
+        tenantId: 'tenant-1',
+      }));
+      expect(sms.sendSaleReceipt).not.toHaveBeenCalled();
+      expect(sms.sendCreditSaleNotice).not.toHaveBeenCalled();
     });
 
     it('does not refuse an excess beyond everything the customer owed', async () => {
