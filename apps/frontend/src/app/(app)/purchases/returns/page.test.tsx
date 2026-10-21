@@ -112,12 +112,8 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
 
         fireEvent.click(screen.getByRole('button', { name: /pur-00001/i }));
 
-        await waitFor(() => {
-            expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument();
-        });
-
-        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
-        fireEvent.click(screen.getByRole('button', { name: /create purchase return/i }));
+        await putCoffeeOnSlip('2');
+        await submitReturn();
 
         await waitFor(() => {
             expect(api.createPurchaseReturn).toHaveBeenCalledWith(
@@ -143,9 +139,8 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
         render(<PurchaseReturnsPage />);
         fireEvent.click(screen.getByRole('button', { name: /new return/i }));
         fireEvent.click(await screen.findByRole('button', { name: /pur-00001/i }));
-        await waitFor(() => expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument());
 
-        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+        await putCoffeeOnSlip('2');
 
         // With a supplier nothing is received by default: the whole ৳24 comes
         // off what is payable, which is today's behaviour.
@@ -156,7 +151,7 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
         // Take ৳10 back from the supplier on bKash; the other ৳14 stays against the payable.
         fireEvent.change(bkash, { target: { value: '10' } });
         expect(screen.getByText(/^Adjusted against payable ৳\s*14\.00$/)).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /create purchase return/i }));
+        await submitReturn();
 
         await waitFor(() => expect(api.createPurchaseReturn).toHaveBeenCalledTimes(1));
         const sent = api.createPurchaseReturn.mock.calls[0][0];
@@ -174,8 +169,7 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
         const props = { onClose: jest.fn(), onSuccess: jest.fn(), initialPurchaseId: 'purchase-1' };
 
         const { rerender } = render(<CreatePurchaseReturnModal isOpen {...props} />);
-        await waitFor(() => expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument());
-        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+        await putCoffeeOnSlip('2');
         const first = (await screen.findByLabelText(/bKash/)) as HTMLInputElement;
         fireEvent.change(first, { target: { value: '10' } });
         expect(first.value).toBe('10');
@@ -183,14 +177,12 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
         // Cancelled, then opened again from the same row.
         rerender(<CreatePurchaseReturnModal isOpen={false} {...props} />);
         rerender(<CreatePurchaseReturnModal isOpen {...props} />);
-        await waitFor(() => expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument());
-        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+        await putCoffeeOnSlip('2');
 
         // Nothing received: the ৳10 typed last time is gone from the strip and the payload.
         expect(await screen.findByText(/^Adjusted against payable ৳\s*24\.00$/)).toBeInTheDocument();
         expect((screen.getByLabelText(/bKash/) as HTMLInputElement).value).toBe('');
-        await waitFor(() => expect(screen.getByRole('button', { name: /create purchase return/i })).toBeEnabled());
-        fireEvent.click(screen.getByRole('button', { name: /create purchase return/i }));
+        await submitReturn();
         await waitFor(() => expect(api.createPurchaseReturn).toHaveBeenCalledTimes(1));
         expect(api.createPurchaseReturn.mock.calls[0][0].payments).toEqual([]);
     });
@@ -203,8 +195,7 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
         render(<PurchaseReturnsPage />);
         fireEvent.click(screen.getByRole('button', { name: /new return/i }));
         fireEvent.click(await screen.findByRole('button', { name: /pur-00001/i }));
-        await waitFor(() => expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument());
-        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+        await putCoffeeOnSlip('2');
 
         const cash = (await screen.findByLabelText(/Cash/)) as HTMLInputElement;
         await waitFor(() => expect(cash.value).toBe('24'));
@@ -226,20 +217,17 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
 
         fireEvent.click(screen.getByRole('button', { name: /new return/i }));
         fireEvent.click(await screen.findByRole('button', { name: /pur-00001/i }));
-        await waitFor(() => {
-            expect(screen.getByText('Returnable Purchase Lines')).toBeInTheDocument();
-        });
 
         // Defaulted from the purchase, not from the branch default.
         await waitFor(() => {
             expect((screen.getByLabelText('Warehouse') as HTMLSelectElement).value).toBe('wh-annex');
         });
 
-        fireEvent.change(screen.getByDisplayValue('0'), { target: { value: '2' } });
+        await putCoffeeOnSlip('2');
         fireEvent.change(screen.getByLabelText('Warehouse — Coffee Beans'), {
             target: { value: 'wh-main' },
         });
-        fireEvent.click(screen.getByRole('button', { name: /create purchase return/i }));
+        await submitReturn();
 
         await waitFor(() => {
             expect(api.createPurchaseReturn).toHaveBeenCalledWith(
@@ -250,4 +238,68 @@ describe('PurchaseReturnsPage — Epic 21: Purchase Returns List & Creation UI',
             );
         });
     });
+
+    it('scans a SKU one piece at a time and return-all fills what is left', async () => {
+        const { api } = require('@/lib/api');
+        const [purchase] = await api.getPurchases();
+        api.getPurchases.mockResolvedValue([{
+            ...purchase,
+            items: [
+                ...purchase.items,
+                {
+                    id: 'item-2',
+                    quantity: 3,
+                    unit_cost: 10,
+                    product_id: 'prod-2',
+                    product: { name: 'Sugar', sku: 'SG-001' },
+                    returnItems: [],
+                },
+            ],
+        }]);
+
+        render(<PurchaseReturnsPage />);
+        fireEvent.click(screen.getByRole('button', { name: /new return/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /pur-00001/i }));
+
+        const search = await screen.findByLabelText('Search or scan a product on this bill');
+        fireEvent.change(search, { target: { value: 'SG-001' } });
+        fireEvent.keyDown(search, { key: 'Enter' });
+        await waitFor(() => {
+            expect(screen.getByRole('spinbutton', { name: 'Return Qty — Sugar' })).toHaveValue(1);
+        });
+
+        fireEvent.change(screen.getByLabelText('Search or scan a product on this bill'), { target: { value: 'SG-001' } });
+        fireEvent.keyDown(screen.getByLabelText('Search or scan a product on this bill'), { key: 'Enter' });
+        await waitFor(() => {
+            expect(screen.getByRole('spinbutton', { name: 'Return Qty — Sugar' })).toHaveValue(2);
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Return all remaining' }));
+        await waitFor(() => {
+            expect(screen.getByRole('spinbutton', { name: 'Return Qty — Coffee Beans' })).toHaveValue(4);
+            expect(screen.getByRole('spinbutton', { name: 'Return Qty — Sugar' })).toHaveValue(3);
+        });
+        expect(screen.queryByLabelText('Partial quantity — Sugar')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove Sugar' }));
+        const partial = await screen.findByLabelText('Partial quantity — Sugar');
+        fireEvent.change(partial, { target: { value: '1' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Add — Sugar' }));
+        await waitFor(() => {
+            expect(screen.getByRole('spinbutton', { name: 'Return Qty — Sugar' })).toHaveValue(1);
+        });
+    });
 });
+
+/** The slip starts empty. Add the fixture line, then set how many go back. */
+async function putCoffeeOnSlip(quantity: string) {
+    fireEvent.click(await screen.findByRole('button', { name: 'Add all left — Coffee Beans' }));
+    const qty = await screen.findByRole('spinbutton', { name: 'Return Qty — Coffee Beans' });
+    fireEvent.change(qty, { target: { value: quantity } });
+}
+
+async function submitReturn() {
+    const create = await screen.findByRole('button', { name: /create purchase return/i });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+}
