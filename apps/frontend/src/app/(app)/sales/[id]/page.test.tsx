@@ -31,6 +31,7 @@ jest.mock('@/lib/api', () => ({
         finalizeSale: jest.fn(),
         getCustomers: jest.fn(),
         getProducts: jest.fn(),
+        getPaymentLayout: jest.fn(),
         getPaymentMethods: jest.fn(),
         searchProductsByQuantity: jest.fn(),
         getInventoryWarehouses: jest.fn().mockResolvedValue([]),
@@ -144,6 +145,7 @@ beforeEach(() => {
     api.getCustomers.mockResolvedValue([]);
     api.getProducts.mockResolvedValue([]);
     api.getPaymentMethods.mockResolvedValue([]);
+    api.getPaymentLayout.mockResolvedValue({ customised: false, visible: [], available: [] });
     api.searchProductsByQuantity.mockResolvedValue([]);
     api.updateSale.mockResolvedValue({});
     api.deleteSale.mockResolvedValue({ deleted: true });
@@ -573,16 +575,75 @@ describe('SaleDetailPage — edit mode', () => {
 
     it('reloads a saved payment into its matching tenant method', async () => {
         // The sale stores the canonical "Mobile Wallet"; the tenant calls it bKash.
-        getApi().getPaymentMethods.mockResolvedValue([
-            { id: 'pm-1', name: 'bKash', type: 'Mobile Wallet', is_active: true, show_on_entry: true, sort_order: 0 },
-        ]);
+        const bkash = { id: 'pm-1', name: 'bKash', type: 'Mobile Wallet', is_active: true, show_on_entry: true, sort_order: 0 };
+        getApi().getPaymentLayout.mockResolvedValue({ customised: false, visible: [bkash], available: [bkash] });
+        getApi().getPaymentMethods.mockResolvedValue([bkash]);
         getApi().getSale.mockResolvedValue({
             ...mockSale,
+            store_id: 'store-1',
             payments: [{ payment_method: 'Mobile Wallet', amount: '3000', created_at: '2026-01-15T12:01:00Z' }],
         });
         await renderPage();
 
         expect(screen.getByLabelText('bKash amount')).toHaveValue(3000);
+    });
+
+    it('lays the strip out for the sale\'s own branch and saves each tender\'s paymentMethodId', async () => {
+        const cash = { id: 'pm-cash', name: 'Cash', type: 'Cash', account_id: 'acc-cash', is_active: true, show_on_entry: true, sort_order: 1, all_branches: true, store_ids: [] };
+        const nagad = { ...cash, id: 'pm-nagad', name: 'Nagad', type: 'Mobile Wallet', account_id: 'acc-nagad', sort_order: 2 };
+        getApi().getPaymentLayout.mockResolvedValue({ customised: false, visible: [cash, nagad], available: [cash, nagad] });
+        getApi().getPaymentMethods.mockResolvedValue([cash, nagad]);
+        getApi().getSale.mockResolvedValue({
+            ...mockSale,
+            // Not the header branch: the sale's own.
+            store_id: 'store-gulshan',
+            payments: [{
+                payment_method: 'Mobile Wallet',
+                payment_method_id: 'pm-nagad',
+                payment_method_name: 'Nagad',
+                amount: '3000',
+                created_at: '2026-01-15T12:01:00Z',
+            }],
+        });
+        await renderPage();
+
+        expect(getApi().getPaymentLayout).toHaveBeenCalledWith('store-gulshan', 'sale');
+        expect(getApi().getPaymentMethods).toHaveBeenCalledWith(undefined, 'store-gulshan');
+        expect(screen.getByLabelText('Nagad amount')).toHaveValue(3000);
+
+        fireEvent.change(screen.getByLabelText('Nagad amount'), { target: { value: '2000' } });
+        fireEvent.change(screen.getByLabelText('Cash amount'), { target: { value: '1000' } });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        });
+
+        expect(getApi().updateSale.mock.lastCall[1].payments).toEqual([
+            expect.objectContaining({ paymentMethod: 'Cash', paymentMethodId: 'pm-cash', amount: 1000 }),
+            expect.objectContaining({ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-nagad', amount: 2000 }),
+        ]);
+    });
+
+    it('sends a reopened payment back with the method it was saved on', async () => {
+        getApi().getSale.mockResolvedValue({
+            ...mockSale,
+            store_id: 'store-gulshan',
+            payments: [{
+                payment_method: 'Mobile Wallet',
+                payment_method_id: 'pm-nagad',
+                payment_method_name: 'Nagad',
+                amount: '3000',
+                created_at: '2026-01-15T12:01:00Z',
+            }],
+        });
+        await renderPage();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        });
+
+        expect(getApi().updateSale.mock.lastCall[1].payments).toEqual([
+            expect.objectContaining({ paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-nagad', amount: 3000 }),
+        ]);
     });
 });
 

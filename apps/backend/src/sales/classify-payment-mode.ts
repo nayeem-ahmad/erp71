@@ -8,10 +8,13 @@ export type PaymentMode = 'cash' | 'bank' | 'bkash' | 'nagad' | 'credit';
  * accounts, which is what a Bangladeshi retailer expects to see.
  *
  * Limitation: payment methods are tenant-configurable (PaymentMethod), so a
- * custom method whose name matches nothing here falls back to 'cash'. The real
- * fix is resolving the account from PaymentMethod.account_id rather than
- * substring-matching a user-editable name; that changes autoPostFromRules'
- * account-resolution contract and is tracked separately.
+ * custom method whose name matches nothing here falls back to 'cash'. That is
+ * only the fallback: `resolveTenders` (accounting/payment-account.util.ts)
+ * resolves each tender to its method's linked `account_id`, and
+ * `autoPostFromRules`' `tenderLegs` posts it there. The mode decides the account
+ * only for a tender whose method is unknown or unlinked: bKash or Nagad when the
+ * method's name says so (so an unlinked "bKash" still lands in bKash Account),
+ * else this classifier over the canonical type.
  */
 export function classifyPaymentMode(method: string): PaymentMode {
     const normalized = method.toLowerCase();

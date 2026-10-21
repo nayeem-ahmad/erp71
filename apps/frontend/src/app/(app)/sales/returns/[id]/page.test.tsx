@@ -40,6 +40,8 @@ jest.mock('@/lib/api', () => ({
     api: {
         getReturn: jest.fn(),
         updateReturn: jest.fn(),
+        getPaymentLayout: jest.fn(),
+        getPaymentMethods: jest.fn(),
     },
 }));
 
@@ -49,8 +51,34 @@ jest.mock('@/lib/format', () => ({
     formatDateTime: (v: string) => v,
 }));
 
+const BKASH = {
+    id: 'pm-bkash',
+    name: 'bKash',
+    type: 'Mobile Wallet',
+    account_id: null,
+    is_active: true,
+    sort_order: 1,
+    show_on_entry: true,
+    all_branches: true,
+    store_ids: [],
+};
+
 const mockReturn = {
     id: 'ret-1',
+    store_id: 'store-1',
+    // Saved with its refund tenders: ৳750, all of it on bKash.
+    tenders_recorded: true,
+    payments: [
+        {
+            id: 'rp-1',
+            payment_method: 'Mobile Wallet',
+            payment_method_name: 'bKash',
+            payment_method_id: 'pm-bkash',
+            account_id: 'acc-bkash',
+            amount: '750.00',
+            reference_no: 'TX-77',
+        },
+    ],
     return_number: 'RET-00001',
     created_at: '2026-03-20T12:00:00.000Z',
     total_refund: '750',
@@ -58,6 +86,7 @@ const mockReturn = {
     reason: 'Defective product',
     sale: {
         serial_number: 'SALE-001',
+        customer_id: 'cust-1',
         items: [
             {
                 id: 'sale-item-1',
@@ -111,6 +140,8 @@ describe('ReturnDetailPage', () => {
         const api = getApi();
         api.getReturn.mockResolvedValue(mockReturn);
         api.updateReturn.mockResolvedValue({ ...mockReturn });
+        api.getPaymentLayout.mockResolvedValue({ customised: false, visible: [BKASH], available: [BKASH] });
+        api.getPaymentMethods.mockResolvedValue([BKASH]);
     });
 
     it('shows loading state initially', () => {
@@ -194,6 +225,44 @@ describe('ReturnDetailPage', () => {
         fireEvent.click(screen.getByRole('button', { name: /print preview/i }));
         // Printing first resolves the return's own branch letterhead.
         await waitFor(() => expect(window.open).toHaveBeenCalled());
+    });
+
+    it('return detail lists recorded payments; edit sends payments', async () => {
+        // View mode: the refund as it was recorded, read-only.
+        const { unmount } = render(<ReturnDetailPage />);
+        expect(await screen.findByText('bKash')).toBeInTheDocument();
+        expect(screen.getAllByText('BDT 750').length).toBeGreaterThan(1);
+        expect(screen.getByText('TX-77')).toBeInTheDocument();
+        expect(screen.queryByLabelText('bKash amount')).not.toBeInTheDocument();
+        expect(getApi().getPaymentLayout).not.toHaveBeenCalled();
+        unmount();
+
+        // Edit mode: the same refund, editable, and sent back on save.
+        setEditMode(true);
+        render(<ReturnDetailPage />);
+        const amount = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
+        await waitFor(() => expect(amount.value).toBe('750'));
+        fireEvent.change(screen.getByDisplayValue('Defective product'), { target: { value: 'Changed reason' } });
+        fireEvent.click(screen.getAllByRole('button', { name: /save changes/i })[0]);
+
+        await waitFor(() => expect(getApi().updateReturn).toHaveBeenCalledTimes(1));
+        const [, body] = getApi().updateReturn.mock.calls[0];
+        // Exactly the DTO's fields — and the cheque details come back with it.
+        expect(body.payments).toEqual([
+            { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 750, referenceNo: 'TX-77' },
+        ]);
+    });
+
+    it('leaves the refund of a return saved before tenders alone unless the user sets one', async () => {
+        setEditMode(true);
+        getApi().getReturn.mockResolvedValue({ ...mockReturn, tenders_recorded: false, payments: [] });
+        render(<ReturnDetailPage />);
+        await screen.findByLabelText('bKash amount');
+        fireEvent.change(screen.getByDisplayValue('Defective product'), { target: { value: 'Changed reason' } });
+        fireEvent.click(screen.getAllByRole('button', { name: /save changes/i })[0]);
+
+        await waitFor(() => expect(getApi().updateReturn).toHaveBeenCalledTimes(1));
+        expect(getApi().updateReturn.mock.calls[0][1]).not.toHaveProperty('payments');
     });
 
     describe('Edit mode', () => {

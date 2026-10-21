@@ -73,6 +73,13 @@ export interface Payment extends PaymentInstrument {
     label?: string;
     amount: number;
     accountId?: string;
+    /**
+     * The tenant's payment method this tender was taken on. The server posts
+     * it to that method's linked account. Absent for the generic fallback and
+     * for a payment saved before methods were recorded, which the server
+     * matches by name instead.
+     */
+    paymentMethodId?: string;
 }
 
 export function useNewSaleCart() {

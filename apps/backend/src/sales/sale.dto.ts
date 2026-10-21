@@ -76,9 +76,23 @@ export class CreatePaymentDto extends PaymentInstrumentDto {
     @IsNumber()
     amount: number;
 
+    /**
+     * The tenant's payment method the cashier picked. The server resolves its
+     * linked account from it and checks it is offered at the sale's branch.
+     * Absent from POS and other callers that send only `paymentMethod`, which
+     * is then matched by name.
+     */
     @IsOptional()
     @IsString()
-    accountId?: string; // Links payment to account for accounting
+    paymentMethodId?: string;
+
+    /**
+     * Ignored: the account is resolved on the server from the method. Kept so
+     * an older client that still sends it is not refused.
+     */
+    @IsOptional()
+    @IsString()
+    accountId?: string;
 }
 
 export class CreateSaleDto extends SaleInvoiceExtrasDto {
@@ -306,6 +320,12 @@ export class UpdatePaymentDto extends PaymentInstrumentDto {
     @IsNumber()
     amount: number;
 
+    /** See `CreatePaymentDto.paymentMethodId`. */
+    @IsOptional()
+    @IsString()
+    paymentMethodId?: string;
+
+    /** Ignored, as on `CreatePaymentDto`; kept so older clients are not refused. */
     @IsOptional()
     @IsString()
     accountId?: string;

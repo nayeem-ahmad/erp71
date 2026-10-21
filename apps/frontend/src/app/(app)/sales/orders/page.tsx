@@ -1,25 +1,27 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ClipboardList, Plus, Eye, Edit2, Printer, Trash2, ReceiptText } from 'lucide-react';
+import { ClipboardList, Plus, Eye, Pencil, Printer, Trash2, ReceiptText, CheckCircle2, PlayCircle, PackageCheck } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type BulkAction, type ListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { toast } from '@/lib/toast';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
-import type { HeaderContext } from '@/lib/print';
+import type { HeaderContext, PrintSheet } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { BranchFilter, PageShell } from '@/components/ui';
+import { BranchFilter, ConfirmDialog, PageShell, StatusBadge, buttonClassName, type StatusBadgeTone } from '@/components/ui';
+import { Tabs } from '@/components/ui/compact/Tabs';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
 
 type OrdersTab = 'sales' | 'online';
@@ -41,18 +43,21 @@ interface SalesOrder {
     store_id?: string;
 }
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'bg-gray-50 text-gray-600 border-gray-200',
-    CONFIRMED: 'bg-blue-50 text-blue-700 border-blue-200',
-    PROCESSING: 'bg-amber-50 text-amber-700 border-amber-200',
-    DELIVERED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    CANCELLED: 'bg-red-50 text-red-700 border-red-200',
+const ORDER_STATUSES = ['DRAFT', 'CONFIRMED', 'PROCESSING', 'DELIVERED', 'CANCELLED'] as const;
+const PAYMENT_STATUSES = ['UNPAID', 'PARTIAL', 'PAID'] as const;
+
+const statusTones: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    CONFIRMED: 'info',
+    PROCESSING: 'warning',
+    DELIVERED: 'success',
+    CANCELLED: 'danger',
 };
 
-const paymentColors: Record<string, string> = {
-    UNPAID: 'bg-gray-100 text-gray-600',
-    PARTIAL: 'bg-purple-100 text-purple-700',
-    PAID: 'bg-emerald-100 text-emerald-700',
+const paymentTones: Record<string, StatusBadgeTone> = {
+    UNPAID: 'neutral',
+    PARTIAL: 'warning',
+    PAID: 'success',
 };
 
 const columnHelper = createColumnHelper<SalesOrder>();
@@ -69,6 +74,13 @@ export default function OrdersPage() {
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<SalesOrder | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [selectedOrders, setSelectedOrders] = useState<SalesOrder[]>([]);
+    const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
+    const [bulkBusy, setBulkBusy] = useState(false);
+    /** A bulk step that needs a yes first: delivery moves stock, delete is final. */
+    const [pendingBulk, setPendingBulk] = useState<{ kind: 'deliver' | 'delete'; rows: SalesOrder[] } | null>(null);
 
     const setActiveTab = useCallback((tab: OrdersTab) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -100,35 +112,66 @@ export default function OrdersPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!window.confirm(t.shared.confirm.deleteOrder)) return;
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
         try {
-            await api.deleteOrder(id);
-            setOrders((prev) => prev.filter((o) => o.id !== id));
+            await api.deleteOrder(pendingDelete.id);
+            setOrders((prev) => prev.filter((o) => o.id !== pendingDelete.id));
+            setPendingDelete(null);
         } catch (error: any) {
-            alert(error.message || t.shared.errors.deleteOrder);
+            toast.error(error?.message || t.shared.errors.deleteOrder);
+        } finally {
+            setDeleting(false);
         }
     };
 
-    const handlePrint = async (order: SalesOrder) => {
-        // The order's own branch letterhead, not the one resolved on mount.
-        const header = await printHeader.resolve(order.store_id);
-        const headerContext: HeaderContext = {
+    /**
+     * One step over the ticked orders, one request at a time — delivery moves
+     * stock in a transaction per order, and a burst of them would only queue
+     * behind each other on the server anyway. Orders that fail are named; the
+     * rest stay done.
+     */
+    const runBulk = async (rows: SalesOrder[], step: (order: SalesOrder) => Promise<unknown>, doneMessage: string) => {
+        setBulkBusy(true);
+        const failed: string[] = [];
+        for (const order of rows) {
+            try {
+                await step(order);
+            } catch {
+                failed.push(order.order_number);
+            }
+        }
+        const done = rows.length - failed.length;
+        if (done > 0) toast.success(formatMessage(doneMessage, { count: done }));
+        if (failed.length > 0) toast.error(formatMessage(t.orders.bulk.failed, { numbers: failed.join(', ') }));
+        setBulkBusy(false);
+        setPendingBulk(null);
+        setClearSelectionSignal((n) => n + 1);
+        await loadOrders();
+    };
+
+    const advance = (rows: SalesOrder[], status: string) =>
+        runBulk(rows, (order) => api.updateOrderStatus(order.id, status), t.orders.bulk.updated);
+
+    const confirmBulk = () => {
+        if (!pendingBulk) return;
+        if (pendingBulk.kind === 'deliver') void advance(pendingBulk.rows, 'DELIVERED');
+        else void runBulk(pendingBulk.rows, (order) => api.deleteOrder(order.id), t.orders.bulk.deleted);
+    };
+
+    /** One order as it prints, on the letterhead it was given. */
+    const orderSheet = (order: SalesOrder, header: Awaited<ReturnType<typeof printHeader.resolve>>): PrintSheet => {
+        const context: HeaderContext = {
             docTitle: t.shared.print.salesOrder,
             docNumber: order.order_number,
             docDate: formatDate(order.created_at, locale),
             companyName: header.companyName,
         };
-
-        openPrintWindow({
-            context: headerContext,
-            title: order.order_number,
-            paperSize: paper,
+        return {
+            context,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
-            styles: SIMPLE_DOC_STYLES,
-            compactable: true,
-            repeatHeader: true,
+            headerHtml: renderHeaderHtml(header.headerConfig, context, paper),
             bodyHtml: `
                 <h1>${order.order_number}</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.datePayment, {
@@ -147,6 +190,38 @@ export default function OrdersPage() {
                 </table>
                 <p><strong>${t.shared.print.paid}</strong> ${formatBDT(Number(order.amount_paid), { locale })} | <strong>${t.shared.print.due}</strong> ${formatBDT(Number(order.total_amount) - Number(order.amount_paid), { locale })}</p>`,
             footerHtml: `<div class="footer">${t.shared.print.salesOrder}</div>`,
+        };
+    };
+
+    const handlePrint = async (order: SalesOrder) => {
+        // The order's own branch letterhead, not the one resolved on mount.
+        const header = await printHeader.resolve(order.store_id);
+        const sheet = orderSheet(order, header);
+        openPrintWindow({
+            ...sheet,
+            title: order.order_number,
+            paperSize: paper,
+            styles: SIMPLE_DOC_STYLES,
+            compactable: true,
+            repeatHeader: true,
+        });
+    };
+
+    /**
+     * The ticked orders as one print job, each on a page of its own. Offered
+     * only when they share a branch, so the whole job is on one letterhead.
+     */
+    const printSelected = async (rows: SalesOrder[]) => {
+        if (rows.length === 0) return;
+        const header = await printHeader.resolve(rows[0].store_id);
+        openPrintWindow({
+            title: `${t.orders.title} (${rows.length})`,
+            paperSize: paper,
+            headerConfig: header.headerConfig,
+            styles: SIMPLE_DOC_STYLES,
+            compactable: true,
+            repeatHeader: true,
+            sheets: rows.map((order) => orderSheet(order, header)),
         });
     };
 
@@ -154,43 +229,34 @@ export default function OrdersPage() {
         () => [
             columnHelper.accessor('order_number', {
                 header: t.orders.columns.orderNumber,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
-                ),
                 size: 140,
             }),
             createdAtColumn(columnHelper, { header: t.common.createdAt, locale }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
                 id: 'customer',
                 header: t.orders.columns.customer,
-                cell: (info) => (
-                    <span className="text-sm text-gray-700 font-medium">
-                        {info.getValue() || <span className="text-gray-300">{t.shared.walkIn}</span>}
-                    </span>
-                ),
+                cell: (info) => info.getValue() || <span className="text-gray-400">{t.shared.walkIn}</span>,
                 size: 150,
             }),
             columnHelper.accessor('total_amount', {
                 header: t.orders.columns.total,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-blue-600">
-                        {formatBDT(parseFloat(info.getValue()), { locale })}
-                    </span>
-                ),
+                cell: (info) => formatBDT(parseFloat(info.getValue()), { locale }),
                 sortingFn: (a, b) =>
                     parseFloat(a.getValue('total_amount')) - parseFloat(b.getValue('total_amount')),
-                size: 110,
+                size: 130,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('payment_status', {
                 header: t.orders.columns.payment,
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${paymentColors[status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        <StatusBadge tone={paymentTones[status] ?? 'neutral'}>
                             {t.shared.statuses.payment[status as keyof typeof t.shared.statuses.payment] ?? status}
-                        </span>
+                        </StatusBadge>
                     );
                 },
+                filterFn: 'equalsString',
                 size: 100,
             }),
             columnHelper.accessor('status', {
@@ -198,12 +264,13 @@ export default function OrdersPage() {
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        <StatusBadge tone={statusTones[status] ?? 'neutral'}>
                             {t.shared.statuses.order[status as keyof typeof t.shared.statuses.order] ?? status}
-                        </span>
+                        </StatusBadge>
                     );
                 },
-                size: 130,
+                filterFn: 'equalsString',
+                size: 120,
             }),
             columnHelper.display({
                 id: 'actions',
@@ -211,66 +278,101 @@ export default function OrdersPage() {
                 cell: (info) => {
                     const row = info.row.original;
                     return (
-                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                            <Link
-                                href={`/sales/orders/${row.id}`}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.common.view}
-                            >
-                                <Eye className="w-4 h-4" />
-                            </Link>
-                            <Link
-                                href={`/sales/orders/${row.id}?edit=true`}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                title={t.common.edit}
-                            >
-                                <Edit2 className="w-4 h-4" />
-                            </Link>
+                        <RowActions>
+                            <RowActionButton icon={<Eye />} label={t.common.view} href={`/sales/orders/${row.id}`} />
+                            <RowActionButton icon={<Pencil />} label={t.common.edit} href={`/sales/orders/${row.id}?edit=true`} />
                             {/* Opens the sale entry screen seeded from this
                                 order; the sale records the link back when it is
                                 saved. */}
-                            <Link
+                            <RowActionButton
+                                icon={<ReceiptText />}
+                                label={t.orders.convertToSale}
+                                intent="success"
                                 href={`${routes.sales.new}?salesOrderId=${row.id}`}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.orders.convertToSale}
-                                aria-label={t.orders.convertToSale}
-                            >
-                                <ReceiptText className="w-4 h-4" />
-                            </Link>
-                            <button
-                                onClick={() => void handlePrint(row)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                title={t.common.print}
-                            >
-                                <Printer className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => handleDelete(row.id)}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                                title={t.common.delete}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                            />
+                            <RowActionButton icon={<Printer />} label={t.common.print} onClick={() => void handlePrint(row)} />
+                            <RowActionButton icon={<Trash2 />} label={t.common.delete} intent="danger" onClick={() => setPendingDelete(row)} />
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 190,
+                size: 168,
             }),
         ],
         [t, locale],
     );
 
-    const filterPresets = useMemo(
+    /*
+     * The same forward steps the order page offers, each applied only to the
+     * ticked orders it fits — its count says how many that is, and a step none
+     * of them fits is not offered.
+     */
+    const bulkActions = useMemo<BulkAction<SalesOrder>[]>(() => {
+        const inStatus = (rows: SalesOrder[], status: string) => rows.filter((o) => o.status === status);
+        const deletable = (rows: SalesOrder[]) => rows.filter((o) => o.status !== 'DELIVERED');
+        const steps: { rows: (r: SalesOrder[]) => SalesOrder[]; action: Omit<BulkAction<SalesOrder>, 'label'>; label: string }[] = [
+            {
+                rows: (r) => inStatus(r, 'DRAFT'),
+                label: t.orders.bulk.confirm,
+                action: { icon: <CheckCircle2 className="w-4 h-4" />, onClick: (r) => void advance(inStatus(r, 'DRAFT'), 'CONFIRMED') },
+            },
+            {
+                rows: (r) => inStatus(r, 'CONFIRMED'),
+                label: t.orders.bulk.startProcessing,
+                action: { icon: <PlayCircle className="w-4 h-4" />, onClick: (r) => void advance(inStatus(r, 'CONFIRMED'), 'PROCESSING') },
+            },
+            {
+                rows: (r) => inStatus(r, 'PROCESSING'),
+                label: t.orders.bulk.markDelivered,
+                action: {
+                    icon: <PackageCheck className="w-4 h-4" />,
+                    onClick: (r) => setPendingBulk({ kind: 'deliver', rows: inStatus(r, 'PROCESSING') }),
+                },
+            },
+            {
+                // One branch, one letterhead: mixed branches print one by one.
+                rows: (r) => (r.length > 0 && r.every((o) => o.store_id === r[0].store_id) ? r : []),
+                label: t.orders.bulk.print,
+                action: { icon: <Printer className="w-4 h-4" />, onClick: (r) => void printSelected(r) },
+            },
+            {
+                rows: deletable,
+                label: t.orders.bulk.delete,
+                action: {
+                    icon: <Trash2 className="w-4 h-4" />,
+                    tone: 'danger',
+                    onClick: (r) => setPendingBulk({ kind: 'delete', rows: deletable(r) }),
+                },
+            },
+        ];
+        return steps
+            .map((step) => ({ step, count: step.rows(selectedOrders).length }))
+            .filter(({ count }) => count > 0)
+            .map(({ step, count }) => ({ ...step.action, label: formatMessage(step.label, { count }) }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t, selectedOrders]);
+
+    const filters = useMemo<ListFilter[]>(
         () => [
-            { label: t.orders.filterPresets.draft, filters: [{ id: 'status', value: 'DRAFT' }] },
-            { label: t.orders.filterPresets.confirmed, filters: [{ id: 'status', value: 'CONFIRMED' }] },
-            { label: t.orders.filterPresets.processing, filters: [{ id: 'status', value: 'PROCESSING' }] },
-            { label: t.orders.filterPresets.delivered, filters: [{ id: 'status', value: 'DELIVERED' }] },
+            {
+                id: 'status',
+                type: 'select',
+                label: t.orders.columns.status,
+                columnId: 'status',
+                options: ORDER_STATUSES.map((value) => ({ value, label: t.shared.statuses.order[value] ?? value })),
+            },
+            {
+                id: 'payment',
+                type: 'select',
+                label: t.orders.columns.payment,
+                columnId: 'payment_status',
+                options: PAYMENT_STATUSES.map((value) => ({ value, label: t.shared.statuses.payment[value] ?? value })),
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange },
         ],
-        [t],
+        [t, createdRange],
     );
 
     return (
@@ -290,10 +392,7 @@ export default function OrdersPage() {
                         activeTab === 'sales' ? (
                             <>
                                 <BranchFilter scope={branch} />
-                                <Link
-                                    href={routes.sales.orderNew}
-                                    className={`${compactDensity.btnPrimary} bg-primary hover:bg-primary-hover text-white`}
-                                >
+                                <Link href={routes.sales.orderNew} className={buttonClassName()}>
                                     <Plus className="w-4 h-4" />
                                     {t.orders.newOrder}
                                 </Link>
@@ -302,31 +401,17 @@ export default function OrdersPage() {
                     }
                 />
 
-                <div className="flex gap-1 border-b border-gray-200">
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab('sales')}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === 'sales'
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        {t.orders.tabs.salesOrders}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab('online')}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === 'online'
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        {t.orders.tabs.onlineOrders}
-                    </button>
-                </div>
-
+                <Tabs<OrdersTab>
+                    idPrefix="sales-orders"
+                    label={t.orders.title}
+                    tabs={[
+                        { key: 'sales', label: t.orders.tabs.salesOrders },
+                        { key: 'online', label: t.orders.tabs.onlineOrders },
+                    ]}
+                    value={activeTab}
+                    // Clicking the open tab keeps it open: a list page always shows one.
+                    onChange={(next) => setActiveTab(next ?? activeTab)}
+                />
 
                 {activeTab === 'online' ? (
                     <StorefrontOrdersPanel
@@ -336,9 +421,6 @@ export default function OrdersPage() {
                     />
                 ) : (
                     <>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                        </div>
                         <DataTable<SalesOrder>
                             tableId="sales-orders"
                             columns={columns}
@@ -348,11 +430,48 @@ export default function OrdersPage() {
                             emptyMessage={t.orders.dataTable.emptyMessage}
                             emptyIcon={<ClipboardList className="w-16 h-16 text-gray-200" />}
                             searchPlaceholder={t.orders.dataTable.searchPlaceholder}
-                            filterPresets={filterPresets}
+                            filters={filters}
+                            viewOptions
+                            enableRowSelection
+                            getRowId={(order) => order.id}
+                            onRowSelectionChange={setSelectedOrders}
+                            clearSelectionSignal={clearSelectionSignal}
+                            bulkActions={bulkActions}
+                            bulkActionsDisabled={bulkBusy}
                         />
                     </>
                 )}
-            
+
+                <ConfirmDialog
+                    open={pendingDelete !== null}
+                    title={t.common.delete}
+                    prompt={t.shared.confirm.deleteOrder}
+                    confirmLabel={t.common.delete}
+                    cancelLabel={t.common.cancel}
+                    loading={deleting}
+                    danger
+                    onConfirm={() => void confirmDelete()}
+                    onCancel={() => { if (!deleting) setPendingDelete(null); }}
+                />
+
+                <ConfirmDialog
+                    open={pendingBulk !== null}
+                    title={pendingBulk?.kind === 'deliver' ? t.orders.bulk.deliverTitle : t.orders.bulk.deleteTitle}
+                    prompt={formatMessage(
+                        pendingBulk?.kind === 'deliver' ? t.orders.bulk.deliverPrompt : t.orders.bulk.deletePrompt,
+                        { count: pendingBulk?.rows.length ?? 0 },
+                    )}
+                    confirmLabel={formatMessage(
+                        pendingBulk?.kind === 'deliver' ? t.orders.bulk.markDelivered : t.orders.bulk.delete,
+                        { count: pendingBulk?.rows.length ?? 0 },
+                    )}
+                    cancelLabel={t.common.cancel}
+                    loading={bulkBusy}
+                    danger={pendingBulk?.kind === 'delete'}
+                    onConfirm={confirmBulk}
+                    onCancel={() => { if (!bulkBusy) setPendingBulk(null); }}
+                />
+
         </PageShell>
     );
 }

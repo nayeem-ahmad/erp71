@@ -11,6 +11,9 @@ import { Button } from '@/components/ui';
 import { applyVoiceEntryReturnQuantities, buildVoiceEntryMessages, type VoiceEntryResult } from '@/lib/voice-entry';
 import WarehouseSelect from '@/components/document-entry/WarehouseSelect';
 import { useWarehouses } from '@/lib/hooks/useWarehouses';
+import { useReturnRefund } from '@/lib/hooks/useReturnRefund';
+import { returnPaymentsPayload } from '@/lib/return-refund-prefill';
+import PurchasePaymentSection from '../components/PurchasePaymentSection';
 
 interface PurchaseReturnItem {
     id: string;
@@ -39,8 +42,10 @@ interface PurchaseRecord {
     total_amount: string | number;
     store_id: string;
     warehouse_id?: string | null;
+    supplier_id?: string | null;
     supplier?: {
         name: string;
+        due_balance?: string | number | null;
     } | null;
     items: PurchaseLine[];
 }
@@ -175,6 +180,24 @@ export default function CreatePurchaseReturnModal({
         return sum + quantity * Number(item.unit_cost || 0);
     }, 0);
 
+    // The supplier's payable takes whatever the return is not paid back in; a
+    // purchase with no supplier has none, so the strip must cover all of it.
+    const hasSupplier = !!selectedPurchase?.supplier_id || !!selectedPurchase?.supplier;
+    const partyDue: number | null = hasSupplier ? Number(selectedPurchase?.supplier?.due_balance ?? 0) : null;
+    const refund = useReturnRefund({
+        context: 'purchase_return',
+        // The modal stays mounted while closed, so the open session is part of
+        // the key: reopening the same purchase must not bring back what was
+        // typed last time.
+        docKey: isOpen ? selectedPurchase?.id ?? null : null,
+        total: totalAmount,
+        partyDue,
+    });
+    const received = refund.payments.reduce((sum, p) => sum + p.amount, 0);
+    const refundBalanced = hasSupplier
+        ? received - totalAmount < 0.01
+        : Math.abs(totalAmount - received) < 0.01;
+
     const handleVoiceReturn = (result: VoiceEntryResult) => {
         if (!selectedPurchase) return;
 
@@ -234,6 +257,15 @@ export default function CreatePurchaseReturnModal({
             return;
         }
 
+        if (!refundBalanced) {
+            setError(
+                !hasSupplier && received < totalAmount
+                    ? t.purchaseReturns.refund.needsSupplier
+                    : 'The amount received is more than the return total.',
+            );
+            return;
+        }
+
         setSubmitting(true);
         setError('');
 
@@ -245,6 +277,7 @@ export default function CreatePurchaseReturnModal({
                 notes: notes || undefined,
                 warehouseId: showWarehouse ? warehouseId || undefined : undefined,
                 items,
+                payments: returnPaymentsPayload(refund.payments),
             });
 
             onSuccess();
@@ -495,6 +528,21 @@ export default function CreatePurchaseReturnModal({
                                         </div>
                                         <span className="text-2xl font-bold">{formatBDT(totalAmount, { locale })}</span>
                                     </div>
+
+                                    <PurchasePaymentSection
+                                        key={selectedPurchase.id}
+                                        context="purchase_return"
+                                        storeId={selectedPurchase.store_id}
+                                        payments={refund.payments}
+                                        total={totalAmount}
+                                        onPaymentChange={refund.onPaymentChange}
+                                        onLayoutReady={refund.onLayoutReady}
+                                        blockedReason={hasSupplier ? undefined : t.purchaseReturns.refund.needsSupplier}
+                                        labels={{
+                                            title: t.purchaseReturns.refund.title,
+                                            keepingDue: t.purchaseReturns.refund.keepingDue,
+                                        }}
+                                    />
                                 </>
                             )}
                         </div>
@@ -507,7 +555,7 @@ export default function CreatePurchaseReturnModal({
                     </Button>
                     <Button
                         onClick={handleSubmit}
-                        disabled={submitting || !selectedPurchase}
+                        disabled={submitting || !selectedPurchase || !refund.ready || !refundBalanced}
                         loading={submitting}
                     >
                         Create Purchase Return

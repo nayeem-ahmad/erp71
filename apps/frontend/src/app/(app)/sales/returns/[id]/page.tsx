@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Printer, Save, Package, FileCheck, FileText, Pencil, X, Trash2 } from 'lucide-react';
@@ -15,6 +15,13 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { nestedPageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
 import { PageShell } from '@/components/ui';
+import PaymentSection from '@/components/document-entry/PaymentSection';
+import type { Payment } from '@/lib/hooks/useNewSaleCart';
+import { paymentsFromRecords, returnPaymentsPayload } from '@/lib/return-refund-prefill';
+import { toast } from '@/lib/toast';
+
+/** The server's refusal of a partial refund when no customer's due can take the rest. */
+const REFUND_NEEDS_CUSTOMER = "Refund the full amount, or pick the customer's sale";
 
 interface EditItem {
     saleItemId: string;
@@ -42,6 +49,11 @@ function ReturnDetailPageContent() {
     // Edit state
     const [editReason, setEditReason] = useState('');
     const [editItems, setEditItems] = useState<EditItem[]>([]);
+    // The refund as recorded, until the user changes it; `paymentsTouched`
+    // says whether they have.
+    const [editPayments, setEditPayments] = useState<Payment[]>([]);
+    const [paymentsTouched, setPaymentsTouched] = useState(false);
+    const recordedPayments = useMemo(() => paymentsFromRecords(ret?.payments), [ret]);
 
     useEffect(() => {
         if (params.id) {
@@ -74,6 +86,8 @@ function ReturnDetailPageContent() {
                 };
             });
             setEditItems(items);
+            setEditPayments(recordedPayments);
+            setPaymentsTouched(false);
         }
     }, [isEditMode, ret]);
 
@@ -89,6 +103,19 @@ function ReturnDetailPageContent() {
     };
 
     const editTotal = editItems.reduce((sum, i) => sum + i.quantity * i.priceAtSale, 0);
+
+    // A return saved before refunds were recorded has no tenders, which is not
+    // the same as refunding nothing — its edit leaves the refund alone unless
+    // the user sets one. A recorded one always sends its strip back: the
+    // server treats unchanged tenders as notes-only.
+    const sendsPayments = !!ret?.tenders_recorded || paymentsTouched;
+    // What the tenders leave of the total comes off the customer's due, so
+    // without a customer they must cover all of it; and never more than it.
+    const hasCustomer = !!ret?.sale?.customer_id;
+    const editRefunded = editPayments.reduce((sum, p) => sum + p.amount, 0);
+    const refundBalanced = !sendsPayments || (hasCustomer
+        ? editRefunded - editTotal < 0.01
+        : Math.abs(editTotal - editRefunded) < 0.01);
 
     const updateItemQuantity = (index: number, val: string) => {
         const num = parseInt(val) || 0;
@@ -109,6 +136,10 @@ function ReturnDetailPageContent() {
             alert(t.shared.form.atLeastOneReturnItem);
             return;
         }
+        if (!refundBalanced) {
+            toast.error(!hasCustomer && editRefunded < editTotal ? REFUND_NEEDS_CUSTOMER : 'The refund is more than the return total');
+            return;
+        }
         setSaving(true);
         try {
             await api.updateReturn(ret.id, {
@@ -118,12 +149,14 @@ function ReturnDetailPageContent() {
                     productId: i.productId,
                     quantity: i.quantity,
                 })),
+                ...(sendsPayments ? { payments: returnPaymentsPayload(editPayments) } : {}),
             });
             await loadReturn(ret.id);
             router.push(`/sales/returns/${ret.id}`);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to save return', error);
-            alert(t.shared.errors.saveReturn);
+            // The server says why — an imported return, a refund its due cannot take.
+            toast.error(error?.message || t.shared.errors.saveReturn);
         } finally {
             setSaving(false);
         }
@@ -186,7 +219,7 @@ function ReturnDetailPageContent() {
                         <div className="flex items-center space-x-3 rtl:space-x-reverse">
                             <button
                                 onClick={handleSave}
-                                disabled={saving || editItems.filter((i) => i.quantity > 0).length === 0}
+                                disabled={saving || editItems.filter((i) => i.quantity > 0).length === 0 || !refundBalanced}
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest shadow-sm flex items-center space-x-1.5 rtl:space-x-reverse transition-all disabled:opacity-50"
                             >
                                 <Save className="w-3.5 h-3.5" />
@@ -433,6 +466,27 @@ function ReturnDetailPageContent() {
                     )}
                 </div>
 
+                {/* Refund: what the customer was handed back, and on which method. */}
+                {(isEditMode || recordedPayments.length > 0) && (
+                    <div className="bg-white rounded-lg shadow-sm p-6">
+                        <PaymentSection
+                            context="sale_return"
+                            storeId={ret.store_id}
+                            payments={isEditMode ? editPayments : recordedPayments}
+                            total={isEditMode ? editTotal : parseFloat(ret.total_refund)}
+                            onPaymentChange={(next) => {
+                                setPaymentsTouched(true);
+                                setEditPayments(next);
+                            }}
+                            readOnly={!isEditMode}
+                            captureInstrument
+                            locale={locale}
+                            labels={{ title: 'Refund', keepingDue: 'Adjusted against due {amount}' }}
+                            blockedReason={hasCustomer ? undefined : REFUND_NEEDS_CUSTOMER}
+                        />
+                    </div>
+                )}
+
                 {/* Reason Section */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex items-center space-x-3 rtl:space-x-reverse">
@@ -469,7 +523,7 @@ function ReturnDetailPageContent() {
                         </button>
                         <button
                             onClick={handleSave}
-                            disabled={saving || editItems.filter((i) => i.quantity > 0).length === 0}
+                            disabled={saving || editItems.filter((i) => i.quantity > 0).length === 0 || !refundBalanced}
                             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md flex items-center space-x-2 rtl:space-x-reverse transition-all disabled:opacity-50"
                         >
                             <Save className="w-4 h-4" />

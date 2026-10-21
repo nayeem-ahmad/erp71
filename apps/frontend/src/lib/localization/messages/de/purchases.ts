@@ -57,6 +57,17 @@ export const purchasesMessages = {
         addPaymentMethod: "Zahlungsmethode hinzufügen",
         noPaymentsRecorded: "Keine Zahlungen erfasst.",
         paymentExceedsTotal: "Die Zahlung darf die Einkaufssumme nicht überschreiten.",
+        paymentLayout: {
+            customise: "Anpassen",
+            title: "Zahlungsmethoden auf diesem Bildschirm",
+            reset: "Auf Standard zurücksetzen",
+            save: "Speichern",
+            cancel: "Abbrechen",
+            moveUp: "{method} nach oben",
+            moveDown: "{method} nach unten",
+            showMethod: "{method} anzeigen",
+            saveFailed: "Zahlungsanordnung konnte nicht gespeichert werden",
+        },
         paymentInstrument: {
             toggle: "+ Bank-/Scheckdetails",
             toggleAlt: "+ Zahlungsdetails",
@@ -362,6 +373,11 @@ export const purchasesMessages = {
             unknownItem: "Unbekannter Artikel",
             createReturn: "Einkaufsretoure anlegen",
             creating: "Wird angelegt...",
+        },
+        refund: {
+            title: "Vom Lieferanten erhaltenes Geld",
+            keepingDue: "Mit Verbindlichkeit verrechnet {amount}",
+            needsSupplier: "Den vollen Betrag annehmen oder den Einkauf eines Lieferanten wählen",
         },
         detail: {
             loadFailed: "Einkaufsretoure konnte nicht geladen werden",

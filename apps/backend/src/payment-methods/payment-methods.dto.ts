@@ -1,5 +1,5 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsEnum } from 'class-validator';
-import { PaymentMethodType } from '@erp71/shared-types';
+import { IsString, IsOptional, IsBoolean, IsInt, IsEnum, IsArray, IsIn } from 'class-validator';
+import { PaymentMethodType, PAYMENT_LAYOUT_CONTEXTS, PaymentLayoutContext } from '@erp71/shared-types';
 
 // Re-exported so existing importers (controller, specs) keep working. The
 // values live in @erp71/shared-types so the settings form validates against
@@ -30,6 +30,17 @@ export class CreatePaymentMethodDto {
   @IsOptional()
   @IsBoolean()
   show_on_entry?: boolean;
+
+  /** Offered at every branch (the default). When false, only at `store_ids`. */
+  @IsOptional()
+  @IsBoolean()
+  all_branches?: boolean;
+
+  /** The branches a limited method is offered at; ignored when all_branches is true. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  store_ids?: string[];
 }
 
 export class UpdatePaymentMethodDto {
@@ -56,6 +67,17 @@ export class UpdatePaymentMethodDto {
   @IsOptional()
   @IsBoolean()
   show_on_entry?: boolean;
+
+  /** Offered at every branch (the default). When false, only at `store_ids`. */
+  @IsOptional()
+  @IsBoolean()
+  all_branches?: boolean;
+
+  /** The branches a limited method is offered at; ignored when all_branches is true. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  store_ids?: string[];
 }
 
 export class PaymentMethodResponseDto {
@@ -67,6 +89,10 @@ export class PaymentMethodResponseDto {
   is_active: boolean;
   sort_order: number;
   show_on_entry: boolean;
+  /** Offered at every branch; when false, only at `store_ids`. */
+  all_branches: boolean;
+  /** The branches a limited method is offered at; empty when all_branches. */
+  store_ids: string[];
   created_at: Date;
   updated_at: Date;
   /** The linked ledger account; only the list endpoint fills it in. */
@@ -84,4 +110,24 @@ export class PaymentMethodAccountDto {
   code: string | null;
   type: string;
   category: string;
+}
+
+/** Which branch and screen a layout belongs to; both required on every layout route. */
+export class PaymentLayoutQueryDto {
+  @IsString()
+  storeId: string;
+
+  @IsIn(PAYMENT_LAYOUT_CONTEXTS as PaymentLayoutContext[])
+  context: PaymentLayoutContext;
+}
+
+/** A member's arrangement of one screen: method ids in order, and the ones tucked away. */
+export class SavePaymentLayoutDto {
+  @IsArray()
+  @IsString({ each: true })
+  order: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  hidden: string[];
 }

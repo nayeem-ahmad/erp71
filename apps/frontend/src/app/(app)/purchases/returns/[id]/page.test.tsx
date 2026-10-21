@@ -20,11 +20,26 @@ jest.mock('@/lib/api', () => ({
         getPurchaseReturn: jest.fn(),
         updatePurchaseReturn: jest.fn(),
         deletePurchaseReturn: jest.fn(),
+        getPaymentLayout: jest.fn(),
+        getPaymentMethods: jest.fn(),
     },
 }));
 
+const BKASH = {
+    id: 'pm-bkash',
+    name: 'bKash',
+    type: 'Mobile Wallet',
+    account_id: null,
+    is_active: true,
+    sort_order: 1,
+    show_on_entry: true,
+    all_branches: true,
+    store_ids: [],
+};
+
 describe('PurchaseReturnDetailPage — Epic 21.4', () => {
     beforeEach(() => {
+        jest.clearAllMocks();
         pushMock.mockReset();
         searchValue = '';
         window.alert = jest.fn();
@@ -65,7 +80,32 @@ describe('PurchaseReturnDetailPage — Epic 21.4', () => {
         });
         api.updatePurchaseReturn.mockResolvedValue({ id: 'pret-1' });
         api.deletePurchaseReturn.mockResolvedValue({ deleted: true });
+        api.getPaymentLayout.mockResolvedValue({ customised: false, visible: [BKASH], available: [BKASH] });
+        api.getPaymentMethods.mockResolvedValue([BKASH]);
     });
+
+    /** The return as saved with its money received: ৳10 from the supplier on bKash, the other ৳14 against the payable. */
+    const withRecordedPayments = async () => {
+        const { api } = require('@/lib/api');
+        const saved = await api.getPurchaseReturn();
+        api.getPurchaseReturn.mockResolvedValue({
+            ...saved,
+            store_id: 'store-1',
+            supplier_id: 'sup-1',
+            tenders_recorded: true,
+            payments: [
+                {
+                    id: 'rp-1',
+                    payment_method: 'Mobile Wallet',
+                    payment_method_name: 'bKash',
+                    payment_method_id: 'pm-bkash',
+                    account_id: 'acc-bkash',
+                    amount: '10.00',
+                    reference_no: 'TX-5',
+                },
+            ],
+        });
+    };
 
     it('renders purchase return detail data', async () => {
         render(<PurchaseReturnDetailPage />);
@@ -102,6 +142,44 @@ describe('PurchaseReturnDetailPage — Epic 21.4', () => {
             );
         });
         expect(pushMock).toHaveBeenCalledWith('/purchases/returns/pret-1');
+    });
+
+    it('return detail lists recorded payments; edit sends payments', async () => {
+        const { api } = require('@/lib/api');
+        await withRecordedPayments();
+
+        // View mode: what was received, read-only.
+        const { unmount } = render(<PurchaseReturnDetailPage />);
+        expect(await screen.findByText('bKash')).toBeInTheDocument();
+        expect(screen.getByText('TX-5')).toBeInTheDocument();
+        expect(screen.queryByLabelText(/bKash/i, { selector: 'input' })).not.toBeInTheDocument();
+        unmount();
+
+        // Edit mode: the same tenders, editable, and sent back on save.
+        searchValue = 'true';
+        render(<PurchaseReturnDetailPage />);
+        const amount = (await screen.findByRole('spinbutton', { name: /bKash/i })) as HTMLInputElement;
+        await waitFor(() => expect(amount.value).toBe('10'));
+        fireEvent.change(screen.getByDisplayValue('REF-1'), { target: { value: 'REF-2' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.updatePurchaseReturn).toHaveBeenCalledTimes(1));
+        // Exactly the DTO's fields, the transaction id travelling with the tender.
+        expect(api.updatePurchaseReturn.mock.calls[0][1].payments).toEqual([
+            { paymentMethod: 'Mobile Wallet', paymentMethodId: 'pm-bkash', amount: 10, referenceNo: 'TX-5' },
+        ]);
+    });
+
+    it('leaves the money of a return saved before tenders alone unless the user sets some', async () => {
+        searchValue = 'true';
+        const { api } = require('@/lib/api');
+        render(<PurchaseReturnDetailPage />);
+        await waitFor(() => expect(screen.getByDisplayValue('REF-1')).toBeInTheDocument());
+        fireEvent.change(screen.getByDisplayValue('REF-1'), { target: { value: 'REF-2' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.updatePurchaseReturn).toHaveBeenCalledTimes(1));
+        expect(api.updatePurchaseReturn.mock.calls[0][1]).not.toHaveProperty('payments');
     });
 
     it('deletes the purchase return after confirmation', async () => {

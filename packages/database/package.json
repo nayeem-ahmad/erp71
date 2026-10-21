@@ -24,6 +24,8 @@
     "sync:board-slug": "tsx prisma/sync-board-slug.ts",
     "sync:party-branch": "tsx prisma/sync-party-branch.ts",
     "sync:purchase-date": "tsx prisma/sync-purchase-date.ts",
+    "sync:payment-method-account-fk": "tsx prisma/sync-payment-method-account-fk.ts",
+    "sync:payment-method-accounts": "tsx prisma/sync-payment-method-accounts.ts",
     "sync:task-reference": "tsx prisma/sync-task-reference.ts",
     "sync:story-code": "tsx prisma/sync-story-code.ts",
     "sync:store-code": "tsx prisma/sync-store-code.ts",

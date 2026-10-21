@@ -86,7 +86,7 @@ describe('AuthService', () => {
         tenantUser: { create: jest.fn(), findMany: jest.fn() },
         tenantRole: { create: jest.fn() },
         tenantRolePermission: { createMany: jest.fn() },
-        paymentMethod: { createMany: jest.fn() },
+        paymentMethod: { createMany: jest.fn(), findMany: jest.fn(), update: jest.fn() },
         leadSourceOption: { createMany: jest.fn() },
         leadCategoryOption: { createMany: jest.fn() },
         conversationChannel: { createMany: jest.fn() },
@@ -195,6 +195,9 @@ describe('AuthService', () => {
             { id: 'payable-id', name: 'Purchase Payable' },
             { id: 'expense-id', name: 'General Operating Expense' },
         ]);
+        // Signup links the seeded methods to their accounts, reading the unlinked ones.
+        db.paymentMethod.findMany.mockResolvedValue([{ id: 'pm-cash', name: 'Cash' }]);
+        db.paymentMethod.update.mockResolvedValue({});
         db.userStoreAccess.create.mockResolvedValue({});
         db.userStorePermission.createMany.mockResolvedValue({ count: 22 });
         db.tenantRole.create.mockImplementation((args: any) =>
@@ -327,13 +330,19 @@ describe('AuthService', () => {
                 skipDuplicates: true,
                 data: expect.arrayContaining([
                     expect.objectContaining({ tenant_id: 'tenant-1', name: 'Cash', type: 'Cash', sort_order: 1, show_on_entry: true }),
-                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'bKash', type: 'Mobile Wallet', sort_order: 2 }),
-                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Nagad', type: 'Mobile Wallet', sort_order: 3 }),
-                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Card', type: 'Card', sort_order: 4 }),
-                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Bank', type: 'Bank', sort_order: 5 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Bank', type: 'Bank', sort_order: 2 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'bKash', type: 'Mobile Wallet', sort_order: 3 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Nagad', type: 'Mobile Wallet', sort_order: 4 }),
+                    expect.objectContaining({ tenant_id: 'tenant-1', name: 'Card', type: 'Card', sort_order: 5 }),
                 ]),
             }),
         );
+
+        // Each default method posts to its own account, not its type's fallback.
+        expect(db.paymentMethod.update).toHaveBeenCalledWith({
+            where: { id: 'pm-cash' },
+            data: { account_id: 'cash-id' },
+        });
 
         // Lead sources and categories are tenant-owned rows rather than enums, so
         // a tenant provisioned without them has empty dropdowns on the lead form

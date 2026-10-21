@@ -1,6 +1,6 @@
 # Dynamic payment methods on sales and purchases — plan
 
-Status: **proposed, 2026-09-26.** Nothing here is built. Written in answer to
+Status: **superseded in part, 2026-10-20,** by docs/superpowers/specs/2026-10-19-payment-method-layout-and-tender-posting-design.md (branch feat/branch-payment-methods).
 "In sales/purchase, payment methods should load dynamically. Some should show up
 by default. Others can be added when needed."
 

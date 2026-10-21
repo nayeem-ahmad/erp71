@@ -37,6 +37,11 @@ interface PurchaseEntryLayoutProps {
     createdAt?: string | null;
     currentUser?: any;
     /**
+     * The branch the bill belongs to: the header branch on a new bill, the
+     * bill's own when editing. The payment strip offers that branch's methods.
+     */
+    storeId: string;
+    /**
      * What the supplier was owed apart from this bill. A recorded bill is
      * already in the supplier's balance, so its screens work this out; a new
      * one reads the picked supplier's balance.
@@ -68,6 +73,7 @@ export default function PurchaseEntryLayout({
     transactionDateEditable = false,
     createdAt,
     currentUser = null,
+    storeId,
     previousPayable,
     onVoiceResult,
     actions,
@@ -214,6 +220,8 @@ export default function PurchaseEntryLayout({
                     />
                     <div className="border-t pt-3">
                         <PurchasePaymentSection
+                            context="purchase"
+                            storeId={storeId}
                             payments={entry.payments}
                             total={entry.totals.total}
                             onPaymentChange={entry.setPayments}
