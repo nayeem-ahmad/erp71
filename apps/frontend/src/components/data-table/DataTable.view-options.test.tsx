@@ -126,7 +126,7 @@ describe('DataTable view options', () => {
         expect(table()).toHaveClass('dt-view');
         expect(table()).not.toHaveClass('dt-single-line');
         expect(table().style.getPropertyValue('--dt-font-size')).toBe('13px');
-        expect(screen.getByText('Alpha').closest('tr')).toHaveClass('even:bg-gray-50');
+        expect(screen.getByText('Alpha').closest('tr')).toHaveClass('even:bg-gray-100/70', 'hover:bg-blue-50');
     });
 
     it('holds compact rows to one line', () => {
@@ -143,10 +143,20 @@ describe('DataTable view options', () => {
         expect(table().style.getPropertyValue('--dt-font-size')).toBe('15px');
     });
 
+    it('marks a ticked row a shade deeper than hover', () => {
+        render(<DataTable {...props} viewOptions enableRowSelection getRowId={(row) => row.id} />);
+        fireEvent.click(screen.getAllByRole('checkbox', { name: 'Select row' })[0]);
+        expect(screen.getByText('Alpha').closest('tr')).toHaveClass('!bg-blue-100/80');
+        expect(screen.getByText('Beta').closest('tr')).not.toHaveClass('!bg-blue-100/80');
+    });
+
     it('turns striping off', () => {
         render(<DataTable {...props} viewOptions />);
         fireEvent.click(within(openViewOptions()).getByRole('switch', { name: 'Striped rows' }));
-        expect(screen.getByText('Alpha').closest('tr')).not.toHaveClass('even:bg-gray-50');
+        const row = screen.getByText('Alpha').closest('tr');
+        expect(row).not.toHaveClass('even:bg-gray-100/70');
+        // The hover wash stays with the stripes off.
+        expect(row).toHaveClass('hover:bg-blue-50');
     });
 
     it('applies a change to every list unless this one is set apart', () => {

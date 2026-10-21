@@ -13,7 +13,7 @@ import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { toast } from '@/lib/toast';
 import StorefrontOrdersPanel from './StorefrontOrdersPanel';
 import { SIMPLE_DOC_STYLES, openPrintWindow, renderHeaderHtml, sheetPaper } from '@/lib/print';
-import type { HeaderContext } from '@/lib/print';
+import type { HeaderContext, PrintSheet } from '@/lib/print';
 import { usePrintHeader } from '@/lib/print/use-print-header';
 import { useSalePrintPrefs } from '@/lib/hooks/useSalePrintPrefs';
 import { useI18n, formatMessage } from '@/lib/i18n';
@@ -160,25 +160,18 @@ export default function OrdersPage() {
         else void runBulk(pendingBulk.rows, (order) => api.deleteOrder(order.id), t.orders.bulk.deleted);
     };
 
-    const handlePrint = async (order: SalesOrder) => {
-        // The order's own branch letterhead, not the one resolved on mount.
-        const header = await printHeader.resolve(order.store_id);
-        const headerContext: HeaderContext = {
+    /** One order as it prints, on the letterhead it was given. */
+    const orderSheet = (order: SalesOrder, header: Awaited<ReturnType<typeof printHeader.resolve>>): PrintSheet => {
+        const context: HeaderContext = {
             docTitle: t.shared.print.salesOrder,
             docNumber: order.order_number,
             docDate: formatDate(order.created_at, locale),
             companyName: header.companyName,
         };
-
-        openPrintWindow({
-            context: headerContext,
-            title: order.order_number,
-            paperSize: paper,
+        return {
+            context,
             headerConfig: header.headerConfig,
-            headerHtml: renderHeaderHtml(header.headerConfig, headerContext, paper),
-            styles: SIMPLE_DOC_STYLES,
-            compactable: true,
-            repeatHeader: true,
+            headerHtml: renderHeaderHtml(header.headerConfig, context, paper),
             bodyHtml: `
                 <h1>${order.order_number}</h1>
                 <div class="subtitle">${formatMessage(t.shared.print.datePayment, {
@@ -197,6 +190,38 @@ export default function OrdersPage() {
                 </table>
                 <p><strong>${t.shared.print.paid}</strong> ${formatBDT(Number(order.amount_paid), { locale })} | <strong>${t.shared.print.due}</strong> ${formatBDT(Number(order.total_amount) - Number(order.amount_paid), { locale })}</p>`,
             footerHtml: `<div class="footer">${t.shared.print.salesOrder}</div>`,
+        };
+    };
+
+    const handlePrint = async (order: SalesOrder) => {
+        // The order's own branch letterhead, not the one resolved on mount.
+        const header = await printHeader.resolve(order.store_id);
+        const sheet = orderSheet(order, header);
+        openPrintWindow({
+            ...sheet,
+            title: order.order_number,
+            paperSize: paper,
+            styles: SIMPLE_DOC_STYLES,
+            compactable: true,
+            repeatHeader: true,
+        });
+    };
+
+    /**
+     * The ticked orders as one print job, each on a page of its own. Offered
+     * only when they share a branch, so the whole job is on one letterhead.
+     */
+    const printSelected = async (rows: SalesOrder[]) => {
+        if (rows.length === 0) return;
+        const header = await printHeader.resolve(rows[0].store_id);
+        openPrintWindow({
+            title: `${t.orders.title} (${rows.length})`,
+            paperSize: paper,
+            headerConfig: header.headerConfig,
+            styles: SIMPLE_DOC_STYLES,
+            compactable: true,
+            repeatHeader: true,
+            sheets: rows.map((order) => orderSheet(order, header)),
         });
     };
 
@@ -305,6 +330,12 @@ export default function OrdersPage() {
                     icon: <PackageCheck className="w-4 h-4" />,
                     onClick: (r) => setPendingBulk({ kind: 'deliver', rows: inStatus(r, 'PROCESSING') }),
                 },
+            },
+            {
+                // One branch, one letterhead: mixed branches print one by one.
+                rows: (r) => (r.length > 0 && r.every((o) => o.store_id === r[0].store_id) ? r : []),
+                label: t.orders.bulk.print,
+                action: { icon: <Printer className="w-4 h-4" />, onClick: (r) => void printSelected(r) },
             },
             {
                 rows: deletable,

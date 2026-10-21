@@ -619,6 +619,7 @@ export const salesMessages = {
             confirm: 'Confirm ({count})',
             startProcessing: 'Start processing ({count})',
             markDelivered: 'Mark delivered ({count})',
+            print: 'Print selected ({count})',
             delete: 'Delete ({count})',
             deliverTitle: 'Mark as delivered?',
             deliverPrompt: 'Orders: {count}. Their stock leaves the warehouse and their totals are added to the customers. This cannot be undone from the list.',

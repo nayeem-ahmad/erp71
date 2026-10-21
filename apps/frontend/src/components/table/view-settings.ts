@@ -58,3 +58,17 @@ export function sanitizeTableView(raw: unknown): Partial<TableViewSettings> {
     if (typeof value.fitWidth === 'boolean') clean.fitWidth = value.fitWidth;
     return clean;
 }
+
+/**
+ * Row fills. The stripe is a visible step (gray-100 at 70%, not the gray-50
+ * that disappears on a laptop panel), the hover wash is blue with striping on
+ * or off, and a ticked row sits a shade deeper than hover so the two can be
+ * told apart. `hover:` follows `even:` in Tailwind's variant order, so the
+ * wash replaces the stripe under the pointer; `selected` carries `!` because
+ * it must win over both.
+ */
+export const TABLE_ROW_CLASSES = {
+    striped: 'odd:bg-white even:bg-gray-100/70 hover:bg-blue-50 transition-colors',
+    plain: 'bg-white hover:bg-blue-50 transition-colors',
+    selected: '!bg-blue-100/80',
+} as const;

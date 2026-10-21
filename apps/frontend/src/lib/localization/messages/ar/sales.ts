@@ -615,6 +615,7 @@ export const salesMessages = {
             confirm: 'تأكيد ({count})',
             startProcessing: 'بدء المعالجة ({count})',
             markDelivered: 'تم التسليم ({count})',
+            print: 'طباعة المحدد ({count})',
             delete: 'حذف ({count})',
             deliverTitle: 'وضع علامة تم التسليم؟',
             deliverPrompt: 'الطلبات: {count}. سيخرج مخزونها من المستودع وتُضاف مبالغها إلى العملاء. لا يمكن التراجع عن ذلك من القائمة.',

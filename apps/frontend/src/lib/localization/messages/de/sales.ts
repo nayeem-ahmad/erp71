@@ -615,6 +615,7 @@ export const salesMessages = {
             confirm: "Bestätigen ({count})",
             startProcessing: "Bearbeitung starten ({count})",
             markDelivered: "Als geliefert markieren ({count})",
+            print: "Auswahl drucken ({count})",
             delete: "Löschen ({count})",
             deliverTitle: "Als geliefert markieren?",
             deliverPrompt: "Aufträge: {count}. Ihr Bestand verlässt das Lager und ihre Summen werden den Kunden zugerechnet. Das lässt sich in der Liste nicht rückgängig machen.",

@@ -615,6 +615,7 @@ export const salesMessages = {
                 confirm: "নিশ্চিত করুন ({count})",
                 startProcessing: "প্রক্রিয়া শুরু ({count})",
                 markDelivered: "ডেলিভারি হয়েছে ({count})",
+                print: "নির্বাচিত প্রিন্ট ({count})",
                 delete: "মুছুন ({count})",
                 deliverTitle: "ডেলিভারি হয়েছে বলে চিহ্নিত করবেন?",
                 deliverPrompt: "অর্ডার: {count}। এগুলোর স্টক গুদাম থেকে বের হবে এবং মোট পরিমাণ গ্রাহকদের হিসাবে যোগ হবে। তালিকা থেকে এটি ফেরানো যায় না।",

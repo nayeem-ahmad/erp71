@@ -615,6 +615,7 @@ export const salesMessages = {
                 confirm: "Sahkan ({count})",
                 startProcessing: "Mula proses ({count})",
                 markDelivered: "Tandakan dihantar ({count})",
+                print: "Cetak pilihan ({count})",
                 delete: "Padam ({count})",
                 deliverTitle: "Tandakan sebagai dihantar?",
                 deliverPrompt: "Pesanan: {count}. Stoknya keluar dari gudang dan jumlahnya ditambah kepada pelanggan. Ini tidak boleh dibatalkan dari senarai.",

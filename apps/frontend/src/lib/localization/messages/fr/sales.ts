@@ -615,6 +615,7 @@ export const salesMessages = {
             confirm: "Confirmer ({count})",
             startProcessing: "Lancer le traitement ({count})",
             markDelivered: "Marquer livré ({count})",
+            print: "Imprimer la sélection ({count})",
             delete: "Supprimer ({count})",
             deliverTitle: "Marquer comme livré ?",
             deliverPrompt: "Commandes : {count}. Leur stock sort de l'entrepôt et leurs montants sont ajoutés aux clients. Impossible d'annuler depuis la liste.",

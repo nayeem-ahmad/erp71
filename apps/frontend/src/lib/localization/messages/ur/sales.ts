@@ -615,6 +615,7 @@ export const salesMessages = {
             confirm: 'تصدیق کریں ({count})',
             startProcessing: 'پروسیسنگ شروع ({count})',
             markDelivered: 'ڈیلیور ہو گیا ({count})',
+            print: 'منتخب پرنٹ کریں ({count})',
             delete: 'حذف کریں ({count})',
             deliverTitle: 'ڈیلیور شدہ نشان زد کریں؟',
             deliverPrompt: 'آرڈر: {count}۔ ان کا اسٹاک گودام سے نکلے گا اور ان کی رقم گاہکوں کے کھاتے میں جڑے گی۔ فہرست سے اسے واپس نہیں کیا جا سکتا۔',

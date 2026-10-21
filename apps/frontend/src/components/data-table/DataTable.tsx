@@ -56,7 +56,7 @@ import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { stripedRowClass } from '@/lib/ui/striped-row';
 import { useTablePreferences } from './useTablePreferences';
 import FilterBar, { type ListFilter, type ResolvedListFilter } from './FilterBar';
-import { TableViewOptions, useTableViewSettings, TABLE_DENSITY_CLASSES, TABLE_FONT_PX } from '@/components/table';
+import { TableViewOptions, useTableViewSettings, TABLE_DENSITY_CLASSES, TABLE_FONT_PX, TABLE_ROW_CLASSES } from '@/components/table';
 import {
     columnDefId,
     isPinnedColumnId,
@@ -416,7 +416,9 @@ export default function DataTable<T>({
     const savedPrefs = prefs.getPreferences(tableId);
     const isMdUp = useIsMdUp();
     const { settings: view } = useTableViewSettings(tableId);
-    const striped = viewOptions ? view.striped : stripedProp;
+    const rowToneClass = viewOptions
+        ? view.striped ? TABLE_ROW_CLASSES.striped : TABLE_ROW_CLASSES.plain
+        : stripedProp ? stripedRowClass : 'hover:bg-gray-50/50 transition-colors';
     /** Compact rows hold to one line; stacked cell content runs along it. */
     const singleLine = viewOptions && view.density === 'compact';
     /** A phone keeps sideways scrolling — eight columns in 360px read as none. */
@@ -1235,9 +1237,9 @@ export default function DataTable<T>({
                                 {table.getRowModel().rows.map((row) => (
                                     <tr
                                         key={row.id}
-                                        className={`${striped ? stripedRowClass : 'hover:bg-gray-50/50 transition-colors'} ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${
+                                        className={`${rowToneClass} ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${
                                             // A ticked row stays marked over its stripe, not just by its box.
-                                            viewOptions && row.getIsSelected() ? '!bg-blue-50' : ''
+                                            viewOptions && row.getIsSelected() ? TABLE_ROW_CLASSES.selected : ''
                                         } ${rowClassName?.(row.original) ?? ''}`}
                                         onClick={onRowClick ? (event) => {
                                             if (isFromControl(event.target)) return;

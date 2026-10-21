@@ -19,7 +19,7 @@ jest.mock('@/lib/i18n', () => {
 jest.mock('@/lib/hooks/useSalePrintPrefs', () => require('@/test-utils/print-paper').salePrintPrefsModuleMock());
 jest.mock('@/lib/print', () => require('@/test-utils/print-paper').printModuleSpy());
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
-import { mockBrowserPaper, printedPaper } from '@/test-utils/print-paper';
+import { mockBrowserPaper, openPrintWindowSpy, printedPaper } from '@/test-utils/print-paper';
 import OrdersPage from './page';
 
 jest.mock('@/lib/branch-scope', () => require('@/test-utils/branch-scope').branchScopeModuleMock());
@@ -99,6 +99,7 @@ const ordersInEveryStatus = [
     { id: 'o-proc', order_number: 'SO-P', status: 'PROCESSING' },
     { id: 'o-deliv', order_number: 'SO-V', status: 'DELIVERED' },
 ].map((o) => ({
+    store_id: 'branch-a',
     ...o, payment_status: 'UNPAID', total_amount: '100', amount_paid: '0', created_at: '2026-01-10T10:00:00Z',
     items: [], deposits: [], customer: null,
 }));
@@ -307,6 +308,28 @@ describe('OrdersPage', () => {
             fireEvent.click(within(dialog).getByRole('button', { name: 'Delete (3)' }));
             await waitFor(() => expect(api.deleteOrder).toHaveBeenCalledTimes(3));
             expect(api.deleteOrder).not.toHaveBeenCalledWith('o-deliv');
+        });
+
+        it('prints the ticked orders as one job, a page each, when they share a branch', async () => {
+            const openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+            openPrintWindowSpy.mockClear();
+            const bar = await tickAll();
+            fireEvent.click(bar.getByRole('button', { name: 'Print selected (4)' }));
+            await waitFor(() => expect(openPrintWindowSpy).toHaveBeenCalledTimes(1));
+            const job = openPrintWindowSpy.mock.calls[0][0];
+            expect(job.sheets.map((sheet: any) => sheet.bodyHtml.match(/<h1>(.*?)<\/h1>/)[1])).toEqual(['SO-D', 'SO-C', 'SO-P', 'SO-V']);
+            openSpy.mockRestore();
+        });
+
+        it('offers no combined print when the ticked orders are from different branches', async () => {
+            const { api } = require('@/lib/api');
+            api.getOrders.mockResolvedValue([
+                ...ordersInEveryStatus.slice(0, 3),
+                { ...ordersInEveryStatus[3], store_id: 'branch-b' },
+            ]);
+            const bar = await tickAll();
+            expect(bar.queryByRole('button', { name: /Print selected/ })).not.toBeInTheDocument();
+            expect(bar.getByRole('button', { name: 'Confirm (1)' })).toBeInTheDocument();
         });
 
         it('names the orders a step could not change and keeps the rest done', async () => {
