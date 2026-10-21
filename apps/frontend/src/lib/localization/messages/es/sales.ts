@@ -427,7 +427,7 @@ export const salesMessages = {
             },
             loadFailed: "No se pudo cargar la venta para imprimir.",
             popupBlocked: "Permita las ventanas emergentes de este sitio para imprimir.",
-            printSelected: "Imprimir facturas",
+            printSelected: "Imprimir facturas ({count})",
             bulkFailed: "No se pudieron cargar las ventas seleccionadas para imprimir.",
             bulkPartial: "No se pudieron cargar {skipped} de {total} ventas seleccionadas; se omitieron.",
         },

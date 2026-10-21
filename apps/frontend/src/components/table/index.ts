@@ -1,4 +1,4 @@
-export { RowActions, RowActionButton } from './RowActions';
+export { RowActions, RowActionButton, rowActionButtonClass } from './RowActions';
 export type { RowActionButtonProps, RowActionIntent } from './RowActions';
 export { TableViewOptions } from './TableViewOptions';
 export { useTableViewSettings, useTableViewStore } from './useTableViewSettings';

@@ -427,7 +427,7 @@ export const salesMessages = {
                 },
                 loadFailed: "Jualan tidak dapat dimuatkan untuk dicetak.",
                 popupBlocked: "Benarkan pop-up untuk tapak ini bagi mencetak.",
-                printSelected: "Cetak invois",
+                printSelected: "Cetak invois ({count})",
                 bulkFailed: "Jualan yang dipilih tidak dapat dimuatkan untuk dicetak.",
                 bulkPartial: "{skipped} daripada {total} jualan yang dipilih tidak dapat dimuatkan dan telah ditinggalkan.",
             },

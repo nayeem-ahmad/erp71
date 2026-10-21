@@ -427,7 +427,7 @@ export const salesMessages = {
             },
             loadFailed: "پرنٹ کے لیے سیل لوڈ نہیں ہو سکی۔",
             popupBlocked: "پرنٹ کرنے کے لیے اس سائٹ کے پاپ اپ کی اجازت دیں۔",
-            printSelected: "انوائسز پرنٹ کریں",
+            printSelected: "انوائسز پرنٹ کریں ({count})",
             bulkFailed: "منتخب سیلز پرنٹ کے لیے لوڈ نہیں ہو سکیں۔",
             bulkPartial: "منتخب {total} میں سے {skipped} سیلز لوڈ نہیں ہو سکیں اور چھوڑ دی گئیں۔",
         },
