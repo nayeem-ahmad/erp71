@@ -2084,6 +2084,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Sales return entry fills a short slip** — done 2026-10-21. After the invoice is found, the return starts empty and holds only lines that are going back. Search or scan on that bill, pick a line that is not on the return yet (all of it, or a typed quantity), or return everything left and trim. Fully returned lines stay off the bill. The refund strip, the serial lookup, and the warehouse rules are unchanged. Tests: the new sales-return page, including payments.
+
 - [x] **Purchase return slip released** — done 2026-10-21. PR #869 merged to `main` as `cb7e0fa2`. Deploy to VPS run 39561279489; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200.
 
 - [x] **Purchase return entry fills a short slip** — done 2026-10-21. After a purchase is chosen the return starts empty and holds only lines that are going back. Search or scan on that bill: a typed match adds the line at what is left, an exact SKU scans one piece at a time, and a line already on the slip jumps to its quantity. "On this bill" lists only lines not yet on the return. "Return all remaining" fills every still-returnable line, ready to trim. Cancelled purchases stay out of the lookup, which matches number, supplier, product, or date and shows the latest 12 before a search. The supplier refund strip is unchanged. Tests: slip helper and the purchase-returns page (create, payments, reopen, no supplier, warehouse, scan).
