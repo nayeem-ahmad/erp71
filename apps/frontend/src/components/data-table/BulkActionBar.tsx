@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { formatMessage, useI18n } from '@/lib/i18n';
 
 export interface BulkAction<T> {
     label: string;
@@ -32,13 +33,27 @@ export default function BulkActionBar<T>({
     disabled = false,
     extra,
 }: BulkActionBarProps<T>) {
+    const { t } = useI18n();
     if (count === 0) return null;
 
+    // On a phone the count and the clear button share the first line and the
+    // actions wrap underneath; on a desktop it is all one line, clear last.
     return (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary-border bg-primary-light px-3 py-2 text-sm">
-            <span className="font-semibold text-gray-700">{count} selected</span>
+            <span className="font-semibold text-gray-700">{formatMessage(t.common.dataTable.selectedCount, { count })}</span>
+            <button
+                type="button"
+                disabled={disabled}
+                onClick={onClear}
+                aria-label={t.common.dataTable.clearSelection}
+                title={t.common.dataTable.clearSelection}
+                className="ms-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-gray-600 hover:bg-white disabled:opacity-50 max-md:min-h-touch max-md:min-w-touch md:order-last md:ms-0"
+            >
+                <X className="w-4 h-4" />
+            </button>
+            <div className="basis-full md:hidden" aria-hidden />
             {extra}
-            <div className="flex-1" />
+            <div className="hidden flex-1 md:block" />
             {actions.map((action) => (
                 <button
                     key={action.label}
@@ -55,16 +70,6 @@ export default function BulkActionBar<T>({
                     {action.label}
                 </button>
             ))}
-            <button
-                type="button"
-                disabled={disabled}
-                onClick={onClear}
-                aria-label="Clear selection"
-                title="Clear selection"
-                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-gray-600 hover:bg-white disabled:opacity-50"
-            >
-                <X className="w-4 h-4" />
-            </button>
         </div>
     );
 }

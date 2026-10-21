@@ -7,7 +7,7 @@ import { formatMessage, useI18n } from '@/lib/i18n';
 import { EXPORT_ROW_CAP } from './fetch-all-pages';
 
 export type ExportFormat = 'csv' | 'excel' | 'pdf';
-export type ExportRowScope = 'page' | 'all';
+export type ExportRowScope = 'selected' | 'page' | 'all';
 
 export interface ExportableColumn {
     id: string;
@@ -20,6 +20,8 @@ export interface ExportDialogProps {
     title: string;
     pageCount: number;
     totalCount: number;
+    /** Ticked rows. Above zero the dialog offers them, and opens on them. */
+    selectedCount?: number;
     columns: ExportableColumn[];
     busy?: boolean;
     progress?: { loaded: number; total: number } | null;
@@ -40,6 +42,7 @@ export default function ExportDialog({
     title,
     pageCount,
     totalCount,
+    selectedCount = 0,
     columns,
     busy = false,
     progress = null,
@@ -62,9 +65,10 @@ export default function ExportDialog({
     useEffect(() => {
         if (!open) return;
         setFormat('csv');
-        setRowScope('all');
+        // Rows someone ticked and then pressed Export are the rows they meant.
+        setRowScope(selectedCount > 0 ? 'selected' : 'all');
         setSelected(new Set(visibleIds));
-    }, [open, visibleIds]);
+    }, [open, visibleIds, selectedCount]);
 
     if (!open) return null;
 
@@ -114,6 +118,19 @@ export default function ExportDialog({
                 <fieldset className="space-y-2">
                     <legend className="text-xs font-semibold text-gray-500">{copy.exportRows}</legend>
                     <div className="space-y-1.5">
+                        {selectedCount > 0 && (
+                            <label className="flex items-center gap-2 text-sm text-gray-700 min-h-touch">
+                                <input
+                                    type="radio"
+                                    name="export-rows"
+                                    value="selected"
+                                    checked={rowScope === 'selected'}
+                                    onChange={() => setRowScope('selected')}
+                                    className="h-4 w-4 text-blue-600"
+                                />
+                                {formatMessage(copy.exportSelected, { count: formatCount(selectedCount) })}
+                            </label>
+                        )}
                         <label className="flex items-center gap-2 text-sm text-gray-700 min-h-touch">
                             <input
                                 type="radio"

@@ -15,6 +15,7 @@ import {
     type ColumnOrderState,
     type ColumnSizingState,
     type Row,
+    type Column,
 } from '@tanstack/react-table';
 import {
     Search,
@@ -54,6 +55,8 @@ import { useIsMdUp } from '@/hooks/useMediaQuery';
 import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { stripedRowClass } from '@/lib/ui/striped-row';
 import { useTablePreferences } from './useTablePreferences';
+import FilterBar, { type ListFilter, type ResolvedListFilter } from './FilterBar';
+import { TableViewOptions, useTableViewSettings, TABLE_DENSITY_CLASSES, TABLE_FONT_PX, TABLE_ROW_CLASSES } from '@/components/table';
 import {
     columnDefId,
     isPinnedColumnId,
@@ -75,6 +78,12 @@ declare module '@tanstack/react-table' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     interface ColumnMeta<TData, TValue> {
         hideOnMobile?: boolean;
+        /**
+         * `end` for amounts, quantities and counts: header and cells aligned to
+         * the end edge, with even-width digits, so a column of figures lines up
+         * on its last digit — on paper too.
+         */
+        align?: 'start' | 'center' | 'end';
     }
 }
 
@@ -140,6 +149,19 @@ export interface DataTableProps<T> {
      * keep the faint gray hover they already have.
      */
     striped?: boolean;
+    /**
+     * Draws the list with the person's view settings — row spacing, text size,
+     * striping, fit-to-width — and adds the View options menu to the toolbar.
+     * Every cell then takes the table's one text size and weight, and the
+     * actions column is centred. Piloted on Sales Orders before every list
+     * takes it.
+     */
+    viewOptions?: boolean;
+    /**
+     * The list's filters, drawn in the toolbar beside the search box (and in a
+     * bottom sheet on a phone). See `ListFilter`.
+     */
+    filters?: ListFilter[];
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
      *  client row count. Pages using this must also set `showSearch={false}` and render
@@ -191,15 +213,34 @@ const SERVER_MAX_PAGE_SIZE = 100;
 /*  Header Cells                                                    */
 /* --------------------------------------------------------------- */
 
-/** The label and its sort control — identical whether the cell is draggable. */
-function HeaderLabel({ header }: { header: any }) {
+type ColumnAlign = 'start' | 'center' | 'end';
+
+const JUSTIFY_CLASS: Record<ColumnAlign, string> = {
+    start: '',
+    center: 'justify-center',
+    end: 'justify-end',
+};
+
+const TEXT_ALIGN_CLASS: Record<ColumnAlign, string> = {
+    start: '',
+    center: 'text-center',
+    // A figure never wraps — "৳" on one line and the digits on the next reads as two values.
+    end: 'text-end tabular-nums whitespace-nowrap text-ellipsis',
+};
+
+/**
+ * The label and its sort control — identical whether the cell is draggable.
+ * An end-aligned column puts the arrow before the label, so the label ends
+ * flush with the figures under it.
+ */
+function HeaderLabel({ header, align = 'start' }: { header: any; align?: ColumnAlign }) {
     const canSort = header.column.getCanSort();
     const sorted = header.column.getIsSorted();
 
     return (
         <button
             onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-            className={`flex items-center space-x-1 rtl:space-x-reverse ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
+            className={`flex items-center gap-1 ${align === 'end' ? 'flex-row-reverse' : ''} ${canSort ? 'cursor-pointer hover:text-gray-600' : ''}`}
         >
             <span>
                 {header.isPlaceholder
@@ -207,7 +248,7 @@ function HeaderLabel({ header }: { header: any }) {
                     : flexRender(header.column.columnDef.header, header.getContext())}
             </span>
             {canSort && (
-                <span className="ms-0.5">
+                <span>
                     {sorted === 'asc' ? (
                         <ChevronUp className="w-3 h-3 text-blue-600" />
                     ) : sorted === 'desc' ? (
@@ -238,9 +279,16 @@ function ResizeHandle({ header }: { header: any }) {
 function SortableHeader({
     header,
     headerClassName,
+    widthStyle,
+    align = 'start',
+    floatingGrip = false,
 }: {
     header: any;
     headerClassName: string;
+    widthStyle: React.CSSProperties;
+    align?: ColumnAlign;
+    /** Pilot lists (`viewOptions`) float the grip so labels line up with values. */
+    floatingGrip?: boolean;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: header.id });
@@ -258,17 +306,33 @@ function SortableHeader({
             ref={setNodeRef}
             style={{
                 ...style,
-                width: header.getSize(),
-                minWidth: header.getSize(),
+                ...widthStyle,
             }}
-            className={headerClassName}
+            className={`${headerClassName} ${TEXT_ALIGN_CLASS[align]}`}
         >
-            <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                <span {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-40 transition-opacity">
-                    <GripVertical className="w-3 h-3" />
-                </span>
-                <HeaderLabel header={header} />
-            </div>
+            {floatingGrip ? (
+                <>
+                    {/* The grip floats in the cell's start padding, so the label
+                        starts where the values under it do. */}
+                    <span
+                        {...attributes}
+                        {...listeners}
+                        className="absolute start-0 top-1/2 -translate-y-1/2 cursor-grab opacity-0 group-hover:opacity-40 transition-opacity"
+                    >
+                        <GripVertical className="w-2.5 h-3" />
+                    </span>
+                    <div className={`flex items-center ${JUSTIFY_CLASS[align]}`}>
+                        <HeaderLabel header={header} align={align} />
+                    </div>
+                </>
+            ) : (
+                <div className={`flex items-center space-x-1 rtl:space-x-reverse ${JUSTIFY_CLASS[align]}`}>
+                    <span {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-40 transition-opacity">
+                        <GripVertical className="w-3 h-3" />
+                    </span>
+                    <HeaderLabel header={header} align={align} />
+                </div>
+            )}
             <ResizeHandle header={header} />
         </th>
     );
@@ -283,21 +347,24 @@ function SortableHeader({
 function PinnedHeader({
     header,
     headerClassName,
+    widthStyle,
+    align = 'start',
 }: {
     header: any;
     headerClassName: string;
+    widthStyle: React.CSSProperties;
+    align?: ColumnAlign;
 }) {
     return (
         <th
             style={{
                 position: 'relative',
-                width: header.getSize(),
-                minWidth: header.getSize(),
+                ...widthStyle,
             }}
-            className={headerClassName}
+            className={`${headerClassName} ${TEXT_ALIGN_CLASS[align]}`}
         >
-            <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                <HeaderLabel header={header} />
+            <div className={`flex items-center ${JUSTIFY_CLASS[align]}`}>
+                <HeaderLabel header={header} align={align} />
             </div>
             <ResizeHandle header={header} />
         </th>
@@ -332,7 +399,9 @@ export default function DataTable<T>({
     serverPagination,
     onRowClick,
     rowClassName,
-    striped = false,
+    striped: stripedProp = false,
+    viewOptions = false,
+    filters,
 }: DataTableProps<T>) {
     const { t } = useI18n();
     // Lazy: every list page renders this table, but printing is a rare click.
@@ -346,6 +415,20 @@ export default function DataTable<T>({
     const prefs = useTablePreferences();
     const savedPrefs = prefs.getPreferences(tableId);
     const isMdUp = useIsMdUp();
+    const { settings: view } = useTableViewSettings(tableId);
+    const rowToneClass = viewOptions
+        ? view.striped ? TABLE_ROW_CLASSES.striped : TABLE_ROW_CLASSES.plain
+        : stripedProp ? stripedRowClass : 'hover:bg-gray-50/50 transition-colors';
+    /** Compact rows hold to one line; stacked cell content runs along it. */
+    const singleLine = viewOptions && view.density === 'compact';
+    /** A phone keeps sideways scrolling — eight columns in 360px read as none. */
+    const fitWidth = viewOptions && view.fitWidth && isMdUp;
+    const headerCellClass = viewOptions
+        ? `text-start font-medium text-gray-500 select-none group bg-gray-50 border-b border-gray-200 ${TABLE_DENSITY_CLASSES[view.density].headerCell}`
+        : d.headerCell;
+    const bodyCellClass = viewOptions
+        ? `align-middle ${TABLE_DENSITY_CLASSES[view.density].bodyCell}${singleLine || fitWidth ? ' overflow-hidden' : ''}`
+        : d.bodyCell;
 
     // Inject a checkbox selection column when the caller hasn't supplied their own `id: 'select'` column
     const hasCallerSelectColumn = useMemo(
@@ -429,6 +512,8 @@ export default function DataTable<T>({
     const columnSelectorRef = useRef<HTMLDivElement>(null);
     const tableScrollRef = useRef<HTMLDivElement>(null);
     const [tableCanScroll, setTableCanScroll] = useState(false);
+    /** The scroller's width, which fit-to-width shares out between the columns. */
+    const [containerWidth, setContainerWidth] = useState(0);
 
     // DnD sensors
     const sensors = useSensors(
@@ -478,7 +563,11 @@ export default function DataTable<T>({
     const applyColumnFilters = useCallback(
         (next: ColumnFiltersState) => {
             if (onServerColumnFiltersChange) onServerColumnFiltersChange(next);
-            else setColumnFilters(next);
+            else {
+                setColumnFilters(next);
+                // Page 3 of the unfiltered list can be past the end of the filtered one.
+                setClientPageIndex(0);
+            }
         },
         [onServerColumnFiltersChange],
     );
@@ -617,6 +706,7 @@ export default function DataTable<T>({
 
         const updateScrollState = () => {
             setTableCanScroll(element.scrollWidth > element.clientWidth + 4);
+            setContainerWidth(element.clientWidth);
         };
 
         updateScrollState();
@@ -628,7 +718,7 @@ export default function DataTable<T>({
             observer?.disconnect();
             window.removeEventListener('resize', updateScrollState);
         };
-    }, [data, effectiveColumnVisibility, isLoading, effectiveColumnOrder]);
+    }, [data, effectiveColumnVisibility, isLoading, effectiveColumnOrder, fitWidth]);
 
     // Click outside handlers
     useEffect(() => {
@@ -685,10 +775,17 @@ export default function DataTable<T>({
         }
     };
 
-    // Advanced filter state for individual columns
-    const filterableColumns = table.getAllLeafColumns().filter(
-        (c) => !isPinnedColumnId(c.id) && c.getCanFilter(),
+    // Advanced filter state for individual columns. A column one of the
+    // list's own filters already narrows is left to that filter.
+    const boundFilterColumns = new Set(
+        (filters ?? []).flatMap((f) => (f.type === 'select' && f.columnId ? [f.columnId] : [])),
     );
+    const filterableColumns = table.getAllLeafColumns().filter(
+        (c) => !isPinnedColumnId(c.id) && c.getCanFilter() && !boundFilterColumns.has(c.id),
+    );
+    const advancedFiltersLabel = filters?.length ? t.common.dataTable.moreFilters : t.common.dataTable.filters;
+    /** Only what the advanced panel itself narrows — the filter bar shows its own. */
+    const advancedFilterCount = activeColumnFilters.filter((f) => !boundFilterColumns.has(f.id)).length;
 
     const totalRows = isServer
         ? serverPagination!.total
@@ -706,6 +803,60 @@ export default function DataTable<T>({
     );
 
     const toolbarBtnBase = `${d.toolbarBtn} ${d.toolbarBtnIdle}`;
+
+    /*
+     * Column widths. Normally each column is its own size in px and a wide list
+     * scrolls. Fit-to-width shares the scroller's width out in proportion to
+     * those sizes — so a resize still means something — while the checkbox and
+     * actions gutters, and the figures, keep their own width — a total cut to
+     * "৳ 128,450…" is a wrong number.
+     */
+    const keepsWidth = (column: Column<T, unknown>) =>
+        isPinnedColumnId(column.id) || column.columnDef.meta?.align === 'end';
+    const visibleLeafColumns = table.getVisibleLeafColumns();
+    const keptWidth = visibleLeafColumns
+        .filter(keepsWidth)
+        .reduce((sum, c) => sum + c.getSize(), 0);
+    const flexibleSize = visibleLeafColumns
+        .filter((c) => !keepsWidth(c))
+        .reduce((sum, c) => sum + c.getSize(), 0);
+    const fitActive = fitWidth && containerWidth > 0 && flexibleSize > 0;
+    const columnWidthStyle = (column: Column<T, unknown>): React.CSSProperties => {
+        if (!fitActive || keepsWidth(column)) {
+            return { width: column.getSize(), minWidth: column.getSize() };
+        }
+        const share = (Math.max(0, containerWidth - keptWidth) * column.getSize()) / flexibleSize;
+        return { width: Math.floor(share) };
+    };
+    const columnAlign = (column: Column<T, unknown>): ColumnAlign =>
+        viewOptions && column.id === PINNED_LAST_COLUMN_ID ? 'center' : column.columnDef.meta?.align ?? 'start';
+    /** The whole value as a tooltip, for a cell that may be cut off. */
+    const cellTitle = (value: unknown, column: Column<T, unknown>): string | undefined => {
+        if (!(singleLine || fitActive) || isPinnedColumnId(column.id)) return undefined;
+        return typeof value === 'string' || typeof value === 'number' ? String(value) : undefined;
+    };
+
+    const resolvedFilters = useMemo<ResolvedListFilter[]>(
+        () =>
+            (filters ?? []).map((filter) => {
+                if (filter.type !== 'select') return filter;
+                if (filter.columnId) {
+                    const columnId = filter.columnId;
+                    const current = activeColumnFilters.find((f) => f.id === columnId)?.value;
+                    const others = activeColumnFilters.filter((f) => f.id !== columnId);
+                    return {
+                        ...filter,
+                        value: typeof current === 'string' && current ? current : null,
+                        onChange: (next: string | null) => {
+                            applyColumnFilters(next ? [...others, { id: columnId, value: next }] : others);
+                            setActivePreset(null);
+                        },
+                    };
+                }
+                return { ...filter, value: filter.value ?? null, onChange: filter.onChange ?? (() => {}) };
+            }),
+        [filters, activeColumnFilters, applyColumnFilters],
+    );
 
     const selectedRows = useMemo(
         () => table.getSelectedRowModel().rows.map((r: Row<T>) => r.original),
@@ -745,7 +896,9 @@ export default function DataTable<T>({
 
         let records: T[];
         try {
-            if (opts.rowScope === 'page') {
+            if (opts.rowScope === 'selected') {
+                records = table.getSelectedRowModel().rows.map((r) => r.original);
+            } else if (opts.rowScope === 'page') {
                 records = table.getPaginationRowModel().rows.map((r) => r.original);
             } else if (isServer && serverPagination?.fetchAllRows) {
                 setExportBusy(true);
@@ -802,6 +955,12 @@ export default function DataTable<T>({
                         </div>
                     )}
 
+                    {resolvedFilters.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <FilterBar filters={resolvedFilters} compact={!isMdUp} />
+                        </div>
+                    )}
+
                     {/* Toolbar buttons — always aligned to the right, even when the search box is hidden */}
                     <div className="flex items-center gap-2 flex-wrap ms-auto">
                         {/* Advanced Filters */}
@@ -809,17 +968,17 @@ export default function DataTable<T>({
                             <button
                                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                                 className={`${d.toolbarBtn} ${
-                                    showAdvancedFilters || activeColumnFilters.length > 0
+                                    showAdvancedFilters || advancedFilterCount > 0
                                         ? 'bg-blue-50 text-blue-700 border-blue-200'
                                         : d.toolbarBtnIdle
                                 }`}
-                                title={t.common.dataTable.filters}
+                                title={advancedFiltersLabel}
                             >
                                 <SlidersHorizontal className="w-3.5 h-3.5" />
-                                <span className={isCompact ? 'sr-only' : undefined}>{t.common.dataTable.filters}</span>
-                                {activeColumnFilters.length > 0 && (
+                                <span className={isCompact ? 'sr-only' : undefined}>{advancedFiltersLabel}</span>
+                                {advancedFilterCount > 0 && (
                                     <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                                        {activeColumnFilters.length}
+                                        {advancedFilterCount}
                                     </span>
                                 )}
                             </button>
@@ -867,6 +1026,10 @@ export default function DataTable<T>({
                                 </div>
                             )}
                         </div>
+
+                        {viewOptions && (
+                            <TableViewOptions tableId={tableId} buttonClassName={toolbarBtnBase} iconOnly={isCompact} />
+                        )}
 
                         {/* Export */}
                         <button
@@ -1005,7 +1168,15 @@ export default function DataTable<T>({
                         collisionDetection={closestCenter}
                         onDragEnd={handleDragEnd}
                     >
-                        <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                        <table
+                            className={`w-full${viewOptions ? ' dt-view' : ''}${singleLine ? ' dt-single-line' : ''}`}
+                            style={{
+                                tableLayout: 'fixed',
+                                ...(viewOptions
+                                    ? ({ '--dt-font-size': `${TABLE_FONT_PX[view.fontSize]}px` } as React.CSSProperties)
+                                    : {}),
+                            }}
+                        >
                             <thead>
                                 {table.getHeaderGroups().map((headerGroup) => (
                                     <tr key={headerGroup.id}>
@@ -1022,8 +1193,8 @@ export default function DataTable<T>({
                                                     return (
                                                         <th
                                                             key={header.id}
-                                                            style={{ width: header.getSize(), minWidth: header.getSize() }}
-                                                            className={d.headerCell}
+                                                            style={columnWidthStyle(header.column)}
+                                                            className={headerCellClass}
                                                         >
                                                             {header.isPlaceholder
                                                                 ? null
@@ -1037,12 +1208,25 @@ export default function DataTable<T>({
                                                 // handle — most tables leave this column resizable.
                                                 if (header.column.id === PINNED_LAST_COLUMN_ID) {
                                                     return (
-                                                        <PinnedHeader key={header.id} header={header} headerClassName={d.headerCell} />
+                                                        <PinnedHeader
+                                                            key={header.id}
+                                                            header={header}
+                                                            headerClassName={headerCellClass}
+                                                            widthStyle={columnWidthStyle(header.column)}
+                                                            align={columnAlign(header.column)}
+                                                        />
                                                     );
                                                 }
 
                                                 return (
-                                                    <SortableHeader key={header.id} header={header} headerClassName={d.headerCell} />
+                                                    <SortableHeader
+                                                        key={header.id}
+                                                        header={header}
+                                                        headerClassName={headerCellClass}
+                                                        widthStyle={columnWidthStyle(header.column)}
+                                                        align={columnAlign(header.column)}
+                                                        floatingGrip={viewOptions}
+                                                    />
                                                 );
                                             })}
                                         </SortableContext>
@@ -1053,7 +1237,10 @@ export default function DataTable<T>({
                                 {table.getRowModel().rows.map((row) => (
                                     <tr
                                         key={row.id}
-                                        className={`${striped ? stripedRowClass : 'hover:bg-gray-50/50 transition-colors'} ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${rowClassName?.(row.original) ?? ''}`}
+                                        className={`${rowToneClass} ${onRowClick ? 'cursor-pointer focus-visible:outline-none focus-visible:bg-blue-50/60' : ''} ${
+                                            // A ticked row stays marked over its stripe, not just by its box.
+                                            viewOptions && row.getIsSelected() ? TABLE_ROW_CLASSES.selected : ''
+                                        } ${rowClassName?.(row.original) ?? ''}`}
                                         onClick={onRowClick ? (event) => {
                                             if (isFromControl(event.target)) return;
                                             onRowClick(row.original);
@@ -1068,8 +1255,10 @@ export default function DataTable<T>({
                                         {row.getVisibleCells().map((cell) => (
                                             <td
                                                 key={cell.id}
-                                                className={d.bodyCell}
-                                                style={{ width: cell.column.getSize() }}
+                                                className={`${bodyCellClass} ${TEXT_ALIGN_CLASS[columnAlign(cell.column)]}`}
+                                                style={{ width: columnWidthStyle(cell.column).width }}
+                                                data-actions={cell.column.id === PINNED_LAST_COLUMN_ID || undefined}
+                                                title={cellTitle(cell.getValue(), cell.column)}
                                             >
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                             </td>
@@ -1183,6 +1372,7 @@ export default function DataTable<T>({
                 title={title}
                 pageCount={pageRowCount}
                 totalCount={totalRows}
+                selectedCount={enableRowSelection ? selectedRows.length : 0}
                 columns={exportColumns}
                 busy={exportBusy}
                 progress={exportProgress}

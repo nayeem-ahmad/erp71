@@ -15,3 +15,5 @@ export {
     PINNED_FIRST_COLUMN_ID,
     PINNED_LAST_COLUMN_ID,
 } from './column-order';
+export { default as FilterBar } from './FilterBar';
+export type { ListFilter, ResolvedListFilter } from './FilterBar';

@@ -179,19 +179,18 @@ export interface PrintTableHeader {
 }
 
 export function printTable<T>(table: Table<T>, title: string, header?: PrintTableHeader, paperSize: PaperSize = 'A4') {
-    const headers = table
+    const columns = table
         .getVisibleLeafColumns()
-        .filter((c) => c.id !== 'actions' && c.id !== 'select')
-        .map((c) => c.columnDef.header as string);
+        .filter((c) => c.id !== 'actions' && c.id !== 'select');
+    const headers = columns.map((c) => c.columnDef.header as string);
+    // Amounts and counts line up on their last digit on paper as on screen.
+    const cellAttr = columns.map((c) => (c.columnDef.meta?.align === 'end' ? ' style="text-align:end"' : ''));
 
     const rows = table.getFilteredRowModel().rows.map((row) =>
-        table
-            .getVisibleLeafColumns()
-            .filter((c) => c.id !== 'actions' && c.id !== 'select')
-            .map((col) => {
-                const val = row.getValue(col.id);
-                return val == null ? '' : String(val);
-            }),
+        columns.map((col) => {
+            const val = row.getValue(col.id);
+            return val == null ? '' : String(val);
+        }),
     );
 
     openPrintWindow({
@@ -207,8 +206,8 @@ export function printTable<T>(table: Table<T>, title: string, header?: PrintTabl
         bodyHtml: `
 <h1>${title}</h1>
 <table>
-  <thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
-  <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+  <thead><tr>${headers.map((h, i) => `<th${cellAttr[i]}>${h}</th>`).join('')}</tr></thead>
+  <tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${cellAttr[i]}>${c}</td>`).join('')}</tr>`).join('')}</tbody>
 </table>`,
         footerHtml: `<div class="footer">Printed on ${formatDateTime(new Date())}</div>`,
     });

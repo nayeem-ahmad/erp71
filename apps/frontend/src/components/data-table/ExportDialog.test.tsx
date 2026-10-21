@@ -89,4 +89,16 @@ describe('ExportDialog', () => {
         fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
         expect(defaultProps.onClose).toHaveBeenCalled();
     });
+
+    it('opens on the ticked rows when there are some, and exports those', () => {
+        render(<ExportDialog {...defaultProps} selectedCount={3} />);
+        expect(screen.getByRole('radio', { name: /selected rows \(3\)/i })).toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: /download/i }));
+        expect(defaultProps.onConfirm).toHaveBeenCalledWith(expect.objectContaining({ rowScope: 'selected' }));
+    });
+
+    it('offers no selected-rows choice when nothing is ticked', () => {
+        render(<ExportDialog {...defaultProps} />);
+        expect(screen.queryByRole('radio', { name: /selected rows/i })).not.toBeInTheDocument();
+    });
 });
