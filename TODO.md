@@ -2084,6 +2084,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Customer SMS on credit sales and payments released** — done 2026-10-21. PR #877 merged to `main` as `1356ef06`. Deploy to VPS run 39585064032; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200. Feature landed on `dev` as PR #876 (`7abe4b09`). The switch stays off until an admin turns it on.
+
 - [x] **SMS the customer on a credit sale and on a payment** — done 2026-10-21. Settings › SMS Notifications, off until an admin turns it on. A credit sale texts the bill, what was paid, what is still due, and the balance; a payment received (on the customer payments screen, or extra taken with a sale) texts the amount and the balance. A number that is not a mobile is skipped, and each message uses SMS credit. A credit or payment text replaces the plain sale receipt for that checkout so it is not charged twice.
 
 - [x] **Sales return slip released** — done 2026-10-21. PR #872 merged to `main` as `29af344e7`. Deploy to VPS run 39571207582; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200.
