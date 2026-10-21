@@ -395,6 +395,10 @@ export const settingsExtrasMessages = {
             label: "SMS bei geringem Bestand senden",
             hint: "Sendet dem Mandanteninhaber eine SMS, wenn Produkte bei der täglichen Bestandsprüfung unter ihren Meldebestand fallen.",
         },
+        onCreditPayment: {
+            label: "Kunden bei Kreditverkauf und Zahlung per SMS benachrichtigen",
+            hint: "Sendet eine SMS, wenn ein Verkauf einen offenen Betrag lässt (einschließlich der darauf gezahlten Summe) und wenn eine Zahlung eingeht. Ohne gültige Mobilnummer wird nichts gesendet. Jede Nachricht verbraucht SMS-Guthaben.",
+        },
         saveButton: "SMS-Einstellungen speichern",
         saving: "Wird gespeichert…",
     },

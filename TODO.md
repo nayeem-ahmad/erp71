@@ -2084,6 +2084,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **SMS the customer on a credit sale and on a payment** — done 2026-10-21. Settings › SMS Notifications, off until an admin turns it on. A credit sale texts the bill, what was paid, what is still due, and the balance; a payment received (on the customer payments screen, or extra taken with a sale) texts the amount and the balance. A number that is not a mobile is skipped, and each message uses SMS credit. A credit or payment text replaces the plain sale receipt for that checkout so it is not charged twice.
+
 - [x] **Sales return slip released** — done 2026-10-21. PR #872 merged to `main` as `29af344e7`. Deploy to VPS run 39571207582; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200.
 
 - [x] **Daily business summary email** — done 2026-10-21. Off until turned on at Settings › Automated Reports. At 00:20 in the shop’s time zone the owner, plus any other members chosen there, gets one email for the day that just ended: a company total, then each branch (a quiet branch is one “No sales” line). Customer and supplier dues, and the reorder count, are company-wide so they are not added up across branches. A send is recorded per shop day so a retry does not mail twice; a missed earlier day is not backfilled. On `feat/daily-summary-email`.

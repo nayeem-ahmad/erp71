@@ -395,6 +395,10 @@ export const settingsExtrasMessages = {
                 label: "SMS amaran stok rendah",
                 hint: "Hantar amaran SMS apabila produk jatuh di bawah tahap pesanan semula.",
             },
+            onCreditPayment: {
+                label: "SMS pelanggan untuk jualan kredit dan bayaran",
+                hint: "Menghantar SMS apabila jualan meninggalkan baki terhutang, termasuk jumlah yang dibayar pada bil itu, dan apabila bayaran diterima. Tidak dihantar jika nombor mudah alih tidak sah. Setiap mesej menggunakan kredit SMS.",
+            },
             saveButton: "Simpan Tetapan SMS",
             saving: "Menyimpan…",
         },

@@ -395,6 +395,10 @@ export const settingsExtrasMessages = {
                 label: "লো স্টক সতর্কতার জন্য SMS পাঠান",
                 hint: "Send SMS alerts when products fall below reorder level.",
             },
+            onCreditPayment: {
+                label: "বাকি বিক্রি ও পেমেন্টে গ্রাহককে SMS পাঠান",
+                hint: "বিক্রয়ে বাকি থাকলে (সেই বিলে যা পরিশোধ হয়েছে তাসহ) এবং পেমেন্ট জমা হলে গ্রাহককে একটি SMS যায়। বৈধ মোবাইল নম্বর না থাকলে পাঠানো হয় না। প্রতিটি বার্তায় SMS ক্রেডিট খরচ হয়।",
+            },
             saveButton: "SMS সেটিংস সংরক্ষণ",
             saving: "সংরক্ষণ হচ্ছে…",
         },

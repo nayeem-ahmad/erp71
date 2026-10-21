@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
+import { SmsService } from '../sms/sms.service';
 import { CustomerType, Prisma } from '@prisma/client';
 import { checkedSalesRepId, listSalesReps, SALES_REP_SELECT } from './sales-rep.util';
 import { DatabaseService } from '../database/database.service';
@@ -86,9 +87,12 @@ const DISCOUNT_LEG = CUSTOMER_PAYMENT_DISCOUNT_LEG;
 import { makeImportBranchResolver } from '../common/import-branch.util';
 @Injectable()
 export class CustomersService {
+    private readonly logger = new Logger(CustomersService.name);
+
     constructor(
         private db: DatabaseService,
         private encryption: EncryptionService,
+        private smsService: SmsService,
     ) {}
 
     private encryptNid(value: string | undefined | null): string | undefined {
@@ -1076,7 +1080,7 @@ export class CustomersService {
             ? await resolveCreditPaymentMethod(this.db, tenantId, dto.paymentMethodId, customer.store_id)
             : null;
 
-        return this.db.$transaction(async (tx) => {
+        const saved = await this.db.$transaction(async (tx) => {
             if (typed) {
                 await assertSerialFree(tx, 'customerCreditTransaction', tenantId, typed);
                 await assertNotAheadOfSeries(tx, 'CustomerCreditTransaction', tenantId, typed, SERIAL_SERIES);
@@ -1133,6 +1137,47 @@ export class CustomersService {
         }).catch((err) => {
             if (serial && isSerialConflict(err)) throw serialTaken(serial);
             throw err;
+        });
+
+        if (txType === 'PAYMENT' && dto.amount > 0.005) {
+            this.textCustomerAboutPayment(tenantId, dto.amount, saved);
+        }
+        return saved;
+    }
+
+    /**
+     * After a payment is on the books. Skipped when SMS is off, and the send
+     * itself skips a number that is not a mobile. A failure here never undoes
+     * the payment.
+     */
+    private textCustomerAboutPayment(
+        tenantId: string,
+        amount: number,
+        saved: {
+            payment_number: string;
+            balance_after: unknown;
+            customer?: { name?: string | null; phone?: string | null } | null;
+        },
+    ): void {
+        const phone = saved.customer?.phone;
+        if (!phone || !saved.payment_number) return;
+
+        void this.db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { name: true, sms_enabled: true, sms_on_credit_payment: true },
+        }).then((tenant) => {
+            if (!tenant?.sms_enabled || !tenant.sms_on_credit_payment) return;
+            return this.smsService.sendCustomerPaymentNotice({
+                phone,
+                customerName: saved.customer?.name ?? 'Customer',
+                shopName: tenant.name,
+                amount,
+                paymentNumber: saved.payment_number,
+                balanceAfter: Number(saved.balance_after),
+                tenantId,
+            });
+        }).catch((err) => {
+            this.logger.warn(`Failed to send payment SMS for ${saved.payment_number}: ${err}`);
         });
     }
 

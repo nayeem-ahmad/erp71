@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { roundMoney } from '@erp71/shared-types';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { SmsCreditService } from './sms-credit.service';
+import { smsDestination } from './sms-destination';
 import { CircuitBreakerRegistry } from '../system-health/resilience/circuit-breaker.registry';
 
 export interface SendSmsOptions {
@@ -12,7 +14,67 @@ export interface SendSmsOptions {
 
 export interface SendSmsResult {
     sent: boolean;
-    reason?: 'INSUFFICIENT_SMS_CREDITS';
+    reason?: 'INSUFFICIENT_SMS_CREDITS' | 'INVALID_MOBILE';
+}
+
+export interface CreditSaleSms {
+    phone: string;
+    customerName: string;
+    shopName: string;
+    serialNumber: string;
+    totalAmount: number;
+    paidAmount: number;
+    dueAmount: number;
+    balanceAfter: number;
+    tenantId: string;
+}
+
+export interface CustomerPaymentSms {
+    phone: string;
+    customerName: string;
+    shopName: string;
+    amount: number;
+    paymentNumber: string;
+    balanceAfter: number;
+    tenantId: string;
+    /** Set when the payment was taken with a sale, so the text names that bill. */
+    invoiceSerial?: string;
+    invoiceTotal?: number;
+}
+
+function money(amount: number): string {
+    return roundMoney(amount).toFixed(2);
+}
+
+/** One line, clipped, so a long name cannot blow the message into extra segments by itself. */
+function clip(value: string, fallback: string): string {
+    const cleaned = value.replace(/\s+/g, ' ').trim().slice(0, 40);
+    return cleaned || fallback;
+}
+
+function balancePhrase(balance: number): string {
+    if (balance < -0.005) return `Advance BDT ${money(Math.abs(balance))}`;
+    return `Balance due BDT ${money(balance)}`;
+}
+
+export function creditSaleMessage(input: Omit<CreditSaleSms, 'phone' | 'tenantId'>): string {
+    const name = clip(input.customerName, 'Customer');
+    const shop = clip(input.shopName, 'us');
+    return (
+        `Dear ${name}, invoice ${input.serialNumber}: total BDT ${money(input.totalAmount)}, `
+        + `paid BDT ${money(input.paidAmount)}, due BDT ${money(input.dueAmount)}. `
+        + `${balancePhrase(input.balanceAfter)}. - ${shop}`
+    );
+}
+
+export function customerPaymentMessage(input: Omit<CustomerPaymentSms, 'phone' | 'tenantId'>): string {
+    const name = clip(input.customerName, 'Customer');
+    const shop = clip(input.shopName, 'us');
+    const received = `Payment of BDT ${money(input.amount)} received (${input.paymentNumber})`;
+    const bill = input.invoiceSerial
+        ? `invoice ${input.invoiceSerial}: total BDT ${money(input.invoiceTotal ?? 0)}. `
+        : '';
+    return `Dear ${name}, ${bill}${received}. ${balancePhrase(input.balanceAfter)}. - ${shop}`;
 }
 
 @Injectable()
@@ -102,17 +164,56 @@ export class SmsService {
         }
     }
 
+    /**
+     * Sends only when `phone` is a mobile. Anything else returns without
+     * touching SMS credit — the credit is spent inside `sendSms` before the
+     * gateway is called, so a landline would pay for a text it cannot receive.
+     */
+    private async sendToCustomer(
+        phone: string,
+        message: string,
+        tenantId: string | undefined,
+        purpose: string,
+    ): Promise<SendSmsResult> {
+        const to = smsDestination(phone);
+        if (!to) {
+            this.logger.log(`Skipping SMS (${purpose}): not a valid mobile number.`);
+            return { sent: false, reason: 'INVALID_MOBILE' };
+        }
+        return this.sendSms(to, message, { tenantId, purpose });
+    }
+
     async sendSaleReceipt(
         phone: string,
         customerName: string,
         saleTotal: number,
         saleRef: string,
         tenantId?: string,
-    ): Promise<void> {
+    ): Promise<SendSmsResult> {
         const message =
             `Dear ${customerName}, your purchase of BDT ${saleTotal.toFixed(2)} ` +
             `(Ref: ${saleRef}) has been confirmed. Thank you!`;
-        await this.sendSms(phone, message, { tenantId, purpose: 'Sale receipt' });
+        return this.sendToCustomer(phone, message, tenantId, 'Sale receipt');
+    }
+
+    /** One text for a sale that left a balance due, naming what was paid and what is still owed. */
+    async sendCreditSaleNotice(input: CreditSaleSms): Promise<SendSmsResult> {
+        return this.sendToCustomer(
+            input.phone,
+            creditSaleMessage(input),
+            input.tenantId,
+            'Credit sale',
+        );
+    }
+
+    /** One text when money is received on the customer's account. */
+    async sendCustomerPaymentNotice(input: CustomerPaymentSms): Promise<SendSmsResult> {
+        return this.sendToCustomer(
+            input.phone,
+            customerPaymentMessage(input),
+            input.tenantId,
+            'Customer payment',
+        );
     }
 
     async sendLowStockAlert(

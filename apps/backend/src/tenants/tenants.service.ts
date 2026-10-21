@@ -212,6 +212,7 @@ export class TenantsService {
             select: {
                 sms_enabled: true,
                 sms_on_sale: true,
+                sms_on_credit_payment: true,
                 sms_on_low_stock: true,
             },
         });
@@ -219,11 +220,12 @@ export class TenantsService {
 
     async updateSmsSettings(
         tenantId: string,
-        dto: { sms_enabled?: boolean; sms_on_sale?: boolean; sms_on_low_stock?: boolean },
+        dto: { sms_enabled?: boolean; sms_on_sale?: boolean; sms_on_credit_payment?: boolean; sms_on_low_stock?: boolean },
     ) {
         const data: Record<string, boolean> = {};
         if (dto.sms_enabled !== undefined) data.sms_enabled = dto.sms_enabled;
         if (dto.sms_on_sale !== undefined) data.sms_on_sale = dto.sms_on_sale;
+        if (dto.sms_on_credit_payment !== undefined) data.sms_on_credit_payment = dto.sms_on_credit_payment;
         if (dto.sms_on_low_stock !== undefined) data.sms_on_low_stock = dto.sms_on_low_stock;
 
         return this.db.tenant.update({
@@ -232,6 +234,7 @@ export class TenantsService {
             select: {
                 sms_enabled: true,
                 sms_on_sale: true,
+                sms_on_credit_payment: true,
                 sms_on_low_stock: true,
             },
         });

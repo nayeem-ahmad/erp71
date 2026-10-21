@@ -3,9 +3,14 @@ import { CustomersService } from './customers.service';
 import { DatabaseService } from '../database/database.service';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EncryptionService } from '../common/encryption.service';
+import { SmsService } from '../sms/sms.service';
 import { CustomerPaymentDirectionDto } from './customer.dto';
 import { customerInBranchesWhere } from './customer-visibility';
 import { availableAt } from '../payment-methods/payment-method-branches';
+
+async function flushSideEffects() {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+}
 
 jest.mock('@erp71/database', () => {
   const actual = jest.requireActual('@erp71/database');
@@ -26,6 +31,7 @@ jest.mock('../accounting/posting.utils', () => ({
 describe('CustomersService', () => {
   let service: CustomersService;
   let db: any;
+  let sms: { sendCustomerPaymentNotice: jest.Mock };
   let encryption: { encrypt: jest.Mock; decrypt: jest.Mock };
 
   beforeEach(async () => {
@@ -79,16 +85,22 @@ describe('CustomersService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
+      tenant: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       // The serial series: one past the highest number under the prefix.
       $queryRaw: jest.fn().mockResolvedValue([{ next: '1' }]),
       $transaction: jest.fn(),
     };
+
+    sms = { sendCustomerPaymentNotice: jest.fn().mockResolvedValue({ sent: true }) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomersService,
         { provide: DatabaseService, useValue: db },
         { provide: EncryptionService, useValue: encryption },
+        { provide: SmsService, useValue: sms },
       ],
     }).compile();
 
@@ -671,6 +683,90 @@ describe('CustomersService', () => {
         data: { due_balance: 750 },
       });
       expect(result.payment_number).toBe('CPY-00003');
+    });
+
+    it('texts the customer when a payment is received and SMS is on', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.$queryRaw.mockResolvedValue([{ next: '3' }]);
+      db.customerCreditTransaction.create.mockResolvedValue({
+        id: 'pay-3',
+        payment_number: 'CPY-00003',
+        type: 'PAYMENT',
+        amount: 250,
+        balance_after: 750,
+        customer: { id: 'c1', name: 'Alice', phone: '01712345678', customer_code: 'C1' },
+      });
+      db.tenant.findUnique.mockResolvedValue({
+        name: 'Rahim Store',
+        sms_enabled: true,
+        sms_on_credit_payment: true,
+      });
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250 });
+      await flushSideEffects();
+
+      expect(sms.sendCustomerPaymentNotice).toHaveBeenCalledWith({
+        phone: '01712345678',
+        customerName: 'Alice',
+        shopName: 'Rahim Store',
+        amount: 250,
+        paymentNumber: 'CPY-00003',
+        balanceAfter: 750,
+        tenantId: 'tenant-1',
+      });
+    });
+
+    it('does not text when the switch is off, the number is missing, or the shop paid the customer', async () => {
+      db.customer.findFirst.mockResolvedValue({ id: 'c1', name: 'Alice', due_balance: 1000 });
+      db.$queryRaw.mockResolvedValue([{ next: '3' }]);
+      db.customerCreditTransaction.create.mockResolvedValue({
+        id: 'pay-3',
+        payment_number: 'CPY-00003',
+        type: 'PAYMENT',
+        amount: 250,
+        balance_after: 750,
+        customer: { id: 'c1', name: 'Alice', phone: '01712345678' },
+      });
+      db.tenant.findUnique.mockResolvedValue({
+        name: 'Rahim Store',
+        sms_enabled: true,
+        sms_on_credit_payment: false,
+      });
+      db.$transaction.mockImplementation(async (cb: any) => cb(db));
+
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250 });
+      await flushSideEffects();
+      expect(sms.sendCustomerPaymentNotice).not.toHaveBeenCalled();
+
+      db.tenant.findUnique.mockResolvedValue({
+        name: 'Rahim Store',
+        sms_enabled: false,
+        sms_on_credit_payment: true,
+      });
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', { amount: 250 });
+      await flushSideEffects();
+      expect(sms.sendCustomerPaymentNotice).not.toHaveBeenCalled();
+
+      db.tenant.findUnique.mockResolvedValue({
+        name: 'Rahim Store',
+        sms_enabled: true,
+        sms_on_credit_payment: true,
+      });
+      db.customerCreditTransaction.create.mockResolvedValue({
+        id: 'payout-1',
+        payment_number: 'CPO-00001',
+        type: 'PAYOUT',
+        amount: 100,
+        balance_after: 1100,
+        customer: { id: 'c1', name: 'Alice', phone: '01712345678' },
+      });
+      await service.recordCreditPayment('tenant-1', 'c1', 'user-1', {
+        amount: 100,
+        direction: CustomerPaymentDirectionDto.PAY,
+      });
+      await flushSideEffects();
+      expect(sms.sendCustomerPaymentNotice).not.toHaveBeenCalled();
     });
 
     it('starts at CPY-00001 when no prior payments exist', async () => {
