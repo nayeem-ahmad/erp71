@@ -140,6 +140,15 @@ describe('DataTable', () => {
         expect(screen.getByPlaceholderText('Search products...')).toBeInTheDocument();
     });
 
+    it('reports toolbar search to the page and leaves the loaded rows in place', () => {
+        const onSearchChange = jest.fn();
+        render(<DataTable {...defaultProps} onSearchChange={onSearchChange} />);
+        fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'nomatch' } });
+        expect(onSearchChange).toHaveBeenCalledWith('nomatch');
+        expect(screen.getByText('Alpha Product')).toBeInTheDocument();
+        expect(screen.getByText('Gamma Product')).toBeInTheDocument();
+    });
+
     it('hides the built-in search input when showSearch is false', () => {
         render(<DataTable {...defaultProps} showSearch={false} />);
         expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();

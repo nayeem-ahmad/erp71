@@ -1,19 +1,20 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt, Eye, Edit2, FileText, Printer, Search, Trash2 } from 'lucide-react';
+import { Receipt, Eye, Edit2, FileText, Printer, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatBDT, formatDate, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter, DateRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, applyDateRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { PostingBadge } from '@/components/PostingBadge';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { routes } from '@/lib/routes';
-import { BranchFilter, PageShell, Input, Select } from '@/components/ui';
+import { BranchFilter, ConfirmDialog, PageShell, StatusBadge, buttonClassName, type StatusBadgeTone } from '@/components/ui';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { useServerList } from '@/hooks/useServerList';
 import { toast } from '@/lib/toast';
@@ -42,14 +43,16 @@ interface Sale {
     voucher_number?: string | null;
 }
 
-const statusColors: Record<string, string> = {
-    DRAFT: 'bg-gray-50 text-gray-600 border-gray-200',
-    COMPLETED: 'bg-green-50 text-green-700 border-green-200',
-    REFUNDED: 'bg-danger-light text-danger-text border-red-200',
-    PARTIAL_REFUND: 'bg-amber-50 text-amber-700 border-amber-200',
-    // Grey rather than red: a cancelled entry is void, not an error, and the
+const SALE_STATUSES = ['DRAFT', 'COMPLETED', 'REFUNDED', 'PARTIAL_REFUND', 'CANCELLED'] as const;
+
+const statusTones: Record<string, StatusBadgeTone> = {
+    DRAFT: 'neutral',
+    COMPLETED: 'success',
+    REFUNDED: 'danger',
+    PARTIAL_REFUND: 'warning',
+    // Neutral rather than red: a cancelled entry is void, not an error, and the
     // red tone is already carrying "refunded" on this table.
-    CANCELLED: 'bg-gray-100 text-gray-500 border-gray-300',
+    CANCELLED: 'neutral',
 };
 
 const columnHelper = createColumnHelper<Sale>();
@@ -110,9 +113,11 @@ export default function SalesPage() {
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string | null>(null);
     const [dateRange, setDateRange] = useState<CreatedRange | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
+    const [selectedSales, setSelectedSales] = useState<Sale[]>([]);
+    const [pendingDelete, setPendingDelete] = useState<Sale | null>(null);
 
     // Typing must not fire a request per keystroke against a table this large.
     useEffect(() => {
@@ -150,13 +155,13 @@ export default function SalesPage() {
     });
     useBranchForbiddenReset(listError, branch, t.dashboardLayout.branchFilterForbidden);
 
-    const handleDelete = useCallback(async (sale: Sale) => {
-        if (!window.confirm(t.shared.confirm.deleteSale)) return;
-
-        setDeletingId(sale.id);
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeletingId(pendingDelete.id);
         try {
-            await api.deleteSale(sale.id);
-            setSales((prev) => prev.filter((s) => s.id !== sale.id));
+            await api.deleteSale(pendingDelete.id);
+            setSales((prev) => prev.filter((s) => s.id !== pendingDelete.id));
+            setPendingDelete(null);
             void reload();
             toast.success(t.sales.detail.deleted);
         } catch (error: any) {
@@ -165,7 +170,7 @@ export default function SalesPage() {
         } finally {
             setDeletingId(null);
         }
-    }, [t]);
+    };
 
     const handleCancel = useCallback(async (sale: Sale, note: string) => {
         const updated = await api.cancelSale(sale.id, note);
@@ -181,30 +186,21 @@ export default function SalesPage() {
         () => [
             columnHelper.accessor('serial_number', {
                 header: t.sales.columns.serialNumber,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
-                ),
                 size: 140,
             }),
             columnHelper.accessor((row) => row.sale_date ?? row.created_at, {
                 id: 'sale_date',
                 header: t.sales.columns.saleDate,
-                // The date-range control filters this column.
+                // The toolbar date chip filters this on the server.
                 enableColumnFilter: false,
-                cell: (info) => (
-                    <span className="text-sm text-gray-600">{formatSaleDate(info.getValue(), locale)}</span>
-                ),
+                cell: (info) => formatSaleDate(info.getValue(), locale),
                 size: 150,
             }),
             createdAtColumn(columnHelper, { header: t.common.createdAt, locale, enableColumnFilter: false }),
             columnHelper.accessor((row) => row.customer?.name ?? '', {
                 id: 'customer',
                 header: t.sales.columns.customer,
-                cell: (info) => (
-                    <span className="text-sm text-gray-700 font-medium">
-                        {info.getValue() || <span className="text-gray-300">{t.shared.walkIn}</span>}
-                    </span>
-                ),
+                cell: (info) => info.getValue() || <span className="text-gray-400">{t.shared.walkIn}</span>,
                 size: 150,
             }),
             columnHelper.accessor((row) => row.items?.length ?? 0, {
@@ -212,47 +208,36 @@ export default function SalesPage() {
                 header: t.sales.columns.items,
                 // A count of the lines, not a stored value the query could match.
                 enableColumnFilter: false,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">
-                        {formatMessage(t.shared.itemsCount, { count: info.getValue() })}
-                    </span>
-                ),
-                size: 80,
+                cell: (info) => formatMessage(t.shared.itemsCount, { count: info.getValue() }),
+                size: 90,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('total_amount', {
                 header: t.sales.columns.total,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-blue-600">
-                        {formatBDT(parseFloat(info.getValue()), { locale })}
-                    </span>
-                ),
+                cell: (info) => formatBDT(parseFloat(info.getValue()), { locale }),
                 sortingFn: (a, b) =>
                     parseFloat(a.getValue('total_amount')) - parseFloat(b.getValue('total_amount')),
-                size: 110,
+                size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('amount_paid', {
                 header: t.sales.columns.paid,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">
-                        {formatBDT(parseFloat(info.getValue()), { locale })}
-                    </span>
-                ),
+                cell: (info) => formatBDT(parseFloat(info.getValue()), { locale }),
                 sortingFn: (a, b) =>
                     parseFloat(a.getValue('amount_paid')) - parseFloat(b.getValue('amount_paid')),
-                size: 110,
+                size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('status', {
                 header: t.sales.columns.status,
+                // The toolbar select sends an exact status. A second contains-filter here would only confuse it.
+                enableColumnFilter: false,
                 cell: (info) => {
                     const status = info.getValue();
                     return (
-                        <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
-                                statusColors[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
-                            }`}
-                        >
+                        <StatusBadge tone={statusTones[status] ?? 'neutral'}>
                             {t.shared.statuses.sale[status as keyof typeof t.shared.statuses.sale] ?? status}
-                        </span>
+                        </StatusBadge>
                     );
                 },
                 size: 130,
@@ -267,10 +252,7 @@ export default function SalesPage() {
                         return (
                             <div className="flex flex-wrap gap-1">
                                 {row.payments?.map((p, i) => (
-                                    <span
-                                        key={i}
-                                        className="bg-gray-100 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-gray-500"
-                                    >
+                                    <span key={i} className="rounded bg-gray-100 px-1.5 text-gray-600">
                                         {p.payment_method}
                                     </span>
                                 ))}
@@ -300,14 +282,8 @@ export default function SalesPage() {
                     // API refuses to edit or re-cancel it — don't offer the door.
                     const isCancelled = sale.status === 'CANCELLED';
                     return (
-                        <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                            <Link
-                                href={`/sales/${sale.id}`}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.common.view}
-                            >
-                                <Eye className="w-4 h-4" />
-                            </Link>
+                        <RowActions>
+                            <RowActionButton icon={<Eye />} label={t.common.view} href={`/sales/${sale.id}`} />
                             {/* One click each, straight from the row. Both used
                                 to sit behind a split button with the paper
                                 sizes and the rarer documents, which made the
@@ -323,27 +299,19 @@ export default function SalesPage() {
                                 busy={busyId === sale.id}
                             />
                             {!isCancelled && (
-                                <Link
-                                    href={`/sales/${sale.id}?edit=true`}
-                                    className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                                    title={t.common.edit}
-                                >
-                                    <Edit2 className="w-4 h-4" />
-                                </Link>
+                                <RowActionButton icon={<Edit2 />} label={t.common.edit} href={`/sales/${sale.id}?edit=true`} />
                             )}
                             {/* Deleting reverses a posted sale, so it needs the same
                                 permission as cancelling one — `DELETE /sales/:id` answers
                                 403 without it, and a button that can only fail is noise. */}
                             {canCancel && (
-                                <button
-                                    type="button"
-                                    onClick={() => handleDelete(sale)}
+                                <RowActionButton
+                                    icon={<Trash2 />}
+                                    label={t.common.delete}
+                                    intent="danger"
                                     disabled={deletingId === sale.id}
-                                    className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:text-gray-300 transition-colors"
-                                    title={t.common.delete}
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                                    onClick={() => setPendingDelete(sale)}
+                                />
                             )}
                             <SaleRowOverflowMenu
                                 saleId={sale.id}
@@ -360,44 +328,62 @@ export default function SalesPage() {
                                         : undefined
                                 }
                             />
-                        </div>
+                        </RowActions>
                     );
                 },
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 200,
+                size: 220,
             }),
         ],
-        [t, locale, handleDelete, deletingId, canCancel, canCreateReturn, paperSize, busyId, printInvoice, printChallan, printReceipt],
+        [t, locale, deletingId, canCancel, canCreateReturn, paperSize, busyId, printInvoice, printChallan, printReceipt],
     );
 
     // Tick the rows, print them as one job — the day's invoices for the file,
-    // or a delivery run's, without a popup per sale. Selection covers the page
-    // on screen, which the server caps at the 100 the endpoint accepts.
+    // or a delivery run's, without a popup per sale. A selection can span
+    // branches: each invoice keeps its own letterhead. Selection covers the
+    // page on screen, which the server caps at the 100 the endpoint accepts.
     const bulkActions = useMemo(
-        () => [
-            {
-                label: t.sales.printMenu.printSelected,
-                icon: <Printer className="w-4 h-4" />,
-                onClick: (rows: Sale[]) => void printInvoices(rows.map((row) => row.id)),
-            },
-        ],
-        [t, printInvoices],
+        () =>
+            selectedSales.length === 0
+                ? []
+                : [
+                    {
+                        label: formatMessage(t.sales.printMenu.printSelected, { count: selectedSales.length }),
+                        icon: <Printer className="w-4 h-4" />,
+                        onClick: (rows: Sale[]) => void printInvoices(rows.map((row) => row.id)),
+                    },
+                ],
+        [t, printInvoices, selectedSales],
     );
 
-    // Was a client-side preset over the whole downloaded set; with server
-    // paging the filter has to reach the query or it would only ever narrow the
-    // current page.
-    const statusOptions = useMemo(
+    // Page-owned, not bound to a column: these go to the server with the page
+    // query. A column filter would only narrow the rows already on screen.
+    const filters = useMemo<ListFilter[]>(
         () => [
-            { value: 'DRAFT', label: t.sales.filterPresets.draft },
-            { value: 'COMPLETED', label: t.sales.filterPresets.completed },
-            { value: 'REFUNDED', label: t.sales.filterPresets.refunded },
-            { value: 'PARTIAL_REFUND', label: t.sales.filterPresets.partialRefund },
-            { value: 'CANCELLED', label: t.sales.filterPresets.cancelled },
+            {
+                id: 'status',
+                type: 'select',
+                label: t.sales.columns.status,
+                value: statusFilter,
+                onChange: setStatusFilter,
+                options: SALE_STATUSES.map((value) => ({
+                    value,
+                    label: t.shared.statuses.sale[value] ?? value,
+                })),
+            },
+            {
+                id: 'saleDate',
+                type: 'date-range',
+                label: t.common.date,
+                value: dateRange,
+                onChange: setDateRange,
+                withTime: true,
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange },
         ],
-        [t],
+        [t, statusFilter, dateRange, createdRange],
     );
 
     return (
@@ -417,47 +403,18 @@ export default function SalesPage() {
                             <button
                                 type="button"
                                 onClick={() => setPrintSettingsOpen(true)}
-                                className="flex items-center rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                                className={buttonClassName({ variant: 'secondary' })}
                             >
-                                <Printer className="w-4 h-4 me-2" />
+                                <Printer className="w-4 h-4" />
                                 {t.sales.printSettings.action}
                             </button>
-                            <Link
-                                href={routes.sales.new}
-                                className="bg-primary hover:bg-primary-hover text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors"
-                            >
-                                <FileText className="w-4 h-4 me-2" />
+                            <Link href={routes.sales.new} className={buttonClassName()}>
+                                <FileText className="w-4 h-4" />
                                 {t.sidebar.items.newSalesEntry}
                             </Link>
                         </>
                     }
                 />
-
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <div className="relative flex-1 min-w-[220px]">
-                        <Search className="w-4 h-4 text-gray-400 absolute start-3 top-1/2 -translate-y-1/2" />
-                        <Input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder={t.sales.dataTable.searchPlaceholder}
-                            className="ps-9"
-                        />
-                    </div>
-                    <DateRangeFilter label={t.common.date} withTime value={dateRange} onChange={setDateRange} />
-                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                    <Select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-auto max-w-[180px]"
-                    >
-                        <option value="">{t.sales.dataTable.allStatuses}</option>
-                        {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </Select>
-                </div>
 
                 <DataTable<Sale>
                     tableId="sales"
@@ -467,10 +424,14 @@ export default function SalesPage() {
                     isLoading={loading}
                     emptyMessage={t.sales.dataTable.emptyMessage}
                     emptyIcon={<Receipt className="w-16 h-16 text-gray-200" />}
-                    showSearch={false}
+                    searchPlaceholder={t.sales.dataTable.searchPlaceholder}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    viewOptions
                     serverPagination={serverPagination}
                     enableRowSelection
                     getRowId={(sale) => sale.id}
+                    onRowSelectionChange={setSelectedSales}
                     bulkActions={bulkActions}
                     bulkActionsDisabled={batchBusy}
                 />
@@ -492,6 +453,18 @@ export default function SalesPage() {
                         invoiceLayout={invoiceLayout}
                     />
                 )}
+
+                <ConfirmDialog
+                    open={pendingDelete !== null}
+                    title={t.common.delete}
+                    prompt={t.shared.confirm.deleteSale}
+                    confirmLabel={t.common.delete}
+                    cancelLabel={t.common.cancel}
+                    loading={deletingId !== null}
+                    danger
+                    onConfirm={() => void confirmDelete()}
+                    onCancel={() => { if (deletingId === null) setPendingDelete(null); }}
+                />
 
                 {cancelTarget && (
                     <CancelEntryModal

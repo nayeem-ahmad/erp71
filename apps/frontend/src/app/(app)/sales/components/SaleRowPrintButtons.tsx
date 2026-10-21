@@ -1,6 +1,7 @@
 'use client';
 
 import { Printer, Truck } from 'lucide-react';
+import { RowActionButton } from '@/components/table';
 import { useI18n } from '@/lib/i18n';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
 
@@ -33,32 +34,22 @@ export default function SaleRowPrintButtons({
 }: SaleRowPrintButtonsProps) {
     const { t } = useI18n();
     const copy = t.sales.printMenu;
-
-    const buttonClass =
-        'rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:text-gray-300';
+    const pulse = busy ? 'animate-pulse' : undefined;
 
     return (
         <>
-            <button
-                type="button"
+            <RowActionButton
+                icon={<Printer className={pulse} />}
+                label={copy.printInvoice}
                 onClick={() => onPrintInvoice(paperSize)}
                 disabled={busy}
-                className={buttonClass}
-                title={copy.printInvoice}
-                aria-label={copy.printInvoice}
-            >
-                <Printer className={`${busy ? 'animate-pulse' : ''} h-4 w-4`} />
-            </button>
-            <button
-                type="button"
+            />
+            <RowActionButton
+                icon={<Truck className={pulse} />}
+                label={t.sales.challan.action}
                 onClick={() => onPrintChallan(paperSize)}
                 disabled={busy}
-                className={buttonClass}
-                title={t.sales.challan.action}
-                aria-label={t.sales.challan.action}
-            >
-                <Truck className={`${busy ? 'animate-pulse' : ''} h-4 w-4`} />
-            </button>
+            />
         </>
     );
 }

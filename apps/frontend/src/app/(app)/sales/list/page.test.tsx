@@ -49,6 +49,7 @@ jest.mock('@/lib/api', () => ({
         // CANCEL_ENTRY → the action is hidden, which is the default here.
         getMe: jest.fn().mockResolvedValue({ tenants: [] }),
         cancelSale: jest.fn(),
+        deleteSale: jest.fn(),
         // Printing a row fetches the full sale, because the list payload
         // carries no line items.
         printSalesBatch: jest.fn(),
@@ -185,6 +186,78 @@ describe('SalesListPage — Sales Transaction List', () => {
             expect(screen.getAllByText('৳ 55.00').length).toBeGreaterThan(0);
             expect(screen.getAllByText('৳ 20.00').length).toBeGreaterThan(0);
         });
+    });
+
+    it('right-aligns the money and the item count', async () => {
+        renderWithQueryClient(<SalesListPage />);
+        const totals = await screen.findAllByText('৳ 55.00');
+        expect(totals[0].closest('td')).toHaveClass('text-end');
+        expect(screen.getByText('2 items').closest('td')).toHaveClass('text-end');
+    });
+
+    it('offers the list view options beside the columns control', async () => {
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+        expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
+    });
+
+    it('searches the server from the toolbar box', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.change(screen.getByPlaceholderText('Search by serial, customer, status...'), {
+            target: { value: 'SL-00002' },
+        });
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ search: 'SL-00002', page: 1 }),
+            ),
+        );
+    });
+
+    it('filters by status from the toolbar, on the server', async () => {
+        const { api } = require('@/lib/api');
+        renderWithQueryClient(<SalesListPage />);
+        await screen.findByText('SL-00001');
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), {
+            target: { value: 'COMPLETED' },
+        });
+
+        await waitFor(() =>
+            expect(api.getSalesList).toHaveBeenLastCalledWith(
+                expect.objectContaining({ status: 'COMPLETED', page: 1 }),
+            ),
+        );
+    });
+
+    it('asks before deleting a sale', async () => {
+        const { api } = require('@/lib/api');
+        api.getMe.mockResolvedValue({
+            tenants: [{ id: 'tenant-1', role: 'MANAGER', permissions: ['CANCEL_ENTRY'] }],
+        });
+        api.deleteSale.mockResolvedValue(undefined);
+        const confirmSpy = jest.spyOn(window, 'confirm').mockImplementation(() => true);
+
+        try {
+            renderWithQueryClient(<SalesListPage />);
+            await screen.findByText('SL-00001');
+            const deleteButtons = await screen.findAllByRole('button', { name: 'Delete' });
+
+            fireEvent.click(deleteButtons[0]);
+            expect(confirmSpy).not.toHaveBeenCalled();
+            expect(api.deleteSale).not.toHaveBeenCalled();
+
+            const dialog = screen.getByRole('dialog');
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+            await waitFor(() => expect(api.deleteSale).toHaveBeenCalledWith('sale-1'));
+        } finally {
+            api.getMe.mockResolvedValue({ tenants: [] });
+            confirmSpy.mockRestore();
+        }
     });
 
     it('renders COMPLETED status badge', async () => {

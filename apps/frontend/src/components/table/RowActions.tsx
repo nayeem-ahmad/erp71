@@ -45,6 +45,11 @@ export interface RowActionButtonProps {
     disabled?: boolean;
 }
 
+/** The look of a row action, for a control that has to stay its own button — a menu trigger. */
+export function rowActionButtonClass(intent: RowActionIntent = 'neutral'): string {
+    return `${BASE_CLASS} ${INTENT_CLASS[intent]}`;
+}
+
 export function RowActionButton({ icon, label, intent = 'neutral', href, onClick, disabled = false }: RowActionButtonProps) {
     if (disabled) {
         return (
@@ -53,7 +58,7 @@ export function RowActionButton({ icon, label, intent = 'neutral', href, onClick
             </span>
         );
     }
-    const className = `${BASE_CLASS} ${INTENT_CLASS[intent]}`;
+    const className = rowActionButtonClass(intent);
     if (href) {
         return (
             <Link href={href} aria-label={label} title={label} className={className}>

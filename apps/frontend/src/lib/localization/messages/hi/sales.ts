@@ -427,7 +427,7 @@ export const salesMessages = {
             },
             loadFailed: "प्रिंट करने के लिए बिक्री लोड नहीं हो सकी।",
             popupBlocked: "प्रिंट करने के लिए इस साइट के पॉप-अप की अनुमति दें।",
-            printSelected: "चालान प्रिंट करें",
+            printSelected: "चालान प्रिंट करें ({count})",
             bulkFailed: "चयनित बिक्री प्रिंट करने के लिए लोड नहीं हो सकीं।",
             bulkPartial: "चयनित {total} में से {skipped} बिक्री लोड नहीं हो सकीं और छोड़ दी गईं।",
         },

@@ -427,7 +427,7 @@ export const salesMessages = {
             },
             loadFailed: "Der Verkauf konnte zum Drucken nicht geladen werden.",
             popupBlocked: "Erlauben Sie Pop-ups für diese Seite, um zu drucken.",
-            printSelected: "Rechnungen drucken",
+            printSelected: "Rechnungen drucken ({count})",
             bulkFailed: "Die ausgewählten Verkäufe konnten zum Drucken nicht geladen werden.",
             bulkPartial: "{skipped} von {total} ausgewählten Verkäufen konnten nicht geladen werden und wurden ausgelassen.",
         },

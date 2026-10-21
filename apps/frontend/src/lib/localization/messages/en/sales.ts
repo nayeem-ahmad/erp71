@@ -431,7 +431,7 @@ export const salesMessages = {
             },
             loadFailed: 'Could not load the sale to print.',
             popupBlocked: 'Allow pop-ups for this site to print.',
-            printSelected: 'Print invoices',
+            printSelected: 'Print invoices ({count})',
             bulkFailed: 'Could not load the selected sales to print.',
             bulkPartial: '{skipped} of {total} selected sales could not be loaded and were left out.',
         },

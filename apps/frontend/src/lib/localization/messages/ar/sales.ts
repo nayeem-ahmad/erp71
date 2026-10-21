@@ -427,7 +427,7 @@ export const salesMessages = {
             },
             loadFailed: "تعذر تحميل عملية البيع للطباعة.",
             popupBlocked: "اسمح بالنوافذ المنبثقة لهذا الموقع للطباعة.",
-            printSelected: "طباعة الفواتير",
+            printSelected: "طباعة الفواتير ({count})",
             bulkFailed: "تعذر تحميل عمليات البيع المحددة للطباعة.",
             bulkPartial: "تعذر تحميل {skipped} من أصل {total} عمليات بيع محددة، وتم استبعادها.",
         },

@@ -124,8 +124,14 @@ export interface DataTableProps<T> {
     toolbarActions?: React.ReactNode;
     /** Search placeholder text */
     searchPlaceholder?: string;
-    /** Show the built-in global search input in the toolbar (default: true). Set false when the caller renders its own (e.g. server-side) search box. */
+    /** Show the built-in global search input in the toolbar (default: true). Set false when the caller renders its own search box. */
     showSearch?: boolean;
+    /**
+     * The toolbar search box reports each change here and does not filter the
+     * rows on screen. A server-paginated list debounces this and sends it with
+     * the query. Leave unset and the box filters the loaded rows.
+     */
+    onSearchChange?: (query: string) => void;
     /** Predefined filter presets */
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
     /**
@@ -164,8 +170,8 @@ export interface DataTableProps<T> {
     filters?: ListFilter[];
     /** Opt-in server-side pagination + sorting. When set, the table drives page/size/sort
      *  through these callbacks and uses `total` for the footer count instead of the
-     *  client row count. Pages using this must also set `showSearch={false}` and render
-     *  their own server-backed search.
+     *  client row count. Pages using this pass `onSearchChange` so the toolbar box
+     *  searches the server, or set `showSearch={false}` and render their own box.
      *  IMPORTANT: `onPageSizeChange` consumers MUST also reset the current page to 1 when
      *  the page size changes (see the leads page), or the new page size can be requested
      *  against a stale page index and return an empty/mismatched result. */
@@ -393,6 +399,7 @@ export default function DataTable<T>({
     toolbarActions,
     searchPlaceholder,
     showSearch = true,
+    onSearchChange,
     filterPresets,
     enableColumnFilters = true,
     density,
@@ -483,6 +490,18 @@ export default function DataTable<T>({
     const [sorting, setSorting] = useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
     const [globalFilter, setGlobalFilter] = useState('');
+    /** What the box shows when the page owns the query (`onSearchChange`). */
+    const [searchText, setSearchText] = useState('');
+    const remoteSearch = !!onSearchChange;
+    const searchValue = remoteSearch ? searchText : globalFilter;
+    const setSearchValue = (next: string) => {
+        if (onSearchChange) {
+            setSearchText(next);
+            onSearchChange(next);
+        } else {
+            setGlobalFilter(next);
+        }
+    };
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
         savedPrefs?.columnVisibility ?? {},
     );
@@ -592,7 +611,8 @@ export default function DataTable<T>({
         state: {
             sorting: isServer ? serverSorting : sorting,
             columnFilters: activeColumnFilters,
-            globalFilter,
+            // A remote query must not also hide rows on this page.
+            globalFilter: remoteSearch ? '' : globalFilter,
             columnVisibility: effectiveColumnVisibility,
             columnOrder: effectiveColumnOrder,
             columnSizing,
@@ -941,12 +961,12 @@ export default function DataTable<T>({
                                 type="text"
                                 placeholder={resolvedSearchPlaceholder}
                                 className={d.searchInput}
-                                value={globalFilter}
-                                onChange={(e) => setGlobalFilter(e.target.value)}
+                                value={searchValue}
+                                onChange={(e) => setSearchValue(e.target.value)}
                             />
-                            {globalFilter && (
+                            {searchValue && (
                                 <button
-                                    onClick={() => setGlobalFilter('')}
+                                    onClick={() => setSearchValue('')}
                                     className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                 >
                                     <X className="w-3.5 h-3.5" />
