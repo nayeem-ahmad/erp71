@@ -353,6 +353,40 @@ describe('CampaignDispatchService', () => {
             expect(email.sendCustom).not.toHaveBeenCalled();
         });
 
+        it('sends a WhatsApp campaign with the customer name for the template', async () => {
+            db.crmCampaign.findFirst.mockResolvedValue(
+                emailCampaign({ channel: 'WHATSAPP', recipient_source: 'SEGMENT', message: 'Your order is ready.' }),
+            );
+            queueRows([pending('r1', { subject: null, message: null, name: 'Rahim' })]);
+
+            await service.drainCampaign('camp-1');
+
+            expect(whatsapp.sendMessage).toHaveBeenCalledWith('01700000000', 'Your order is ready.', {
+                tenantId: 't1',
+                purpose: 'CRM campaign',
+                recipientName: 'Rahim',
+            });
+        });
+
+        it('records a Meta rejection on the WhatsApp recipient', async () => {
+            db.crmCampaign.findFirst.mockResolvedValue(
+                emailCampaign({ channel: 'WHATSAPP', recipient_source: 'SEGMENT', message: 'Your order is ready.' }),
+            );
+            queueRows([pending('r1', { subject: null, message: null, name: 'Rahim' })]);
+            whatsapp.sendMessage.mockResolvedValueOnce({
+                sent: false,
+                reason: 'WHATSAPP_REJECTED',
+                error: 'WhatsApp API 400: template not found',
+            });
+
+            await service.drainCampaign('camp-1');
+
+            expect(db.crmCampaignRecipient.updateMany).toHaveBeenCalledWith({
+                where: { id: 'r1', status: 'SENDING', claimed_at: expect.any(Date) },
+                data: { status: 'FAILED', error: 'Error: WhatsApp API 400: template not found' },
+            });
+        });
+
         it('routes an SMS campaign through the SMS service', async () => {
             db.crmCampaign.findFirst.mockResolvedValue(
                 emailCampaign({ channel: 'SMS', recipient_source: 'SEGMENT', message: 'Camp body' }),

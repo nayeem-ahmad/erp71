@@ -34,7 +34,8 @@ Track all work here. Check off items as they're completed. Add new items as they
 - [x] Implement audit logging table (who changed what, when — needed for billing disputes) — done 2026-06-09
 
 ### Email & Notifications
-- [ ] **BulkSMSBD is unreachable from the production VPS.** Seen 2026-10-04: the 5-minute health probe logged ~300 `Health probe for BulkSMSBD failed: Unreachable` / `No response within 2000ms` warnings in 24h, and `HealthAlertService` reports "no alert recipients configured", so nobody is told. Confirm whether real SMS sends fail too, and whether BulkSMSBD restricts by source IP or country; the VPS is outside Bangladesh. Configure alert recipients at the same time.
+- [ ] **SMS test button reports success when BulkSMSBD rejects the message.** `SmsService.sendSms` returns `sent: true` unless the tenant is out of credits, including on `response_code` other than 202 and on a network error. The admin test toast then says the message was dispatched.
+- [ ] **Health alerts still have no recipients.** `HealthAlertService` reports "no alert recipients configured", so a BulkSMSBD failure does not notify anyone.
 - [x] Integrate email service (Resend) — done 2026-05-15
 - [x] Transactional emails: billing invoices, payment confirmations, payment failures — done 2026-06-09
 - [x] Onboarding welcome email — sent on signup — done 2026-05-15
@@ -1675,7 +1676,7 @@ A CRM-first tenant landed on `RetailDashboard` — sales, stock, top products �
 ---
 
 ## ROADMAP — Post-launch features
-- [ ] **A metered send that the provider rejects still spends the credit.** Added 2026-10-15. SMS, WhatsApp and email all take the credit before calling the gateway (so a shop can never send more than it has paid for), and none refunds it when the gateway then fails. Fine while failures are rare; worth a `REFUND` ledger entry on a definite provider rejection once BulkSMSBD reachability (see Email & Notifications) is sorted.
+- [ ] **A metered send that the provider rejects still spends the credit.** Added 2026-10-15. SMS, WhatsApp and email all take the credit before calling the gateway (so a shop can never send more than it has paid for), and none refunds it when the gateway then fails. BulkSMSBD reachability from the VPS is confirmed (2026-10-21); a `REFUND` ledger entry on a definite provider rejection is still open.
 - [ ] **Translate the Messaging Credits page and Admin › Credit Top-ups.** Added 2026-10-15. Both are English-only, as the SMS Credits page they replaced was; the sidebar label, the admin sell-credits modal and the ledger event names are in all nine locales.
 - [ ] **Run `sync:nav-layout` for the new admin entry if a platform-admin layout has been saved.** Added 2026-10-15. `admin.tenant-management.credit-topups` is in both default layouts, but a saved layout is served verbatim: `npm run sync:nav-layout --workspace=@erp71/database -- admin.tenant-management.credit-topups`.
 - [ ] **Decide whether a shop with its own WhatsApp Business number or sender email should still be metered.** Added 2026-10-15. Today every tenant-billed send spends a credit, including ones going out through a WABA token or mail identity the shop pays for itself.
@@ -2085,6 +2086,10 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 ## COMPLETED
 
 - [x] **Sales list takes the Sales Orders list UI** — done 2026-10-21. View options, toolbar filters (status, sale date with time, created), search in the table's own box (`onSearchChange`, still server-side), totals and the item count right-aligned, `StatusBadge`, `RowActions` (invoice and challan stay one click each), header buttons on `buttonClassName()`, and delete through `ConfirmDialog`. Print selected still prints a mixed-branch selection, each invoice on its own letterhead, and the button now counts the ticked rows. Tests: sales list (search, status, alignment, view options, delete dialog) and `DataTable` remote search.
+
+- [x] **WhatsApp campaigns send the approved `erp71_customer_update` template** — done 2026-10-21. A CRM WhatsApp campaign no longer sends plain text. It sends the English template with the customer name in `{{1}}` and the campaign text in `{{2}}`. A Meta rejection is stored on the recipient as failed. The admin test send uses the same template. Tests: template payload (3) and campaign dispatch (the new WhatsApp cases included in 35 passing).
+
+- [x] **BulkSMSBD accepts sends from `66.116.239.87`** — done 2026-10-21. Both server addresses are on the BulkSMSBD IP White List, type ALL, Active: `66.116.239.87` added 2026-10-21 17:23, and `66.116.236.127` since 2026-10-05 01:29. A test from the production server to 01714111977 returned `response_code` 202 and the message was received. Traffic to `139.99.39.237` is still SNATed by `erp71-sms-egress` (`/usr/local/sbin/erp71-sms-egress.sh`). A direct connect from `66.116.236.127` is still refused, so that rule has to stay even though the address is whitelisted.
 
 - [x] **Customer SMS on credit sales and payments released** — done 2026-10-21. PR #877 merged to `main` as `1356ef06`. Deploy to VPS run 39585064032; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200. Feature landed on `dev` as PR #876 (`7abe4b09`). The switch stays off until an admin turns it on.
 

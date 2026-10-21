@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { TenantMessagingIdentityService } from '../tenant-messaging/tenant-messaging-identity.service';
 import { SmsCreditService } from '../sms/sms-credit.service';
+import { customerUpdatePayload } from './customer-update-template';
 
 export interface SendWhatsAppOptions {
     /**
@@ -12,11 +13,15 @@ export interface SendWhatsAppOptions {
     tenantId?: string | null;
     /** Short label stored on the usage ledger entry (e.g. "CRM campaign"). */
     purpose?: string;
+    /** Customer name for the {{1}} variable of erp71_customer_update. */
+    recipientName?: string | null;
 }
 
 export interface SendWhatsAppResult {
     sent: boolean;
-    reason?: 'INSUFFICIENT_WHATSAPP_CREDITS';
+    reason?: 'INSUFFICIENT_WHATSAPP_CREDITS' | 'WHATSAPP_REJECTED';
+    /** Meta's error, when the send was rejected. */
+    error?: string;
 }
 
 @Injectable()
@@ -89,12 +94,9 @@ export class WhatsAppService {
 
         try {
             const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
-            const body = JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: phone,
-                type: 'text',
-                text: { body: message },
-            });
+            const body = JSON.stringify(
+                customerUpdatePayload(phone, options?.recipientName, message),
+            );
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -108,13 +110,19 @@ export class WhatsAppService {
             if (!response.ok) {
                 const errBody = await response.text().catch(() => '');
                 this.logger.error(`WhatsApp API ${response.status} for ${phone}: ${errBody}`);
-                return { sent: true };
+                const detail = errBody ? `: ${errBody.slice(0, 500)}` : '';
+                return {
+                    sent: false,
+                    reason: 'WHATSAPP_REJECTED',
+                    error: `WhatsApp API ${response.status}${detail}`,
+                };
             }
 
             const result: any = await response.json().catch(() => ({}));
             this.logger.debug(`WhatsApp sent to ${phone}: messageId=${result?.messages?.[0]?.id}`);
         } catch (err) {
             this.logger.error(`Failed to send WhatsApp to ${phone}: ${err}`);
+            return { sent: false, reason: 'WHATSAPP_REJECTED', error: 'WhatsApp could not be reached' };
         }
         return { sent: true };
     }
@@ -135,12 +143,13 @@ export class WhatsAppService {
         }
 
         const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
-        const body = JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: phone,
-            type: 'text',
-            text: { body: 'Test message from ERP71. Your WhatsApp Cloud API is configured correctly.' },
-        });
+        const body = JSON.stringify(
+            customerUpdatePayload(
+                phone,
+                'Customer',
+                'Test message from ERP71. Your WhatsApp Cloud API is configured correctly.',
+            ),
+        );
 
         const response = await fetch(url, {
             method: 'POST',
