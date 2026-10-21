@@ -417,6 +417,13 @@ export const settingsExtrasMessages = {
             others: 'Also send to',
             othersHint: 'People who already have a login. Someone who leaves the workspace stops receiving it.',
             noOthers: 'No other people with a login yet.',
+            sms: {
+                label: 'Short text message',
+                hint: 'One short text at 12:20 am, to the mobile number on each person’s login. Someone without a mobile is skipped. Each text spends SMS credits.',
+                ownerMobile: 'The owner’s text goes to',
+                ownerNoMobile: 'The owner has no mobile number on their login, so they will not get the text.',
+                noMobile: 'no mobile',
+            },
         },
         weekly: {
             label: 'Enable Weekly Report',

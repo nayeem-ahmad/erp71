@@ -2085,6 +2085,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Daily summary short SMS** — done 2026-10-21. A second switch on Settings › Automated Reports. At 00:20 in the shop’s time zone the owner, plus the same other members as the email, get one short text on the mobile saved on their login. Someone without a mobile is skipped. The text is the company total (sales, cash, purchases, expenses, and dues once). English uses Tk so a normal text is one SMS credit. Each text spends SMS credits. A send is recorded per shop day. WhatsApp waits for an owner template. On `feat/daily-summary-sms`.
+
 - [x] **Sales list takes the Sales Orders list UI** — done 2026-10-21. View options, toolbar filters (status, sale date with time, created), search in the table's own box (`onSearchChange`, still server-side), totals and the item count right-aligned, `StatusBadge`, `RowActions` (invoice and challan stay one click each), header buttons on `buttonClassName()`, and delete through `ConfirmDialog`. Print selected still prints a mixed-branch selection, each invoice on its own letterhead, and the button now counts the ticked rows. Tests: sales list (search, status, alignment, view options, delete dialog) and `DataTable` remote search.
 
 - [x] **WhatsApp campaigns send the approved `erp71_customer_update` template** — done 2026-10-21. A CRM WhatsApp campaign no longer sends plain text. It sends the English template with the customer name in `{{1}}` and the campaign text in `{{2}}`. A Meta rejection is stored on the recipient as failed. The admin test send uses the same template. Tests: template payload (3) and campaign dispatch (the new WhatsApp cases included in 35 passing).

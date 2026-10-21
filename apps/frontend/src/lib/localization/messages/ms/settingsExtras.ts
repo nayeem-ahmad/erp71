@@ -417,6 +417,13 @@ export const settingsExtrasMessages = {
                 others: "Hantar juga kepada",
                 othersHint: "Orang yang sudah mempunyai log masuk. Sesiapa yang meninggalkan ruang kerja tidak lagi menerimanya.",
                 noOthers: "Belum ada orang lain yang mempunyai log masuk.",
+                sms: {
+                    label: "Mesej ringkas",
+                    hint: "Satu mesej ringkas pada 12:20 pagi ke nombor mudah alih pada log masuk. Tanpa nombor, ia dilangkau. Setiap mesej menggunakan kredit SMS.",
+                    ownerMobile: "Mesej pemilik dihantar ke",
+                    ownerNoMobile: "Pemilik tiada nombor mudah alih pada log masuk, jadi mesej tidak dihantar.",
+                    noMobile: "tiada nombor",
+                },
             },
             weekly: {
                 label: "Laporan jualan mingguan",

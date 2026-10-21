@@ -9,6 +9,7 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { DailyReportController } from './daily-report.controller';
 import { DailyReportService } from './daily-report.service';
 import { DailySummaryEmailService } from './daily-summary-email.service';
+import { DailySummarySmsService } from './daily-summary-sms.service';
 
 @Module({
     imports: [
@@ -19,6 +20,6 @@ import { DailySummaryEmailService } from './daily-summary-email.service';
         AccountingModule,
     ],
     controllers: [DailyReportController],
-    providers: [DailyReportService, DailySummaryEmailService, SubscriptionAccessGuard, StorePermissionGuard],
+    providers: [DailyReportService, DailySummaryEmailService, DailySummarySmsService, SubscriptionAccessGuard, StorePermissionGuard],
 })
 export class DailyReportModule {}

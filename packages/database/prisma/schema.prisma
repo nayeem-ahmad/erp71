@@ -944,6 +944,9 @@ model Tenant {
   /// it on, so existing workspaces do not start receiving mail. The owner
   /// always receives it; `daily_summary_recipient_ids` are other members.
   daily_summary_email_enabled Boolean  @default(false)
+  /// Short SMS of the same day, to the mobile on each of those logins. Off
+  /// until someone turns it on. Each text spends SMS credits.
+  daily_summary_sms_enabled   Boolean  @default(false)
   daily_summary_recipient_ids String[] @default([])
 
   /// Password complexity a member of this workspace has to satisfy when they
@@ -1170,6 +1173,7 @@ model Tenant {
   creditTopupRequests        CreditTopupRequest[]
   recordHistory              RecordHistory[]
   dailySummaryEmailSends     DailySummaryEmailSend[]
+  dailySummarySmsSends       DailySummarySmsSend[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])
@@ -1191,6 +1195,24 @@ model DailySummaryEmailSend {
 
   @@id([tenant_id, report_date])
   @@map("daily_summary_email_sends")
+}
+
+/// One row per workspace per shop-local day, so a retry of the nightly text
+/// does not message the same mobiles twice. `sent_to` is the numbers that
+/// already got it.
+model DailySummarySmsSend {
+  tenant_id    String
+  /// The shop-local calendar day the summary describes, `YYYY-MM-DD`.
+  report_date  String
+  sent_to      String[]  @default([])
+  locked_until DateTime?
+  completed_at DateTime?
+  updated_at   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@id([tenant_id, report_date])
+  @@map("daily_summary_sms_sends")
 }
 
 /// Platform-admin managed sender identity for one tenant's outbound messages.

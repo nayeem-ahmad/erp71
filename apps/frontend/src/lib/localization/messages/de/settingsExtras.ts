@@ -417,6 +417,13 @@ export const settingsExtrasMessages = {
             others: "Außerdem senden an",
             othersHint: "Personen, die sich bereits anmelden können. Wer den Workspace verlässt, erhält sie nicht mehr.",
             noOthers: "Es gibt noch keine weiteren Personen mit Anmeldung.",
+            sms: {
+                label: "Kurze SMS",
+                hint: "Eine kurze SMS um 00:20 Uhr an die Mobilnummer im Login. Ohne Mobilnummer wird übersprungen. Jede SMS verbraucht SMS-Guthaben.",
+                ownerMobile: "Die SMS an den Inhaber geht an",
+                ownerNoMobile: "Der Inhaber hat keine Mobilnummer im Login und erhält die SMS nicht.",
+                noMobile: "keine Mobilnummer",
+            },
         },
         weekly: {
             label: "Wochenbericht aktivieren",

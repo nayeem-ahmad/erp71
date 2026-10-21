@@ -417,6 +417,13 @@ export const settingsExtrasMessages = {
             others: "Enviar también a",
             othersHint: "Personas que ya pueden iniciar sesión. Quien deje el espacio deja de recibirlo.",
             noOthers: "Todavía no hay otras personas con acceso.",
+            sms: {
+                label: "Mensaje corto",
+                hint: "Un SMS corto a las 00:20, al móvil del inicio de sesión. Quien no tenga móvil no lo recibe. Cada mensaje gasta crédito de SMS.",
+                ownerMobile: "El mensaje del propietario va a",
+                ownerNoMobile: "El propietario no tiene móvil en su acceso, así que no recibirá el mensaje.",
+                noMobile: "sin móvil",
+            },
         },
         weekly: {
             label: "Activar el informe semanal",
