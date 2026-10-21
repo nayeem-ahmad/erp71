@@ -417,6 +417,19 @@ export const settingsExtrasMessages = {
             others: "Envoyer aussi à",
             othersHint: "Des personnes qui ont déjà un accès. Quelqu’un qui quitte l’espace ne le reçoit plus.",
             noOthers: "Personne d’autre n’a encore d’accès.",
+            sms: {
+                label: "SMS court",
+                hint: "Un SMS court à 00 h 20, vers le mobile enregistré sur l’accès. Sans mobile, on passe. Chaque SMS consomme des crédits.",
+                ownerMobile: "Le SMS du propriétaire part vers",
+                ownerNoMobile: "Le propriétaire n’a pas de mobile sur son accès, donc il ne reçoit pas le SMS.",
+                noMobile: "pas de mobile",
+            },
+            whatsapp: {
+                label: "WhatsApp",
+                hint: "Le même résumé par WhatsApp à 00 h 20, vers le mobile enregistré sur l’accès. Sans mobile, on passe. Chaque message consomme un crédit WhatsApp.",
+                ownerMobile: "Le WhatsApp du propriétaire part vers",
+                ownerNoMobile: "Le propriétaire n’a pas de mobile sur son accès, donc il ne reçoit pas WhatsApp.",
+            },
         },
         weekly: {
             label: "Activer le rapport hebdomadaire",

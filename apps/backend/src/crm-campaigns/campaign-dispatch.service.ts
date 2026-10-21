@@ -33,6 +33,7 @@ interface PendingRecipient {
     id: string;
     email: string | null;
     phone: string | null;
+    name: string | null;
     subject: string | null;
     message: string | null;
 }
@@ -138,7 +139,7 @@ export class CampaignDispatchService {
         // claimedAt makes the set we iterate provably the set we own.
         const batch: PendingRecipient[] = await this.db.crmCampaignRecipient.findMany({
             where: { id: { in: queued.map((r) => r.id) }, status: 'SENDING', claimed_at: claimedAt },
-            select: { id: true, email: true, phone: true, subject: true, message: true },
+            select: { id: true, email: true, phone: true, name: true, subject: true, message: true },
             orderBy: { id: 'asc' },
         });
 
@@ -324,8 +325,15 @@ export class CampaignDispatchService {
             const result = await this.whatsapp.sendMessage(recipient.phone, message, {
                 tenantId: campaign.tenant_id,
                 purpose: 'CRM campaign',
+                recipientName: recipient.name,
             });
-            if (!result.sent) throw new Error('Insufficient WhatsApp credits');
+            if (!result.sent) {
+                throw new Error(
+                    result.reason === 'WHATSAPP_REJECTED'
+                        ? (result.error || 'WhatsApp was not accepted')
+                        : 'Insufficient WhatsApp credits',
+                );
+            }
             return;
         }
 

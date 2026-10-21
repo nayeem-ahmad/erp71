@@ -248,15 +248,17 @@ export class TenantsService {
                 report_monthly_enabled: true,
                 report_email: true,
                 daily_summary_email_enabled: true,
+                daily_summary_sms_enabled: true,
+                daily_summary_whatsapp_enabled: true,
                 daily_summary_recipient_ids: true,
-                owner: { select: { id: true, name: true, email: true } },
+                owner: { select: { id: true, name: true, email: true, mobile: true } },
             },
         });
         if (!tenant) return null;
 
         const members = await this.db.tenantUser.findMany({
             where: { tenant_id: tenantId },
-            select: { user_id: true, user: { select: { name: true, email: true } } },
+            select: { user_id: true, user: { select: { name: true, email: true, mobile: true } } },
             orderBy: { user: { email: 'asc' } },
         });
 
@@ -265,6 +267,8 @@ export class TenantsService {
             report_monthly_enabled: tenant.report_monthly_enabled,
             report_email: tenant.report_email,
             daily_summary_email_enabled: tenant.daily_summary_email_enabled,
+            daily_summary_sms_enabled: tenant.daily_summary_sms_enabled,
+            daily_summary_whatsapp_enabled: tenant.daily_summary_whatsapp_enabled,
             daily_summary_recipient_ids: tenant.daily_summary_recipient_ids,
             daily_summary_owner: tenant.owner,
             daily_summary_candidates: members
@@ -273,6 +277,7 @@ export class TenantsService {
                     id: member.user_id,
                     name: member.user.name,
                     email: member.user.email,
+                    mobile: member.user.mobile,
                 })),
         };
     }
@@ -284,6 +289,8 @@ export class TenantsService {
             report_monthly_enabled?: boolean;
             report_email?: string | null;
             daily_summary_email_enabled?: boolean;
+            daily_summary_sms_enabled?: boolean;
+            daily_summary_whatsapp_enabled?: boolean;
             daily_summary_recipient_ids?: string[];
         },
     ) {
@@ -293,6 +300,12 @@ export class TenantsService {
         if (dto.report_email !== undefined) data.report_email = dto.report_email || null;
         if (dto.daily_summary_email_enabled !== undefined) {
             data.daily_summary_email_enabled = dto.daily_summary_email_enabled;
+        }
+        if (dto.daily_summary_sms_enabled !== undefined) {
+            data.daily_summary_sms_enabled = dto.daily_summary_sms_enabled;
+        }
+        if (dto.daily_summary_whatsapp_enabled !== undefined) {
+            data.daily_summary_whatsapp_enabled = dto.daily_summary_whatsapp_enabled;
         }
         if (dto.daily_summary_recipient_ids !== undefined) {
             data.daily_summary_recipient_ids = await this.dailySummaryRecipientIds(

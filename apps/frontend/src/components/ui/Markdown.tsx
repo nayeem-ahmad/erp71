@@ -41,7 +41,7 @@ function styled<T extends keyof JSX.IntrinsicElements>(tag: T, className: string
     return StyledTag;
 }
 
-const HEADING = 'mt-3 text-sm font-semibold text-gray-900 first:mt-0';
+const HEADING = 'mt-3 text-sm font-semibold text-gray-900 break-words first:mt-0';
 
 /**
  * A same-origin app route the assistant asked to link to. react-markdown has
@@ -68,7 +68,7 @@ const baseComponents: Components = {
     h5: styled('h5', HEADING),
     h6: styled('h6', HEADING),
 
-    p: styled('p', 'mt-2 text-sm leading-relaxed first:mt-0'),
+    p: styled('p', 'mt-2 text-sm leading-relaxed break-words first:mt-0'),
     strong: styled('strong', 'font-semibold text-gray-900'),
     em: styled('em', 'italic'),
     del: styled('del', 'text-gray-500 line-through'),
@@ -76,9 +76,9 @@ const baseComponents: Components = {
 
     ul: styled('ul', 'mt-2 list-disc space-y-1 ps-4 text-sm first:mt-0'),
     ol: styled('ol', 'mt-2 list-decimal space-y-1 ps-4 text-sm first:mt-0'),
-    li: styled('li', 'leading-relaxed marker:text-gray-400'),
+    li: styled('li', 'leading-relaxed break-words marker:text-gray-400'),
 
-    blockquote: styled('blockquote', 'mt-2 border-s-2 border-gray-300 ps-2 text-sm text-gray-600'),
+    blockquote: styled('blockquote', 'mt-2 border-s-2 border-gray-300 ps-2 text-sm text-gray-600 break-words'),
 
     // Wide tables scroll inside the bubble; the panel itself never scrolls sideways.
     table: ({ node: _node, ...props }) => (
