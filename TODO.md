@@ -2084,6 +2084,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Sales return slip released** — done 2026-10-21. PR #872 merged to `main` as `29af344e7`. Deploy to VPS run 39571207582; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200.
+
 - [x] **Daily business summary email** — done 2026-10-21. Off until turned on at Settings › Automated Reports. At 00:20 in the shop’s time zone the owner, plus any other members chosen there, gets one email for the day that just ended: a company total, then each branch (a quiet branch is one “No sales” line). Customer and supplier dues, and the reorder count, are company-wide so they are not added up across branches. A send is recorded per shop day so a retry does not mail twice; a missed earlier day is not backfilled. On `feat/daily-summary-email`.
 
 - [x] **Sales return entry fills a short slip** — done 2026-10-21. After the invoice is found, the return starts empty and holds only lines that are going back. Search or scan on that bill, pick a line that is not on the return yet (all of it, or a typed quantity), or return everything left and trim. Fully returned lines stay off the bill. The refund strip, the serial lookup, and the warehouse rules are unchanged. Tests: the new sales-return page, including payments.
