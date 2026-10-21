@@ -111,6 +111,12 @@ const findSale = async (serial = 'S-00001') => {
     });
 };
 
+/** The slip starts empty. Put every still-returnable line on it at full quantity. */
+const returnTheRest = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Return all remaining' }));
+    await screen.findByLabelText('Qty — Rice 5kg');
+};
+
 describe('NewSalesReturnPage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -141,20 +147,24 @@ describe('NewSalesReturnPage', () => {
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
 
-        // line-1: 5 sold − 2 already returned = 3 returnable, seeded at the cap.
+        // The slip starts empty. Rice is offered; oil was fully returned.
         expect(await screen.findByText('Rice 5kg')).toBeInTheDocument();
-        const qtyInput = screen.getByDisplayValue('3') as HTMLInputElement;
-        expect(qtyInput.max).toBe('3');
+        expect(screen.queryByLabelText('Qty — Rice 5kg')).not.toBeInTheDocument();
+        expect(screen.queryByText('Oil 1L')).not.toBeInTheDocument();
 
-        // line-2 is fully returned (3 of 3), so it is not offered at all.
+        fireEvent.click(screen.getByRole('button', { name: 'Add all left — Rice 5kg' }));
+        // line-1: 5 sold − 2 already returned = 3 returnable, added at the cap.
+        const qtyInput = await screen.findByLabelText('Qty — Rice 5kg') as HTMLInputElement;
+        expect(qtyInput.value).toBe('3');
+        expect(qtyInput.max).toBe('3');
         expect(screen.queryByText('Oil 1L')).not.toBeInTheDocument();
     });
 
     it('prices the refund from the sale and does not allow editing it', async () => {
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
-        await screen.findByText('Rice 5kg');
         // 3 returnable × ৳100 line price
         expect(screen.getAllByText('৳300.00').length).toBeGreaterThan(0);
         expect(screen.getByText('Refund Total')).toBeInTheDocument();
@@ -165,8 +175,8 @@ describe('NewSalesReturnPage', () => {
     it('caps a typed quantity at the returnable amount', async () => {
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
-        await screen.findByText('Rice 5kg');
         const qtyInput = screen.getByDisplayValue('3');
         fireEvent.change(qtyInput, { target: { value: '9' } });
 
@@ -185,7 +195,7 @@ describe('NewSalesReturnPage', () => {
     it('submits the return against the originating sale line ids', async () => {
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
-        await screen.findByText('Rice 5kg');
+        await returnTheRest();
 
         fireEvent.change(screen.getByPlaceholderText(/Reason for return/i), {
             target: { value: 'Damaged' },
@@ -220,7 +230,7 @@ describe('NewSalesReturnPage', () => {
 
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
-        await screen.findByText('Rice 5kg');
+        await returnTheRest();
 
         expect((screen.getByLabelText('Warehouse') as HTMLSelectElement).value).toBe('wh-annex');
         await waitFor(() => expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled());
@@ -246,7 +256,7 @@ describe('NewSalesReturnPage', () => {
 
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
-        await screen.findByText('Rice 5kg');
+        await returnTheRest();
 
         // Not hidden behind the switch: a warehouse steering a line has to be
         // visible on the line, or the return silently restocks elsewhere.
@@ -267,12 +277,14 @@ describe('NewSalesReturnPage', () => {
         });
     });
 
-    it('keeps the submit button disabled until a sale is loaded', async () => {
+    it('keeps the submit button disabled until a line is on the slip', async () => {
         await act(async () => { render(<NewSalesReturnPage />); });
 
         expect(screen.getByRole('button', { name: /Create Return/i })).toBeDisabled();
         await findSale();
         await screen.findByText('Rice 5kg');
+        expect(screen.getByRole('button', { name: /Create Return/i })).toBeDisabled();
+        await returnTheRest();
         await waitFor(() => expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled());
     });
 
@@ -282,6 +294,7 @@ describe('NewSalesReturnPage', () => {
         (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(0));
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
         const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
         await waitFor(() => expect(bkash.value).toBe('300'));
@@ -304,6 +317,7 @@ describe('NewSalesReturnPage', () => {
         (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(120, { balance: 400 }));
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
         // ৳300 − ৳120 due = ৳180 refunded; the ৳120 is kept against the due.
         const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
@@ -317,6 +331,7 @@ describe('NewSalesReturnPage', () => {
         (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(5000));
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
         const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
         await waitFor(() => expect(bkash.value).toBe('300'));
@@ -337,6 +352,7 @@ describe('NewSalesReturnPage', () => {
         mockLayout([CASH]);
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
         const cash = (await screen.findByLabelText('Cash amount')) as HTMLInputElement;
         await waitFor(() => expect(cash.value).toBe('300'));
@@ -352,6 +368,7 @@ describe('NewSalesReturnPage', () => {
         });
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
         const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
         await waitFor(() => expect(bkash.value).toBe('300'));
@@ -379,6 +396,7 @@ describe('NewSalesReturnPage', () => {
         mockLayout([CARD, CASH]);
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
 
         const card = (await screen.findByLabelText('Card amount')) as HTMLInputElement;
         await waitFor(() => expect(card.value).toBe('300'));
@@ -389,6 +407,7 @@ describe('NewSalesReturnPage', () => {
         (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(0));
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
         const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
         await waitFor(() => expect(bkash.value).toBe('300'));
 
@@ -405,6 +424,7 @@ describe('NewSalesReturnPage', () => {
         (api.getSale as jest.Mock).mockResolvedValue(bkashSaleOf(0));
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
         const bkash = (await screen.findByLabelText('bKash amount')) as HTMLInputElement;
         await waitFor(() => expect(bkash.value).toBe('300'));
 
@@ -416,6 +436,7 @@ describe('NewSalesReturnPage', () => {
     it('will not take a partial refund with no customer', async () => {
         await act(async () => { render(<NewSalesReturnPage />); });
         await findSale();
+        await returnTheRest();
         const cash = (await screen.findByLabelText('Cash amount')) as HTMLInputElement;
         await waitFor(() => expect(cash.value).toBe('300'));
 
@@ -423,6 +444,45 @@ describe('NewSalesReturnPage', () => {
 
         expect(await screen.findByText("Refund the full amount, or pick the customer's sale")).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Create Return/i })).toBeDisabled();
+    });
+
+    it('scans a SKU one piece at a time and a typed quantity adds a partial', async () => {
+        (api.getSale as jest.Mock).mockResolvedValue({
+            ...SALE,
+            items: [
+                { ...SALE.items[0], product: { name: 'Rice 5kg', sku: 'RICE' } },
+                {
+                    id: 'line-3',
+                    quantity: 4,
+                    price_at_sale: '20.00',
+                    product: { name: 'Sugar', sku: 'SG-001' },
+                    returns: [],
+                },
+            ],
+        });
+        await act(async () => { render(<NewSalesReturnPage />); });
+        await findSale();
+
+        expect(screen.queryByLabelText('Qty — Sugar')).not.toBeInTheDocument();
+        const search = await screen.findByLabelText('Search or scan a product on this bill');
+        fireEvent.change(search, { target: { value: 'SG-001' } });
+        fireEvent.keyDown(search, { key: 'Enter' });
+        await waitFor(() => expect(screen.getByLabelText('Qty — Sugar')).toHaveValue(1));
+
+        fireEvent.change(screen.getByLabelText('Search or scan a product on this bill'), { target: { value: 'SG-001' } });
+        fireEvent.keyDown(screen.getByLabelText('Search or scan a product on this bill'), { key: 'Enter' });
+        await waitFor(() => expect(screen.getByLabelText('Qty — Sugar')).toHaveValue(2));
+
+        const partial = screen.getByLabelText('Partial quantity — Rice 5kg');
+        fireEvent.change(partial, { target: { value: '1' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Add — Rice 5kg' }));
+        await waitFor(() => expect(screen.getByLabelText('Qty — Rice 5kg')).toHaveValue(1));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Return all remaining' }));
+        await waitFor(() => {
+            expect(screen.getByLabelText('Qty — Rice 5kg')).toHaveValue(3);
+            expect(screen.getByLabelText('Qty — Sugar')).toHaveValue(4);
+        });
     });
 
     describe('started from a sale', () => {
@@ -436,6 +496,8 @@ describe('NewSalesReturnPage', () => {
             // The lookup shows which sale it is, locked until "Change".
             expect(screen.getByPlaceholderText(/Sale serial number/i)).toHaveValue('S-00001');
             expect(screen.getByPlaceholderText(/Sale serial number/i)).toBeDisabled();
+            expect(screen.queryByLabelText('Qty — Rice 5kg')).not.toBeInTheDocument();
+            await returnTheRest();
             await waitFor(() => expect(screen.getByRole('button', { name: /Create Return/i })).toBeEnabled());
         });
 
