@@ -424,6 +424,12 @@ export const settingsExtrasMessages = {
                     ownerNoMobile: "Pemilik tiada nombor mudah alih pada log masuk, jadi mesej tidak dihantar.",
                     noMobile: "tiada nombor",
                 },
+                whatsapp: {
+                    label: "WhatsApp",
+                    hint: "Ringkasan yang sama melalui WhatsApp pada 12:20 pagi ke nombor mudah alih pada log masuk. Tanpa nombor, ia dilangkau. Setiap mesej menggunakan satu kredit WhatsApp.",
+                    ownerMobile: "WhatsApp pemilik dihantar ke",
+                    ownerNoMobile: "Pemilik tiada nombor mudah alih pada log masuk, jadi WhatsApp tidak dihantar.",
+                },
             },
             weekly: {
                 label: "Laporan jualan mingguan",

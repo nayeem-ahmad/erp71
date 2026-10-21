@@ -424,6 +424,12 @@ export const settingsExtrasMessages = {
                 ownerNoMobile: 'The owner has no mobile number on their login, so they will not get the text.',
                 noMobile: 'no mobile',
             },
+            whatsapp: {
+                label: 'WhatsApp',
+                hint: 'The same summary on WhatsApp at 12:20 am, to the mobile number on each person’s login. Someone without a mobile is skipped. Each message spends one WhatsApp credit.',
+                ownerMobile: 'The owner’s WhatsApp goes to',
+                ownerNoMobile: 'The owner has no mobile number on their login, so they will not get WhatsApp.',
+            },
         },
         weekly: {
             label: 'Enable Weekly Report',

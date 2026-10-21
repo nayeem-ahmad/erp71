@@ -17,6 +17,7 @@ type ReportSettings = {
     report_email: string | null;
     daily_summary_email_enabled: boolean;
     daily_summary_sms_enabled: boolean;
+    daily_summary_whatsapp_enabled: boolean;
     daily_summary_recipient_ids: string[];
     daily_summary_owner: Person | null;
     daily_summary_candidates: Person[];
@@ -28,6 +29,7 @@ const EMPTY_SETTINGS: ReportSettings = {
     report_email: '',
     daily_summary_email_enabled: false,
     daily_summary_sms_enabled: false,
+    daily_summary_whatsapp_enabled: false,
     daily_summary_recipient_ids: [],
     daily_summary_owner: null,
     daily_summary_candidates: [],
@@ -83,6 +85,7 @@ export default function ReportSettingsPage() {
                         report_email: d.report_email ?? '',
                         daily_summary_email_enabled: d.daily_summary_email_enabled ?? false,
                         daily_summary_sms_enabled: d.daily_summary_sms_enabled ?? false,
+                        daily_summary_whatsapp_enabled: d.daily_summary_whatsapp_enabled ?? false,
                         daily_summary_recipient_ids: d.daily_summary_recipient_ids ?? [],
                         daily_summary_owner: d.daily_summary_owner ?? null,
                         daily_summary_candidates: d.daily_summary_candidates ?? [],
@@ -106,6 +109,7 @@ export default function ReportSettingsPage() {
                     report_email: settings.report_email?.trim() || null,
                     daily_summary_email_enabled: settings.daily_summary_email_enabled,
                     daily_summary_sms_enabled: settings.daily_summary_sms_enabled,
+                    daily_summary_whatsapp_enabled: settings.daily_summary_whatsapp_enabled,
                     daily_summary_recipient_ids: settings.daily_summary_recipient_ids,
                 }),
             });
@@ -197,7 +201,24 @@ export default function ReportSettingsPage() {
                         />
                     </div>
 
-                    {(settings.daily_summary_email_enabled || settings.daily_summary_sms_enabled) && (
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <label
+                                htmlFor="daily_summary_whatsapp_enabled"
+                                className="block text-sm font-semibold text-gray-800"
+                            >
+                                {m.daily.whatsapp.label}
+                            </label>
+                            <p className="mt-0.5 text-xs text-gray-500">{m.daily.whatsapp.hint}</p>
+                        </div>
+                        <Toggle
+                            id="daily_summary_whatsapp_enabled"
+                            checked={settings.daily_summary_whatsapp_enabled}
+                            onChange={(v) => updateSetting('daily_summary_whatsapp_enabled', v)}
+                        />
+                    </div>
+
+                    {(settings.daily_summary_email_enabled || settings.daily_summary_sms_enabled || settings.daily_summary_whatsapp_enabled) && (
                         <div className="space-y-3">
                             {settings.daily_summary_email_enabled && settings.daily_summary_owner?.email && (
                                 <p className="text-sm text-gray-700">
@@ -213,6 +234,16 @@ export default function ReportSettingsPage() {
                                     </p>
                                 ) : (
                                     <p className="text-sm text-amber-700">{m.daily.sms.ownerNoMobile}</p>
+                                )
+                            )}
+                            {settings.daily_summary_whatsapp_enabled && (
+                                settings.daily_summary_owner?.mobile ? (
+                                    <p className="text-sm text-gray-700">
+                                        {m.daily.whatsapp.ownerMobile}{' '}
+                                        <span className="text-gray-500">{settings.daily_summary_owner.mobile}</span>
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-amber-700">{m.daily.whatsapp.ownerNoMobile}</p>
                                 )
                             )}
                             <div>
@@ -239,7 +270,7 @@ export default function ReportSettingsPage() {
                                                         {person.name && (
                                                             <span className="ms-2 text-gray-500">{person.email}</span>
                                                         )}
-                                                        {settings.daily_summary_sms_enabled && (
+                                                        {(settings.daily_summary_sms_enabled || settings.daily_summary_whatsapp_enabled) && (
                                                             <span className="ms-2 text-gray-500">
                                                                 {person.mobile || m.daily.sms.noMobile}
                                                             </span>

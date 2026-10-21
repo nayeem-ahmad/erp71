@@ -424,6 +424,12 @@ export const settingsExtrasMessages = {
                 ownerNoMobile: "Der Inhaber hat keine Mobilnummer im Login und erhält die SMS nicht.",
                 noMobile: "keine Mobilnummer",
             },
+            whatsapp: {
+                label: "WhatsApp",
+                hint: "Dieselbe Übersicht per WhatsApp um 00:20 Uhr an die Mobilnummer im Login. Ohne Mobilnummer wird übersprungen. Jede Nachricht verbraucht ein WhatsApp-Guthaben.",
+                ownerMobile: "Das WhatsApp an den Inhaber geht an",
+                ownerNoMobile: "Der Inhaber hat keine Mobilnummer im Login und erhält kein WhatsApp.",
+            },
         },
         weekly: {
             label: "Wochenbericht aktivieren",

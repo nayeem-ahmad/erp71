@@ -947,6 +947,9 @@ model Tenant {
   /// Short SMS of the same day, to the mobile on each of those logins. Off
   /// until someone turns it on. Each text spends SMS credits.
   daily_summary_sms_enabled   Boolean  @default(false)
+  /// The same summary on WhatsApp, through `erp71_tenant_owner_daily_summary`.
+  /// Off until someone turns it on. Each message spends one WhatsApp credit.
+  daily_summary_whatsapp_enabled Boolean @default(false)
   daily_summary_recipient_ids String[] @default([])
 
   /// Password complexity a member of this workspace has to satisfy when they
@@ -1174,6 +1177,7 @@ model Tenant {
   recordHistory              RecordHistory[]
   dailySummaryEmailSends     DailySummaryEmailSend[]
   dailySummarySmsSends       DailySummarySmsSend[]
+  dailySummaryWhatsAppSends  DailySummaryWhatsAppSend[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])
@@ -1213,6 +1217,23 @@ model DailySummarySmsSend {
 
   @@id([tenant_id, report_date])
   @@map("daily_summary_sms_sends")
+}
+
+/// One row per workspace per shop-local day, so a retry of the nightly
+/// WhatsApp does not message the same mobiles twice.
+model DailySummaryWhatsAppSend {
+  tenant_id    String
+  /// The shop-local calendar day the summary describes, `YYYY-MM-DD`.
+  report_date  String
+  sent_to      String[]  @default([])
+  locked_until DateTime?
+  completed_at DateTime?
+  updated_at   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@id([tenant_id, report_date])
+  @@map("daily_summary_whatsapp_sends")
 }
 
 /// Platform-admin managed sender identity for one tenant's outbound messages.

@@ -424,6 +424,12 @@ export const settingsExtrasMessages = {
                 ownerNoMobile: "Le propriétaire n’a pas de mobile sur son accès, donc il ne reçoit pas le SMS.",
                 noMobile: "pas de mobile",
             },
+            whatsapp: {
+                label: "WhatsApp",
+                hint: "Le même résumé par WhatsApp à 00 h 20, vers le mobile enregistré sur l’accès. Sans mobile, on passe. Chaque message consomme un crédit WhatsApp.",
+                ownerMobile: "Le WhatsApp du propriétaire part vers",
+                ownerNoMobile: "Le propriétaire n’a pas de mobile sur son accès, donc il ne reçoit pas WhatsApp.",
+            },
         },
         weekly: {
             label: "Activer le rapport hebdomadaire",

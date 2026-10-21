@@ -249,6 +249,7 @@ export class TenantsService {
                 report_email: true,
                 daily_summary_email_enabled: true,
                 daily_summary_sms_enabled: true,
+                daily_summary_whatsapp_enabled: true,
                 daily_summary_recipient_ids: true,
                 owner: { select: { id: true, name: true, email: true, mobile: true } },
             },
@@ -267,6 +268,7 @@ export class TenantsService {
             report_email: tenant.report_email,
             daily_summary_email_enabled: tenant.daily_summary_email_enabled,
             daily_summary_sms_enabled: tenant.daily_summary_sms_enabled,
+            daily_summary_whatsapp_enabled: tenant.daily_summary_whatsapp_enabled,
             daily_summary_recipient_ids: tenant.daily_summary_recipient_ids,
             daily_summary_owner: tenant.owner,
             daily_summary_candidates: members
@@ -288,6 +290,7 @@ export class TenantsService {
             report_email?: string | null;
             daily_summary_email_enabled?: boolean;
             daily_summary_sms_enabled?: boolean;
+            daily_summary_whatsapp_enabled?: boolean;
             daily_summary_recipient_ids?: string[];
         },
     ) {
@@ -300,6 +303,9 @@ export class TenantsService {
         }
         if (dto.daily_summary_sms_enabled !== undefined) {
             data.daily_summary_sms_enabled = dto.daily_summary_sms_enabled;
+        }
+        if (dto.daily_summary_whatsapp_enabled !== undefined) {
+            data.daily_summary_whatsapp_enabled = dto.daily_summary_whatsapp_enabled;
         }
         if (dto.daily_summary_recipient_ids !== undefined) {
             data.daily_summary_recipient_ids = await this.dailySummaryRecipientIds(
