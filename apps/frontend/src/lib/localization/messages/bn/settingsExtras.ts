@@ -406,6 +406,14 @@ export const settingsExtrasMessages = {
             loadFailed: "রিপোর্ট সেটিংস লোড ব্যর্থ।",
             saveFailed: "রিপোর্ট সেটিংস সংরক্ষণ ব্যর্থ।",
             saved: "রিপোর্ট সেটিংস সফলভাবে সংরক্ষিত।",
+            daily: {
+                label: "দৈনিক ব্যবসার সারসংক্ষেপ",
+                hint: "দোকানের সময়ে রাত ১২:২০-এ আগের দিনের সারসংক্ষেপ যায়। এক ইমেইলে সব শাখা থাকে।",
+                ownerAlways: "মালিক সবসময় পান।",
+                others: "আরও যাদের কাছে পাঠাবেন",
+                othersHint: "যাদের এই দোকানে লগইন আছে। কেউ চলে গেলে আর পাঠানো হয় না।",
+                noOthers: "লগইন-সহ আর কেউ নেই।",
+            },
             weekly: {
                 label: "সাপ্তাহিক রিপোর্ট সক্রিয় করুন",
                 hint: "Sent every Monday morning with the previous week's summary.",

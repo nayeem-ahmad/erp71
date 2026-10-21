@@ -935,6 +935,12 @@ model Tenant {
   report_monthly_enabled Boolean @default(false)
   report_email           String? // override email for reports (defaults to owner email)
 
+  /// Nightly summary of the shop day that just ended. Off until someone turns
+  /// it on, so existing workspaces do not start receiving mail. The owner
+  /// always receives it; `daily_summary_recipient_ids` are other members.
+  daily_summary_email_enabled Boolean  @default(false)
+  daily_summary_recipient_ids String[] @default([])
+
   /// Password complexity a member of this workspace has to satisfy when they
   /// change, reset or first set their password. Edited by a tenant admin at
   /// Settings › Password Policy; evaluated by the one shared rule set in
@@ -1158,9 +1164,28 @@ model Tenant {
   activationRequests         ActivationRequest[]
   creditTopupRequests        CreditTopupRequest[]
   recordHistory              RecordHistory[]
+  dailySummaryEmailSends     DailySummaryEmailSend[]
 
   @@index([deleted_at])
   @@index([billing_suspended_at])
+}
+
+/// One row per workspace per shop-local day, so a retry of the nightly summary
+/// does not mail the same people twice. `sent_to` is the addresses that already
+/// got it. `locked_until` is how two processes avoid sending the same day at once.
+model DailySummaryEmailSend {
+  tenant_id    String
+  /// The shop-local calendar day the summary describes, `YYYY-MM-DD`.
+  report_date  String
+  sent_to      String[]  @default([])
+  locked_until DateTime?
+  completed_at DateTime?
+  updated_at   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@id([tenant_id, report_date])
+  @@map("daily_summary_email_sends")
 }
 
 /// Platform-admin managed sender identity for one tenant's outbound messages.

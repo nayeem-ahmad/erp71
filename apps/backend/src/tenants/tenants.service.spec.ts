@@ -15,6 +15,9 @@ describe('TenantsService', () => {
             findUnique: jest.fn(),
             update: jest.fn(),
         },
+        tenantUser: {
+            findMany: jest.fn(),
+        },
     };
 
     const planEntitlements = {
@@ -353,6 +356,52 @@ describe('TenantsService', () => {
             await service.updateTaxSettings('tenant-1', { business_tin: '123' } as any);
 
             expect(savedData()).not.toHaveProperty('mushak_pos_receipt');
+        });
+    });
+
+    describe('daily summary recipients', () => {
+        const savedIds = () => db.tenant.update.mock.calls[0][0].data.daily_summary_recipient_ids;
+
+        function settingsRow(ids: string[]) {
+            return {
+                report_weekly_enabled: false,
+                report_monthly_enabled: false,
+                report_email: null,
+                daily_summary_email_enabled: true,
+                daily_summary_recipient_ids: ids,
+                owner: { id: 'owner', name: 'Karim', email: 'owner@shop.test' },
+            };
+        }
+
+        it('keeps members and drops the owner, who already receives the email', async () => {
+            db.tenant.findUnique
+                .mockResolvedValueOnce({ owner_id: 'owner' })
+                .mockResolvedValueOnce(settingsRow(['member']));
+            db.tenantUser.findMany
+                .mockResolvedValueOnce([{ user_id: 'member' }])
+                .mockResolvedValueOnce([
+                    { user_id: 'member', user: { name: 'Asha', email: 'asha@shop.test' } },
+                    { user_id: 'owner', user: { name: 'Karim', email: 'owner@shop.test' } },
+                ]);
+            db.tenant.update.mockResolvedValue({});
+
+            const result = await service.updateReportSettings('tenant-1', {
+                daily_summary_recipient_ids: ['owner', 'member', 'member'],
+            });
+
+            expect(savedIds()).toEqual(['member']);
+            expect(result?.daily_summary_candidates.map((person) => person.id)).toEqual(['member']);
+            expect(result?.daily_summary_owner?.email).toBe('owner@shop.test');
+        });
+
+        it('refuses someone who is not a member of the workspace', async () => {
+            db.tenant.findUnique.mockResolvedValue({ owner_id: 'owner' });
+            db.tenantUser.findMany.mockResolvedValue([]);
+
+            await expect(
+                service.updateReportSettings('tenant-1', { daily_summary_recipient_ids: ['stranger'] }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.tenant.update).not.toHaveBeenCalled();
         });
     });
 });

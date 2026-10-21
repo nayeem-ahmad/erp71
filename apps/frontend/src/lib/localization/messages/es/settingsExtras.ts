@@ -406,6 +406,14 @@ export const settingsExtrasMessages = {
         loadFailed: "No se pudieron cargar los ajustes de informes.",
         saveFailed: "No se pudieron guardar los ajustes de informes.",
         saved: "Ajustes de informes guardados correctamente.",
+        daily: {
+            label: "Resumen diario del negocio",
+            hint: "Se envía a las 00:20 en la zona horaria de la tienda, del día que acaba de terminar. Un correo reúne todas las sucursales.",
+            ownerAlways: "El propietario siempre lo recibe.",
+            others: "Enviar también a",
+            othersHint: "Personas que ya pueden iniciar sesión. Quien deje el espacio deja de recibirlo.",
+            noOthers: "Todavía no hay otras personas con acceso.",
+        },
         weekly: {
             label: "Activar el informe semanal",
             hint: "Se envía cada lunes por la mañana con el resumen de ventas de la semana anterior (lun.–dom.).",
