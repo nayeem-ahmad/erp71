@@ -8,6 +8,7 @@ import { ExpensesModule } from '../expenses/expenses.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { DailyReportController } from './daily-report.controller';
 import { DailyReportService } from './daily-report.service';
+import { DailySummaryEmailService } from './daily-summary-email.service';
 
 @Module({
     imports: [
@@ -18,6 +19,6 @@ import { DailyReportService } from './daily-report.service';
         AccountingModule,
     ],
     controllers: [DailyReportController],
-    providers: [DailyReportService, SubscriptionAccessGuard, StorePermissionGuard],
+    providers: [DailyReportService, DailySummaryEmailService, SubscriptionAccessGuard, StorePermissionGuard],
 })
 export class DailyReportModule {}
