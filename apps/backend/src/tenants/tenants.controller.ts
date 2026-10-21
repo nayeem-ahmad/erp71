@@ -110,6 +110,8 @@ export class TenantsController {
             report_monthly_enabled?: boolean;
             report_email?: string | null;
             daily_summary_email_enabled?: boolean;
+            daily_summary_sms_enabled?: boolean;
+            daily_summary_whatsapp_enabled?: boolean;
             daily_summary_recipient_ids?: string[];
         },
     ) {
