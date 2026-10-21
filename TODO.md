@@ -2084,6 +2084,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 ## COMPLETED
 
+- [x] **Sales return slip released** — done 2026-10-21. PR #872 merged to `main` as `29af344e7`. Deploy to VPS run 39571207582; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200.
+
 - [x] **Sales return entry fills a short slip** — done 2026-10-21. After the invoice is found, the return starts empty and holds only lines that are going back. Search or scan on that bill, pick a line that is not on the return yet (all of it, or a typed quantity), or return everything left and trim. Fully returned lines stay off the bill. The refund strip, the serial lookup, and the warehouse rules are unchanged. Tests: the new sales-return page, including payments.
 
 - [x] **Purchase return slip released** — done 2026-10-21. PR #869 merged to `main` as `cb7e0fa2`. Deploy to VPS run 39561279489; live health reported that commit with `db: ok`, and app.erp71.com returned HTTP 200.
