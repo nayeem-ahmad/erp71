@@ -122,7 +122,7 @@ export default function DescriptionSection({
                         </>
                     ) : (
                         <span className="block text-sm leading-relaxed text-gray-700">
-                            <Suspense fallback={<span className="whitespace-pre-wrap">{description}</span>}>
+                            <Suspense fallback={<span className="whitespace-pre-wrap break-words">{description}</span>}>
                                 <Markdown content={description} allowImages />
                             </Suspense>
                         </span>

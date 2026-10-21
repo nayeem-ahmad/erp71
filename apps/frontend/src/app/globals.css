@@ -110,7 +110,7 @@
      * so does react-markdown, because the bridge writes lists loose.
      */
     .prose-editor p {
-        @apply mt-2 leading-relaxed first:mt-0;
+        @apply mt-2 leading-relaxed break-words first:mt-0;
     }
 
     .prose-editor strong {
@@ -139,7 +139,7 @@
     }
 
     .prose-editor li {
-        @apply leading-relaxed marker:text-gray-400;
+        @apply leading-relaxed break-words marker:text-gray-400;
     }
 
     /* TipTap's Placeholder only marks the empty line; drawing it is left to
