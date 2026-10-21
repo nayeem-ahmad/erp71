@@ -406,6 +406,14 @@ export const settingsExtrasMessages = {
             loadFailed: "Gagal memuatkan tetapan laporan.",
             saveFailed: "Gagal menyimpan tetapan laporan.",
             saved: "Tetapan laporan disimpan.",
+            daily: {
+                label: "Ringkasan perniagaan harian",
+                hint: "Dihantar pada 12:20 pagi mengikut zon waktu kedai, untuk hari yang baru tamat. Satu e-mel merangkumi setiap cawangan.",
+                ownerAlways: "Pemilik sentiasa menerimanya.",
+                others: "Hantar juga kepada",
+                othersHint: "Orang yang sudah mempunyai log masuk. Sesiapa yang meninggalkan ruang kerja tidak lagi menerimanya.",
+                noOthers: "Belum ada orang lain yang mempunyai log masuk.",
+            },
             weekly: {
                 label: "Laporan jualan mingguan",
                 hint: "Dihantar setiap Isnin pagi dengan ringkasan minggu sebelumnya.",
