@@ -395,6 +395,10 @@ export const settingsExtrasMessages = {
             label: "Envoyer un SMS pour les alertes de stock faible",
             hint: "Envoie un SMS au propriétaire de l'espace lorsque des produits passent sous leur seuil de réapprovisionnement lors du contrôle quotidien.",
         },
+        onCreditPayment: {
+            label: "SMS au client pour une vente à crédit et un paiement",
+            hint: "Envoie un SMS lorsqu'une vente laisse un solde dû, y compris la somme payée sur cette facture, et lorsqu'un paiement est reçu. Rien n'est envoyé sans un numéro de mobile valide. Chaque message utilise un crédit SMS.",
+        },
         saveButton: "Enregistrer les paramètres SMS",
         saving: "Enregistrement…",
     },

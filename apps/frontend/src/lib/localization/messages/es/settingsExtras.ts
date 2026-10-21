@@ -395,6 +395,10 @@ export const settingsExtrasMessages = {
             label: "Enviar SMS en avisos de existencias bajas",
             hint: "Envía un SMS al propietario cuando algún producto cae por debajo de su nivel de reposición durante la revisión diaria de existencias.",
         },
+        onCreditPayment: {
+            label: "SMS al cliente en una venta a crédito y en un pago",
+            hint: "Envía un SMS cuando una venta deja un saldo pendiente, incluido lo pagado en esa factura, y cuando se recibe un pago. No se envía si el móvil no es válido. Cada mensaje usa crédito SMS.",
+        },
         saveButton: "Guardar ajustes de SMS",
         saving: "Guardando…",
     },
