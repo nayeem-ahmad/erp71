@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeftRight, Ban, Copy, Eye, FileCheck, MoreHorizontal, Receipt, Undo2 } from 'lucide-react';
 import AnchoredDropdown from '@/components/document-entry/AnchoredDropdown';
+import { rowActionButtonClass } from '@/components/table';
 import { useDismissOnClickOutside } from '@/lib/click-outside';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -76,7 +77,7 @@ export default function SaleRowOverflowMenu({
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
+                className={rowActionButtonClass()}
                 title={label}
                 aria-label={label}
                 aria-haspopup="menu"
