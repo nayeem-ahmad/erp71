@@ -406,6 +406,14 @@ export const settingsExtrasMessages = {
         loadFailed: "Berichtseinstellungen konnten nicht geladen werden.",
         saveFailed: "Berichtseinstellungen konnten nicht gespeichert werden.",
         saved: "Berichtseinstellungen erfolgreich gespeichert.",
+        daily: {
+            label: "Tägliche Geschäftsübersicht",
+            hint: "Geht um 00:20 Uhr in der Zeitzone des Geschäfts raus, für den Tag, der gerade zu Ende gegangen ist. Eine E-Mail fasst alle Filialen zusammen.",
+            ownerAlways: "Der Inhaber erhält sie immer.",
+            others: "Außerdem senden an",
+            othersHint: "Personen, die sich bereits anmelden können. Wer den Workspace verlässt, erhält sie nicht mehr.",
+            noOthers: "Es gibt noch keine weiteren Personen mit Anmeldung.",
+        },
         weekly: {
             label: "Wochenbericht aktivieren",
             hint: "Wird jeden Montagmorgen mit der Verkaufsübersicht der Vorwoche (Mo–So) versendet.",

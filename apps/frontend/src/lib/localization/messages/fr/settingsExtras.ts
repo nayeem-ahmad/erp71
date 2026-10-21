@@ -406,6 +406,14 @@ export const settingsExtrasMessages = {
         loadFailed: "Impossible de charger les paramètres de rapport.",
         saveFailed: "Impossible d'enregistrer les paramètres de rapport.",
         saved: "Paramètres de rapport enregistrés avec succès.",
+        daily: {
+            label: "Résumé quotidien",
+            hint: "Envoyé à 00 h 20 dans le fuseau de la boutique, pour la journée qui vient de se terminer. Un e-mail couvre toutes les succursales.",
+            ownerAlways: "Le propriétaire le reçoit toujours.",
+            others: "Envoyer aussi à",
+            othersHint: "Des personnes qui ont déjà un accès. Quelqu’un qui quitte l’espace ne le reçoit plus.",
+            noOthers: "Personne d’autre n’a encore d’accès.",
+        },
         weekly: {
             label: "Activer le rapport hebdomadaire",
             hint: "Envoyé chaque lundi matin avec la synthèse des ventes de la semaine précédente (lun.–dim.).",

@@ -334,6 +334,15 @@ ${details}
         });
     }
 
+    /**
+     * The nightly business summary, sent by the platform to the shop's own
+     * people. Not metered: it is the same kind of mail as the low-stock alert,
+     * not a message the shop sends to a customer.
+     */
+    async sendDailyBusinessSummary(to: string, subject: string, html: string): Promise<void> {
+        await this.send({ to, subject, html }, { throwOnError: true });
+    }
+
     async sendLowStockAlert(to: string, tenantName: string, items: Array<{ name: string; sku: string; quantity: number; reorderPoint: number }>): Promise<void> {
         const { frontendUrl } = await this.getTransportConfig();
         const rows = items

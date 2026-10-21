@@ -238,34 +238,102 @@ export class TenantsService {
     }
 
     async getReportSettings(tenantId: string) {
-        return this.db.tenant.findUnique({
+        const tenant = await this.db.tenant.findUnique({
             where: { id: tenantId },
             select: {
                 report_weekly_enabled: true,
                 report_monthly_enabled: true,
                 report_email: true,
+                daily_summary_email_enabled: true,
+                daily_summary_recipient_ids: true,
+                owner: { select: { id: true, name: true, email: true } },
             },
         });
+        if (!tenant) return null;
+
+        const members = await this.db.tenantUser.findMany({
+            where: { tenant_id: tenantId },
+            select: { user_id: true, user: { select: { name: true, email: true } } },
+            orderBy: { user: { email: 'asc' } },
+        });
+
+        return {
+            report_weekly_enabled: tenant.report_weekly_enabled,
+            report_monthly_enabled: tenant.report_monthly_enabled,
+            report_email: tenant.report_email,
+            daily_summary_email_enabled: tenant.daily_summary_email_enabled,
+            daily_summary_recipient_ids: tenant.daily_summary_recipient_ids,
+            daily_summary_owner: tenant.owner,
+            daily_summary_candidates: members
+                .filter((member) => member.user_id !== tenant.owner?.id && member.user.email)
+                .map((member) => ({
+                    id: member.user_id,
+                    name: member.user.name,
+                    email: member.user.email,
+                })),
+        };
     }
 
     async updateReportSettings(
         tenantId: string,
-        dto: { report_weekly_enabled?: boolean; report_monthly_enabled?: boolean; report_email?: string | null },
+        dto: {
+            report_weekly_enabled?: boolean;
+            report_monthly_enabled?: boolean;
+            report_email?: string | null;
+            daily_summary_email_enabled?: boolean;
+            daily_summary_recipient_ids?: string[];
+        },
     ) {
-        const data: Record<string, boolean | string | null> = {};
+        const data: Record<string, boolean | string | string[] | null> = {};
         if (dto.report_weekly_enabled !== undefined) data.report_weekly_enabled = dto.report_weekly_enabled;
         if (dto.report_monthly_enabled !== undefined) data.report_monthly_enabled = dto.report_monthly_enabled;
         if (dto.report_email !== undefined) data.report_email = dto.report_email || null;
+        if (dto.daily_summary_email_enabled !== undefined) {
+            data.daily_summary_email_enabled = dto.daily_summary_email_enabled;
+        }
+        if (dto.daily_summary_recipient_ids !== undefined) {
+            data.daily_summary_recipient_ids = await this.dailySummaryRecipientIds(
+                tenantId,
+                dto.daily_summary_recipient_ids,
+            );
+        }
 
-        return this.db.tenant.update({
+        await this.db.tenant.update({ where: { id: tenantId }, data });
+        return this.getReportSettings(tenantId);
+    }
+
+    /**
+     * Extra people for the nightly summary. The owner is always included at
+     * send time, so they are dropped here. Anyone who is not a member is refused
+     * rather than stored and silently skipped.
+     */
+    private async dailySummaryRecipientIds(tenantId: string, ids: string[]): Promise<string[]> {
+        if (!Array.isArray(ids)) {
+            throw new BadRequestException('Choose people from this workspace');
+        }
+
+        const tenant = await this.db.tenant.findUnique({
             where: { id: tenantId },
-            data,
-            select: {
-                report_weekly_enabled: true,
-                report_monthly_enabled: true,
-                report_email: true,
-            },
+            select: { owner_id: true },
         });
+        if (!tenant) throw new NotFoundException('Tenant not found');
+
+        const requested = [...new Set(ids.map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean))]
+            .filter((id) => id !== tenant.owner_id);
+        if (requested.length > 20) {
+            throw new BadRequestException('Choose at most 20 other people');
+        }
+        if (requested.length === 0) return [];
+
+        const members = await this.db.tenantUser.findMany({
+            where: { tenant_id: tenantId, user_id: { in: requested } },
+            select: { user_id: true },
+        });
+        const memberIds = new Set(members.map((member) => member.user_id));
+        if (requested.some((id) => !memberIds.has(id))) {
+            throw new BadRequestException('Choose people who belong to this workspace');
+        }
+        return requested;
     }
 
     async getLocalizationSettings(tenantId: string) {

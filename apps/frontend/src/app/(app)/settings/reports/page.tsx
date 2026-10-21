@@ -9,10 +9,26 @@ import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { toast } from '@/lib/toast';
 import { Alert, Button, Field, Input, PageShell } from '@/components/ui';
 
+type Person = { id: string; name: string | null; email: string };
+
 type ReportSettings = {
     report_weekly_enabled: boolean;
     report_monthly_enabled: boolean;
     report_email: string | null;
+    daily_summary_email_enabled: boolean;
+    daily_summary_recipient_ids: string[];
+    daily_summary_owner: Person | null;
+    daily_summary_candidates: Person[];
+};
+
+const EMPTY_SETTINGS: ReportSettings = {
+    report_weekly_enabled: false,
+    report_monthly_enabled: false,
+    report_email: '',
+    daily_summary_email_enabled: false,
+    daily_summary_recipient_ids: [],
+    daily_summary_owner: null,
+    daily_summary_candidates: [],
 };
 
 function Toggle({
@@ -50,11 +66,7 @@ function Toggle({
 export default function ReportSettingsPage() {
     const { t } = useI18n();
     const m = t.settingsExtras.reportEmails;
-    const [settings, setSettings] = useState<ReportSettings>({
-        report_weekly_enabled: false,
-        report_monthly_enabled: false,
-        report_email: '',
-    });
+    const [settings, setSettings] = useState<ReportSettings>(EMPTY_SETTINGS);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -67,6 +79,10 @@ export default function ReportSettingsPage() {
                         report_weekly_enabled: d.report_weekly_enabled ?? false,
                         report_monthly_enabled: d.report_monthly_enabled ?? false,
                         report_email: d.report_email ?? '',
+                        daily_summary_email_enabled: d.daily_summary_email_enabled ?? false,
+                        daily_summary_recipient_ids: d.daily_summary_recipient_ids ?? [],
+                        daily_summary_owner: d.daily_summary_owner ?? null,
+                        daily_summary_candidates: d.daily_summary_candidates ?? [],
                     });
                 }
             })
@@ -85,6 +101,8 @@ export default function ReportSettingsPage() {
                     report_weekly_enabled: settings.report_weekly_enabled,
                     report_monthly_enabled: settings.report_monthly_enabled,
                     report_email: settings.report_email?.trim() || null,
+                    daily_summary_email_enabled: settings.daily_summary_email_enabled,
+                    daily_summary_recipient_ids: settings.daily_summary_recipient_ids,
                 }),
             });
             toast.success(m.saved);
@@ -97,6 +115,19 @@ export default function ReportSettingsPage() {
 
     function updateSetting<K extends keyof ReportSettings>(key: K, value: ReportSettings[K]) {
         setSettings((prev) => ({ ...prev, [key]: value }));
+    }
+
+    function toggleRecipient(id: string) {
+        setSettings((prev) => {
+            const selected = prev.daily_summary_recipient_ids.includes(id);
+            if (!selected && prev.daily_summary_recipient_ids.length >= 20) return prev;
+            return {
+                ...prev,
+                daily_summary_recipient_ids: selected
+                    ? prev.daily_summary_recipient_ids.filter((current) => current !== id)
+                    : [...prev.daily_summary_recipient_ids, id],
+            };
+        });
     }
 
     return (
@@ -128,6 +159,67 @@ export default function ReportSettingsPage() {
                 </div>
             ) : (
                 <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <label
+                                htmlFor="daily_summary_email_enabled"
+                                className="block text-sm font-semibold text-gray-800"
+                            >
+                                {m.daily.label}
+                            </label>
+                            <p className="mt-0.5 text-xs text-gray-500">{m.daily.hint}</p>
+                        </div>
+                        <Toggle
+                            id="daily_summary_email_enabled"
+                            checked={settings.daily_summary_email_enabled}
+                            onChange={(v) => updateSetting('daily_summary_email_enabled', v)}
+                        />
+                    </div>
+
+                    {settings.daily_summary_email_enabled && (
+                        <div className="space-y-3">
+                            {settings.daily_summary_owner?.email && (
+                                <p className="text-sm text-gray-700">
+                                    {m.daily.ownerAlways}{' '}
+                                    <span className="text-gray-500">{settings.daily_summary_owner.email}</span>
+                                </p>
+                            )}
+                            <div>
+                                <p className="text-sm font-semibold text-gray-800">{m.daily.others}</p>
+                                <p className="mt-0.5 text-xs text-gray-500">{m.daily.othersHint}</p>
+                            </div>
+                            {settings.daily_summary_candidates.length === 0 ? (
+                                <p className="text-sm text-gray-500">{m.daily.noOthers}</p>
+                            ) : (
+                                <ul className="space-y-1">
+                                    {settings.daily_summary_candidates.map((person) => {
+                                        const checked = settings.daily_summary_recipient_ids.includes(person.id);
+                                        return (
+                                            <li key={person.id}>
+                                                <label className="flex min-h-touch items-center gap-3 text-sm text-gray-800">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        checked={checked}
+                                                        onChange={() => toggleRecipient(person.id)}
+                                                    />
+                                                    <span>
+                                                        {person.name || person.email}
+                                                        {person.name && (
+                                                            <span className="ms-2 text-gray-500">{person.email}</span>
+                                                        )}
+                                                    </span>
+                                                </label>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </div>
+                    )}
+
+                    <hr className="border-gray-100" />
+
                     {/* Weekly report */}
                     <div className="flex items-start justify-between gap-4">
                         <div>

@@ -406,6 +406,14 @@ export const settingsExtrasMessages = {
         loadFailed: 'Failed to load report settings.',
         saveFailed: 'Failed to save report settings.',
         saved: 'Report settings saved successfully.',
+        daily: {
+            label: 'Daily business summary',
+            hint: 'Sent at 12:20 am in the shop’s time zone, for the day that just ended. One email covers every branch.',
+            ownerAlways: 'The owner always receives this.',
+            others: 'Also send to',
+            othersHint: 'People who already have a login. Someone who leaves the workspace stops receiving it.',
+            noOthers: 'No other people with a login yet.',
+        },
         weekly: {
             label: 'Enable Weekly Report',
             hint: 'Sent every Monday morning with last week\'s sales summary (Mon–Sun).',
