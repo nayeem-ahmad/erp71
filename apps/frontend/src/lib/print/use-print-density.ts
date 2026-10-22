@@ -1,12 +1,26 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { usePreferencesStore } from '@/lib/preferences/store';
 import { readPrintDensity, setPrintDensity, subscribePrintDensity } from './density';
 import type { PrintDensity } from './types';
 
 /** The server has no storage to read; the client catches up after hydration. */
 function serverDensity(): PrintDensity {
     return 'normal';
+}
+
+/**
+ * Also re-reads when the member's preferences arrive or change, so a profile's
+ * density that lands after the page mounted is shown rather than missed.
+ */
+function subscribe(listener: () => void): () => void {
+    const unsubscribeDensity = subscribePrintDensity(listener);
+    const unsubscribeProfile = usePreferencesStore.subscribe(listener);
+    return () => {
+        unsubscribeDensity();
+        unsubscribeProfile();
+    };
 }
 
 /**
@@ -17,6 +31,6 @@ function serverDensity(): PrintDensity {
  * show three different answers — flipping any one of them re-renders the rest.
  */
 export function usePrintDensity(): [PrintDensity, (density: PrintDensity) => void] {
-    const density = useSyncExternalStore(subscribePrintDensity, readPrintDensity, serverDensity);
+    const density = useSyncExternalStore(subscribe, readPrintDensity, serverDensity);
     return [density, setPrintDensity];
 }

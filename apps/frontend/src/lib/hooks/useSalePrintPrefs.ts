@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { profileDevice } from '@/lib/preferences/profile-device';
+import { usePreferencesStore } from '@/lib/preferences/store';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
 import { PRINT_PREVIEW_SKIP_MESSAGE, type PrintDensity } from '@/lib/print';
 import { usePrintDensity } from '@/lib/print/use-print-density';
@@ -39,6 +41,24 @@ function storedPaper(): PaperSize | null {
     return stored && VALID_SIZES.includes(stored as PaperSize) ? (stored as PaperSize) : null;
 }
 
+/** The paper size the member's profile sets for a browser that has chosen none, if any. */
+function profilePaper(): PaperSize | null {
+    const paper = profileDevice().paperSize;
+    return paper && VALID_SIZES.includes(paper) ? paper : null;
+}
+
+/**
+ * Whether to skip the preview: this browser's stored answer (`true` or
+ * `false`), else the profile's, else false. An absent key is not a stored
+ * `false` — only the absent case lets the profile apply.
+ */
+function readSkipPreview(): boolean {
+    const stored = readStored(SKIP_PREVIEW_KEY);
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
+    return profileDevice().skipPreview === true;
+}
+
 /** The shop's `default_paper_size`, or null when it has none or cannot be read. */
 async function tenantPaper(): Promise<PaperSize | null> {
     try {
@@ -54,10 +74,10 @@ async function tenantPaper(): Promise<PaperSize | null> {
  * The same answer as `useSalePrintPrefs().paperSize`, read at the moment of
  * printing — for a print button on a screen that should not spend a request
  * on the shop's settings every time it loads (every list has one). This
- * browser's choice, else the shop default, else A4.
+ * browser's choice, else the member's profile, else the shop default, else A4.
  */
 export async function resolvePrintPaper(): Promise<PaperSize> {
-    return storedPaper() ?? (await tenantPaper()) ?? 'A4';
+    return storedPaper() ?? profilePaper() ?? (await tenantPaper()) ?? 'A4';
 }
 
 export interface SalePrintPrefs {
@@ -85,8 +105,10 @@ export interface SalePrintPrefs {
 /**
  * The operator's printing preferences: what paper, and whether to preview.
  *
- * Paper size layers a per-browser choice over the tenant's
- * `default_paper_size`. The tenant setting is the starting point — a shop that
+ * Paper size layers a per-browser choice over the member's profile and then the
+ * tenant's `default_paper_size`. The profile is read only — a browser that has
+ * chosen nothing starts from it, but nothing is stored until the operator
+ * changes something here. The tenant setting is the starting point — a shop that
  * has configured 80mm thermal should not have every till default to A4 — but
  * the till that changes it keeps that choice, because one counter printing A5
  * delivery copies should not restate the setting for everyone.
@@ -100,14 +122,22 @@ export function useSalePrintPrefs(): SalePrintPrefs {
     const [skipPreview, setSkipPreviewState] = useState(false);
     const [density, setDensity] = usePrintDensity();
     const [typeScale, setTypeScale] = usePrintTypeScale();
+    // Primitives, so a profile that arrives after mount re-runs the read below
+    // and nothing else about the preferences store re-renders this hook.
+    const profileSize = usePreferencesStore((s) => s.data?.sections?.device?.value?.paperSize);
+    const profileSkip = usePreferencesStore((s) => s.data?.sections?.device?.value?.skipPreview);
 
     // Read the stored answers on mount rather than in the initialiser: this
     // renders on the server first, where there is no localStorage, and a
     // mismatched first paint is a hydration error.
     useEffect(() => {
         const storedSize = storedPaper();
+        const fromProfile = profilePaper();
         if (storedSize) {
             setPaperSizeState(storedSize);
+        } else if (fromProfile) {
+            // The member's profile answers; no need to ask the shop.
+            setPaperSizeState(fromProfile);
         } else {
             // No local override — fall back to what the tenant configured, or
             // stay on A4 when it cannot be read. `tenantPaper` never throws: a
@@ -119,8 +149,8 @@ export function useSalePrintPrefs(): SalePrintPrefs {
             });
         }
 
-        setSkipPreviewState(readStored(SKIP_PREVIEW_KEY) === 'true');
-    }, []);
+        setSkipPreviewState(readSkipPreview());
+    }, [profileSize, profileSkip]);
 
     const setPaperSize = useCallback((size: PaperSize) => {
         setPaperSizeState(size);

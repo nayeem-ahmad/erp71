@@ -10,6 +10,7 @@
  * silently differed between the two would read as the switch not working.
  */
 
+import { profileDevice } from '@/lib/preferences/profile-device';
 import type { PrintDensity } from './types';
 
 export const PRINT_DENSITY_KEY = 'erp71:print:density';
@@ -35,10 +36,10 @@ export function isPrintDensity(value: unknown): value is PrintDensity {
 }
 
 /**
- * What this page falls back on when storage is unavailable, so the choice still
- * holds for as long as the page is open.
+ * What the operator chose on this page, kept for when storage is unavailable so
+ * the choice still holds for as long as the page is open. Null until they choose.
  */
-let sessionDensity: PrintDensity = 'normal';
+let sessionDensity: PrintDensity | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -55,7 +56,11 @@ export function readPrintDensity(): PrintDensity {
     } catch {
         // Fall through to the session's answer.
     }
-    return sessionDensity;
+    if (sessionDensity) return sessionDensity;
+    // This browser has no answer yet: start from the member's profile. Never
+    // written back — only the operator's own switch stores anything.
+    const fromProfile = profileDevice().printDensity;
+    return isPrintDensity(fromProfile) ? fromProfile : 'normal';
 }
 
 export function setPrintDensity(density: PrintDensity): void {
