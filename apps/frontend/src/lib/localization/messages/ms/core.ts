@@ -38,6 +38,7 @@ export const coreMessages = {
             sameAsEntry: "Sama seperti entri",
             perLineWarehouse: "Gudang per baris",
             rememberMe: "Ingat saya",
+            preferenceSaveFailed: "Tidak dapat menyimpan tetapan anda.",
             duplicate: 'Duplikat',
             forgotPassword: "Lupa kata laluan?",
             signIn: "Log masuk",

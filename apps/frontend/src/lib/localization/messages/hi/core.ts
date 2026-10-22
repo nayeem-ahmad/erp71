@@ -38,6 +38,7 @@ export const coreMessages = {
         sameAsEntry: "प्रविष्टि के समान",
         perLineWarehouse: "प्रति-पंक्ति गोदाम",
         rememberMe: "मुझे याद रखें",
+        preferenceSaveFailed: "आपकी सेटिंग सहेजी नहीं जा सकी।",
         duplicate: "प्रतिलिपि",
         forgotPassword: "पासवर्ड भूल गए?",
         signIn: "साइन इन करें",

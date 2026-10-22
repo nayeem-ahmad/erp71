@@ -38,6 +38,7 @@ export const coreMessages = {
         sameAsEntry: "Igual que el documento",
         perLineWarehouse: "Almacén por línea",
         rememberMe: "Recordarme",
+        preferenceSaveFailed: "No se pudo guardar tu ajuste.",
         duplicate: "Duplicar",
         forgotPassword: "¿Olvidaste tu contraseña?",
         signIn: "Iniciar sesión",

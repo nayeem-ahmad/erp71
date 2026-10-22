@@ -38,6 +38,7 @@ export const coreMessages = {
         sameAsEntry: 'Same as entry',
         perLineWarehouse: 'Per-line warehouse',
         rememberMe: 'Remember me',
+        preferenceSaveFailed: 'Could not save your setting.',
         duplicate: 'Duplicate',
         forgotPassword: 'Forgot password?',
         signIn: 'Sign in',

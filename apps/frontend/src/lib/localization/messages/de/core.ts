@@ -38,6 +38,7 @@ export const coreMessages = {
         sameAsEntry: "Wie im Beleg",
         perLineWarehouse: "Lager pro Position",
         rememberMe: "Angemeldet bleiben",
+        preferenceSaveFailed: "Einstellung konnte nicht gespeichert werden.",
         duplicate: "Duplizieren",
         forgotPassword: "Passwort vergessen?",
         signIn: "Anmelden",

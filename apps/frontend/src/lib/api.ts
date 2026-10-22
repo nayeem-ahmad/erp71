@@ -4,6 +4,7 @@ import type {
     AiChatResponse,
     BoardBackgroundColor,
     DashboardPreference,
+    MyPreferencesResponse,
     PasswordPolicy,
     PaymentLayoutContext,
     PaymentLayoutEntry,
@@ -11,6 +12,11 @@ import type {
     PlatformFeatureKey,
     PlatformFeatures,
     PlatformRole,
+    PersonSectionKey,
+    PreferenceProfileDetail,
+    PreferenceProfileSummary,
+    PreferenceSource,
+    SectionPartials,
     SupportedLocaleCode,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
@@ -5812,6 +5818,54 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    // Member preferences and workspace preference profiles (see lib/preferences).
+    getMyPreferences: (): Promise<MyPreferencesResponse> => fetchWithAuth('/preferences/me'),
+    saveMyPreferenceSection: (
+        section: PersonSectionKey,
+        body: unknown,
+    ): Promise<{ value: unknown; source: PreferenceSource }> =>
+        fetchWithAuth(`/preferences/me/${section}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    resetMyPreferenceSection: (
+        section: PersonSectionKey,
+    ): Promise<{ value: unknown; source: PreferenceSource }> =>
+        fetchWithAuth(`/preferences/me/${section}`, { method: 'DELETE' }),
+    getPreferenceProfiles: (): Promise<PreferenceProfileSummary[]> => fetchWithAuth('/preference-profiles'),
+    getPreferenceProfile: (id: string): Promise<PreferenceProfileDetail> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}`),
+    createPreferenceProfile: (body: {
+        name: string;
+        is_default?: boolean;
+        sections?: SectionPartials;
+    }): Promise<PreferenceProfileDetail> =>
+        fetchWithAuth('/preference-profiles', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updatePreferenceProfile: (
+        id: string,
+        body: { name?: string; is_default?: boolean; sections?: Record<string, unknown | null> },
+    ): Promise<PreferenceProfileDetail> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deletePreferenceProfile: (id: string): Promise<void> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    applyPreferenceProfile: (
+        id: string,
+        body: { sections: PersonSectionKey[]; user_ids?: string[] },
+    ): Promise<{ updated: number }> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}/apply`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
     // New Sales
     createNewSale: (data: any) => fetchWithAuth('/sales', {
         method: 'POST',

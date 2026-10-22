@@ -38,6 +38,7 @@ export const coreMessages = {
         sameAsEntry: "Comme l'en-tête",
         perLineWarehouse: "Entrepôt par ligne",
         rememberMe: "Se souvenir de moi",
+        preferenceSaveFailed: "Impossible d'enregistrer votre réglage.",
         duplicate: "Dupliquer",
         forgotPassword: "Mot de passe oublié ?",
         signIn: "Se connecter",

@@ -38,6 +38,7 @@ export const coreMessages = {
         sameAsEntry: 'نفس المستند',
         perLineWarehouse: 'مستودع لكل بند',
         rememberMe: 'تذكّرني',
+        preferenceSaveFailed: 'تعذّر حفظ إعدادك.',
         duplicate: 'تكرار',
         forgotPassword: 'نسيت كلمة المرور؟',
         signIn: 'تسجيل الدخول',

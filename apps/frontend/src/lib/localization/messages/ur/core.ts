@@ -38,6 +38,7 @@ export const coreMessages = {
         sameAsEntry: 'انٹری کی طرح',
         perLineWarehouse: 'فی سطر گودام',
         rememberMe: 'مجھے یاد رکھیں',
+        preferenceSaveFailed: 'آپ کی ترتیب محفوظ نہیں ہو سکی۔',
         duplicate: 'نقل',
         forgotPassword: 'پاس ورڈ بھول گئے؟',
         signIn: 'لاگ اِن کریں',

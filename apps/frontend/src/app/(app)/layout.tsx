@@ -42,6 +42,7 @@ import { formatPlanDisplayName } from '@/lib/plan-display';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useMe } from '@/hooks/use-me';
+import { usePreferencesLoader } from '@/lib/preferences/use-preferences-loader';
 import { ME_QUERY_KEY, QueryProvider, resetWorkspaceQueries, workspaceScope } from '@/lib/query-client';
 import {
     applyPlatformAdminContext,
@@ -351,6 +352,9 @@ function AppShell({ children }: DashboardLayoutProps) {
         queryFn: () => api.getSalesSettings(),
         enabled: salesSettingsEnabled,
     });
+    // The member's own saved preferences (lists, sidebar, ...). Only a workspace
+    // member has any, so the console, referee and employee shells skip the fetch.
+    usePreferencesLoader(!inPlatformAdminMode && !inRefereeMode && !inEmployeeMode && Boolean(activeTenant));
     // On until told otherwise — the old default, and the safe one: a failed read
     // must not hide the till.
     const posEnabled = !salesSettingsEnabled || salesSettingsQuery.data === undefined
