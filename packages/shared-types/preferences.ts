@@ -96,13 +96,30 @@ export interface SectionValues {
 }
 
 /**
- * What one layer says about each section — only the fields it answered.
- *
- * Fields nested inside a section are partial too, though the types do not say
- * so: a profile's `tableView.global` may hold just `density`, and its
- * `alerts.quiet` just `from`. `normalizeSectionPartial` produces exactly that.
+ * A list-view layer: the settings it answered, for all lists and for single
+ * lists. Partial all the way down, because a profile may set only `density`;
+ * the resolved `TableViewPrefs` is the complete form.
  */
-export type SectionPartials = { [K in PreferenceSectionKey]?: Partial<SectionValues[K]> };
+export interface TableViewPartial {
+  global?: Partial<TableViewSettings>;
+  tables?: Record<string, Partial<TableViewSettings>>;
+}
+
+/** An alerts layer; `quiet` may hold just the hours it changed. */
+export interface AlertPartial {
+  mutedTypes?: string[];
+  quiet?: Partial<AlertPrefs['quiet']>;
+}
+
+/** What one layer says about a section: only the fields it answered. */
+export type SectionPartial<K extends PreferenceSectionKey> = K extends 'tableView'
+  ? TableViewPartial
+  : K extends 'alerts'
+    ? AlertPartial
+    : Partial<SectionValues[K]>;
+
+/** What one layer says about each section. `normalizeSectionPartial` produces exactly that. */
+export type SectionPartials = { [K in PreferenceSectionKey]?: SectionPartial<K> };
 
 export interface PreferenceProfilePrefs {
   version: 1;
@@ -112,7 +129,7 @@ export interface PreferenceProfilePrefs {
 /** What a member has saved for themselves on the server (person sections only). */
 export interface MemberPreferences {
   version: 1;
-  tableView?: Partial<TableViewPrefs>;
+  tableView?: TableViewPartial;
   tableColumns?: TableColumnsPrefs;
   sidebar?: SidebarPrefs;
 }
@@ -224,13 +241,12 @@ function readColumnsEntry(raw: unknown): TableColumnsEntry | undefined {
   return entry;
 }
 
-function readTableView(raw: unknown): Partial<TableViewPrefs> {
+function readTableView(raw: unknown): TableViewPartial {
   if (!isRecord(raw)) return {};
-  const out: Partial<TableViewPrefs> = {};
+  const out: TableViewPartial = {};
   const global = sanitizeTableView(raw.global);
-  // Partial on purpose: a layer states only the settings it answered.
-  if (Object.keys(global).length > 0) out.global = global as TableViewSettings;
-  const tables = listMap(raw.tables, (entry) => (isRecord(entry) ? (sanitizeTableView(entry) as TableViewSettings) : undefined));
+  if (Object.keys(global).length > 0) out.global = global;
+  const tables = listMap(raw.tables, (entry) => (isRecord(entry) ? sanitizeTableView(entry) : undefined));
   if (Object.keys(tables).length > 0) out.tables = tables;
   return out;
 }
@@ -247,9 +263,9 @@ function minuteOfDay(value: unknown): number | undefined {
     : undefined;
 }
 
-function readAlerts(raw: unknown): Partial<AlertPrefs> {
+function readAlerts(raw: unknown): AlertPartial {
   if (!isRecord(raw)) return {};
-  const out: Partial<AlertPrefs> = {};
+  const out: AlertPartial = {};
   if (Array.isArray(raw.mutedTypes)) {
     const types = raw.mutedTypes.filter(
       (type): type is string => typeof type === 'string' && type.length > 0 && type.length <= MAX_MUTED_TYPE_LENGTH,
@@ -263,8 +279,7 @@ function readAlerts(raw: unknown): Partial<AlertPrefs> {
     if (from !== undefined) quiet.from = from;
     const to = minuteOfDay(raw.quiet.to);
     if (to !== undefined) quiet.to = to;
-    // Partial on purpose: quiet hours merge field by field across layers.
-    if (Object.keys(quiet).length > 0) out.quiet = quiet as AlertPrefs['quiet'];
+    if (Object.keys(quiet).length > 0) out.quiet = quiet;
   }
   return out;
 }
@@ -287,7 +302,7 @@ function readDevice(raw: unknown): DevicePrefs {
 export function normalizeSectionPartial<K extends PreferenceSectionKey>(
   key: K,
   raw: unknown,
-): Partial<SectionValues[K]> {
+): SectionPartial<K> {
   let out: unknown;
   switch (key) {
     case 'invoicePrint':
@@ -311,7 +326,7 @@ export function normalizeSectionPartial<K extends PreferenceSectionKey>(
     default:
       out = {};
   }
-  return out as Partial<SectionValues[K]>;
+  return out as SectionPartial<K>;
 }
 
 function hasAnswers(partial: object | undefined): boolean {
@@ -355,13 +370,19 @@ function mergeSection<K extends PreferenceSectionKey>(key: K, layers: Layer[]): 
     case 'invoicePrint':
       out = Object.assign({}, DEFAULT_INVOICE_PRINT_PREFS, ...layers);
       break;
-    case 'tableView':
-      out = {
-        global: Object.assign({}, DEFAULT_TABLE_VIEW, ...layers.map((layer) => layer.global)),
-        // A list's override is one decision, so the most specific layer's entry wins whole.
-        tables: Object.assign({}, ...layers.map((layer) => layer.tables)),
-      };
+    case 'tableView': {
+      const global: TableViewSettings = Object.assign({}, DEFAULT_TABLE_VIEW, ...layers.map((layer) => layer.global));
+      // A list's override is one decision, so the most specific layer's entry wins whole...
+      const entries: Record<string, Partial<TableViewSettings>> = Object.assign(
+        {},
+        ...layers.map((layer) => layer.tables),
+      );
+      // ...and is then filled from the resolved global, so a consumer never meets a half-set list.
+      const tables: Record<string, TableViewSettings> = {};
+      for (const [id, entry] of Object.entries(entries)) tables[id] = { ...global, ...entry };
+      out = { global, tables };
       break;
+    }
     case 'tableColumns':
       // Likewise: hidden, order and page size describe one arrangement.
       out = Object.assign({}, ...layers);

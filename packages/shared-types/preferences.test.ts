@@ -12,10 +12,9 @@ import {
   type SectionPartials,
 } from './preferences';
 
-// Layers are typed by their full section shapes, but a profile or member holds
-// only the fields it set; tests state partial layers and cast them once here.
-const sections = (value: unknown) => value as SectionPartials;
-const profileOf = (value: unknown): PreferenceProfilePrefs => ({ version: 1, sections: sections(value) });
+// Layer builders, so a test states only the fields a profile or member sets.
+const sections = (value: SectionPartials) => value;
+const profileOf = (value: SectionPartials): PreferenceProfilePrefs => ({ version: 1, sections: value });
 
 describe('built-in values', () => {
   it('has the documented alert defaults', () => {
@@ -96,7 +95,18 @@ describe('resolvePreferences', () => {
       }),
     });
     expect(out.tableView.value.global).toEqual({ ...DEFAULT_TABLE_VIEW, density: 'compact', striped: false });
-    expect(out.tableView.value.tables).toEqual({ sales: { fitWidth: true } });
+    // The member's entry replaces the profile's whole (no cozy / lg), then fills from the resolved global.
+    expect(out.tableView.value.tables).toEqual({
+      sales: { ...DEFAULT_TABLE_VIEW, density: 'compact', striped: false, fitWidth: true },
+    });
+  });
+
+  it('fills a per-list entry from the resolved global so every entry is complete', () => {
+    const out = resolvePreferences({
+      profile: profileOf({ tableView: { global: { density: 'compact' } } }),
+      member: sections({ tableView: { tables: { sales: { fitWidth: true } } } }),
+    });
+    expect(out.tableView.value.tables.sales).toEqual({ ...DEFAULT_TABLE_VIEW, density: 'compact', fitWidth: true });
   });
 
   it('replaces the sidebar group list whole', () => {
