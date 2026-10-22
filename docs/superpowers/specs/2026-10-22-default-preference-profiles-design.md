@@ -229,7 +229,8 @@ prints today, and from then on no profile can change it. After release:
   `{ [K]: { value, source } }`. It is pure, used by the API and the
   frontend, and handles every merge rule in §2.
 - Limits, enforced by the normalisers: list ids match
-  `/^[a-z0-9][a-z0-9_.:-]{0,79}$/`, at most 300 lists per map, at most 100
+  `/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/` (column ids are accessor keys,
+  often camelCase), at most 300 lists per map, at most 100
   column ids per list, page size within the list's allowed sizes, at most
   50 sidebar group ids.
 
@@ -446,7 +447,8 @@ everywhere else):
 - A new one-shot sync, `sync:member-prefs-legacy`
   (`packages/database/prisma/sync-member-prefs-legacy.ts`), runs in
   `db-prepare.sh` after the push. If the `PlatformSetting`
-  `(group 'migrations', key 'member_prefs_legacy_backfill')` is absent, it
+  `(group 'sync', key 'member_prefs_legacy')` is absent (the one-shot
+  pattern of `sync-payment-method-accounts.utils.ts`), it
   does two things in one transaction and then writes that row:
   - sets `legacy_browser_sections = ['tableView', 'tableColumns', 'sidebar']`
     on every existing `TenantUser`;
