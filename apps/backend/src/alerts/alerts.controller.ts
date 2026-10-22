@@ -7,7 +7,7 @@ import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
 import { PreferencesService } from '../preferences/preferences.service';
-import { resolveAlertPrefs } from '../notifications/alert-policy';
+import { profileAlertsFor, resolveAlertPrefs } from '../notifications/alert-policy';
 import { AlertSettingsService } from './alert-settings.service';
 import { ALERT_TYPES } from './alert-types';
 import { UpdateAlertPreferencesDto, UpdateAlertThresholdsDto } from './alerts.dto';
@@ -69,8 +69,10 @@ export class AlertsController {
             this.settings.get(tenant.tenantId),
         ]);
         // A row is the member's whole answer; only without one does the profile speak.
-        const profile = preference ? null : await this.memberPrefs.profileFor(tenant.tenantId, tenant.userId).catch(() => null);
-        const alerts = resolveAlertPrefs(preference, profile?.prefs.sections.alerts);
+        const alerts = resolveAlertPrefs(
+            preference,
+            preference ? undefined : await profileAlertsFor(this.memberPrefs, tenant.tenantId, tenant.userId),
+        );
         return {
             types: ALERT_TYPES,
             muted_types: alerts.mutedTypes,

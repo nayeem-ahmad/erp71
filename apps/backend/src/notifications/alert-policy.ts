@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DEFAULT_ALERT_PREFS, type AlertPartial, type AlertPrefs } from '@erp71/shared-types';
 import { PreferencesService } from '../preferences/preferences.service';
 import { DatabaseService } from '../database/database.service';
 import { TenantTimezoneService } from '../database/tenant-timezone.service';
 import { startOfZonedToday } from '../common/tenant-time.util';
+
+const alertLogger = new Logger('AlertPolicy');
 
 /** More than this many pushes a day and the rest wait in the bell. */
 export const DAILY_PUSH_CAP = 30;
@@ -38,6 +40,27 @@ export function resolveAlertPrefs(row: AlertRow | null, profile?: AlertPartial):
         mutedTypes: [...(profile?.mutedTypes ?? DEFAULT_ALERT_PREFS.mutedTypes)],
         quiet: { ...DEFAULT_ALERT_PREFS.quiet, ...profile?.quiet },
     };
+}
+
+/**
+ * The alerts layer of the member's profile, or nothing. A profile that cannot be
+ * read must not break a push or the settings screen, so this falls back to the
+ * built-ins, but it says so: otherwise a transient error silently turns a muted
+ * type into a push and nothing records why. The one place that swallows and logs.
+ */
+export async function profileAlertsFor(
+    preferences: Pick<PreferencesService, 'profileFor'>,
+    tenantId: string,
+    userId: string,
+): Promise<AlertPartial | undefined> {
+    try {
+        return (await preferences.profileFor(tenantId, userId))?.prefs.sections.alerts;
+    } catch (error) {
+        alertLogger.warn(
+            `Could not read the preference profile for user ${userId} in tenant ${tenantId}; using built-in alert settings: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return undefined;
+    }
 }
 
 /**
@@ -136,8 +159,7 @@ export class AlertPolicy {
             where: { user_id_tenant_id: { user_id: userId, tenant_id: tenantId } },
         });
         if (row) return resolveAlertPrefs(row);
-        const profile = await this.preferences.profileFor(tenantId, userId).catch(() => null);
-        return resolveAlertPrefs(null, profile?.prefs.sections.alerts);
+        return resolveAlertPrefs(null, await profileAlertsFor(this.preferences, tenantId, userId));
     }
 
     private isQuiet(alerts: AlertPrefs, timeZone: string, now: Date): boolean {

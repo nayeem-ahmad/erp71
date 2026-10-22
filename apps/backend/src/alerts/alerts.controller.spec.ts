@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { PreferencesService } from '../preferences/preferences.service';
 import { AlertsController } from './alerts.controller';
 
@@ -83,6 +84,18 @@ describe('AlertsController preferences', () => {
             expect(out.quiet).toEqual({ enabled: false, from: '01:00', to: '02:00' });
             expect(profileFor).not.toHaveBeenCalled();
         });
+    });
+
+    it('a profile that cannot be read shows the built-ins, and is logged', async () => {
+        const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+        profileFor.mockRejectedValue(new Error('db down'));
+
+        const out = await controller.preferences(tenant);
+
+        expect(out.muted_types).toEqual([]);
+        expect(out.quiet).toEqual({ enabled: true, from: '22:00', to: '08:00' });
+        expect(warn).toHaveBeenCalledWith(expect.stringMatching(/u1.*t1.*db down/));
+        warn.mockRestore();
     });
 
     describe('PUT', () => {

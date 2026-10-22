@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { DEFAULT_ALERT_PREFS } from '@erp71/shared-types';
 import { AlertPolicy, DAILY_PUSH_CAP, DEFAULT_QUIET, inQuietWindow, minuteOfDay } from './alert-policy';
 
@@ -89,9 +90,13 @@ describe('AlertPolicy', () => {
             expect(preferences.profileFor).not.toHaveBeenCalled();
         });
 
-        it('a profile that cannot be read leaves the built-ins', async () => {
+        it('a profile that cannot be read leaves the built-ins, and is logged', async () => {
+            const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
             preferences.profileFor.mockRejectedValue(new Error('gone'));
             expect(await policy.decide('t1', 'u1', 'LOW_STOCK', lateNight)).toBe('hold');
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn).toHaveBeenCalledWith(expect.stringMatching(/u1.*t1.*gone/));
+            warn.mockRestore();
         });
 
         it('decide: one profile lookup per (tenant,user) within a dispatch', async () => {
