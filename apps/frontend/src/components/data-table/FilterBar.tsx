@@ -27,6 +27,9 @@ export type ListFilter =
           columnId?: string;
           value?: string | null;
           onChange?: (next: string | null) => void;
+          /** A scope can pin the value, so the control stays visible but refuses a choice. */
+          disabled?: boolean;
+          title?: string;
       }
     | {
           id: string;
@@ -36,19 +39,35 @@ export type ListFilter =
           value: CreatedRange | null;
           onChange: (next: CreatedRange | null) => void;
           withTime?: boolean;
+      }
+    | {
+          id: string;
+          type: 'toggle';
+          label: string;
+          pressed: boolean;
+          onChange: (next: boolean) => void;
+          /**
+           * A checkbox keeps a labelled input. A button is the pressed chip
+           * used for a filter that is simply on or off.
+           */
+          control?: 'button' | 'checkbox';
       };
 
 /** A filter with its value resolved, as `DataTable` hands it to the bar. */
 export type ResolvedListFilter =
     | (Extract<ListFilter, { type: 'select' }> & { value: string | null; onChange: (next: string | null) => void })
-    | Extract<ListFilter, { type: 'date-range' }>;
+    | Extract<ListFilter, { type: 'date-range' }>
+    | Extract<ListFilter, { type: 'toggle' }>;
 
 export function isFilterActive(filter: ResolvedListFilter): boolean {
-    return filter.type === 'select' ? Boolean(filter.value) : !isCreatedRangeEmpty(filter.value);
+    if (filter.type === 'select') return Boolean(filter.value);
+    if (filter.type === 'toggle') return filter.pressed;
+    return !isCreatedRangeEmpty(filter.value);
 }
 
 function clearFilter(filter: ResolvedListFilter): void {
-    filter.onChange(null);
+    if (filter.type === 'toggle') filter.onChange(false);
+    else filter.onChange(null);
 }
 
 /**
@@ -71,10 +90,12 @@ function SelectChip({ filter, block = false }: { filter: Extract<ResolvedListFil
                 id={id}
                 aria-label={filter.label}
                 value={filter.value ?? ''}
+                disabled={filter.disabled}
+                title={filter.title}
                 onChange={(e) => filter.onChange(e.target.value || null)}
-                className={`cursor-pointer border-0 bg-transparent py-1.5 ps-1 text-xs font-semibold focus:outline-none focus:ring-0 ${
-                    block ? 'flex-1' : ''
-                }`}
+                className={`border-0 bg-transparent py-1.5 ps-1 text-xs font-semibold focus:outline-none focus:ring-0 disabled:cursor-not-allowed ${
+                    filter.disabled ? '' : 'cursor-pointer'
+                } ${block ? 'flex-1' : ''}`}
             >
                 <option value="">{t.common.dataTable.filterAll}</option>
                 {filter.options.map((option) => (
@@ -87,8 +108,39 @@ function SelectChip({ filter, block = false }: { filter: Extract<ResolvedListFil
     );
 }
 
+function ToggleControl({ filter }: { filter: Extract<ResolvedListFilter, { type: 'toggle' }> }) {
+    if (filter.control === 'checkbox') {
+        return (
+            <label className="inline-flex items-center gap-2 text-xs text-gray-600 max-md:min-h-touch">
+                <input
+                    type="checkbox"
+                    checked={filter.pressed}
+                    onChange={(e) => filter.onChange(e.target.checked)}
+                    className="h-4 w-4"
+                />
+                {filter.label}
+            </label>
+        );
+    }
+    return (
+        <button
+            type="button"
+            aria-pressed={filter.pressed}
+            onClick={() => filter.onChange(!filter.pressed)}
+            className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors max-md:min-h-touch ${
+                filter.pressed
+                    ? 'border-blue-600 bg-blue-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+        >
+            {filter.label}
+        </button>
+    );
+}
+
 function FilterControl({ filter, block = false }: { filter: ResolvedListFilter; block?: boolean }) {
     if (filter.type === 'select') return <SelectChip filter={filter} block={block} />;
+    if (filter.type === 'toggle') return <ToggleControl filter={filter} />;
     const range = <CreatedRangeFilter value={filter.value} onChange={filter.onChange} label={filter.label} withTime={filter.withTime} />;
     // In the phone sheet the trigger spans the sheet like the selects above it.
     return block ? <div className="[&>div>button]:w-full">{range}</div> : range;
@@ -100,6 +152,7 @@ function chipText(filter: ResolvedListFilter, anyTime: string, createdLabel: str
         const option = filter.options.find((o) => o.value === filter.value);
         return `${filter.label}: ${option?.label ?? filter.value}`;
     }
+    if (filter.type === 'toggle') return filter.label;
     return `${filter.label ?? createdLabel}: ${formatCreatedRangeLabel(filter.value, anyTime)}`;
 }
 

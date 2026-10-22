@@ -3,29 +3,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CalendarPlus, PhoneCall, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, ClipboardList, Eye, PhoneCall, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { useCanApproveCrmActivity } from '@/lib/use-can-approve-crm-activity';
-import { useLeadTaxonomy, type LeadTaxonomyOption } from '@/lib/use-lead-taxonomy';
-import { useTeamMemberOptions, type TeamMemberOption } from '@/lib/use-team-member-options';
+import { useLeadTaxonomy } from '@/lib/use-lead-taxonomy';
+import { useTeamMemberOptions } from '@/lib/use-team-member-options';
 import { useRememberedFilters } from '@/lib/use-remembered-filters';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
-import CrmActivityAgenda, { CrmActivityApproval, CrmActivityRowActions } from '@/components/crm/CrmActivityAgenda';
+import CrmActivityAgenda, { CrmActivityApproval } from '@/components/crm/CrmActivityAgenda';
 import {
     activityKindName,
     activityLabel,
     activityTarget,
-    countExtraActivityFilters,
     readActivityLayout,
     writeActivityLayout,
     type ActivityLayout,
     type ActivityTarget,
     type CrmActivityListRow as CrmActivityRow,
 } from '@/components/crm/crm-activity-layout';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, FilterBar, createdAtColumn, type ResolvedListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
+import { useIsMdUp } from '@/hooks/useMediaQuery';
 import {
     applyCreatedRangeQuery,
     applyDueRangeQuery,
@@ -37,7 +38,6 @@ import {
     PageShell,
     PageHeader,
     Button,
-    Select,
     StatusBadge,
     type StatusBadgeTone,
 } from '@/components/ui';
@@ -71,6 +71,7 @@ export default function CrmActivitiesPage() {
     const { t } = useI18n();
     const m = t.crm.activitiesPage;
     const scopeCopy = t.crm.scope;
+    const isMdUp = useIsMdUp();
 
     const { options: purposes } = useLeadTaxonomy('purposes');
     const { options: channels } = useLeadTaxonomy('channels');
@@ -128,7 +129,6 @@ export default function CrmActivitiesPage() {
     // Read after mount: the server has no localStorage, so the first paint is
     // Standard and the remembered layout replaces it on the next one.
     const [layout, setLayoutState] = useState<ActivityLayout>('standard');
-    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     useEffect(() => { setLayoutState(readActivityLayout()); }, []);
     const setLayout = useCallback((next: ActivityLayout) => {
         setLayoutState(next);
@@ -234,7 +234,7 @@ export default function CrmActivitiesPage() {
             header: m.columns.target,
             cell: (info) => {
                 const target = activityTarget(info.row.original);
-                if (!target) return <span className="text-gray-400">—</span>;
+                if (!target) return '—';
                 return (
                     <Link href={target.href} className="text-blue-600 hover:underline">
                         {info.getValue()}
@@ -244,13 +244,14 @@ export default function CrmActivitiesPage() {
         });
         const dueColumn = columnHelper.accessor('due_at', {
             header: m.columns.due,
+            enableColumnFilter: false,
             cell: (info) => {
                 const value = info.getValue();
-                if (!value) return <span className="text-gray-400">—</span>;
+                if (!value) return '—';
                 const row = info.row.original;
                 const overdue = row.status === 'PLANNED' && new Date(value) < new Date();
                 return (
-                    <span className={`inline-flex items-center gap-1 ${overdue ? 'font-bold text-red-600' : 'text-gray-600'}`}>
+                    <span className={`inline-flex items-center gap-1 ${overdue ? 'text-red-600' : ''}`}>
                         {overdue && <AlertTriangle className="h-3 w-3" />}
                         {formatDate(value)}
                     </span>
@@ -259,6 +260,7 @@ export default function CrmActivitiesPage() {
         });
         const statusColumn = columnHelper.accessor('status', {
             header: m.columns.status,
+            enableColumnFilter: false,
             cell: (info) => (
                 <StatusBadge tone={statusTone[info.getValue()] ?? 'neutral'}>
                     {m.status[info.getValue() as 'PLANNED' | 'DONE' | 'CANCELLED'] ?? info.getValue()}
@@ -288,22 +290,27 @@ export default function CrmActivitiesPage() {
         // Ahead of the link, because it is the cheaper of the two: read the
         // lead's timeline here, and leave for its page only when the answer
         // is not in it. Compact rows drop the 44px target on desktop.
-        const actionsColumn = (dense: boolean) => columnHelper.display({
+        const actionsColumn = columnHelper.display({
             id: 'actions',
-            header: '',
+            header: t.common.actions,
             cell: (info) => {
                 const target = activityTarget(info.row.original);
                 if (!target) return null;
                 return (
-                    <CrmActivityRowActions
-                        href={target.href}
-                        onView={() => setViewing(target)}
-                        viewLabel={m.viewActivities}
-                        openLabel={m.open}
-                        dense={dense}
-                    />
+                    <RowActions>
+                        <RowActionButton
+                            icon={<ClipboardList />}
+                            label={m.viewActivities}
+                            onClick={() => setViewing(target)}
+                        />
+                        <RowActionButton icon={<Eye />} label={m.open} href={target.href} />
+                    </RowActions>
                 );
             },
+            enableSorting: false,
+            enableColumnFilter: false,
+            enableResizing: false,
+            size: 96,
         });
         const subjectColumn = (withKind: boolean): ColumnDef<CrmActivityRow, any> => columnHelper.accessor(
             (row) => activityLabel(row),
@@ -313,9 +320,9 @@ export default function CrmActivitiesPage() {
                 cell: (info) => {
                     const kind = withKind ? activityKindName(info.row.original) : '';
                     return (
-                        <span className="font-medium text-gray-800">
+                        <span>
                             {info.getValue()}
-                            {kind ? <span className="font-normal text-gray-500"> · {kind}</span> : null}
+                            {kind ? <span> · {kind}</span> : null}
                         </span>
                     );
                 },
@@ -326,14 +333,14 @@ export default function CrmActivitiesPage() {
             columnHelper.accessor((row) => activityKindName(row), {
                 id: 'kind',
                 header: m.columns.kind,
-                cell: (info) => <span className="text-gray-600">{info.getValue() || '—'}</span>,
+                cell: (info) => info.getValue() || '—',
             }),
             targetColumn,
             dueColumn,
-            createdAtColumn(columnHelper, { header: t.common.createdAt }),
+            createdAtColumn(columnHelper, { header: t.common.createdAt, enableColumnFilter: false }),
             statusColumn,
             approvedColumn,
-            actionsColumn(false),
+            actionsColumn,
         ];
         const compactColumns: ColumnDef<CrmActivityRow, any>[] = [
             subjectColumn(true),
@@ -341,10 +348,110 @@ export default function CrmActivitiesPage() {
             dueColumn,
             statusColumn,
             approvedColumn,
-            actionsColumn(true),
+            actionsColumn,
         ];
         return { standardColumns, compactColumns };
-    }, [m, t.common.createdAt, canApprove, toggleApproval]);
+    }, [m, t.common.createdAt, t.common.actions, canApprove, toggleApproval]);
+
+    const activityFilters = useMemo<ResolvedListFilter[]>(() => [
+        {
+            id: 'status',
+            type: 'select',
+            label: m.columns.status,
+            value: statusFilter || null,
+            onChange: (next) => setFilter('status', next ?? ''),
+            options: [
+                { value: 'PLANNED', label: m.status.PLANNED },
+                { value: 'DONE', label: m.status.DONE },
+                { value: 'CANCELLED', label: m.status.CANCELLED },
+            ],
+        },
+        {
+            id: 'approval',
+            type: 'select',
+            label: m.columns.approved,
+            value: approvalFilter || null,
+            onChange: (next) => setFilter('approval', (next ?? '') as '' | 'approved' | 'pending'),
+            options: [
+                { value: 'approved', label: m.filters.approvalApproved },
+                { value: 'pending', label: m.filters.approvalPending },
+            ],
+        },
+        {
+            id: 'target',
+            type: 'select',
+            label: m.columns.target,
+            value: targetFilter || null,
+            onChange: (next) => setFilter('target', (next ?? '') as '' | 'customer' | 'lead'),
+            options: [
+                { value: 'lead', label: m.filters.leads },
+                { value: 'customer', label: m.filters.customers },
+            ],
+        },
+        {
+            id: 'purpose',
+            type: 'select',
+            label: t.crm.setup.tabs.purposes,
+            value: purposeFilter || null,
+            onChange: (next) => setFilter('purposeId', next ?? ''),
+            options: purposes.map((purpose) => ({ value: purpose.id, label: purpose.name })),
+        },
+        {
+            id: 'channel',
+            type: 'select',
+            label: t.crm.setup.tabs.channels,
+            value: channelFilter || null,
+            onChange: (next) => setFilter('channelId', next ?? ''),
+            options: channels.map((channel) => ({ value: channel.id, label: channel.name })),
+        },
+        {
+            id: 'leadOwner',
+            type: 'select',
+            label: t.crm.leads.fields.owner,
+            value: leadOwnerFilter || null,
+            onChange: (next) => setFilter('leadOwner', next ?? ''),
+            options: [
+                { value: 'unassigned', label: m.filters.unassigned },
+                ...memberOptions.map((member) => ({ value: member.id, label: member.label })),
+            ],
+        },
+        {
+            id: 'assignee',
+            type: 'select',
+            label: t.crm.leads.fields.nextStepAssignedTo,
+            value: mineOnly ? null : (assigneeFilter || null),
+            onChange: (next) => setFilter('assignee', next ?? ''),
+            disabled: mineOnly,
+            title: mineOnly ? scopeCopy.assigneeLockedHint : undefined,
+            options: memberOptions.map((member) => ({ value: member.id, label: member.label })),
+        },
+        {
+            id: 'overdue',
+            type: 'toggle',
+            control: 'checkbox',
+            label: m.filters.overdueOnly,
+            pressed: overdueOnly,
+            onChange: chooseOverdueOnly,
+        },
+        {
+            id: 'due',
+            type: 'date-range',
+            label: m.filters.due,
+            value: dueRange,
+            onChange: chooseDueRange,
+        },
+        {
+            id: 'created',
+            type: 'date-range',
+            value: createdRange,
+            onChange: (next) => setFilter('createdRange', next),
+        },
+    ], [
+        m, t.crm.setup.tabs.purposes, t.crm.setup.tabs.channels, t.crm.leads.fields.owner, t.crm.leads.fields.nextStepAssignedTo,
+        statusFilter, approvalFilter, targetFilter, purposeFilter, channelFilter, leadOwnerFilter, assigneeFilter,
+        purposes, channels, memberOptions, mineOnly, scopeCopy.assigneeLockedHint, overdueOnly, dueRange, createdRange,
+        setFilter, chooseOverdueOnly, chooseDueRange,
+    ]);
 
     return (
         <PageShell>
@@ -359,6 +466,13 @@ export default function CrmActivitiesPage() {
                 )}
                 actions={
                     <>
+                        <MineOnlyToggle
+                            value={mineOnly}
+                            onChange={setMineOnly}
+                            label={scopeCopy.mineOnly}
+                            title={scopeCopy.mineOnlyHint}
+                            size={layout === 'standard' ? 'md' : 'sm'}
+                        />
                         <LayoutSwitch
                             value={layout}
                             onChange={setLayout}
@@ -411,77 +525,41 @@ export default function CrmActivitiesPage() {
                 />
             )}
 
-            <ActivityFilters
-                layout={layout}
-                moreOpen={moreFiltersOpen}
-                onToggleMore={() => setMoreFiltersOpen((open) => !open)}
-                extraCount={countExtraActivityFilters({
-                    approval: approvalFilter,
-                    target: targetFilter,
-                    purposeId: purposeFilter,
-                    channelId: channelFilter,
-                    leadOwner: leadOwnerFilter,
-                    assignee: assigneeFilter,
-                    createdRange,
-                })}
-                mineOnly={mineOnly}
-                onMineOnly={setMineOnly}
-                mineLabel={scopeCopy.mineOnly}
-                mineHint={scopeCopy.mineOnlyHint}
-                assigneeLockedHint={scopeCopy.assigneeLockedHint}
-                statusFilter={statusFilter}
-                onStatus={(value) => setFilter('status', value)}
-                approvalFilter={approvalFilter}
-                onApproval={(value) => setFilter('approval', value)}
-                targetFilter={targetFilter}
-                onTarget={(value) => setFilter('target', value)}
-                purposeFilter={purposeFilter}
-                onPurpose={(value) => setFilter('purposeId', value)}
-                channelFilter={channelFilter}
-                onChannel={(value) => setFilter('channelId', value)}
-                leadOwnerFilter={leadOwnerFilter}
-                onLeadOwner={(value) => setFilter('leadOwner', value)}
-                assigneeFilter={assigneeFilter}
-                onAssignee={(value) => setFilter('assignee', value)}
-                purposes={purposes}
-                channels={channels}
-                memberOptions={memberOptions}
-                overdueOnly={overdueOnly}
-                onOverdue={chooseOverdueOnly}
-                dueRange={dueRange}
-                onDueRange={chooseDueRange}
-                createdRange={createdRange}
-                onCreatedRange={(next) => setFilter('createdRange', next)}
-                copy={m}
-            />
-
             {error && (
                 <div className="mb-4 rounded-md border border-red-200 bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
                     {error}
                 </div>
             )}
 
-            {isLoading ? (
-                <div className="rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">{t.common.loading}</div>
-            ) : layout === 'agenda' ? (
-                <CrmActivityAgenda
-                    rows={rows}
-                    canApprove={canApprove}
-                    onToggleApproval={(id, approved) => { void toggleApproval(id, approved); }}
-                    onView={(row) => {
-                        const target = activityTarget(row);
-                        if (target) setViewing(target);
-                    }}
-                    emptyMessage={m.emptyMessage}
-                />
+            {layout === 'agenda' ? (
+                <>
+                    <FilterBar filters={activityFilters} compact={!isMdUp} />
+                    {isLoading ? (
+                        <div className="rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">{t.common.loading}</div>
+                    ) : (
+                        <CrmActivityAgenda
+                            rows={rows}
+                            canApprove={canApprove}
+                            onToggleApproval={(id, approved) => { void toggleApproval(id, approved); }}
+                            onView={(row) => {
+                                const target = activityTarget(row);
+                                if (target) setViewing(target);
+                            }}
+                            emptyMessage={m.emptyMessage}
+                        />
+                    )}
+                </>
             ) : (
                 <DataTable
-                    striped
+                    viewOptions
+                    filters={activityFilters}
+                    isLoading={isLoading}
                     tableId={layout === 'compact' ? 'crm-activities-compact' : 'crm-activities'}
                     columns={layout === 'compact' ? compactColumns : standardColumns}
                     data={rows}
                     title={m.title}
                     emptyMessage={m.emptyMessage}
+                    searchPlaceholder={m.searchPlaceholder}
                 />
             )}
 
@@ -599,187 +677,3 @@ function LayoutSwitch({
     );
 }
 
-function ActivityFilters({
-    layout, moreOpen, onToggleMore, extraCount,
-    mineOnly, onMineOnly, mineLabel, mineHint, assigneeLockedHint,
-    statusFilter, onStatus,
-    approvalFilter, onApproval,
-    targetFilter, onTarget,
-    purposeFilter, onPurpose,
-    channelFilter, onChannel,
-    leadOwnerFilter, onLeadOwner,
-    assigneeFilter, onAssignee,
-    purposes, channels, memberOptions,
-    overdueOnly, onOverdue,
-    dueRange, onDueRange,
-    createdRange, onCreatedRange,
-    copy,
-}: Readonly<{
-    layout: ActivityLayout;
-    moreOpen: boolean;
-    onToggleMore: () => void;
-    extraCount: number;
-    mineOnly: boolean;
-    onMineOnly: (value: boolean) => void;
-    mineLabel: string;
-    mineHint: string;
-    assigneeLockedHint: string;
-    statusFilter: string;
-    onStatus: (value: string) => void;
-    approvalFilter: '' | 'approved' | 'pending';
-    onApproval: (value: '' | 'approved' | 'pending') => void;
-    targetFilter: '' | 'customer' | 'lead';
-    onTarget: (value: '' | 'customer' | 'lead') => void;
-    purposeFilter: string;
-    onPurpose: (value: string) => void;
-    channelFilter: string;
-    onChannel: (value: string) => void;
-    leadOwnerFilter: string;
-    onLeadOwner: (value: string) => void;
-    assigneeFilter: string;
-    onAssignee: (value: string) => void;
-    purposes: LeadTaxonomyOption[];
-    channels: LeadTaxonomyOption[];
-    memberOptions: TeamMemberOption[];
-    overdueOnly: boolean;
-    onOverdue: (value: boolean) => void;
-    dueRange: CreatedRange | null;
-    onDueRange: (next: CreatedRange | null) => void;
-    createdRange: CreatedRange | null;
-    onCreatedRange: (next: CreatedRange | null) => void;
-    copy: {
-        moreFilters: string;
-        filters: {
-            allStatuses: string;
-            allApprovals: string;
-            approvalApproved: string;
-            approvalPending: string;
-            allTargets: string;
-            leads: string;
-            customers: string;
-            allPurposes: string;
-            allChannels: string;
-            allOwners: string;
-            unassigned: string;
-            allAssignees: string;
-            overdueOnly: string;
-            due: string;
-        };
-        status: { PLANNED: string; DONE: string; CANCELLED: string };
-    };
-}>) {
-    const compact = layout !== 'standard';
-    const selectClass = 'w-auto max-w-[180px]';
-    const extra = (
-        <>
-            <Select
-                value={approvalFilter}
-                onChange={(e) => onApproval(e.target.value as '' | 'approved' | 'pending')}
-                className={selectClass}
-            >
-                <option value="">{copy.filters.allApprovals}</option>
-                <option value="approved">{copy.filters.approvalApproved}</option>
-                <option value="pending">{copy.filters.approvalPending}</option>
-            </Select>
-            <Select
-                value={targetFilter}
-                onChange={(e) => onTarget(e.target.value as '' | 'customer' | 'lead')}
-                className={selectClass}
-            >
-                <option value="">{copy.filters.allTargets}</option>
-                <option value="lead">{copy.filters.leads}</option>
-                <option value="customer">{copy.filters.customers}</option>
-            </Select>
-            <Select value={purposeFilter} onChange={(e) => onPurpose(e.target.value)} className={selectClass}>
-                <option value="">{copy.filters.allPurposes}</option>
-                {purposes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-            <Select value={channelFilter} onChange={(e) => onChannel(e.target.value)} className={selectClass}>
-                <option value="">{copy.filters.allChannels}</option>
-                {channels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
-            <Select value={leadOwnerFilter} onChange={(e) => onLeadOwner(e.target.value)} className={selectClass}>
-                <option value="">{copy.filters.allOwners}</option>
-                {/* Mirrors UNASSIGNED_OWNER_FILTER in crm-leads.dto.ts. */}
-                <option value="unassigned">{copy.filters.unassigned}</option>
-                {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
-            </Select>
-            {/* Disabled rather than hidden while the scope is on: the API pins
-                the assignee to the caller either way, and a control that still
-                looked live would be offering a choice it could not honour. */}
-            <Select
-                value={mineOnly ? '' : assigneeFilter}
-                onChange={(e) => onAssignee(e.target.value)}
-                disabled={mineOnly}
-                title={mineOnly ? assigneeLockedHint : undefined}
-                className={selectClass}
-            >
-                <option value="">{mineOnly ? mineLabel : copy.filters.allAssignees}</option>
-                {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
-            </Select>
-        </>
-    );
-    const overdueControl = (
-        <label className={`flex items-center gap-2 text-sm text-gray-600 ${compact ? 'max-md:min-h-touch' : 'min-h-touch'}`}>
-            <input type="checkbox" checked={overdueOnly} onChange={(e) => onOverdue(e.target.checked)} className="h-4 w-4" />
-            {copy.filters.overdueOnly}
-        </label>
-    );
-    const dueControl = <CreatedRangeFilter value={dueRange} onChange={onDueRange} label={copy.filters.due} />;
-    const createdControl = <CreatedRangeFilter value={createdRange} onChange={onCreatedRange} />;
-
-    return (
-        <div className="mb-4">
-            <div className={`flex flex-wrap items-center ${compact ? 'gap-2' : 'gap-3'}`}>
-                {/* The scope, not a filter: it outlives the tab and is shared with
-                    the Overview and the other CRM lists. First in the row because
-                    it decides what every control after it is narrowing. */}
-                <MineOnlyToggle
-                    value={mineOnly}
-                    onChange={onMineOnly}
-                    label={mineLabel}
-                    title={mineHint}
-                    size={compact ? 'sm' : 'md'}
-                />
-                <Select value={statusFilter} onChange={(e) => onStatus(e.target.value)} className={selectClass}>
-                    <option value="">{copy.filters.allStatuses}</option>
-                    <option value="PLANNED">{copy.status.PLANNED}</option>
-                    <option value="DONE">{copy.status.DONE}</option>
-                    <option value="CANCELLED">{copy.status.CANCELLED}</option>
-                </Select>
-                {compact ? (
-                    <>
-                        {dueControl}
-                        {overdueControl}
-                        <Button
-                            variant={extraCount > 0 ? 'tinted' : 'secondary'}
-                            aria-expanded={moreOpen}
-                            aria-controls="crm-activity-more-filters"
-                            onClick={onToggleMore}
-                        >
-                            {copy.moreFilters}
-                            {extraCount > 0 ? (
-                                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white">
-                                    {extraCount}
-                                </span>
-                            ) : null}
-                        </Button>
-                    </>
-                ) : (
-                    <>
-                        {extra}
-                        {overdueControl}
-                        {dueControl}
-                        {createdControl}
-                    </>
-                )}
-            </div>
-            {compact && moreOpen && (
-                <div id="crm-activity-more-filters" className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 bg-white p-3">
-                    {extra}
-                    {createdControl}
-                </div>
-            )}
-        </div>
-    );
-}

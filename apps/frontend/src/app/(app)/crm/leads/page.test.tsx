@@ -80,6 +80,11 @@ function selectByOption(optionText: string): HTMLSelectElement {
     return option.closest('select') as HTMLSelectElement;
 }
 
+/** Toolbar filters are named by their label. The empty choice is "All" on every one. */
+function selectByName(name: string): HTMLSelectElement {
+    return screen.getByRole('combobox', { name }) as HTMLSelectElement;
+}
+
 describe('LeadsPage — lead owner', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -110,7 +115,7 @@ describe('LeadsPage — lead owner', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.change(selectByOption('All owners'), { target: { value: 'user-2' } });
+        fireEvent.change(selectByName('Lead Owner'), { target: { value: 'user-2' } });
 
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: 'user-2' })),
@@ -121,7 +126,7 @@ describe('LeadsPage — lead owner', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.change(selectByOption('All owners'), { target: { value: 'unassigned' } });
+        fireEvent.change(selectByName('Lead Owner'), { target: { value: 'unassigned' } });
 
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: 'unassigned' })),
@@ -154,7 +159,7 @@ describe('LeadsPage — email', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.change(selectByOption('All emails'), { target: { value: 'empty' } });
+        fireEvent.change(selectByName('Email'), { target: { value: 'empty' } });
 
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ emailPresence: 'empty' })),
@@ -165,7 +170,7 @@ describe('LeadsPage — email', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.change(selectByOption('All emails'), { target: { value: 'has' } });
+        fireEvent.change(selectByName('Email'), { target: { value: 'has' } });
 
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ emailPresence: 'has' })),
@@ -208,8 +213,8 @@ describe('LeadsPage — filters arriving in the URL', () => {
         );
         // Both filters are visible in their controls, so the list says why it is
         // short and either can be widened without editing the address bar.
-        expect(selectByOption('All owners').value).toBe('unassigned');
-        expect(selectByOption('All statuses').value).toBe('open');
+        expect(selectByName('Lead Owner').value).toBe('unassigned');
+        expect(selectByName('Status').value).toBe('open');
     });
 
     it('opens showing only leads with no activity for the linked window', async () => {
@@ -264,7 +269,7 @@ describe('LeadsPage — filters arriving in the URL', () => {
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ status: 'QUALIFIED' })),
         );
-        expect(selectByOption('All statuses').value).toBe('QUALIFIED');
+        expect(selectByName('Status').value).toBe('QUALIFIED');
     });
 
     it('ignores params the API would reject rather than opening an empty list', async () => {
@@ -277,7 +282,7 @@ describe('LeadsPage — filters arriving in the URL', () => {
                 expect.objectContaining({ status: undefined, staleDays: undefined }),
             ),
         );
-        expect(selectByOption('All statuses').value).toBe('');
+        expect(selectByName('Status').value).toBe('');
     });
 
     it('opens showing only the leads with no email address', async () => {
@@ -292,7 +297,7 @@ describe('LeadsPage — filters arriving in the URL', () => {
         );
         // Visible in its control, like the filters above — the list says why it
         // is short and can be widened without editing the address bar.
-        expect(selectByOption('All emails').value).toBe('empty');
+        expect(selectByName('Email').value).toBe('empty');
     });
 
     it('ignores an email presence value the API would reject', async () => {
@@ -305,7 +310,7 @@ describe('LeadsPage — filters arriving in the URL', () => {
                 expect.objectContaining({ emailPresence: undefined }),
             ),
         );
-        expect(selectByOption('All emails').value).toBe('');
+        expect(selectByName('Email').value).toBe('');
     });
 
     it('leaves every filter open when no params are given', async () => {
@@ -409,8 +414,8 @@ describe('LeadsPage — remembered filters', () => {
         const first = render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.change(selectByOption('All owners'), { target: { value: 'user-2' } });
-        fireEvent.change(selectByOption('All priorities'), { target: { value: 'HIGH' } });
+        fireEvent.change(selectByName('Lead Owner'), { target: { value: 'user-2' } });
+        fireEvent.change(selectByName('Priority'), { target: { value: 'HIGH' } });
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(
                 expect.objectContaining({ assignedTo: 'user-2', priority: 'HIGH' }),
@@ -422,8 +427,8 @@ describe('LeadsPage — remembered filters', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        expect(selectByOption('All owners').value).toBe('user-2');
-        expect(selectByOption('All priorities').value).toBe('HIGH');
+        expect(selectByName('Lead Owner').value).toBe('user-2');
+        expect(selectByName('Priority').value).toBe('HIGH');
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(
                 expect.objectContaining({ assignedTo: 'user-2', priority: 'HIGH' }),
@@ -434,7 +439,7 @@ describe('LeadsPage — remembered filters', () => {
     it('never fetches the unfiltered list on the way to the remembered one', async () => {
         const first = render(<LeadsPage />);
         await screen.findByText('Karim Traders');
-        fireEvent.change(selectByOption('All owners'), { target: { value: 'user-2' } });
+        fireEvent.change(selectByName('Lead Owner'), { target: { value: 'user-2' } });
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: 'user-2' })),
         );
@@ -453,7 +458,7 @@ describe('LeadsPage — remembered filters', () => {
     it('lets a dashboard link win over a remembered filter, so its count still means something', async () => {
         const first = render(<LeadsPage />);
         await screen.findByText('Karim Traders');
-        fireEvent.change(selectByOption('All owners'), { target: { value: 'user-2' } });
+        fireEvent.change(selectByName('Lead Owner'), { target: { value: 'user-2' } });
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: 'user-2' })),
         );
@@ -465,7 +470,7 @@ describe('LeadsPage — remembered filters', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        expect(selectByOption('All owners').value).toBe('unassigned');
+        expect(selectByName('Lead Owner').value).toBe('unassigned');
         for (const call of api.getLeads.mock.calls) {
             expect(call[0]).toEqual(expect.objectContaining({ assignedTo: 'unassigned' }));
         }
@@ -474,7 +479,7 @@ describe('LeadsPage — remembered filters', () => {
     it('still remembers the filters a link did not name', async () => {
         const first = render(<LeadsPage />);
         await screen.findByText('Karim Traders');
-        fireEvent.change(selectByOption('All priorities'), { target: { value: 'HIGH' } });
+        fireEvent.change(selectByName('Priority'), { target: { value: 'HIGH' } });
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenCalledWith(expect.objectContaining({ priority: 'HIGH' })),
         );
@@ -559,7 +564,7 @@ describe('LeadsPage — only mine', () => {
 
         fireEvent.click(toggle());
 
-        await waitFor(() => expect(selectByOption('Only mine')).toBeDisabled());
+        await waitFor(() => expect(selectByName('Lead Owner')).toBeDisabled());
     });
 
     it('releases the owner filter again when the scope is switched off', async () => {
@@ -571,14 +576,14 @@ describe('LeadsPage — only mine', () => {
         fireEvent.click(toggle());
 
         await waitFor(() => expect(lastCall().mine).toBeUndefined());
-        expect(selectByOption('All owners')).not.toBeDisabled();
+        expect(selectByName('Lead Owner')).not.toBeDisabled();
     });
 
     it('keeps the other filters, so the scope narrows the slice rather than replacing it', async () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.change(selectByOption('All priorities'), { target: { value: 'HIGH' } });
+        fireEvent.change(selectByName('Priority'), { target: { value: 'HIGH' } });
         await waitFor(() => expect(lastCall().priority).toBe('HIGH'));
         fireEvent.click(toggle());
 
@@ -697,7 +702,7 @@ describe('LeadsPage — tenant stages', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        fireEvent.change(selectByOption('All statuses'), { target: { value: 'st-neg' } });
+        fireEvent.change(selectByName('Status'), { target: { value: 'st-neg' } });
 
         await waitFor(() =>
             expect(api.getLeads).toHaveBeenLastCalledWith(
@@ -726,7 +731,7 @@ describe('LeadsPage — tenant stages', () => {
         render(<LeadsPage />);
         await screen.findByText('Karim Traders');
 
-        await waitFor(() => expect(selectByOption('All statuses').value).toBe('st-old'));
+        await waitFor(() => expect(selectByName('Status').value).toBe('st-old'));
         expect(screen.getByRole('option', { name: 'Paused (Hidden)' })).toBeInTheDocument();
     });
 
@@ -740,7 +745,7 @@ describe('LeadsPage — tenant stages', () => {
                 expect.objectContaining({ statusId: undefined }),
             ),
         );
-        expect(selectByOption('All statuses').value).toBe('');
+        expect(selectByName('Status').value).toBe('');
     });
 
     it('offers only open stages to the bulk edit', async () => {
@@ -826,7 +831,7 @@ describe('LeadsPage — board view', () => {
     it('turns the stage filter into the columns it allows, not an extra filter on each', async () => {
         render(<LeadsPage />);
         await screen.findByRole('cell', { name: 'Karim Traders' });
-        fireEvent.change(selectByOption('All statuses'), { target: { value: 'open' } });
+        fireEvent.change(selectByName('Status'), { target: { value: 'open' } });
         fireEvent.click(boardButton());
 
         await screen.findByRole('region', { name: 'Negotiation' });
