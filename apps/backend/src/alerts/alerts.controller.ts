@@ -6,7 +6,8 @@ import { RequireStorePermission } from '../auth/store-permission.decorator';
 import { TenantInterceptor } from '../database/tenant.interceptor';
 import { Tenant, TenantContext } from '../database/tenant.decorator';
 import { DatabaseService } from '../database/database.service';
-import { DEFAULT_QUIET } from '../notifications/alert-policy';
+import { PreferencesService } from '../preferences/preferences.service';
+import { resolveAlertPrefs } from '../notifications/alert-policy';
 import { AlertSettingsService } from './alert-settings.service';
 import { ALERT_TYPES } from './alert-types';
 import { UpdateAlertPreferencesDto, UpdateAlertThresholdsDto } from './alerts.dto';
@@ -30,6 +31,7 @@ export class AlertsController {
     constructor(
         private readonly db: DatabaseService,
         private readonly settings: AlertSettingsService,
+        private readonly memberPrefs: PreferencesService,
     ) {}
 
     @Get('preferences')
@@ -39,16 +41,15 @@ export class AlertsController {
 
     @Put('preferences')
     async updatePreferences(@Tenant() tenant: TenantContext, @Body() dto: UpdateAlertPreferencesDto) {
-        const data = {
-            ...(dto.muted_types ? { muted_types: [...new Set(dto.muted_types)] } : {}),
-            ...(dto.quiet_enabled !== undefined ? { quiet_enabled: dto.quiet_enabled } : {}),
-            ...(dto.quiet_from ? { quiet_from: toMinutes(dto.quiet_from) } : {}),
-            ...(dto.quiet_to ? { quiet_to: toMinutes(dto.quiet_to) } : {}),
+        // Only the fields sent: the rest stay whatever the member sees now, profile or built-in.
+        const quiet = {
+            ...(dto.quiet_enabled !== undefined ? { enabled: dto.quiet_enabled } : {}),
+            ...(dto.quiet_from ? { from: toMinutes(dto.quiet_from) } : {}),
+            ...(dto.quiet_to ? { to: toMinutes(dto.quiet_to) } : {}),
         };
-        await this.db.userAlertPreference.upsert({
-            where: { user_id_tenant_id: { user_id: tenant.userId, tenant_id: tenant.tenantId } },
-            create: { user_id: tenant.userId, tenant_id: tenant.tenantId, ...data },
-            update: data,
+        await this.memberPrefs.saveSection(tenant.tenantId, tenant.userId, 'alerts', {
+            ...(dto.muted_types ? { mutedTypes: [...new Set(dto.muted_types)] } : {}),
+            ...(Object.keys(quiet).length > 0 ? { quiet } : {}),
         });
         return this.describe(tenant);
     }
@@ -67,13 +68,16 @@ export class AlertsController {
             }),
             this.settings.get(tenant.tenantId),
         ]);
+        // A row is the member's whole answer; only without one does the profile speak.
+        const profile = preference ? null : await this.memberPrefs.profileFor(tenant.tenantId, tenant.userId).catch(() => null);
+        const alerts = resolveAlertPrefs(preference, profile?.prefs.sections.alerts);
         return {
             types: ALERT_TYPES,
-            muted_types: preference?.muted_types ?? [],
+            muted_types: alerts.mutedTypes,
             quiet: {
-                enabled: preference?.quiet_enabled ?? true,
-                from: toClock(preference?.quiet_from ?? DEFAULT_QUIET.from),
-                to: toClock(preference?.quiet_to ?? DEFAULT_QUIET.to),
+                enabled: alerts.quiet.enabled,
+                from: toClock(alerts.quiet.from),
+                to: toClock(alerts.quiet.to),
             },
             thresholds,
         };
