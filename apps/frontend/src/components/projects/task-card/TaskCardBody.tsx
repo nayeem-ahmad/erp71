@@ -9,6 +9,7 @@ import DescriptionSection from './DescriptionSection';
 import ChecklistSection from './ChecklistSection';
 import SubtasksSection from './SubtasksSection';
 import RecordCard from './RecordCard';
+import { TaskFilesProvider } from './task-files';
 
 export type TaskCardPresentation = 'modal' | 'page';
 
@@ -55,13 +56,14 @@ export function TaskCardBody({
     const setTab = onRecordTabChange ?? setOwnTab;
 
     return (
-        /* `grid-cols-1` is not decoration. Without a base column count only the
-           breakpoint's template is declared, so below it the grid falls back to
-           a single *implicit* track, and an implicit track is `auto` — it sizes
-           to its widest content rather than to the grid. Measured on a phone:
-           one 574px track inside a 302px grid, clipping the chips off the right
-           edge with no scroll to reach them. */
-        <div
+        <TaskFilesProvider card={card}>
+            {/* `grid-cols-1` is not decoration. Without a base column count only the
+                breakpoint's template is declared, so below it the grid falls back to
+                a single *implicit* track, and an implicit track is `auto` — it sizes
+                to its widest content rather than to the grid. Measured on a phone:
+                one 574px track inside a 302px grid, clipping the chips off the right
+                edge with no scroll to reach them. */}
+            <div
             className={`grid grid-cols-1 gap-4 ${
                 page ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : 'md:grid-cols-3'
             }`}
@@ -96,5 +98,6 @@ export function TaskCardBody({
                 <RecordCard task={task} card={card} value={tab} onChange={setTab} />
             </div>
         </div>
+        </TaskFilesProvider>
     );
 }

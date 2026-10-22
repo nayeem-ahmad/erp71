@@ -18,7 +18,8 @@ import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { Markdown } from './lazy-markdown';
 import { relativeTime } from './model';
-import { useTaskImageUpload } from './task-image-upload';
+import { imageUrlsIn, urlsDropped } from './task-image-refs';
+import { useTrackedTaskImages } from './use-tracked-task-images';
 
 /**
  * When something happened: "2 hours ago", with the exact time on hover. A
@@ -45,10 +46,13 @@ function When({ at, locale }: { at: string; locale: string }) {
  */
 export default function ActivitySection({
     taskId,
+    description = '',
     onChanged,
     show = 'all',
 }: {
     taskId: string;
+    /** The saved description, so an image it still shows is not removed with a comment. */
+    description?: string;
     onChanged?: () => void;
     /**
      * Which half of the feed to draw. Comments and the activity log answer
@@ -74,7 +78,10 @@ export default function ActivitySection({
     const [editBody, setEditBody] = useState('');
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState(false);
-    const uploadImage = useTaskImageUpload(taskId);
+    // Separate sessions: posting the draft must not release an image that is
+    // still sitting, unsent, in a comment being edited, or the other way round.
+    const draftImages = useTrackedTaskImages(taskId, description);
+    const editImages = useTrackedTaskImages(taskId, description);
 
     /* One fetch, two tabs: `mergeFeed` already tags every entry with its kind,
        so each tab is a filter over the same feed rather than a second request.
@@ -133,8 +140,19 @@ export default function ActivitySection({
     const post = () => {
         const body = draft.trim();
         if (!body) return;
+        const { shown, abandoned } = draftImages.consume(body);
         return run(async () => {
-            await api.addTaskComment(taskId, body);
+            try {
+                await api.addTaskComment(taskId, body);
+            } catch (error) {
+                draftImages.restore([...shown, ...abandoned]);
+                throw error;
+            }
+            // The body is passed in because the comment list this reads may
+            // still be the one from before the post. An image the draft no
+            // longer shows is removed unless the description or another
+            // comment still shows it.
+            await draftImages.release(description, abandoned, [body]);
             setDraft('');
         });
     };
@@ -146,9 +164,28 @@ export default function ActivitySection({
 
     const commitEdit = (comment: FeedEntry & { kind: 'comment' }) => {
         const body = editBody.trim();
+        const previous = comment.body;
         setEditingId(null);
-        if (!body || body === comment.body) return;
-        return run(() => api.updateTaskComment(comment.id, body));
+        const { shown, abandoned } = editImages.consume(body);
+        if (!body || body === previous) {
+            // Nothing was saved, so a paste that did not stay in the text
+            // must not stay in Attachments either.
+            void editImages.release(description, abandoned);
+            return;
+        }
+        return run(async () => {
+            try {
+                await api.updateTaskComment(comment.id, body);
+            } catch (error) {
+                editImages.restore([...shown, ...abandoned]);
+                throw error;
+            }
+            await editImages.release(
+                description,
+                [...abandoned, ...urlsDropped(previous, body).map((url) => ({ url }))],
+                [body],
+            );
+        });
     };
 
     return (
@@ -171,7 +208,8 @@ export default function ActivitySection({
                         placeholder={m.commentPlaceholder}
                         onChange={setDraft}
                         onSubmit={post}
-                        uploadImage={uploadImage}
+                        uploadImage={draftImages.uploadImage}
+                        onImageDiscarded={draftImages.discard}
                     />
                     <div className="flex justify-end">
                         <Button type="submit" disabled={saving || draft.trim() === ''}>
@@ -240,9 +278,14 @@ export default function ActivitySection({
                                                 ariaLabel={m.editComment}
                                                 onChange={setEditBody}
                                                 onSubmit={() => commitEdit(entry)}
-                                                onCancel={() => setEditingId(null)}
+                                                onCancel={() => {
+                                                    const { abandoned } = editImages.consume(entry.body);
+                                                    setEditingId(null);
+                                                    void editImages.release(description, abandoned);
+                                                }}
                                                 showActions
-                                                uploadImage={uploadImage}
+                                                uploadImage={editImages.uploadImage}
+                                                onImageDiscarded={editImages.discard}
                                             />
                                         </div>
                                     ) : (
@@ -281,7 +324,14 @@ export default function ActivitySection({
                                                 className="max-md:min-h-touch text-red-600 hover:underline"
                                                 disabled={saving}
                                                 onClick={() =>
-                                                    run(() => api.deleteTaskComment(entry.id))
+                                                    run(async () => {
+                                                        await api.deleteTaskComment(entry.id);
+                                                        // The comment is gone, so an image only it
+                                                        // showed goes with it. One the description
+                                                        // still shows stays.
+                                                        const removed = imageUrlsIn(entry.body).map((url) => ({ url }));
+                                                        await editImages.release(description, removed);
+                                                    })
                                                 }
                                             >
                                                 {t.common.delete}

@@ -15,13 +15,15 @@ let latest = '';
 
 function Host({
     uploadImage,
+    onImageDiscarded,
     onUploadingChange,
     initial = '',
     onSubmit,
     onCancel,
     showActions,
 }: {
-    uploadImage?: (file: File) => Promise<{ url: string; name?: string } | null>;
+    uploadImage?: (file: File) => Promise<{ url: string; name?: string; id?: string } | null>;
+    onImageDiscarded?: (image: { url: string; name?: string; id?: string }) => void;
     onUploadingChange?: (uploading: boolean) => void;
     initial?: string;
     /** Told the value as the host holds it when the save happens. */
@@ -40,6 +42,7 @@ function Host({
             }}
             ariaLabel="Description"
             uploadImage={uploadImage}
+            onImageDiscarded={onImageDiscarded}
             onUploadingChange={onUploadingChange}
             // A closure over this render's value, the way every real caller's
             // save is: the description's `commit`, the comment box's `post`.
@@ -79,10 +82,10 @@ const pressModEnter = () => fireEvent.keyDown(surface(), { key: 'Enter', ctrlKey
 
 /** An upload that stays in flight until the test lets it land. */
 const heldUpload = () => {
-    let land!: (value: { url: string }) => void;
+    let land!: (value: { url: string; name?: string; id?: string }) => void;
     const uploadImage = jest.fn().mockReturnValue(
         new Promise((resolve) => {
-            land = resolve as (value: { url: string }) => void;
+            land = resolve as (value: { url: string; name?: string; id?: string }) => void;
         }),
     );
     return { uploadImage, land: (value: { url: string }) => land(value) };
@@ -234,6 +237,40 @@ describe('RichTextEditor image paste', () => {
     it('says an image can be pasted where one can', () => {
         render(<Host uploadImage={jest.fn()} />);
         expect(screen.getByText(/Paste an image to attach it\./)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Insert image' })).toBeInTheDocument();
+    });
+
+    it('inserts an image chosen from the toolbar', async () => {
+        const uploadImage = jest.fn().mockResolvedValue({ url: 'https://cdn/picked.png', name: 'picked.png' });
+        render(<Host uploadImage={uploadImage} />);
+
+        const input = document.querySelector('[data-rich-text-editor] input[type="file"]') as HTMLInputElement;
+        fireEvent.change(input, { target: { files: [image('picked.png')] } });
+
+        await waitFor(() => expect(latest).toBe('![picked.png](https://cdn/picked.png)'));
+        expect(uploadImage).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells the caller when the image was removed before the upload landed', async () => {
+        const { uploadImage, land } = heldUpload();
+        const onImageDiscarded = jest.fn();
+        render(<Host uploadImage={uploadImage} onImageDiscarded={onImageDiscarded} />);
+
+        paste([image()]);
+        await screen.findByRole('img');
+        fireEvent.focus(surface());
+        fireEvent.keyDown(surface(), { key: 'a', ctrlKey: true });
+        fireEvent.keyDown(surface(), { key: 'Backspace' });
+
+        await act(async () => {
+            land({ url: 'https://cdn/x.png', id: 'a1', name: 'shot.png' });
+        });
+
+        await waitFor(() =>
+            expect(onImageDiscarded).toHaveBeenCalledWith(
+                expect.objectContaining({ url: 'https://cdn/x.png', id: 'a1' }),
+            ),
+        );
     });
 });
 

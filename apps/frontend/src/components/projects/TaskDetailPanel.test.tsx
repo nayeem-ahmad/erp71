@@ -648,6 +648,36 @@ describe('TaskDetailPanel activity', () => {
         );
     });
 
+    it('drops the attachment when the only comment showing it is deleted', async () => {
+        const withShot = {
+            ...comment('c1', '2026-08-03T10:00:00Z'),
+            body: 'See ![shot.png](https://cdn/shot.png)',
+        };
+        let gone = false;
+        getTaskComments.mockImplementation(() => Promise.resolve(gone ? [] : [withShot]));
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/shot.png',
+                file_name: 'shot.png',
+                mime_type: 'image/png',
+                file_size: 1000,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        deleteTaskComment.mockImplementation(() => {
+            gone = true;
+            return Promise.resolve({});
+        });
+        panel();
+        await openTab(/^Comments/);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(deleteTaskComment).toHaveBeenCalledWith('c1'));
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
+    });
+
     it('offers edit and delete only on your own comment', async () => {
         getTaskComments.mockResolvedValue([
             comment('mine', '2026-08-03T10:00:00Z', 'user-me'),
@@ -1127,6 +1157,90 @@ describe('TaskDetailPanel description', () => {
                 description: 'See below\n\n![shot.png](https://cdn/shot.png)',
             }),
         );
+    });
+
+    it('removes the attachment when the image leaves the description', async () => {
+        // The file was kept because the description showed it. Once the text
+        // no longer does, and no comment does either, it leaves the list.
+        getProjectTask.mockResolvedValue(withDescription('![shot.png](https://cdn/shot.png)'));
+        updateProjectTask.mockImplementation(async (_id: string, body: { description: string }) => ({
+            id: 't1',
+            title: 'Wire the meter',
+            description: body.description,
+            checklistItems: [],
+            timeEntries: [],
+        }));
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/shot.png',
+                file_name: 'shot.png',
+                mime_type: 'image/png',
+                file_size: 1000,
+                created_at: '2026-09-20T10:00:00Z',
+            },
+        ]);
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'Just words');
+        leave(editor);
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { description: 'Just words' }),
+        );
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
+    });
+
+    it('keeps the attachment when a comment still shows the image', async () => {
+        getProjectTask.mockResolvedValue(withDescription('![shot.png](https://cdn/shot.png)'));
+        getTaskComments.mockResolvedValue([
+            {
+                id: 'c1',
+                body: 'Still here ![shot.png](https://cdn/shot.png)',
+                created_at: '2026-08-03T10:00:00Z',
+                user: { id: 'user-me', name: 'Karim', email: 'k@x.com' },
+            },
+        ]);
+        updateProjectTask.mockResolvedValue({
+            id: 't1',
+            title: 'Wire the meter',
+            description: 'Just words',
+            checklistItems: [],
+            timeEntries: [],
+        });
+        panel();
+        const editor = await edit();
+
+        typeInEditor(editor, 'Just words');
+        leave(editor);
+
+        await waitFor(() => expect(updateProjectTask).toHaveBeenCalled());
+        await waitFor(() => expect(getTaskComments).toHaveBeenCalledWith('t1'));
+        expect(deleteTaskAttachment).not.toHaveBeenCalled();
+    });
+
+    it('drops a pasted image when the edit is cancelled', async () => {
+        getProjectTask.mockResolvedValue(withDescription(null));
+        addTaskAttachment.mockResolvedValue({
+            id: 'a1',
+            file_url: 'https://cdn/shot.png',
+            file_name: 'shot.png',
+        });
+        panel();
+        const editor = await edit();
+
+        fireEvent.paste(editor, {
+            clipboardData: { files: [screenshot()], getData: () => '', types: ['Files'] },
+        });
+        await waitFor(() =>
+            expect(editor.querySelector('img')).toHaveAttribute('src', 'https://cdn/shot.png'),
+        );
+
+        fireEvent.keyDown(editor, { key: 'Escape' });
+
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
+        expect(updateProjectTask).not.toHaveBeenCalled();
     });
 
     it('leaves the card open when Escape cancels the edit', async () => {
@@ -2319,6 +2433,158 @@ describe('TaskDetailPanel attachments', () => {
         fireEvent.click(await screen.findByLabelText('Remove attachment plan.png'));
 
         await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
+    });
+
+    it('says when a file is the one shown in the description', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            description: '![plan.png](https://cdn/plan.png)',
+        });
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                mime_type: 'image/png',
+                file_size: 2048,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+        await openTab(/^Attachments/);
+
+        expect(await screen.findByText('In the description')).toBeInTheDocument();
+    });
+
+    it('asks before removing a file the description shows, then takes it out of both', async () => {
+        getProjectTask.mockResolvedValue({
+            ...withChecklist([]),
+            description: '![plan.png](https://cdn/plan.png)',
+        });
+        updateProjectTask.mockResolvedValue({
+            id: 't1',
+            title: 'Wire the meter',
+            description: '',
+            checklistItems: [],
+            timeEntries: [],
+        });
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                mime_type: 'image/png',
+                file_size: 2048,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment plan.png'));
+
+        expect(deleteTaskAttachment).not.toHaveBeenCalled();
+        expect(await screen.findByText('Remove this file?')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() =>
+            expect(updateProjectTask).toHaveBeenCalledWith('t1', { description: '' }),
+        );
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a1'));
+    });
+
+    it('reads the comments again before removing an image it could not place', async () => {
+        // The first read fails, so the tile cannot say where the image is
+        // shown. Removing it anyway would leave a comment with a broken image.
+        let reads = 0;
+        getTaskComments.mockImplementation(() => {
+            reads += 1;
+            if (reads === 1) return Promise.reject(new Error('down'));
+            return Promise.resolve([
+                {
+                    id: 'c1',
+                    body: 'See ![plan.png](https://cdn/plan.png)',
+                },
+            ]);
+        });
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                mime_type: 'image/png',
+                file_size: 2048,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment plan.png'));
+
+        expect(await screen.findByText('Remove this file?')).toBeInTheDocument();
+        expect(deleteTaskAttachment).not.toHaveBeenCalled();
+    });
+
+    it('leaves an image in place when it cannot tell whether a comment shows it', async () => {
+        const { toast } = jest.requireMock('@/lib/toast');
+        toast.error.mockClear();
+        getTaskComments.mockRejectedValue(new Error('down'));
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a1',
+                file_url: 'https://cdn/plan.png',
+                file_name: 'plan.png',
+                mime_type: 'image/png',
+                file_size: 2048,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment plan.png'));
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('Could not remove that file'),
+        );
+        expect(deleteTaskAttachment).not.toHaveBeenCalled();
+    });
+
+    it('still removes a PDF when the comments cannot be read', async () => {
+        getTaskComments.mockRejectedValue(new Error('down'));
+        getTaskAttachments.mockResolvedValue([
+            {
+                id: 'a2',
+                file_url: 'https://cdn/two.pdf',
+                file_name: 'two.pdf',
+                mime_type: 'application/pdf',
+                file_size: 4096,
+                created_at: '2026-08-03T10:00:00Z',
+            },
+        ]);
+        panel();
+        await openTab(/^Attachments/);
+
+        fireEvent.click(await screen.findByLabelText('Remove attachment two.pdf'));
+
+        await waitFor(() => expect(deleteTaskAttachment).toHaveBeenCalledWith('a2'));
+    });
+
+    it('attaches an image pasted onto the tab', async () => {
+        panel();
+        await openTab(/^Attachments/);
+        const zone = await screen.findByRole('region', { name: 'Drop files here, or paste an image.' });
+
+        fireEvent.paste(zone, { clipboardData: { files: [file('shot.png', 'image/png')] } });
+
+        await waitFor(() =>
+            expect(addTaskAttachment).toHaveBeenCalledWith(
+                't1',
+                expect.objectContaining({ fileName: 'shot.png', mimeType: 'image/png' }),
+            ),
+        );
     });
 
     it('says the list failed rather than showing it as empty', async () => {

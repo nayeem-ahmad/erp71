@@ -60,7 +60,7 @@ export function useTaskImageUpload(taskId: string) {
                     fileName: file.name || 'pasted-image',
                     mimeType: file.type,
                 })) as Attachment;
-                return { url: created.file_url, name: created.file_name };
+                return { url: created.file_url, name: created.file_name, id: created.id };
             } catch (error) {
                 toast.error(error instanceof Error ? error.message : m.uploadFailed);
                 return null;
