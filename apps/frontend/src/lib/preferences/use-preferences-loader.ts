@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MyPreferencesResponse } from '@erp71/shared-types';
-import { currentViewUserKey } from '@/components/table/useTableViewSettings';
+import { currentViewUserKey } from '@/components/table/view-user-key';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { workspaceScope } from '@/lib/query-client';

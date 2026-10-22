@@ -11,7 +11,7 @@ import {
     type PreferenceSource,
     type SectionValues,
 } from '@erp71/shared-types';
-import { currentViewUserKey } from '@/components/table/useTableViewSettings';
+import { currentViewUserKey } from '@/components/table/view-user-key';
 import { readLegacyBrowserSection } from './legacy';
 import { usePreferencesStore } from './store';
 

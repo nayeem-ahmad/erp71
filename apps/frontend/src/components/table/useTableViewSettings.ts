@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { create } from 'zustand';
-import { getAccessToken } from '@/lib/session-store';
-import { tokenSubject } from '@/lib/query-client';
+import { usePreferencesStore } from '@/lib/preferences/store';
+import { usePreferenceSection } from '@/lib/preferences/use-preference-section';
+import { currentViewUserKey } from './view-user-key';
 import { DEFAULT_TABLE_VIEW, sanitizeTableView, type TableViewSettings } from './view-settings';
 
 /**
@@ -11,10 +12,11 @@ import { DEFAULT_TABLE_VIEW, sanitizeTableView, type TableViewSettings } from '.
  * overrides for the lists they have set apart ("This list only").
  *
  * Kept per person rather than per browser: a shop's counter PC is shared, and
- * one cashier's large text should not follow the next one in. Stored in this
- * browser for now, under a key named for the signed-in user; moving it to the
- * server so it follows the person across devices is the next step, and this
- * store is the only thing that has to learn about it.
+ * one cashier's large text should not follow the next one in. Once the
+ * person's preferences have loaded from the server they are the source of
+ * truth and follow the person across devices; this store (this browser, under
+ * a key named for the signed-in user) is what draws the lists before that and
+ * in the modes that never load preferences (platform admin, referee, employee).
  */
 
 const STORAGE_PREFIX = 'erp71:table-view:';
@@ -35,15 +37,7 @@ interface TableViewState {
     reset: (tableId: string) => void;
 }
 
-/** The signed-in user's id from their token, or a shared bucket when signed out. */
-export function currentViewUserKey(): string {
-    if (typeof window === 'undefined') return 'anon';
-    try {
-        return tokenSubject(getAccessToken()) ?? 'anon';
-    } catch {
-        return 'anon';
-    }
-}
+export { currentViewUserKey };
 
 function read(userKey: string): { global: TableViewSettings; tables: Record<string, TableViewSettings> } {
     const empty = { global: DEFAULT_TABLE_VIEW, tables: {} };
@@ -126,10 +120,15 @@ export const useTableViewStore = create<TableViewState>((set, get) => {
  * The view settings one list draws with, and the setters its View options menu
  * calls. A change made while the list has its own override stays on that list;
  * otherwise it changes every list.
+ *
+ * With the person's preferences loaded, those are read and every change is
+ * saved to them (nothing is written to this browser). Otherwise the settings
+ * live in this browser, as before.
  */
 export function useTableViewSettings(tableId: string) {
-    const settings = useTableViewStore((s) => s.tables[tableId] ?? s.global);
-    const isOverridden = useTableViewStore((s) => Boolean(s.tables[tableId]));
+    const prefs = usePreferenceSection('tableView');
+    const localSettings = useTableViewStore((s) => s.tables[tableId] ?? s.global);
+    const localOverridden = useTableViewStore((s) => Boolean(s.tables[tableId]));
     const loadedKey = useTableViewStore((s) => s.userKey);
 
     // Someone else signed in on this tab since the store was read.
@@ -138,15 +137,60 @@ export function useTableViewSettings(tableId: string) {
         if (key !== loadedKey) useTableViewStore.getState().load(key);
     }, [loadedKey]);
 
+    // What the next change builds on. A second change in the same tick lands before
+    // this component re-renders, so each save moves it on to what it just saved.
+    const latest = useRef(prefs);
+    latest.current = prefs;
+
+    const save = useCallback(
+        (body: Parameters<ReturnType<typeof usePreferencesStore.getState>['save']>[1], next: typeof prefs.value) => {
+            latest.current = { ...latest.current, value: next };
+            usePreferencesStore.getState().save('tableView', body, next);
+        },
+        [],
+    );
+
     const update = useCallback(
-        (patch: Partial<TableViewSettings>) => useTableViewStore.getState().update(tableId, patch),
-        [tableId],
+        (patch: Partial<TableViewSettings>) => {
+            if (!latest.current.ready) return useTableViewStore.getState().update(tableId, patch);
+            const { global, tables } = latest.current.value;
+            if (tables[tableId]) {
+                const entry = { ...tables[tableId], ...patch };
+                save({ tables: { [tableId]: entry } }, { global, tables: { ...tables, [tableId]: entry } });
+            } else {
+                save({ global: patch }, { global: { ...global, ...patch }, tables });
+            }
+        },
+        [tableId, save],
     );
     const setOverride = useCallback(
-        (on: boolean) => useTableViewStore.getState().setOverride(tableId, on),
-        [tableId],
+        (on: boolean) => {
+            if (!latest.current.ready) return useTableViewStore.getState().setOverride(tableId, on);
+            const { global, tables } = latest.current.value;
+            if (on) {
+                save({ tables: { [tableId]: global } }, { global, tables: { ...tables, [tableId]: { ...global } } });
+            } else {
+                const { [tableId]: _removed, ...rest } = tables;
+                save({ tables: { [tableId]: null } }, { global, tables: rest });
+            }
+        },
+        [tableId, save],
     );
-    const reset = useCallback(() => useTableViewStore.getState().reset(tableId), [tableId]);
+    const reset = useCallback(() => {
+        if (!latest.current.ready) return useTableViewStore.getState().reset(tableId);
+        const { global, tables } = latest.current.value;
+        if (tables[tableId]) {
+            save(
+                { tables: { [tableId]: DEFAULT_TABLE_VIEW } },
+                { global, tables: { ...tables, [tableId]: { ...DEFAULT_TABLE_VIEW } } },
+            );
+        } else {
+            save({ global: DEFAULT_TABLE_VIEW }, { global: { ...DEFAULT_TABLE_VIEW }, tables });
+        }
+    }, [tableId, save]);
+
+    const settings = prefs.ready ? (prefs.value.tables[tableId] ?? prefs.value.global) : localSettings;
+    const isOverridden = prefs.ready ? Boolean(prefs.value.tables[tableId]) : localOverridden;
 
     return { settings, isOverridden, update, setOverride, reset };
 }
