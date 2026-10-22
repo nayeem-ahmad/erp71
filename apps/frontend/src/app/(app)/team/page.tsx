@@ -19,7 +19,9 @@ import { fetchMe } from '@/hooks/use-me';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { PageShell } from '@/components/ui';
+import { Button, PageShell } from '@/components/ui';
+import ProfilesPanel from '@/components/preferences/ProfilesPanel';
+import { hasPermission } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
 import { getWorkspaceItem } from '@/lib/session-store';
 
@@ -73,7 +75,7 @@ type Invitation = {
     expiresAt: string;
 };
 type ToastState = { type: 'success' | 'error'; message: string } | null;
-type TeamTab = 'members' | 'roles';
+type TeamTab = 'members' | 'roles' | 'profiles';
 
 const OWNER_BADGE_STYLE = 'bg-purple-100 text-purple-700';
 const ROLE_BADGE_STYLE = 'bg-gray-100 text-gray-700';
@@ -809,6 +811,10 @@ export default function TeamPage() {
     const tm = t.teamManagement;
     const [activeTab, setActiveTab] = useState<TeamTab>('members');
     const [isOwner, setIsOwner] = useState(false);
+    // Default profiles: owners and MANAGE_USERS holders, like the rest of staff
+    // management. Assigning a profile to a role stays with role editing (owners).
+    const [canManageProfiles, setCanManageProfiles] = useState(false);
+    const [creatingProfile, setCreatingProfile] = useState(false);
     const [tenantRoles, setTenantRoles] = useState<TenantRoleSummary[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -824,7 +830,11 @@ export default function TeamPage() {
             const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
             setIsOwner(tenant?.role === 'OWNER');
-        }).catch(() => setIsOwner(false));
+            setCanManageProfiles(tenant?.role === 'OWNER' || hasPermission(tenant?.permissions, 'MANAGE_USERS'));
+        }).catch(() => {
+            setIsOwner(false);
+            setCanManageProfiles(false);
+        });
     }, []);
 
     const loadRoles = async () => {
@@ -884,7 +894,8 @@ export default function TeamPage() {
 
     useEffect(() => {
         if (!isOwner && activeTab === 'roles') setActiveTab('members');
-    }, [isOwner, activeTab]);
+        if (!canManageProfiles && activeTab === 'profiles') setActiveTab('members');
+    }, [isOwner, canManageProfiles, activeTab]);
 
     return (
         <PageShell>
@@ -897,6 +908,11 @@ export default function TeamPage() {
                         tm.title,
                         'settings',
                     )}
+                    actions={activeTab === 'profiles' ? (
+                        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreatingProfile(true)}>
+                            {tm.profiles.newProfile}
+                        </Button>
+                    ) : undefined}
                 />
 
                 <div className="flex gap-1 border-b border-gray-200">
@@ -922,10 +938,24 @@ export default function TeamPage() {
                             {tm.roles.tabLabel}
                         </button>
                     )}
+                    {canManageProfiles && (
+                        <button
+                            onClick={() => setActiveTab('profiles')}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === 'profiles'
+                                    ? 'border-blue-600 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            {tm.profiles.tabLabel}
+                        </button>
+                    )}
                 </div>
 
                 {activeTab === 'roles' ? (
                     <RolesPanel onToast={showToast} />
+                ) : activeTab === 'profiles' ? (
+                    <ProfilesPanel createOpen={creatingProfile} onCreateClose={() => setCreatingProfile(false)} />
                 ) : (
                     <>
                         <form onSubmit={sendInvite} className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">

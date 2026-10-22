@@ -5866,6 +5866,16 @@ export const api = {
             body: JSON.stringify(body),
             headers: { 'Content-Type': 'application/json' },
         }),
+    /**
+     * The signed-in member's alert settings and the alert types there are. The
+     * profile editor reads only `types`, to offer each one for muting; labels
+     * come from the server in English.
+     */
+    getAlertPreferences: (): Promise<{
+        types: { type: string; label: string; description: string }[];
+        muted_types: string[];
+        quiet: { enabled: boolean; from: string; to: string };
+    }> => fetchWithAuth('/alerts/preferences'),
     // New Sales
     createNewSale: (data: any) => fetchWithAuth('/sales', {
         method: 'POST',

@@ -44,6 +44,21 @@ let sessionDensity: PrintDensity | null = null;
 const listeners = new Set<() => void>();
 
 /**
+ * Only what this browser has stored, or null — no session answer, no profile,
+ * no fallback. For copying a browser's own setup somewhere else (Team → Default
+ * profiles), where a value it never chose must not pass for one it did.
+ */
+export function readStoredPrintDensity(): PrintDensity | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const stored = window.localStorage.getItem(PRINT_DENSITY_KEY);
+        return isPrintDensity(stored) ? stored : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Reading storage throws outright in a locked-down browser (Safari private
  * mode, a sandboxed frame), and a print preference is never worth failing a
  * print over.

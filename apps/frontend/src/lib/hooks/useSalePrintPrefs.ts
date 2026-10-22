@@ -41,6 +41,24 @@ function storedPaper(): PaperSize | null {
     return stored && VALID_SIZES.includes(stored as PaperSize) ? (stored as PaperSize) : null;
 }
 
+/**
+ * The paper this browser has chosen, or null — never the profile's or the
+ * shop's. For copying a browser's own setup (Team → Default profiles).
+ */
+export function readStoredPaperSize(): PaperSize | null {
+    if (typeof window === 'undefined') return null;
+    return storedPaper();
+}
+
+/** This browser's stored skip-preview answer, or null when it has none. */
+export function readStoredSkipPreview(): boolean | null {
+    if (typeof window === 'undefined') return null;
+    const stored = readStored(SKIP_PREVIEW_KEY);
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
+    return null;
+}
+
 /** The paper size the member's profile sets for a browser that has chosen none, if any. */
 function profilePaper(): PaperSize | null {
     const paper = profileDevice().paperSize;
@@ -53,10 +71,7 @@ function profilePaper(): PaperSize | null {
  * `false` — only the absent case lets the profile apply.
  */
 function readSkipPreview(): boolean {
-    const stored = readStored(SKIP_PREVIEW_KEY);
-    if (stored === 'true') return true;
-    if (stored === 'false') return false;
-    return profileDevice().skipPreview === true;
+    return readStoredSkipPreview() ?? profileDevice().skipPreview === true;
 }
 
 /** The shop's `default_paper_size`, or null when it has none or cannot be read. */
