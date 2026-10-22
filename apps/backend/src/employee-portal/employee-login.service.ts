@@ -17,6 +17,7 @@ import { AuthCacheService } from '../database/auth-cache.service';
 import { AuditService, type AuditContext } from '../audit/audit.service';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { generatePassword } from '../password-policy/generate-password';
+import { newAccountLocale } from '../preferences/new-account-locale';
 
 /**
  * Giving an employee a way to sign in.
@@ -119,8 +120,14 @@ export class EmployeeLoginService {
         // sign in and see nothing, and an `Employee` pointing at a user that was
         // never created is a broken portal grant. Neither half is useful alone.
         await this.db.$transaction(async (tx) => {
+            const tenant = await tx.tenant.findUnique({
+                where: { id: tenantId },
+                select: { default_locale: true, localization_enabled: true },
+            });
+
             const user = await tx.user.create({
                 data: {
+                    preferred_locale: tenant ? newAccountLocale(tenant) : 'en',
                     // A placeholder when they have no address: sign-in is by
                     // mobile, and the column is NOT NULL. See `placeholderEmailFor`.
                     email,
