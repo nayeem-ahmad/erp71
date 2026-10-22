@@ -99,6 +99,20 @@ describe('useTablePreferences with preferences loaded', () => {
         expect(store().getPreferences('customers')?.pageSize).toBe(50);
     });
 
+    it('keeps a column named after its header from this browser’s old answers', () => {
+        // A column with no `id` or `accessorKey` takes its header text as its id.
+        window.localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ orders: { columnVisibility: { 'Customer Name': false }, columnOrder: ['Customer Name', 'total'] } }),
+        );
+        hydrate({}, { source: 'default', legacy: ['tableColumns'] });
+
+        expect(store().getPreferences('orders')).toEqual({
+            columnVisibility: { 'Customer Name': false },
+            columnOrder: ['Customer Name', 'total'],
+        });
+    });
+
     it('saves a change to the list’s whole entry and writes nothing to this browser', async () => {
         hydrate({ orders: { order: ['b', 'a'], pageSize: 20 }, customers: { hidden: ['x'] } });
 

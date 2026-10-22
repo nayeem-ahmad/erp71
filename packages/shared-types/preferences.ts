@@ -178,10 +178,15 @@ export const DEFAULT_SECTION_VALUES: SectionValues = {
 // Normalisers
 // ---------------------------------------------------------------------------
 
-/** List, column and sidebar group ids: a leading alphanumeric, then up to 79 of `A-Za-z0-9_.:-`. */
+/**
+ * List and sidebar group ids: a leading alphanumeric, then up to 79 of
+ * `A-Za-z0-9_.:-`. They become object keys somewhere along the way, so the
+ * pattern also keeps out `__proto__` and friends.
+ */
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/;
 const MAX_LISTS = 300;
 const MAX_COLUMN_IDS = 100;
+const MAX_COLUMN_ID_LENGTH = 80;
 const MAX_SIDEBAR_GROUPS = 50;
 const PAGE_SIZE = { min: 1, max: 500 } as const;
 const MAX_MUTED_TYPES = 100;
@@ -197,10 +202,29 @@ function isOneOf<T extends string>(options: readonly T[], value: unknown): value
 }
 
 /** Valid, distinct ids from a list, at most `max`; `undefined` when it is not a list at all. */
-function idList(raw: unknown, max: number): string[] | undefined {
+function idList(
+  raw: unknown,
+  max: number,
+  isId: (id: string) => boolean = (id) => ID_PATTERN.test(id),
+): string[] | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const ids = raw.filter((id): id is string => typeof id === 'string' && ID_PATTERN.test(id));
+  const ids = raw.filter((id): id is string => typeof id === 'string' && isId(id));
   return [...new Set(ids)].slice(0, max);
+}
+
+/**
+ * A column id: 1 to 80 characters, not blank, no control characters. Looser
+ * than `ID_PATTERN` because a column with no `id` or `accessorKey` takes its
+ * header text as its id ("Customer Name"), and column ids are only ever array
+ * values, never object keys.
+ */
+function isColumnId(id: string): boolean {
+  if (id.length === 0 || id.length > MAX_COLUMN_ID_LENGTH || id.trim() === '') return false;
+  for (let i = 0; i < id.length; i += 1) {
+    const code = id.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return false;
+  }
+  return true;
 }
 
 /**
@@ -226,9 +250,9 @@ function listMap<T>(raw: unknown, read: (entry: unknown) => T | undefined): Reco
 function readColumnsEntry(raw: unknown): TableColumnsEntry | undefined {
   if (!isRecord(raw)) return undefined;
   const entry: TableColumnsEntry = {};
-  const hidden = idList(raw.hidden, MAX_COLUMN_IDS);
+  const hidden = idList(raw.hidden, MAX_COLUMN_IDS, isColumnId);
   if (hidden) entry.hidden = hidden;
-  const order = idList(raw.order, MAX_COLUMN_IDS);
+  const order = idList(raw.order, MAX_COLUMN_IDS, isColumnId);
   if (order) entry.order = order;
   if (
     typeof raw.pageSize === 'number' &&

@@ -207,6 +207,37 @@ describe('normalizeSectionPartial', () => {
     expect(Object.keys(out)).toEqual(['good.id']);
   });
 
+  it('still drops a list id with a space, even with readable columns', () => {
+    const out = normalizeSectionPartial('tableColumns', { 'sales list': { hidden: ['Customer Name'] } });
+    expect(out).toEqual({});
+  });
+
+  it('column ids may contain spaces and capitals', () => {
+    // TanStack takes a column's id from its string header when it has neither `id` nor `accessorKey`.
+    const out = normalizeSectionPartial('tableColumns', {
+      a: { hidden: ['Customer Name', 'createdAt'], order: ['Customer Name', 'createdAt', 'Due (৳)'] },
+    });
+    expect(out.a.hidden).toEqual(['Customer Name', 'createdAt']);
+    expect(out.a.order).toEqual(['Customer Name', 'createdAt', 'Due (৳)']);
+  });
+
+  it('a column id with a control character or empty/whitespace-only is dropped', () => {
+    const out = normalizeSectionPartial('tableColumns', {
+      a: { hidden: ['ok', '', '   ', 'tab\there', 'line\nbreak', 'nul\u0000', 'del\u007f', '\u001f'] },
+    });
+    expect(out.a.hidden).toEqual(['ok']);
+  });
+
+  it('an 81-char column id is dropped', () => {
+    const out = normalizeSectionPartial('tableColumns', { a: { hidden: ['x'.repeat(80), 'y'.repeat(81)] } });
+    expect(out.a.hidden).toEqual(['x'.repeat(80)]);
+  });
+
+  it('sidebar group ids keep the strict pattern', () => {
+    const out = normalizeSectionPartial('sidebar', { appShellOpenGroups: ['sales', 'Sales Group', '__proto__'] });
+    expect(out.appShellOpenGroups).toEqual(['sales']);
+  });
+
   it('keeps the first 300 lists and drops the 301st', () => {
     const raw = Object.fromEntries(ids(301, 'list').map((id) => [id, { hidden: ['c'] }]));
     const out = normalizeSectionPartial('tableColumns', raw);
@@ -214,13 +245,13 @@ describe('normalizeSectionPartial', () => {
     expect(out).not.toHaveProperty('list300');
   });
 
-  it('keeps the first 100 column ids and drops stale ones', () => {
+  it('keeps the first 100 distinct column ids and drops what is not one', () => {
     const out = normalizeSectionPartial('tableColumns', {
-      a: { hidden: [...ids(101, 'c'), '!bad'], order: ['ok', 'no good', 5] },
+      a: { hidden: ['c0', ...ids(101, 'c')], order: ['ok', 'no good', 'ok', 5, null] },
     });
     expect(out.a.hidden).toHaveLength(100);
     expect(out.a.hidden).not.toContain('c100');
-    expect(out.a.order).toEqual(['ok']);
+    expect(out.a.order).toEqual(['ok', 'no good']);
   });
 
   it('drops a page size outside 1 to 500 or not a whole number', () => {
