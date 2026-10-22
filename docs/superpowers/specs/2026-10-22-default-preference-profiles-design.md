@@ -228,9 +228,12 @@ prints today, and from then on no profile can change it. After release:
 - `resolvePreferences({ profile, member, legacy? })` →
   `{ [K]: { value, source } }`. It is pure, used by the API and the
   frontend, and handles every merge rule in §2.
-- Limits, enforced by the normalisers: list ids match
-  `/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/` (column ids are accessor keys,
-  often camelCase), at most 300 lists per map, at most 100
+- Limits, enforced by the normalisers: list ids and sidebar group keys
+  match `/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/` (they become object keys,
+  so the pattern also shuts out `__proto__`); column ids are any 1–80
+  characters with no control characters, because TanStack takes a
+  column's id from its header text ("Customer Name") when it has an
+  accessor function and no id; at most 300 lists per map, at most 100
   column ids per list, page size within the list's allowed sizes, at most
   50 sidebar group ids.
 
