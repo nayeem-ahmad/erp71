@@ -144,7 +144,7 @@ export class PreferencesService {
     async resetSection(tenantId: string, userId: string, key: PersonSectionKey): Promise<ResolvedSection> {
         this.assertPersonSection(key);
         return this.db.$transaction(async (tx) => {
-            await this.lock(tx, tenantId, userId);
+            // clearSections locks the membership before it reads it.
             const touched = await this.clearSections(tx, tenantId, [userId], [key]);
             if (touched === 0) throw new NotFoundException('Not a member of this workspace.');
             return (await this.read(tx, tenantId, userId)).response.sections[key];
@@ -158,8 +158,11 @@ export class PreferencesService {
      * disagree about what "no answer" means: a null invoice layout, no alert row,
      * the key gone from `preferences`, and the section off the legacy-browser list
      * (a reset member must see the profile, not the shared till's leftovers).
-     * Callers hold the transaction; `userIds` are matched on `tenant_id` too, so a
-     * foreign id is simply not found.
+     * Callers hold the transaction. It locks the listed memberships itself (sorted
+     * by user id, so two overlapping "apply" runs cannot deadlock) before reading
+     * them, because `preferences` is read, changed and written whole and a
+     * concurrent `saveSection` by one of these members would otherwise be lost.
+     * `userIds` are matched on `tenant_id` too, so a foreign id is simply not found.
      */
     async clearSections(
         tx: Client,
@@ -170,6 +173,7 @@ export class PreferencesService {
         if (userIds.length === 0 || sections.length === 0) return 0;
         const where = { tenant_id: tenantId, user_id: { in: userIds } };
 
+        await tx.$queryRaw`SELECT 1 FROM "TenantUser" WHERE tenant_id = ${tenantId} AND user_id = ANY(${userIds}) ORDER BY user_id FOR UPDATE`;
         const members = await tx.tenantUser.findMany({
             where,
             select: { user_id: true, preferences: true, legacy_browser_sections: true },

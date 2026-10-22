@@ -472,5 +472,28 @@ describe('PreferencesService', () => {
             await expect(service.clearSections(db, 't1', ['u1'], [])).resolves.toBe(0);
             expect(db.tenantUser.findMany).not.toHaveBeenCalled();
         });
+
+        it("clearSections locks the listed members' rows, ordered, before reading them", async () => {
+            await service.clearSections(db, 't1', ['u2', 'u1'], ['sidebar']);
+
+            expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+            const [strings, ...values] = db.$queryRaw.mock.calls[0];
+            const sql = strings.join('?');
+            expect(sql).toContain('FOR UPDATE');
+            expect(sql).toContain('ORDER BY user_id');
+            expect(sql).toContain('user_id = ANY(?)');
+            expect(values).toEqual(['t1', ['u2', 'u1']]);
+            expect(db.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+                db.tenantUser.findMany.mock.invocationCallOrder[0],
+            );
+        });
+
+        it('makes no queries at all for an empty userIds list', async () => {
+            await expect(service.clearSections(db, 't1', [], ['sidebar', 'alerts', 'invoicePrint'])).resolves.toBe(0);
+            expect(db.$queryRaw).not.toHaveBeenCalled();
+            expect(db.tenantUser.findMany).not.toHaveBeenCalled();
+            expect(db.tenantUser.updateMany).not.toHaveBeenCalled();
+            expect(db.userAlertPreference.deleteMany).not.toHaveBeenCalled();
+        });
     });
 });
