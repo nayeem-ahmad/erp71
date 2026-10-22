@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type {
+    LegacyBrowserSection,
     MyPreferencesResponse,
     PersonSectionKey,
     PreferenceSource,
@@ -39,6 +40,8 @@ type ResolvedSection = { value: unknown; source: PreferenceSource };
 interface PendingSave {
     /** Every edit since the last send, folded into one request body. */
     body: unknown;
+    /** The first save of a legacy section: `body` is the whole section as the member sees it. */
+    whole: boolean;
     timer: ReturnType<typeof setTimeout>;
     /** The section as it was before the first of those edits. */
     rollback: ResolvedPreferences[PersonSectionKey];
@@ -117,6 +120,19 @@ function mergeBodies(key: PersonSectionKey, earlier: unknown, later: unknown): u
             // tableColumns (per list, replaced whole) and invoicePrint (field by field).
             return { ...earlier, ...later };
     }
+}
+
+/**
+ * The request body that carries a whole section, from the value the member sees.
+ *
+ * The server stores only the submitted ids and, on any save, stops reading the
+ * browser for that section. So while a section is still shown from this
+ * browser's old answers, a change to one list would silently drop every other
+ * list's answers. The first save therefore sends everything the member sees.
+ */
+function wholeSectionBody(key: PersonSectionKey, section: unknown): unknown {
+    if (key === 'tableView' && isRecord(section)) return { global: section.global, tables: section.tables };
+    return section;
 }
 
 function withoutLegacy(data: MyPreferencesResponse, key: PersonSectionKey): MyPreferencesResponse {
@@ -248,8 +264,19 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
 
             const earlier = pending.get(key);
             if (earlier) clearTimeout(earlier.timer);
+            // Still shown from the browser (listed, and not yet the member's own answer)? Then this
+            // save, and any more in the same window, carry the whole section; see wholeSectionBody.
+            const whole =
+                earlier?.whole ??
+                (data.legacy_browser_sections.includes(key as LegacyBrowserSection) &&
+                    data.sections[key].source !== 'member');
             pending.set(key, {
-                body: earlier ? mergeBodies(key, earlier.body, body) : body,
+                body: whole
+                    ? wholeSectionBody(key, optimistic)
+                    : earlier
+                      ? mergeBodies(key, earlier.body, body)
+                      : body,
+                whole,
                 timer: setTimeout(() => flush(key), SAVE_DEBOUNCE_MS),
                 rollback: earlier ? earlier.rollback : data.sections[key],
             });

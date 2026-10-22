@@ -131,6 +131,92 @@ describe('preferences store', () => {
         expect(saveApi).toHaveBeenCalledWith('tableColumns', { orders: { hidden: ['a'] }, invoices: null });
     });
 
+    describe('the first save of a section still shown from the browser', () => {
+        const entryA = { hidden: ['x'] };
+        const entryA2 = { hidden: ['x', 'y'] };
+        const entryB = { order: ['b', 'a'] };
+
+        function legacyColumns(source: 'profile' | 'member') {
+            const base = response({ legacy_browser_sections: ['tableColumns'] });
+            base.sections.tableColumns = { value: { a: entryA }, source };
+            state().hydrate('t1:u1', base);
+        }
+
+        it('first save of a legacy section sends the whole section as seen', async () => {
+            saveApi.mockResolvedValue({ value: { a: entryA2, b: entryB }, source: 'member' });
+            legacyColumns('profile');
+
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+
+            expect(saveApi).toHaveBeenCalledTimes(1);
+            expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2, b: entryB });
+        });
+
+        it('sends the latest whole section when several edits land in one window', async () => {
+            saveApi.mockResolvedValue({ value: {}, source: 'member' });
+            legacyColumns('profile');
+
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
+            state().save('tableColumns', { c: entryB }, { a: entryA2, b: entryB, c: entryB });
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+
+            expect(saveApi).toHaveBeenCalledTimes(1);
+            expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2, b: entryB, c: entryB });
+        });
+
+        it('sends tableView as global and tables', async () => {
+            saveApi.mockResolvedValue({ value: {}, source: 'member' });
+            const base = response({ legacy_browser_sections: ['tableView'] });
+            state().hydrate('t1:u1', base);
+            const optimistic = {
+                global: { ...DEFAULT_SECTION_VALUES.tableView.global, density: 'compact' as const },
+                tables: {},
+            };
+
+            state().save('tableView', { global: { density: 'compact' } }, optimistic);
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+
+            expect(saveApi).toHaveBeenCalledWith('tableView', { global: optimistic.global, tables: optimistic.tables });
+        });
+
+        it('after that, saves send only the partial body', async () => {
+            saveApi.mockResolvedValue({ value: { a: entryA2, b: entryB }, source: 'member' });
+            legacyColumns('profile');
+
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+            saveApi.mockClear();
+
+            state().save('tableColumns', { b: null }, { a: entryA2 });
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+
+            expect(saveApi).toHaveBeenCalledWith('tableColumns', { b: null });
+        });
+
+        it('a member-sourced section never sends the full body even if listed', async () => {
+            saveApi.mockResolvedValue({ value: {}, source: 'member' });
+            legacyColumns('member');
+
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+
+            expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2 });
+        });
+    });
+
     it('a failed save rolls back and raises a toast through the global store', async () => {
         saveApi.mockRejectedValue(new Error('boom'));
         state().hydrate('t1:u1', response({ legacy_browser_sections: ['sidebar'] }));
