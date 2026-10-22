@@ -131,6 +131,10 @@ export function useSalePrintPrefs(): SalePrintPrefs {
     // renders on the server first, where there is no localStorage, and a
     // mismatched first paint is a hydration error.
     useEffect(() => {
+        // The shop request below can outlive this run (the profile may arrive
+        // while it is in flight and re-run the effect); a late answer from a
+        // superseded run must not overwrite the newer one.
+        let cancelled = false;
         const storedSize = storedPaper();
         const fromProfile = profilePaper();
         if (storedSize) {
@@ -145,11 +149,14 @@ export function useSalePrintPrefs(): SalePrintPrefs {
             // screen down, and this runs in a passive effect where a
             // synchronous throw is unrecoverable.
             void tenantPaper().then((fallback) => {
-                if (fallback) setPaperSizeState(fallback);
+                if (!cancelled && fallback) setPaperSizeState(fallback);
             });
         }
 
         setSkipPreviewState(readSkipPreview());
+        return () => {
+            cancelled = true;
+        };
     }, [profileSize, profileSkip]);
 
     const setPaperSize = useCallback((size: PaperSize) => {

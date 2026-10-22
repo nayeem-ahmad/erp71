@@ -148,6 +148,21 @@ describe('useSalePrintPrefs', () => {
         await waitFor(() => expect(result.current.paperSize).toBe('A5'));
     });
 
+    it('paper: a shop answer that lands after the profile does not override it', async () => {
+        let resolveShop!: (value: unknown) => void;
+        getSalesSettings.mockReturnValue(new Promise((resolve) => { resolveShop = resolve; }));
+        const { result } = renderHook(() => useSalePrintPrefs());
+
+        act(() => hydrateProfile({ paperSize: 'Thermal80' }));
+        await waitFor(() => expect(result.current.paperSize).toBe('Thermal80'));
+
+        await act(async () => {
+            resolveShop({ default_paper_size: 'Letter' });
+        });
+
+        expect(result.current.paperSize).toBe('Thermal80');
+    });
+
     it('skip preview: stored value wins over the profile, whichever way', () => {
         hydrateProfile({ skipPreview: true });
         localStorage.setItem(SKIP_KEY, 'false');
