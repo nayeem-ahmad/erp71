@@ -474,6 +474,18 @@ step sync:crm-activity-approval \
 step sync:setup-fee-paid \
     npm run sync:setup-fee-paid --workspace=@erp71/database
 
+# sync:member-prefs-legacy is ONE-SHOT, and must stay so. It gives every member
+# who exists today all three legacy browser sections (table views, table columns,
+# sidebar) so they keep the layout they set up in their browser, and it fills out
+# every stored invoice print layout so a profile cannot change one the member
+# never touched. db push adds the columns empty and never runs migration data
+# steps. Re-running would hand members back to old browser leftovers and give a
+# member who joined after release the same, so the first live run stores a
+# platform_settings marker (sync / member_prefs_legacy) in the same transaction as
+# the work and later deploys skip. See prisma/sync-member-prefs-legacy.ts.
+step sync:member-prefs-legacy \
+    npm run sync:member-prefs-legacy --workspace=@erp71/database
+
 if ! record_prepared; then
     log "WARNING: could not write the marker in $STATE_DIR; the database IS prepared, but the next start will prepare again"
 fi
