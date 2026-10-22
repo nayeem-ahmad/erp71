@@ -16,6 +16,7 @@ import {
     type ColumnSizingState,
     type Row,
     type Column,
+    type Updater,
 } from '@tanstack/react-table';
 import {
     Search,
@@ -421,6 +422,12 @@ export default function DataTable<T>({
     const resolvedSearchPlaceholder = searchPlaceholder ?? t.common.dataTable.searchPlaceholder;
     const prefs = useTablePreferences();
     const savedPrefs = prefs.getPreferences(tableId);
+    /**
+     * What the member has saved for this list, as a comparable key, once their
+     * preferences have loaded — `null` before (and in the modes that never load
+     * them). Watched so the list can follow what loads after it opened.
+     */
+    const personEntryKey = prefs.personColumns ? JSON.stringify(prefs.personColumns[tableId] ?? null) : null;
     const isMdUp = useIsMdUp();
     const { settings: view } = useTableViewSettings(tableId);
     const rowToneClass = viewOptions
@@ -519,6 +526,50 @@ export default function DataTable<T>({
     /** Client-mode page index. In server mode the page lives in `serverPagination`. */
     const [clientPageIndex, setClientPageIndex] = useState(0);
 
+    /*
+     * Column choices are saved only from the viewer's own change — the column
+     * menu, a header drag, the rows-per-page box — never on mount. Saving on
+     * mount would turn whatever the list opened with (the built-in columns, a
+     * profile's, or this browser's before preferences loaded) into the member's
+     * own answer.
+     *
+     * Until the viewer changes one of these on this list, it follows what is
+     * saved: preferences that load after the list opened (a first visit paints
+     * before them) re-seed it, as does a refresh that brings a newer answer.
+     * Once they have changed it, their change stands.
+     */
+    const changedByViewer = useRef({ visibility: false, order: false, pageSize: false });
+    /** What the next change builds on — a second change in one tick lands before the re-render. */
+    const latestVisibility = useRef(columnVisibility);
+    latestVisibility.current = columnVisibility;
+    const latestOrder = useRef(columnOrder);
+    latestOrder.current = columnOrder;
+    const seededFrom = useRef(personEntryKey);
+
+    useEffect(() => {
+        if (personEntryKey === null || personEntryKey === seededFrom.current) return;
+        seededFrom.current = personEntryKey;
+        const saved = prefs.getPreferences(tableId);
+        const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+        if (!changedByViewer.current.visibility) {
+            const next = saved?.columnVisibility ?? {};
+            setColumnVisibility((current) => (same(current, next) ? current : next));
+        }
+        if (!changedByViewer.current.order) {
+            const next = saved?.columnOrder ?? [];
+            setColumnOrder((current) => (same(current, next) ? current : next));
+        }
+        if (!changedByViewer.current.pageSize) {
+            const next = saved?.pageSize ?? d.defaultPageSize;
+            if (next !== pageSize) {
+                setPageSize(next);
+                setClientPageIndex(0);
+            }
+        }
+        // Keyed on what is saved; `prefs` itself changes with every width drag.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [personEntryKey, tableId]);
+
     // UI toggles
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [showExportDialog, setShowExportDialog] = useState(false);
@@ -554,6 +605,27 @@ export default function DataTable<T>({
         () => reconcileColumnOrder(columnOrder, declaredColumnIds),
         [columnOrder, declaredColumnIds],
     );
+
+    const changeColumnVisibility = (updater: Updater<VisibilityState>) => {
+        const next = typeof updater === 'function' ? updater(latestVisibility.current) : updater;
+        latestVisibility.current = next;
+        changedByViewer.current.visibility = true;
+        setColumnVisibility(next);
+        prefs.setColumnVisibility(tableId, next);
+    };
+
+    /**
+     * Applies and saves a new order. It is reconciled first — the saved order can
+     * predate a column — and saved whole, so the stored one stops drifting.
+     */
+    const changeColumnOrder = (updater: Updater<ColumnOrderState>) => {
+        const current = reconcileColumnOrder(latestOrder.current, declaredColumnIds);
+        const next = typeof updater === 'function' ? updater(current) : updater;
+        latestOrder.current = next;
+        changedByViewer.current.order = true;
+        setColumnOrder(next);
+        prefs.setColumnOrder(tableId, next);
+    };
 
     const effectiveColumnVisibility = useMemo(() => {
         if (isMdUp) return columnVisibility;
@@ -632,8 +704,8 @@ export default function DataTable<T>({
         onColumnFiltersChange: (updater) =>
             applyColumnFilters(typeof updater === 'function' ? updater(activeColumnFilters) : updater),
         onGlobalFilterChange: setGlobalFilter,
-        onColumnVisibilityChange: setColumnVisibility,
-        onColumnOrderChange: setColumnOrder,
+        onColumnVisibilityChange: changeColumnVisibility,
+        onColumnOrderChange: changeColumnOrder,
         onColumnSizingChange: setColumnSizing,
         onRowSelectionChange: setRowSelection,
         // `pagination` is supplied in `state`, which makes it fully controlled — so this
@@ -679,22 +751,8 @@ export default function DataTable<T>({
             : undefined,
     });
 
-    // Persist preferences
-    useEffect(() => {
-        prefs.setColumnVisibility(tableId, columnVisibility);
-    }, [columnVisibility]);
-
-    useEffect(() => {
-        prefs.setColumnOrder(tableId, effectiveColumnOrder);
-    }, [effectiveColumnOrder]);
-
-    // Persist the size actually in use, not the client-mode state — in server mode the size
-    // lives in `serverPagination` and the local `pageSize` is an unread default, so writing
-    // that here would overwrite the viewer's real choice with 10 on every mount.
-    useEffect(() => {
-        prefs.setPageSize(tableId, effectivePageSize);
-    }, [effectivePageSize]);
-
+    // Widths are this browser's, and only ever written here. Visibility, order and
+    // page size are saved by the change handlers (see `changedByViewer`), not on mount.
     useEffect(() => {
         Object.entries(columnSizing).forEach(([colId, width]) => {
             prefs.setColumnWidth(tableId, colId, width);
@@ -752,37 +810,35 @@ export default function DataTable<T>({
     }, []);
 
     // DnD column reorder
-    const handleDragEnd = useCallback(
-        (event: DragEndEvent) => {
-            const { active, over } = event;
-            if (!active || !over || active.id === over.id) return;
-            const activeId = String(active.id);
-            const overId = String(over.id);
-            // Neither edge column can be dragged or dropped onto. The headers
-            // below already withhold their grips and leave them out of the
-            // sortable set, so this is the belt to that pair of braces.
-            if (isPinnedColumnId(activeId) || isPinnedColumnId(overId)) return;
-            setColumnOrder((prev) => {
-                // Reconciled first: the saved order can predate a column, and
-                // splicing at an index of -1 would drop the last one instead.
-                const current = reconcileColumnOrder(prev, declaredColumnIds);
-                const from = current.indexOf(activeId);
-                const to = current.indexOf(overId);
-                if (from === -1 || to === -1) return prev;
-                const next = [...current];
-                next.splice(from, 1);
-                next.splice(to, 0, activeId);
-                return next;
-            });
-        },
-        [declaredColumnIds],
-    );
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!active || !over || active.id === over.id) return;
+        const activeId = String(active.id);
+        const overId = String(over.id);
+        // Neither edge column can be dragged or dropped onto. The headers
+        // below already withhold their grips and leave them out of the
+        // sortable set, so this is the belt to that pair of braces.
+        if (isPinnedColumnId(activeId) || isPinnedColumnId(overId)) return;
+        // Reconciled first: the saved order can predate a column, and
+        // splicing at an index of -1 would drop the last one instead.
+        const current = reconcileColumnOrder(latestOrder.current, declaredColumnIds);
+        const from = current.indexOf(activeId);
+        const to = current.indexOf(overId);
+        if (from === -1 || to === -1) return;
+        const next = [...current];
+        next.splice(from, 1);
+        next.splice(to, 0, activeId);
+        changeColumnOrder(next);
+    };
 
     // Routed through the table so both modes take the single path in `onPaginationChange`
     // (which also resets to page 1). Setting `pageSize` here as well would fork that logic
-    // and, in server mode, write a client page size that nothing reads.
+    // and, in server mode, write a client page size that nothing reads. The size saved is
+    // the one picked, in either mode — in server mode it lives in `serverPagination`.
     const handlePageSizeChange = (size: number) => {
+        changedByViewer.current.pageSize = true;
         table.setPageSize(size);
+        prefs.setPageSize(tableId, size);
     };
 
     const handlePreset = (preset: { label: string; filters: ColumnFiltersState }) => {
