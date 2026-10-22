@@ -8,7 +8,9 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
 import { Markdown } from './lazy-markdown';
-import { useTaskImageUpload } from './task-image-upload';
+import { imageKey, imageUrlsIn, urlsDropped, withoutImages } from './task-image-refs';
+import { useTaskFiles } from './task-files';
+import { useTrackedTaskImages } from './use-tracked-task-images';
 
 const DESCRIPTION_MAX = 5000;
 
@@ -49,7 +51,8 @@ export default function DescriptionSection({
     const [editing, setEditing] = useState(false);
     const [value, setValue] = useState(description);
     const [saving, setSaving] = useState(false);
-    const uploadImage = useTaskImageUpload(taskId);
+    const images = useTrackedTaskImages(taskId, description);
+    const { registerDescriptionStrip } = useTaskFiles();
 
     /* A pasted image sits in the text as a placeholder until its upload lands,
        so blurring in between would save the placeholder. The commit waits, and
@@ -57,22 +60,60 @@ export default function DescriptionSection({
     const uploading = useRef(false);
     const pendingCommit = useRef(false);
 
-    useEffect(() => setValue(description), [description]);
+    // Not while editing: a file removed from the Attachments tab rewrites the
+    // saved description, and copying that over the draft would throw away
+    // whatever else was being typed. The draft is updated on its own, below.
+    useEffect(() => {
+        if (!editing) setValue(description);
+    }, [description, editing]);
+
+    useEffect(() => {
+        if (!editing) return;
+        registerDescriptionStrip((keys) => setValue((current) => withoutImages(current, keys)));
+        return () => registerDescriptionStrip(null);
+    }, [editing, registerDescriptionStrip]);
 
     const commit = async () => {
         setEditing(false);
+        const previous = description.trim();
         const next = value.trim();
-        if (next === description.trim()) return;
+        const { shown, abandoned } = images.consume(next);
+        const changed = next !== previous;
+        if (!changed && abandoned.length === 0) return;
+
         setSaving(true);
         try {
-            // '' clears it — the backend stores an empty description as null.
-            await onSaved(await api.updateProjectTask(taskId, { description: next }));
+            if (changed) {
+                // '' clears it — the backend stores an empty description as null.
+                await onSaved(await api.updateProjectTask(taskId, { description: next }));
+            }
         } catch (error) {
+            // The draft is thrown away, so an image that existed only in it
+            // must not stay in Attachments. One the saved text still shows stays.
+            const kept = new Set(imageUrlsIn(description).map(imageKey));
+            const orphaned = [...shown, ...abandoned].filter((item) => !kept.has(imageKey(item.url)));
+            await images.release(description, orphaned);
             setValue(description);
             toast.error(error instanceof Error ? error.message : m.saveFailed);
-        } finally {
             setSaving(false);
+            return;
         }
+
+        // An image taken out of the text leaves the inventory too, unless a
+        // comment still shows it. A file that was only ever an attachment is
+        // not in `abandoned` or `urlsDropped`, so it stays.
+        await images.release(next, [
+            ...abandoned,
+            ...urlsDropped(previous, next).map((url) => ({ url })),
+        ]);
+        setSaving(false);
+    };
+
+    const cancel = () => {
+        const { abandoned } = images.consume(description);
+        setValue(description);
+        setEditing(false);
+        void images.release(description, abandoned);
     };
 
     if (!editing) {
@@ -162,7 +203,8 @@ export default function DescriptionSection({
                     ariaLabel={m.title}
                     onSubmit={commit}
                     showActions
-                    uploadImage={uploadImage}
+                    uploadImage={images.uploadImage}
+                    onImageDiscarded={images.discard}
                     onUploadingChange={(busy) => {
                         uploading.current = busy;
                         if (busy || !pendingCommit.current) return;
@@ -171,10 +213,7 @@ export default function DescriptionSection({
                         pendingCommit.current = false;
                         void commit();
                     }}
-                    onCancel={() => {
-                        setValue(description);
-                        setEditing(false);
-                    }}
+                    onCancel={cancel}
                 />
             </div>
         </CompactSection>

@@ -294,6 +294,30 @@ export function useTaskCard(
         [apply, taskId],
     );
 
+    /**
+     * The Attachments tab's count, moved by a paste or a removal without
+     * re-reading the card. A re-read would replace a description that is
+     * still being edited.
+     */
+    const adjustAttachmentCount = useCallback(
+        (delta: number) => {
+            if (delta === 0) return;
+            markChanged();
+            setTask((current) =>
+                current
+                    ? {
+                          ...current,
+                          _count: {
+                              ...current._count,
+                              attachments: Math.max(0, (current._count?.attachments ?? 0) + delta),
+                          },
+                      }
+                    : current,
+            );
+        },
+        [markChanged],
+    );
+
     /** For the endpoints that answer with something other than the task. */
     const refresh = useCallback(async () => {
         markChanged();
@@ -446,7 +470,7 @@ export function useTaskCard(
         watching, watchBusy, toggleWatch,
         hours, canSaveWork, hoursLeftAfter,
         allLabels, members, membersFailed, stories, sprints, projects, localeInfo,
-        apply, applyWithLog, refresh, markChanged, close,
+        apply, applyWithLog, refresh, markChanged, adjustAttachmentCount, close,
         changeStatus, changePriority, changeSprint, saveWork, deleteEntry,
         onLabelsWanted: () => setLabelsWanted(true),
         onMembersWanted: () => setMembersWanted(true),

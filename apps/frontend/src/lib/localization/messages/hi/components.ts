@@ -267,7 +267,8 @@ export const componentsMessages = {
         link: "लिंक",
         uploading: "छवि अपलोड हो रही है…",
         resizeImage: "छवि का आकार बदलें",
-        pasteImage: "छवि संलग्न करने के लिए पेस्ट करें।",
+        pasteImage: "छवि संलग्न करने के लिए पेस्ट करें। पाठ से हटाने पर फ़ाइल संलग्नकों से भी हट जाती है।",
+        insertImage: "छवि डालें",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

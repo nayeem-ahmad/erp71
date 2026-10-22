@@ -267,7 +267,8 @@ export const componentsMessages = {
         link: 'Link',
         uploading: 'Uploading image…',
         resizeImage: 'Resize image',
-        pasteImage: 'Paste an image to attach it.',
+        pasteImage: 'Paste an image to attach it. Removing it from the text removes the file from Attachments.',
+        insertImage: 'Insert image',
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

@@ -267,7 +267,8 @@ export const componentsMessages = {
             link: "লিংক",
             uploading: "ছবি আপলোড হচ্ছে…",
             resizeImage: "ছবির আকার পরিবর্তন করুন",
-            pasteImage: "ছবি সংযুক্ত করতে পেস্ট করুন।",
+            pasteImage: "ছবি সংযুক্ত করতে পেস্ট করুন। লেখা থেকে সরালে ফাইলটি সংযুক্তি থেকেও সরবে।",
+            insertImage: "ছবি যোগ করুন",
         },
         shareModal: {
             title: "{subject} শেয়ার করুন",
