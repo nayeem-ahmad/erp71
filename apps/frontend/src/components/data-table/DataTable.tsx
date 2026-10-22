@@ -132,6 +132,11 @@ export interface DataTableProps<T> {
      * the query. Leave unset and the box filters the loaded rows.
      */
     onSearchChange?: (query: string) => void;
+    /**
+     * The text the toolbar box shows when the page owns the query. A remembered
+     * search arrives after mount, so the box cannot keep its own copy.
+     */
+    searchValue?: string;
     /** Predefined filter presets */
     filterPresets?: { label: string; filters: ColumnFiltersState }[];
     /**
@@ -400,6 +405,7 @@ export default function DataTable<T>({
     searchPlaceholder,
     showSearch = true,
     onSearchChange,
+    searchValue: searchValueProp,
     filterPresets,
     enableColumnFilters = true,
     density,
@@ -493,10 +499,10 @@ export default function DataTable<T>({
     /** What the box shows when the page owns the query (`onSearchChange`). */
     const [searchText, setSearchText] = useState('');
     const remoteSearch = !!onSearchChange;
-    const searchValue = remoteSearch ? searchText : globalFilter;
+    const shownSearch = remoteSearch ? (searchValueProp ?? searchText) : globalFilter;
     const setSearchValue = (next: string) => {
         if (onSearchChange) {
-            setSearchText(next);
+            if (searchValueProp === undefined) setSearchText(next);
             onSearchChange(next);
         } else {
             setGlobalFilter(next);
@@ -961,10 +967,10 @@ export default function DataTable<T>({
                                 type="text"
                                 placeholder={resolvedSearchPlaceholder}
                                 className={d.searchInput}
-                                value={searchValue}
+                                value={shownSearch}
                                 onChange={(e) => setSearchValue(e.target.value)}
                             />
-                            {searchValue && (
+                            {shownSearch && (
                                 <button
                                     onClick={() => setSearchValue('')}
                                     className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"

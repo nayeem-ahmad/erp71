@@ -149,6 +149,16 @@ describe('DataTable', () => {
         expect(screen.getByText('Gamma Product')).toBeInTheDocument();
     });
 
+    it('shows a search the page already owns, and still reports what is typed', () => {
+        const onSearchChange = jest.fn();
+        render(<DataTable {...defaultProps} onSearchChange={onSearchChange} searchValue="karim" />);
+        const box = screen.getByPlaceholderText('Search...');
+        expect(box).toHaveValue('karim');
+        fireEvent.change(box, { target: { value: 'rahim' } });
+        expect(onSearchChange).toHaveBeenCalledWith('rahim');
+        expect(screen.getByText('Alpha Product')).toBeInTheDocument();
+    });
+
     it('hides the built-in search input when showSearch is false', () => {
         render(<DataTable {...defaultProps} showSearch={false} />);
         expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
