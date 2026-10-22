@@ -1,8 +1,19 @@
 'use client';
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { DEFAULT_SECTION_VALUES } from '@erp71/shared-types';
 import Sidebar from './Sidebar';
+import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
+import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
+
+jest.mock('@/lib/api', () => ({
+    api: {
+        saveMyPreferenceSection: jest.fn(),
+        resetMyPreferenceSection: jest.fn(),
+    },
+}));
+const saveApi = api.saveMyPreferenceSection as jest.Mock;
 
 jest.mock('next/link', () => {
     // Everything else on the props is spread through — the brand mark's
@@ -613,5 +624,112 @@ describe('Sidebar — team chat unread badge', () => {
         fireEvent.click(screen.getByTitle('Collapse sidebar'));
 
         expect(screen.getByTitle('Chat · 1 unread message')).toBeInTheDocument();
+    });
+});
+
+describe('Sidebar — preferences', () => {
+    const hydrate = (device: { sidebarCollapsed?: boolean }, openGroups: string[] = []) =>
+        act(() =>
+            usePreferencesStore.getState().hydrate('t1:u1', {
+                profile: { id: 'p1', name: 'Cashier' },
+                legacy_browser_sections: [],
+                sections: {
+                    invoicePrint: { value: DEFAULT_SECTION_VALUES.invoicePrint, source: 'default' },
+                    tableView: { value: DEFAULT_SECTION_VALUES.tableView, source: 'default' },
+                    tableColumns: { value: DEFAULT_SECTION_VALUES.tableColumns, source: 'default' },
+                    sidebar: { value: { appShellOpenGroups: openGroups }, source: 'profile' },
+                    alerts: { value: DEFAULT_SECTION_VALUES.alerts, source: 'default' },
+                    device: { value: device, source: 'profile' },
+                },
+            }),
+        );
+    const isCollapsed = () => screen.queryByTitle('Expand sidebar') !== null;
+    const settle = () =>
+        act(async () => {
+            jest.advanceTimersByTime(SAVE_DEBOUNCE_MS * 2);
+        });
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        localStorage.clear();
+        usePreferencesStore.getState().clear();
+        saveApi.mockReset();
+        setBranding();
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    describe('collapsed: browser value wins, else device.sidebarCollapsed, else expanded', () => {
+        it('is expanded by default', () => {
+            hydrate({});
+            render(<Sidebar canAccessAccounting />);
+            expect(isCollapsed()).toBe(false);
+        });
+
+        it("starts collapsed from the profile's device setting when this browser has no value", () => {
+            hydrate({ sidebarCollapsed: true });
+            render(<Sidebar canAccessAccounting />);
+            expect(isCollapsed()).toBe(true);
+        });
+
+        it("this browser's stored expanded wins over the profile", () => {
+            localStorage.setItem('sidebar-collapsed', 'false');
+            hydrate({ sidebarCollapsed: true });
+            render(<Sidebar canAccessAccounting />);
+            expect(isCollapsed()).toBe(false);
+        });
+
+        it("this browser's stored collapsed wins over a profile that expands", () => {
+            localStorage.setItem('sidebar-collapsed', 'true');
+            hydrate({ sidebarCollapsed: false });
+            render(<Sidebar canAccessAccounting />);
+            expect(isCollapsed()).toBe(true);
+        });
+
+        it('applies the profile when preferences finish loading after mount', () => {
+            render(<Sidebar canAccessAccounting />);
+            expect(isCollapsed()).toBe(false);
+
+            hydrate({ sidebarCollapsed: true });
+
+            expect(isCollapsed()).toBe(true);
+        });
+
+        it('does not apply the profile after loading when this browser has a value', () => {
+            localStorage.setItem('sidebar-collapsed', 'false');
+            render(<Sidebar canAccessAccounting />);
+
+            hydrate({ sidebarCollapsed: true });
+
+            expect(isCollapsed()).toBe(false);
+        });
+
+        it('toggling writes only the browser key, never the server', async () => {
+            hydrate({ sidebarCollapsed: true });
+            render(<Sidebar canAccessAccounting />);
+
+            fireEvent.click(screen.getByTitle('Expand sidebar'));
+            await settle();
+
+            expect(isCollapsed()).toBe(false);
+            expect(localStorage.getItem('sidebar-collapsed')).toBe('false');
+            expect(saveApi).not.toHaveBeenCalled();
+        });
+    });
+
+    it('classic Sidebar open groups unchanged (still sidebar-open-groups)', async () => {
+        // Even with the person's app-shell groups loaded, the classic sidebar neither
+        // reads them nor saves to them: its groups stay in this browser.
+        hydrate({}, ['accounting:setup']);
+        render(<Sidebar canAccessAccounting canAccessInventoryReports canAccessAccountingAdvanced />);
+        expect(screen.queryByText('Chart of Accounts')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Accounting Reports'));
+        await settle();
+
+        const saved = JSON.parse(localStorage.getItem('sidebar-open-groups') ?? '{}');
+        expect(Object.keys(saved).some((key) => key.endsWith(':reports'))).toBe(true);
+        expect(saveApi).not.toHaveBeenCalled();
     });
 });

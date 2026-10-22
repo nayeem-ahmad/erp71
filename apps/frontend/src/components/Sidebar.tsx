@@ -24,6 +24,7 @@ import { BRAND_NAME } from '@/lib/brand';
 import { useNavLayouts } from '@/contexts/NavLayoutContext';
 import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
+import { usePreferenceSection } from '@/lib/preferences/use-preference-section';
 import type { AppState, PlatformRole } from '@erp71/shared-types';
 import type { ResolvedNavChild, ResolvedNavModule } from '@/lib/nav-resolver';
 import { isNavSubgroup, resolveSidebarModules } from '@/lib/sidebar-modules';
@@ -151,6 +152,12 @@ export default function Sidebar({
     const { tenantLayout, platformAdminLayout } = useNavLayouts();
     const defaultWidth = compactNav ? SIDEBAR_DEFAULT_WIDTH.compact : SIDEBAR_DEFAULT_WIDTH.normal;
     const [collapsed, setCollapsed] = useState(false);
+    // The profile's starting choice for collapsed. This browser's own answer wins, and
+    // toggling is a device setting: it writes only this browser, never the person's
+    // preferences. The open groups below stay in this browser too.
+    const devicePrefs = usePreferenceSection('device');
+    const profileCollapsed = devicePrefs.ready ? devicePrefs.value.sidebarCollapsed : undefined;
+    const collapsedTouchedRef = useRef(false);
     const [width, setWidth] = useState<number>(defaultWidth);
     const [isResizing, setIsResizing] = useState(false);
     // The referee portal has exactly one module holding all of its navigation, so
@@ -324,6 +331,12 @@ export default function Sidebar({
         }
     }, []);
 
+    useEffect(() => {
+        if (profileCollapsed === undefined || collapsedTouchedRef.current) return;
+        if (localStorage.getItem('sidebar-collapsed') !== null) return;
+        setCollapsed(profileCollapsed);
+    }, [profileCollapsed]);
+
     // Tracks the last pathname we auto-opened a section for, so re-renders that
     // change `modules` (locale switch, async nav-layout load, permission change)
     // don't clobber a section the user manually opened on the current page.
@@ -383,6 +396,7 @@ export default function Sidebar({
     useDrawerFocusTrap(asideRef, isOpen, onClose);
 
     const toggleSidebar = () => {
+        collapsedTouchedRef.current = true;
         setCollapsed((prev) => {
             localStorage.setItem('sidebar-collapsed', String(!prev));
             return !prev;

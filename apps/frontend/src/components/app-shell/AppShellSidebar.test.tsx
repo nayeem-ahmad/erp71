@@ -1,10 +1,43 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import {
     DEFAULT_PLATFORM_FEATURES,
+    DEFAULT_SECTION_VALUES,
     resolveAppStates,
     type AppStateInput,
+    type MyPreferencesResponse,
 } from '@erp71/shared-types';
+import { api } from '@/lib/api';
+import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
 import AppShellSidebar from './AppShellSidebar';
+
+jest.mock('@/lib/api', () => ({
+    api: {
+        saveMyPreferenceSection: jest.fn(),
+        resetMyPreferenceSection: jest.fn(),
+    },
+}));
+const saveApi = api.saveMyPreferenceSection as jest.Mock;
+
+function preferences(
+    sidebar: { appShellOpenGroups?: string[] } = {},
+    device: { sidebarCollapsed?: boolean } = {},
+    sidebarSource: 'default' | 'profile' | 'member' = 'profile',
+): MyPreferencesResponse {
+    return {
+        profile: { id: 'p1', name: 'Cashier' },
+        legacy_browser_sections: [],
+        sections: {
+            invoicePrint: { value: DEFAULT_SECTION_VALUES.invoicePrint, source: 'default' },
+            tableView: { value: DEFAULT_SECTION_VALUES.tableView, source: 'default' },
+            tableColumns: { value: DEFAULT_SECTION_VALUES.tableColumns, source: 'default' },
+            sidebar: { value: sidebar, source: sidebarSource },
+            alerts: { value: DEFAULT_SECTION_VALUES.alerts, source: 'default' },
+            device: { value: device, source: 'profile' },
+        },
+    };
+}
+const hydrate = (data: MyPreferencesResponse) =>
+    act(() => usePreferencesStore.getState().hydrate('t1:u1', data));
 
 let mockPathname = '/sales/list';
 let mockIsMdUp = true;
@@ -193,5 +226,202 @@ describe('AppShellSidebar', () => {
         });
 
         expect(screen.getByRole('searchbox')).toHaveFocus();
+    });
+});
+
+describe('AppShellSidebar — preferences', () => {
+    const subgroup = (name: string) => within(panel()).getByRole('button', { name });
+    const reportsOpen = () => subgroup('Accounting Reports').getAttribute('aria-expanded') === 'true';
+    const setupOpen = () => subgroup('Accounting Setup').getAttribute('aria-expanded') === 'true';
+    const settle = () =>
+        act(async () => {
+            jest.advanceTimersByTime(SAVE_DEBOUNCE_MS * 2);
+        });
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        localStorage.clear();
+        usePreferencesStore.getState().clear();
+        saveApi.mockReset();
+        saveApi.mockImplementation(async (_key: string, body: unknown) => ({ value: body, source: 'member' }));
+        mockPathname = '/accounting';
+        mockIsMdUp = true;
+        mockPendingVouchers = 0;
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it("opens the profile's groups for a member with none saved", () => {
+        hydrate(preferences({ appShellOpenGroups: ['accounting:reports'] }));
+        renderShell();
+
+        expect(reportsOpen()).toBe(true);
+        expect(setupOpen()).toBe(false);
+    });
+
+    it('seeds the groups from the profile when preferences finish loading after mount', () => {
+        renderShell();
+        expect(reportsOpen()).toBe(false);
+
+        hydrate(preferences({ appShellOpenGroups: ['accounting:reports'] }));
+
+        expect(reportsOpen()).toBe(true);
+    });
+
+    it('does not reseed once the person has toggled a group', () => {
+        renderShell();
+        fireEvent.click(subgroup('Accounting Setup'));
+
+        hydrate(preferences({ appShellOpenGroups: ['accounting:reports'] }));
+
+        expect(setupOpen()).toBe(true);
+        expect(reportsOpen()).toBe(false);
+    });
+
+    it('without loaded preferences, reads the groups from this browser as before', () => {
+        localStorage.setItem('app-shell-open-groups', JSON.stringify({ 'accounting:reports': true }));
+        renderShell();
+
+        expect(reportsOpen()).toBe(true);
+    });
+
+    it("ignores this browser's groups once preferences have loaded", () => {
+        localStorage.setItem('app-shell-open-groups', JSON.stringify({ 'accounting:reports': true }));
+        hydrate(preferences({ appShellOpenGroups: ['accounting:setup'] }));
+        renderShell();
+
+        expect(setupOpen()).toBe(true);
+        expect(reportsOpen()).toBe(false);
+    });
+
+    it('toggleGroup saves appShellOpenGroups, and writes nothing to the browser', async () => {
+        hydrate(preferences({ appShellOpenGroups: ['accounting:reports'] }));
+        renderShell();
+
+        fireEvent.click(subgroup('Accounting Setup'));
+        expect(setupOpen()).toBe(true);
+        await settle();
+
+        expect(saveApi).toHaveBeenCalledTimes(1);
+        const [key, body] = saveApi.mock.calls[0];
+        expect(key).toBe('sidebar');
+        expect((body as { appShellOpenGroups: string[] }).appShellOpenGroups.slice().sort()).toEqual([
+            'accounting:reports',
+            'accounting:setup',
+        ]);
+        expect(localStorage.getItem('app-shell-open-groups')).toBeNull();
+    });
+
+    it('saves the groups left open after closing one', async () => {
+        hydrate(preferences({ appShellOpenGroups: ['accounting:reports', 'accounting:setup'] }));
+        renderShell();
+
+        fireEvent.click(subgroup('Accounting Reports'));
+        await settle();
+
+        expect(saveApi).toHaveBeenCalledWith('sidebar', { appShellOpenGroups: ['accounting:setup'] });
+    });
+
+    it("opening the current page's group on navigation saves nothing", async () => {
+        mockPathname = '/accounting/reports/pl';
+        hydrate(preferences({ appShellOpenGroups: [] }));
+        const { rerender } = renderShell();
+        expect(reportsOpen()).toBe(true);
+
+        mockPathname = '/accounting/setup/chart-of-accounts';
+        rerender(<AppShellSidebar appStates={states()} planFeatures={PLAN} memberIsOwner memberPermissions={[]} />);
+        await settle();
+
+        expect(saveApi).not.toHaveBeenCalled();
+        expect(localStorage.getItem('app-shell-open-groups')).toBeNull();
+    });
+
+    it('keeps the current page group open when the profile seeds after mount', () => {
+        mockPathname = '/accounting/reports/pl';
+        renderShell();
+
+        hydrate(preferences({ appShellOpenGroups: ['accounting:setup'] }));
+
+        expect(reportsOpen()).toBe(true);
+        expect(setupOpen()).toBe(true);
+    });
+
+    it('without loaded preferences, toggleGroup writes the browser key and not the server', async () => {
+        renderShell();
+
+        fireEvent.click(subgroup('Accounting Setup'));
+        await settle();
+
+        expect(JSON.parse(localStorage.getItem('app-shell-open-groups') as string)).toEqual({ 'accounting:setup': true });
+        expect(saveApi).not.toHaveBeenCalled();
+    });
+
+    it('never writes to the server on mount', async () => {
+        hydrate(preferences({ appShellOpenGroups: ['accounting:reports'] }, { sidebarCollapsed: true }));
+        renderShell();
+        await settle();
+
+        expect(saveApi).not.toHaveBeenCalled();
+    });
+
+    describe('collapsed: browser value wins, else device.sidebarCollapsed, else expanded', () => {
+        const collapsedNow = () => screen.queryByTestId('app-panel') === null;
+
+        it('is expanded by default', () => {
+            hydrate(preferences());
+            renderShell();
+            expect(collapsedNow()).toBe(false);
+        });
+
+        it("starts collapsed from the profile's device setting when this browser has no value", () => {
+            hydrate(preferences({}, { sidebarCollapsed: true }));
+            renderShell();
+            expect(collapsedNow()).toBe(true);
+        });
+
+        it("this browser's stored expanded wins over the profile", () => {
+            localStorage.setItem('app-shell-collapsed', 'false');
+            hydrate(preferences({}, { sidebarCollapsed: true }));
+            renderShell();
+            expect(collapsedNow()).toBe(false);
+        });
+
+        it("this browser's stored collapsed wins over a profile that expands", () => {
+            localStorage.setItem('app-shell-collapsed', 'true');
+            hydrate(preferences({}, { sidebarCollapsed: false }));
+            renderShell();
+            expect(collapsedNow()).toBe(true);
+        });
+
+        it('applies the profile when preferences finish loading after mount', () => {
+            renderShell();
+            expect(collapsedNow()).toBe(false);
+
+            hydrate(preferences({}, { sidebarCollapsed: true }));
+
+            expect(collapsedNow()).toBe(true);
+        });
+
+        it('does not apply the profile after loading when this browser has a value', () => {
+            localStorage.setItem('app-shell-collapsed', 'false');
+            renderShell();
+
+            hydrate(preferences({}, { sidebarCollapsed: true }));
+
+            expect(collapsedNow()).toBe(false);
+        });
+
+        it('toggling writes only the browser key, never the server', async () => {
+            hydrate(preferences({}, { sidebarCollapsed: true }));
+            renderShell();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Expand menu' }));
+            await settle();
+
+            expect(collapsedNow()).toBe(false);
+            expect(localStorage.getItem('app-shell-collapsed')).toBe('false');
+            expect(saveApi).not.toHaveBeenCalled();
+        });
     });
 });
