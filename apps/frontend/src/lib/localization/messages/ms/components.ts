@@ -267,7 +267,8 @@ export const componentsMessages = {
             link: "Pautan",
             uploading: "Memuat naik imej…",
             resizeImage: "Ubah saiz imej",
-            pasteImage: "Tampal imej untuk melampirkannya.",
+            pasteImage: "Tampal imej untuk melampirkannya. Mengeluarkannya daripada teks turut mengeluarkan fail daripada Lampiran.",
+            insertImage: "Sisip imej",
         },
         shareModal: {
             title: "Kongsi {subject}",

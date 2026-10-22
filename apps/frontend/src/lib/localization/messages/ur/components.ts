@@ -267,7 +267,8 @@ export const componentsMessages = {
         link: "لنک",
         uploading: "تصویر اپ لوڈ ہو رہی ہے…",
         resizeImage: "تصویر کا سائز تبدیل کریں",
-        pasteImage: "تصویر منسلک کرنے کے لیے پیسٹ کریں۔",
+        pasteImage: "تصویر منسلک کرنے کے لیے پیسٹ کریں۔ متن سے ہٹانے پر فائل منسلکات سے بھی نکل جاتی ہے۔",
+        insertImage: "تصویر شامل کریں",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the

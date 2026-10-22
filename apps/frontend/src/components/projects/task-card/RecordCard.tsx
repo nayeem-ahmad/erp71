@@ -202,10 +202,20 @@ export default function RecordCard({
             {value != null && (
                 <div className="px-3 pb-4 md:px-4">
                     <TabPanel tabKey="comments" value={value} idPrefix="task-record">
-                        <ActivitySection taskId={task.id} onChanged={card.markChanged} show="comments" />
+                        <ActivitySection
+                            taskId={task.id}
+                            description={task.description ?? ''}
+                            onChanged={card.markChanged}
+                            show="comments"
+                        />
                     </TabPanel>
                     <TabPanel tabKey="activity" value={value} idPrefix="task-record">
-                        <ActivitySection taskId={task.id} onChanged={card.markChanged} show="activity" />
+                        <ActivitySection
+                            taskId={task.id}
+                            description={task.description ?? ''}
+                            onChanged={card.markChanged}
+                            show="activity"
+                        />
                     </TabPanel>
                     <TabPanel tabKey="time" value={value} idPrefix="task-record">
                         <HourLogPanel task={task} card={card} />
@@ -214,7 +224,11 @@ export default function RecordCard({
                         <RemainingPanel task={task} card={card} />
                     </TabPanel>
                     <TabPanel tabKey="attachments" value={value} idPrefix="task-record">
-                        <AttachmentsSection taskId={task.id} />
+                        <AttachmentsSection
+                            taskId={task.id}
+                            description={task.description ?? ''}
+                            onDescriptionSaved={card.apply}
+                        />
                     </TabPanel>
                 </div>
             )}

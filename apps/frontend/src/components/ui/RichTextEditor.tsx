@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Bold, Check, Code, Italic, Link2, List, ListOrdered, Strikethrough, X } from 'lucide-react';
+import { Bold, Check, Code, ImagePlus, Italic, Link2, List, ListOrdered, Strikethrough, X } from 'lucide-react';
 import { useEditor, EditorContent, ReactNodeViewRenderer, type Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import { Placeholder } from '@tiptap/extensions';
@@ -74,6 +74,12 @@ export type RichTextEditorProps = {
      */
     uploadImage?: (file: File) => Promise<PastedImage | null>;
     /**
+     * The image was removed from the text before its upload finished, after
+     * the upload had already kept the file. The caller deletes it: the editor
+     * does not know where the file lives.
+     */
+    onImageDiscarded?: (image: PastedImage) => void;
+    /**
      * Fires when an upload starts and again when the last one lands.
      *
      * Editors that save on blur need it: committing mid-upload would store a
@@ -83,7 +89,7 @@ export type RichTextEditorProps = {
 };
 
 /** Where a pasted image was kept, and what to call it in the markdown. */
-export type PastedImage = { url: string; name?: string };
+export type PastedImage = { url: string; name?: string; id?: string };
 
 /** Distinguishes one in-flight paste from the next. */
 let pasteSequence = 0;
@@ -133,6 +139,7 @@ export function RichTextEditor({
     showActions,
     hideHint,
     uploadImage,
+    onImageDiscarded,
     onUploadingChange,
 }: RichTextEditorProps) {
     const { t } = useI18n();
@@ -162,6 +169,22 @@ export function RichTextEditor({
         return true;
     };
 
+    /*
+     * TipTap keeps the first render's paste and drop handlers. They read these
+     * refs, which every later render fills, so a description that gains an
+     * uploader after it opens still takes a screenshot.
+     */
+    const editorRef = useRef<Editor | null>(null);
+    const pasteActions = useRef({
+        uploadImage,
+        onImageDiscarded,
+        disabled: Boolean(disabled),
+    });
+    pasteActions.current = { uploadImage, onImageDiscarded, disabled: Boolean(disabled) };
+    const fileRef = useRef<HTMLInputElement>(null);
+    /** Where a file chosen from the toolbar is inserted. The dialog can blur the editor. */
+    const insertAt = useRef<number | undefined>(undefined);
+
     const editor = useEditor({
         extensions: [
             // The same list the markdown bridge derives its schema from, with
@@ -187,9 +210,12 @@ export function RichTextEditor({
                 class: 'prose-editor px-3 py-2 text-sm focus:outline-none',
             },
             handlePaste: (_view, event) => handlePaste(event as ClipboardEvent),
+            handleDrop: (view, event, _slice, moved) =>
+                handleDrop(view, event as DragEvent, moved),
         },
         onUpdate: ({ editor }) => onChange(docToMarkdown(editor.state.doc)),
     });
+    editorRef.current = editor;
 
     /*
      * Announced from an effect rather than from the upload itself, so a parent
@@ -257,50 +283,47 @@ export function RichTextEditor({
             landed = null;
         }
 
-        // Gone from the document (the user deleted it, or the editor closed
-        // while it uploaded): nothing left to replace.
-        const at = findPaste(ed, pasteId);
-        if (at) {
-            if (landed) {
-                ed.chain()
-                    .command(({ tr }) => {
-                        tr.setNodeMarkup(at.pos, undefined, {
-                            src: landed!.url,
-                            alt: landed!.name || file.name || 'image',
-                            width: null,
-                            uploading: false,
-                            pasteId: null,
-                        });
-                        return true;
-                    })
-                    .run();
-            } else {
-                ed.chain().deleteRange({ from: at.pos, to: at.pos + at.size }).run();
-            }
+        // Gone from the document — deleted, or the editor closed while it
+        // uploaded. The file was still kept: tell the caller, which is the
+        // one that can delete it. A destroyed editor's document can still
+        // hold the node, and writing into it would keep a file nothing shows.
+        const at = ed.isDestroyed ? null : findPaste(ed, pasteId);
+        if (at && landed) {
+            ed.chain()
+                .command(({ tr }) => {
+                    tr.setNodeMarkup(at.pos, undefined, {
+                        src: landed!.url,
+                        alt: landed!.name || file.name || 'image',
+                        width: null,
+                        uploading: false,
+                        pasteId: null,
+                    });
+                    return true;
+                })
+                .run();
+        } else if (at) {
+            ed.chain().deleteRange({ from: at.pos, to: at.pos + at.size }).run();
+        } else if (landed) {
+            void pasteActions.current.onImageDiscarded?.(landed);
         }
         URL.revokeObjectURL(blobUrl);
         setUploading((n) => n - 1);
     };
 
-    function handlePaste(event: ClipboardEvent): boolean {
-        if (!uploadImage || disabled || !editor) return false;
-        const files = imagesOnClipboard(event.clipboardData);
-        // A paste carrying no image must still paste normally.
-        if (files.length === 0) return false;
-
-        /* Where the caret is — or the end of the document, if it has never
-           been put anywhere. An editor that has not been focused reports a
-           selection at position 0, and an image pasted into a description you
-           have not clicked into belongs after what is already written, not
-           jammed in front of the first word. */
-        const caret = editor.isFocused ? undefined : editor.state.doc.content.size;
-
+    /**
+     * Puts each image in the document at `at` (the caret, when omitted) and
+     * starts its upload. The second image follows the first: inserting every
+     * one at the same position would stack them on top of each other.
+     */
+    function placeImages(ed: Editor, files: File[], at?: number) {
+        const upload = pasteActions.current.uploadImage;
+        if (!upload) return;
+        let position = at;
         for (const file of files) {
             const pasteId = `paste-${(pasteSequence += 1)}`;
             const blobUrl = URL.createObjectURL(file);
-            editor
-                .chain()
-                .focus(caret)
+            ed.chain()
+                .focus(position)
                 // Its own paragraph: a screenshot is not a word in a sentence,
                 // and one pasted at the end of a line would otherwise sit
                 // against the last word with no space between them.
@@ -321,8 +344,45 @@ export function RichTextEditor({
                     },
                 ])
                 .run();
-            void runUpload(uploadImage, editor, file, pasteId, blobUrl);
+            position = undefined;
+            void runUpload(upload, ed, file, pasteId, blobUrl);
         }
+    }
+
+    function handlePaste(event: ClipboardEvent): boolean {
+        const { uploadImage: upload, disabled: off } = pasteActions.current;
+        if (!upload || off) return false;
+        const files = imagesOnClipboard(event.clipboardData);
+        // A paste carrying no image must still paste normally.
+        if (files.length === 0) return false;
+        const ed = editorRef.current;
+        if (!ed) return false;
+
+        /* Where the caret is — or the end of the document, if it has never
+           been put anywhere. An editor that has not been focused reports a
+           selection at position 0, and an image pasted into a description you
+           have not clicked into belongs after what is already written, not
+           jammed in front of the first word. */
+        const caret = ed.isFocused ? undefined : ed.state.doc.content.size;
+        placeImages(ed, files, caret);
+        return true;
+    }
+
+    function handleDrop(
+        view: { posAtCoords: (coords: { left: number; top: number }) => { pos: number } | null },
+        event: DragEvent,
+        moved: boolean,
+    ): boolean {
+        // An image dragged from inside the document is TipTap's own move.
+        if (moved) return false;
+        const { uploadImage: upload, disabled: off } = pasteActions.current;
+        if (!upload || off) return false;
+        const files = imagesOnClipboard(event.dataTransfer);
+        if (files.length === 0) return false;
+        const ed = editorRef.current;
+        if (!ed) return false;
+        const at = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+        placeImages(ed, files, at);
         return true;
     }
 
@@ -367,6 +427,41 @@ export function RichTextEditor({
             }}
         >
             <div className="flex flex-wrap items-center gap-0.5" role="toolbar" aria-label={m.toolbar}>
+                {uploadImage && (
+                    <>
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            title={m.insertImage}
+                            aria-label={m.insertImage}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                                insertAt.current = editor?.state.selection.from;
+                                fileRef.current?.click();
+                            }}
+                            className="flex items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 max-md:min-h-touch max-md:min-w-touch"
+                        >
+                            <ImagePlus className="h-4 w-4" aria-hidden />
+                        </button>
+                        <input
+                            ref={fileRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            tabIndex={-1}
+                            aria-hidden
+                            className="sr-only"
+                            onChange={(event) => {
+                                const files = Array.from(event.target.files ?? []).filter((file) =>
+                                    file.type.startsWith('image/'),
+                                );
+                                event.target.value = '';
+                                if (!editor || files.length === 0) return;
+                                placeImages(editor, files, insertAt.current);
+                            }}
+                        />
+                    </>
+                )}
                 {COMMANDS.map(({ key, Icon }) => (
                     <button
                         key={key}

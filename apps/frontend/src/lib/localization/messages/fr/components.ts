@@ -267,7 +267,8 @@ export const componentsMessages = {
         link: "Lien",
         uploading: "Téléversement de l’image…",
         resizeImage: "Redimensionner l’image",
-        pasteImage: "Collez une image pour la joindre.",
+        pasteImage: "Collez une image pour la joindre. La retirer du texte retire aussi le fichier des pièces jointes.",
+        insertImage: "Insérer une image",
     },
     // Deliberately generic: the same modal is meant to serve storefront products
     // and anything else shareable, so the copy says "this link", never "the
