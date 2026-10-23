@@ -4,6 +4,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreateSalesReturnDto, UpdateSalesReturnDto } from './sales-returns.dto';
 import {
     applyInventoryMovement,
@@ -90,7 +91,12 @@ export class SalesReturnsService {
 
             if (dto.saleId && !sale) throw new BadRequestException('Sale not found');
 
-            const returnNumber = `RET-${Date.now()}`;
+            const returnNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'SALES_RETURN',
+                storeId: dto.storeId,
+                isTaken: numberTakenIn(tx.salesReturn, tenantId, 'return_number'),
+            });
             let totalRefund = 0;
             const returnItemData = [];
 

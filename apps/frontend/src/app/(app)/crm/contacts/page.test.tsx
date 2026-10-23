@@ -57,9 +57,8 @@ const contacts = [
 ];
 
 /** The filters are unlabelled selects, so each is found by an option only it has. */
-function selectByOption(optionText: string): HTMLSelectElement {
-    const option = screen.getByRole('option', { name: optionText });
-    return option.closest('select') as HTMLSelectElement;
+function selectByName(name: string): HTMLSelectElement {
+    return screen.getByRole('combobox', { name }) as HTMLSelectElement;
 }
 
 /**
@@ -119,7 +118,7 @@ describe('ContactsPage — only mine', () => {
 
         fireEvent.click(toggle());
 
-        await waitFor(() => expect(selectByOption('Only mine')).toBeDisabled());
+        await waitFor(() => expect(selectByName('Owner')).toBeDisabled());
     });
 
     it('remembers the choice for the next visit', async () => {

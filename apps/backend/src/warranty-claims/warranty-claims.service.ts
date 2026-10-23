@@ -4,6 +4,7 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { formatZonedDate } from '../common/tenant-time.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreateWarrantyClaimDto, UpdateWarrantyClaimStatusDto } from './warranty-claim.dto';
 
 const VALID_STATUSES = ['SUBMITTED', 'APPROVED', 'REJECTED', 'REPAIRED', 'REPLACED', 'COMPLETED'];
@@ -97,7 +98,12 @@ export class WarrantyClaimsService {
                 ? await tx.sale.findUnique({ where: { id: serial.source_id } })
                 : null;
 
-            const claimNumber = `WC-${Date.now()}`;
+            const claimNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'WARRANTY_CLAIM',
+                storeId: dto.storeId,
+                isTaken: numberTakenIn(tx.warrantyClaim, tenantId, 'claim_number'),
+            });
 
             const claim = await tx.warrantyClaim.create({
                 data: {

@@ -2,6 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { WarrantyClaimsService } from './warranty-claims.service';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'WC-2627-00001'),
+}));
+
 
 describe('WarrantyClaimsService', () => {
     let service: WarrantyClaimsService;
@@ -86,11 +93,17 @@ describe('WarrantyClaimsService', () => {
                 expect.objectContaining({
                     data: expect.objectContaining({
                         tenant_id: 'tenant-1',
+                        claim_number: 'WC-2627-00001',
                         serial_number: 'SN-001',
                         status: 'SUBMITTED',
                     }),
                 }),
             );
+            expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+                tenantId: 'tenant-1',
+                docType: 'WARRANTY_CLAIM',
+                storeId: 'store-1',
+            }));
             expect(tx.productSerial.updateMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({ status: 'CLAIMED' }),

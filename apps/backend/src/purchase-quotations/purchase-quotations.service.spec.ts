@@ -4,6 +4,12 @@ import { PurchaseQuotationsService } from './purchase-quotations.service';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseQuotationDto, UpdatePurchaseQuotationStatusDto } from './purchase-quotation.dto';
 
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async (_tx: unknown, { docType }: { docType: string }) => (docType === 'RFQ' ? 'RFQ-00001' : 'PO-00001')),
+}));
+import { issueDocumentNumber } from '../database/document-number.utils';
+
 describe('PurchaseQuotationsService', () => {
     let service: PurchaseQuotationsService;
     let db: any;
@@ -83,7 +89,11 @@ describe('PurchaseQuotationsService', () => {
             expect(db.store.findFirst).toHaveBeenCalledWith({
                 where: { id: storeId, tenant_id: tenantId },
             });
-            expect(db.purchaseQuotation.count).toHaveBeenCalledWith({ where: { tenant_id: tenantId } });
+            expect(issueDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({
+                tenantId,
+                docType: 'RFQ',
+                storeId,
+            }));
             expect(db.purchaseQuotation.create).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({
@@ -98,9 +108,9 @@ describe('PurchaseQuotationsService', () => {
             expect(result).toEqual(baseRFQ);
         });
 
-        it('generates sequential RFQ numbers', async () => {
+        it('numbers the RFQ from the stored series, checked against every RFQ number', async () => {
             db.store.findFirst.mockResolvedValue({ id: storeId });
-            db.purchaseQuotation.count.mockResolvedValue(9);
+            (issueDocumentNumber as jest.Mock).mockResolvedValueOnce('RFQ-00010');
             db.purchaseQuotation.create.mockResolvedValue({ rfq_number: 'RFQ-00010' });
 
             await service.create(tenantId, baseCreateDto);
@@ -110,6 +120,13 @@ describe('PurchaseQuotationsService', () => {
                     data: expect.objectContaining({ rfq_number: 'RFQ-00010' }),
                 }),
             );
+            const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls[0][1];
+            db.purchaseQuotation.findFirst.mockResolvedValueOnce({ id: 'deleted-earlier' });
+            await expect(isTaken('RFQ-00010')).resolves.toBe(true);
+            expect(db.purchaseQuotation.findFirst).toHaveBeenLastCalledWith({
+                where: { tenant_id: tenantId, rfq_number: 'RFQ-00010' },
+                select: { id: true },
+            });
         });
 
         it('calculates total from items', async () => {
@@ -436,7 +453,7 @@ describe('PurchaseQuotationsService', () => {
             const result = await service.convertToPurchaseOrder(tenantId, rfqId);
 
             expect(db.$transaction).toHaveBeenCalled();
-            expect(db.purchaseOrder.count).toHaveBeenCalledWith({ where: { tenant_id: tenantId } });
+            expect(issueDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({ docType: 'PURCHASE_ORDER' }));
             expect(db.purchaseOrder.create).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({
@@ -467,9 +484,9 @@ describe('PurchaseQuotationsService', () => {
             expect(result).toEqual(createdPO);
         });
 
-        it('generates correct sequential PO number during conversion', async () => {
+        it('numbers the converted PO from the purchase-order series', async () => {
             db.purchaseQuotation.findFirst.mockResolvedValue(rfqWithItems);
-            db.purchaseOrder.count.mockResolvedValue(5);
+            (issueDocumentNumber as jest.Mock).mockResolvedValueOnce('PO-00006');
             db.purchaseOrder.create.mockResolvedValue({ po_number: 'PO-00006' });
             db.purchaseQuotation.update.mockResolvedValue({});
 
@@ -480,6 +497,10 @@ describe('PurchaseQuotationsService', () => {
                     data: expect.objectContaining({ po_number: 'PO-00006' }),
                 }),
             );
+            expect(issueDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({
+                docType: 'PURCHASE_ORDER',
+                storeId: rfqWithItems.store_id,
+            }));
         });
 
         it('maps multiple items correctly to PO items', async () => {

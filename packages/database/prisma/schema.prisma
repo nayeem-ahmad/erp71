@@ -4264,7 +4264,9 @@ model AccountingSettings {
 model DocumentSequence {
   id          String   @id @default(uuid())
   tenant_id   String
-  /// Logical series: QUOTE | PROFORMA | IMPORT_SHIPMENT | SALE.
+  /// Logical series: a `NumberingDocType` (shared-types document-numbering.ts) —
+  /// SALE, PURCHASE, QUOTE, … QUOTE, PROFORMA and IMPORT_SHIPMENT rows predate
+  /// the configurable formats and are read by them unchanged.
   doc_type    String
   /// The reset period this counter belongs to — see `numberingPeriodKey` in
   /// shared-types. "2526" is the fiscal year July 2025 to June 2026 (the form

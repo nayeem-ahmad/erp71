@@ -5,6 +5,12 @@ import { WarehouseTransfersService } from './warehouse-transfers.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
 import { ApprovalNotifier } from '../approvals/approval-notifier';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'TRF-00001'),
+}));
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -111,6 +117,18 @@ describe('WarehouseTransfersService', () => {
                 status: 'SENT',
             }),
             include: expect.any(Object),
+        });
+        expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+            tenantId: 'tenant-1',
+            docType: 'WAREHOUSE_TRANSFER',
+            storeId: 'store-1',
+        }));
+        const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls.at(-1)[1];
+        tx.warehouseTransfer.findFirst.mockResolvedValueOnce({ id: 'transfer-0' });
+        await expect(isTaken('TRF-00001')).resolves.toBe(true);
+        expect(tx.warehouseTransfer.findFirst).toHaveBeenLastCalledWith({
+            where: { tenant_id: 'tenant-1', transfer_number: 'TRF-00001' },
+            select: { id: true },
         });
         expect(applyInventoryMovement).toHaveBeenCalledWith(
             tx,

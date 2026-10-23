@@ -3,6 +3,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { CreateStockTakeSessionDto, UpdateStockTakeCountsDto, UpdateStockTakeStatusDto } from './stock-takes.dto';
 import { autoPostFromRules } from '../accounting/posting.utils';
@@ -13,15 +14,19 @@ export class StockTakesService {
 
     async create(tenantId: string, dto: CreateStockTakeSessionDto) {
         return this.db.$transaction(async (tx) => {
-            await assertWarehouseBelongsToTenant(tx, tenantId, dto.warehouseId);
+            const warehouse = await assertWarehouseBelongsToTenant(tx, tenantId, dto.warehouseId);
             const stockRows = await tx.productStock.findMany({
                 where: { tenant_id: tenantId, warehouse_id: dto.warehouseId },
                 include: { product: true },
                 orderBy: { product: { name: 'asc' } },
             });
 
-            const count = await tx.stockTakeSession.count({ where: { tenant_id: tenantId } });
-            const sessionNumber = `STK-${String(count + 1).padStart(5, '0')}`;
+            const sessionNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'STOCK_TAKE',
+                storeId: warehouse.store_id,
+                isTaken: numberTakenIn(tx.stockTakeSession, tenantId, 'session_number'),
+            });
 
             const session = await tx.stockTakeSession.create({
                 data: {

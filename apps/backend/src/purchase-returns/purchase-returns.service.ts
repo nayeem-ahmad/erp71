@@ -4,6 +4,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreatePurchaseReturnDto, UpdatePurchaseReturnDto } from './purchase-return.dto';
 import {
     applyInventoryMovement,
@@ -122,8 +123,12 @@ export class PurchaseReturnsService {
                 ? await resolveReturnTenders(tx, tenantId, storeId, dto.payments)
                 : null;
 
-            const count = await tx.purchaseReturn.count({ where: { tenant_id: tenantId } });
-            const returnNumber = `PRET-${String(count + 1).padStart(5, '0')}`;
+            const returnNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'PURCHASE_RETURN',
+                storeId,
+                isTaken: numberTakenIn(tx.purchaseReturn, tenantId, 'return_number'),
+            });
             const warehouses = await resolveEntryWarehouses(
                 tx,
                 tenantId,

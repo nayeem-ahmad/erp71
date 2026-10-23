@@ -322,6 +322,16 @@ step sync:store-code \
 step sync:supplier-code \
     npm run sync:supplier-code --workspace=@erp71/database
 
+# sync:document-sequences starts each running document series (PUR-, PRET-, PO-,
+# RFQ-, TRF-, STK-, SHR-, FND-) past the numbers already in use. Those types
+# were numbered count(rows) + 1 and now draw from document_sequences, whose
+# counters would otherwise start at 1 and spend the engine's few skips on
+# numbers that exist. Idempotent (a counter only moves up; only tenants still
+# on the default format), and on later prepares it also covers numbers the old
+# backend issued during a deploy's swap. See prisma/sync-document-sequences.ts.
+step sync:document-sequences \
+    npm run sync:document-sequences --workspace=@erp71/database
+
 # sync:lead-taxonomy plays the same role for CRM lead sources/categories, and
 # additionally backfills Lead.source_id / Lead.category_id from the legacy enum
 # columns. It is idempotent and additive-only, and it degrades to "seed defaults

@@ -6,6 +6,7 @@ import { createdAtRange } from '../common/created-range.util';
 import { zonedDayRange } from '../common/tenant-time.util';
 import { resolveOrderBy, type SortableMap } from '../common/sort.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreatePurchaseDto, CreatePurchasePaymentDto, PurchaseBillDto, UpdatePurchaseDto } from './purchase.dto';
 import { applyInventoryMovement, resolveEntryWarehouses } from '../database/inventory.utils';
 import { costBehaviourFor } from '../database/product-cost.utils';
@@ -244,10 +245,16 @@ export class PurchasesService {
                 }
             }
 
-            const count = await tx.purchase.count({ where: { tenant_id: tenantId } });
-            const purchaseNumber = `PUR-${String(count + 1).padStart(5, '0')}`;
-            // `created_at` is left to the database. This is the bill's own time.
+            // `created_at` is left to the database. This is the bill's own time,
+            // and the period its number belongs to.
             const purchaseDate = resolvePurchaseDate(dto.purchaseDate);
+            const purchaseNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'PURCHASE',
+                storeId: dto.storeId,
+                on: purchaseDate,
+                isTaken: numberTakenIn(tx.purchase, tenantId, 'purchase_number'),
+            });
 
             const purchase = await tx.purchase.create({
                 data: {

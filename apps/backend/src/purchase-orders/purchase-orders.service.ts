@@ -3,6 +3,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderStatusDto } from './purchase-order.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
@@ -38,37 +39,43 @@ export class PurchaseOrdersService {
         const freight = dto.freightAmount ?? 0;
         const total = subtotal + tax + freight - discount;
 
-        const count = await this.db.purchaseOrder.count({ where: { tenant_id: tenantId } });
-        const poNumber = `PO-${String(count + 1).padStart(5, '0')}`;
+        return this.db.$transaction(async (tx) => {
+            const poNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'PURCHASE_ORDER',
+                storeId: dto.storeId,
+                isTaken: numberTakenIn(tx.purchaseOrder, tenantId, 'po_number'),
+            });
 
-        return this.db.purchaseOrder.create({
-            data: {
-                tenant_id: tenantId,
-                store_id: dto.storeId,
-                supplier_id: dto.supplierId,
-                po_number: poNumber,
-                expected_date: dto.expectedDate ? new Date(dto.expectedDate) : undefined,
-                subtotal_amount: subtotal,
-                tax_amount: tax,
-                discount_amount: discount,
-                freight_amount: freight,
-                total_amount: total,
-                notes: dto.notes,
-                created_by: userId,
-                items: {
-                    create: dto.items.map((i) => ({
-                        product_id: i.productId,
-                        quantity: i.quantity,
-                        unit_cost: i.unitCost,
-                        line_total: i.quantity * i.unitCost,
-                    })),
+            return tx.purchaseOrder.create({
+                data: {
+                    tenant_id: tenantId,
+                    store_id: dto.storeId,
+                    supplier_id: dto.supplierId,
+                    po_number: poNumber,
+                    expected_date: dto.expectedDate ? new Date(dto.expectedDate) : undefined,
+                    subtotal_amount: subtotal,
+                    tax_amount: tax,
+                    discount_amount: discount,
+                    freight_amount: freight,
+                    total_amount: total,
+                    notes: dto.notes,
+                    created_by: userId,
+                    items: {
+                        create: dto.items.map((i) => ({
+                            product_id: i.productId,
+                            quantity: i.quantity,
+                            unit_cost: i.unitCost,
+                            line_total: i.quantity * i.unitCost,
+                        })),
+                    },
                 },
-            },
-            include: {
-                supplier: true,
-                store: { select: { name: true } },
-                items: { include: { product: true } },
-            },
+                include: {
+                    supplier: true,
+                    store: { select: { name: true } },
+                    items: { include: { product: true } },
+                },
+            });
         });
     }
 

@@ -20,8 +20,29 @@
  * sale at the till.
  */
 
-/** Document types a tenant can configure. Only sales so far; the rest follow. */
-export const NUMBERING_DOC_TYPES = ['SALE'] as const;
+/**
+ * Document types a tenant can configure. `QUOTE`, `PROFORMA` and
+ * `IMPORT_SHIPMENT` are the names their counters were stored under before they
+ * became configurable, so those counters carry straight over.
+ */
+export const NUMBERING_DOC_TYPES = [
+  'SALE',
+  'SALES_RETURN',
+  'SALES_EXCHANGE',
+  'SALES_ORDER',
+  'QUOTE',
+  'PROFORMA',
+  'WARRANTY_CLAIM',
+  'PURCHASE',
+  'PURCHASE_RETURN',
+  'PURCHASE_ORDER',
+  'RFQ',
+  'IMPORT_SHIPMENT',
+  'WAREHOUSE_TRANSFER',
+  'STOCK_TAKE',
+  'SHRINKAGE',
+  'STOCK_FOUND',
+] as const;
 export type NumberingDocType = (typeof NUMBERING_DOC_TYPES)[number];
 
 export const NUMBERING_RESET_POLICIES = ['NEVER', 'FISCAL_YEAR', 'CALENDAR_YEAR', 'MONTHLY'] as const;
@@ -29,6 +50,72 @@ export type NumberingResetPolicy = (typeof NUMBERING_RESET_POLICIES)[number];
 
 export const NUMBERING_SCOPES = ['TENANT', 'STORE', 'COUNTER'] as const;
 export type NumberingScope = (typeof NUMBERING_SCOPES)[number];
+
+export const NUMBERING_DOC_GROUPS = ['SALES', 'PURCHASES', 'INVENTORY'] as const;
+export type NumberingDocGroup = (typeof NUMBERING_DOC_GROUPS)[number];
+
+export const NUMBERING_DOC_GROUP_LABELS: Record<NumberingDocGroup, string> = {
+  SALES: 'Sales',
+  PURCHASES: 'Purchases',
+  INVENTORY: 'Inventory',
+};
+
+export interface NumberingDocTypeInfo {
+  label: string;
+  /** Lower-case plural, for sentences: "Only new purchase returns change." */
+  plural: string;
+  group: NumberingDocGroup;
+  /** Letters the built-in formats start with: `PUR` in `PUR-00042`. */
+  prefix: string;
+  /**
+   * Who may run a separate series. Only a sale knows the POS counter it was
+   * rung up on, so per-counter numbering is a sales-invoice option alone.
+   */
+  scopes: readonly NumberingScope[];
+  /**
+   * The other type numbered into the same unique column (quotations and
+   * proformas are both `Quotation.quote_number`). The two must not share a
+   * format, or each would keep landing on the other's numbers.
+   */
+  sharesColumnWith?: NumberingDocType;
+}
+
+const BRANCH_SCOPES: readonly NumberingScope[] = ['TENANT', 'STORE'];
+
+export const NUMBERING_DOC_TYPE_INFO: Record<NumberingDocType, NumberingDocTypeInfo> = {
+  SALE: { label: 'Sales invoice', plural: 'sales invoices', group: 'SALES', prefix: 'INV', scopes: NUMBERING_SCOPES },
+  SALES_RETURN: { label: 'Sales return', plural: 'sales returns', group: 'SALES', prefix: 'RET', scopes: BRANCH_SCOPES },
+  SALES_EXCHANGE: { label: 'Sales exchange', plural: 'sales exchanges', group: 'SALES', prefix: 'EXC', scopes: BRANCH_SCOPES },
+  SALES_ORDER: { label: 'Sales order', plural: 'sales orders', group: 'SALES', prefix: 'ORD', scopes: BRANCH_SCOPES },
+  QUOTE: {
+    label: 'Quotation', plural: 'quotations', group: 'SALES', prefix: 'QT', scopes: BRANCH_SCOPES,
+    sharesColumnWith: 'PROFORMA',
+  },
+  PROFORMA: {
+    label: 'Proforma invoice', plural: 'proforma invoices', group: 'SALES', prefix: 'PI', scopes: BRANCH_SCOPES,
+    sharesColumnWith: 'QUOTE',
+  },
+  WARRANTY_CLAIM: { label: 'Warranty claim', plural: 'warranty claims', group: 'SALES', prefix: 'WC', scopes: BRANCH_SCOPES },
+  PURCHASE: { label: 'Purchase', plural: 'purchases', group: 'PURCHASES', prefix: 'PUR', scopes: BRANCH_SCOPES },
+  PURCHASE_RETURN: { label: 'Purchase return', plural: 'purchase returns', group: 'PURCHASES', prefix: 'PRET', scopes: BRANCH_SCOPES },
+  PURCHASE_ORDER: { label: 'Purchase order', plural: 'purchase orders', group: 'PURCHASES', prefix: 'PO', scopes: BRANCH_SCOPES },
+  RFQ: { label: 'Purchase quotation (RFQ)', plural: 'purchase quotations', group: 'PURCHASES', prefix: 'RFQ', scopes: BRANCH_SCOPES },
+  IMPORT_SHIPMENT: { label: 'Import shipment', plural: 'import shipments', group: 'PURCHASES', prefix: 'IMP', scopes: BRANCH_SCOPES },
+  WAREHOUSE_TRANSFER: { label: 'Warehouse transfer', plural: 'warehouse transfers', group: 'INVENTORY', prefix: 'TRF', scopes: BRANCH_SCOPES },
+  STOCK_TAKE: { label: 'Stock take', plural: 'stock takes', group: 'INVENTORY', prefix: 'STK', scopes: BRANCH_SCOPES },
+  SHRINKAGE: {
+    label: 'Shrinkage (stock loss)', plural: 'shrinkage entries', group: 'INVENTORY', prefix: 'SHR', scopes: BRANCH_SCOPES,
+    sharesColumnWith: 'STOCK_FOUND',
+  },
+  STOCK_FOUND: {
+    label: 'Stock found', plural: 'stock-found entries', group: 'INVENTORY', prefix: 'FND', scopes: BRANCH_SCOPES,
+    sharesColumnWith: 'SHRINKAGE',
+  },
+};
+
+export function isNumberingDocType(value: unknown): value is NumberingDocType {
+  return typeof value === 'string' && (NUMBERING_DOC_TYPES as readonly string[]).includes(value);
+}
 
 export const NUMBERING_TOKENS = ['SEQ', 'FY', 'YYYY', 'YY', 'MM', 'STORE', 'COUNTER'] as const;
 export type NumberingToken = (typeof NUMBERING_TOKENS)[number];
@@ -50,16 +137,44 @@ export const NUMBERING_NEXT_NUMBER_MAX = 999_999_999;
 /** Branch codes print inside document numbers, so they are short and plain. */
 export const STORE_CODE_PATTERN = /^[A-Z0-9]{1,6}$/;
 
+const fiscalYearSeries = (prefix: string): DocumentNumberingConfig =>
+  ({ template: `${prefix}-{FY}-{SEQ}`, resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 });
+const runningSeries = (prefix: string): DocumentNumberingConfig =>
+  ({ template: `${prefix}-{SEQ}`, resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5 });
+
 /**
  * What a tenant gets until it saves its own format. Fiscal-year reset because
  * that is the period Bangladeshi VAT returns and audits run on.
+ *
+ * The purchase and inventory documents keep the running `PUR-00042` shape they
+ * had before they were configurable, so nobody's numbering changes on the day
+ * this ships; their counters are seeded past the existing numbers by
+ * `prisma/sync-document-sequences.ts`. The types that were numbered by epoch
+ * millis (`RET-1755764812345`) had no series worth keeping and start one.
  */
 export const DEFAULT_DOCUMENT_NUMBERING: Record<NumberingDocType, DocumentNumberingConfig> = {
-  SALE: { template: 'INV-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'TENANT', seqWidth: 5 },
+  SALE: fiscalYearSeries('INV'),
+  SALES_RETURN: fiscalYearSeries('RET'),
+  SALES_EXCHANGE: fiscalYearSeries('EXC'),
+  SALES_ORDER: fiscalYearSeries('ORD'),
+  QUOTE: fiscalYearSeries('QT'),
+  PROFORMA: fiscalYearSeries('PI'),
+  WARRANTY_CLAIM: fiscalYearSeries('WC'),
+  PURCHASE: runningSeries('PUR'),
+  PURCHASE_RETURN: runningSeries('PRET'),
+  PURCHASE_ORDER: runningSeries('PO'),
+  RFQ: runningSeries('RFQ'),
+  IMPORT_SHIPMENT: fiscalYearSeries('IMP'),
+  WAREHOUSE_TRANSFER: runningSeries('TRF'),
+  STOCK_TAKE: runningSeries('STK'),
+  SHRINKAGE: runningSeries('SHR'),
+  STOCK_FOUND: runningSeries('FND'),
 };
 
-/** Ready-made formats the settings page offers before "Custom". */
-export const DOCUMENT_NUMBERING_PRESETS: { key: string; label: string; config: DocumentNumberingConfig }[] = [
+type NumberingPreset = { key: string; label: string; config: DocumentNumberingConfig };
+
+/** Ready-made sales-invoice formats the settings page offers before "Custom". */
+export const DOCUMENT_NUMBERING_PRESETS: NumberingPreset[] = [
   {
     key: 'fiscal-year',
     label: 'Yearly series (resets every July)',
@@ -81,6 +196,30 @@ export const DOCUMENT_NUMBERING_PRESETS: { key: string; label: string; config: D
     config: { template: 'INV-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 6 },
   },
 ];
+
+/**
+ * The presets for one document type. Sales invoices keep the list above; every
+ * other type gets the same four shapes under its own prefix, so a per-branch
+ * purchase reads `PUR-S1-2627-00001` rather than looking like an invoice.
+ */
+export function documentNumberingPresets(docType: NumberingDocType): NumberingPreset[] {
+  if (docType === 'SALE') return DOCUMENT_NUMBERING_PRESETS;
+  const prefix = NUMBERING_DOC_TYPE_INFO[docType].prefix;
+  return [
+    { key: 'fiscal-year', label: 'Yearly series (resets every July)', config: fiscalYearSeries(prefix) },
+    {
+      key: 'per-branch',
+      label: 'Separate series per branch',
+      config: { template: `${prefix}-{STORE}-{FY}-{SEQ}`, resetPolicy: 'FISCAL_YEAR', scope: 'STORE', seqWidth: 5 },
+    },
+    {
+      key: 'monthly',
+      label: 'Monthly series',
+      config: { template: `${prefix}-{YY}{MM}-{SEQ}`, resetPolicy: 'MONTHLY', scope: 'TENANT', seqWidth: 4 },
+    },
+    { key: 'running', label: 'Running number, never resets', config: runningSeries(prefix) },
+  ];
+}
 
 export const NUMBERING_RESET_LABELS: Record<NumberingResetPolicy, string> = {
   NEVER: 'Never',
@@ -153,9 +292,10 @@ export function templateUsesToken(template: string, token: NumberingToken): bool
 
 /**
  * Every reason this format cannot be saved, in the order the owner should fix
- * them. Empty when it is valid.
+ * them. Empty when it is valid. With `docType`, also refuses a scope that type
+ * cannot be numbered by.
  */
-export function validateNumberingConfig(config: DocumentNumberingConfig): string[] {
+export function validateNumberingConfig(config: DocumentNumberingConfig, docType?: NumberingDocType): string[] {
   const errors: string[] = [];
   const template = typeof config.template === 'string' ? config.template.trim() : '';
 
@@ -168,6 +308,8 @@ export function validateNumberingConfig(config: DocumentNumberingConfig): string
   }
   if (!(NUMBERING_SCOPES as readonly string[]).includes(config.scope)) {
     errors.push('Choose who shares a series.');
+  } else if (docType && !NUMBERING_DOC_TYPE_INFO[docType].scopes.includes(config.scope)) {
+    errors.push(`${NUMBERING_DOC_TYPE_INFO[docType].label} numbers cannot run a separate series per POS counter.`);
   }
   if (
     !Number.isInteger(config.seqWidth)

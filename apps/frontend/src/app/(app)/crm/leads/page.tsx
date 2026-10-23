@@ -3,20 +3,21 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, RefreshCw, Search, Eye, Trash2, Upload, Clock, ExternalLink, LayoutList, Kanban, Pencil } from 'lucide-react';
+import { Plus, RefreshCw, Eye, Trash2, Upload, ExternalLink, LayoutList, Kanban, Pencil } from 'lucide-react';
 import { api, ApiError, type BulkLeadChanges } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter, type BulkAction } from '@/components/data-table';
+import { DataTable, FilterBar, createdAtColumn, type BulkAction, type ResolvedListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, PageHeader, Button, Select, StatusBadge, Input, ConfirmDialog } from '@/components/ui';
+import { PageShell, PageHeader, Button, Select, StatusBadge, ConfirmDialog, buttonClassName, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { compactDensity } from '@/lib/ui/compact-density';
+import { useIsMdUp } from '@/hooks/useMediaQuery';
 import {
     LEAD_PRIORITIES,
     LEAD_STATUSES,
@@ -29,7 +30,7 @@ import { useCrmMineOnly } from '@/lib/crm-scope';
 import MineOnlyToggle from '@/components/crm/MineOnlyToggle';
 import Avatar from '@/components/Avatar';
 import BulkEditLeadsModal from '@/components/crm/BulkEditLeadsModal';
-import { leadPriorityColor, leadScoreColor } from '@/lib/lead-badges';
+
 import LeadsBoard from '@/components/crm/leads-board/LeadsBoard';
 import { useLeadsView } from '@/components/crm/leads-board/use-leads-view';
 import {
@@ -75,6 +76,23 @@ interface Lead {
 
 const columnHelper = createColumnHelper<Lead>();
 
+const PRIORITY_TONE: Record<string, StatusBadgeTone> = {
+    LOW: 'neutral',
+    MEDIUM: 'info',
+    HIGH: 'warning',
+    URGENT: 'danger',
+};
+
+function priorityTone(priority: string): StatusBadgeTone {
+    return PRIORITY_TONE[priority] ?? 'neutral';
+}
+
+function scoreTone(score: number): StatusBadgeTone {
+    if (score >= 70) return 'success';
+    if (score >= 40) return 'warning';
+    return 'neutral';
+}
+
 /**
  * A free-text column's cell. The table lays out with a fixed width per column,
  * so an address or a paragraph of remarks would otherwise wrap the row several
@@ -84,7 +102,7 @@ const columnHelper = createColumnHelper<Lead>();
 function TextCell({ value }: { value: string | null }) {
     if (!value) return <>—</>;
     return (
-        <span className="block truncate text-gray-700" title={value}>
+        <span className="block truncate" title={value}>
             {value}
         </span>
     );
@@ -204,6 +222,7 @@ const LEAD_IMPORT_FIELDS: ImportField[] = [
 
 function LeadsPage() {
     const { t, locale, fmt } = useI18n();
+    const isMdUp = useIsMdUp();
     const m = t.crm.leads;
     const c = t.common;
     const scopeCopy = t.crm.scope;
@@ -563,7 +582,7 @@ function LeadsPage() {
                     <Avatar src={info.row.original.photo_url} name={info.row.original.name} />
                     <Link
                         href={routes.crm.leadDetail(info.row.original.id)}
-                        className="font-semibold text-gray-900 hover:text-primary"
+                        className="text-blue-600 hover:underline"
                     >
                         {info.getValue()}
                     </Link>
@@ -594,19 +613,22 @@ function LeadsPage() {
             id: 'category',
             header: m.fields.category,
             cell: (info) => (info.getValue() as string) || '—',
+            enableColumnFilter: false,
         }),
         columnHelper.accessor((row) => row.sourceOption?.name ?? row.source ?? '', {
             id: 'source',
             header: m.columns.source,
             cell: (info) => (info.getValue() as string) || '—',
+            enableColumnFilter: false,
             meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('priority', {
             header: m.fields.priority,
+            enableColumnFilter: false,
             cell: (info) => (
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${leadPriorityColor(info.getValue())}`}>
+                <StatusBadge tone={priorityTone(info.getValue())}>
                     {priorityLabel(info.getValue())}
-                </span>
+                </StatusBadge>
             ),
         }),
         // The stage's own name is the value, so a CSV export says "Negotiation"
@@ -614,6 +636,7 @@ function LeadsPage() {
         columnHelper.accessor((row) => leadStatusLabel(row, m.statuses), {
             id: 'status',
             header: m.columns.status,
+            enableColumnFilter: false,
             cell: (info) => (
                 <StatusBadge tone={leadStatusTone(info.row.original.status)}>
                     {info.getValue() as string}
@@ -628,14 +651,15 @@ function LeadsPage() {
             header: m.fields.owner,
             cell: (info) => info.getValue()?.name ?? '—',
             enableSorting: false,
+            enableColumnFilter: false,
         }),
         columnHelper.accessor('score', {
             header: m.fields.score,
-            cell: (info) => (
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${leadScoreColor(info.getValue() ?? 0)}`}>
-                    {info.getValue() ?? 0}
-                </span>
-            ),
+            meta: { align: 'end' },
+            cell: (info) => {
+                const score = info.getValue() ?? 0;
+                return <StatusBadge tone={scoreTone(score)}>{score}</StatusBadge>;
+            },
         }),
         // The three `next_step*` columns are deliberately not rendered. They are a
         // read-only rollup of the earliest PLANNED CrmActivity, so every value they
@@ -680,7 +704,7 @@ function LeadsPage() {
             columnHelper.accessor((row) => row.custom_fields?.[def.key] ?? '', {
                 id: `cf_${def.key}`,
                 header: def.label,
-                cell: (info) => <span className="text-gray-700">{info.getValue() as string}</span>,
+                cell: (info) => (info.getValue() as string) || '—',
                 enableSorting: false,
             }),
         ),
@@ -691,29 +715,16 @@ function LeadsPage() {
             cell: (info) => {
                 const lead = info.row.original;
                 return (
-                    <div className="flex items-center justify-end gap-1">
-                        <Link
-                            href={routes.crm.leadDetail(lead.id)}
-                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={c.view}
-                        >
-                            <Eye className="w-4 h-4" />
-                        </Link>
-                        <button
-                            type="button"
-                            onClick={() => setPendingDelete(lead)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-danger-light transition-colors"
-                            title={c.delete}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <RowActions>
+                        <RowActionButton icon={<Eye />} label={c.view} href={routes.crm.leadDetail(lead.id)} />
+                        <RowActionButton icon={<Trash2 />} label={c.delete} intent="danger" onClick={() => setPendingDelete(lead)} />
+                    </RowActions>
                 );
             },
             enableSorting: false,
             enableColumnFilter: false,
             enableResizing: false,
-            size: 90,
+            size: 96,
         }),
     ], [m, c, locale, statusLabel, priorityLabel, customFieldDefs]);
 
@@ -724,6 +735,103 @@ function LeadsPage() {
         ],
         [customFieldDefs],
     );
+
+    const statusFilterOptions = useMemo(() => {
+        const options: { value: string; label: string }[] = [
+            { value: OPEN_STATUS_FILTER, label: m.openPipeline },
+        ];
+        if (allStatusOptions.length > 0) {
+            if (LEAD_STATUSES.includes(statusFilter as (typeof LEAD_STATUSES)[number])) {
+                options.push({ value: statusFilter, label: statusLabel(statusFilter) });
+            }
+            for (const option of allStatusOptions) {
+                const name = stageOptionLabel(option, m.statuses);
+                options.push({
+                    value: option.id,
+                    label: option.is_active ? name : `${name} (${t.crm.leadTaxonomy.inactive})`,
+                });
+            }
+        } else {
+            for (const status of LEAD_STATUSES) options.push({ value: status, label: statusLabel(status) });
+        }
+        return options;
+    }, [allStatusOptions, statusFilter, statusLabel, m.openPipeline, m.statuses, t.crm.leadTaxonomy.inactive]);
+
+    const listFilters = useMemo<ResolvedListFilter[]>(() => [
+        {
+            id: 'status',
+            type: 'select',
+            label: m.columns.status,
+            value: statusFilter || null,
+            onChange: (next) => setFilter('status', next ?? ''),
+            options: statusFilterOptions,
+        },
+        {
+            id: 'category',
+            type: 'select',
+            label: m.fields.category,
+            value: categoryFilter || null,
+            onChange: (next) => setFilter('category', next ?? ''),
+            options: categoryOptions.map((category) => ({ value: category.id, label: category.name })),
+        },
+        {
+            id: 'source',
+            type: 'select',
+            label: m.columns.source,
+            value: sourceFilter || null,
+            onChange: (next) => setFilter('source', next ?? ''),
+            options: sourceOptions.map((source) => ({ value: source.id, label: source.name })),
+        },
+        {
+            id: 'priority',
+            type: 'select',
+            label: m.fields.priority,
+            value: priorityFilter || null,
+            onChange: (next) => setFilter('priority', next ?? ''),
+            options: LEAD_PRIORITIES.map((priority) => ({ value: priority, label: priorityLabel(priority) })),
+        },
+        {
+            id: 'owner',
+            type: 'select',
+            label: m.fields.owner,
+            value: mineOnly ? null : (ownerFilter || null),
+            onChange: (next) => setFilter('owner', next ?? ''),
+            disabled: mineOnly,
+            title: mineOnly ? scopeCopy.ownerLockedHint : undefined,
+            options: [
+                { value: 'unassigned', label: m.fields.unassigned },
+                ...memberOptions.map((member) => ({ value: member.id, label: member.label })),
+            ],
+        },
+        {
+            id: 'email',
+            type: 'select',
+            label: m.fields.email,
+            value: emailFilter || null,
+            onChange: (next) => setFilter('email', next ?? ''),
+            options: [
+                { value: 'has', label: m.hasEmail },
+                { value: 'empty', label: m.noEmail },
+            ],
+        },
+        {
+            id: 'created',
+            type: 'date-range',
+            value: createdRange,
+            onChange: (next) => setFilter('createdRange', next),
+        },
+        {
+            id: 'stale',
+            type: 'toggle',
+            label: fmt(m.noActivityFilter, { days: staleDays }),
+            pressed: staleOnly,
+            onChange: (next) => setFilter('staleOnly', next),
+        },
+    ], [
+        m, statusFilter, statusFilterOptions, categoryFilter, categoryOptions, sourceFilter, sourceOptions,
+        priorityFilter, priorityLabel, mineOnly, ownerFilter, scopeCopy.ownerLockedHint, memberOptions,
+        emailFilter, createdRange, fmt, staleDays, staleOnly, setFilter,
+    ]);
 
     const bulkActions: BulkAction<Lead>[] = useMemo(
         () => [
@@ -755,6 +863,12 @@ function LeadsPage() {
                 )}
                 actions={
                     <>
+                        <MineOnlyToggle
+                            value={mineOnly}
+                            onChange={setMineOnly}
+                            label={scopeCopy.mineOnly}
+                            title={scopeCopy.mineOnlyHint}
+                        />
                         <div role="group" aria-label={m.board.view} className="inline-flex rounded-md border border-gray-200 bg-white p-0.5">
                             {([
                                 ['list', m.board.listView, <LayoutList key="list" className="w-4 h-4" />],
@@ -779,115 +893,23 @@ function LeadsPage() {
                         <Button variant="secondary" onClick={() => setImportOpen(true)} leftIcon={<Upload className="w-4 h-4" />}>
                             Import
                         </Button>
-                        <Link
-                            href={routes.crm.leadNew}
-                            className={`${compactDensity.btnPrimary} bg-blue-600 text-white hover:bg-blue-700`}
-                        >
+                        <Link href={routes.crm.leadNew} className={buttonClassName()}>
                             <Plus className="w-4 h-4" /> {m.newLead}
                         </Link>
                     </>
                 }
             />
 
-            <div className="flex flex-wrap gap-3 items-center">
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <Input
+            {view === 'board' && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <input
+                        type="text"
                         value={search}
-                        onChange={(e) => { setTyping(true); setFilter('search', e.target.value); }}
                         placeholder={m.searchPlaceholder}
-                        className="ps-9"
+                        onChange={(e) => { setTyping(true); setFilter('search', e.target.value); }}
+                        className="min-w-[200px] max-w-sm flex-1 rounded-md border border-gray-200 px-3 py-1.5 text-sm"
                     />
-                </div>
-                {/* The scope, not a filter: it outlives the tab and is shared with
-                    the Overview and the other CRM lists. First in the row because
-                    it decides what every control after it is narrowing. */}
-                <MineOnlyToggle
-                    value={mineOnly}
-                    onChange={setMineOnly}
-                    label={scopeCopy.mineOnly}
-                    title={scopeCopy.mineOnlyHint}
-                />
-                {/* The dashboard's stale tile links straight here. A visible,
-                    togglable control rather than an invisible URL filter, so a
-                    shortened list always says why it is short — and can be
-                    widened again without editing the address bar. */}
-                <button
-                    type="button"
-                    onClick={() => setFilter('staleOnly', !staleOnly)}
-                    aria-pressed={staleOnly}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                        staleOnly
-                            ? 'bg-primary text-white border-primary hover:bg-primary-hover'
-                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                    }`}
-                >
-                    <Clock className="w-4 h-4" />
-                    {fmt(m.noActivityFilter, { days: staleDays })}
-                </button>
-                <Select value={statusFilter} onChange={(e) => setFilter('status', e.target.value)} className="w-auto max-w-[180px]">
-                    <option value="">{m.allStatuses}</option>
-                    {/* Mirrors OPEN_LEAD_STATUS_FILTER in crm-leads.dto.ts. The
-                        three working stages as one choice — what the dashboard's
-                        attention tiles count, and so what their links open. */}
-                    <option value={OPEN_STATUS_FILTER}>{m.openPipeline}</option>
-                    {allStatusOptions.length > 0 ? (
-                        <>
-                            {/* A lifecycle from an older link stays visible as the selection. */}
-                            {LEAD_STATUSES.includes(statusFilter as (typeof LEAD_STATUSES)[number]) && (
-                                <option value={statusFilter}>{statusLabel(statusFilter)}</option>
-                            )}
-                            {allStatusOptions.map((o) => (
-                                <option key={o.id} value={o.id}>
-                                    {o.is_active
-                                        ? stageOptionLabel(o, m.statuses)
-                                        : `${stageOptionLabel(o, m.statuses)} (${t.crm.leadTaxonomy.inactive})`}
-                                </option>
-                            ))}
-                        </>
-                    ) : (
-                        LEAD_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)
-                    )}
-                </Select>
-                <Select value={categoryFilter} onChange={(e) => setFilter('category', e.target.value)} className="w-auto max-w-[180px]">
-                    <option value="">{m.allCategories}</option>
-                    {categoryOptions.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                </Select>
-                <Select value={sourceFilter} onChange={(e) => setFilter('source', e.target.value)} className="w-auto max-w-[180px]">
-                    <option value="">{m.allSources}</option>
-                    {sourceOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </Select>
-                <Select value={priorityFilter} onChange={(e) => setFilter('priority', e.target.value)} className="w-auto max-w-[180px]">
-                    <option value="">{m.allPriorities}</option>
-                    {LEAD_PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
-                </Select>
-                {/* Disabled rather than hidden while the scope is on: the API pins
-                    the owner to the caller either way, and a control that still
-                    looked live would be offering a choice it could not honour. */}
-                <Select
-                    value={mineOnly ? '' : ownerFilter}
-                    onChange={(e) => setFilter('owner', e.target.value)}
-                    disabled={mineOnly}
-                    title={mineOnly ? scopeCopy.ownerLockedHint : undefined}
-                    className="w-auto max-w-[180px]"
-                >
-                    <option value="">{mineOnly ? scopeCopy.mineOnly : m.allOwners}</option>
-                    {/* Mirrors UNASSIGNED_OWNER_FILTER in crm-leads.dto.ts. Every lead
-                        created before the owner field existed is unowned, so reaching
-                        them to distribute is the main use of this filter. */}
-                    <option value="unassigned">{m.fields.unassigned}</option>
-                    {memberOptions.map((mem) => <option key={mem.id} value={mem.id}>{mem.label}</option>)}
-                </Select>
-                {/* Presence, not a value match — free-text search already covers
-                    the address itself. "No email" is the one that earns the
-                    control: it lists the leads no campaign can reach. */}
-                <Select value={emailFilter} onChange={(e) => setFilter('email', e.target.value)} className="w-auto max-w-[180px]">
-                    <option value="">{m.allEmails}</option>
-                    <option value="has">{m.hasEmail}</option>
-                    <option value="empty">{m.noEmail}</option>
-                </Select>
-                <CreatedRangeFilter value={createdRange} onChange={(next) => setFilter('createdRange', next)} />
-                {view === 'board' && (
+                    <FilterBar filters={listFilters} compact={!isMdUp} />
                     <label className="flex items-center gap-2 text-sm text-gray-600">
                         {m.board.groupBy}
                         <Select
@@ -903,8 +925,8 @@ function LeadsPage() {
                             ))}
                         </Select>
                     </label>
-                )}
-            </div>
+                </div>
+            )}
 
             {accessDenied && (
                 <div className="mb-4 rounded-md border border-red-200 bg-danger-light px-4 py-3 text-sm font-semibold text-danger-text">
@@ -927,7 +949,11 @@ function LeadsPage() {
                     data={leads}
                     columns={columns}
                     isLoading={loading}
-                    showSearch={false}
+                    searchPlaceholder={m.searchPlaceholder}
+                    searchValue={search}
+                    onSearchChange={(value) => { setTyping(true); setFilter('search', value); }}
+                    filters={listFilters}
+                    viewOptions
                     serverPagination={{
                         total,
                         page,

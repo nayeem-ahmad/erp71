@@ -116,6 +116,66 @@ describe('DocumentNumberingPage', () => {
         })));
     });
 
+    describe('other document types', () => {
+        const purchase = {
+            ...loaded,
+            docType: 'PURCHASE',
+            config: { template: 'PUR-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 5 },
+            sequences: [{ periodKey: '', scopeKey: '', nextNumber: 1849 }],
+        };
+
+        beforeEach(() => {
+            api.getDocumentNumbering.mockImplementation(async (type: string) => (type === 'PURCHASE' ? purchase : loaded));
+        });
+        afterEach(() => window.history.replaceState(null, '', '/'));
+
+        it('opens the document the link names, with only the series it can run', async () => {
+            window.history.replaceState(null, '', '/settings/document-numbering?type=purchase');
+
+            render(<DocumentNumberingPage />);
+
+            expect(await screen.findByText('Purchase number')).toBeInTheDocument();
+            expect(screen.getByText('PUR-01849', { selector: '.font-semibold' })).toBeInTheDocument();
+            expect(api.getDocumentNumbering).toHaveBeenCalledWith('PURCHASE');
+            expect(api.getDocumentNumbering).not.toHaveBeenCalledWith('SALE');
+            const scopes = Array.from((screen.getByLabelText('Series') as HTMLSelectElement).options).map((o) => o.value);
+            expect(scopes).toEqual(['TENANT', 'STORE']);
+            // Presets carry the document's own prefix.
+            fireEvent.change(screen.getByLabelText('Start from'), { target: { value: 'fiscal-year' } });
+            expect(screen.getByText('PUR-2627-00001', { selector: '.font-semibold' })).toBeInTheDocument();
+        });
+
+        it('switches document and saves under it', async () => {
+            render(<DocumentNumberingPage />);
+            fireEvent.change(await screen.findByLabelText('Document'), { target: { value: 'PURCHASE' } });
+
+            expect(await screen.findByText('Purchase number')).toBeInTheDocument();
+            expect(window.location.search).toBe('?type=PURCHASE');
+            fireEvent.change(screen.getByLabelText('Whole business'), { target: { value: '2000' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+            await waitFor(() => expect(api.updateDocumentNumbering).toHaveBeenCalledWith('PURCHASE', expect.objectContaining({
+                template: 'PUR-{SEQ}',
+                nextNumbers: [{ scopeKey: '', nextNumber: 2000 }],
+            })));
+        });
+
+        it('asks before discarding unsaved changes', async () => {
+            render(<DocumentNumberingPage />);
+            fireEvent.change(await screen.findByLabelText(/Format/), { target: { value: 'BILL-{FY}-{SEQ}' } });
+
+            fireEvent.change(screen.getByLabelText('Document'), { target: { value: 'PURCHASE' } });
+            fireEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
+            expect(screen.getByLabelText(/Format/)).toHaveValue('BILL-{FY}-{SEQ}');
+            expect(api.getDocumentNumbering).not.toHaveBeenCalledWith('PURCHASE');
+
+            fireEvent.change(screen.getByLabelText('Document'), { target: { value: 'PURCHASE' } });
+            fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
+            expect(await screen.findByText('Purchase number')).toBeInTheDocument();
+            expect(screen.getByLabelText(/Format/)).toHaveValue('PUR-{SEQ}');
+        });
+    });
+
     it('says so when the page cannot load', async () => {
         api.getDocumentNumbering.mockRejectedValue(new Error('Forbidden'));
 

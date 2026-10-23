@@ -4,6 +4,12 @@ import { DatabaseService } from '../database/database.service';
 import { StockTakesService } from './stock-takes.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'STK-00001'),
+}));
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -45,7 +51,7 @@ describe('StockTakesService', () => {
         }).compile();
 
         service = module.get(StockTakesService);
-        (assertWarehouseBelongsToTenant as jest.Mock).mockResolvedValue({ id: 'wh-1' });
+        (assertWarehouseBelongsToTenant as jest.Mock).mockResolvedValue({ id: 'wh-1', store_id: 'store-1' });
         (applyInventoryMovement as jest.Mock).mockResolvedValue(0);
         (autoPostFromRules as jest.Mock).mockResolvedValue({
             postingStatus: 'posted',
@@ -68,6 +74,11 @@ describe('StockTakesService', () => {
             data: expect.objectContaining({ session_number: 'STK-00001', status: 'COUNTING' }),
             include: expect.any(Object),
         });
+        expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+            tenantId: 'tenant-1',
+            docType: 'STOCK_TAKE',
+            storeId: 'store-1',
+        }));
         expect(result.summary.totalExpectedQuantity).toBe(7);
     });
 

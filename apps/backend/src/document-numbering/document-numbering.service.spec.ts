@@ -116,7 +116,7 @@ describe('DocumentNumberingService', () => {
 
         it('refuses a document type that is not configurable', async () => {
             const service = new DocumentNumberingService(makeDb().db, audit as any);
-            await expect(service.get('t1', 'PURCHASE')).rejects.toThrow(NotFoundException);
+            await expect(service.get('t1', 'PRODUCT_DEMAND')).rejects.toThrow(NotFoundException);
         });
     });
 
@@ -149,6 +149,48 @@ describe('DocumentNumberingService', () => {
                 .rejects.toThrow(BadRequestException);
             expect(db.$transaction).not.toHaveBeenCalled();
             expect(tx.documentNumbering.upsert).not.toHaveBeenCalled();
+        });
+
+        it('refuses per-counter numbering for a document that has no POS counter', async () => {
+            const { db } = makeDb();
+            const service = new DocumentNumberingService(db, audit as any);
+
+            await expect(service.update(CTX, 'PURCHASE', {
+                template: 'PUR-{STORE}{COUNTER}-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'COUNTER', seqWidth: 5,
+            })).rejects.toThrow(/cannot run a separate series per POS counter/);
+            expect(db.$transaction).not.toHaveBeenCalled();
+        });
+
+        it('refuses a quotation format the proforma series already prints', async () => {
+            const { db, tx } = makeDb();
+            const service = new DocumentNumberingService(db, audit as any);
+            // No saved PROFORMA row: its default PI-{FY}-{SEQ} is what it prints.
+            await expect(service.update(CTX, 'QUOTE', { ...valid, template: 'pi-{fy}-{seq}' })).resolves.toBeDefined();
+            await expect(service.update(CTX, 'QUOTE', { ...valid, template: 'PI-{fy}-{seq}' }))
+                .rejects.toThrow(/Quotations and proforma invoices share one number series/);
+
+            tx.documentNumbering.upsert.mockClear();
+            tx.documentNumbering.findUnique.mockImplementation(async ({ where }: any) =>
+                where.tenant_id_doc_type.doc_type === 'SHRINKAGE'
+                    ? { template: 'ADJ-{SEQ}', reset_policy: 'NEVER', scope: 'TENANT', seq_width: 5 }
+                    : null);
+            await expect(service.update(CTX, 'STOCK_FOUND', {
+                template: 'ADJ-{SEQ}', resetPolicy: 'NEVER', scope: 'TENANT', seqWidth: 6,
+            })).rejects.toThrow(/already use ADJ-\{SEQ\}/);
+            expect(tx.documentNumbering.upsert).not.toHaveBeenCalled();
+        });
+
+        it('saves a purchase format under its own document type', async () => {
+            const { db, tx } = makeDb();
+            const service = new DocumentNumberingService(db, audit as any);
+
+            await service.update(CTX, 'purchase', {
+                template: 'PUR-{STORE}-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'STORE', seqWidth: 5,
+            });
+
+            expect(tx.documentNumbering.upsert).toHaveBeenCalledWith(expect.objectContaining({
+                where: { tenant_id_doc_type: { tenant_id: 't1', doc_type: 'PURCHASE' } },
+            }));
         });
 
         it('lets two branches swap codes', async () => {

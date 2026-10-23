@@ -4,6 +4,12 @@ import { PurchaseOrdersService } from './purchase-orders.service';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderStatusDto } from './purchase-order.dto';
 
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'PO-00001'),
+}));
+import { issueDocumentNumber } from '../database/document-number.utils';
+
 jest.mock('../database/inventory.utils', () => ({
     resolveWarehouseId: jest.fn().mockResolvedValue('warehouse-1'),
     applyInventoryMovement: jest.fn().mockResolvedValue(10),
@@ -100,7 +106,12 @@ describe('PurchaseOrdersService', () => {
             expect(db.product.findMany).toHaveBeenCalledWith({
                 where: { tenant_id: tenantId, id: { in: [productId] } },
             });
-            expect(db.purchaseOrder.count).toHaveBeenCalledWith({ where: { tenant_id: tenantId } });
+            expect(db.$transaction).toHaveBeenCalled();
+            expect(issueDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({
+                tenantId,
+                docType: 'PURCHASE_ORDER',
+                storeId,
+            }));
             expect(db.purchaseOrder.create).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({
@@ -116,10 +127,10 @@ describe('PurchaseOrdersService', () => {
             expect(result).toEqual(basePO);
         });
 
-        it('generates sequential PO numbers', async () => {
+        it('numbers the PO from the stored series, checked against every PO number', async () => {
             db.store.findFirst.mockResolvedValue({ id: storeId });
             db.product.findMany.mockResolvedValue([{ id: productId }]);
-            db.purchaseOrder.count.mockResolvedValue(42);
+            (issueDocumentNumber as jest.Mock).mockResolvedValueOnce('PO-00043');
             db.purchaseOrder.create.mockResolvedValue({ po_number: 'PO-00043' });
 
             await service.create(tenantId, userId, baseCreateDto);
@@ -129,6 +140,13 @@ describe('PurchaseOrdersService', () => {
                     data: expect.objectContaining({ po_number: 'PO-00043' }),
                 }),
             );
+            const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls[0][1];
+            db.purchaseOrder.findFirst.mockResolvedValueOnce(null);
+            await expect(isTaken('PO-00043')).resolves.toBe(false);
+            expect(db.purchaseOrder.findFirst).toHaveBeenLastCalledWith({
+                where: { tenant_id: tenantId, po_number: 'PO-00043' },
+                select: { id: true },
+            });
         });
 
         it('calculates totals including tax, discount, and freight', async () => {
