@@ -70,6 +70,7 @@ describe('CrmLeadsService', () => {
             $transaction: jest.fn(async (fn: any) => fn(db)),
             crmContact: {
                 findMany: jest.fn().mockResolvedValue([]),
+                findFirst: jest.fn().mockResolvedValue(null),
                 create: jest.fn().mockResolvedValue({ id: 'contact-1', organization_id: null }),
                 update: jest.fn(),
             },
@@ -213,11 +214,56 @@ describe('CrmLeadsService', () => {
         });
 
         it('throws ConflictException when a customer with the same mobile already exists', async () => {
-            db.lead.findFirst.mockResolvedValueOnce(lead);
+            db.lead.findFirst.mockResolvedValueOnce({ ...lead, contact_id: 'contact-1' });
             db.customer.findFirst.mockResolvedValueOnce({ id: 'existing-cust', name: 'Jane Doe', phone: '01700000000' });
 
             await expect(service.convert('tenant-1', 'lead-1')).rejects.toThrow(ConflictException);
             expect(customersService.create).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+            expect(db.crmContact.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('sets the contact customer_id when it is null, and nothing else', async () => {
+            db.lead.findFirst.mockResolvedValueOnce({ ...lead, contact_id: 'contact-1' });
+            db.customer.findFirst.mockResolvedValueOnce(null);
+            customersService.create.mockResolvedValueOnce({ id: 'cust-1', name: 'Jane Doe', phone: '01700000000' });
+            db.lead.update.mockResolvedValueOnce({ ...lead, status: LeadStatus.CONVERTED, converted_customer_id: 'cust-1' });
+            db.crmContact.findFirst.mockResolvedValueOnce({ customer_id: null });
+
+            await service.convert('tenant-1', 'lead-1', 'branch-a');
+
+            expect(db.crmContact.findFirst).toHaveBeenCalledWith({
+                where: { id: 'contact-1', tenant_id: 'tenant-1' },
+                select: { customer_id: true },
+            });
+            expect(db.crmContact.update).toHaveBeenCalledTimes(1);
+            expect(db.crmContact.update).toHaveBeenCalledWith({
+                where: { id: 'contact-1' },
+                data: { customer_id: 'cust-1' },
+            });
+            expect(db.crmContact.update.mock.invocationCallOrder[0]).toBeGreaterThan(
+                db.lead.update.mock.invocationCallOrder[0],
+            );
+        });
+
+        it('does not update a contact when contact_id is null or customer_id is already set', async () => {
+            db.lead.findFirst.mockResolvedValueOnce({ ...lead, contact_id: null });
+            db.customer.findFirst.mockResolvedValueOnce(null);
+            customersService.create.mockResolvedValueOnce({ id: 'cust-1' });
+            db.lead.update.mockResolvedValueOnce({ ...lead, status: LeadStatus.CONVERTED });
+
+            await service.convert('tenant-1', 'lead-1');
+            expect(db.crmContact.findFirst).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+
+            db.lead.findFirst.mockResolvedValueOnce({ ...lead, contact_id: 'contact-1' });
+            db.customer.findFirst.mockResolvedValueOnce(null);
+            customersService.create.mockResolvedValueOnce({ id: 'cust-2' });
+            db.lead.update.mockResolvedValueOnce({ ...lead, status: LeadStatus.CONVERTED });
+            db.crmContact.findFirst.mockResolvedValueOnce({ customer_id: 'cust-old' });
+
+            await service.convert('tenant-1', 'lead-1');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
         });
     });
 

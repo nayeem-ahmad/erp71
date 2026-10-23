@@ -1464,6 +1464,21 @@ export class CrmLeadsService {
             include: leadIncludes,
         });
 
+        // The person behind the deal, and only when they are not already a customer.
+        // Name, phone, email, and company stay as they are.
+        if (lead.contact_id) {
+            const contact = await this.db.crmContact.findFirst({
+                where: { id: lead.contact_id, tenant_id: tenantId },
+                select: { customer_id: true },
+            });
+            if (contact && contact.customer_id == null) {
+                await this.db.crmContact.update({
+                    where: { id: lead.contact_id },
+                    data: { customer_id: customer.id },
+                });
+            }
+        }
+
         return { lead: updatedLead, customer };
     }
 }

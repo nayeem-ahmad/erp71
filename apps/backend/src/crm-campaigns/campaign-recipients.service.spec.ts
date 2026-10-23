@@ -125,6 +125,104 @@ describe('CampaignRecipientsService', () => {
             );
         });
 
+        it('leaves lead_id null when two leads share an email', async () => {
+            db.lead.findMany.mockResolvedValueOnce([
+                { id: 'lead-1', name: 'First', mobile: '018', email: 'rahim@example.com' },
+                { id: 'lead-2', name: 'Second', mobile: '019', email: 'rahim@example.com' },
+            ]);
+
+            await service.writeUploadedRecipients('t1', 'camp-1', [ROW], 'user-1');
+
+            expect(db.crmContact.createMany).not.toHaveBeenCalled();
+            expect(writtenRow()).toEqual(
+                expect.objectContaining({
+                    lead_id: null,
+                    customer_id: null,
+                    contact_id: null,
+                    name: 'Rahim Uddin',
+                    phone: null,
+                    email: 'rahim@example.com',
+                }),
+            );
+        });
+
+        it('counts two casings of one address as two leads, and picks neither', async () => {
+            db.lead.findMany.mockResolvedValueOnce([
+                { id: 'lead-1', name: 'First', mobile: '018', email: 'Rahim@Example.com' },
+                { id: 'lead-2', name: 'Second', mobile: '019', email: 'rahim@example.com' },
+            ]);
+
+            await service.writeUploadedRecipients('t1', 'camp-1', [ROW], null);
+
+            expect(writtenRow().lead_id).toBeNull();
+            expect(db.crmContact.createMany).not.toHaveBeenCalled();
+        });
+
+        it('leaves contact_id null when two contacts share an email', async () => {
+            db.crmContact.findMany.mockResolvedValueOnce([
+                { id: 'con-1', name: 'A', mobile: '017', email: 'rahim@example.com' },
+                { id: 'con-2', name: 'B', mobile: '018', email: 'rahim@example.com' },
+            ]);
+
+            await service.writeUploadedRecipients('t1', 'camp-1', [ROW], 'user-1');
+
+            expect(db.crmContact.createMany).not.toHaveBeenCalled();
+            expect(writtenRow()).toEqual(
+                expect.objectContaining({
+                    contact_id: null,
+                    lead_id: null,
+                    customer_id: null,
+                    name: 'Rahim Uddin',
+                }),
+            );
+        });
+
+        it('keeps the one contact when two leads share the address and there is no customer', async () => {
+            db.lead.findMany.mockResolvedValueOnce([
+                { id: 'lead-1', name: 'From Lead', mobile: '018', email: 'rahim@example.com' },
+                { id: 'lead-2', name: 'Other Lead', mobile: '019', email: 'rahim@example.com' },
+            ]);
+            db.crmContact.findMany.mockResolvedValueOnce([
+                { id: 'con-1', name: 'From Contact', mobile: '017', email: 'rahim@example.com' },
+            ]);
+
+            await service.writeUploadedRecipients('t1', 'camp-1', [ROW], 'user-1');
+
+            expect(db.crmContact.createMany).not.toHaveBeenCalled();
+            expect(writtenRow()).toEqual(
+                expect.objectContaining({
+                    lead_id: null,
+                    contact_id: 'con-1',
+                    customer_id: null,
+                    name: 'From Contact',
+                    phone: '017',
+                }),
+            );
+        });
+
+        it('leaves customer_id null when two customers share an email and does not fall through to a lead', async () => {
+            db.customer.findMany.mockResolvedValueOnce([
+                { id: 'cus-1', name: 'A', phone: '017', email: 'rahim@example.com' },
+                { id: 'cus-2', name: 'B', phone: '018', email: 'rahim@example.com' },
+            ]);
+            db.lead.findMany.mockResolvedValueOnce([
+                { id: 'lead-1', name: 'From Lead', mobile: '019', email: 'rahim@example.com' },
+            ]);
+
+            await service.writeUploadedRecipients('t1', 'camp-1', [ROW], 'user-1');
+
+            expect(db.crmContact.createMany).not.toHaveBeenCalled();
+            expect(writtenRow()).toEqual(
+                expect.objectContaining({
+                    customer_id: null,
+                    lead_id: null,
+                    contact_id: null,
+                    name: 'Rahim Uddin',
+                    phone: null,
+                }),
+            );
+        });
+
         it('creates a contact when nothing matches, tagged as an import', async () => {
             await service.writeUploadedRecipients('t1', 'camp-1', [ROW], 'user-1');
 
@@ -204,10 +302,9 @@ describe('CampaignRecipientsService', () => {
             expect(writtenRow()).toEqual(expect.objectContaining({ customer_id: 'cus-1' }));
         });
 
-        // The spec requires case-insensitive resolution, and none of the three
-        // tables normalises email on write. Without it, every upload mints a
-        // fresh duplicate contact for an address stored in mixed case — the
-        // exact duplicate the resolution order exists to prevent.
+        // Case-insensitive on the raw column. Leads and contacts also store
+        // email_norm; customers do not. Without the insensitive match, every
+        // upload mints a duplicate contact for an address stored in mixed case.
         it('matches a customer whose stored address differs only in case', async () => {
             // The mock stands in for Postgres honouring mode: 'insensitive':
             // it only returns the row when the lookup asks for insensitivity.

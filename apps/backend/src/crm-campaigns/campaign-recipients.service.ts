@@ -8,7 +8,8 @@ interface ResolvedParty {
     customer_id: string | null;
     lead_id: string | null;
     contact_id: string | null;
-    name: string;
+    /** Null when no single party was chosen, so the upload row's own name is used. */
+    name: string | null;
     phone: string | null;
 }
 
@@ -44,12 +45,15 @@ export class CampaignRecipientsService {
 
         const emails = [...new Set(rows.map((r) => r.email))];
         const parties = await this.resolveParties(tenantId, emails, client);
+        const addressKey = (email: string) => email.toLowerCase();
 
         // Whatever matched nothing becomes a contact. Ids are minted here so
         // the recipient rows can point at them without reading the inserts back.
+        // An address that matched several rows is already in `parties` with a
+        // null id — it must not mint another contact.
         const newContacts = new Map<string, { id: string; name: string }>();
         for (const row of rows) {
-            if (parties.has(row.email) || newContacts.has(row.email)) continue;
+            if (parties.has(addressKey(row.email)) || newContacts.has(row.email)) continue;
             newContacts.set(row.email, { id: randomUUID(), name: row.name });
         }
         if (newContacts.size > 0) {
@@ -67,7 +71,7 @@ export class CampaignRecipientsService {
 
         const data = rows.map((row) => {
             const created = newContacts.get(row.email);
-            const party: ResolvedParty = parties.get(row.email) ?? {
+            const party: ResolvedParty = parties.get(addressKey(row.email)) ?? {
                 customer_id: null,
                 lead_id: null,
                 contact_id: created?.id ?? null,
@@ -82,7 +86,7 @@ export class CampaignRecipientsService {
                 contact_id: party.contact_id,
                 phone: party.phone,
                 email: row.email,
-                name: party.name,
+                name: party.name ?? row.name,
                 subject: row.subject,
                 message: row.message,
                 status: 'PENDING',
@@ -151,10 +155,13 @@ export class CampaignRecipientsService {
      * Looks a whole batch of addresses up across customers, leads and contacts.
      *
      * One query per table for the whole upload, not three per row. Matching
-     * stays case-insensitive: none of these three tables normalises email on
-     * write, so a stored `Rahim@Example.com` must still match an uploaded
-     * `rahim@example.com` or every upload mints a duplicate contact for it —
-     * precisely what the resolution order exists to prevent.
+     * stays case-insensitive on the raw email. Leads and contacts also store
+     * `email_norm`; customers do not. A stored `Rahim@Example.com` must still
+     * match an uploaded `rahim@example.com`, or every upload mints a duplicate
+     * contact for it — precisely what the resolution order exists to prevent.
+     * `lead_id` and `contact_id` are set only when exactly one row in that
+     * table has the address. Two customers leave `customer_id` null and do
+     * not fall through to a lead.
      *
      * The cost of that is a scan: `mode: 'insensitive'` on an `in` compiles to
      * `LOWER(email) IN (…)`, and no plain btree index on email can serve a
@@ -187,37 +194,90 @@ export class CampaignRecipientsService {
             }),
         ]);
 
-        // Precedence is customer → lead → contact. Filling the map weakest
-        // first lets each stronger match simply overwrite the weaker one.
-        const byEmail = new Map<string, ResolvedParty>();
+        // Group by the lowercased address first. Last-write-wins used to pick
+        // whichever row the query returned last when two leads shared an email.
         const key = (email: string | null) => (email ?? '').toLowerCase();
+        type Bucket = { customers: typeof customers; leads: typeof leads; contacts: typeof contacts };
+        const buckets = new Map<string, Bucket>();
+        const bucketFor = (email: string | null): Bucket => {
+            const id = key(email);
+            let bucket = buckets.get(id);
+            if (!bucket) {
+                bucket = { customers: [], leads: [], contacts: [] };
+                buckets.set(id, bucket);
+            }
+            return bucket;
+        };
+        for (const row of customers) bucketFor(row.email).customers.push(row);
+        for (const row of leads) bucketFor(row.email).leads.push(row);
+        for (const row of contacts) bucketFor(row.email).contacts.push(row);
 
-        for (const c of contacts) {
-            byEmail.set(key(c.email), {
-                customer_id: null,
-                lead_id: null,
-                contact_id: c.id,
-                name: c.name,
-                phone: c.mobile ?? null,
-            });
-        }
-        for (const l of leads) {
-            byEmail.set(key(l.email), {
-                customer_id: null,
-                lead_id: l.id,
-                contact_id: null,
-                name: l.name,
-                phone: l.mobile ?? null,
-            });
-        }
-        for (const c of customers) {
-            byEmail.set(key(c.email), {
-                customer_id: c.id,
-                lead_id: null,
-                contact_id: null,
-                name: c.name,
-                phone: c.phone ?? null,
-            });
+        const byEmail = new Map<string, ResolvedParty>();
+        for (const [id, bucket] of buckets) {
+            if (bucket.customers.length === 1) {
+                const customer = bucket.customers[0];
+                byEmail.set(id, {
+                    customer_id: customer.id,
+                    lead_id: null,
+                    contact_id: null,
+                    name: customer.name,
+                    phone: customer.phone ?? null,
+                });
+                continue;
+            }
+            if (bucket.customers.length > 1) {
+                byEmail.set(id, {
+                    customer_id: null,
+                    lead_id: null,
+                    contact_id: null,
+                    name: null,
+                    phone: null,
+                });
+                continue;
+            }
+
+            const contact = bucket.contacts.length === 1 ? bucket.contacts[0] : null;
+            if (bucket.leads.length === 1) {
+                const lead = bucket.leads[0];
+                byEmail.set(id, {
+                    customer_id: null,
+                    lead_id: lead.id,
+                    contact_id: null,
+                    name: lead.name,
+                    phone: lead.mobile ?? null,
+                });
+                continue;
+            }
+            if (bucket.leads.length > 1) {
+                byEmail.set(id, {
+                    customer_id: null,
+                    lead_id: null,
+                    contact_id: contact?.id ?? null,
+                    name: contact?.name ?? null,
+                    phone: contact?.mobile ?? null,
+                });
+                continue;
+            }
+
+            if (contact) {
+                byEmail.set(id, {
+                    customer_id: null,
+                    lead_id: null,
+                    contact_id: contact.id,
+                    name: contact.name,
+                    phone: contact.mobile ?? null,
+                });
+                continue;
+            }
+            if (bucket.contacts.length > 1) {
+                byEmail.set(id, {
+                    customer_id: null,
+                    lead_id: null,
+                    contact_id: null,
+                    name: null,
+                    phone: null,
+                });
+            }
         }
 
         return byEmail;
