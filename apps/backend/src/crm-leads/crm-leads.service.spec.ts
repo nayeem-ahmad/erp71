@@ -42,6 +42,19 @@ describe('CrmLeadsService', () => {
         };
     }
 
+    function contactRow(extra: Record<string, unknown> = {}) {
+        return {
+            id: 'contact-1',
+            mobile: null as string | null,
+            mobile_norm: null as string | null,
+            linkedin_url: null as string | null,
+            linkedin_norm: null as string | null,
+            organization_id: null as string | null,
+            created_at: new Date('2020-01-01T00:00:00.000Z'),
+            ...extra,
+        };
+    }
+
     /** The tenant's stages: the five seeded ones plus one custom open stage. */
     const STAGES = [
         { id: 'st-new', code: 'NEW', name: 'New', lifecycle: 'NEW', is_active: true },
@@ -54,6 +67,12 @@ describe('CrmLeadsService', () => {
 
     beforeEach(async () => {
         db = {
+            $transaction: jest.fn(async (fn: any) => fn(db)),
+            crmContact: {
+                findMany: jest.fn().mockResolvedValue([]),
+                create: jest.fn().mockResolvedValue({ id: 'contact-1', organization_id: null }),
+                update: jest.fn(),
+            },
             leadStatusOption: {
                 findFirst: jest.fn(async ({ where }: any) =>
                     STAGES.find((r) =>
@@ -281,31 +300,72 @@ describe('CrmLeadsService', () => {
     });
 
     describe('duplicate detection', () => {
-        it('rejects a create whose mobile is the same number spelled differently', async () => {
-            // The old check compared raw strings, so this imported as a second lead.
+        it('links one contact when a create reuses a mobile spelled differently', async () => {
+            // Two deals may share one person. The old check rejected the second
+            // spelling before a lead row existed.
             db.lead.findFirst.mockResolvedValueOnce(existingByMobile('01712345678'));
+            db.crmContact.findMany.mockResolvedValueOnce([
+                contactRow({
+                    id: 'contact-1',
+                    mobile: '01712345678',
+                    mobile_norm: '+8801712345678',
+                }),
+            ]);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
 
-            await expect(
-                service.create('tenant-1', 'user-1', { name: 'Karim', mobile: '+880 1712-345678' } as any, 'Asia/Dhaka'),
-            ).rejects.toThrow('A lead with this mobile number already exists.');
-            expect(db.lead.create).not.toHaveBeenCalled();
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Karim', mobile: '+880 1712-345678' } as any,
+                'Asia/Dhaka',
+            );
+
+            expect(db.lead.create).toHaveBeenCalledTimes(1);
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.contact_id).toBe('contact-1');
+            expect(created.mobile).toBe('+880 1712-345678');
+            expect(created.mobile_norm).toBe('+8801712345678');
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
         });
 
-        it('rejects a create on a duplicate email, and names the field', async () => {
-            db.lead.findFirst.mockResolvedValueOnce({
+        it('lets two leads keep an email that is already stored', async () => {
+            db.lead.findFirst.mockResolvedValue({
                 id: 'lead-existing',
                 mobile_norm: null,
                 email_norm: 'karim@shop.com',
                 linkedin_norm: null,
             });
+            db.lead.create.mockResolvedValue({ id: 'lead-new' });
 
-            await expect(
-                service.create('tenant-1', 'user-1', { name: 'Karim', email: 'Karim@Shop.com' } as any, 'Asia/Dhaka'),
-            ).rejects.toThrow('A lead with this email already exists.');
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Karim', email: 'Karim@Shop.com' } as any,
+                'Asia/Dhaka',
+            );
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Karim Two', email: 'karim@shop.com' } as any,
+                'Asia/Dhaka',
+            );
+
+            expect(db.lead.create).toHaveBeenCalledTimes(2);
+            expect(db.lead.create.mock.calls[0][0].data.email).toBe('Karim@Shop.com');
+            expect(db.lead.create.mock.calls[0][0].data.email_norm).toBe('karim@shop.com');
+            expect(db.lead.create.mock.calls[1][0].data.email).toBe('karim@shop.com');
+            expect(db.lead.create.mock.calls[1][0].data.email_norm).toBe('karim@shop.com');
         });
 
-        it('matches on any identity key, in one query', async () => {
-            db.lead.findFirst.mockResolvedValueOnce(null);
+        it('resolves a contact by mobile and does not search leads by email', async () => {
+            db.crmContact.findMany.mockResolvedValueOnce([
+                contactRow({
+                    id: 'contact-mobile',
+                    mobile: '01712345678',
+                    mobile_norm: '+8801712345678',
+                }),
+            ]);
             db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
 
             await service.create('tenant-1', 'user-1', {
@@ -315,18 +375,16 @@ describe('CrmLeadsService', () => {
                 linkedin_url: 'https://www.linkedin.com/in/Karim/',
             } as any, 'Asia/Dhaka');
 
-            expect(db.lead.findFirst).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: expect.objectContaining({
-                        tenant_id: 'tenant-1',
-                        OR: [
-                            { mobile_norm: '+8801712345678' },
-                            { email_norm: 'karim@shop.com' },
-                            { linkedin_norm: 'linkedin.com/in/karim' },
-                        ],
-                    }),
-                }),
-            );
+            expect(db.lead.findFirst).not.toHaveBeenCalled();
+            expect(db.crmContact.findMany).toHaveBeenCalledTimes(1);
+            const where = db.crmContact.findMany.mock.calls[0][0].where;
+            expect(where).toEqual(expect.objectContaining({
+                tenant_id: 'tenant-1',
+                OR: expect.arrayContaining([{ mobile_norm: '+8801712345678' }]),
+            }));
+            expect(JSON.stringify(where)).not.toMatch(/email/);
+            expect(db.lead.create.mock.calls[0][0].data.contact_id).toBe('contact-mobile');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
         });
 
         it('stores the normalized keys alongside the raw values', async () => {
@@ -355,18 +413,39 @@ describe('CrmLeadsService', () => {
             expect(db.lead.create).toHaveBeenCalled();
         });
 
-        it('excludes the lead being edited, so re-saving its own email is allowed', async () => {
-            db.lead.findFirst.mockResolvedValueOnce({ id: 'lead-1', status: 'NEW' });  // the lead itself
-            db.lead.findFirst.mockResolvedValueOnce(null);                             // no other holder
+        it('re-saves a lead\'s own email without searching other leads or contacts', async () => {
+            db.lead.findFirst.mockResolvedValueOnce({
+                id: 'lead-1',
+                status: 'NEW',
+                priority: 'MEDIUM',
+                source_id: 'src-other',
+                last_contacted_at: null,
+                next_step_date: null,
+                lost_reason: null,
+                email: 'old@shop.com',
+                email_norm: 'old@shop.com',
+                mobile: '01712345678',
+                mobile_norm: '+8801712345678',
+                linkedin_url: null,
+                linkedin_norm: null,
+                organization_id: 'org-keep',
+            });
             db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
 
             await service.update('tenant-1', 'lead-1', { email: 'karim@shop.com' } as any);
 
-            expect(db.lead.findFirst).toHaveBeenLastCalledWith(
-                expect.objectContaining({
-                    where: expect.objectContaining({ id: { not: 'lead-1' } }),
-                }),
-            );
+            expect(db.lead.findFirst).toHaveBeenCalledTimes(1);
+            expect(db.lead.findFirst).toHaveBeenCalledWith({
+                where: { id: 'lead-1', tenant_id: 'tenant-1' },
+            });
+            expect(db.crmContact.findMany).not.toHaveBeenCalled();
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+            const patched = db.lead.update.mock.calls[0][0].data;
+            expect(patched.email).toBe('karim@shop.com');
+            expect(patched.email_norm).toBe('karim@shop.com');
+            expect(patched).not.toHaveProperty('contact_id');
+            expect(patched).not.toHaveProperty('organization_id');
         });
 
         it('leaves an identity key alone when the edit never mentions it', async () => {
@@ -381,6 +460,310 @@ describe('CrmLeadsService', () => {
             expect(patched).not.toHaveProperty('email_norm');
             expect(patched).not.toHaveProperty('mobile_norm');
             expect(patched).not.toHaveProperty('linkedin_norm');
+        });
+    });
+
+    describe('contact linking', () => {
+        const editable = (extra: Record<string, unknown> = {}) => ({
+            id: 'lead-1',
+            tenant_id: 'tenant-1',
+            status: 'NEW',
+            priority: 'MEDIUM',
+            source_id: 'src-other',
+            last_contacted_at: null,
+            next_step_date: null,
+            lost_reason: null,
+            name: 'Karim',
+            mobile: '01700000000',
+            mobile_norm: '+8801700000000',
+            email: null,
+            address: null,
+            linkedin_url: null,
+            linkedin_norm: null,
+            organization_id: null as string | null,
+            ...extra,
+        });
+
+        it('creates one contact when the mobile matches nothing and stores its id', async () => {
+            const order: string[] = [];
+            db.$transaction.mockImplementation(async (fn: any) => {
+                order.push('begin');
+                const result = await fn(db);
+                order.push('end');
+                return result;
+            });
+            db.crmContact.create.mockImplementation(async () => {
+                order.push('contact');
+                return { id: 'contact-new', organization_id: null };
+            });
+            db.lead.create.mockImplementation(async () => {
+                order.push('lead');
+                return { id: 'lead-9' };
+            });
+
+            await service.create('tenant-1', 'user-1', {
+                name: 'Karim',
+                mobile: '01712-345678',
+                email: 'Karim@Shop.com',
+                address: 'Dhaka',
+                linkedin_url: 'https://www.linkedin.com/in/karim',
+            } as any, 'Asia/Dhaka');
+
+            expect(order).toEqual(['begin', 'contact', 'lead', 'end']);
+            expect(db.crmContact.create).toHaveBeenCalledTimes(1);
+            expect(db.crmContact.create.mock.calls[0][0].data).toEqual(expect.objectContaining({
+                tenant_id: 'tenant-1',
+                name: 'Karim',
+                mobile: '01712-345678',
+                email: 'Karim@Shop.com',
+                address: 'Dhaka',
+                linkedin_url: 'https://www.linkedin.com/in/karim',
+                mobile_norm: '+8801712345678',
+                email_norm: 'karim@shop.com',
+                linkedin_norm: 'linkedin.com/in/karim',
+            }));
+            expect(db.crmContact.create.mock.calls[0][0].data).not.toHaveProperty('company');
+            expect(db.crmContact.create.mock.calls[0][0].data).not.toHaveProperty('notes');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+            expect(db.lead.create.mock.calls[0][0].data.contact_id).toBe('contact-new');
+        });
+
+        it('links a lead mobile to a contact whose raw mobile normalizes and whose norm is null', async () => {
+            db.crmContact.findMany.mockResolvedValueOnce([
+                contactRow({
+                    id: 'contact-newer',
+                    mobile: '01712345678',
+                    mobile_norm: null,
+                    organization_id: 'org-new',
+                    created_at: new Date('2024-06-01T00:00:00.000Z'),
+                }),
+                contactRow({
+                    id: 'contact-older',
+                    mobile: '+8801712345678',
+                    mobile_norm: null,
+                    organization_id: 'org-old',
+                    created_at: new Date('2020-01-01T00:00:00.000Z'),
+                }),
+            ]);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Karim', mobile: '01712-345678' } as any,
+                'Asia/Dhaka',
+            );
+
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.contact_id).toBe('contact-older');
+            expect(created.organization_id).toBe('org-old');
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+        });
+
+        it('creates a contact per lead when they share only an email', async () => {
+            db.crmContact.findMany.mockImplementation(async (args: any) => {
+                const where = JSON.stringify(args?.where ?? {});
+                if (/email/i.test(where)) {
+                    return [contactRow({
+                        id: 'contact-email',
+                        email: 'shared@shop.com',
+                        email_norm: 'shared@shop.com',
+                    })];
+                }
+                return [];
+            });
+            db.crmContact.create
+                .mockResolvedValueOnce({ id: 'contact-a', organization_id: null })
+                .mockResolvedValueOnce({ id: 'contact-b', organization_id: null });
+            db.lead.create
+                .mockResolvedValueOnce({ id: 'lead-1' })
+                .mockResolvedValueOnce({ id: 'lead-2' });
+
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Karim', email: 'shared@shop.com' } as any,
+                'Asia/Dhaka',
+            );
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Rahim', email: 'Shared@Shop.com' } as any,
+                'Asia/Dhaka',
+            );
+
+            expect(db.crmContact.findMany.mock.calls.some((call: any[]) =>
+                /email/i.test(JSON.stringify(call[0]?.where ?? {})),
+            )).toBe(false);
+            expect(db.crmContact.create).toHaveBeenCalledTimes(2);
+            expect(db.lead.create.mock.calls.map((call: any[]) => call[0].data.contact_id)).toEqual([
+                'contact-a',
+                'contact-b',
+            ]);
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+        });
+
+        it('attaches a lead with a new mobile to the contact that already has its LinkedIn', async () => {
+            db.crmContact.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([
+                    contactRow({
+                        id: 'contact-li',
+                        mobile: '01500000000',
+                        mobile_norm: '+8801500000000',
+                        linkedin_url: 'https://www.linkedin.com/in/Karim/',
+                        linkedin_norm: 'linkedin.com/in/karim',
+                        organization_id: 'org-li',
+                    }),
+                ]);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create('tenant-1', 'user-1', {
+                name: 'Someone Else',
+                mobile: '01900000000',
+                linkedin_url: 'linkedin.com/in/karim',
+            } as any, 'Asia/Dhaka');
+
+            expect(db.crmContact.findMany).toHaveBeenCalledTimes(2);
+            const linkedinWhere = db.crmContact.findMany.mock.calls[1][0].where;
+            expect(linkedinWhere).toEqual(expect.objectContaining({
+                OR: expect.arrayContaining([{ linkedin_norm: 'linkedin.com/in/karim' }]),
+            }));
+            expect(JSON.stringify(linkedinWhere)).not.toMatch(/email/);
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+            const created = db.lead.create.mock.calls[0][0].data;
+            expect(created.contact_id).toBe('contact-li');
+            expect(created.organization_id).toBe('org-li');
+            expect(created.mobile).toBe('01900000000');
+        });
+
+        it('stores a non-number mobile as null and does not match a second one to the first', async () => {
+            db.crmContact.findMany.mockResolvedValue([
+                contactRow({ id: 'contact-junk', mobile: 'N/A', mobile_norm: null }),
+            ]);
+            db.crmContact.create
+                .mockResolvedValueOnce({ id: 'contact-1', organization_id: null })
+                .mockResolvedValueOnce({ id: 'contact-2', organization_id: null });
+            db.lead.create
+                .mockResolvedValueOnce({ id: 'lead-1' })
+                .mockResolvedValueOnce({ id: 'lead-2' });
+
+            await service.create('tenant-1', 'user-1', { name: 'A', mobile: 'N/A' } as any, 'Asia/Dhaka');
+            await service.create('tenant-1', 'user-1', { name: 'B', mobile: 'N/A' } as any, 'Asia/Dhaka');
+
+            expect(db.crmContact.create).toHaveBeenCalledTimes(2);
+            for (const call of db.crmContact.create.mock.calls) {
+                expect(call[0].data.mobile).toBeNull();
+                expect(call[0].data.mobile_norm).toBeNull();
+            }
+            expect(db.lead.create.mock.calls[0][0].data.mobile).toBe('N/A');
+            expect(db.lead.create.mock.calls[0][0].data.mobile_norm).toBeNull();
+            expect(db.lead.create.mock.calls[0][0].data.contact_id).toBe('contact-1');
+            expect(db.lead.create.mock.calls[1][0].data.contact_id).toBe('contact-2');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+        });
+
+        it('copies organization_id from the contact only when the lead does not have one', async () => {
+            db.crmContact.findMany.mockResolvedValueOnce([
+                contactRow({
+                    id: 'contact-org',
+                    mobile: '01712345678',
+                    mobile_norm: '+8801712345678',
+                    organization_id: 'org-9',
+                }),
+            ]);
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-9' });
+
+            await service.create(
+                'tenant-1',
+                'user-1',
+                { name: 'Karim', mobile: '01712345678' } as any,
+                'Asia/Dhaka',
+            );
+
+            expect(db.lead.create.mock.calls[0][0].data.organization_id).toBe('org-9');
+            expect(db.lead.create.mock.calls[0][0].data.contact_id).toBe('contact-org');
+
+            db.lead.findFirst.mockResolvedValueOnce(editable({ organization_id: null }));
+            db.crmContact.findMany.mockResolvedValueOnce([
+                contactRow({
+                    id: 'contact-2',
+                    mobile: '01800000000',
+                    mobile_norm: '+8801800000000',
+                    organization_id: 'org-2',
+                }),
+            ]);
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', { mobile: '01800000000' } as any);
+
+            const filled = db.lead.update.mock.calls[0][0].data;
+            expect(filled.contact_id).toBe('contact-2');
+            expect(filled.organization_id).toBe('org-2');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+
+            db.lead.findFirst.mockResolvedValueOnce(editable({ organization_id: 'org-keep' }));
+            db.crmContact.findMany.mockResolvedValueOnce([
+                contactRow({
+                    id: 'contact-3',
+                    mobile: '01900000000',
+                    mobile_norm: '+8801900000000',
+                    organization_id: 'org-other',
+                }),
+            ]);
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', { mobile: '01900000000' } as any);
+
+            const kept = db.lead.update.mock.calls[1][0].data;
+            expect(kept.contact_id).toBe('contact-3');
+            expect(kept).not.toHaveProperty('organization_id');
+
+            db.lead.findFirst.mockResolvedValueOnce(editable({ organization_id: 'org-keep' }));
+            db.crmContact.findMany.mockResolvedValueOnce([
+                contactRow({
+                    id: 'contact-4',
+                    mobile: '01600000000',
+                    mobile_norm: '+8801600000000',
+                    organization_id: null,
+                }),
+            ]);
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', { mobile: '01600000000' } as any);
+
+            const notNulled = db.lead.update.mock.calls[2][0].data;
+            expect(notNulled.contact_id).toBe('contact-4');
+            expect(notNulled.organization_id).not.toBeNull();
+            expect(notNulled).not.toHaveProperty('organization_id');
+        });
+
+        it('does not re-resolve the contact when mobile and LinkedIn are unchanged', async () => {
+            db.lead.findFirst.mockResolvedValueOnce(editable({
+                mobile: '01712345678',
+                mobile_norm: '+8801712345678',
+                linkedin_url: 'linkedin.com/in/karim',
+                linkedin_norm: 'linkedin.com/in/karim',
+                organization_id: null,
+            }));
+            db.lead.update.mockResolvedValueOnce({ id: 'lead-1' });
+
+            await service.update('tenant-1', 'lead-1', {
+                name: 'Karim Rahman',
+                mobile: '01712-345678',
+                linkedin_url: 'https://www.linkedin.com/in/Karim/',
+                email: 'karim@shop.com',
+            } as any);
+
+            expect(db.crmContact.findMany).not.toHaveBeenCalled();
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+            const patched = db.lead.update.mock.calls[0][0].data;
+            expect(patched).not.toHaveProperty('contact_id');
+            expect(patched).not.toHaveProperty('organization_id');
+            expect(patched.email_norm).toBe('karim@shop.com');
         });
     });
 
@@ -897,22 +1280,24 @@ describe('CrmLeadsService', () => {
             expect(updateCall.data).not.toHaveProperty('source');
         });
 
-        it('skips a row whose email matches an existing lead', async () => {
-            // Before identity keys, only `mobile` was checked — a row with a new
-            // (or blank) mobile and a known email imported as a second lead.
+        it('creates a row whose only match would be an email', async () => {
+            // Email alone is not the same lead. The lookup still returns the
+            // old email holder if the importer asks for it, which it must not.
             db.lead.findFirst.mockResolvedValueOnce({
                 id: 'lead-existing',
                 mobile_norm: null,
                 email_norm: 'alice@example.com',
                 linkedin_norm: null,
             });
+            db.lead.create.mockResolvedValueOnce({ id: 'lead-new' });
 
             const result = await service.importRows('tenant-1', [
                 { name: 'Alice', email: 'ALICE@example.com' },
             ], 'skip', 'Asia/Dhaka');
 
-            expect(result).toEqual({ created: 0, updated: 0, skipped: 1, errors: [] });
-            expect(db.lead.create).not.toHaveBeenCalled();
+            expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+            expect(db.lead.create).toHaveBeenCalledTimes(1);
+            expect(db.lead.create.mock.calls[0][0].data.email).toBe('ALICE@example.com');
         });
 
         it('skips a row whose LinkedIn URL matches an existing lead', async () => {
@@ -931,9 +1316,7 @@ describe('CrmLeadsService', () => {
             expect(db.lead.create).not.toHaveBeenCalled();
         });
 
-        it('skips a second row of the same file describing the same lead', async () => {
-            // The database cannot catch this one: in skip mode the first row is
-            // never written, so there is nothing for the lookup to find.
+        it('creates both rows of a file that share only an email', async () => {
             db.lead.findFirst.mockResolvedValue(null);
             db.lead.create.mockResolvedValue({ id: 'lead-10' });
 
@@ -942,20 +1325,18 @@ describe('CrmLeadsService', () => {
                 { name: 'Alice Rahman', email: 'ALICE@Example.com ' },
             ], 'skip', 'Asia/Dhaka');
 
-            expect(result.created).toBe(1);
-            expect(result.skipped).toBe(1);
+            expect(result.created).toBe(2);
+            expect(result.skipped).toBe(0);
             expect(result.errors).toEqual([]);
-            // Reported apart from errors: the file listed someone twice, which is
-            // not a failure the shop owner has to go and fix.
-            expect(result.duplicates).toEqual(['Row 3: same email as row 2 — skipped']);
-            expect(db.lead.create).toHaveBeenCalledTimes(1);
+            expect(result.duplicates).toBeUndefined();
+            expect(db.lead.create).toHaveBeenCalledTimes(2);
         });
 
-        it('lets a later row of the same file overwrite an earlier one in upsert mode', async () => {
+        it('does not let a shared email make a later row overwrite an earlier one', async () => {
             db.lead.create.mockResolvedValue({ id: 'lead-10' });
             db.lead.findFirst
-                .mockResolvedValueOnce(null)                                   // row 2: new
-                .mockResolvedValueOnce({                                       // row 3: row 2's lead
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({
                     id: 'lead-10',
                     mobile_norm: null,
                     email_norm: 'alice@example.com',
@@ -968,13 +1349,32 @@ describe('CrmLeadsService', () => {
                 { name: 'Alice Rahman', email: 'alice@example.com' },
             ], 'upsert', 'Asia/Dhaka');
 
-            expect(result).toEqual({ created: 1, updated: 1, skipped: 0, errors: [] });
-            expect(db.lead.update).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: { id: 'lead-10' },
-                    data: expect.objectContaining({ name: 'Alice Rahman' }),
-                }),
-            );
+            expect(result).toEqual({ created: 2, updated: 0, skipped: 0, errors: [] });
+            expect(db.lead.update).not.toHaveBeenCalled();
+            expect(db.lead.create).toHaveBeenCalledTimes(2);
+        });
+
+        it('does not call a shared email a same-file duplicate, and still does for a mobile', async () => {
+            db.lead.findFirst.mockResolvedValue(null);
+            db.lead.create.mockResolvedValue({ id: 'lead-10' });
+
+            const byEmail = await service.importRows('tenant-1', [
+                { name: 'Alice', email: 'alice@example.com', mobile: '01800000001' },
+                { name: 'Bob', email: 'ALICE@example.com', mobile: '01800000002' },
+            ], 'skip', 'Asia/Dhaka');
+
+            expect(byEmail.duplicates).toBeUndefined();
+            expect(byEmail.created).toBe(2);
+            expect(byEmail.skipped).toBe(0);
+
+            const byMobile = await service.importRows('tenant-1', [
+                { name: 'Alice', mobile: '01800000001' },
+                { name: 'Alice Rahman', mobile: '+8801800000001' },
+            ], 'skip', 'Asia/Dhaka');
+
+            expect(byMobile.created).toBe(1);
+            expect(byMobile.skipped).toBe(1);
+            expect(byMobile.duplicates).toEqual(['Row 3: same mobile number as row 2 — skipped']);
         });
 
         it('does not treat two rows without any identity field as duplicates', async () => {
