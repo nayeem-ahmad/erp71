@@ -319,8 +319,10 @@ function noteCustomer(
  * Links each lead that has no `contact_id` to the oldest contact with the same
  * normalized mobile, otherwise the same LinkedIn profile. Email is not a key.
  * Otherwise one contact is copied from that lead and is visible to later leads
- * in this run. Nothing here updates an existing contact's name, email, mobile,
- * or company — a trimmed name difference is only recorded.
+ * in this run. A mobile `normalizeLeadMobile` rejects is not a person: it is
+ * stored as null, and it does not match another lead or an existing contact.
+ * Nothing here updates an existing contact's name, email, mobile, or company —
+ * a trimmed name difference is only recorded.
  */
 export function planLeadLinks(leads: LeadLinkRow[], contacts: ContactLinkRow[]) {
     const byMobile = new Map<string, Candidate[]>();
@@ -380,13 +382,16 @@ export function planLeadLinks(leads: LeadLinkRow[], contacts: ContactLinkRow[]) 
         const mobileNorm = normalizeLeadMobile(row.mobile);
         const emailNorm = normalizeLeadEmail(row.email);
         const linkedinNorm = normalizeProfileUrl(row.linkedin_url);
+        // CrmContact is unique on the raw mobile string. Only NULL may repeat,
+        // so `N/A`, `-`, `call`, and blanks must not be copied onto the insert.
+        const storedMobile = mobileNorm == null ? null : (row.mobile ?? null);
         const key = `lead:${row.id}`;
         const insert: ContactInsert = {
             key,
             fromLeadId: row.id,
             tenant_id: row.tenant_id,
             name: row.name,
-            mobile: row.mobile ?? null,
+            mobile: storedMobile,
             email: row.email ?? null,
             linkedin_url: row.linkedin_url ?? null,
             address: row.address ?? null,
@@ -403,7 +408,7 @@ export function planLeadLinks(leads: LeadLinkRow[], contacts: ContactLinkRow[]) 
             organization_id: null,
             contactKey: key,
         };
-        indexMobile(byMobile, candidate, row.tenant_id, row.mobile, mobileNorm);
+        indexMobile(byMobile, candidate, row.tenant_id, storedMobile, mobileNorm);
         indexLinkedin(byLinkedin, candidate, row.tenant_id, row.linkedin_url, linkedinNorm);
         leadLinks.push({
             leadId: row.id,

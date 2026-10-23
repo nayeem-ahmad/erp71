@@ -543,6 +543,154 @@ describe('planLeadLinks', () => {
         expect(result.nameMismatches).toEqual([]);
     });
 
+    it('stores null for a mobile that does not normalize, and does not join those leads', () => {
+        // `N/A`, `-`, `call`, and blanks are not a person. Postgres allows many
+        // NULL mobiles but only one of any other raw string, so copying the junk
+        // onto two new contacts would throw when the sync inserts them.
+        const existing = contact({
+            id: 'c-junk',
+            name: 'Old Card',
+            mobile: 'N/A',
+            mobile_norm: null,
+        });
+        const before = { ...existing };
+        const result = planLeadLinks(
+            [
+                leadRow({
+                    id: 'l1',
+                    name: 'Karim',
+                    mobile: 'N/A',
+                    email: 'karim@shop.com',
+                    created_at: '2020-01-01T00:00:00.000Z',
+                }),
+                leadRow({
+                    id: 'l2',
+                    name: 'Rahim',
+                    mobile: 'N/A',
+                    email: 'rahim@shop.com',
+                    created_at: '2020-02-01T00:00:00.000Z',
+                }),
+                leadRow({
+                    id: 'l3',
+                    name: 'Dash',
+                    mobile: '-',
+                    created_at: '2020-03-01T00:00:00.000Z',
+                }),
+                leadRow({
+                    id: 'l4',
+                    name: 'Call',
+                    mobile: 'call',
+                    created_at: '2020-04-01T00:00:00.000Z',
+                }),
+                leadRow({
+                    id: 'l5',
+                    name: 'Empty',
+                    mobile: '',
+                    created_at: '2020-05-01T00:00:00.000Z',
+                }),
+                leadRow({
+                    id: 'l6',
+                    name: 'Spaces',
+                    mobile: '   ',
+                    created_at: '2020-06-01T00:00:00.000Z',
+                }),
+            ],
+            [existing],
+        );
+
+        expect(existing).toEqual(before);
+        expect(result.contactInserts).toEqual([
+            {
+                key: 'lead:l1',
+                fromLeadId: 'l1',
+                tenant_id: 't1',
+                name: 'Karim',
+                mobile: null,
+                email: 'karim@shop.com',
+                linkedin_url: null,
+                address: null,
+                mobile_norm: null,
+                email_norm: 'karim@shop.com',
+                linkedin_norm: null,
+            },
+            {
+                key: 'lead:l2',
+                fromLeadId: 'l2',
+                tenant_id: 't1',
+                name: 'Rahim',
+                mobile: null,
+                email: 'rahim@shop.com',
+                linkedin_url: null,
+                address: null,
+                mobile_norm: null,
+                email_norm: 'rahim@shop.com',
+                linkedin_norm: null,
+            },
+            {
+                key: 'lead:l3',
+                fromLeadId: 'l3',
+                tenant_id: 't1',
+                name: 'Dash',
+                mobile: null,
+                email: null,
+                linkedin_url: null,
+                address: null,
+                mobile_norm: null,
+                email_norm: null,
+                linkedin_norm: null,
+            },
+            {
+                key: 'lead:l4',
+                fromLeadId: 'l4',
+                tenant_id: 't1',
+                name: 'Call',
+                mobile: null,
+                email: null,
+                linkedin_url: null,
+                address: null,
+                mobile_norm: null,
+                email_norm: null,
+                linkedin_norm: null,
+            },
+            {
+                key: 'lead:l5',
+                fromLeadId: 'l5',
+                tenant_id: 't1',
+                name: 'Empty',
+                mobile: null,
+                email: null,
+                linkedin_url: null,
+                address: null,
+                mobile_norm: null,
+                email_norm: null,
+                linkedin_norm: null,
+            },
+            {
+                key: 'lead:l6',
+                fromLeadId: 'l6',
+                tenant_id: 't1',
+                name: 'Spaces',
+                mobile: null,
+                email: null,
+                linkedin_url: null,
+                address: null,
+                mobile_norm: null,
+                email_norm: null,
+                linkedin_norm: null,
+            },
+        ]);
+        expect(result.leadLinks).toEqual([
+            { leadId: 'l1', contactKey: 'lead:l1', organizationId: null },
+            { leadId: 'l2', contactKey: 'lead:l2', organizationId: null },
+            { leadId: 'l3', contactKey: 'lead:l3', organizationId: null },
+            { leadId: 'l4', contactKey: 'lead:l4', organizationId: null },
+            { leadId: 'l5', contactKey: 'lead:l5', organizationId: null },
+            { leadId: 'l6', contactKey: 'lead:l6', organizationId: null },
+        ]);
+        expect(result.customerLinks).toEqual([]);
+        expect(result.nameMismatches).toEqual([]);
+    });
+
     it('does not match an existing contact by email alone', () => {
         const existing = contact({ id: 'c1', email: 'info@shop.com', name: 'Shop' });
         const result = planLeadLinks(
