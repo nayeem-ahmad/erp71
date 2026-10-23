@@ -1080,6 +1080,7 @@ model Tenant {
   leadStatusOptions          LeadStatusOption[]
   conversationChannels       ConversationChannel[]
   crmContacts                CrmContact[]
+  organizations              Organization[]
   crmContactAttachments      CrmContactAttachment[]
   customFieldDefinitions     CustomFieldDefinition[]
   customerCreditTransactions CustomerCreditTransaction[]
@@ -3274,6 +3275,7 @@ model Customer {
   creditTransactions  CustomerCreditTransaction[]
   campaignRecipients  CrmCampaignRecipient[]
   convertedFromLeads  Lead[]                      @relation("LeadConvertedCustomer")
+  crmContacts         CrmContact[]
   projects            Project[]
 
   @@unique([tenant_id, phone])
@@ -3387,11 +3389,12 @@ model Lead {
   custom_fields         Json?
   email                 String?
   address               String?
-  /// Normalized copies of `mobile` / `email` / `linkedin_url`, carrying the
-  /// per-tenant unique indexes below. They exist because the raw columns cannot
-  /// be compared usefully — `01712-345678`, `+8801712345678` and `01712345678`
-  /// are three strings and one phone number. Written ONLY via
-  /// packages/shared-types/lead-identity.ts; never displayed, never edited directly.
+  /// Normalized copies of `mobile` / `email` / `linkedin_url`. They exist
+  /// because the raw columns cannot be compared usefully — `01712-345678`,
+  /// `+8801712345678` and `01712345678` are three strings and one phone
+  /// number. Written ONLY via packages/shared-types/lead-identity.ts; never
+  /// displayed, never edited directly. Indexed, not unique: many leads may
+  /// share one value. The person is unique on `CrmContact`.
   ///
   /// `fb_url` / `x_url` / `website_url` get no such column on purpose: they are
   /// company-level and legitimately shared across many leads at one firm.
@@ -3466,6 +3469,11 @@ model Lead {
   /// Written by every path that sets a terminal status and cleared when a lead is
   /// reopened — `updated_at` cannot stand in for it, because any later edit moves it.
   closed_at             DateTime?
+  /// The person this deal belongs to, and that person's company. Nullable so
+  /// the columns can be added before the backfill fills them. Deleting either
+  /// row leaves the lead in place.
+  contact_id            String?
+  organization_id       String?
   converted_customer_id String?
   created_by            String?
   created_at            DateTime      @default(now())
@@ -3475,6 +3483,8 @@ model Lead {
   assignee           User?                  @relation("LeadAssignee", fields: [assigned_to], references: [id])
   nextStepAssignee   User?                  @relation("LeadNextStepAssignee", fields: [next_step_assigned_to], references: [id])
   creator            User?                  @relation("LeadCreator", fields: [created_by], references: [id])
+  contact            CrmContact?            @relation(fields: [contact_id], references: [id], onDelete: SetNull)
+  organization       Organization?          @relation(fields: [organization_id], references: [id], onDelete: SetNull)
   convertedCustomer  Customer?              @relation("LeadConvertedCustomer", fields: [converted_customer_id], references: [id])
   sourceOption       LeadSourceOption?      @relation(fields: [source_id], references: [id], onDelete: Restrict)
   categoryOption     LeadCategoryOption?    @relation(fields: [category_id], references: [id], onDelete: Restrict)
@@ -3485,13 +3495,11 @@ model Lead {
   projects           Project[]
   campaignRecipients CrmCampaignRecipient[]
 
-  // Identity uniqueness, per tenant. Postgres treats NULLs as distinct, so any
-  // number of leads may be missing a mobile or an email; two that carry the
-  // same one cannot both exist. Supersedes the old @@unique([tenant_id, mobile]),
-  // which compared raw strings and so let every alternate spelling through.
-  @@unique([tenant_id, mobile_norm])
-  @@unique([tenant_id, email_norm])
-  @@unique([tenant_id, linkedin_norm])
+  // Lookup only. Many leads may share a mobile, email, or LinkedIn; the person
+  // is unique on CrmContact. Replaces @@unique on these same columns.
+  @@index([tenant_id, mobile_norm])
+  @@index([tenant_id, email_norm])
+  @@index([tenant_id, linkedin_norm])
   @@index([tenant_id, status])
   @@index([tenant_id, category])
   @@index([tenant_id, priority])
@@ -3594,6 +3602,28 @@ enum CrmContactCaptureSource {
   IMPORT
 }
 
+/// A company. Many contacts belong to one; an individual contact has none.
+/// Unique per tenant on `name_norm` (trim, lowercase, collapsed whitespace).
+/// Display `name` keeps the original spelling. Deleting the row nulls the links.
+model Organization {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  name        String
+  name_norm   String
+  email       String?
+  phone       String?
+  address     String?
+  website_url String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  tenant   Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  contacts CrmContact[]
+  leads    Lead[]
+
+  @@unique([tenant_id, name_norm])
+}
+
 /// A person the tenant knows — deliberately thinner than `Lead`.
 ///
 /// A lead carries a pipeline (status, score, next step, source/category
@@ -3601,6 +3631,7 @@ enum CrmContactCaptureSource {
 /// who they are, where they work, how to reach them. Keeping them separate is
 /// what lets the business-card scanner drop a card into the system in one step
 /// without inventing a pipeline stage for someone met at a trade fair.
+/// `company` stays free text; `organization_id` points at the company row.
 model CrmContact {
   id                String                  @id @default(uuid())
   tenant_id         String
@@ -3613,6 +3644,15 @@ model CrmContact {
   address           String?
   website_url       String?
   linkedin_url      String?
+  /// Normalized copies of mobile / email / linkedin_url. Written ONLY via
+  /// packages/shared-types/lead-identity.ts. `mobile_norm` and `linkedin_norm`
+  /// are unique per tenant; `email_norm` is indexed only, so a shared inbox
+  /// can belong to more than one person. Null when a later row collides.
+  mobile_norm       String?
+  email_norm        String?
+  linkedin_norm     String?
+  organization_id   String?
+  customer_id       String?
   photo_url         String?
   /// Cloudinary's public_id for `photo_url` — see the same field on `Lead`.
   photo_storage_key String?
@@ -3624,14 +3664,20 @@ model CrmContact {
   updated_at        DateTime                @updatedAt
 
   tenant             Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  organization       Organization?          @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  customer           Customer?              @relation(fields: [customer_id], references: [id], onDelete: SetNull)
   assignee           User?                  @relation("CrmContactAssignee", fields: [assigned_to], references: [id])
   creator            User?                  @relation("CrmContactCreator", fields: [created_by], references: [id])
+  leads              Lead[]
   attachments        CrmContactAttachment[]
   campaignRecipients CrmCampaignRecipient[]
 
-  // Mobile is the dedupe key, as it is on Lead. Postgres treats NULLs as
-  // distinct, so any number of contacts may have no mobile at all.
+  // Raw mobile stays unique. Normalized mobile and LinkedIn identify the
+  // person; email does not. Postgres treats NULLs as distinct.
   @@unique([tenant_id, mobile])
+  @@unique([tenant_id, mobile_norm])
+  @@unique([tenant_id, linkedin_norm])
+  @@index([tenant_id, email_norm])
   @@index([tenant_id, name])
   @@index([tenant_id, company])
   @@index([tenant_id, assigned_to])
