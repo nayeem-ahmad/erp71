@@ -675,6 +675,7 @@ describe('CrmContactsService', () => {
             expect(db.crmContact.update.mock.calls[0][0].data).toEqual({
                 name: 'Rafiq Islam',
                 mobile: '01711223344',
+                mobile_norm: '+8801711223344',
                 email: 'rafiq@example.com',
                 email_norm: 'rafiq@example.com',
             });
@@ -722,6 +723,46 @@ describe('CrmContactsService', () => {
 
             expect(db.crmContact.update.mock.calls[0][0].data.email).toBe('Rafiq@Example.com');
             expect(db.crmContact.update.mock.calls[0][0].data.email_norm).toBe('rafiq@example.com');
+        });
+
+        it('writes the new mobile_norm when an upsert changes the mobile', async () => {
+            db.crmContact.findUnique.mockResolvedValue({
+                id: 'contact-1',
+                mobile: '01711223344',
+                mobile_norm: '+8801711223344',
+            });
+
+            await service.importRows(
+                TENANT,
+                [{ name: 'Rafiq Islam', mobile: '01811-112222' }],
+                'upsert',
+            );
+
+            const data = db.crmContact.update.mock.calls[0][0].data;
+            expect(data.mobile).toBe('01811-112222');
+            expect(data.mobile_norm).toBe('+8801811112222');
+            expect(Object.values(data)).not.toContain('+8801711223344');
+        });
+
+        it('errors the row when the new mobile normalizes to another contact', async () => {
+            db.crmContact.findUnique.mockResolvedValue({ id: 'contact-1' });
+            db.crmContact.findMany.mockResolvedValue([
+                {
+                    id: 'contact-9',
+                    mobile: '01811112222',
+                    mobile_norm: '+8801811112222',
+                },
+            ]);
+
+            const result = await service.importRows(
+                TENANT,
+                [{ name: 'Rafiq', mobile: '01811-112222' }],
+                'upsert',
+            );
+
+            expect(result.updated).toBe(0);
+            expect(result.errors[0]).toContain('A contact with this mobile number already exists.');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
         });
 
         it('errors the row when the new LinkedIn profile belongs to another contact', async () => {
