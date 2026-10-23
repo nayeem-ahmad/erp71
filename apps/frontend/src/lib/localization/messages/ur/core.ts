@@ -2393,6 +2393,12 @@ export const coreMessages = {
             deleteConfirm: 'کردار "{name}" حذف کریں؟ یہ واپس نہیں ہو سکتا۔',
             systemRole: 'سسٹم',
             pickerLabel: 'کردار',
+            defaultProfileLabel: 'ڈیفالٹ پروفائل',
+            defaultProfileNone: 'کوئی نہیں (ورک اسپیس کا ڈیفالٹ استعمال ہوگا)',
+            defaultProfileHint: 'اس کردار کے نئے ارکان اسی پروفائل سے شروع کرتے ہیں۔',
+            profileOnRow: 'پروفائل: {name}',
+            startsWith: 'شروعات ہوگی: {name}',
+            startsWithDefault: 'شروعات ہوگی: {name} (ورک اسپیس کا ڈیفالٹ)',
         },
         member: {
             loading: 'رکن لوڈ ہو رہا ہے…',

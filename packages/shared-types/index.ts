@@ -1149,6 +1149,8 @@ export interface TenantRoleSummary {
    */
   record_scope?: TenantRecordScope;
   member_count?: number;
+  /** The profile new members of this role start from; null when the role has none. */
+  preference_profile?: { id: string; name: string } | null;
 }
 
 export interface TenantUser {

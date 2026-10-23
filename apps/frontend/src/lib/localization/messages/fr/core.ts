@@ -2393,6 +2393,12 @@ export const coreMessages = {
             deleteConfirm: "Supprimer le rôle « {name} » ? Cette action est irréversible.",
             systemRole: "Système",
             pickerLabel: "Rôles",
+            defaultProfileLabel: 'Profil par défaut',
+            defaultProfileNone: 'Aucun (utiliser le profil par défaut de l’espace de travail)',
+            defaultProfileHint: 'Les nouveaux membres ayant ce rôle démarrent avec ce profil.',
+            profileOnRow: 'Profil : {name}',
+            startsWith: 'Démarre avec : {name}',
+            startsWithDefault: 'Démarre avec : {name} (par défaut de l’espace de travail)',
         },
         member: {
             loading: "Chargement du membre…",

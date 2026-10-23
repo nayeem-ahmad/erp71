@@ -2393,6 +2393,12 @@ export const coreMessages = {
             deleteConfirm: 'حذف الدور "{name}"؟ لا يمكن التراجع عن هذا.',
             systemRole: 'نظام',
             pickerLabel: 'الأدوار',
+            defaultProfileLabel: 'الملف الافتراضي',
+            defaultProfileNone: 'بدون (استخدام الملف الافتراضي لمساحة العمل)',
+            defaultProfileHint: 'يبدأ الأعضاء الجدد بهذا الدور من هذا الملف.',
+            profileOnRow: 'الملف: {name}',
+            startsWith: 'يبدأ بـ: {name}',
+            startsWithDefault: 'يبدأ بـ: {name} (الافتراضي لمساحة العمل)',
         },
         member: {
             loading: 'جارٍ تحميل العضو…',

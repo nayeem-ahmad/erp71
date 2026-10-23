@@ -4771,6 +4771,8 @@ export const api = {
         description?: string;
         permissions: string[];
         recordScope?: 'ALL' | 'PROJECT' | 'OWN';
+        /** null clears the role's profile; omitted leaves it as it is. */
+        preference_profile_id?: string | null;
     }) =>
         fetchWithAuth('/team/roles', {
             method: 'POST',
@@ -4784,6 +4786,7 @@ export const api = {
             description?: string;
             permissions?: string[];
             recordScope?: 'ALL' | 'PROJECT' | 'OWN';
+            preference_profile_id?: string | null;
         },
     ) =>
         fetchWithAuth(`/team/roles/${id}`, {

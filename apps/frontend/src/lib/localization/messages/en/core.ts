@@ -2393,6 +2393,12 @@ export const coreMessages = {
             deleteConfirm: 'Delete role "{name}"? This cannot be undone.',
             systemRole: 'System',
             pickerLabel: 'Roles',
+            defaultProfileLabel: 'Default profile',
+            defaultProfileNone: 'None (use the workspace default)',
+            defaultProfileHint: 'New members with this role start from this profile.',
+            profileOnRow: 'Profile: {name}',
+            startsWith: 'Starts with: {name}',
+            startsWithDefault: 'Starts with: {name} (workspace default)',
         },
         member: {
             loading: 'Loading member…',

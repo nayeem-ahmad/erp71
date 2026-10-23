@@ -11,6 +11,7 @@ import {
     TENANT_RECORD_SCOPE_LABELS,
     TENANT_ROLE_MODULES,
     TenantRecordScope,
+    type PreferenceProfileSummary,
     type StorePermission,
     type TenantRoleSummary,
 } from '@erp71/shared-types';
@@ -21,6 +22,7 @@ import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { Button, PageShell } from '@/components/ui';
 import ProfilesPanel from '@/components/preferences/ProfilesPanel';
+import { InviteProfileLine, RoleProfileSelect } from '@/components/preferences/RoleProfileFields';
 import { hasPermission } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
 import { getWorkspaceItem } from '@/lib/session-store';
@@ -267,6 +269,9 @@ function RolesPanel({
     const [formName, setFormName] = useState('');
     const [formPerms, setFormPerms] = useState<Set<StorePermission>>(new Set());
     const [formScope, setFormScope] = useState<TenantRecordScope>(TenantRecordScope.ALL);
+    // '' is None: the role has no profile, so its members get the workspace default.
+    const [formProfileId, setFormProfileId] = useState('');
+    const [profiles, setProfiles] = useState<PreferenceProfileSummary[]>([]);
     const [saving, setSaving] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -284,12 +289,18 @@ function RolesPanel({
 
     useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
+    // A failed profile load leaves the select with None only; the roles still edit.
+    useEffect(() => {
+        api.getPreferenceProfiles().then((list) => setProfiles(list ?? [])).catch(() => setProfiles([]));
+    }, []);
+
     const startCreate = () => {
         setCreating(true);
         setEditingId(null);
         setFormName('');
         setFormPerms(new Set());
         setFormScope(TenantRecordScope.ALL);
+        setFormProfileId('');
     };
 
     const startEdit = (role: TenantRoleSummary) => {
@@ -298,6 +309,7 @@ function RolesPanel({
         setFormName(role.name);
         setFormPerms(new Set(role.permissions));
         setFormScope(role.record_scope ?? TenantRecordScope.ALL);
+        setFormProfileId(role.preference_profile?.id ?? '');
     };
 
     const cancelForm = () => {
@@ -306,6 +318,7 @@ function RolesPanel({
         setFormName('');
         setFormPerms(new Set());
         setFormScope(TenantRecordScope.ALL);
+        setFormProfileId('');
     };
 
     const togglePerm = (perm: StorePermission) => {
@@ -325,6 +338,7 @@ function RolesPanel({
                 name: formName.trim(),
                 permissions: Array.from(formPerms),
                 recordScope: formScope,
+                preference_profile_id: formProfileId || null,
             });
             onToast({ type: 'success', message: tr.roleCreated });
             cancelForm();
@@ -360,6 +374,7 @@ function RolesPanel({
                 name: formName.trim(),
                 permissions: Array.from(formPerms),
                 recordScope: formScope,
+                preference_profile_id: formProfileId || null,
             });
             onToast({ type: 'success', message: tr.roleUpdated });
             cancelForm();
@@ -417,6 +432,7 @@ function RolesPanel({
                     </div>
                     <PermissionMatrix permissions={formPerms} onToggle={togglePerm} />
                     <RecordScopeField scope={formScope} onChange={setFormScope} />
+                    <RoleProfileSelect value={formProfileId} profiles={profiles} onChange={setFormProfileId} />
                     <div className="flex items-center gap-3 pt-1 border-t border-gray-100">
                         <button
                             onClick={saveCreate}
@@ -456,6 +472,7 @@ function RolesPanel({
                                         </div>
                                         <PermissionMatrix permissions={formPerms} onToggle={togglePerm} />
                                         <RecordScopeField scope={formScope} onChange={setFormScope} />
+                                        <RoleProfileSelect value={formProfileId} profiles={profiles} onChange={setFormProfileId} />
                                         <div className="flex items-center gap-3 pt-1 border-t border-gray-100">
                                             <button
                                                 onClick={() => saveEdit(role)}
@@ -490,6 +507,7 @@ function RolesPanel({
                                             </div>
                                             <p className="text-xs text-gray-500 mt-0.5">
                                                 {formatPermCount(role.permissions.length)} · {formatMemberCount(role.member_count ?? 0)}
+                                                {role.preference_profile && ` · ${fmt(tr.profileOnRow, { name: role.preference_profile.name })}`}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
@@ -816,6 +834,8 @@ export default function TeamPage() {
     const [canManageProfiles, setCanManageProfiles] = useState(false);
     const [creatingProfile, setCreatingProfile] = useState(false);
     const [tenantRoles, setTenantRoles] = useState<TenantRoleSummary[]>([]);
+    // Only read to say what an invitee starts with; without it the line just stays away.
+    const [profiles, setProfiles] = useState<PreferenceProfileSummary[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -861,6 +881,9 @@ export default function TeamPage() {
         }
     };
     useEffect(() => { void load(); }, []);
+    useEffect(() => {
+        api.getPreferenceProfiles().then((list) => setProfiles(list ?? [])).catch(() => setProfiles([]));
+    }, []);
 
     const sendInvite = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -980,6 +1003,7 @@ export default function TeamPage() {
                                         disabled={tenantRoles.length === 0}
                                         otherLabel={tm.member.otherRoles}
                                     />
+                                    <InviteProfileLine roles={tenantRoles} selectedRoleIds={inviteTenantRoleIds} profiles={profiles} />
                                 </div>
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <p className="text-xs text-gray-500">

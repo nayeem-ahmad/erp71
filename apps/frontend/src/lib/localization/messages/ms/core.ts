@@ -2394,6 +2394,12 @@ export const coreMessages = {
                 deleteConfirm: 'Delete role "{name}"? This cannot be undone.',
                 systemRole: "System",
                 pickerLabel: "Peranan",
+                defaultProfileLabel: 'Profil lalai',
+                defaultProfileNone: 'Tiada (guna lalai ruang kerja)',
+                defaultProfileHint: 'Ahli baharu dengan peranan ini bermula daripada profil ini.',
+                profileOnRow: 'Profil: {name}',
+                startsWith: 'Bermula dengan: {name}',
+                startsWithDefault: 'Bermula dengan: {name} (lalai ruang kerja)',
             },
             member: {
                 loading: "Loading member…",

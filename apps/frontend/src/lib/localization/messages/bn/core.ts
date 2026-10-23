@@ -2393,6 +2393,12 @@ export const coreMessages = {
                 deleteConfirm: '"{name}" ভূমিকা মুছবেন? এটি পূর্বাবস্থায় ফেরানো যাবে না।',
                 systemRole: "সিস্টেম",
                 pickerLabel: "ভূমিকা",
+                defaultProfileLabel: 'ডিফল্ট প্রোফাইল',
+                defaultProfileNone: 'কোনোটি নয় (ওয়ার্কস্পেসের ডিফল্ট ব্যবহার হবে)',
+                defaultProfileHint: 'এই ভূমিকার নতুন সদস্যরা এই প্রোফাইল থেকে শুরু করেন।',
+                profileOnRow: 'প্রোফাইল: {name}',
+                startsWith: 'শুরু হবে: {name}',
+                startsWithDefault: 'শুরু হবে: {name} (ওয়ার্কস্পেসের ডিফল্ট)',
             },
             member: {
                 loading: "সদস্য লোড হচ্ছে…",

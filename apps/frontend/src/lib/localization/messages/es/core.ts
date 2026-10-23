@@ -2393,6 +2393,12 @@ export const coreMessages = {
             deleteConfirm: "¿Eliminar el rol «{name}»? Esta acción no se puede deshacer.",
             systemRole: "Sistema",
             pickerLabel: "Roles",
+            defaultProfileLabel: 'Perfil predeterminado',
+            defaultProfileNone: 'Ninguno (usar el predeterminado del espacio de trabajo)',
+            defaultProfileHint: 'Los nuevos miembros con este rol empiezan con este perfil.',
+            profileOnRow: 'Perfil: {name}',
+            startsWith: 'Empieza con: {name}',
+            startsWithDefault: 'Empieza con: {name} (predeterminado del espacio de trabajo)',
         },
         member: {
             loading: "Cargando el miembro…",

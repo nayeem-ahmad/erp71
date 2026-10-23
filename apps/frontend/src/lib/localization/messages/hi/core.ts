@@ -2393,6 +2393,12 @@ export const coreMessages = {
             deleteConfirm: "भूमिका \"{name}\" हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
             systemRole: "सिस्टम",
             pickerLabel: "भूमिकाएँ",
+            defaultProfileLabel: 'डिफ़ॉल्ट प्रोफ़ाइल',
+            defaultProfileNone: 'कोई नहीं (वर्कस्पेस का डिफ़ॉल्ट इस्तेमाल होगा)',
+            defaultProfileHint: 'इस भूमिका वाले नए सदस्य इसी प्रोफ़ाइल से शुरू करते हैं।',
+            profileOnRow: 'प्रोफ़ाइल: {name}',
+            startsWith: 'शुरुआत होगी: {name}',
+            startsWithDefault: 'शुरुआत होगी: {name} (वर्कस्पेस का डिफ़ॉल्ट)',
         },
         member: {
             loading: "सदस्य लोड हो रहा है…",

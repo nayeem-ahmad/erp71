@@ -2393,6 +2393,12 @@ export const coreMessages = {
             deleteConfirm: "Rolle \"{name}\" löschen? Dies kann nicht rückgängig gemacht werden.",
             systemRole: "System",
             pickerLabel: "Rollen",
+            defaultProfileLabel: 'Standardprofil',
+            defaultProfileNone: 'Keines (Standard des Arbeitsbereichs verwenden)',
+            defaultProfileHint: 'Neue Mitglieder mit dieser Rolle starten mit diesem Profil.',
+            profileOnRow: 'Profil: {name}',
+            startsWith: 'Startet mit: {name}',
+            startsWithDefault: 'Startet mit: {name} (Standard des Arbeitsbereichs)',
         },
         member: {
             loading: "Mitglied wird geladen…",
