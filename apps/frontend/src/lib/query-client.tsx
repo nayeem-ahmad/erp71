@@ -161,8 +161,16 @@ export function workspaceScope(): readonly [string | null, string | null] {
     return [getWorkspaceItem('tenant_id'), getWorkspaceItem('store_id')];
 }
 
+/**
+ * The member's own preferences (`usePreferencesLoader`). Keyed by tenant and
+ * person, not by branch: they load once per workspace session, so a branch
+ * switch must not throw them away and fetch them again.
+ */
+export const MY_PREFERENCES_QUERY_ROOT = 'preferences-me';
+
 function isWorkspaceQuery(query: Query): boolean {
-    return query.queryKey[0] !== ME_QUERY_KEY[0];
+    const root = query.queryKey[0];
+    return root !== ME_QUERY_KEY[0] && root !== MY_PREFERENCES_QUERY_ROOT;
 }
 
 /**
@@ -172,6 +180,10 @@ function isWorkspaceQuery(query: Query): boolean {
  * for any key that forgot its scope, and it frees the memory. Queries on screen
  * are reset (back to their skeleton) and refetched under the new headers, so the
  * old shop's figures are never painted into the new one.
+ *
+ * The member's preferences are spared: their key carries the tenant and the
+ * person, so another shop's can never answer here, and a branch switch (which
+ * also lands here) must not refetch them.
  *
  * `me` is not reset — it describes the person, not the workspace, and every
  * workspace's permissions are already in it. It is only marked stale, so the next

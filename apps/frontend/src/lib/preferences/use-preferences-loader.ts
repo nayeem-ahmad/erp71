@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MyPreferencesResponse } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { workspaceScope } from '@/lib/query-client';
+import { MY_PREFERENCES_QUERY_ROOT } from '@/lib/query-client';
 import { currentPreferencesScopeKey } from './scope';
 import { onPreferencesSettled, setPreferenceSaveFailedMessage, usePreferencesStore } from './store';
 
@@ -48,8 +48,11 @@ export function usePreferencesLoader(enabled: boolean): void {
     // The same key every reader checks the store against (`isCurrentPreferencesScope`).
     const scopeKey = enabled ? currentPreferencesScopeKey() : null;
 
+    // Keyed on the workspace and the person, not the branch: preferences load once per
+    // workspace session, and a branch switch neither moves this key nor resets the query.
+    const queryKey = [MY_PREFERENCES_QUERY_ROOT, scopeKey] as const;
     const query = useQuery({
-        queryKey: ['preferences-me', ...workspaceScope()],
+        queryKey,
         queryFn: () => api.getMyPreferences(),
         enabled: scopeKey !== null,
     });
@@ -84,7 +87,7 @@ export function usePreferencesLoader(enabled: boolean): void {
         return onPreferencesSettled((data) => {
             if (usePreferencesStore.getState().scopeKey !== scopeKey) return;
             writeCache(scopeKey, data);
-            queryClient.setQueryData(['preferences-me', ...workspaceScope()], data);
+            queryClient.setQueryData([MY_PREFERENCES_QUERY_ROOT, scopeKey], data);
         });
     }, [scopeKey, queryClient]);
 }
