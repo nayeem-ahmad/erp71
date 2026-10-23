@@ -29,6 +29,9 @@ describe('SalesQuotationsService', () => {
       quotationItem: {
         deleteMany: jest.fn(),
       },
+      // No saved format: the built-in QT-/PI- defaults, in Dhaka time.
+      documentNumbering: { findUnique: jest.fn().mockResolvedValue(null) },
+      tenant: { findUnique: jest.fn().mockResolvedValue({ timezone: 'Asia/Dhaka' }) },
       documentSequence: {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
         // The reserved number is one below what `update` returns, so this
@@ -80,6 +83,31 @@ describe('SalesQuotationsService', () => {
     const result = await service.create('tenant-1', mockDto as any);
     expect(db.quotation.create).toHaveBeenCalled();
     expect(result).toEqual({ id: 'quote-1' });
+  });
+
+  it('create() numbers a proforma from the PI series, stepping over any quotation number', async () => {
+    db.quotation.create.mockResolvedValue({ id: 'quote-1' });
+    // The PI counter already stood at 42 before proformas were configurable.
+    db.documentSequence.update.mockResolvedValueOnce({ next_number: 43 });
+    db.quotation.findFirst.mockResolvedValueOnce(null);
+
+    await service.create('tenant-1', {
+        storeId: 'store-1',
+        docKind: 'PROFORMA',
+        totalAmount: 500,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 500 }],
+    } as any);
+
+    expect(db.documentSequence.createMany).toHaveBeenCalledWith(expect.objectContaining({
+        data: [expect.objectContaining({ tenant_id: 'tenant-1', doc_type: 'PROFORMA', scope_key: '' })],
+    }));
+    expect(db.quotation.findFirst).toHaveBeenCalledWith({
+        where: { tenant_id: 'tenant-1', quote_number: expect.stringMatching(/^PI-\d{4}-00042$/) },
+        select: { id: true },
+    });
+    expect(db.quotation.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ quote_number: expect.stringMatching(/^PI-\d{4}-00042$/) }),
+    }));
   });
 
   it('create() stores the VAT added on top and how the prices were entered', async () => {

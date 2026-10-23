@@ -3,6 +3,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreateSalesOrderDto, UpdateSalesOrderDto, UpdateOrderStatusDto, AddDepositDto } from './sales-orders.dto';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { resolveInlineCustomer } from '../customers/resolve-inline-customer.util';
@@ -33,7 +34,12 @@ export class SalesOrdersService {
                 dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
-            const orderNumber = `ORD-${Date.now()}`;
+            const orderNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'SALES_ORDER',
+                storeId: dto.storeId,
+                isTaken: numberTakenIn(tx.salesOrder, tenantId, 'order_number'),
+            });
             const deliveryDate = this.normalizeDeliveryDate(dto.deliveryDate);
             
             const itemsData = dto.items.map(item => ({

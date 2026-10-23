@@ -2,6 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SalesOrdersService } from './sales-orders.service';
 import { DatabaseService } from '../database/database.service';
 import { BadRequestException } from '@nestjs/common';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'ORD-2627-00001'),
+}));
+
 
 describe('SalesOrdersService', () => {
   let service: SalesOrdersService;
@@ -99,6 +106,32 @@ describe('SalesOrdersService', () => {
             data: expect.objectContaining({ total_amount: 1150, vat_amount: 150, prices_include_vat: false }),
         }),
     );
+  });
+
+  it('create() numbers the order from the sales-order series at its branch', async () => {
+    db.salesOrder.create.mockResolvedValue({ id: 'order-1' });
+
+    await service.create('tenant-1', 'user-1', {
+        storeId: 'store-1',
+        totalAmount: 100,
+        items: [{ productId: 'prod-1', quantity: 1, priceAtOrder: 100 }],
+    } as any);
+
+    expect(issueDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({
+        tenantId: 'tenant-1',
+        docType: 'SALES_ORDER',
+        storeId: 'store-1',
+    }));
+    expect(db.salesOrder.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ order_number: 'ORD-2627-00001' }) }),
+    );
+    const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls.at(-1)[1];
+    db.salesOrder.findFirst.mockResolvedValueOnce({ id: 'order-0' });
+    await expect(isTaken('ORD-2627-00001')).resolves.toBe(true);
+    expect(db.salesOrder.findFirst).toHaveBeenLastCalledWith({
+        where: { tenant_id: 'tenant-1', order_number: 'ORD-2627-00001' },
+        select: { id: true },
+    });
   });
 
   it('updateStatus() should decrement stock when delivering', async () => {

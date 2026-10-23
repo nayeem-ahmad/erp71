@@ -5,6 +5,12 @@ import { DatabaseService } from '../database/database.service';
 import { applyInventoryMovement, resolveEntryWarehouses, usableWarehouseIds } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'EXC-2627-00001'),
+}));
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -120,6 +126,12 @@ describe('SalesExchangesService', () => {
         expect(created.due_delta).toBe(0);
         expect(created.posting_status).toBe('skipped');
         expect(autoPostFromRules).not.toHaveBeenCalled();
+        // Numbered at the sale's branch, not the epoch-millis EXC-… it used to be.
+        expect(issueDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({
+            docType: 'SALES_EXCHANGE',
+            storeId: expect.any(String),
+        }));
+        expect(db.salesExchange.create.mock.calls[0][0].data.exchange_number).toBe('EXC-2627-00001');
         expect(db.customer.update).not.toHaveBeenCalled();
         expect(applyInventoryMovement).toHaveBeenCalledWith(
             db,

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { createdAtRange } from '../common/created-range.util';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { CreateInventoryShrinkageDto, ShrinkageDirection } from './inventory-shrinkage.dto';
@@ -8,24 +9,25 @@ import { autoPostFromRules } from '../accounting/posting.utils';
 /**
  * Everything that differs between writing stock off and putting a surplus back.
  *
- * Held in one table so the two directions cannot drift apart: a reference
- * series is only unique because nothing else uses its prefix, and a reason type
- * is only meaningful because the other direction cannot reach it.
+ * Held in one table so the two directions cannot drift apart: each numbers
+ * its own series (SHR-00007 and FND-00001 are the seventh write-off and the
+ * first surplus, not one muddled sequence), and a reason type is only
+ * meaningful because the other direction cannot reach it.
  */
 const DIRECTION_RULES: Record<
     ShrinkageDirection,
-    { reasonType: string; referencePrefix: string; movementType: string; sign: 1 | -1; label: string }
+    { reasonType: string; docType: 'SHRINKAGE' | 'STOCK_FOUND'; movementType: string; sign: 1 | -1; label: string }
 > = {
     // Stock leaves. The movement is QUANTITY_ONLY (see product-cost.utils.ts),
     // so the goods leave at the weighted average rather than at anything this
     // document says.
-    LOSS: { reasonType: 'SHRINKAGE', referencePrefix: 'SHR', movementType: 'SHRINKAGE', sign: -1, label: 'shrinkage' },
+    LOSS: { reasonType: 'SHRINKAGE', docType: 'SHRINKAGE', movementType: 'SHRINKAGE', sign: -1, label: 'shrinkage' },
     // Stock arrives — but not from anywhere, which is exactly why STOCK_FOUND
     // must stay off the REVALUE list. Nobody knows what found goods cost, and
     // the honest answer is that they join the pool at the average the rest of
     // that product is already held at. Adding it to COST_BEHAVIOUR later would
     // let a counter revalue inventory by typing a number into a stock screen.
-    FOUND: { reasonType: 'FOUND', referencePrefix: 'FND', movementType: 'STOCK_FOUND', sign: 1, label: 'stock found' },
+    FOUND: { reasonType: 'FOUND', docType: 'STOCK_FOUND', movementType: 'STOCK_FOUND', sign: 1, label: 'stock found' },
 };
 
 @Injectable()
@@ -39,16 +41,16 @@ export class InventoryShrinkageService {
         const rules = DIRECTION_RULES[direction];
 
         return this.db.$transaction(async (tx) => {
-            await assertWarehouseBelongsToTenant(tx, tenantId, dto.warehouseId);
+            const warehouse = await assertWarehouseBelongsToTenant(tx, tenantId, dto.warehouseId);
             await this.assertActiveReason(tx, tenantId, dto.reasonId, rules.reasonType);
 
-            // Counted per direction so the two series number independently:
-            // SHR-00007 and FND-00001 are the seventh write-off and the first
-            // surplus, not the seventh and eighth of one muddled sequence.
-            const count = await tx.inventoryShrinkage.count({
-                where: { tenant_id: tenantId, direction },
+            // Checked against both directions' numbers: they share the column.
+            const referenceNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: rules.docType,
+                storeId: warehouse.store_id,
+                isTaken: numberTakenIn(tx.inventoryShrinkage, tenantId, 'reference_number'),
             });
-            const referenceNumber = `${rules.referencePrefix}-${String(count + 1).padStart(5, '0')}`;
 
             const products = await tx.product.findMany({
                 where: { tenant_id: tenantId, id: { in: dto.items.map((item) => item.productId) } },

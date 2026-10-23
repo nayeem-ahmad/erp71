@@ -4,6 +4,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { applyInventoryMovement, resolveEntryWarehouses, usableWarehouseIds } from '../database/inventory.utils';
 import { resolveProductCosts } from '../database/product-cost.utils';
 import { autoPostFromRules, voidAutoPostedVoucher, type AutoPostResult } from '../accounting/posting.utils';
@@ -182,7 +183,12 @@ export class SalesExchangesService {
             }
 
             const session = await findOpenSessionForUser(tx, tenantId, userId);
-            const exchangeNumber = `EXC-${Date.now()}`;
+            const exchangeNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'SALES_EXCHANGE',
+                storeId: sale.store_id,
+                isTaken: numberTakenIn(tx.salesExchange, tenantId, 'exchange_number'),
+            });
             const exchange = await tx.salesExchange.create({
                 data: {
                     tenant_id: tenantId,

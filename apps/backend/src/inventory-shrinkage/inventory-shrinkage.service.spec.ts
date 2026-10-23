@@ -4,6 +4,12 @@ import { DatabaseService } from '../database/database.service';
 import { InventoryShrinkageService } from './inventory-shrinkage.service';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import { autoPostFromRules } from '../accounting/posting.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async (_tx: unknown, { docType }: { docType: string }) => (docType === 'STOCK_FOUND' ? 'FND-00001' : 'SHR-00001')),
+}));
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -28,7 +34,7 @@ describe('InventoryShrinkageService', () => {
 
         tx = {
             inventoryReason: { findFirst: jest.fn() },
-            inventoryShrinkage: { count: jest.fn(), create: jest.fn() },
+            inventoryShrinkage: { count: jest.fn(), create: jest.fn(), findFirst: jest.fn() },
             product: { findMany: jest.fn() },
         };
 
@@ -42,7 +48,7 @@ describe('InventoryShrinkageService', () => {
         }).compile();
 
         service = module.get(InventoryShrinkageService);
-        (assertWarehouseBelongsToTenant as jest.Mock).mockResolvedValue({ id: 'wh-1' });
+        (assertWarehouseBelongsToTenant as jest.Mock).mockResolvedValue({ id: 'wh-1', store_id: 'store-1' });
         (applyInventoryMovement as jest.Mock).mockResolvedValue(3);
         (autoPostFromRules as jest.Mock).mockResolvedValue({
             postingStatus: 'posted',
@@ -117,8 +123,18 @@ describe('InventoryShrinkageService', () => {
         expect(tx.inventoryReason.findFirst).toHaveBeenCalledWith(
             expect.objectContaining({ where: expect.objectContaining({ type: 'FOUND' }) }),
         );
-        expect(tx.inventoryShrinkage.count).toHaveBeenCalledWith({
-            where: { tenant_id: 'tenant-1', direction: 'FOUND' },
+        // Its own series, checked against both directions' numbers.
+        expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+            tenantId: 'tenant-1',
+            docType: 'STOCK_FOUND',
+            storeId: 'store-1',
+        }));
+        const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls.at(-1)[1];
+        tx.inventoryShrinkage.findFirst.mockResolvedValueOnce(null);
+        await expect(isTaken('FND-00001')).resolves.toBe(false);
+        expect(tx.inventoryShrinkage.findFirst).toHaveBeenLastCalledWith({
+            where: { tenant_id: 'tenant-1', reference_number: 'FND-00001' },
+            select: { id: true },
         });
         expect(tx.inventoryShrinkage.create).toHaveBeenCalledWith(
             expect.objectContaining({
