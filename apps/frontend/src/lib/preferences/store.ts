@@ -1,14 +1,18 @@
 import { create } from 'zustand';
-import type {
-    LegacyBrowserSection,
-    MyPreferencesResponse,
-    PersonSectionKey,
-    PreferenceSource,
-    ResolvedPreferences,
-    SectionValues,
+import {
+    LEGACY_BROWSER_SECTIONS,
+    normalizeSectionPartial,
+    type LegacyBrowserSection,
+    type MyPreferencesResponse,
+    type PersonSectionKey,
+    type PreferenceSource,
+    type ResolvedPreferences,
+    type SectionValues,
 } from '@erp71/shared-types';
+import { currentViewUserKey } from '@/components/table/view-user-key';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { readLegacyBrowserSection } from './legacy';
 import { isCurrentPreferencesScope } from './scope';
 
 /**
@@ -41,7 +45,10 @@ type ResolvedSection = { value: unknown; source: PreferenceSource };
 interface PendingSave {
     /** Every edit since the last send, folded into one request body. */
     body: unknown;
-    /** The first save of a legacy section: `body` is the whole section as the member sees it. */
+    /**
+     * The first save of a section still shown from this browser's old answers: `body`
+     * carries those answers with the edits on top (see `browserAnswersBody`).
+     */
     whole: boolean;
     timer: ReturnType<typeof setTimeout>;
     /** The section as it was before the first of those edits. */
@@ -67,6 +74,12 @@ interface PreferencesState {
 const pending = new Map<PersonSectionKey, PendingSave>();
 /** The latest queued or running request per section; later requests wait for it. */
 const inFlight = new Map<PersonSectionKey, Promise<void>>();
+/**
+ * What a failed save hands to the request already queued behind it, which is
+ * sent next in its place: the failed body when it was a whole first save, and
+ * the section as it was before the failed edits.
+ */
+const handedOn = new Map<PersonSectionKey, { body?: unknown; rollback: ResolvedPreferences[PersonSectionKey] }>();
 /** Bumped whenever the data's owner changes, so a late response for the old owner is ignored. */
 let generation = 0;
 const settledListeners = new Set<(data: MyPreferencesResponse) => void>();
@@ -127,17 +140,33 @@ function mergeBodies(key: PersonSectionKey, earlier: unknown, later: unknown): u
     }
 }
 
+function isLegacySection(key: PersonSectionKey): key is LegacyBrowserSection {
+    return (LEGACY_BROWSER_SECTIONS as readonly string[]).includes(key);
+}
+
 /**
- * The request body that carries a whole section, from the value the member sees.
+ * This browser's own old answers for a section, as a save body — or undefined
+ * when the member is not being shown any: the section is not listed in
+ * `legacy_browser_sections`, the member already has an answer of their own on
+ * the server, or this browser holds nothing readable for it.
  *
- * The server stores only the submitted ids and, on any save, stops reading the
- * browser for that section. So while a section is still shown from this
- * browser's old answers, a change to one list would silently drop every other
- * list's answers. The first save therefore sends everything the member sees.
+ * Any save takes the section off that list, and from then on the server never
+ * reads this browser for it. Sending just the change would drop every other
+ * answer the browser held for the section (another list's columns, say);
+ * sending the value on screen would freeze the profile's and the built-in
+ * values into the member's own answers, so they would stop following later
+ * profile changes. The first save therefore sends exactly the browser's answers
+ * with the change on top (Ruling R11). The normalised partial is already in
+ * body shape: the per-list map for `tableColumns`, `{ global, tables }` for
+ * `tableView`. The sidebar's body is always the whole list, so `mergeBodies`
+ * leaves the caller's as it is.
  */
-function wholeSectionBody(key: PersonSectionKey, section: unknown): unknown {
-    if (key === 'tableView' && isRecord(section)) return { global: section.global, tables: section.tables };
-    return section;
+function browserAnswersBody(key: PersonSectionKey, data: MyPreferencesResponse): unknown | undefined {
+    if (!isLegacySection(key) || !data.legacy_browser_sections.includes(key)) return undefined;
+    if (data.sections[key].source === 'member') return undefined;
+    const answers = normalizeSectionPartial(key, readLegacyBrowserSection(key, currentViewUserKey()));
+    // The same test the display uses (`applyLegacyLayer`): nothing readable, nothing shown.
+    return Object.keys(answers as object).length > 0 ? answers : undefined;
 }
 
 function withoutLegacy(data: MyPreferencesResponse, key: PersonSectionKey): MyPreferencesResponse {
@@ -163,6 +192,7 @@ function cancelAll(): void {
     for (const entry of pending.values()) clearTimeout(entry.timer);
     pending.clear();
     inFlight.clear();
+    handedOn.clear();
     generation += 1;
 }
 
@@ -214,6 +244,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
                 settle();
                 return;
             }
+            // The save in line before this one failed: this one is sent in its place.
+            const earlier = handedOn.get(key);
+            if (earlier) {
+                handedOn.delete(key);
+                entry.rollback = earlier.rollback;
+                if (earlier.body !== undefined) {
+                    entry.whole = true;
+                    entry.body = mergeBodies(key, earlier.body, entry.body);
+                }
+            }
             let result: ResolvedSection | null = null;
             try {
                 result = await api.saveMyPreferenceSection(key, entry.body);
@@ -230,9 +270,23 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
                 else set({ data: withoutLegacy(get().data as MyPreferencesResponse, key) });
             } else {
                 toast.error(saveFailedMessage);
-                // The newer edit builds on this one, so a failure of it goes back to where this started.
-                if (newer) newer.rollback = entry.rollback;
-                else restore(key, entry.rollback);
+                // A later edit builds on this one, so a failure of it goes back to where this started.
+                // And when this was the section's whole first save, the next request to reach the
+                // server must carry the whole section instead: sent as a partial it would succeed,
+                // the server would stop reading this browser for the section, and the browser's other
+                // answers would be lost for good.
+                if (inFlight.has(key)) {
+                    // Already sent off and waiting behind this one, so it goes first.
+                    handedOn.set(key, { body: entry.whole ? entry.body : undefined, rollback: entry.rollback });
+                } else if (newer) {
+                    newer.rollback = entry.rollback;
+                    if (entry.whole) {
+                        newer.whole = true;
+                        newer.body = mergeBodies(key, entry.body, newer.body);
+                    }
+                } else {
+                    restore(key, entry.rollback);
+                }
             }
             announceSettled();
         });
@@ -275,19 +329,13 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
 
             const earlier = pending.get(key);
             if (earlier) clearTimeout(earlier.timer);
-            // Still shown from the browser (listed, and not yet the member's own answer)? Then this
-            // save, and any more in the same window, carry the whole section; see wholeSectionBody.
-            const whole =
-                earlier?.whole ??
-                (data.legacy_browser_sections.includes(key as LegacyBrowserSection) &&
-                    data.sections[key].source !== 'member');
+            // Still shown from this browser's old answers? Then this save carries them, and any more
+            // edits in the same window build on it; see browserAnswersBody.
+            const browserAnswers = earlier ? undefined : browserAnswersBody(key, data);
+            const base = earlier ? earlier.body : browserAnswers;
             pending.set(key, {
-                body: whole
-                    ? wholeSectionBody(key, optimistic)
-                    : earlier
-                      ? mergeBodies(key, earlier.body, body)
-                      : body,
-                whole,
+                body: base === undefined ? body : mergeBodies(key, base, body),
+                whole: earlier ? earlier.whole : browserAnswers !== undefined,
                 timer: setTimeout(() => flush(key), SAVE_DEBOUNCE_MS),
                 rollback: earlier ? earlier.rollback : data.sections[key],
             });
@@ -312,6 +360,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
                     settle();
                     return;
                 }
+                // A save that failed just before is moot once the section is reset; only where
+                // it started from still matters, should the reset fail as well.
+                const failedBefore = handedOn.get(key);
+                handedOn.delete(key);
                 let result: ResolvedSection | null = null;
                 try {
                     result = await api.resetMyPreferenceSection(key);
@@ -325,7 +377,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
                     apply(key, result);
                 } else {
                     toast.error(saveFailedMessage);
-                    if (unsent) restore(key, unsent.rollback);
+                    const back = failedBefore?.rollback ?? unsent?.rollback;
+                    if (back) restore(key, back);
                 }
                 announceSettled();
             });

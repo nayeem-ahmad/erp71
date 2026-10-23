@@ -79,8 +79,9 @@ function hiddenFrom(visibility: Record<string, boolean>): string[] {
 /**
  * Saves one list's entry with `patch` applied. The server replaces a list's
  * entry whole, so the rest of what is saved for it (a profile's page size,
- * say) goes along; the full map is the optimistic value, which the
- * preferences store also sends whole on a legacy member's first save.
+ * say) goes along; the full map is the optimistic value. On a legacy member's
+ * first save the preferences store adds this browser's old lists to the body,
+ * never the profile's (see `browserAnswersBody`).
  */
 function saveEntry(person: TableColumnsPrefs, tableId: string, patch: TableColumnsEntry) {
     const entry = { ...person[tableId], ...patch };

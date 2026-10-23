@@ -189,89 +189,195 @@ describe('preferences store', () => {
         expect(saveApi).toHaveBeenCalledWith('tableColumns', { orders: { hidden: ['a'] }, invoices: null });
     });
 
-    describe('the first save of a section still shown from the browser', () => {
-        const entryA = { hidden: ['x'] };
+    describe('the first save of a section still shown from the browser (Ruling R11)', () => {
         const entryA2 = { hidden: ['x', 'y'] };
         const entryB = { order: ['b', 'a'] };
+        const entryC = { pageSize: 50 };
+        const send = () =>
+            act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
 
-        function legacyColumns(source: 'profile' | 'member') {
+        /** This browser's old columns: list a hides x, list b is reordered. */
+        function browserColumns() {
+            window.localStorage.setItem(
+                'data-table-preferences',
+                JSON.stringify({ a: { columnVisibility: { x: false, z: true } }, b: { columnOrder: ['b', 'a'] } }),
+            );
+        }
+
+        /** Listed as legacy; the server's own value is the profile's list c. */
+        function legacyColumns(source: 'profile' | 'member' | 'default' = 'profile') {
             const base = response({ legacy_browser_sections: ['tableColumns'] });
-            base.sections.tableColumns = { value: { a: entryA }, source };
+            base.sections.tableColumns = { value: source === 'default' ? {} : { c: entryC }, source };
             state().hydrate('t1:u1', base);
         }
 
-        it('first save of a legacy section sends the whole section as seen', async () => {
-            saveApi.mockResolvedValue({ value: { a: entryA2, b: entryB }, source: 'member' });
+        it('sends only the change when this browser holds nothing for the section', async () => {
+            saveApi.mockResolvedValue({ value: { a: entryA2, c: entryC }, source: 'member' });
             legacyColumns('profile');
 
-            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
-            await act(async () => {
-                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
-            });
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, c: entryC });
+            await send();
 
             expect(saveApi).toHaveBeenCalledTimes(1);
+            expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2 });
+        });
+
+        it("sends this browser's answers with the change, and none of the profile's", async () => {
+            saveApi.mockResolvedValue({ value: {}, source: 'member' });
+            browserColumns();
+            legacyColumns('profile');
+
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB, c: entryC });
+            await send();
+
+            expect(saveApi).toHaveBeenCalledTimes(1);
+            // b is the browser's own answer and survives; c is only the profile's and is not frozen in.
             expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2, b: entryB });
         });
 
-        it('sends the latest whole section when several edits land in one window', async () => {
+        it("sends the browser's answers with every edit made in one window", async () => {
             saveApi.mockResolvedValue({ value: {}, source: 'member' });
-            legacyColumns('profile');
+            browserColumns();
+            legacyColumns('default');
 
             state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
-            state().save('tableColumns', { c: entryB }, { a: entryA2, b: entryB, c: entryB });
-            await act(async () => {
-                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
-            });
+            state().save('tableColumns', { d: entryB }, { a: entryA2, b: entryB, d: entryB });
+            await send();
 
             expect(saveApi).toHaveBeenCalledTimes(1);
-            expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2, b: entryB, c: entryB });
+            expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2, b: entryB, d: entryB });
         });
 
-        it('sends tableView as global and tables', async () => {
+        it("sends tableView as this browser's global and tables, with the change on top", async () => {
             saveApi.mockResolvedValue({ value: {}, source: 'member' });
+            window.localStorage.setItem(
+                'erp71:table-view:u1',
+                JSON.stringify({ global: { density: 'compact' }, tables: { orders: { fontSize: 'lg' } } }),
+            );
             const base = response({ legacy_browser_sections: ['tableView'] });
-            state().hydrate('t1:u1', base);
-            const optimistic = {
-                global: { ...DEFAULT_SECTION_VALUES.tableView.global, density: 'compact' as const },
-                tables: {},
+            // The profile turns striping off; this browser never touched it.
+            base.sections.tableView = {
+                value: { global: { ...DEFAULT_SECTION_VALUES.tableView.global, striped: false }, tables: {} },
+                source: 'profile',
             };
+            state().hydrate('t1:u1', base);
+            const shownGlobal = { ...DEFAULT_SECTION_VALUES.tableView.global, striped: false, density: 'compact' as const };
 
-            state().save('tableView', { global: { density: 'compact' } }, optimistic);
-            await act(async () => {
-                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            state().save('tableView', { global: { fontSize: 'xl' } }, {
+                global: { ...shownGlobal, fontSize: 'xl' as const },
+                tables: { orders: { ...shownGlobal, fontSize: 'lg' as const } },
             });
+            await send();
 
-            expect(saveApi).toHaveBeenCalledWith('tableView', { global: optimistic.global, tables: optimistic.tables });
+            expect(saveApi).toHaveBeenCalledWith('tableView', {
+                global: { density: 'compact', fontSize: 'xl' },
+                tables: { orders: { fontSize: 'lg' } },
+            });
+        });
+
+        it("sends the sidebar's whole list as the caller gave it", async () => {
+            saveApi.mockResolvedValue({ value: {}, source: 'member' });
+            window.localStorage.setItem('app-shell-open-groups', JSON.stringify({ stock: true, hr: true }));
+            state().hydrate('t1:u1', response({ legacy_browser_sections: ['sidebar'] }));
+
+            state().save('sidebar', { appShellOpenGroups: ['stock'] }, { appShellOpenGroups: ['stock'] });
+            await send();
+
+            expect(saveApi).toHaveBeenCalledWith('sidebar', { appShellOpenGroups: ['stock'] });
         });
 
         it('after that, saves send only the partial body', async () => {
             saveApi.mockResolvedValue({ value: { a: entryA2, b: entryB }, source: 'member' });
+            browserColumns();
             legacyColumns('profile');
 
-            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
-            await act(async () => {
-                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
-            });
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB, c: entryC });
+            await send();
             saveApi.mockClear();
 
             state().save('tableColumns', { b: null }, { a: entryA2 });
-            await act(async () => {
-                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
-            });
+            await send();
 
             expect(saveApi).toHaveBeenCalledWith('tableColumns', { b: null });
         });
 
-        it('a member-sourced section never sends the full body even if listed', async () => {
+        it('a member-sourced section never sends the browser answers even if listed', async () => {
             saveApi.mockResolvedValue({ value: {}, source: 'member' });
+            browserColumns();
             legacyColumns('member');
 
-            state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB });
-            await act(async () => {
-                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
-            });
+            state().save('tableColumns', { a: entryA2 }, { a: entryA2, c: entryC });
+            await send();
 
             expect(saveApi).toHaveBeenCalledWith('tableColumns', { a: entryA2 });
+        });
+
+        describe('when that first save fails (I2)', () => {
+            function deferred() {
+                let reject!: (error: Error) => void;
+                const promise = new Promise((_resolve, rej) => {
+                    reject = rej;
+                });
+                return { promise, reject };
+            }
+
+            it('failed whole save, then a queued edit → the queued PATCH carries the whole section', async () => {
+                browserColumns();
+                legacyColumns('profile');
+                const first = deferred();
+                saveApi.mockReturnValueOnce(first.promise).mockResolvedValue({ value: {}, source: 'member' });
+
+                state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB, c: entryC });
+                await send();
+                // While the first request is out, the member makes another change.
+                state().save('tableColumns', { d: entryB }, { a: entryA2, b: entryB, c: entryC, d: entryB });
+                await act(async () => {
+                    first.reject(new Error('offline'));
+                });
+                await send();
+
+                expect(saveApi).toHaveBeenCalledTimes(2);
+                expect(saveApi.mock.calls[1]).toEqual(['tableColumns', { a: entryA2, b: entryB, d: entryB }]);
+            });
+
+            it('the same when the queued edit was already sent off behind the failing one', async () => {
+                browserColumns();
+                legacyColumns('profile');
+                const first = deferred();
+                saveApi.mockReturnValueOnce(first.promise).mockResolvedValue({ value: {}, source: 'member' });
+
+                state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB, c: entryC });
+                await send();
+                state().save('tableColumns', { d: entryB }, { a: entryA2, b: entryB, c: entryC, d: entryB });
+                // The second edit's pause runs out while the first request is still out: it waits in line.
+                await send();
+                expect(saveApi).toHaveBeenCalledTimes(1);
+
+                await act(async () => {
+                    first.reject(new Error('offline'));
+                });
+
+                expect(saveApi).toHaveBeenCalledTimes(2);
+                expect(saveApi.mock.calls[1]).toEqual(['tableColumns', { a: entryA2, b: entryB, d: entryB }]);
+            });
+
+            it('a queued edit that then fails too goes back to before the first edit', async () => {
+                browserColumns();
+                legacyColumns('profile');
+                const before = state().data?.sections.tableColumns;
+                saveApi.mockRejectedValue(new Error('offline'));
+
+                state().save('tableColumns', { a: entryA2 }, { a: entryA2, b: entryB, c: entryC });
+                await send();
+                state().save('tableColumns', { d: entryB }, { a: entryA2, b: entryB, c: entryC, d: entryB });
+                await send();
+                await send();
+
+                expect(state().data?.sections.tableColumns).toEqual(before);
+                expect(state().data?.legacy_browser_sections).toEqual(['tableColumns']);
+            });
         });
     });
 

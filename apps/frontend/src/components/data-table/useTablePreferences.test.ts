@@ -153,16 +153,16 @@ describe('useTablePreferences with preferences loaded', () => {
         expect(saveApi).toHaveBeenCalledWith('tableColumns', { orders: { order: ['b', 'a'], pageSize: 50 } });
     });
 
-    it('sends every list the member sees on the first save of a legacy section', async () => {
+    it("sends this browser's lists, not the profile's, on the first save of a legacy section", async () => {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ orders: { columnVisibility: { a: false } } }));
         hydrate({ customers: { pageSize: 50 } }, { source: 'profile', legacy: ['tableColumns'] });
 
         store().setPageSize('invoices', 20);
         await flush();
 
+        // `customers` is only the profile's: left out, it keeps following the profile (Ruling R11).
         expect(saveApi).toHaveBeenCalledWith('tableColumns', {
             orders: { hidden: ['a'] },
-            customers: { pageSize: 50 },
             invoices: { pageSize: 20 },
         });
     });
