@@ -341,15 +341,15 @@ step sync:lead-taxonomy \
 step sync:crm-activities \
     npm run sync:crm-activities --workspace=@erp71/database
 
-# sync:lead-identity backfills Lead.mobile_norm/email_norm/linkedin_norm, the
-# normalized columns carrying the per-tenant unique indexes that stop duplicate
-# leads. It is REQUIRED, not a nicety: production applies schema with `db push`
-# above, never `prisma migrate deploy`, so the migration that backfills these
-# columns never runs here. Without this step the columns stay NULL on every
-# existing lead, the indexes guard nothing, and the old raw-mobile unique that
-# db push drops is not replaced. Only the oldest lead claiming a value is filled
-# in, so pre-existing duplicates cannot make it throw. See
-# prisma/sync-lead-identity.ts.
+# sync:lead-identity fills Lead.mobile_norm/email_norm/linkedin_norm from the
+# raw columns, including when several leads share one mobile, email, or LinkedIn
+# profile. The unique indexes on those columns are gone. Leaving a shared norm
+# null would hide an email the user can already see. It writes only the norm
+# columns — never email, mobile, or linkedin_url — and a lead whose norms are
+# already set is left alone. REQUIRED, and it must stay AFTER `prisma db push`
+# above: production never runs `prisma migrate deploy`, and filling a second
+# lead's email_norm before that drop would throw on the old unique index and
+# abort boot. See prisma/sync-lead-identity.ts.
 step sync:lead-identity \
     npm run sync:lead-identity --workspace=@erp71/database
 
