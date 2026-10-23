@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { InvoicePrintPrefs } from '@erp71/shared-types';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import PreferenceSourceLine from '@/components/preferences/PreferenceSourceLine';
 import { Alert, Button, Checkbox, Field, Select } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import type { PrintDensity } from '@/lib/print';
@@ -82,6 +83,8 @@ export default function PrintSettingsModal({
     const [saving, setSaving] = useState(false);
     const [layoutError, setLayoutError] = useState(false);
     const [layoutValid, setLayoutValid] = useState(true);
+    // The fields keep the footer mode and the typed signature gap in their own state, so a reset remounts them.
+    const [resetCount, setResetCount] = useState(0);
 
     const handleSave = async () => {
         if (invoiceLayout && layout) {
@@ -171,8 +174,16 @@ export default function PrintSettingsModal({
                         <div>
                             <h3 className="text-sm font-semibold text-gray-700">{copy.invoiceLayout.heading}</h3>
                             <p className="text-xs text-gray-400">{copy.invoiceLayout.hint}</p>
+                            <PreferenceSourceLine
+                                sectionKey="invoicePrint"
+                                copy={copy.invoiceLayout.source}
+                                onInvoicePrintReset={(prefs) => {
+                                    setLayout(prefs);
+                                    setResetCount((n) => n + 1);
+                                }}
+                            />
                         </div>
-                        <InvoiceLayoutFields value={layout} onChange={setLayout} onValidityChange={setLayoutValid} />
+                        <InvoiceLayoutFields key={resetCount} value={layout} onChange={setLayout} onValidityChange={setLayoutValid} />
                         {layoutError && <Alert tone="danger">{copy.invoiceLayout.saveFailed}</Alert>}
                     </section>
                 )}

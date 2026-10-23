@@ -8,8 +8,12 @@ import { useI18n } from '@/lib/i18n';
 import { useTableViewSettings } from './useTableViewSettings';
 import { TABLE_DENSITIES, TABLE_FONT_SIZES, type TableDensity, type TableFontSize } from './view-settings';
 
-/** A row of mutually exclusive choices, each a pressed/unpressed button. */
-function Segmented<K extends string>({
+/**
+ * A row of mutually exclusive choices, each a pressed/unpressed button. Also
+ * drawn by the preference profile editor, so a profile's list look is set with
+ * the same control a member uses.
+ */
+export function Segmented<K extends string>({
     label,
     options,
     value,

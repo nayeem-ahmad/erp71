@@ -400,6 +400,13 @@ export const salesMessages = {
                 footerNone: "कोई फ़ुटर नहीं",
                 footerPlaceholder: "जैसे: बेचा गया सामान वापस नहीं होगा।",
                 saveFailed: "इनवॉइस लेआउट सहेजा नहीं जा सका। फिर कोशिश करें।",
+                source: {
+                    following: "{profile} डिफ़ॉल्ट का पालन कर रहा है",
+                    builtIn: "अंतर्निहित सेटिंग उपयोग में है",
+                    customised: "अनुकूलित",
+                    browser: "इस ब्राउज़र पर सेट",
+                    reset: "रीसेट करें",
+                },
             },
             saved: 'प्रिंट सेटिंग्स सहेजी गईं',
         },

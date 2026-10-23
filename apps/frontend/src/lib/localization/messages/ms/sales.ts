@@ -400,6 +400,13 @@ export const salesMessages = {
                     footerNone: "Tiada pengaki",
                     footerPlaceholder: "cth. Barang yang dijual tidak boleh dipulangkan.",
                     saveFailed: "Tidak dapat menyimpan susun atur invois. Cuba lagi.",
+                    source: {
+                        following: "Mengikut lalai {profile}",
+                        builtIn: "Menggunakan tetapan terbina dalam",
+                        customised: "Disesuaikan",
+                        browser: "Ditetapkan pada pelayar ini",
+                        reset: "Tetap semula",
+                    },
                 },
                 saved: 'Tetapan cetak disimpan',
             },

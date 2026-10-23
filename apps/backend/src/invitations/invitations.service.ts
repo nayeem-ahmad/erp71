@@ -12,6 +12,7 @@ import {
 } from '@erp71/shared-types';
 import { PasswordPolicyService } from '../password-policy/password-policy.service';
 import { setMemberRoles } from '../team/role-sync.util';
+import { newAccountLocale } from '../preferences/new-account-locale';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
@@ -463,6 +464,14 @@ export class InvitationsService {
         const passwordHash = await bcrypt.hash(password, 10);
 
         await this.db.$transaction(async (tx) => {
+            // A new account starts in the inviting workspace's language. Only this
+            // signup path sets it: `accept` joins an existing account, whose own
+            // choice of language is none of the workspace's business.
+            const tenant = await tx.tenant.findUnique({
+                where: { id: invitation.tenant_id },
+                select: { default_locale: true, localization_enabled: true },
+            });
+
             const user = await tx.user.create({
                 data: {
                     email: invitation.email,
@@ -471,6 +480,7 @@ export class InvitationsService {
                     mobile: normalizedMobile,
                     mobile_country_code: countryCode,
                     email_verified_at: new Date(),
+                    preferred_locale: tenant ? newAccountLocale(tenant) : 'en',
                 },
             });
 

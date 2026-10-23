@@ -400,6 +400,13 @@ export const salesMessages = {
                 footerNone: "بدون تذييل",
                 footerPlaceholder: "مثال: البضاعة المباعة لا تُرد.",
                 saveFailed: "تعذّر حفظ تخطيط الفاتورة. حاول مرة أخرى.",
+                source: {
+                    following: "يتبع الإعداد الافتراضي لـ {profile}",
+                    builtIn: "يستخدم الإعداد المدمج",
+                    customised: "مخصّص",
+                    browser: "مضبوط على هذا المتصفح",
+                    reset: "إعادة ضبط",
+                },
             },
             saved: 'تم حفظ إعدادات الطباعة',
         },

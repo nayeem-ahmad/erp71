@@ -113,10 +113,12 @@ export const DEFAULT_INVOICE_PRINT_PREFS: InvoicePrintPrefs = {
   signature_space_mm: null,
 };
 
+function isOneOf<T extends string>(options: readonly T[], value: unknown): value is T {
+  return typeof value === 'string' && (options as readonly string[]).includes(value);
+}
+
 function oneOf<T extends string>(options: readonly T[], value: unknown, fallback: T): T {
-  return typeof value === 'string' && (options as readonly string[]).includes(value)
-    ? (value as T)
-    : fallback;
+  return isOneOf(options, value) ? value : fallback;
 }
 
 function bool(value: unknown, fallback: boolean): boolean {
@@ -166,4 +168,44 @@ export function normalizeInvoicePrintPrefs(raw: unknown): InvoicePrintPrefs {
         : d.footer_text,
     signature_space_mm: signatureSpace(r.signature_space_mm),
   };
+}
+
+/**
+ * Reads a blob as only the answers it actually gives.
+ *
+ * A preference profile sets some fields and leaves the rest to the member or the
+ * built-ins, so "not answered" has to stay distinguishable from "answered with
+ * the default". A present `null` is an answer — `footer_text: null` picks the
+ * built-in thank-you and `signature_space_mm: null` the built-in gap — while a
+ * value of the wrong type is not, and is left out.
+ */
+export function normalizeInvoicePrintPrefsPartial(raw: unknown): Partial<InvoicePrintPrefs> {
+  if (!raw || typeof raw !== 'object') return {};
+  const r = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+
+  const choices: Record<string, readonly string[]> = {
+    layout: INVOICE_LAYOUTS,
+    padding: INVOICE_PADDINGS,
+    balance: INVOICE_BALANCE_MODES,
+    table_style: INVOICE_TABLE_STYLES,
+    warranty_column: INVOICE_WARRANTY_COLUMNS,
+    table_borders: INVOICE_TABLE_BORDERS,
+  };
+  for (const [key, options] of Object.entries(choices)) {
+    if (isOneOf(options, r[key])) out[key] = r[key];
+  }
+  for (const key of ['amount_in_words', 'serial_column', 'signature_lines', 'hide_empty_discount']) {
+    if (typeof r[key] === 'boolean') out[key] = r[key];
+  }
+  // The legacy on/off switch, honoured only when the newer field has no answer.
+  if (out.warranty_column === undefined && r.hide_empty_warranty === true) out.warranty_column = 'when-used';
+
+  if (r.footer_text === null) out.footer_text = null;
+  else if (typeof r.footer_text === 'string') out.footer_text = r.footer_text.slice(0, INVOICE_FOOTER_MAX_LENGTH);
+  if (r.signature_space_mm === null) out.signature_space_mm = null;
+  else if (typeof r.signature_space_mm === 'number' && Number.isFinite(r.signature_space_mm)) {
+    out.signature_space_mm = signatureSpace(r.signature_space_mm);
+  }
+  return out as Partial<InvoicePrintPrefs>;
 }

@@ -400,6 +400,13 @@ export const salesMessages = {
                 footerNone: "کوئی فوٹر نہیں",
                 footerPlaceholder: "مثلاً: فروخت شدہ مال واپس نہیں ہوگا۔",
                 saveFailed: "انوائس لے آؤٹ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
+                source: {
+                    following: "{profile} کی ڈیفالٹ پر عمل ہو رہا ہے",
+                    builtIn: "بلٹ اِن ترتیب استعمال ہو رہی ہے",
+                    customised: "حسب ضرورت",
+                    browser: "اس براؤزر پر سیٹ کی گئی",
+                    reset: "ری سیٹ کریں",
+                },
             },
             saved: 'پرنٹ سیٹنگز محفوظ ہو گئیں',
         },

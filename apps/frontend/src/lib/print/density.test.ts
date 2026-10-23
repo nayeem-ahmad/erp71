@@ -1,6 +1,33 @@
+import { DEFAULT_SECTION_VALUES, type DevicePrefs } from '@erp71/shared-types';
 import { PRINT_DENSITY_KEY, PRINT_DENSITY_MESSAGE } from './density';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
+
+jest.mock('@/lib/api', () => ({ api: {} }));
 
 type DensityModule = typeof import('./density');
+type StoreModule = typeof import('@/lib/preferences/store');
+
+/** A fresh copy of density with the preferences store it reads, holding `device` as the profile's. */
+function loadWithProfile(device: DevicePrefs): DensityModule {
+    let mod: DensityModule | undefined;
+    jest.isolateModules(() => {
+        mod = require('./density');
+        const { usePreferencesStore } = require('@/lib/preferences/store') as StoreModule;
+        usePreferencesStore.getState().hydrate('t1:u1', {
+            profile: { id: 'p1', name: 'Cashier' },
+            legacy_browser_sections: [],
+            sections: {
+                invoicePrint: { value: DEFAULT_SECTION_VALUES.invoicePrint, source: 'default' },
+                tableView: { value: DEFAULT_SECTION_VALUES.tableView, source: 'default' },
+                tableColumns: { value: {}, source: 'default' },
+                sidebar: { value: DEFAULT_SECTION_VALUES.sidebar, source: 'default' },
+                alerts: { value: DEFAULT_SECTION_VALUES.alerts, source: 'default' },
+                device: { value: device, source: 'profile' },
+            },
+        });
+    });
+    return mod!;
+}
 
 /** A fresh copy of the module — it holds the session fallback and the listener flag. */
 function load(): DensityModule {
@@ -15,6 +42,8 @@ beforeEach(() => {
     // Restore first: a test below makes storage throw.
     jest.restoreAllMocks();
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signInForPreferences('t1:u1');
 });
 
 describe('remembered print density', () => {
@@ -107,5 +136,52 @@ describe('the print window reporting back', () => {
         density.listenForPrintWindowDensity();
 
         expect(add.mock.calls.filter(([type]) => type === 'message')).toHaveLength(1);
+    });
+});
+
+describe('a new browser starts from the profile', () => {
+    it('stored → profile → normal: the browser answer wins over the profile', () => {
+        window.localStorage.setItem(PRINT_DENSITY_KEY, 'normal');
+
+        expect(loadWithProfile({ printDensity: 'compact' }).readPrintDensity()).toBe('normal');
+    });
+
+    it('uses the profile when this browser has nothing stored', () => {
+        expect(loadWithProfile({ printDensity: 'compact' }).readPrintDensity()).toBe('compact');
+    });
+
+    it('uses the profile when the stored value is not one it wrote', () => {
+        window.localStorage.setItem(PRINT_DENSITY_KEY, 'tiny');
+
+        expect(loadWithProfile({ printDensity: 'compact' }).readPrintDensity()).toBe('compact');
+    });
+
+    it('uses the profile when this browser\'s density cannot be read', () => {
+        // Only the density key: with every read failing there is no token or workspace to
+        // say whose profile the store holds, so no profile would be trusted at all.
+        const getItem = Storage.prototype.getItem;
+        jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+            if (key === PRINT_DENSITY_KEY) throw new Error('SecurityError');
+            return getItem.call(this, key);
+        });
+
+        expect(loadWithProfile({ printDensity: 'compact' }).readPrintDensity()).toBe('compact');
+    });
+
+    it('nothing is written to localStorage when the profile value is used', () => {
+        const setItem = jest.spyOn(Storage.prototype, 'setItem');
+
+        loadWithProfile({ printDensity: 'compact' }).readPrintDensity();
+
+        expect(setItem).not.toHaveBeenCalled();
+        expect(window.localStorage.getItem(PRINT_DENSITY_KEY)).toBeNull();
+    });
+
+    it('no profile device fields → today\'s behaviour exactly', () => {
+        const density = loadWithProfile({ printTypeScale: 'large' });
+
+        expect(density.readPrintDensity()).toBe('normal');
+        density.setPrintDensity('compact');
+        expect(density.readPrintDensity()).toBe('compact');
     });
 });

@@ -39,6 +39,11 @@ describe('EmployeeLoginService', () => {
             user: { create: jest.fn().mockResolvedValue({ id: 'user-new' }) },
             tenantUser: { create: jest.fn().mockResolvedValue({}) },
             employee: { update: jest.fn().mockResolvedValue({}) },
+            tenant: {
+                findUnique: jest
+                    .fn()
+                    .mockResolvedValue({ default_locale: 'en', localization_enabled: false }),
+            },
         };
 
         db = {
@@ -82,6 +87,18 @@ describe('EmployeeLoginService', () => {
     });
 
     describe('create', () => {
+        it('create sets preferred_locale from the tenant', async () => {
+            tx.tenant.findUnique.mockResolvedValue({ default_locale: 'bn', localization_enabled: true });
+
+            await service.create(TENANT, 'emp-1', { userId: 'hr-1' });
+
+            expect(tx.tenant.findUnique).toHaveBeenCalledWith({
+                where: { id: TENANT },
+                select: { default_locale: true, localization_enabled: true },
+            });
+            expect(tx.user.create.mock.calls[0][0].data.preferred_locale).toBe('bn');
+        });
+
         it('writes a membership with no role and no store permission', async () => {
             await service.create(TENANT, 'emp-1', { userId: 'hr-1' });
 

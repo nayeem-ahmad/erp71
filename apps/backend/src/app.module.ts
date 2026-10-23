@@ -33,6 +33,7 @@ import { AssetsModule } from './assets/assets.module';
 import { SalesModule } from './sales/sales.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { SalesSettingsModule } from './sales-settings/sales-settings.module';
+import { PreferencesModule } from './preferences/preferences.module';
 import { DocumentNumberingModule } from './document-numbering/document-numbering.module';
 import { PrintTemplatesModule } from './print-templates/print-templates.module';
 import { CustomersModule } from './customers/customers.module';
@@ -188,6 +189,7 @@ import { SocialMediaModule } from './social-media/social-media.module';
         SalesModule,
         PaymentMethodsModule,
         SalesSettingsModule,
+        PreferencesModule,
         DocumentNumberingModule,
         PrintTemplatesModule,
         CustomersModule,

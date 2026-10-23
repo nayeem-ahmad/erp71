@@ -349,6 +349,7 @@ describe('InvitationsService', () => {
         db.user.findFirst.mockResolvedValue(null); // mobile not taken
         db.user.create.mockResolvedValue({ id: 'new-user' });
         db.store.findFirst.mockResolvedValue({ id: 'store-1' });
+        db.tenant.findUnique.mockResolvedValue({ default_locale: 'en', localization_enabled: false });
 
         await service.acceptWithSignup(rawToken, 'New Bie', '01712345678', 'supersecret');
 
@@ -367,6 +368,68 @@ describe('InvitationsService', () => {
             where: { id: 'inv1' },
             data: { accepted_at: expect.any(Date) },
         });
+    });
+
+    it("acceptWithSignup creates the user with the tenant's language", async () => {
+        const rawToken = 'signup-locale-token';
+        const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        db.userInvitation.findUnique.mockResolvedValue({
+            id: 'inv1',
+            token_hash: hash,
+            email: 'newbie@example.com',
+            accepted_at: null,
+            expires_at: new Date(Date.now() + 86400_000),
+            tenant_id: 't1',
+            tenant_role_id: 'role-cashier',
+            invited_by: 'owner',
+            tenantRole: { name: 'Cashier', permissions: [] },
+            roles: [],
+        });
+        db.user.findUnique.mockResolvedValue(null);
+        db.user.create.mockResolvedValue({ id: 'new-user' });
+        db.store.findFirst.mockResolvedValue(null);
+        db.tenant.findUnique.mockResolvedValue({ default_locale: 'bn', localization_enabled: true });
+
+        await service.acceptWithSignup(rawToken, 'New Bie', '01712345678', 'supersecret');
+
+        expect(db.tenant.findUnique).toHaveBeenCalledWith({
+            where: { id: 't1' },
+            select: { default_locale: true, localization_enabled: true },
+        });
+        expect(db.user.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ preferred_locale: 'bn' }),
+            }),
+        );
+    });
+
+    it('accept for an existing account does not touch preferred_locale', async () => {
+        const rawToken = 'join-locale-token';
+        const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        db.userInvitation.findUnique.mockResolvedValue({
+            id: 'inv1',
+            token_hash: hash,
+            email: 'joiner@example.com',
+            accepted_at: null,
+            expires_at: new Date(Date.now() + 86400_000),
+            tenant_id: 't1',
+            tenant_role_id: 'role-cashier',
+            invited_by: 'owner',
+            tenantRole: { name: 'Cashier', permissions: [] },
+            roles: [],
+        });
+        db.user.findUnique.mockResolvedValue({ id: 'u2', email: 'joiner@example.com' });
+        db.store.findFirst.mockResolvedValue(null);
+        db.tenant.findUnique.mockResolvedValue({ default_locale: 'bn', localization_enabled: true });
+        const userUpdate = jest.fn();
+        (db.user as any).update = userUpdate;
+
+        await service.accept(rawToken, 'u2');
+
+        expect(db.tenantUser.create).toHaveBeenCalled();
+        expect(db.user.create).not.toHaveBeenCalled();
+        expect(userUpdate).not.toHaveBeenCalled();
+        expect(db.tenant.findUnique).not.toHaveBeenCalled();
     });
 
     it('acceptWithSignup rejects when an account already exists for the email', async () => {

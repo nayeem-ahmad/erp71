@@ -400,6 +400,13 @@ export const salesMessages = {
                 footerNone: "Aucun pied de page",
                 footerPlaceholder: "ex. Les marchandises vendues ne sont ni reprises ni échangées.",
                 saveFailed: "Impossible d'enregistrer la mise en page. Réessayez.",
+                source: {
+                    following: "Suit le réglage par défaut « {profile} »",
+                    builtIn: "Réglage intégré utilisé",
+                    customised: "Personnalisé",
+                    browser: "Défini sur ce navigateur",
+                    reset: "Réinitialiser",
+                },
             },
             saved: 'Paramètres d’impression enregistrés',
         },
