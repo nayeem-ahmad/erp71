@@ -1,5 +1,6 @@
 import { api } from './api';
 import { platformRoleOf } from './platform-admin-paths';
+import { clearInvoicePrintPrefsCache } from './hooks/useInvoicePrintPrefs';
 import { syncLocalePreferenceFromSession } from './localization/preference';
 import { usePreferencesStore } from './preferences/store';
 import { clearQueryCache, getQueryClient, ME_QUERY_KEY, resetWorkspaceQueries } from './query-client';
@@ -85,9 +86,14 @@ function switchWorkspace(apply: () => void): void {
  * would race the change of hands and could go out under the next session's
  * token or workspace header. Losing the last half-second of a setting is the
  * lesser harm. Replies to saves already sent are ignored for the same reason.
+ *
+ * The invoice layout (`invoicePrint`) is also cached by the print hook, which
+ * only notices a change of workspace; without this the next cashier on a shared
+ * till would print with the last one's layout until a reload.
  */
 function forgetMemberPreferences(): void {
     usePreferencesStore.getState().clear();
+    clearInvoicePrintPrefsCache();
 }
 
 /** Activate the referee self-service portal (no shop/tenant scope). */

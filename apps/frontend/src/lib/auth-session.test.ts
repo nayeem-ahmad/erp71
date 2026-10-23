@@ -1,15 +1,19 @@
+import { renderHook, waitFor } from '@testing-library/react';
 import { DEFAULT_SECTION_VALUES, type MyPreferencesResponse } from '@erp71/shared-types';
 import { signInForPreferences } from '@/test-utils/preferences-scope';
+import { clearInvoicePrintPrefsCache, useInvoicePrintPrefs } from './hooks/useInvoicePrintPrefs';
 import { applyTenantContext, clearAuthSession, clearSidebarLayoutState, storeAuthResponse } from './auth-session';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from './preferences/store';
 import { getQueryClient, ME_QUERY_KEY } from './query-client';
 import { getWorkspaceItem, setWorkspaceItem } from './session-store';
 
 jest.mock('./api', () => ({
-    api: { getMe: jest.fn(), saveMyPreferenceSection: jest.fn() },
+    api: { getMe: jest.fn(), saveMyPreferenceSection: jest.fn(), getMyInvoicePrint: jest.fn() },
 }));
 
-const { api } = jest.requireMock('./api') as { api: { getMe: jest.Mock; saveMyPreferenceSection: jest.Mock } };
+const { api } = jest.requireMock('./api') as {
+    api: { getMe: jest.Mock; saveMyPreferenceSection: jest.Mock; getMyInvoicePrint: jest.Mock };
+};
 
 describe('clearSidebarLayoutState', () => {
     beforeEach(() => {
@@ -205,6 +209,7 @@ describe('the preferences store across sign-in, sign-out and workspace switches'
         sessionStorage.clear();
         usePreferencesStore.getState().clear();
         api.getMe.mockReset();
+        api.getMyInvoicePrint.mockReset();
         api.saveMyPreferenceSection.mockReset();
         api.saveMyPreferenceSection.mockResolvedValue({ value: { appShellOpenGroups: ['hr'] }, source: 'member' });
     });
@@ -245,6 +250,24 @@ describe('the preferences store across sign-in, sign-out and workspace switches'
         applyTenantContext(SHOP_B);
 
         await expectClearedWithNothingSent();
+    });
+
+    it("sign-out also forgets the invoice layout loaded for the last person", async () => {
+        clearInvoicePrintPrefsCache();
+        jest.useRealTimers();
+        applyTenantContext(SHOP_A);
+        api.getMyInvoicePrint.mockResolvedValueOnce({ layout: 'detailed' }).mockResolvedValueOnce({});
+        const first = renderHook(() => useInvoicePrintPrefs());
+        await waitFor(() => expect(first.result.current.prefs.layout).toBe('detailed'));
+        first.unmount();
+
+        clearAuthSession();
+        // The next cashier signs in to the same shop on this till.
+        applyTenantContext(SHOP_A);
+        const next = renderHook(() => useInvoicePrintPrefs());
+
+        await expect(next.result.current.resolve()).resolves.toMatchObject({ layout: 'standard' });
+        expect(api.getMyInvoicePrint).toHaveBeenCalledTimes(2);
     });
 
     it('re-entering the shop the tab is already in keeps the store and the save', async () => {
