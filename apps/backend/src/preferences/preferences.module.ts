@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
-import { PreferencesService } from './preferences.service';
+import { MemberPreferencesModule } from './member-preferences.module';
 import { PreferencesController } from './preferences.controller';
 import { PreferenceProfilesService } from './preference-profiles.service';
 import { PreferenceProfilesController } from './preference-profiles.controller';
 
+/** The preference routes. Other modules import MemberPreferencesModule instead. */
 @Module({
-    imports: [DatabaseModule],
+    imports: [DatabaseModule, MemberPreferencesModule],
     controllers: [PreferencesController, PreferenceProfilesController],
-    providers: [PreferencesService, PreferenceProfilesService],
-    exports: [PreferencesService],
+    providers: [PreferenceProfilesService],
 })
 export class PreferencesModule {}
