@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
 import { api } from '@/lib/api';
-import { clearInvoicePrintPrefsCache, useInvoicePrintPrefs } from './useInvoicePrintPrefs';
+import { clearInvoicePrintPrefsCache, reloadInvoicePrintPrefs, useInvoicePrintPrefs } from './useInvoicePrintPrefs';
 
 jest.mock('@/lib/api', () => ({
     api: { getMyInvoicePrint: jest.fn(), updateMyInvoicePrint: jest.fn() },
@@ -47,6 +47,20 @@ describe('useInvoicePrintPrefs', () => {
         const { result } = renderHook(() => useInvoicePrintPrefs());
 
         await expect(result.current.resolve()).resolves.toMatchObject({ serial_column: true });
+    });
+
+    it('reload asks the server again and hands the new layout to every subscriber', async () => {
+        getMine.mockResolvedValueOnce({ table_style: 'grid' });
+        const { result } = renderHook(() => useInvoicePrintPrefs());
+        await waitFor(() => expect(result.current.prefs.table_style).toBe('grid'));
+
+        getMine.mockResolvedValueOnce({});
+        await act(async () => {
+            await expect(reloadInvoicePrintPrefs()).resolves.toEqual(DEFAULT_INVOICE_PRINT_PREFS);
+        });
+
+        expect(getMine).toHaveBeenCalledTimes(2);
+        expect(result.current.prefs).toEqual(DEFAULT_INVOICE_PRINT_PREFS);
     });
 
     it('saves a change and hands it to every subscriber at once', async () => {

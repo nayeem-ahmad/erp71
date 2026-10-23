@@ -76,6 +76,17 @@ export function clearInvoicePrintPrefsCache(): void {
     current = DEFAULT_INVOICE_PRINT_PREFS;
 }
 
+/**
+ * Drops the loaded layout and asks the server again — after the member's
+ * layout was reset to the default, so every print screen shows the layout
+ * that now applies rather than the one they customised.
+ */
+export function reloadInvoicePrintPrefs(): Promise<InvoicePrintPrefs> {
+    generation++;
+    loading = null;
+    return load();
+}
+
 function subscribe(listener: () => void): () => void {
     listeners.add(listener);
     return () => listeners.delete(listener);

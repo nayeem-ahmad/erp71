@@ -294,6 +294,24 @@ export const coreMessages = {
         profileFailed: "प्रोफ़ाइल अपडेट करने में विफल।",
         namePlaceholder: "आपका नाम",
         securitySettings: "पासवर्ड और सुरक्षा सेटिंग्स",
+        preferences: {
+            heading: "मेरी प्राथमिकताएँ",
+            hint: "आपकी हर सेटिंग कहाँ से आ रही है। रीसेट करने पर सेटिंग डिफ़ॉल्ट पर लौट जाती है।",
+            sections: {
+                invoicePrint: "इनवॉइस लेआउट",
+                tableView: "सूची का रूप",
+                tableColumns: "सूची के कॉलम",
+                sidebar: "साइडबार समूह",
+                alerts: "अलर्ट",
+            },
+            source: {
+                following: "{profile} डिफ़ॉल्ट का पालन कर रहा है",
+                builtIn: "अंतर्निहित सेटिंग उपयोग में है",
+                customised: "अनुकूलित",
+                browser: "इस ब्राउज़र पर सेट",
+                reset: "रीसेट करें",
+            },
+        },
     },
     dashboardLayout: {
         defaultPageTitle: "डैशबोर्ड",

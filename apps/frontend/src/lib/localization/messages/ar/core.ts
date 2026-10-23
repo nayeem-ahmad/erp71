@@ -294,6 +294,24 @@ export const coreMessages = {
         profileFailed: 'تعذّر تحديث الملف الشخصي.',
         namePlaceholder: 'اسمك',
         securitySettings: 'إعدادات كلمة المرور والأمان',
+        preferences: {
+            heading: "تفضيلاتي",
+            hint: "مصدر كل إعداد من إعداداتك. إعادة الضبط تُرجع الإعداد إلى الافتراضي.",
+            sections: {
+                invoicePrint: "تخطيط الفاتورة",
+                tableView: "مظهر القوائم",
+                tableColumns: "أعمدة القوائم",
+                sidebar: "مجموعات الشريط الجانبي",
+                alerts: "التنبيهات",
+            },
+            source: {
+                following: "يتبع الإعداد الافتراضي لـ {profile}",
+                builtIn: "يستخدم الإعداد المدمج",
+                customised: "مخصّص",
+                browser: "مضبوط على هذا المتصفح",
+                reset: "إعادة ضبط",
+            },
+        },
     },
     dashboardLayout: {
         defaultPageTitle: 'لوحة المعلومات',

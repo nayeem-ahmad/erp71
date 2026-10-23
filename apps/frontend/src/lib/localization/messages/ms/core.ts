@@ -294,6 +294,24 @@ export const coreMessages = {
             profileFailed: "Gagal mengemas kini profil.",
             namePlaceholder: "Nama anda",
             securitySettings: "Tetapan kata laluan & keselamatan",
+            preferences: {
+                heading: "Pilihan saya",
+                hint: "Dari mana setiap tetapan anda datang. Tetap semula mengembalikan tetapan kepada lalai.",
+                sections: {
+                    invoicePrint: "Susun atur invois",
+                    tableView: "Rupa senarai",
+                    tableColumns: "Lajur senarai",
+                    sidebar: "Kumpulan bar sisi",
+                    alerts: "Makluman",
+                },
+                source: {
+                    following: "Mengikut lalai {profile}",
+                    builtIn: "Menggunakan tetapan terbina dalam",
+                    customised: "Disesuaikan",
+                    browser: "Ditetapkan pada pelayar ini",
+                    reset: "Tetap semula",
+                },
+            },
         },
         dashboardLayout: {
             defaultPageTitle: "Dashboard",

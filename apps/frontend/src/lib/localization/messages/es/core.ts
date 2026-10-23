@@ -294,6 +294,24 @@ export const coreMessages = {
         profileFailed: "No se pudo actualizar el perfil.",
         namePlaceholder: "Tu nombre",
         securitySettings: "Ajustes de contraseña y seguridad",
+        preferences: {
+            heading: "Mis preferencias",
+            hint: "De dónde viene cada uno de tus ajustes. Restablecer devuelve el ajuste al valor predeterminado.",
+            sections: {
+                invoicePrint: "Diseño de factura",
+                tableView: "Aspecto de las listas",
+                tableColumns: "Columnas de las listas",
+                sidebar: "Grupos de la barra lateral",
+                alerts: "Alertas",
+            },
+            source: {
+                following: "Sigue el valor predeterminado de {profile}",
+                builtIn: "Usa el ajuste integrado",
+                customised: "Personalizado",
+                browser: "Definido en este navegador",
+                reset: "Restablecer",
+            },
+        },
     },
     dashboardLayout: {
         defaultPageTitle: "Panel",

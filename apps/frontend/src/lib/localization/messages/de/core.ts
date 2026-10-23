@@ -294,6 +294,24 @@ export const coreMessages = {
         profileFailed: "Profil konnte nicht aktualisiert werden.",
         namePlaceholder: "Ihr Name",
         securitySettings: "Passwort- und Sicherheitseinstellungen",
+        preferences: {
+            heading: "Meine Einstellungen",
+            hint: "Woher jede Ihrer Einstellungen stammt. Zurücksetzen stellt die Standardeinstellung wieder her.",
+            sections: {
+                invoicePrint: "Rechnungslayout",
+                tableView: "Listenansicht",
+                tableColumns: "Listenspalten",
+                sidebar: "Seitenleisten-Gruppen",
+                alerts: "Benachrichtigungen",
+            },
+            source: {
+                following: "Folgt der Standardeinstellung „{profile}“",
+                builtIn: "Eingebaute Einstellung in Verwendung",
+                customised: "Angepasst",
+                browser: "In diesem Browser festgelegt",
+                reset: "Zurücksetzen",
+            },
+        },
     },
     dashboardLayout: {
         defaultPageTitle: "Übersicht",

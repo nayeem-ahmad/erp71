@@ -294,6 +294,24 @@ export const coreMessages = {
             profileFailed: "প্রোফাইল আপডেট ব্যর্থ হয়েছে।",
             namePlaceholder: "আপনার নাম",
             securitySettings: "পাসওয়ার্ড ও নিরাপত্তা সেটিংস",
+            preferences: {
+                heading: "আমার পছন্দ",
+                hint: "আপনার প্রতিটি সেটিং কোথা থেকে আসছে। রিসেট করলে সেটিং ডিফল্টে ফিরে যায়।",
+                sections: {
+                    invoicePrint: "ইনভয়েস লেআউট",
+                    tableView: "তালিকার চেহারা",
+                    tableColumns: "তালিকার কলাম",
+                    sidebar: "সাইডবার গ্রুপ",
+                    alerts: "অ্যালার্ট",
+                },
+                source: {
+                    following: "{profile} ডিফল্ট অনুসরণ করছে",
+                    builtIn: "অন্তর্নির্মিত সেটিং ব্যবহার হচ্ছে",
+                    customised: "কাস্টমাইজ করা",
+                    browser: "এই ব্রাউজারে সেট করা",
+                    reset: "রিসেট",
+                },
+            },
         },
         dashboardLayout: {
             defaultPageTitle: "ড্যাশবোর্ড",

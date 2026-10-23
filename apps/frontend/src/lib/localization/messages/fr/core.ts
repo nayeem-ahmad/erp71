@@ -294,6 +294,24 @@ export const coreMessages = {
         profileFailed: "Échec de la mise à jour du profil.",
         namePlaceholder: "Votre nom",
         securitySettings: "Paramètres de mot de passe et de sécurité",
+        preferences: {
+            heading: "Mes préférences",
+            hint: "D'où vient chacun de vos réglages. Réinitialiser rétablit le réglage par défaut.",
+            sections: {
+                invoicePrint: "Mise en page de la facture",
+                tableView: "Apparence des listes",
+                tableColumns: "Colonnes des listes",
+                sidebar: "Groupes de la barre latérale",
+                alerts: "Alertes",
+            },
+            source: {
+                following: "Suit le réglage par défaut « {profile} »",
+                builtIn: "Réglage intégré utilisé",
+                customised: "Personnalisé",
+                browser: "Défini sur ce navigateur",
+                reset: "Réinitialiser",
+            },
+        },
     },
     dashboardLayout: {
         defaultPageTitle: "Tableau de bord",

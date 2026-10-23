@@ -294,6 +294,24 @@ export const coreMessages = {
         profileFailed: 'Failed to update profile.',
         namePlaceholder: 'Your name',
         securitySettings: 'Password & security settings',
+        preferences: {
+            heading: "My preferences",
+            hint: "Where each of your settings comes from. Reset puts one back to the default.",
+            sections: {
+                invoicePrint: "Invoice layout",
+                tableView: "List look",
+                tableColumns: "List columns",
+                sidebar: "Sidebar groups",
+                alerts: "Alerts",
+            },
+            source: {
+                following: "Following {profile} default",
+                builtIn: "Using the built-in setting",
+                customised: "Customised",
+                browser: "Set on this browser",
+                reset: "Reset",
+            },
+        },
     },
     dashboardLayout: {
         defaultPageTitle: 'Dashboard',

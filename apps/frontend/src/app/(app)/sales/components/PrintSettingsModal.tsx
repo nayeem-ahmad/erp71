@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { InvoicePrintPrefs } from '@erp71/shared-types';
 import ModalShell, { ModalFooter, ModalHeader } from '@/components/ModalShell';
+import PreferenceSourceLine from '@/components/preferences/PreferenceSourceLine';
 import { Alert, Button, Checkbox, Field, Select } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import type { PrintDensity } from '@/lib/print';
@@ -171,6 +172,11 @@ export default function PrintSettingsModal({
                         <div>
                             <h3 className="text-sm font-semibold text-gray-700">{copy.invoiceLayout.heading}</h3>
                             <p className="text-xs text-gray-400">{copy.invoiceLayout.hint}</p>
+                            <PreferenceSourceLine
+                                sectionKey="invoicePrint"
+                                copy={copy.invoiceLayout.source}
+                                onInvoicePrintReset={setLayout}
+                            />
                         </div>
                         <InvoiceLayoutFields value={layout} onChange={setLayout} onValidityChange={setLayoutValid} />
                         {layoutError && <Alert tone="danger">{copy.invoiceLayout.saveFailed}</Alert>}

@@ -400,6 +400,13 @@ export const salesMessages = {
                 footerNone: "Sin pie de página",
                 footerPlaceholder: "p. ej. No se aceptan devoluciones.",
                 saveFailed: "No se pudo guardar el diseño de factura. Inténtalo de nuevo.",
+                source: {
+                    following: "Sigue el valor predeterminado de {profile}",
+                    builtIn: "Usa el ajuste integrado",
+                    customised: "Personalizado",
+                    browser: "Definido en este navegador",
+                    reset: "Restablecer",
+                },
             },
             saved: 'Ajustes de impresión guardados',
         },

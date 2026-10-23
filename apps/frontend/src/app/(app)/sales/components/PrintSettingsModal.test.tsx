@@ -1,6 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DEFAULT_INVOICE_PRINT_PREFS } from '@erp71/shared-types';
+import { DEFAULT_SECTION_VALUES, type MyPreferencesResponse, type PreferenceSource } from '@erp71/shared-types';
+import { reloadInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
+import { usePreferencesStore } from '@/lib/preferences/store';
 import PrintSettingsModal from './PrintSettingsModal';
+
+jest.mock('@/lib/api', () => ({ api: {} }));
+jest.mock('@/lib/hooks/useInvoicePrintPrefs', () => ({
+    reloadInvoicePrintPrefs: jest.fn(),
+}));
+
 
 describe('PrintSettingsModal — compact', () => {
     it('saves the compact choice along with the other two settings', () => {
@@ -251,5 +260,74 @@ describe('PrintSettingsModal — invoice layout', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('Could not save your invoice layout');
         expect(onSave).not.toHaveBeenCalled();
         expect(onClose).not.toHaveBeenCalled();
+    });
+});
+
+describe('PrintSettingsModal — where the invoice layout comes from', () => {
+    const member = { ...DEFAULT_INVOICE_PRINT_PREFS, table_style: 'striped' as const };
+
+    function hydrate(source: PreferenceSource) {
+        const data: MyPreferencesResponse = {
+            profile: { id: 'p1', name: 'Cashier setup' },
+            legacy_browser_sections: [],
+            sections: {
+                invoicePrint: { value: DEFAULT_SECTION_VALUES.invoicePrint, source },
+                tableView: { value: DEFAULT_SECTION_VALUES.tableView, source: 'default' },
+                tableColumns: { value: DEFAULT_SECTION_VALUES.tableColumns, source: 'default' },
+                sidebar: { value: DEFAULT_SECTION_VALUES.sidebar, source: 'default' },
+                alerts: { value: DEFAULT_SECTION_VALUES.alerts, source: 'default' },
+                device: { value: {}, source: 'default' },
+            },
+        };
+        usePreferencesStore.getState().hydrate('t:u', data);
+    }
+
+    function open() {
+        render(
+            <PrintSettingsModal
+                paperSize="A4"
+                skipPreview={false}
+                density="normal"
+                typeScale="normal"
+                onSave={jest.fn()}
+                onClose={jest.fn()}
+                invoiceLayout={{ prefs: member, save: jest.fn() }}
+            />,
+        );
+    }
+
+    beforeEach(() => {
+        usePreferencesStore.getState().clear();
+        (reloadInvoicePrintPrefs as jest.Mock).mockReset();
+        (reloadInvoicePrintPrefs as jest.Mock).mockResolvedValue(DEFAULT_INVOICE_PRINT_PREFS);
+    });
+
+    it('PrintSettingsModal shows the same line for invoicePrint', () => {
+        hydrate('profile');
+        open();
+        expect(screen.getByText('Following Cashier setup default')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
+    });
+
+    it('resets a customised layout and shows the layout that results', async () => {
+        hydrate('member');
+        const reset = jest.fn().mockResolvedValue(undefined);
+        usePreferencesStore.setState({ reset });
+        open();
+        expect(screen.getByLabelText('Item table style')).toHaveValue('striped');
+
+        expect(screen.getByText('Customised')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+
+        await waitFor(() => expect(reset).toHaveBeenCalledWith('invoicePrint'));
+        await waitFor(() => expect(reloadInvoicePrintPrefs).toHaveBeenCalled());
+        await waitFor(() =>
+            expect(screen.getByLabelText('Item table style')).toHaveValue(DEFAULT_INVOICE_PRINT_PREFS.table_style),
+        );
+    });
+
+    it('shows no line when preferences are not loaded', () => {
+        open();
+        expect(screen.queryByText(/Using the built-in setting|Customised/)).not.toBeInTheDocument();
     });
 });

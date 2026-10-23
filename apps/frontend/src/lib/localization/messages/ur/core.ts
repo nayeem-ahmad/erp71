@@ -294,6 +294,24 @@ export const coreMessages = {
         profileFailed: 'پروفائل اپ ڈیٹ نہیں ہو سکا۔',
         namePlaceholder: 'آپ کا نام',
         securitySettings: 'پاس ورڈ اور سیکیورٹی ترتیبات',
+        preferences: {
+            heading: "میری ترجیحات",
+            hint: "آپ کی ہر ترتیب کہاں سے آ رہی ہے۔ ری سیٹ کرنے سے ترتیب ڈیفالٹ پر لوٹ جاتی ہے۔",
+            sections: {
+                invoicePrint: "انوائس لے آؤٹ",
+                tableView: "فہرست کی شکل",
+                tableColumns: "فہرست کے کالم",
+                sidebar: "سائیڈ بار گروپس",
+                alerts: "الرٹس",
+            },
+            source: {
+                following: "{profile} کی ڈیفالٹ پر عمل ہو رہا ہے",
+                builtIn: "بلٹ اِن ترتیب استعمال ہو رہی ہے",
+                customised: "حسب ضرورت",
+                browser: "اس براؤزر پر سیٹ کی گئی",
+                reset: "ری سیٹ کریں",
+            },
+        },
     },
     dashboardLayout: {
         defaultPageTitle: 'ڈیش بورڈ',

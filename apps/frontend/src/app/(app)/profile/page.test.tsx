@@ -2,6 +2,8 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import ProfilePage from './page';
 import Toaster from '@/components/Toaster';
+import { DEFAULT_SECTION_VALUES } from '@erp71/shared-types';
+import { usePreferencesStore } from '@/lib/preferences/store';
 
 function renderProfilePage() {
     return render(
@@ -31,9 +33,11 @@ jest.mock('@/lib/api', () => ({
 
 jest.mock('@/lib/i18n', () => {
     const { enMessages } = require('@/lib/localization/messages/en');
+    const { formatMessage } = jest.requireActual('@/lib/i18n');
     return {
         useI18n: () => ({
             t: enMessages,
+            fmt: (template: string, values: Record<string, string | number>) => formatMessage(template, values, 'en'),
         }),
     };
 });
@@ -322,6 +326,38 @@ describe('ProfilePage', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Are you sure you want to disable 2FA?')).toBeInTheDocument();
+        });
+    });
+
+    describe('my preferences', () => {
+        afterEach(() => usePreferencesStore.getState().clear());
+
+        it('lists where each setting comes from once preferences are loaded', async () => {
+            usePreferencesStore.getState().hydrate('t:u', {
+                profile: { id: 'p1', name: 'Cashier setup' },
+                legacy_browser_sections: [],
+                sections: {
+                    invoicePrint: { value: DEFAULT_SECTION_VALUES.invoicePrint, source: 'profile' },
+                    tableView: { value: DEFAULT_SECTION_VALUES.tableView, source: 'default' },
+                    tableColumns: { value: DEFAULT_SECTION_VALUES.tableColumns, source: 'member' },
+                    sidebar: { value: DEFAULT_SECTION_VALUES.sidebar, source: 'default' },
+                    alerts: { value: DEFAULT_SECTION_VALUES.alerts, source: 'default' },
+                    device: { value: {}, source: 'default' },
+                },
+            });
+            renderProfilePage();
+
+            expect(await screen.findByText('My preferences')).toBeInTheDocument();
+            expect(screen.getByText('Following Cashier setup default')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument();
+        });
+
+        it('is left out where preferences are not loaded', async () => {
+            renderProfilePage();
+            await waitFor(() => {
+                expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
+            });
+            expect(screen.queryByText('My preferences')).not.toBeInTheDocument();
         });
     });
 });
