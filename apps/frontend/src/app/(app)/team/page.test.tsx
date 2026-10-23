@@ -156,6 +156,39 @@ describe('TeamPage — role default profile', () => {
         );
     });
 
+    it('saving a role without touching the profile select omits preference_profile_id', async () => {
+        await openRoleEditor('Cashier');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+        await waitFor(() => expect(mockApi.updateTeamRole).toHaveBeenCalledTimes(1));
+        expect(mockApi.updateTeamRole.mock.calls[0][1]).not.toHaveProperty('preference_profile_id');
+    });
+
+    it('when profiles fail to load, saving a role keeps its existing profile', async () => {
+        mockApi.getPreferenceProfiles.mockRejectedValue(new Error('offline'));
+        const select = (await openRoleEditor('Cashier')) as HTMLSelectElement;
+
+        // The select still names the role's own profile instead of falling back to None.
+        expect(select.value).toBe('p1');
+        expect(select.selectedOptions[0].textContent).toBe('Cashier setup');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+        await waitFor(() => expect(mockApi.updateTeamRole).toHaveBeenCalledTimes(1));
+        expect(mockApi.updateTeamRole.mock.calls[0][1]).not.toHaveProperty('preference_profile_id');
+    });
+
+    it('creating a role sends a profile only when one was chosen', async () => {
+        signIn('OWNER');
+        mockApi.getTeamRoles.mockResolvedValue([] as never);
+        render(<TeamPage />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Roles' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Create role' }));
+        fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Packer' } });
+        fireEvent.click(screen.getAllByRole('checkbox')[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+        await waitFor(() => expect(mockApi.createTeamRole).toHaveBeenCalledTimes(1));
+        expect(mockApi.createTeamRole.mock.calls[0][0]).not.toHaveProperty('preference_profile_id');
+    });
+
     it('shows the profile on the role row', async () => {
         signIn('OWNER');
         mockApi.getTeamRoles.mockResolvedValue([cashierRole, clerkRole] as never);

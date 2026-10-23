@@ -13,20 +13,26 @@ import { useI18n } from '@/lib/i18n';
 export function RoleProfileSelect({
     value,
     profiles,
+    current,
     onChange,
 }: {
     value: string;
     profiles: PreferenceProfileSummary[];
+    /** The role's saved profile: still offered when the profile list did not load, so the select never shows None for it. */
+    current?: { id: string; name: string } | null;
     onChange: (profileId: string) => void;
 }) {
     const { t } = useI18n();
     const copy = t.teamManagement.roles;
     const id = useId();
+    const options = current && !profiles.some((profile) => profile.id === current.id)
+        ? [{ id: current.id, name: current.name }, ...profiles]
+        : profiles;
     return (
         <Field label={copy.defaultProfileLabel} htmlFor={id} hint={copy.defaultProfileHint}>
             <Select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="w-full max-w-md">
                 <option value="">{copy.defaultProfileNone}</option>
-                {profiles.map((profile) => (
+                {options.map((profile) => (
                     <option key={profile.id} value={profile.id}>{profile.name}</option>
                 ))}
             </Select>

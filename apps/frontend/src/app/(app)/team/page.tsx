@@ -338,7 +338,8 @@ function RolesPanel({
                 name: formName.trim(),
                 permissions: Array.from(formPerms),
                 recordScope: formScope,
-                preference_profile_id: formProfileId || null,
+                // Only a chosen profile is sent; omitted, the role starts without one.
+                ...(formProfileId ? { preference_profile_id: formProfileId } : {}),
             });
             onToast({ type: 'success', message: tr.roleCreated });
             cancelForm();
@@ -374,7 +375,11 @@ function RolesPanel({
                 name: formName.trim(),
                 permissions: Array.from(formPerms),
                 recordScope: formScope,
-                preference_profile_id: formProfileId || null,
+                // Sent only when the owner changed the select, so a profile list that
+                // never loaded cannot clear the role's existing profile.
+                ...(formProfileId !== (role.preference_profile?.id ?? '')
+                    ? { preference_profile_id: formProfileId || null }
+                    : {}),
             });
             onToast({ type: 'success', message: tr.roleUpdated });
             cancelForm();
@@ -472,7 +477,7 @@ function RolesPanel({
                                         </div>
                                         <PermissionMatrix permissions={formPerms} onToggle={togglePerm} />
                                         <RecordScopeField scope={formScope} onChange={setFormScope} />
-                                        <RoleProfileSelect value={formProfileId} profiles={profiles} onChange={setFormProfileId} />
+                                        <RoleProfileSelect value={formProfileId} profiles={profiles} current={role.preference_profile} onChange={setFormProfileId} />
                                         <div className="flex items-center gap-3 pt-1 border-t border-gray-100">
                                             <button
                                                 onClick={() => saveEdit(role)}
