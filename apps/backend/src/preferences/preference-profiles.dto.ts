@@ -9,6 +9,7 @@ import {
     IsString,
     MaxLength,
     MinLength,
+    ValidateIf,
 } from 'class-validator';
 import { PERSON_SECTIONS, type PersonSectionKey } from '@erp71/shared-types';
 
@@ -59,7 +60,12 @@ export class ApplyPreferenceProfileDto {
     @IsIn(PERSON_SECTIONS, { each: true })
     sections!: PersonSectionKey[];
 
-    @IsOptional()
+    /**
+     * Omitted means everyone the profile reaches. `null` is refused rather than
+     * read as omitted (which `@IsOptional` would do): it would quietly widen a
+     * targeted apply to every member.
+     */
+    @ValidateIf((_, value) => value !== undefined)
     @IsArray()
     @IsString({ each: true })
     user_ids?: string[];

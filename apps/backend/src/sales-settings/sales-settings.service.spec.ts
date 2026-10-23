@@ -24,6 +24,7 @@ describe('SalesSettingsService — member invoice print preferences', () => {
     });
     const profile = (invoicePrint: object) => ({
         id: 'p1',
+        tenant_id: 't1',
         name: 'Cashier starter',
         prefs: { version: 1, sections: { invoicePrint } },
     });

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { DEFAULT_ALERT_PREFS } from '@erp71/shared-types';
-import { AlertPolicy, DAILY_PUSH_CAP, DEFAULT_QUIET, inQuietWindow, minuteOfDay } from './alert-policy';
+import { PreferencesService } from '../preferences/preferences.service';
+import { AlertPolicy, DAILY_PUSH_CAP, DEFAULT_QUIET, inQuietWindow, minuteOfDay, profileAlertsFor } from './alert-policy';
 
 describe('AlertPolicy', () => {
     // 23:30 in Dhaka (UTC+6).
@@ -96,6 +97,20 @@ describe('AlertPolicy', () => {
             expect(await policy.decide('t1', 'u1', 'LOW_STOCK', lateNight)).toBe('hold');
             expect(warn).toHaveBeenCalledTimes(1);
             expect(warn).toHaveBeenCalledWith(expect.stringMatching(/u1.*t1.*gone/));
+            warn.mockRestore();
+        });
+
+        it('someone who is not a member gets the built-ins, and no warning is logged', async () => {
+            const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+            const real = new PreferencesService({
+                tenantUser: { findUnique: jest.fn().mockResolvedValue(null) },
+                preferenceProfile: { findFirst: jest.fn() },
+                userAlertPreference: { findUnique: jest.fn() },
+            } as any);
+
+            await expect(profileAlertsFor(real, 't1', 'platform-admin')).resolves.toBeUndefined();
+
+            expect(warn).not.toHaveBeenCalled();
             warn.mockRestore();
         });
 

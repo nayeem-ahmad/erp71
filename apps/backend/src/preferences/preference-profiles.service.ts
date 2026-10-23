@@ -137,6 +137,11 @@ export class PreferenceProfilesService {
      */
     async apply(ctx: TenantContext, id: string, dto: ApplyPreferenceProfileDto): Promise<{ updated: number }> {
         const sections = this.personSections(dto.sections);
+        // The DTO refuses it too; checked here as well because reading `null` as "omitted"
+        // would turn a targeted apply into one over every member the profile reaches.
+        if (dto.user_ids === null || (dto.user_ids !== undefined && !Array.isArray(dto.user_ids))) {
+            throw new BadRequestException('user_ids must be a list of member ids, or left out to apply to everyone.');
+        }
         const profile = await this.find(ctx.tenantId, id);
 
         const requested = dto.user_ids ? [...new Set(dto.user_ids)] : undefined;

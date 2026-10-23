@@ -22,6 +22,7 @@ import { DatabaseService } from '../database/database.service';
 
 type Client = Prisma.TransactionClient;
 type ResolvedSection = MyPreferencesResponse['sections'][PersonSectionKey];
+type ProfileForMember = { id: string; name: string; prefs: PreferenceProfilePrefs } | null;
 
 /** The sections that live inside `TenantUser.preferences`; invoice layout and alerts have a store of their own. */
 const JSON_SECTIONS = ['tableView', 'tableColumns', 'sidebar'] as const;
@@ -52,12 +53,19 @@ export class PreferencesService {
      * The profile that applies to a member: their primary role's, else the
      * workspace default, else none. `prefs` is normalised, so a hand-edited row
      * cannot hand a caller a shape it does not expect.
+     *
+     * Reads only the role's profile (and, failing that, the default) — not the
+     * member's own answers or alert row. Someone who is not a member gets null,
+     * not an error: alert pushes ask this for every recipient, and a recipient
+     * outside the workspace is simply someone no profile applies to.
      */
-    async profileFor(
-        tenantId: string,
-        userId: string,
-    ): Promise<{ id: string; name: string; prefs: PreferenceProfilePrefs } | null> {
-        return (await this.read(this.db, tenantId, userId)).profile;
+    async profileFor(tenantId: string, userId: string): Promise<ProfileForMember> {
+        const member = await this.db.tenantUser.findUnique({
+            where: this.membership(tenantId, userId),
+            select: { tenantRole: { select: { preferenceProfile: true } } },
+        });
+        if (!member) return null;
+        return this.profileOf(this.db, tenantId, member.tenantRole?.preferenceProfile);
     }
 
     /** What the member sees, section by section, and where each value came from. */
@@ -278,6 +286,23 @@ export class PreferencesService {
         );
     }
 
+    /**
+     * The role's profile when it belongs to this workspace, else the workspace
+     * default, else none. A role can only be given a profile of its own workspace
+     * (`TeamService` checks); one that somehow points elsewhere is ignored as if
+     * the role had none, so another workspace's settings can never reach a member.
+     */
+    private async profileOf(
+        client: Client,
+        tenantId: string,
+        roleProfile: { id: string; tenant_id: string; name: string; prefs: Prisma.JsonValue } | null | undefined,
+    ): Promise<ProfileForMember> {
+        const row =
+            (roleProfile && roleProfile.tenant_id === tenantId ? roleProfile : null) ??
+            (await client.preferenceProfile.findFirst({ where: { tenant_id: tenantId, is_default: true } }));
+        return row ? { id: row.id, name: row.name, prefs: normalizeProfilePrefs(row.prefs) } : null;
+    }
+
     /** Loads everything one resolution needs, and resolves it. */
     private async read(client: Client, tenantId: string, userId: string) {
         const member = await client.tenantUser.findUnique({
@@ -291,10 +316,7 @@ export class PreferencesService {
         });
         if (!member) throw new NotFoundException('Not a member of this workspace.');
 
-        const row =
-            member.tenantRole?.preferenceProfile ??
-            (await client.preferenceProfile.findFirst({ where: { tenant_id: tenantId, is_default: true } }));
-        const profile = row ? { id: row.id, name: row.name, prefs: normalizeProfilePrefs(row.prefs) } : null;
+        const profile = await this.profileOf(client, tenantId, member.tenantRole?.preferenceProfile);
 
         const alertRow = await client.userAlertPreference.findUnique({
             where: { user_id_tenant_id: { user_id: userId, tenant_id: tenantId } },

@@ -7,6 +7,7 @@ describe('AlertsController preferences', () => {
     const thresholds = { large_sale_amount: 50000 };
     const profile = (alerts: object) => ({
         id: 'p1',
+        tenant_id: 't1',
         name: 'Cashier starter',
         prefs: { version: 1, sections: { alerts } },
     });

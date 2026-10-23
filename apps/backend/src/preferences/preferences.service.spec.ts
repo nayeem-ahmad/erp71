@@ -16,6 +16,7 @@ describe('PreferencesService', () => {
 
     const profile = (sections: object, extra: object = {}) => ({
         id: 'p1',
+        tenant_id: 't1',
         name: 'Cashier starter',
         prefs: { version: 1, sections },
         ...extra,
@@ -87,6 +88,33 @@ describe('PreferencesService', () => {
                 member({ tenantRole: { preferenceProfile: profile({ sidebar: 'junk', device: { paperSize: 'A3' } }) } }),
             );
             await expect(service.profileFor('t1', 'u1')).resolves.toMatchObject({ prefs: { version: 1, sections: {} } });
+        });
+
+        it("ignores a role's profile that belongs to another workspace", async () => {
+            db.tenantUser.findUnique.mockResolvedValue(
+                member({ tenantRole: { preferenceProfile: profile({}, { id: 'foreign', tenant_id: 't2' }) } }),
+            );
+            db.preferenceProfile.findFirst.mockResolvedValue(profile({}, { id: 'pd', name: 'Everyone' }));
+
+            await expect(service.profileFor('t1', 'u1')).resolves.toMatchObject({ id: 'pd' });
+            expect(db.preferenceProfile.findFirst).toHaveBeenCalledWith({ where: { tenant_id: 't1', is_default: true } });
+        });
+
+        it('returns null for a non-member instead of throwing', async () => {
+            db.tenantUser.findUnique.mockResolvedValue(null);
+
+            await expect(service.profileFor('t1', 'u1')).resolves.toBeNull();
+            expect(db.preferenceProfile.findFirst).not.toHaveBeenCalled();
+        });
+
+        it("reads only the role's profile, never the member's answers or alert row", async () => {
+            await service.profileFor('t1', 'u1');
+
+            expect(db.tenantUser.findUnique).toHaveBeenCalledWith({
+                where: membership,
+                select: { tenantRole: { select: { preferenceProfile: true } } },
+            });
+            expect(db.userAlertPreference.findUnique).not.toHaveBeenCalled();
         });
     });
 
@@ -170,6 +198,21 @@ describe('PreferencesService', () => {
                 value: { 'sales.list': { hidden: ['tax'] } },
                 source: 'member',
             });
+        });
+
+        it("resolves without a role's profile that belongs to another workspace", async () => {
+            db.tenantUser.findUnique.mockResolvedValue(
+                member({
+                    tenantRole: {
+                        preferenceProfile: profile({ sidebar: { appShellOpenGroups: ['sales'] } }, { id: 'foreign', tenant_id: 't2' }),
+                    },
+                }),
+            );
+
+            const result = await service.resolveFor('t1', 'u1');
+
+            expect(result.profile).toBeNull();
+            expect(result.sections.sidebar.source).toBe('default');
         });
 
         it('NotFoundException for a non-member', async () => {

@@ -305,6 +305,14 @@ describe('PreferenceProfilesService', () => {
             expect(db.$transaction).not.toHaveBeenCalled();
         });
 
+        it('apply refuses user_ids: null rather than widening to every member', async () => {
+            await expect(
+                service.apply(ctx, 'p1', { sections: ['sidebar'], user_ids: null as unknown as string[] }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.$transaction).not.toHaveBeenCalled();
+            expect(db.tenantUser.findMany).not.toHaveBeenCalled();
+        });
+
         it('apply rejects an empty section list', async () => {
             await expect(service.apply(ctx, 'p1', { sections: [] })).rejects.toBeInstanceOf(BadRequestException);
         });
