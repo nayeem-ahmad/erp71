@@ -326,6 +326,45 @@ describe('PrintSettingsModal — where the invoice layout comes from', () => {
         );
     });
 
+    it('clears a custom footer and signature gap from the fields when reset', async () => {
+        hydrate('member');
+        usePreferencesStore.setState({ reset: jest.fn().mockResolvedValue(undefined) });
+        const custom = {
+            ...DEFAULT_INVOICE_PRINT_PREFS,
+            footer_text: 'No returns after 7 days',
+            signature_lines: true,
+            signature_space_mm: 25,
+        };
+        render(
+            <PrintSettingsModal
+                paperSize="A4"
+                skipPreview={false}
+                density="normal"
+                typeScale="normal"
+                onSave={jest.fn()}
+                onClose={jest.fn()}
+                invoiceLayout={{ prefs: custom, save: jest.fn() }}
+            />,
+        );
+        expect(screen.getByLabelText('Footer')).toHaveValue('custom');
+        expect(screen.getByLabelText('Space above signatures (mm)')).toHaveValue(25);
+
+        // Leave the gap out of range, so Save is blocked until the fields are reset.
+        fireEvent.change(screen.getByLabelText('Space above signatures (mm)'), { target: { value: '9999' } });
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+
+        await waitFor(() => expect(screen.getByLabelText('Footer')).toHaveValue('default'));
+        expect(screen.queryByPlaceholderText(/Goods once sold/)).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Space above signatures (mm)')).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+
+        // The gap is back to the default too, not just hidden.
+        fireEvent.click(screen.getByLabelText(/signature lines/));
+        expect(screen.getByLabelText('Space above signatures (mm)')).toHaveValue(null);
+    });
+
     it('shows no line when preferences are not loaded', () => {
         open();
         expect(screen.queryByText(/Using the built-in setting|Customised/)).not.toBeInTheDocument();
