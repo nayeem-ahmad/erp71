@@ -253,8 +253,27 @@ describe('CampaignRecipientsService', () => {
 
             expect(db.crmContact.createMany.mock.calls[0][0].data).toHaveLength(1);
             const rows = db.crmCampaignRecipient.createMany.mock.calls[0][0].data;
-            expect(rows).toHaveLength(2);
-            expect(rows[0].contact_id).toBe(rows[1].contact_id);
+            expect(rows).toHaveLength(1);
+            expect(rows[0].contact_id).toBe(db.crmContact.createMany.mock.calls[0][0].data[0].id);
+            expect(rows[0].subject).toBe('Hi');
+        });
+
+        it('creates one contact and one recipient when two rows differ only by email case', async () => {
+            await service.writeUploadedRecipients(
+                't1',
+                'camp-1',
+                [ROW, { ...ROW, email: 'Rahim@Example.com', name: 'Rahim', subject: 'Second' }],
+                'user-1',
+            );
+
+            expect(db.crmContact.createMany).toHaveBeenCalledTimes(1);
+            const contacts = db.crmContact.createMany.mock.calls[0][0].data;
+            expect(contacts).toHaveLength(1);
+            expect(contacts[0].email).toBe('rahim@example.com');
+            const recipients = db.crmCampaignRecipient.createMany.mock.calls[0][0].data;
+            expect(recipients).toHaveLength(1);
+            expect(recipients[0].contact_id).toBe(contacts[0].id);
+            expect(recipients[0].email.toLowerCase()).toBe('rahim@example.com');
         });
 
         // I4: three sequential ILIKE findFirsts per row became one indexed

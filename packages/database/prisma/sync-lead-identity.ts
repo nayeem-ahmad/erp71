@@ -164,11 +164,11 @@ async function main() {
 if (require.main === module) {
     main()
         .catch((error) => {
-            // Warn, never exit non-zero. This runs in an && chain ahead of
-            // `node main.js` in the container CMD, where a non-zero exit is a
-            // full outage rather than a failed script.
+            // Non-zero on purpose. `db-prepare.sh` treats a failed step as
+            // fatal and does not boot the new process; the old one keeps
+            // serving. A thrown error must not look like a finished backfill.
             console.error('sync-lead-identity failed:', error);
-            process.exitCode = 0;
+            process.exitCode = 1;
         })
         .finally(() => prisma.$disconnect());
 }

@@ -613,17 +613,27 @@ export class CrmContactsService {
                 update: async (id, row) => {
                     // A blank cell means "not supplied", not "erase what is there":
                     // a spreadsheet re-import that only fills in emails must not
-                    // wipe every other column it left empty.
-                    await this.db.crmContact.update({
-                        where: { id },
-                        data: {
-                            name: row.name,
-                            ...OPTIONAL_TEXT_FIELDS.reduce<Record<string, string>>((acc, field) => {
-                                if (row[field]) acc[field] = row[field] as string;
-                                return acc;
-                            }, {}),
-                        },
-                    });
+                    // wipe every other column it left empty. A supplied email,
+                    // LinkedIn URL, or company updates the norm or organization
+                    // in the same write. A later boot will not repair a column
+                    // that is already set.
+                    const data: Record<string, string | null> = { name: row.name };
+                    for (const field of OPTIONAL_TEXT_FIELDS) {
+                        if (row[field]) data[field] = row[field];
+                    }
+                    if (row.email) {
+                        data.email_norm = leadIdentityPatch({ email: row.email }).email_norm ?? null;
+                    }
+                    if (row.linkedin_url) {
+                        const linkedinNorm = normalizeProfileUrl(row.linkedin_url);
+                        await this.assertNormalizedFree(tenantId, 'linkedin', linkedinNorm, id);
+                        data.linkedin_norm = linkedinNorm;
+                    }
+                    if (row.company) {
+                        const organizationId = await this.organizationIdForCompany(tenantId, row.company);
+                        if (organizationId) data.organization_id = organizationId;
+                    }
+                    await this.db.crmContact.update({ where: { id }, data });
                 },
             },
         );

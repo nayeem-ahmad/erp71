@@ -676,7 +676,101 @@ describe('CrmContactsService', () => {
                 name: 'Rafiq Islam',
                 mobile: '01711223344',
                 email: 'rafiq@example.com',
+                email_norm: 'rafiq@example.com',
             });
+            expect(db.organization.findUnique).not.toHaveBeenCalled();
+            expect(db.organization.create).not.toHaveBeenCalled();
+        });
+
+        it('writes the new linkedin_norm and organization_id when an upsert changes them', async () => {
+            db.crmContact.findUnique.mockResolvedValue({
+                id: 'contact-1',
+                linkedin_norm: 'linkedin.com/in/old-profile',
+                organization_id: 'org-old',
+            });
+
+            await service.importRows(
+                TENANT,
+                [{
+                    name: 'Rafiq Islam',
+                    mobile: '01711223344',
+                    linkedin_url: 'https://www.LinkedIn.com/in/Rafiq-Islam/?utm_source=x',
+                    company: ' Karim Traders ',
+                }],
+                'upsert',
+            );
+
+            const data = db.crmContact.update.mock.calls[0][0].data;
+            expect(data.linkedin_url).toBe('https://www.LinkedIn.com/in/Rafiq-Islam/?utm_source=x');
+            expect(data.linkedin_norm).toBe('linkedin.com/in/rafiq-islam');
+            expect(data.company).toBe('Karim Traders');
+            expect(data.organization_id).toBe('org-1');
+            expect(Object.values(data)).not.toContain('linkedin.com/in/old-profile');
+            expect(Object.values(data)).not.toContain('org-old');
+            expect(db.organization.update).not.toHaveBeenCalled();
+            expect(db.organization.delete).not.toHaveBeenCalled();
+        });
+
+        it('writes email_norm when an upsert supplies an email', async () => {
+            db.crmContact.findUnique.mockResolvedValue({ id: 'contact-1' });
+
+            await service.importRows(
+                TENANT,
+                [{ name: 'Rafiq Islam', mobile: '01711223344', email: 'Rafiq@Example.com' }],
+                'upsert',
+            );
+
+            expect(db.crmContact.update.mock.calls[0][0].data.email).toBe('Rafiq@Example.com');
+            expect(db.crmContact.update.mock.calls[0][0].data.email_norm).toBe('rafiq@example.com');
+        });
+
+        it('errors the row when the new LinkedIn profile belongs to another contact', async () => {
+            db.crmContact.findUnique.mockResolvedValue({ id: 'contact-1' });
+            db.crmContact.findMany.mockResolvedValue([
+                {
+                    id: 'contact-9',
+                    linkedin_url: 'linkedin.com/in/jane-doe',
+                    linkedin_norm: 'linkedin.com/in/jane-doe',
+                },
+            ]);
+
+            const result = await service.importRows(
+                TENANT,
+                [{
+                    name: 'Rafiq',
+                    mobile: '01711223344',
+                    linkedin_url: 'https://www.LinkedIn.com/in/Jane-Doe/',
+                    company: 'Karim Traders',
+                }],
+                'upsert',
+            );
+
+            expect(result.updated).toBe(0);
+            expect(result.errors[0]).toContain('A contact with this LinkedIn profile already exists.');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+            expect(db.organization.create).not.toHaveBeenCalled();
+            expect(db.organization.update).not.toHaveBeenCalled();
+            expect(db.organization.delete).not.toHaveBeenCalled();
+        });
+
+        it('re-reads the organization after a unique conflict and does not rename it', async () => {
+            db.crmContact.findUnique.mockResolvedValue({ id: 'contact-1' });
+            const conflict = Object.assign(new Error('unique'), { code: 'P2002' });
+            db.organization.findUnique
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: 'org-existing' });
+            db.organization.create.mockRejectedValueOnce(conflict);
+
+            await service.importRows(
+                TENANT,
+                [{ name: 'Rafiq', mobile: '01711223344', company: 'Karim Traders' }],
+                'upsert',
+            );
+
+            expect(db.organization.update).not.toHaveBeenCalled();
+            expect(db.organization.delete).not.toHaveBeenCalled();
+            expect(db.crmContact.update.mock.calls[0][0].data.organization_id).toBe('org-existing');
+            expect(db.crmContact.update.mock.calls[0][0].data.company).toBe('Karim Traders');
         });
 
         it('reports a row with no name instead of creating a nameless contact', async () => {

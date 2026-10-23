@@ -1334,13 +1334,12 @@ export class CrmLeadsService {
                     data: {
                         name: row.name,
                         // Each normalized column is written under exactly the
-                        // condition its raw column is, or the two would drift and
-                        // the unique indexes would guard a stale value.
+                        // condition its raw column is, or the two would drift.
+                        // Matching trusts a set norm and ignores the raw value.
                         //
-                        // An upsert whose email belongs to a *different* lead than
-                        // the one matched here still trips the unique index; that
-                        // surfaces as a row error ("duplicate value for …") rather
-                        // than one lead quietly absorbing another's identity.
+                        // A shared email does not conflict. `Lead_tenant_id_email_norm_key`
+                        // is gone, so another lead already holding this address is
+                        // not a row error and this lead does not absorb that one.
                         mobile: row.mobile,
                         mobile_norm: row.identity.mobile_norm,
                         ...(row.email    !== null      ? { email: row.email, email_norm: row.identity.email_norm } : {}),

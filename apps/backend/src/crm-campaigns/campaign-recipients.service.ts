@@ -51,34 +51,43 @@ export class CampaignRecipientsService {
         // the recipient rows can point at them without reading the inserts back.
         // An address that matched several rows is already in `parties` with a
         // null id — it must not mint another contact.
-        const newContacts = new Map<string, { id: string; name: string }>();
+        // Lowercased address, not the raw cell. Two casings that match nobody
+        // are one contact, and one recipient is inserted per address. The
+        // recipient unique is case-sensitive, so the second casing would send
+        // again. Existing recipient rows are not rewritten.
+        const newContacts = new Map<string, { id: string; name: string; email: string }>();
         for (const row of rows) {
-            if (parties.has(addressKey(row.email)) || newContacts.has(row.email)) continue;
-            newContacts.set(row.email, { id: randomUUID(), name: row.name });
+            const key = addressKey(row.email);
+            if (parties.has(key) || newContacts.has(key)) continue;
+            newContacts.set(key, { id: randomUUID(), name: row.name, email: row.email });
         }
         if (newContacts.size > 0) {
             await client.crmContact.createMany({
-                data: [...newContacts].map(([email, contact]) => ({
+                data: [...newContacts.values()].map((contact) => ({
                     id: contact.id,
                     tenant_id: tenantId,
                     name: contact.name,
-                    email,
+                    email: contact.email,
                     capture_source: 'IMPORT',
                     created_by: userId,
                 })),
             });
         }
 
-        const data = rows.map((row) => {
-            const created = newContacts.get(row.email);
-            const party: ResolvedParty = parties.get(addressKey(row.email)) ?? {
+        const seenAddresses = new Set<string>();
+        const data = rows.flatMap((row) => {
+            const key = addressKey(row.email);
+            if (seenAddresses.has(key)) return [];
+            seenAddresses.add(key);
+            const created = newContacts.get(key);
+            const party: ResolvedParty = parties.get(key) ?? {
                 customer_id: null,
                 lead_id: null,
                 contact_id: created?.id ?? null,
                 name: created?.name ?? row.name,
                 phone: null,
             };
-            return {
+            return [{
                 id: randomUUID(),
                 campaign_id: campaignId,
                 customer_id: party.customer_id,
@@ -90,7 +99,7 @@ export class CampaignRecipientsService {
                 subject: row.subject,
                 message: row.message,
                 status: 'PENDING',
-            };
+            }];
         });
 
         const result = await client.crmCampaignRecipient.createMany({ data, skipDuplicates: true });
