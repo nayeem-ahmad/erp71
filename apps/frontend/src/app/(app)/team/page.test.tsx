@@ -227,6 +227,38 @@ describe('TeamPage — invite starts-with line', () => {
         expect(await screen.findByText('Starts with: Shop default (workspace default)')).toBeInTheDocument();
     });
 
+    it('reflects a profile given to a role in the Roles tab after returning to Members', async () => {
+        signIn('OWNER');
+        let clerkProfile: { id: string; name: string } | null = null;
+        mockApi.getTeamRoles.mockImplementation((async () => [
+            cashierRole,
+            { ...clerkRole, preference_profile: clerkProfile },
+        ]) as never);
+        mockApi.updateTeamRole.mockImplementation((async () => {
+            clerkProfile = { id: 'p1', name: 'Cashier setup' };
+            return {};
+        }) as never);
+        mockApi.getPreferenceProfiles.mockResolvedValue([cashier] as never);
+        render(<TeamPage />);
+
+        // Before the change a Clerk invitee starts with nothing.
+        fireEvent.click(await screen.findByLabelText('Clerk'));
+        await act(async () => {});
+        expect(screen.queryByText(/Starts with/)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByLabelText('Clerk'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Roles' }));
+        const row = (await screen.findByText('Clerk', { selector: 'p' })).closest('div.rounded-lg') as HTMLElement;
+        fireEvent.click(within(row).getByRole('button', { name: 'Edit role' }));
+        fireEvent.change(await screen.findByLabelText('Default profile'), { target: { value: 'p1' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+        await waitFor(() => expect(mockApi.updateTeamRole).toHaveBeenCalledTimes(1));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+        fireEvent.click(await screen.findByLabelText('Clerk'));
+        expect(await screen.findByText('Starts with: Cashier setup')).toBeInTheDocument();
+    });
+
     it('shows nothing when neither exists', async () => {
         await openInvite([cashierRole, clerkRole], [{ ...cashier, is_default: false }]);
         await act(async () => {});

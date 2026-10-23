@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Loader2, UserPlus, Mail, Trash2, ShieldCheck, Store as StoreIcon,
     ChevronRight, Users, Plus, Pencil, X,
@@ -886,9 +886,24 @@ export default function TeamPage() {
         }
     };
     useEffect(() => { void load(); }, []);
-    useEffect(() => {
+    const loadProfiles = () => {
         api.getPreferenceProfiles().then((list) => setProfiles(list ?? [])).catch(() => setProfiles([]));
-    }, []);
+    };
+    useEffect(() => { loadProfiles(); }, []);
+
+    // The other tabs keep their own copies, so coming back to Members re-reads the
+    // roles and profiles: "Starts with" must not describe what they were before.
+    const leftMembers = useRef(false);
+    useEffect(() => {
+        if (activeTab !== 'members') {
+            leftMembers.current = true;
+        } else if (leftMembers.current) {
+            leftMembers.current = false;
+            void loadRoles();
+            loadProfiles();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
 
     const sendInvite = async (e: React.FormEvent) => {
         e.preventDefault();
