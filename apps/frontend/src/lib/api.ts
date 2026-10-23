@@ -4,6 +4,7 @@ import type {
     AiChatResponse,
     BoardBackgroundColor,
     DashboardPreference,
+    MyPreferencesResponse,
     PasswordPolicy,
     PaymentLayoutContext,
     PaymentLayoutEntry,
@@ -11,6 +12,11 @@ import type {
     PlatformFeatureKey,
     PlatformFeatures,
     PlatformRole,
+    PersonSectionKey,
+    PreferenceProfileDetail,
+    PreferenceProfileSummary,
+    PreferenceSource,
+    SectionPartials,
     SupportedLocaleCode,
     TenantFeatureOverrides,
 } from '@erp71/shared-types';
@@ -4765,6 +4771,8 @@ export const api = {
         description?: string;
         permissions: string[];
         recordScope?: 'ALL' | 'PROJECT' | 'OWN';
+        /** null clears the role's profile; omitted leaves it as it is. */
+        preference_profile_id?: string | null;
     }) =>
         fetchWithAuth('/team/roles', {
             method: 'POST',
@@ -4778,6 +4786,7 @@ export const api = {
             description?: string;
             permissions?: string[];
             recordScope?: 'ALL' | 'PROJECT' | 'OWN';
+            preference_profile_id?: string | null;
         },
     ) =>
         fetchWithAuth(`/team/roles/${id}`, {
@@ -5812,6 +5821,64 @@ export const api = {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
     }),
+    // Member preferences and workspace preference profiles (see lib/preferences).
+    getMyPreferences: (): Promise<MyPreferencesResponse> => fetchWithAuth('/preferences/me'),
+    saveMyPreferenceSection: (
+        section: PersonSectionKey,
+        body: unknown,
+    ): Promise<{ value: unknown; source: PreferenceSource }> =>
+        fetchWithAuth(`/preferences/me/${section}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    resetMyPreferenceSection: (
+        section: PersonSectionKey,
+    ): Promise<{ value: unknown; source: PreferenceSource }> =>
+        fetchWithAuth(`/preferences/me/${section}`, { method: 'DELETE' }),
+    getPreferenceProfiles: (): Promise<PreferenceProfileSummary[]> => fetchWithAuth('/preference-profiles'),
+    getPreferenceProfile: (id: string): Promise<PreferenceProfileDetail> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}`),
+    createPreferenceProfile: (body: {
+        name: string;
+        is_default?: boolean;
+        sections?: SectionPartials;
+    }): Promise<PreferenceProfileDetail> =>
+        fetchWithAuth('/preference-profiles', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    updatePreferenceProfile: (
+        id: string,
+        body: { name?: string; is_default?: boolean; sections?: Record<string, unknown | null> },
+    ): Promise<PreferenceProfileDetail> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    deletePreferenceProfile: (id: string): Promise<void> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    applyPreferenceProfile: (
+        id: string,
+        body: { sections: PersonSectionKey[]; user_ids?: string[] },
+    ): Promise<{ updated: number }> =>
+        fetchWithAuth(`/preference-profiles/${encodeURIComponent(id)}/apply`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    /**
+     * The signed-in member's alert settings and the alert types there are. The
+     * profile editor reads only `types`, to offer each one for muting; labels
+     * come from the server in English.
+     */
+    getAlertPreferences: (): Promise<{
+        types: { type: string; label: string; description: string }[];
+        muted_types: string[];
+        quiet: { enabled: boolean; from: string; to: string };
+    }> => fetchWithAuth('/alerts/preferences'),
     // New Sales
     createNewSale: (data: any) => fetchWithAuth('/sales', {
         method: 'POST',

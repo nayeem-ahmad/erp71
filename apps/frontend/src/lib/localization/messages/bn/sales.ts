@@ -400,6 +400,13 @@ export const salesMessages = {
                     footerNone: "ফুটার নেই",
                     footerPlaceholder: "যেমন: বিক্রিত পণ্য ফেরত নেওয়া হয় না।",
                     saveFailed: "ইনভয়েস লেআউট সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।",
+                    source: {
+                        following: "{profile} ডিফল্ট অনুসরণ করছে",
+                        builtIn: "অন্তর্নির্মিত সেটিং ব্যবহার হচ্ছে",
+                        customised: "কাস্টমাইজ করা",
+                        browser: "এই ব্রাউজারে সেট করা",
+                        reset: "রিসেট",
+                    },
                 },
                 saved: 'প্রিন্ট সেটিংস সংরক্ষিত হয়েছে',
             },

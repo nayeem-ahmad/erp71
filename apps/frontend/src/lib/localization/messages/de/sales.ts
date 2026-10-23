@@ -400,6 +400,13 @@ export const salesMessages = {
                 footerNone: "Keine Fußzeile",
                 footerPlaceholder: "z. B. Verkaufte Ware ist vom Umtausch ausgeschlossen.",
                 saveFailed: "Rechnungslayout konnte nicht gespeichert werden. Bitte erneut versuchen.",
+                source: {
+                    following: "Folgt der Standardeinstellung „{profile}“",
+                    builtIn: "Eingebaute Einstellung in Verwendung",
+                    customised: "Angepasst",
+                    browser: "In diesem Browser festgelegt",
+                    reset: "Zurücksetzen",
+                },
             },
             saved: 'Druckeinstellungen gespeichert',
         },

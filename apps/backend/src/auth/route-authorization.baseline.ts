@@ -86,6 +86,9 @@ export const OPEN_ROUTES: Record<string, string> = {
     'NotificationsController.unreadCount': "self-scoped: acts only on the signed-in member’s own data", // GET /notifications/unread-count
     'NotificationsController.markAllRead': "self-scoped: acts only on the signed-in member’s own data", // PATCH /notifications/read-all
     'NotificationsController.markRead': "self-scoped: acts only on the signed-in member’s own data", // PATCH /notifications/:id/read
+    'PreferencesController.get': "self-scoped: acts only on the signed-in member’s own data", // GET /preferences/me
+    'PreferencesController.save': "self-scoped: acts only on the signed-in member’s own data", // PATCH /preferences/me/:section
+    'PreferencesController.reset': "self-scoped: acts only on the signed-in member’s own data", // DELETE /preferences/me/:section
     'SalesSettingsController.get': "shell read: the POS flags every page needs to lay out the sales menu", // GET /sales-settings
     'SmsCreditController.getSummary': "messaging balances are shown wherever a message is sent; submitting a top-up requires MANAGE_USERS and only a platform admin grants credits", // GET /sms-credits/summary
     'SupportController.listThreads': "the shop-wide support inbox is shared by every member by design (revisit: TODO.md)", // GET /support/threads

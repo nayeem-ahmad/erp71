@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { useQuery } from '@tanstack/react-query';
 import {
     ME_QUERY_KEY,
+    MY_PREFERENCES_QUERY_ROOT,
     QueryProvider,
     getQueryClient,
     readMe,
@@ -91,6 +92,16 @@ describe('resetWorkspaceQueries', () => {
         expect(client.getQueryData(['dashboard', 't1', 's1', 'kpis'])).toBeUndefined();
         expect(client.getQueryData(ME_QUERY_KEY)).toEqual({ id: 'u1' });
         expect(client.getQueryState(ME_QUERY_KEY)?.isInvalidated).toBe(true);
+    });
+
+    it("spares the member's preferences, which are keyed by tenant and person, not branch", () => {
+        const client = getQueryClient();
+        client.setQueryData([MY_PREFERENCES_QUERY_ROOT, 't1:u1'], { sections: {} });
+
+        resetWorkspaceQueries(client);
+
+        expect(client.getQueryData([MY_PREFERENCES_QUERY_ROOT, 't1:u1'])).toEqual({ sections: {} });
+        expect(client.getQueryState([MY_PREFERENCES_QUERY_ROOT, 't1:u1'])?.isInvalidated).toBe(false);
     });
 
     it('keys workspace queries on the tab’s tenant and store', () => {

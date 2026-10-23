@@ -1,6 +1,8 @@
 import { api } from './api';
 import { platformRoleOf } from './platform-admin-paths';
+import { clearInvoicePrintPrefsCache } from './hooks/useInvoicePrintPrefs';
 import { syncLocalePreferenceFromSession } from './localization/preference';
+import { usePreferencesStore } from './preferences/store';
 import { clearQueryCache, getQueryClient, ME_QUERY_KEY, resetWorkspaceQueries } from './query-client';
 import { routes } from './routes';
 import { clearStoredSession } from './session-expiry';
@@ -68,7 +70,30 @@ function workspaceIdentity(): string {
 function switchWorkspace(apply: () => void): void {
     const before = workspaceIdentity();
     apply();
-    if (workspaceIdentity() !== before) resetWorkspaceQueries();
+    if (workspaceIdentity() !== before) {
+        resetWorkspaceQueries();
+        forgetMemberPreferences();
+    }
+}
+
+/**
+ * Drop the member's preferences held in memory, for a sign-in, a sign-out or a
+ * move to another workspace — all client-side navigations the store would
+ * otherwise survive, greeting the next person (or workspace) with the last
+ * one's lists and sidebar groups until the loader caught up.
+ *
+ * An edit still waiting on its debounce is cancelled, not sent: flushed now it
+ * would race the change of hands and could go out under the next session's
+ * token or workspace header. Losing the last half-second of a setting is the
+ * lesser harm. Replies to saves already sent are ignored for the same reason.
+ *
+ * The invoice layout (`invoicePrint`) is also cached by the print hook, which
+ * only notices a change of workspace; without this the next cashier on a shared
+ * till would print with the last one's layout until a reload.
+ */
+function forgetMemberPreferences(): void {
+    usePreferencesStore.getState().clear();
+    clearInvoicePrintPrefsCache();
 }
 
 /** Activate the referee self-service portal (no shop/tenant scope). */
@@ -195,6 +220,8 @@ export async function storeAuthResponse(
     options: StoreAuthOptions = {},
 ): Promise<StoreAuthResult> {
     const data = res.data ? res.data : res;
+    // Before the new token is in place, so nothing the last session left unsent can ride on it.
+    forgetMemberPreferences();
     setCredentials(data);
     // Nothing the previous session cached may reach this one, which can be a
     // different person on the same browser — a sign-out in another tab, or an
@@ -275,6 +302,7 @@ export function clearAuthSession() {
     // it in memory and greet whoever signs in next with this account's data.
     // (The expiry path does not need this: it reloads the page.)
     clearQueryCache();
+    forgetMemberPreferences();
 }
 
 /** True when the path belongs to a shop workspace (not the platform admin console). */

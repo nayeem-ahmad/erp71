@@ -1103,6 +1103,7 @@ model Tenant {
   salesSettings              SalesSettings?
   accountingSettings         AccountingSettings?
   printTemplates             PrintTemplate[]
+  preferenceProfiles         PreferenceProfile[]
   printTemplateStoreAssignments PrintTemplateStoreAssignment[]
   navLayout                  TenantNavLayout?
   referralSignup             ReferralSignup?
@@ -1581,6 +1582,17 @@ model TenantUser {
   /// packages/shared-types/payment-layout.ts). Held on the membership so it
   /// follows the person to any till. Null means the default order everywhere.
   payment_method_prefs Json?
+  /// The member's own answers for the preference sections that have no column of
+  /// their own (table view, table columns, sidebar, alerts, device) — a
+  /// MemberPreferences JSON, see packages/shared-types/preferences.ts. Null means
+  /// the member has answered none, so the profile (or built-in) value applies.
+  preferences Json?
+  /// The person sections that still read this member's old browser-held values
+  /// (a subset of LEGACY_BROWSER_SECTIONS), only until the member answers them.
+  /// Every member existing at release gets all three from
+  /// prisma/sync-member-prefs-legacy.ts; a member who joins later gets none, so
+  /// a profile applies to them instead of a shared till's leftovers.
+  legacy_browser_sections String[] @default([])
 
   // Relations
   tenant     Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
@@ -1645,10 +1657,14 @@ model TenantRole {
   /// defaulting the other way would have narrowed every member in every
   /// workspace on the morning of the deploy. See `TenantRecordScope`.
   record_scope TenantRecordScope @default(ALL)
+  /// The starting preferences members of this role get until they change them.
+  /// Null falls back to the tenant's default profile. See `PreferenceProfile`.
+  preference_profile_id String?
   created_at   DateTime          @default(now())
   updated_at   DateTime          @updatedAt
 
-  tenant          Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant            Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  preferenceProfile PreferenceProfile? @relation(fields: [preference_profile_id], references: [id], onDelete: SetNull)
   permissions     TenantRolePermission[]
   members         TenantUser[]
   memberRoles     TenantUserRole[]
@@ -1658,6 +1674,32 @@ model TenantRole {
   @@unique([tenant_id, name])
   @@unique([tenant_id, template_key])
   @@index([tenant_id])
+  @@index([preference_profile_id])
+}
+
+/// A starting set of a member's own preferences — invoice print, lists,
+/// sidebar, alerts and a new browser's print setup — that an owner builds once
+/// and attaches to roles. Read at lookup time, never copied onto members: a
+/// member who has not changed a setting follows the profile as it changes.
+model PreferenceProfile {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  name       String
+  /// The profile for members whose role has none. At most one per tenant,
+  /// kept so in the service as PrintTemplate.is_default is.
+  is_default Boolean  @default(false)
+  /// PreferenceProfilePrefs JSON — see packages/shared-types/preferences.ts.
+  prefs      Json
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  updated_by String?
+
+  tenant Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  roles  TenantRole[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id])
+  @@map("preference_profiles")
 }
 
 model TenantRolePermission {

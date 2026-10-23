@@ -12,6 +12,8 @@
  * is what the type comes out at.
  */
 
+import { profileDevice } from '@/lib/preferences/profile-device';
+
 export type PrintTypeScale = 'normal' | 'large' | 'larger';
 
 export const PRINT_TYPE_SCALES: PrintTypeScale[] = ['normal', 'large', 'larger'];
@@ -33,12 +35,27 @@ export function isPrintTypeScale(value: unknown): value is PrintTypeScale {
 }
 
 /**
- * What this page falls back on when storage is unavailable, so the choice still
- * holds for as long as the page is open.
+ * What the operator chose on this page, kept for when storage is unavailable so
+ * the choice still holds for as long as the page is open. Null until they choose.
  */
-let sessionScale: PrintTypeScale = 'normal';
+let sessionScale: PrintTypeScale | null = null;
 
 const listeners = new Set<() => void>();
+
+/**
+ * Only what this browser has stored, or null — no session answer, no profile,
+ * no fallback. For copying a browser's own setup somewhere else (Team → Default
+ * profiles), where a value it never chose must not pass for one it did.
+ */
+export function readStoredPrintTypeScale(): PrintTypeScale | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const stored = window.localStorage.getItem(PRINT_TYPE_SCALE_KEY);
+        return isPrintTypeScale(stored) ? stored : null;
+    } catch {
+        return null;
+    }
+}
 
 /**
  * Reading storage throws outright in a locked-down browser (Safari private
@@ -53,7 +70,11 @@ export function readPrintTypeScale(): PrintTypeScale {
     } catch {
         // Fall through to the session's answer.
     }
-    return sessionScale;
+    if (sessionScale) return sessionScale;
+    // This browser has no answer yet: start from the member's profile. Never
+    // written back — only the operator's own control stores anything.
+    const fromProfile = profileDevice().printTypeScale;
+    return isPrintTypeScale(fromProfile) ? fromProfile : 'normal';
 }
 
 export function setPrintTypeScale(scale: PrintTypeScale): void {

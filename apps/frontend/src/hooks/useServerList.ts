@@ -104,14 +104,27 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
     const [loading, setLoading] = useState(enabled);
     const [error, setError] = useState<unknown>(null);
     const [page, setPage] = useState(1);
-    // Read once on mount: DataTable persists the size as it changes, and re-reading later
-    // would fight the local state it is being written from.
+    // The saved size (the member's, once their preferences have loaded; this browser's
+    // before) seeds the state. DataTable saves the size only when the viewer picks one.
     const savedPageSize = useTablePreferences(
         (s) => (tableId ? s.getPreferences(tableId)?.pageSize : undefined),
     );
+    const personLoaded = useTablePreferences((s) => s.personColumns !== null);
     const [pageSize, setPageSize] = useState(
         savedPageSize ?? initialPageSize ?? DEFAULT_PAGE_SIZE,
     );
+    // Until the viewer picks a size on this list, it follows the member's saved one: their
+    // preferences usually land after a first visit's list has mounted. Once they pick, the
+    // pick stands — re-reading after that would fight the state it is being written from.
+    const pickedPageSize = useRef(false);
+    useEffect(() => {
+        if (!tableId || !personLoaded || pickedPageSize.current) return;
+        const next = savedPageSize ?? initialPageSize ?? DEFAULT_PAGE_SIZE;
+        if (next === pageSize) return;
+        setPageSize(next);
+        setPage(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tableId, personLoaded, savedPageSize]);
     const [sort, setSort] = useState<{ id: string; desc: boolean } | null>(initialSort);
     const { columnFilters, setColumnFilters, filters: typedFilters } = useServerColumnFilters();
     const filters = serverColumnFilters ? typedFilters : undefined;
@@ -187,7 +200,7 @@ export function useServerList<T, R extends Paginated<T> = Paginated<T>>({
         onPageChange: setPage,
         // DataTable requires the page reset here, or the new size is requested
         // against a stale page index and returns an empty result.
-        onPageSizeChange: (size: number) => { setPageSize(size); setPage(1); },
+        onPageSizeChange: (size: number) => { pickedPageSize.current = true; setPageSize(size); setPage(1); },
         sort,
         onSortChange: setSort,
         fetchAllRows,

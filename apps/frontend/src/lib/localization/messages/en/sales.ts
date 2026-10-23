@@ -403,6 +403,13 @@ export const salesMessages = {
                 footerNone: "No footer",
                 footerPlaceholder: "e.g. Goods once sold are not returnable.",
                 saveFailed: "Could not save your invoice layout. Try again.",
+                source: {
+                    following: "Following {profile} default",
+                    builtIn: "Using the built-in setting",
+                    customised: "Customised",
+                    browser: "Set on this browser",
+                    reset: "Reset",
+                },
             },
             saved: 'Print settings saved',
         },

@@ -936,7 +936,7 @@ describe('DataTable — default page size', () => {
         expect(screen.getByTestId('page-size-select')).toHaveValue('10');
     });
 
-    it('persists the size actually in use in server mode, not the unread client default', () => {
+    it('persists the size the viewer picks in server mode, and nothing on mount', () => {
         const setPageSize = jest.fn();
         jest.spyOn(require('./useTablePreferences'), 'useTablePreferences').mockReturnValue({
             getPreferences: jest.fn().mockReturnValue(undefined),
@@ -962,9 +962,13 @@ describe('DataTable — default page size', () => {
             />,
         );
 
-        // 50 is what the viewer chose; 10 is the local default this mode never reads.
-        expect(setPageSize).toHaveBeenCalledWith('test-table', 50);
-        expect(setPageSize).not.toHaveBeenCalledWith('test-table', 10);
+        // Opening the list is not a choice: neither the size in use nor the unread client default is saved.
+        expect(setPageSize).not.toHaveBeenCalled();
+
+        fireEvent.change(screen.getByTestId('page-size-select'), { target: { value: '100' } });
+
+        expect(setPageSize).toHaveBeenCalledTimes(1);
+        expect(setPageSize).toHaveBeenCalledWith('test-table', 100);
 
         jest.restoreAllMocks();
     });

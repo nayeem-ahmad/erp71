@@ -16,6 +16,8 @@ import { useBranding } from '@/lib/branding';
 import { useI18n } from '@/lib/i18n';
 import type { ResolvedNavModule } from '@/lib/nav-resolver';
 import { isNavSubgroup, resolveSidebarModules, type SidebarModulesInput } from '@/lib/sidebar-modules';
+import { usePreferencesStore } from '@/lib/preferences/store';
+import { usePreferenceSection } from '@/lib/preferences/use-preference-section';
 import { filterNavModules, normalizeNavSearchQuery } from '@/lib/sidebar-nav-filter';
 import { routes } from '@/lib/routes';
 
@@ -51,6 +53,18 @@ function writeStorage(key: string, value: string) {
     } catch {
         /* private mode — the preference just does not stick */
     }
+}
+
+/** The saved list of open group ids, as the `openGroups` map the panel draws from. */
+function groupsFromList(ids: readonly string[] | undefined): Record<string, boolean> {
+    const open: Record<string, boolean> = {};
+    for (const id of ids ?? []) open[id] = true;
+    return open;
+}
+
+/** The ids of the groups that are open — the true keys only. */
+function listFromGroups(open: Record<string, boolean>): string[] {
+    return Object.keys(open).filter((id) => open[id]);
 }
 
 export type AppShellSidebarProps = Omit<SidebarModulesInput, 'tenantLayout' | 'platformAdminLayout' | 'messages'> & {
@@ -103,15 +117,39 @@ export default function AppShellSidebar({
     const asideRef = useRef<HTMLElement>(null);
     const touchStartXRef = useRef(0);
 
+    // The person's own preferences, once they have loaded. Until then (and in the
+    // modes that never load them) the open groups live in this browser, as before.
+    // `device` holds only what the profile sets; collapsed is still a per-browser
+    // choice, so it only supplies the starting value.
+    const sidebarPrefs = usePreferenceSection('sidebar');
+    const devicePrefs = usePreferenceSection('device');
+    // Whose preferences the store holds — `<tenantId>:<userId>`, or null before a load.
+    const prefsScopeKey = usePreferencesStore((state) => state.scopeKey);
+    const prefsReadyRef = useRef(sidebarPrefs.ready);
+    prefsReadyRef.current = sidebarPrefs.ready;
+    // The groups on screen, for a save that must build on them without waiting for a render.
+    const openGroupsRef = useRef(openGroups);
+    openGroupsRef.current = openGroups;
+    // Set by an explicit click; the saved groups seed the panel only before that.
+    // Both marks belong to one person in one workspace (see the scope effect below).
+    const groupsTouchedRef = useRef(false);
+    const groupsSeededRef = useRef(false);
+    const collapsedTouchedRef = useRef(false);
+    const seenScopeRef = useRef(prefsScopeKey);
+
     useEffect(() => {
         if (readStorage(STORAGE.collapsed) === 'true') setCollapsed(true);
         const savedWidth = Number(readStorage(STORAGE.width));
         if (savedWidth) setPanelWidth(clampPanelWidth(savedWidth));
+        if (prefsReadyRef.current) return;
         const savedGroups = readStorage(STORAGE.openGroups);
         if (savedGroups) {
             try { setOpenGroups(JSON.parse(savedGroups)); } catch { /* ignore */ }
         }
     }, []);
+
+    // This browser's answer wins; otherwise the profile's. Never saved anywhere.
+    const profileCollapsed = devicePrefs.ready ? devicePrefs.value.sidebarCollapsed : undefined;
 
     /* ---- Which app's menu is showing ---- */
 
@@ -155,8 +193,8 @@ export default function AppShellSidebar({
             ? child.children.some((link) => badgeFor(link.href) > 0)
             : badgeFor(child.href) > 0)));
 
-    // Auto-open the subgroup holding the current page.
-    useEffect(() => {
+    // The subgroups holding the current page.
+    const groupsOfCurrentPage = () => {
         const toOpen: Record<string, boolean> = {};
         for (const navModule of modules) {
             for (const child of navModule.children ?? []) {
@@ -165,6 +203,48 @@ export default function AppShellSidebar({
                 }
             }
         }
+        return toOpen;
+    };
+
+    // The store moved to someone else's preferences — another account on this browser,
+    // or another workspace — without this panel unmounting. Start over as a fresh mount
+    // would: the last person's groups and collapsed starting value go, the next person's
+    // saved groups seed the panel, and their first toggle saves their own set. Declared
+    // ahead of the two effects below so they run after it in the same commit.
+    useEffect(() => {
+        const previous = seenScopeRef.current;
+        seenScopeRef.current = prefsScopeKey;
+        // A first load (null → scope) builds on what is on screen; only a change of hands resets.
+        if (previous === null || previous === prefsScopeKey) return;
+        groupsSeededRef.current = false;
+        groupsTouchedRef.current = false;
+        collapsedTouchedRef.current = false;
+        setOpenGroups(groupsOfCurrentPage());
+        setCollapsed(readStorage(STORAGE.collapsed) === 'true');
+        // `groupsOfCurrentPage` reads this render's modules; only the change of scope matters here.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefsScopeKey]);
+
+    useEffect(() => {
+        if (profileCollapsed === undefined || collapsedTouchedRef.current) return;
+        if (readStorage(STORAGE.collapsed) !== null) return;
+        setCollapsed(profileCollapsed);
+    }, [profileCollapsed, prefsScopeKey]);
+
+    // The saved groups are the starting point once preferences have loaded (on mount,
+    // or later if they arrive after). The page's own group stays open on top of them.
+    useEffect(() => {
+        if (!sidebarPrefs.ready || groupsSeededRef.current || groupsTouchedRef.current) return;
+        groupsSeededRef.current = true;
+        setOpenGroups({ ...groupsFromList(sidebarPrefs.value.appShellOpenGroups), ...groupsOfCurrentPage() });
+        // `groupsOfCurrentPage` reads this render's modules; only readiness and whose they are matter here.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sidebarPrefs.ready, prefsScopeKey]);
+
+    // Auto-open the subgroup holding the current page. This is navigation, not a
+    // choice: it is never written to the browser or the server.
+    useEffect(() => {
+        const toOpen = groupsOfCurrentPage();
         if (Object.keys(toOpen).length === 0) return;
         setOpenGroups((prev) => (Object.keys(toOpen).every((key) => prev[key]) ? prev : { ...prev, ...toOpen }));
         // Once per navigation; `modules` is rebuilt every render.
@@ -172,6 +252,16 @@ export default function AppShellSidebar({
     }, [pathname]);
 
     const toggleGroup = (key: string) => {
+        groupsTouchedRef.current = true;
+        if (prefsReadyRef.current) {
+            const prev = openGroupsRef.current;
+            const next = { ...prev, [key]: !prev[key] };
+            openGroupsRef.current = next;
+            setOpenGroups(next);
+            const appShellOpenGroups = listFromGroups(next);
+            usePreferencesStore.getState().save('sidebar', { appShellOpenGroups }, { appShellOpenGroups });
+            return;
+        }
         setOpenGroups((prev) => {
             const next = { ...prev, [key]: !prev[key] };
             writeStorage(STORAGE.openGroups, JSON.stringify(next));
@@ -214,6 +304,7 @@ export default function AppShellSidebar({
     }, [pathname]);
 
     const toggleCollapsed = () => {
+        collapsedTouchedRef.current = true;
         setCollapsed((prev) => {
             writeStorage(STORAGE.collapsed, String(!prev));
             return !prev;

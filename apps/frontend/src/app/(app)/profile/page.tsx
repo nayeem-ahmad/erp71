@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import AvatarCropModal from '@/components/AvatarCropModal';
+import MyPreferencesSection from '@/components/preferences/MyPreferencesSection';
 import { PageShell, PasswordRequirements } from '@/components/ui';
 import { evaluatePassword, type PasswordPolicy } from '@erp71/shared-types';
 import { toast } from '@/lib/toast';
@@ -761,6 +762,8 @@ export default function ProfilePage() {
                         )}
                     </div>
                 </div>
+
+                <MyPreferencesSection />
             </div>
 
             {cropSrc && (

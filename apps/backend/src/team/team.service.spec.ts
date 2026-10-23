@@ -28,6 +28,7 @@ const db = {
         createMany: jest.fn(),
         deleteMany: jest.fn(),
     },
+    preferenceProfile: { findFirst: jest.fn() },
     store: { findFirst: jest.fn(), findMany: jest.fn() },
     user: { findUnique: jest.fn() },
     userInvitation: { findMany: jest.fn(), deleteMany: jest.fn() },
@@ -265,8 +266,35 @@ describe('TeamService', () => {
                 level: null,
                 permissions: [StorePermission.MANAGE_USERS],
                 member_count: 3,
+                preference_profile: null,
             },
         ]);
+    });
+
+    it('listRoles includes the profile', async () => {
+        db.tenantRole.findMany.mockResolvedValue([
+            {
+                id: 'role-1',
+                name: 'Cashier',
+                description: null,
+                is_system: false,
+                template_key: null,
+                permissions: [],
+                _count: { memberRoles: 0 },
+                preferenceProfile: { id: 'prof-1', name: 'Till defaults' },
+            },
+        ]);
+
+        await expect(service.listRoles(owner)).resolves.toEqual([
+            expect.objectContaining({ preference_profile: { id: 'prof-1', name: 'Till defaults' } }),
+        ]);
+        expect(db.tenantRole.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                include: expect.objectContaining({
+                    preferenceProfile: { select: { id: true, name: true } },
+                }),
+            }),
+        );
     });
 
     it('reports a seeded role\'s module and level from its template, not its stored name', async () => {
@@ -395,6 +423,123 @@ describe('TeamService', () => {
 
             const [{ data }] = db.tenantRole.update.mock.calls.at(-1);
             expect(data).not.toHaveProperty('record_scope');
+        });
+    });
+
+    /**
+     * PreferencesService resolves a member's profile through their role without
+     * re-checking the profile's tenant, so a role may only point at a profile of
+     * its own workspace — that is enforced here, on every write.
+     */
+    describe('default preference profile', () => {
+        const existingRole = {
+            id: 'role-1',
+            name: 'Custom',
+            tenant_id: 't1',
+            permissions: [{ permission: StorePermission.CREATE_SALE }],
+        };
+
+        beforeEach(() => {
+            db.tenantRole.create.mockResolvedValue({ id: 'role-new' });
+            db.tenantRole.findMany.mockResolvedValue([]);
+            db.tenantRole.findFirst.mockResolvedValue(existingRole);
+        });
+
+        it('updateRoleTemplate sets and clears preference_profile_id', async () => {
+            db.preferenceProfile.findFirst.mockResolvedValue({ id: 'prof-1' });
+
+            await service.updateRoleTemplate(owner, 'role-1', { preference_profile_id: 'prof-1' });
+
+            expect(db.preferenceProfile.findFirst).toHaveBeenCalledWith({
+                where: { id: 'prof-1', tenant_id: 't1' },
+                select: { id: true },
+            });
+            expect(db.tenantRole.update.mock.calls.at(-1)[0].data.preference_profile_id).toBe('prof-1');
+            // A profile-only change moves no permission, so nobody is re-synced.
+            expect(syncMemberPermissionsFromRoles).not.toHaveBeenCalled();
+            expect(db.tenantRolePermission.deleteMany).not.toHaveBeenCalled();
+            expect(audit.log).toHaveBeenCalledWith(
+                'team.role_updated',
+                'TenantRole',
+                expect.any(Object),
+                'role-1',
+                expect.objectContaining({ preferenceProfileId: 'prof-1' }),
+            );
+
+            db.preferenceProfile.findFirst.mockClear();
+            await service.updateRoleTemplate(owner, 'role-1', { preference_profile_id: null });
+
+            expect(db.preferenceProfile.findFirst).not.toHaveBeenCalled();
+            expect(db.tenantRole.update.mock.calls.at(-1)[0].data.preference_profile_id).toBeNull();
+            expect(syncMemberPermissionsFromRoles).not.toHaveBeenCalled();
+        });
+
+        it('leaves the profile alone when the caller does not mention it', async () => {
+            await service.updateRoleTemplate(owner, 'role-1', { name: 'Renamed' });
+
+            expect(db.tenantRole.update.mock.calls.at(-1)[0].data).not.toHaveProperty('preference_profile_id');
+            expect(db.preferenceProfile.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('a profile id from another tenant is a BadRequestException on update', async () => {
+            db.preferenceProfile.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.updateRoleTemplate(owner, 'role-1', { preference_profile_id: 'foreign' }),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.tenantRole.update).not.toHaveBeenCalled();
+        });
+
+        it('a profile id from another tenant is a BadRequestException on create', async () => {
+            db.preferenceProfile.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.createRole(owner, {
+                    name: 'Till',
+                    permissions: [StorePermission.CREATE_SALE],
+                    preference_profile_id: 'foreign',
+                }),
+            ).rejects.toThrow(BadRequestException);
+            expect(db.tenantRole.create).not.toHaveBeenCalled();
+        });
+
+        it('createRole stores a profile of its own tenant', async () => {
+            db.preferenceProfile.findFirst.mockResolvedValue({ id: 'prof-1' });
+
+            await service.createRole(owner, {
+                name: 'Till',
+                permissions: [StorePermission.CREATE_SALE],
+                preference_profile_id: 'prof-1',
+            });
+
+            expect(db.preferenceProfile.findFirst).toHaveBeenCalledWith({
+                where: { id: 'prof-1', tenant_id: 't1' },
+                select: { id: true },
+            });
+            expect(db.tenantRole.create.mock.calls.at(-1)[0].data.preference_profile_id).toBe('prof-1');
+        });
+
+        it('createRole without a profile leaves the column alone', async () => {
+            await service.createRole(owner, { name: 'Till', permissions: [StorePermission.CREATE_SALE] });
+
+            expect(db.tenantRole.create.mock.calls.at(-1)[0].data).not.toHaveProperty('preference_profile_id');
+            expect(db.preferenceProfile.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('a non-owner cannot set it', async () => {
+            await expect(
+                service.updateRoleTemplate(cashier, 'role-1', { preference_profile_id: 'prof-1' }),
+            ).rejects.toThrow(ForbiddenException);
+            await expect(
+                service.createRole(cashier, {
+                    name: 'Till',
+                    permissions: [StorePermission.CREATE_SALE],
+                    preference_profile_id: 'prof-1',
+                }),
+            ).rejects.toThrow(ForbiddenException);
+            expect(db.preferenceProfile.findFirst).not.toHaveBeenCalled();
+            expect(db.tenantRole.update).not.toHaveBeenCalled();
+            expect(db.tenantRole.create).not.toHaveBeenCalled();
         });
     });
 
