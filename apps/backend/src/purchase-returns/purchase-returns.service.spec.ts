@@ -10,6 +10,12 @@ import {
     usableWarehouseIds,
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'PRET-00001'),
+}));
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -210,6 +216,19 @@ describe('PurchaseReturnsService', () => {
             }),
         });
         expect(result.id).toBe('pret-1');
+        // Numbered at the purchase's branch, against every return number.
+        expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+            tenantId: 'tenant-1',
+            docType: 'PURCHASE_RETURN',
+            storeId: 'store-1',
+        }));
+        const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls.at(-1)[1];
+        tx.purchaseReturn.findFirst.mockResolvedValueOnce(null);
+        await expect(isTaken('PRET-00001')).resolves.toBe(false);
+        expect(tx.purchaseReturn.findFirst).toHaveBeenLastCalledWith({
+            where: { tenant_id: 'tenant-1', return_number: 'PRET-00001' },
+            select: { id: true },
+        });
     });
 
     it('sends the goods back out of the warehouse the purchase received them into', async () => {

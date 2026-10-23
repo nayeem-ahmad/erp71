@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { applyInventoryMovement, resolveWarehouseId } from '../database/inventory.utils';
 import { allocateLandedCost, AllocationBasis } from '../database/landed-cost.utils';
-import { DocumentSeries, nextDocumentNumber } from '../database/document-number.utils';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { postMultiLeg } from '../accounting/posting.utils';
 import {
     CAPITALIZED_BY_DEFAULT,
@@ -262,9 +262,11 @@ export class ImportsService {
         }
 
         return this.db.$transaction(async (tx) => {
-            const referenceNumber = await nextDocumentNumber(tx, {
+            const referenceNumber = await issueDocumentNumber(tx, {
                 tenantId,
-                series: DocumentSeries.IMPORT_SHIPMENT,
+                docType: 'IMPORT_SHIPMENT',
+                storeId: dto.storeId,
+                isTaken: numberTakenIn(tx.importShipment, tenantId, 'reference_number'),
             });
 
             const items = await this.itemRows(tx, tenantId, dto.items);

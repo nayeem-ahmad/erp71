@@ -1,7 +1,11 @@
 import {
   DEFAULT_DOCUMENT_NUMBERING,
   DOCUMENT_NUMBERING_PRESETS,
+  NUMBERING_DOC_TYPES,
+  NUMBERING_DOC_TYPE_INFO,
+  documentNumberingPresets,
   fiscalYearLabel,
+  isNumberingDocType,
   normalizeStoreCode,
   numberingPeriodKey,
   parseNumberingTemplate,
@@ -152,5 +156,62 @@ describe('helpers', () => {
     expect(normalizeStoreCode('D-1')).toBeNull();
     expect(normalizeStoreCode('')).toBeNull();
     expect(normalizeStoreCode(7)).toBeNull();
+  });
+});
+
+describe('document types', () => {
+  const october2026 = { year: 2026, month: 10 };
+
+  it('gives every type a valid default and valid presets, all printing its own prefix', () => {
+    for (const docType of NUMBERING_DOC_TYPES) {
+      const { prefix } = NUMBERING_DOC_TYPE_INFO[docType];
+      expect(validateNumberingConfig(DEFAULT_DOCUMENT_NUMBERING[docType], docType)).toEqual([]);
+      expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING[docType], 1, october2026).startsWith(`${prefix}-`)).toBe(true);
+      for (const preset of documentNumberingPresets(docType)) {
+        expect(validateNumberingConfig(preset.config, docType)).toEqual([]);
+      }
+    }
+  });
+
+  it('keeps the shapes existing series already print', () => {
+    // Running series seeded from the old count-based numbers.
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.PURCHASE, 42, october2026)).toBe('PUR-00042');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.PURCHASE_RETURN, 42, october2026)).toBe('PRET-00042');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.SHRINKAGE, 7, october2026)).toBe('SHR-00007');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.STOCK_FOUND, 1, october2026)).toBe('FND-00001');
+    // The fixed fiscal-year series, whose stored counters carry over.
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.QUOTE, 42, october2026)).toBe('QT-2627-00042');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.PROFORMA, 42, october2026)).toBe('PI-2627-00042');
+    expect(renderDocumentNumber(DEFAULT_DOCUMENT_NUMBERING.IMPORT_SHIPMENT, 7, october2026)).toBe('IMP-2627-00007');
+  });
+
+  it('keeps the sales-invoice presets as they were and prefixes the others', () => {
+    expect(documentNumberingPresets('SALE')).toBe(DOCUMENT_NUMBERING_PRESETS);
+    expect(documentNumberingPresets('PURCHASE').map((p) => p.config.template)).toEqual([
+      'PUR-{FY}-{SEQ}',
+      'PUR-{STORE}-{FY}-{SEQ}',
+      'PUR-{YY}{MM}-{SEQ}',
+      'PUR-{SEQ}',
+    ]);
+  });
+
+  it('offers per-counter numbering on sales invoices only', () => {
+    const perCounter = { template: '{STORE}{COUNTER}-{FY}-{SEQ}', resetPolicy: 'FISCAL_YEAR', scope: 'COUNTER', seqWidth: 5 } as const;
+    expect(validateNumberingConfig(perCounter, 'SALE')).toEqual([]);
+    expect(validateNumberingConfig(perCounter, 'PURCHASE').join()).toMatch(/cannot run a separate series per POS counter/);
+    expect(validateNumberingConfig(perCounter)).toEqual([]);
+  });
+
+  it('pairs the types that share a number column', () => {
+    for (const docType of NUMBERING_DOC_TYPES) {
+      const sibling = NUMBERING_DOC_TYPE_INFO[docType].sharesColumnWith;
+      if (sibling) expect(NUMBERING_DOC_TYPE_INFO[sibling].sharesColumnWith).toBe(docType);
+    }
+  });
+
+  it('recognises a document type', () => {
+    expect(isNumberingDocType('PURCHASE')).toBe(true);
+    expect(isNumberingDocType('purchase')).toBe(false);
+    expect(isNumberingDocType(undefined)).toBe(false);
   });
 });

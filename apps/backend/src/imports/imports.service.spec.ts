@@ -92,6 +92,8 @@ describe('ImportsService', () => {
                     Promise.resolve(ACCOUNTS[where.name] ? { id: ACCOUNTS[where.name] } : null),
                 ),
             },
+            documentNumbering: { findUnique: jest.fn().mockResolvedValue(null) },
+            tenant: { findUnique: jest.fn().mockResolvedValue({ timezone: 'Asia/Dhaka' }) },
             documentSequence: {
                 createMany: jest.fn().mockResolvedValue({ count: 1 }),
                 update: jest.fn().mockResolvedValue({ next_number: 2 }),
@@ -99,6 +101,7 @@ describe('ImportsService', () => {
             product: { findMany: jest.fn() },
             importShipment: {
                 create: jest.fn(),
+                findFirst: jest.fn().mockResolvedValue(null),
                 update: jest.fn(),
                 // Every claim-then-act path guards with updateMany, so the
                 // default has to be "this caller won the race".
