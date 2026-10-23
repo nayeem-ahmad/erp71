@@ -12,7 +12,14 @@
  * already walked, the same way `planBackfill` does (`${tenant} ${field} ${value}`).
  */
 
-import { normalizeLeadEmail, normalizeLeadMobile, normalizeProfileUrl } from '@erp71/shared-types';
+import {
+    normalizeLeadEmail,
+    normalizeLeadMobile,
+    normalizeProfileUrl,
+    organizationNameNorm,
+} from '@erp71/shared-types';
+
+export { organizationNameNorm };
 
 export interface ContactNormRow {
     id: string;
@@ -101,11 +108,6 @@ interface Candidate {
     organization_id: string | null;
     contactId?: string;
     contactKey?: string;
-}
-
-/** Trim, lowercase, and collapse internal whitespace to one space. */
-export function organizationNameNorm(raw: string): string {
-    return raw.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function createdAtMillis(value: string | Date | null | undefined): number {

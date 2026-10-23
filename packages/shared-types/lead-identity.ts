@@ -83,6 +83,11 @@ export function normalizeProfileUrl(raw: unknown): string | null {
     return cleaned || null;
 }
 
+/** Trim, lowercase, and collapse internal whitespace to one space. */
+export function organizationNameNorm(raw: string): string {
+    return raw.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 /** The three identity columns for a lead's contact details. */
 export function leadIdentityOf(input: {
     mobile?: unknown;

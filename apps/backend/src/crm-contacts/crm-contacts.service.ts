@@ -1,6 +1,3 @@
-import { createRequire } from 'module';
-import { existsSync } from 'fs';
-import { dirname, join } from 'path';
 import {
     BadRequestException,
     Injectable,
@@ -38,27 +35,8 @@ import {
     leadIdentityPatch,
     normalizeLeadMobile,
     normalizeProfileUrl,
+    organizationNameNorm,
 } from '@erp71/shared-types';
-
-// A static import of this file pulls it into the Nest program. tsc then treats
-// the repo as rootDir and emits dist/apps/backend/src/main.js instead of
-// dist/src/main.js. The function itself is still organizationNameNorm.
-function loadOrganizationNameNorm(): (raw: string) => string {
-    const requirePlan = createRequire(__filename);
-    let dir = __dirname;
-    for (let i = 0; i < 8; i += 1) {
-        const file = join(dir, 'packages/database/prisma/crm-identity-plan.ts');
-        if (existsSync(file)) {
-            return requirePlan(file).organizationNameNorm as (raw: string) => string;
-        }
-        const parent = dirname(dir);
-        if (parent === dir) break;
-        dir = parent;
-    }
-    throw new Error('organizationNameNorm could not be loaded from crm-identity-plan.ts');
-}
-
-const organizationNameNorm = loadOrganizationNameNorm();
 
 const attachmentIncludes = {
     creator: { select: { id: true, name: true, email: true } },
