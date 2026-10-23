@@ -172,14 +172,11 @@ describe('ProfileEditorModal', () => {
     it('Copy from my settings sends collectMySettings for the chosen sections, legacy values included', async () => {
         // The admin's lists still come from this browser's old answers.
         window.localStorage.setItem('erp71:table-view:anon', JSON.stringify({ global: { fontSize: 'lg' } }));
-        usePreferencesStore.setState({
-            ready: true,
-            scopeKey: 't1:u1',
-            data: {
-                profile: null,
-                legacy_browser_sections: ['tableView'],
-                sections: resolvePreferences({ member: { alerts: { mutedTypes: ['LOW_STOCK'] } } }),
-            },
+        // Read fresh from the server: the store's copy can be behind a save made elsewhere.
+        mockApi.getMyPreferences.mockResolvedValue({
+            profile: null,
+            legacy_browser_sections: ['tableView'],
+            sections: resolvePreferences({ member: { alerts: { mutedTypes: ['LOW_STOCK'] } } }),
         });
         window.localStorage.setItem('erp71:sales-print:paper-size', 'Thermal58');
         renderEditor();

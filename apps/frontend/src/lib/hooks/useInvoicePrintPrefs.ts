@@ -7,6 +7,7 @@ import {
     type InvoicePrintPrefs,
 } from '@erp71/shared-types';
 import { api } from '@/lib/api';
+import { usePreferencesStore } from '@/lib/preferences/store';
 import { getWorkspaceItem } from '@/lib/session-store';
 
 /**
@@ -118,6 +119,10 @@ export function useInvoicePrintPrefs(): InvoicePrintPrefsState {
         generation++;
         loading = Promise.resolve(saved);
         publish(saved);
+        // The member's preferences hold the same layout (`invoicePrint`); without this they
+        // would show the one from before the save — a wrong "Following …" line in Print
+        // settings, and Copy from my settings copying the old layout into a profile.
+        usePreferencesStore.getState().adoptSaved('invoicePrint', saved);
         return saved;
     }, []);
 

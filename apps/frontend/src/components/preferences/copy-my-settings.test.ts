@@ -37,6 +37,11 @@ function hydrate(data: MyPreferencesResponse) {
     usePreferencesStore.setState({ ready: true, scopeKey: 't1:u1', data });
 }
 
+/** What `GET /preferences/me` answers. */
+function serve(data: MyPreferencesResponse) {
+    mockApi.getMyPreferences.mockResolvedValue(data);
+}
+
 beforeEach(() => {
     window.localStorage.clear();
     usePreferencesStore.setState({ ready: false, scopeKey: null, data: null });
@@ -52,7 +57,7 @@ describe('collectMySettings — person sections', () => {
             'data-table-preferences',
             JSON.stringify({ orders: { columnVisibility: { total: false, customer: true } } }),
         );
-        hydrate(
+        serve(
             response({
                 legacy: ['tableView', 'tableColumns'],
                 member: { invoicePrint: { serial_column: true } },
@@ -70,7 +75,7 @@ describe('collectMySettings — person sections', () => {
 
     it("ignores the browser's leftovers for a section the member has answered", async () => {
         window.localStorage.setItem('erp71:table-view:anon', JSON.stringify({ global: { density: 'compact' } }));
-        hydrate(response({ member: { tableView: { global: { striped: false } } } }));
+        serve(response({ member: { tableView: { global: { striped: false } } } }));
 
         const out = await collectMySettings(['tableView']);
 
@@ -78,7 +83,7 @@ describe('collectMySettings — person sections', () => {
     });
 
     it("includes what the member's own profile gives them", async () => {
-        hydrate(response({ profile: { alerts: { mutedTypes: ['LOW_STOCK'] } } }));
+        serve(response({ profile: { alerts: { mutedTypes: ['LOW_STOCK'] } } }));
 
         const out = await collectMySettings(['alerts']);
 
@@ -86,7 +91,7 @@ describe('collectMySettings — person sections', () => {
     });
 
     it('returns only the sections asked for', async () => {
-        hydrate(response());
+        serve(response());
 
         const out = await collectMySettings(['sidebar']);
 
@@ -94,12 +99,31 @@ describe('collectMySettings — person sections', () => {
     });
 
     it('loads the member preferences itself when the store has not yet', async () => {
-        mockApi.getMyPreferences.mockResolvedValue(response({ member: { invoicePrint: { layout: 'detailed' } } }));
+        serve(response({ member: { invoicePrint: { layout: 'detailed' } } }));
 
         const out = await collectMySettings(['invoicePrint']);
 
         expect(mockApi.getMyPreferences).toHaveBeenCalledTimes(1);
         expect(out.invoicePrint).toEqual({ ...DEFAULT_INVOICE_PRINT_PREFS, layout: 'detailed' });
+    });
+
+    it("reads the server's answer fresh rather than the store's copy, which can be behind", async () => {
+        // The store still has the layout from before a save in Print settings.
+        hydrate(response({ profile: { invoicePrint: { layout: 'standard' } } }));
+        serve(response({ member: { invoicePrint: { layout: 'detailed', balance: 'never' } } }));
+
+        const out = await collectMySettings(['invoicePrint']);
+
+        expect(mockApi.getMyPreferences).toHaveBeenCalledTimes(1);
+        expect(out.invoicePrint).toEqual({ ...DEFAULT_INVOICE_PRINT_PREFS, layout: 'detailed', balance: 'never' });
+    });
+
+    it("still adds this browser's old answers to the fresh response for a listed section", async () => {
+        window.localStorage.setItem('app-shell-open-groups', JSON.stringify({ stock: true }));
+        hydrate(response());
+        serve(response({ legacy: ['sidebar'], profile: { sidebar: { appShellOpenGroups: ['sales'] } } }));
+
+        expect(await collectMySettings(['sidebar'])).toEqual({ sidebar: { appShellOpenGroups: ['stock'] } });
     });
 });
 

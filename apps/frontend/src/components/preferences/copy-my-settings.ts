@@ -11,7 +11,6 @@ import { api } from '@/lib/api';
 import { readStoredPaperSize, readStoredSkipPreview } from '@/lib/hooks/useSalePrintPrefs';
 import { readStoredPrintDensity } from '@/lib/print/density';
 import { readStoredPrintTypeScale } from '@/lib/print/type-scale';
-import { usePreferencesStore } from '@/lib/preferences/store';
 import { displayedSection } from '@/lib/preferences/use-preference-section';
 
 /**
@@ -63,11 +62,12 @@ function readStoredDevice(appShell: boolean): DevicePrefs {
  * What the signed-in admin sees now in each chosen section, as profile values —
  * "Copy from my settings" in the profile editor sends this as it is.
  *
- * Person sections come from the preferences store by the same rule
- * `usePreferenceSection` draws them with (`displayedSection`), so a section the
- * admin still sees from this browser's old answers is copied with them. The
- * store is loaded for every signed-in member of a workspace; should it not be
- * yet, the server's answer is fetched instead of copying built-in values.
+ * Person sections are read fresh from `GET /preferences/me` — copying is an
+ * explicit admin action, worth one request, and the store's copy can be behind
+ * a save made elsewhere (Print settings saves the invoice layout through its
+ * own endpoint). They are drawn by the same rule `usePreferenceSection` uses
+ * (`displayedSection`), so a section the admin still sees from this browser's
+ * old answers is copied with them.
  *
  * `device` is this browser's stored answers only (see `readStoredDevice`), and
  * the sidebar's collapsed answer is read from whichever sidebar is in use —
@@ -80,8 +80,7 @@ export async function collectMySettings(
     const out: SectionPartials = {};
     const personKeys = sections.filter(isPersonSection);
 
-    let data: MyPreferencesResponse | null = usePreferencesStore.getState().data;
-    if (personKeys.length > 0 && !data) data = await api.getMyPreferences();
+    const data: MyPreferencesResponse | null = personKeys.length > 0 ? await api.getMyPreferences() : null;
 
     for (const key of personKeys) {
         const listedAsLegacy = data?.legacy_browser_sections.includes(key as LegacyBrowserSection) ?? false;

@@ -69,6 +69,12 @@ interface PreferencesState {
      */
     save<K extends PersonSectionKey>(key: K, body: unknown, optimistic: SectionValues[K]): void;
     reset(key: PersonSectionKey): Promise<void>;
+    /**
+     * Takes a section the member just saved through another endpoint (Print settings saves
+     * `invoicePrint` through `/sales-settings/my-invoice-print`) as their own answer, so the
+     * store does not go on showing the value from before until the next load. No request.
+     */
+    adoptSaved<K extends PersonSectionKey>(key: K, value: SectionValues[K]): void;
 }
 
 const pending = new Map<PersonSectionKey, PendingSave>();
@@ -340,6 +346,13 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
                 rollback: earlier ? earlier.rollback : data.sections[key],
             });
             set({ data: withSection(data, key, { value: optimistic, source: 'member' } as ResolvedPreferences[typeof key]) });
+        },
+
+        adoptSaved: (key, value) => {
+            const { data, scopeKey } = get();
+            if (!data || !isCurrentPreferencesScope(scopeKey)) return;
+            apply(key, { value, source: 'member' });
+            announceSettled();
         },
 
         reset: (key) => {
