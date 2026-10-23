@@ -8,6 +8,7 @@ import {
 import { reloadInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 import { usePreferencesStore } from '@/lib/preferences/store';
 import MyPreferencesSection from './MyPreferencesSection';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({ api: {} }));
 jest.mock('@/lib/hooks/useInvoicePrintPrefs', () => ({
@@ -37,6 +38,7 @@ function row(label: string): HTMLElement {
 }
 
 beforeEach(() => {
+    signInForPreferences('t:u');
     usePreferencesStore.getState().clear();
     reload.mockReset();
     reload.mockResolvedValue(DEFAULT_INVOICE_PRINT_PREFS);

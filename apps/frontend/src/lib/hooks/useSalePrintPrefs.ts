@@ -141,6 +141,9 @@ export function useSalePrintPrefs(): SalePrintPrefs {
     // and nothing else about the preferences store re-renders this hook.
     const profileSize = usePreferencesStore((s) => s.data?.sections?.device?.value?.paperSize);
     const profileSkip = usePreferencesStore((s) => s.data?.sections?.device?.value?.skipPreview);
+    // Whose preferences those are: the profile counts only once they are this member's
+    // (`profileDevice`), so a store that changes hands re-runs the read too.
+    const profileScope = usePreferencesStore((s) => s.scopeKey);
 
     // Read the stored answers on mount rather than in the initialiser: this
     // renders on the server first, where there is no localStorage, and a
@@ -172,7 +175,7 @@ export function useSalePrintPrefs(): SalePrintPrefs {
         return () => {
             cancelled = true;
         };
-    }, [profileSize, profileSkip]);
+    }, [profileSize, profileSkip, profileScope]);
 
     const setPaperSize = useCallback((size: PaperSize) => {
         setPaperSizeState(size);

@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { usePreferencesStore } from '@/lib/preferences/store';
 import { useTablePreferences } from '@/components/data-table/useTablePreferences';
 import { useServerList } from './useServerList';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => {
     const actual = jest.requireActual('@/lib/api');
@@ -40,6 +41,8 @@ const fetch = jest.fn(async ({ page, limit }: { page: number; limit: number }) =
 
 beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signInForPreferences('t1:user-a');
     act(() => usePreferencesStore.getState().clear());
     act(() => useTablePreferences.setState({ tables: {} }));
     fetch.mockClear();

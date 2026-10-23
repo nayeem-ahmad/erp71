@@ -9,6 +9,7 @@ import type {
 } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { isCurrentPreferencesScope } from './scope';
 
 /**
  * The signed-in member's preferences, as the server resolved them.
@@ -53,8 +54,12 @@ interface PreferencesState {
     scopeKey: string | null;
     data: MyPreferencesResponse | null;
     hydrate(scopeKey: string, data: MyPreferencesResponse): void;
+    /** Forgets the data and cancels (never sends) every unsent save — for sign-out and switches. */
     clear(): void;
-    /** Applies `optimistic` now and PATCHes `body` after the debounce. Ignored until preferences have loaded. */
+    /**
+     * Applies `optimistic` now and PATCHes `body` after the debounce. Ignored until preferences have
+     * loaded, and while the store holds someone else's (`scopeKey` is not the tab's current one).
+     */
     save<K extends PersonSectionKey>(key: K, body: unknown, optimistic: SectionValues[K]): void;
     reset(key: PersonSectionKey): Promise<void>;
 }
@@ -203,6 +208,12 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
 
         void enqueue(key, async (settle) => {
             if (sentIn !== generation) return;
+            // The tab changed hands since the edit (another tab signed in as someone else): it is
+            // not theirs to receive. Settled without a word; the loader replaces the data next.
+            if (!isCurrentPreferencesScope(get().scopeKey)) {
+                settle();
+                return;
+            }
             let result: ResolvedSection | null = null;
             try {
                 result = await api.saveMyPreferenceSection(key, entry.body);
@@ -260,7 +271,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
 
         save: (key, body, optimistic) => {
             const { data, scopeKey } = get();
-            if (!data || !scopeKey) return;
+            if (!data || !isCurrentPreferencesScope(scopeKey)) return;
 
             const earlier = pending.get(key);
             if (earlier) clearTimeout(earlier.timer);
@@ -297,6 +308,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => {
 
             return enqueue(key, async (settle) => {
                 if (sentIn !== generation) return;
+                if (!isCurrentPreferencesScope(get().scopeKey)) {
+                    settle();
+                    return;
+                }
                 let result: ResolvedSection | null = null;
                 try {
                     result = await api.resetMyPreferenceSection(key);

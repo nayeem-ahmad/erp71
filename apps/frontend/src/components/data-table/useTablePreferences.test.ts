@@ -9,6 +9,7 @@ import {
 import { api } from '@/lib/api';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
 import { useTablePreferences } from './useTablePreferences';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({
     api: { saveMyPreferenceSection: jest.fn(), resetMyPreferenceSection: jest.fn() },
@@ -42,6 +43,8 @@ const flush = () => act(async () => void jest.advanceTimersByTime(SAVE_DEBOUNCE_
 beforeEach(() => {
     jest.useFakeTimers();
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signInForPreferences('t1:user-a');
     usePreferencesStore.getState().clear();
     useTablePreferences.setState({ tables: {} });
     saveApi.mockReset();
@@ -89,6 +92,21 @@ describe('useTablePreferences with preferences loaded', () => {
             columnWidths: { a: 90 },
         });
         expect(store().getPreferences('customers')).toBeUndefined();
+    });
+
+    it('ignores columns the store holds for someone else, and keeps changes in this browser', async () => {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ orders: { pageSize: 100 } }));
+        useTablePreferences.setState({ tables: stored() });
+        signInForPreferences('t1:user-b');
+        hydrate({ orders: { hidden: ['notes'], pageSize: 20 } });
+
+        expect(store().getPreferences('orders')).toEqual({ pageSize: 100 });
+
+        store().setColumnVisibility('orders', { a: false });
+        await flush();
+
+        expect(saveApi).not.toHaveBeenCalled();
+        expect(stored().orders.columnVisibility).toEqual({ a: false });
     });
 
     it('still shows this browser’s old columns while the section is legacy-listed', () => {

@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { DEFAULT_SECTION_VALUES, type MyPreferencesResponse } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useToastStore } from '@/lib/toast';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from './store';
 import { usePreferenceSection } from './use-preference-section';
 
@@ -36,6 +37,8 @@ const state = () => usePreferencesStore.getState();
 beforeEach(() => {
     jest.useFakeTimers();
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signInForPreferences('t1:u1');
     usePreferencesStore.getState().clear();
     useToastStore.setState({ toasts: [] });
     saveApi.mockReset();
@@ -89,6 +92,61 @@ describe('preferences store', () => {
 
         expect(result.current.value).toEqual({ appShellOpenGroups: ['hr'] });
         expect(result.current.source).toBe('member');
+    });
+
+    describe('a store that holds another scope', () => {
+        it('is not ready for someone else signed in on this tab', () => {
+            state().hydrate('t1:u1', response());
+            signInForPreferences('t1:u2');
+
+            const { result } = renderHook(() => usePreferenceSection('sidebar'));
+
+            expect(result.current).toEqual({ ready: false, value: DEFAULT_SECTION_VALUES.sidebar, source: 'default' });
+        });
+
+        it('is not ready once the tab is in another workspace', () => {
+            state().hydrate('t1:u1', response());
+            signInForPreferences('t2:u1');
+
+            const { result } = renderHook(() => usePreferenceSection('tableColumns'));
+
+            expect(result.current.ready).toBe(false);
+            expect(result.current.value).toEqual(DEFAULT_SECTION_VALUES.tableColumns);
+        });
+
+        it('is not ready when nobody is signed in', () => {
+            state().hydrate('t1:u1', response());
+            window.localStorage.removeItem('access_token');
+
+            const { result } = renderHook(() => usePreferenceSection('sidebar'));
+
+            expect(result.current.ready).toBe(false);
+        });
+
+        it('never sends a save for the previous scope under the next one', async () => {
+            state().hydrate('t1:u1', response());
+            signInForPreferences('t1:u2');
+
+            state().save('sidebar', { appShellOpenGroups: ['hr'] }, { appShellOpenGroups: ['hr'] });
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+
+            expect(saveApi).not.toHaveBeenCalled();
+            expect(state().data?.sections.sidebar.source).toBe('profile');
+        });
+
+        it('drops a save still waiting when the tab changes hands before it is sent', async () => {
+            state().hydrate('t1:u1', response());
+            state().save('sidebar', { appShellOpenGroups: ['hr'] }, { appShellOpenGroups: ['hr'] });
+            signInForPreferences('t1:u2');
+
+            await act(async () => {
+                jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+            });
+
+            expect(saveApi).not.toHaveBeenCalled();
+        });
     });
 
     it('falls back to the built-in value before preferences load', () => {

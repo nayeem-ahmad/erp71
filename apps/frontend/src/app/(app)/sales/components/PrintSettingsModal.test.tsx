@@ -4,6 +4,7 @@ import { DEFAULT_SECTION_VALUES, type MyPreferencesResponse, type PreferenceSour
 import { reloadInvoicePrintPrefs } from '@/lib/hooks/useInvoicePrintPrefs';
 import { usePreferencesStore } from '@/lib/preferences/store';
 import PrintSettingsModal from './PrintSettingsModal';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({ api: {} }));
 jest.mock('@/lib/hooks/useInvoicePrintPrefs', () => ({
@@ -297,6 +298,7 @@ describe('PrintSettingsModal — where the invoice layout comes from', () => {
     }
 
     beforeEach(() => {
+        signInForPreferences('t:u');
         usePreferencesStore.getState().clear();
         (reloadInvoicePrintPrefs as jest.Mock).mockReset();
         (reloadInvoicePrintPrefs as jest.Mock).mockResolvedValue(DEFAULT_INVOICE_PRINT_PREFS);

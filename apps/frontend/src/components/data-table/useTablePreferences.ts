@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import type { TableColumnsEntry, TableColumnsPrefs } from '@erp71/shared-types';
+import { isCurrentPreferencesScope } from '@/lib/preferences/scope';
 import { usePreferencesStore } from '@/lib/preferences/store';
 import { displayedSection } from '@/lib/preferences/use-preference-section';
 
@@ -160,7 +161,8 @@ export const useTablePreferences = create<TablePreferencesState>((set, get) => {
 let mirrored: { section: unknown; listed: boolean } = { section: undefined, listed: false };
 
 function mirrorPersonColumns(state: ReturnType<typeof usePreferencesStore.getState>) {
-    const section = state.ready ? state.data?.sections.tableColumns : undefined;
+    // Another person's or workspace's columns, still in memory after a switch, are not this member's.
+    const section = state.ready && isCurrentPreferencesScope(state.scopeKey) ? state.data?.sections.tableColumns : undefined;
     const listed = state.data?.legacy_browser_sections.includes('tableColumns') ?? false;
     if (section === mirrored.section && listed === mirrored.listed) return;
     mirrored = { section, listed };

@@ -3,11 +3,10 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MyPreferencesResponse } from '@erp71/shared-types';
-import { currentViewUserKey } from '@/components/table/view-user-key';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { workspaceScope } from '@/lib/query-client';
-import { getWorkspaceItem } from '@/lib/session-store';
+import { currentPreferencesScopeKey } from './scope';
 import { onPreferencesSettled, setPreferenceSaveFailedMessage, usePreferencesStore } from './store';
 
 const CACHE_PREFIX = 'erp71:prefs:';
@@ -46,9 +45,8 @@ export function usePreferencesLoader(enabled: boolean): void {
     const queryClient = useQueryClient();
     const { t } = useI18n();
 
-    const tenantId = getWorkspaceItem('tenant_id');
-    const userKey = currentViewUserKey();
-    const scopeKey = enabled && tenantId && userKey !== 'anon' ? `${tenantId}:${userKey}` : null;
+    // The same key every reader checks the store against (`isCurrentPreferencesScope`).
+    const scopeKey = enabled ? currentPreferencesScopeKey() : null;
 
     const query = useQuery({
         queryKey: ['preferences-me', ...workspaceScope()],

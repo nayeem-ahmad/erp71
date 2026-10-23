@@ -8,6 +8,7 @@ import {
 } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 import AppShellSidebar from './AppShellSidebar';
 
 jest.mock('@/lib/api', () => ({
@@ -36,8 +37,8 @@ function preferences(
         },
     };
 }
-const hydrate = (data: MyPreferencesResponse) =>
-    act(() => usePreferencesStore.getState().hydrate('t1:u1', data));
+const hydrate = (data: MyPreferencesResponse, scopeKey = 't1:u1') =>
+    act(() => usePreferencesStore.getState().hydrate(scopeKey, data));
 
 let mockPathname = '/sales/list';
 let mockIsMdUp = true;
@@ -241,6 +242,8 @@ describe('AppShellSidebar — preferences', () => {
     beforeEach(() => {
         jest.useFakeTimers();
         localStorage.clear();
+        sessionStorage.clear();
+        signInForPreferences('t1:u1');
         usePreferencesStore.getState().clear();
         saveApi.mockReset();
         saveApi.mockImplementation(async (_key: string, body: unknown) => ({ value: body, source: 'member' }));
@@ -363,6 +366,63 @@ describe('AppShellSidebar — preferences', () => {
         await settle();
 
         expect(saveApi).not.toHaveBeenCalled();
+    });
+
+    describe('when the store moves to someone else', () => {
+        const savedGroups = () =>
+            ((saveApi.mock.calls.at(-1)?.[1] as { appShellOpenGroups: string[] }).appShellOpenGroups ?? []).slice().sort();
+
+        it("remounted for the next person, seeds from their groups and saves their set, not the last person's", async () => {
+            hydrate(preferences({ appShellOpenGroups: ['accounting:reports'] }));
+            const first = renderShell();
+            expect(reportsOpen()).toBe(true);
+            first.unmount();
+
+            // Someone else signs in on this browser; the shell mounts before the loader has run.
+            signInForPreferences('t1:u2');
+            renderShell();
+            expect(reportsOpen()).toBe(false);
+
+            hydrate(preferences({ appShellOpenGroups: ['accounting:setup'] }), 't1:u2');
+            expect(setupOpen()).toBe(true);
+            expect(reportsOpen()).toBe(false);
+
+            fireEvent.click(subgroup('Accounting Reports'));
+            await settle();
+
+            expect(saveApi).toHaveBeenCalledTimes(1);
+            expect(savedGroups()).toEqual(['accounting:reports', 'accounting:setup']);
+        });
+
+        it('re-hydrated in place for another workspace, reseeds even after a toggle in the old one', async () => {
+            hydrate(preferences({ appShellOpenGroups: ['accounting:reports'] }));
+            renderShell();
+            fireEvent.click(subgroup('Accounting Setup'));
+            await settle();
+            saveApi.mockClear();
+
+            signInForPreferences('t2:u1');
+            hydrate(preferences({ appShellOpenGroups: [] }), 't2:u1');
+            expect(reportsOpen()).toBe(false);
+            expect(setupOpen()).toBe(false);
+
+            fireEvent.click(subgroup('Accounting Setup'));
+            await settle();
+
+            expect(saveApi).toHaveBeenCalledTimes(1);
+            expect(savedGroups()).toEqual(['accounting:setup']);
+        });
+
+        it("drops the last person's collapsed starting value", () => {
+            hydrate(preferences({}, { sidebarCollapsed: true }));
+            renderShell();
+            expect(screen.queryByTestId('app-panel')).toBeNull();
+
+            signInForPreferences('t1:u2');
+            hydrate(preferences({}, {}), 't1:u2');
+
+            expect(screen.queryByTestId('app-panel')).not.toBeNull();
+        });
     });
 
     describe('collapsed: browser value wins, else device.sidebarCollapsed, else expanded', () => {

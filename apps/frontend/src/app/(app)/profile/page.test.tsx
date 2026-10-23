@@ -4,6 +4,7 @@ import ProfilePage from './page';
 import Toaster from '@/components/Toaster';
 import { DEFAULT_SECTION_VALUES } from '@erp71/shared-types';
 import { usePreferencesStore } from '@/lib/preferences/store';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 function renderProfilePage() {
     return render(
@@ -330,6 +331,7 @@ describe('ProfilePage', () => {
     });
 
     describe('my preferences', () => {
+        beforeEach(() => signInForPreferences('t:u'));
         afterEach(() => usePreferencesStore.getState().clear());
 
         it('lists where each setting comes from once preferences are loaded', async () => {

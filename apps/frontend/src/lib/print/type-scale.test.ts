@@ -1,5 +1,6 @@
 import { DEFAULT_SECTION_VALUES, type DevicePrefs } from '@erp71/shared-types';
 import { PRINT_TYPE_SCALE_KEY, PRINT_TYPE_SCALE_MESSAGE } from './type-scale';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({ api: {} }));
 
@@ -40,6 +41,8 @@ function load(): ScaleModule {
 beforeEach(() => {
     jest.restoreAllMocks();
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signInForPreferences('t1:u1');
 });
 
 describe('remembered print text size', () => {

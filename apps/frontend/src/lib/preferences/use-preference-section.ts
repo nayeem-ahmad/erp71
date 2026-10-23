@@ -13,6 +13,7 @@ import {
 } from '@erp71/shared-types';
 import { currentViewUserKey } from '@/components/table/view-user-key';
 import { readLegacyBrowserSection } from './legacy';
+import { isCurrentPreferencesScope } from './scope';
 import { usePreferencesStore } from './store';
 
 function isLegacySection(key: PreferenceSectionKey): key is LegacyBrowserSection {
@@ -79,6 +80,11 @@ export function displayedSection<K extends PreferenceSectionKey>(
  * One preference section, already resolved for display. `ready` is false until
  * the first response (or the cached one) has arrived; until then `value` is the
  * built-in default, which a screen must not save back as the member's answer.
+ *
+ * It is also false while the store still holds another person's or another
+ * workspace's preferences: after a sign-out or a switch the next screens can
+ * mount before the loader has replaced them, and nothing of them may be shown,
+ * or seeded and saved back, as this member's.
  */
 export function usePreferenceSection<K extends PreferenceSectionKey>(
     key: K,
@@ -87,6 +93,12 @@ export function usePreferenceSection<K extends PreferenceSectionKey>(
     const listedAsLegacy = usePreferencesStore(
         (state) => state.data?.legacy_browser_sections.includes(key as LegacyBrowserSection) ?? false,
     );
+    const scopeKey = usePreferencesStore((state) => state.scopeKey);
+    // Read at render, like the loader's own key: the tab's workspace and token are not in the store.
+    const inScope = isCurrentPreferencesScope(scopeKey);
 
-    return useMemo(() => displayedSection(key, section, listedAsLegacy), [key, section, listedAsLegacy]);
+    return useMemo(
+        () => displayedSection(key, inScope ? section : undefined, listedAsLegacy),
+        [key, section, listedAsLegacy, inScope],
+    );
 }

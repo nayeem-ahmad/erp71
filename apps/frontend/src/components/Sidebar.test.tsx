@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import { api } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -628,9 +629,9 @@ describe('Sidebar — team chat unread badge', () => {
 });
 
 describe('Sidebar — preferences', () => {
-    const hydrate = (device: { sidebarCollapsed?: boolean }, openGroups: string[] = []) =>
+    const hydrate = (device: { sidebarCollapsed?: boolean }, openGroups: string[] = [], scopeKey = 't1:u1') =>
         act(() =>
-            usePreferencesStore.getState().hydrate('t1:u1', {
+            usePreferencesStore.getState().hydrate(scopeKey, {
                 profile: { id: 'p1', name: 'Cashier' },
                 legacy_browser_sections: [],
                 sections: {
@@ -652,6 +653,8 @@ describe('Sidebar — preferences', () => {
     beforeEach(() => {
         jest.useFakeTimers();
         localStorage.clear();
+        sessionStorage.clear();
+        signInForPreferences('t1:u1');
         usePreferencesStore.getState().clear();
         saveApi.mockReset();
         setBranding();
@@ -701,6 +704,26 @@ describe('Sidebar — preferences', () => {
             render(<Sidebar canAccessAccounting />);
 
             hydrate({ sidebarCollapsed: true });
+
+            expect(isCollapsed()).toBe(false);
+        });
+
+        it("drops the last person's collapsed starting value when the store moves to someone else", () => {
+            hydrate({ sidebarCollapsed: true });
+            render(<Sidebar canAccessAccounting />);
+            expect(isCollapsed()).toBe(true);
+
+            signInForPreferences('t1:u2');
+            hydrate({}, [], 't1:u2');
+
+            expect(isCollapsed()).toBe(false);
+        });
+
+        it("ignores a profile still in the store from someone else", () => {
+            hydrate({ sidebarCollapsed: true });
+            signInForPreferences('t1:u2');
+
+            render(<Sidebar canAccessAccounting />);
 
             expect(isCollapsed()).toBe(false);
         });

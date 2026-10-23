@@ -1,5 +1,6 @@
 import { DEFAULT_SECTION_VALUES, type DevicePrefs } from '@erp71/shared-types';
 import { PRINT_DENSITY_KEY, PRINT_DENSITY_MESSAGE } from './density';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({ api: {} }));
 
@@ -41,6 +42,8 @@ beforeEach(() => {
     // Restore first: a test below makes storage throw.
     jest.restoreAllMocks();
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signInForPreferences('t1:u1');
 });
 
 describe('remembered print density', () => {
@@ -153,9 +156,13 @@ describe('a new browser starts from the profile', () => {
         expect(loadWithProfile({ printDensity: 'compact' }).readPrintDensity()).toBe('compact');
     });
 
-    it('uses the profile when storage is locked', () => {
-        jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-            throw new Error('SecurityError');
+    it('uses the profile when this browser\'s density cannot be read', () => {
+        // Only the density key: with every read failing there is no token or workspace to
+        // say whose profile the store holds, so no profile would be trusted at all.
+        const getItem = Storage.prototype.getItem;
+        jest.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+            if (key === PRINT_DENSITY_KEY) throw new Error('SecurityError');
+            return getItem.call(this, key);
         });
 
         expect(loadWithProfile({ printDensity: 'compact' }).readPrintDensity()).toBe('compact');

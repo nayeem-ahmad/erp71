@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
 import DataTable from './DataTable';
 import { useTablePreferences } from './useTablePreferences';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 /**
  * The real column store and the real preferences store, with only the network
@@ -128,6 +129,8 @@ function hideColumn(label: string) {
 beforeEach(() => {
     jest.useFakeTimers();
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signInForPreferences('t1:user-a');
     act(() => usePreferencesStore.getState().clear());
     act(() => useTablePreferences.setState({ tables: {} }));
     saveApi.mockReset();

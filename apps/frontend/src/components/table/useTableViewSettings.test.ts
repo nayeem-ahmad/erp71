@@ -3,6 +3,7 @@ import { DEFAULT_SECTION_VALUES, type MyPreferencesResponse } from '@erp71/share
 import { api } from '@/lib/api';
 import { SAVE_DEBOUNCE_MS, usePreferencesStore } from '@/lib/preferences/store';
 import { DEFAULT_TABLE_VIEW } from './view-settings';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({
     api: {
@@ -114,6 +115,9 @@ describe('useTableViewSettings with preferences loaded', () => {
     beforeEach(() => {
         jest.useFakeTimers();
         window.localStorage.clear();
+        window.sessionStorage.clear();
+        // The token is mocked (`signIn` below names the user); this puts the tab in workspace t1.
+        signInForPreferences('t1:user-a');
         act(() => usePreferencesStore.getState().clear());
         saveApi.mockReset();
         saveApi.mockResolvedValue({ value: DEFAULT_SECTION_VALUES.tableView, source: 'member' });

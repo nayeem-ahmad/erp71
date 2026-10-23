@@ -123,14 +123,19 @@ export default function AppShellSidebar({
     // choice, so it only supplies the starting value.
     const sidebarPrefs = usePreferenceSection('sidebar');
     const devicePrefs = usePreferenceSection('device');
+    // Whose preferences the store holds — `<tenantId>:<userId>`, or null before a load.
+    const prefsScopeKey = usePreferencesStore((state) => state.scopeKey);
     const prefsReadyRef = useRef(sidebarPrefs.ready);
     prefsReadyRef.current = sidebarPrefs.ready;
     // The groups on screen, for a save that must build on them without waiting for a render.
     const openGroupsRef = useRef(openGroups);
     openGroupsRef.current = openGroups;
     // Set by an explicit click; the saved groups seed the panel only before that.
+    // Both marks belong to one person in one workspace (see the scope effect below).
     const groupsTouchedRef = useRef(false);
     const groupsSeededRef = useRef(false);
+    const collapsedTouchedRef = useRef(false);
+    const seenScopeRef = useRef(prefsScopeKey);
 
     useEffect(() => {
         if (readStorage(STORAGE.collapsed) === 'true') setCollapsed(true);
@@ -145,12 +150,6 @@ export default function AppShellSidebar({
 
     // This browser's answer wins; otherwise the profile's. Never saved anywhere.
     const profileCollapsed = devicePrefs.ready ? devicePrefs.value.sidebarCollapsed : undefined;
-    const collapsedTouchedRef = useRef(false);
-    useEffect(() => {
-        if (profileCollapsed === undefined || collapsedTouchedRef.current) return;
-        if (readStorage(STORAGE.collapsed) !== null) return;
-        setCollapsed(profileCollapsed);
-    }, [profileCollapsed]);
 
     /* ---- Which app's menu is showing ---- */
 
@@ -207,15 +206,40 @@ export default function AppShellSidebar({
         return toOpen;
     };
 
+    // The store moved to someone else's preferences — another account on this browser,
+    // or another workspace — without this panel unmounting. Start over as a fresh mount
+    // would: the last person's groups and collapsed starting value go, the next person's
+    // saved groups seed the panel, and their first toggle saves their own set. Declared
+    // ahead of the two effects below so they run after it in the same commit.
+    useEffect(() => {
+        const previous = seenScopeRef.current;
+        seenScopeRef.current = prefsScopeKey;
+        // A first load (null → scope) builds on what is on screen; only a change of hands resets.
+        if (previous === null || previous === prefsScopeKey) return;
+        groupsSeededRef.current = false;
+        groupsTouchedRef.current = false;
+        collapsedTouchedRef.current = false;
+        setOpenGroups(groupsOfCurrentPage());
+        setCollapsed(readStorage(STORAGE.collapsed) === 'true');
+        // `groupsOfCurrentPage` reads this render's modules; only the change of scope matters here.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefsScopeKey]);
+
+    useEffect(() => {
+        if (profileCollapsed === undefined || collapsedTouchedRef.current) return;
+        if (readStorage(STORAGE.collapsed) !== null) return;
+        setCollapsed(profileCollapsed);
+    }, [profileCollapsed, prefsScopeKey]);
+
     // The saved groups are the starting point once preferences have loaded (on mount,
     // or later if they arrive after). The page's own group stays open on top of them.
     useEffect(() => {
         if (!sidebarPrefs.ready || groupsSeededRef.current || groupsTouchedRef.current) return;
         groupsSeededRef.current = true;
         setOpenGroups({ ...groupsFromList(sidebarPrefs.value.appShellOpenGroups), ...groupsOfCurrentPage() });
-        // `groupsOfCurrentPage` reads this render's modules; only readiness matters here.
+        // `groupsOfCurrentPage` reads this render's modules; only readiness and whose they are matter here.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sidebarPrefs.ready]);
+    }, [sidebarPrefs.ready, prefsScopeKey]);
 
     // Auto-open the subgroup holding the current page. This is navigation, not a
     // choice: it is never written to the browser or the server.

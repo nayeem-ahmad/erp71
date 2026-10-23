@@ -3,6 +3,7 @@ import { DEFAULT_SECTION_VALUES, type DevicePrefs } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { usePreferencesStore } from '@/lib/preferences/store';
 import { resolvePrintPaper, useSalePrintPrefs } from './useSalePrintPrefs';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
 
 jest.mock('@/lib/api', () => ({
     api: { getSalesSettings: jest.fn() },
@@ -31,6 +32,8 @@ function hydrateProfile(device: DevicePrefs) {
 beforeEach(() => {
     jest.restoreAllMocks();
     localStorage.clear();
+    sessionStorage.clear();
+    signInForPreferences('t1:u1');
     usePreferencesStore.getState().clear();
     getSalesSettings.mockReset();
 });
