@@ -322,6 +322,16 @@ step sync:store-code \
 step sync:supplier-code \
     npm run sync:supplier-code --workspace=@erp71/database
 
+# sync:document-sequences starts each running document series (PUR-, PRET-, PO-,
+# RFQ-, TRF-, STK-, SHR-, FND-) past the numbers already in use. Those types
+# were numbered count(rows) + 1 and now draw from document_sequences, whose
+# counters would otherwise start at 1 and spend the engine's few skips on
+# numbers that exist. Idempotent (a counter only moves up; only tenants still
+# on the default format), and on later prepares it also covers numbers the old
+# backend issued during a deploy's swap. See prisma/sync-document-sequences.ts.
+step sync:document-sequences \
+    npm run sync:document-sequences --workspace=@erp71/database
+
 # sync:lead-taxonomy plays the same role for CRM lead sources/categories, and
 # additionally backfills Lead.source_id / Lead.category_id from the legacy enum
 # columns. It is idempotent and additive-only, and it degrades to "seed defaults
@@ -498,6 +508,18 @@ step sync:crm-activity-approval \
 # for onboarding they had years ago. The stamp must exist before any fee does.
 step sync:setup-fee-paid \
     npm run sync:setup-fee-paid --workspace=@erp71/database
+
+# sync:member-prefs-legacy is ONE-SHOT, and must stay so. It gives every member
+# who exists today all three legacy browser sections (table views, table columns,
+# sidebar) so they keep the layout they set up in their browser, and it fills out
+# every stored invoice print layout so a profile cannot change one the member
+# never touched. db push adds the columns empty and never runs migration data
+# steps. Re-running would hand members back to old browser leftovers and give a
+# member who joined after release the same, so the first live run stores a
+# platform_settings marker (sync / member_prefs_legacy) in the same transaction as
+# the work and later deploys skip. See prisma/sync-member-prefs-legacy.ts.
+step sync:member-prefs-legacy \
+    npm run sync:member-prefs-legacy --workspace=@erp71/database
 
 if ! record_prepared; then
     log "WARNING: could not write the marker in $STATE_DIR; the database IS prepared, but the next start will prepare again"

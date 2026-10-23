@@ -1,8 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-    NUMBERING_DOC_TYPES,
+    NUMBERING_DOC_TYPE_INFO,
     NUMBERING_RESET_POLICIES,
+    isNumberingDocType,
     normalizeStoreCode,
     numberingPeriodKey,
     templateUsesToken,
@@ -52,13 +53,14 @@ export class DocumentNumberingService {
             seqWidth: dto.seqWidth,
         };
 
-        const problems = validateNumberingConfig(config);
+        const problems = validateNumberingConfig(config, docType);
         if (problems.length > 0) {
             throw new BadRequestException(problems.join(' '));
         }
 
         const result = await this.db.$transaction(async (tx) => {
             const before = await loadNumberingConfig(tx, tenantId, docType);
+            await this.assertNotSiblingFormat(tx, tenantId, docType, config.template);
 
             await this.applyStoreCodes(tx, tenantId, dto.storeCodes ?? []);
             if (templateUsesToken(config.template, 'STORE')) {
@@ -113,10 +115,36 @@ export class DocumentNumberingService {
 
     private requireDocType(docType: string): NumberingDocType {
         const upper = String(docType ?? '').toUpperCase();
-        if (!(NUMBERING_DOC_TYPES as readonly string[]).includes(upper)) {
+        if (!isNumberingDocType(upper)) {
             throw new NotFoundException('Unknown document type.');
         }
-        return upper as NumberingDocType;
+        return upper;
+    }
+
+    /**
+     * Two types that number one column (quotations and proformas are both
+     * `Quotation.quote_number`) cannot share a format: both counters would
+     * print the same numbers, and each would keep stepping over the other's
+     * until the engine gave up. Tokens compare case-blind, as they render;
+     * literals as typed, as the unique index compares them.
+     */
+    private async assertNotSiblingFormat(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        docType: NumberingDocType,
+        template: string,
+    ): Promise<void> {
+        const sibling = NUMBERING_DOC_TYPE_INFO[docType].sharesColumnWith;
+        if (!sibling) return;
+        const { config } = await loadNumberingConfig(tx, tenantId, sibling);
+        const canonical = (t: string) => t.trim().replace(/\{([^{}]*)\}/g, (_, token: string) => `{${token.toUpperCase()}}`);
+        if (canonical(config.template) === canonical(template)) {
+            const mine = NUMBERING_DOC_TYPE_INFO[docType];
+            const theirs = NUMBERING_DOC_TYPE_INFO[sibling];
+            throw new BadRequestException(
+                `${capitalize(mine.plural)} and ${theirs.plural} share one number series, so they need different formats — ${theirs.plural} already use ${config.template}.`,
+            );
+        }
     }
 
     private async read(
@@ -259,21 +287,21 @@ export class DocumentNumberingService {
                 );
             }
 
-            // Same create-if-missing as the engine, so a sale starting this
+            // Same create-if-missing as the engine, so a document starting this
             // counter at the same moment waits rather than failing.
             await tx.documentSequence.createMany({
                 data: [{ ...key, prefix: config.template, next_number: 1 }],
                 skipDuplicates: true,
             });
-            // Conditional, so an invoice issued between the read above and this
-            // write is never numbered again: the counter only ever moves up.
+            // Conditional, so a number issued between the read above and this
+            // write is never issued again: the counter only ever moves up.
             const { count } = await tx.documentSequence.updateMany({
                 where: { ...key, next_number: { lte: change.nextNumber } },
                 data: { next_number: change.nextNumber },
             });
             if (count === 0) {
                 throw new ConflictException(
-                    'Invoices were issued while you were editing and the counter has moved past that number. Reload and try again.',
+                    `${capitalize(NUMBERING_DOC_TYPE_INFO[docType].plural)} were issued while you were editing and the counter has moved past that number. Reload and try again.`,
                 );
             }
         }
@@ -301,4 +329,8 @@ export class DocumentNumberingService {
             ...counters.map((c) => numberingScopeKey('COUNTER', { storeId: c.store_id, counterId: c.id })),
         ]);
     }
+}
+
+function capitalize(text: string): string {
+    return text.charAt(0).toUpperCase() + text.slice(1);
 }

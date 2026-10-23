@@ -178,13 +178,23 @@ describe('DataTable — pinned edge columns', () => {
         expect(renderedOrder()).toEqual(['select', 'Note', 'Name', 'Amount', 'Actions']);
     });
 
-    it('persists the reconciled order, so the stored preference stops drifting', () => {
+    it('saves nothing when the list opens, even over a saved order that needs reconciling', () => {
         savePreference(['actions', 'name', 'select']);
 
         render(<DataTable {...props} />);
 
+        expect(mockSetColumnOrder).not.toHaveBeenCalled();
+    });
+
+    it('persists the reconciled order on a drag, so the stored preference stops drifting', () => {
+        savePreference(['actions', 'name', 'select']);
+
+        render(<DataTable {...props} />);
+        act(() => mockDnd.onDragEnd?.({ active: { id: 'note' }, over: { id: 'name' } }));
+
+        expect(mockSetColumnOrder).toHaveBeenCalledTimes(1);
         expect(mockSetColumnOrder).toHaveBeenCalledWith('order-test', [
-            'select', 'name', 'amount', 'note', 'actions',
+            'select', 'note', 'name', 'amount', 'actions',
         ]);
     });
 });

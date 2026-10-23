@@ -1,12 +1,19 @@
+import { renderHook, waitFor } from '@testing-library/react';
+import { DEFAULT_SECTION_VALUES, type MyPreferencesResponse } from '@erp71/shared-types';
+import { signInForPreferences } from '@/test-utils/preferences-scope';
+import { clearInvoicePrintPrefsCache, useInvoicePrintPrefs } from './hooks/useInvoicePrintPrefs';
 import { applyTenantContext, clearAuthSession, clearSidebarLayoutState, storeAuthResponse } from './auth-session';
+import { SAVE_DEBOUNCE_MS, usePreferencesStore } from './preferences/store';
 import { getQueryClient, ME_QUERY_KEY } from './query-client';
 import { getWorkspaceItem, setWorkspaceItem } from './session-store';
 
 jest.mock('./api', () => ({
-    api: { getMe: jest.fn() },
+    api: { getMe: jest.fn(), saveMyPreferenceSection: jest.fn(), getMyInvoicePrint: jest.fn() },
 }));
 
-const { api } = jest.requireMock('./api') as { api: { getMe: jest.Mock } };
+const { api } = jest.requireMock('./api') as {
+    api: { getMe: jest.Mock; saveMyPreferenceSection: jest.Mock; getMyInvoicePrint: jest.Mock };
+};
 
 describe('clearSidebarLayoutState', () => {
     beforeEach(() => {
@@ -169,5 +176,107 @@ describe('the query cache across sign-in, sign-out and workspace switches', () =
 
         applyTenantContext(SHOP_B);
         expect(client.getQueryData(['dashboard', 'tenant-a', 'store-a', 'kpis'])).toBeUndefined();
+    });
+});
+
+describe('the preferences store across sign-in, sign-out and workspace switches', () => {
+    const SHOP_A = { id: 'tenant-a', stores: [{ id: 'store-a' }] };
+    const SHOP_B = { id: 'tenant-b', stores: [{ id: 'store-b' }] };
+    const preferences: MyPreferencesResponse = {
+        profile: { id: 'p1', name: 'Cashier' },
+        legacy_browser_sections: [],
+        sections: {
+            invoicePrint: { value: DEFAULT_SECTION_VALUES.invoicePrint, source: 'default' },
+            tableView: { value: DEFAULT_SECTION_VALUES.tableView, source: 'default' },
+            tableColumns: { value: DEFAULT_SECTION_VALUES.tableColumns, source: 'default' },
+            sidebar: { value: { appShellOpenGroups: ['sales'] }, source: 'profile' },
+            alerts: { value: DEFAULT_SECTION_VALUES.alerts, source: 'default' },
+            device: { value: {}, source: 'default' },
+        },
+    };
+
+    /** Signed in to shop A with an edit still waiting on its debounce. */
+    function midEditInShopA() {
+        applyTenantContext(SHOP_A);
+        signInForPreferences('tenant-a:user-1');
+        usePreferencesStore.getState().hydrate('tenant-a:user-1', preferences);
+        usePreferencesStore.getState().save('sidebar', { appShellOpenGroups: ['hr'] }, { appShellOpenGroups: ['hr'] });
+    }
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        localStorage.clear();
+        sessionStorage.clear();
+        usePreferencesStore.getState().clear();
+        api.getMe.mockReset();
+        api.getMyInvoicePrint.mockReset();
+        api.saveMyPreferenceSection.mockReset();
+        api.saveMyPreferenceSection.mockResolvedValue({ value: { appShellOpenGroups: ['hr'] }, source: 'member' });
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    async function expectClearedWithNothingSent() {
+        const store = usePreferencesStore.getState();
+        expect(store.ready).toBe(false);
+        expect(store.scopeKey).toBeNull();
+        expect(store.data).toBeNull();
+        await jest.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS * 2);
+        // Cancelled, not flushed: sent now it would go out under whoever comes next.
+        expect(api.saveMyPreferenceSection).not.toHaveBeenCalled();
+    }
+
+    it('sign-out clears the store and cancels the unsent save', async () => {
+        midEditInShopA();
+
+        clearAuthSession();
+
+        await expectClearedWithNothingSent();
+    });
+
+    it('a new sign-in clears the store and cancels the unsent save', async () => {
+        midEditInShopA();
+        api.getMe.mockResolvedValue({ id: 'user-2', tenants: [SHOP_B] });
+
+        await storeAuthResponse({ access_token: 'token', refresh_token: 'refresh' });
+
+        await expectClearedWithNothingSent();
+    });
+
+    it('entering another shop clears the store and cancels the unsent save', async () => {
+        midEditInShopA();
+
+        applyTenantContext(SHOP_B);
+
+        await expectClearedWithNothingSent();
+    });
+
+    it("sign-out also forgets the invoice layout loaded for the last person", async () => {
+        clearInvoicePrintPrefsCache();
+        jest.useRealTimers();
+        applyTenantContext(SHOP_A);
+        api.getMyInvoicePrint.mockResolvedValueOnce({ layout: 'detailed' }).mockResolvedValueOnce({});
+        const first = renderHook(() => useInvoicePrintPrefs());
+        await waitFor(() => expect(first.result.current.prefs.layout).toBe('detailed'));
+        first.unmount();
+
+        clearAuthSession();
+        // The next cashier signs in to the same shop on this till.
+        applyTenantContext(SHOP_A);
+        const next = renderHook(() => useInvoicePrintPrefs());
+
+        await expect(next.result.current.resolve()).resolves.toMatchObject({ layout: 'standard' });
+        expect(api.getMyInvoicePrint).toHaveBeenCalledTimes(2);
+    });
+
+    it('re-entering the shop the tab is already in keeps the store and the save', async () => {
+        midEditInShopA();
+
+        applyTenantContext(SHOP_A);
+
+        expect(usePreferencesStore.getState().scopeKey).toBe('tenant-a:user-1');
+        await jest.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+        expect(api.saveMyPreferenceSection).toHaveBeenCalledWith('sidebar', { appShellOpenGroups: ['hr'] });
     });
 });

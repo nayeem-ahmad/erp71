@@ -3,18 +3,19 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, RefreshCw, Search, Eye, Trash2, Upload, ScanLine } from 'lucide-react';
+import { Plus, RefreshCw, Eye, Trash2, Upload, ScanLine } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { DEFAULT_PAGE_SIZE, compactDensity } from '@/lib/ui/compact-density';
+import { DEFAULT_PAGE_SIZE } from '@/lib/ui/compact-density';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter, type BulkAction } from '@/components/data-table';
+import { DataTable, createdAtColumn, type BulkAction, type ResolvedListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import { fetchAllPages } from '@/components/data-table/fetch-all-pages';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { PageShell, PageHeader, Button, Select, Input, ConfirmDialog } from '@/components/ui';
+import { PageShell, PageHeader, Button, ConfirmDialog, buttonClassName } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useCrmMineOnly } from '@/lib/crm-scope';
 import { useServerColumnFilters } from '@/lib/column-filters';
@@ -232,7 +233,7 @@ export default function ContactsPage() {
                     <Avatar src={info.row.original.photo_url} name={info.row.original.name} />
                     <Link
                         href={routes.crm.contactDetail(info.row.original.id)}
-                        className="font-semibold text-gray-900 hover:text-primary"
+                        className="text-blue-600 hover:underline"
                     >
                         {info.getValue()}
                     </Link>
@@ -260,16 +261,16 @@ export default function ContactsPage() {
         }),
         columnHelper.accessor('capture_source', {
             header: m.fields.captureSource,
-            cell: (info) => (
-                <span className="text-xs text-gray-500">{captureSourceLabel(info.getValue())}</span>
-            ),
+            cell: (info) => captureSourceLabel(info.getValue()),
             enableSorting: false,
+            enableColumnFilter: false,
             meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('assignee', {
             header: m.fields.assignedTo,
             cell: (info) => info.getValue()?.name ?? '—',
             enableSorting: false,
+            enableColumnFilter: false,
             meta: { hideOnMobile: true },
         }),
         createdAtColumn(columnHelper, { header: c.createdAt, locale, enableColumnFilter: false }),
@@ -279,31 +280,54 @@ export default function ContactsPage() {
             cell: (info) => {
                 const contact = info.row.original;
                 return (
-                    <div className="flex items-center justify-end gap-1">
-                        <Link
-                            href={routes.crm.contactDetail(contact.id)}
-                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={c.view}
-                        >
-                            <Eye className="w-4 h-4" />
-                        </Link>
-                        <button
-                            type="button"
-                            onClick={() => setPendingDelete(contact)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-danger hover:bg-danger-light transition-colors"
-                            title={c.delete}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <RowActions>
+                        <RowActionButton icon={<Eye />} label={c.view} href={routes.crm.contactDetail(contact.id)} />
+                        <RowActionButton icon={<Trash2 />} label={c.delete} intent="danger" onClick={() => setPendingDelete(contact)} />
+                    </RowActions>
                 );
             },
             enableSorting: false,
             enableColumnFilter: false,
             enableResizing: false,
-            size: 90,
+            size: 96,
         }),
     ], [m, c, locale, captureSourceLabel]);
+
+    const ownerOptions = useMemo(
+        () => teamMembers.flatMap((mem) => {
+            const id = mem.userId ?? mem.user_id ?? mem.user?.id;
+            const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
+            return id ? [{ value: id as string, label: label as string }] : [];
+        }),
+        [teamMembers],
+    );
+
+    const listFilters = useMemo<ResolvedListFilter[]>(() => [
+        {
+            id: 'capture',
+            type: 'select',
+            label: m.fields.captureSource,
+            value: captureSourceFilter || null,
+            onChange: (next) => setCaptureSourceFilter(next ?? ''),
+            options: CONTACT_CAPTURE_SOURCES.map((source) => ({ value: source, label: captureSourceLabel(source) })),
+        },
+        {
+            id: 'owner',
+            type: 'select',
+            label: m.fields.assignedTo,
+            value: mineOnly ? null : (assignedFilter || null),
+            onChange: (next) => setAssignedFilter(next ?? ''),
+            disabled: mineOnly,
+            title: mineOnly ? scopeCopy.ownerLockedHint : undefined,
+            options: ownerOptions,
+        },
+        {
+            id: 'created',
+            type: 'date-range',
+            value: createdRange,
+            onChange: setCreatedRange,
+        },
+    ], [m.fields.captureSource, m.fields.assignedTo, captureSourceFilter, captureSourceLabel, mineOnly, assignedFilter, scopeCopy.ownerLockedHint, ownerOptions, createdRange]);
 
     const bulkActions: BulkAction<Contact>[] = useMemo(
         () => [
@@ -330,6 +354,15 @@ export default function ContactsPage() {
                 )}
                 actions={
                     <>
+                        {/* The scope, not a filter: it outlives the tab and is shared
+                            with the Overview and the other CRM lists, and it stays
+                            in the header so it is not buried among the toolbar chips. */}
+                        <MineOnlyToggle
+                            value={mineOnly}
+                            onChange={setMineOnly}
+                            label={scopeCopy.mineOnly}
+                            title={scopeCopy.mineOnlyHint}
+                        />
                         <Button variant="secondary" onClick={loadContacts} leftIcon={<RefreshCw className="w-4 h-4" />} />
                         <Button variant="secondary" onClick={() => setImportOpen(true)} leftIcon={<Upload className="w-4 h-4" />}>
                             Import
@@ -337,64 +370,12 @@ export default function ContactsPage() {
                         <Button variant="secondary" onClick={() => setScannerOpen(true)} leftIcon={<ScanLine className="w-4 h-4" />}>
                             {m.scan.cta}
                         </Button>
-                        <Link
-                            href={routes.crm.contactNew}
-                            className={`${compactDensity.btnPrimary} bg-blue-600 text-white hover:bg-blue-700`}
-                        >
+                        <Link href={routes.crm.contactNew} className={buttonClassName()}>
                             <Plus className="w-4 h-4" /> {m.newContact}
                         </Link>
                     </>
                 }
             />
-
-            <div className="flex flex-wrap gap-3 items-center">
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <Input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={m.searchPlaceholder}
-                        className="ps-9"
-                    />
-                </div>
-                {/* The scope, not a filter: it outlives the tab and is shared with
-                    the Overview and the other CRM lists. First in the row because
-                    it decides what every control after it is narrowing. */}
-                <MineOnlyToggle
-                    value={mineOnly}
-                    onChange={setMineOnly}
-                    label={scopeCopy.mineOnly}
-                    title={scopeCopy.mineOnlyHint}
-                />
-                <Select
-                    value={captureSourceFilter}
-                    onChange={(e) => setCaptureSourceFilter(e.target.value)}
-                    className="w-auto max-w-[200px]"
-                >
-                    <option value="">{m.allCaptureSources}</option>
-                    {CONTACT_CAPTURE_SOURCES.map((s) => (
-                        <option key={s} value={s}>{captureSourceLabel(s)}</option>
-                    ))}
-                </Select>
-                {/* Disabled rather than hidden while the scope is on: the API pins
-                    the owner to the caller either way, and a control that still
-                    looked live would be offering a choice it could not honour. */}
-                <Select
-                    value={mineOnly ? '' : assignedFilter}
-                    onChange={(e) => setAssignedFilter(e.target.value)}
-                    disabled={mineOnly}
-                    title={mineOnly ? scopeCopy.ownerLockedHint : undefined}
-                    className="w-auto max-w-[200px]"
-                >
-                    <option value="">{mineOnly ? scopeCopy.mineOnly : m.fields.assignedTo}</option>
-                    {teamMembers.map((mem) => {
-                        const id = mem.userId ?? mem.user_id ?? mem.user?.id;
-                        const label = mem.name ?? mem.user?.name ?? mem.email ?? mem.user?.email ?? id;
-                        return id ? <option key={id} value={id}>{label}</option> : null;
-                    })}
-                </Select>
-                <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-            </div>
 
             <DataTable<Contact>
                 tableId="crm-contacts"
@@ -402,7 +383,11 @@ export default function ContactsPage() {
                 data={contacts}
                 columns={columns}
                 isLoading={loading}
-                showSearch={false}
+                searchPlaceholder={m.searchPlaceholder}
+                searchValue={search}
+                onSearchChange={setSearch}
+                filters={listFilters}
+                viewOptions
                 serverPagination={{
                     total,
                     page,

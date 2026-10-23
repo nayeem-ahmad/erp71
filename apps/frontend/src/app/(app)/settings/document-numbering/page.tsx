@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    DOCUMENT_NUMBERING_PRESETS,
+    NUMBERING_DOC_GROUPS,
+    NUMBERING_DOC_GROUP_LABELS,
+    NUMBERING_DOC_TYPES,
+    NUMBERING_DOC_TYPE_INFO,
     NUMBERING_RESET_LABELS,
     NUMBERING_RESET_POLICIES,
     NUMBERING_SCOPE_LABELS,
@@ -13,18 +16,20 @@ import {
     NUMBERING_TEMPLATE_MAX_LENGTH,
     NUMBERING_TOKEN_LABELS,
     NUMBERING_TOKENS,
+    documentNumberingPresets,
+    isNumberingDocType,
     normalizeStoreCode,
     templateUsesToken,
     validateNumberingConfig,
     type DocumentNumberingConfig,
+    type NumberingDocType,
     type NumberingResetPolicy,
-    type NumberingScope,
 } from '@erp71/shared-types';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { Alert, Button, CompactSection, Field, Input, PageShell, PageSkeleton, Select } from '@/components/ui';
+import { Alert, Button, CompactSection, ConfirmDialog, Field, Input, PageShell, Select, SkeletonBar } from '@/components/ui';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import {
     counterRowsFor,
@@ -36,6 +41,19 @@ import {
 
 const CUSTOM = 'custom';
 
+const DOC_TYPE_GROUPS = NUMBERING_DOC_GROUPS.map((group) => ({
+    group,
+    types: NUMBERING_DOC_TYPES.filter((docType) => NUMBERING_DOC_TYPE_INFO[docType].group === group),
+}));
+
+/** `?type=PURCHASE` opens that document; anything else opens sales invoices. */
+function docTypeFromUrl(): NumberingDocType {
+    const type = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
+    return isNumberingDocType(type) ? type : 'SALE';
+}
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 const sameConfig = (a: DocumentNumberingConfig, b: DocumentNumberingConfig) =>
     a.template.trim() === b.template.trim()
     && a.resetPolicy === b.resetPolicy
@@ -46,6 +64,10 @@ export default function DocumentNumberingPage() {
     const { t } = useI18n();
     const pageTitle = t.settings.hub.links.documentNumbering;
 
+    /** Read from the URL after mount, so the server and first client render agree. */
+    const [docType, setDocType] = useState<NumberingDocType | null>(null);
+    /** A document picked while edits were unsaved, waiting on the discard prompt. */
+    const [pendingDocType, setPendingDocType] = useState<NumberingDocType | null>(null);
     const [data, setData] = useState<DocumentNumberingData | null>(null);
     const [loadError, setLoadError] = useState('');
     const [saving, setSaving] = useState(false);
@@ -66,13 +88,49 @@ export default function DocumentNumberingPage() {
         setSubmitted(false);
     }, []);
 
-    useEffect(() => {
-        api.getDocumentNumbering('SALE')
-            .then(adopt)
-            .catch((err: unknown) => setLoadError(err instanceof Error ? err.message : 'Could not load document numbering.'));
-    }, [adopt]);
+    useEffect(() => setDocType(docTypeFromUrl()), []);
 
-    const formatErrors = useMemo(() => (config ? validateNumberingConfig(config) : []), [config]);
+    useEffect(() => {
+        if (!docType) return;
+        // A slow answer for the document the owner just left must not land on this one.
+        let current = true;
+        setData(null);
+        setConfig(null);
+        setLoadError('');
+        api.getDocumentNumbering(docType)
+            .then((next: DocumentNumberingData) => {
+                if (current) adopt(next);
+            })
+            .catch((err: unknown) => {
+                if (current) setLoadError(err instanceof Error ? err.message : 'Could not load document numbering.');
+            });
+        return () => {
+            current = false;
+        };
+    }, [docType, adopt]);
+
+    const dirty = Boolean(data && config) && (
+        !sameConfig(config!, data!.config)
+        || Object.keys(nextNumbers).length > 0
+        || data!.stores.some((s) => (codes[s.id] ?? '') !== (s.code ?? ''))
+    );
+
+    const switchTo = (next: NumberingDocType) => {
+        setPendingDocType(null);
+        if (next === docType) return;
+        setDocType(next);
+        window.history.replaceState(null, '', `${window.location.pathname}?type=${next}`);
+    };
+
+    const requestDocType = (next: NumberingDocType) => {
+        if (next !== docType && dirty) setPendingDocType(next);
+        else switchTo(next);
+    };
+
+    const formatErrors = useMemo(
+        () => (config && docType ? validateNumberingConfig(config, docType) : []),
+        [config, docType],
+    );
     const usesStore = config ? templateUsesToken(config.template, 'STORE') : false;
     const codeErrors = useMemo(
         () => (data && usesStore ? storeCodeErrors(data.stores, codes) : {}),
@@ -96,20 +154,49 @@ export default function DocumentNumberingPage() {
         return typed !== undefined && !nextNumberError(scopeKey, currentNext) ? Number(typed) : currentNext;
     };
 
-    if (loadError) {
+    const subtitle = 'Choose how each kind of document is numbered';
+    const docTypePicker = (
+        <Field label="Document" htmlFor="numbering-doc-type" className="max-w-sm">
+            <Select
+                id="numbering-doc-type"
+                value={docType ?? 'SALE'}
+                onChange={(e) => requestDocType(e.target.value as NumberingDocType)}
+                className="w-full"
+            >
+                {DOC_TYPE_GROUPS.map(({ group, types }) => (
+                    <optgroup key={group} label={NUMBERING_DOC_GROUP_LABELS[group]}>
+                        {types.map((type) => (
+                            <option key={type} value={type}>{NUMBERING_DOC_TYPE_INFO[type].label}</option>
+                        ))}
+                    </optgroup>
+                ))}
+            </Select>
+        </Field>
+    );
+
+    if (loadError || !docType || !data || !config) {
         return (
             <PageShell maxWidth="narrow">
-                <PageHeader title={pageTitle} breadcrumbs={breadcrumbs(t, pageTitle)} />
-                <Alert tone="danger" className="mt-4">{loadError}</Alert>
+                <PageHeader title={pageTitle} subtitle={subtitle} breadcrumbs={breadcrumbs(t, pageTitle)} />
+                <div className="mt-4 space-y-4">
+                    {docTypePicker}
+                    {loadError ? (
+                        <Alert tone="danger">{loadError}</Alert>
+                    ) : (
+                        <div className="space-y-3" aria-busy="true">
+                            <SkeletonBar className="h-4 w-1/3" />
+                            <SkeletonBar className="h-9 w-full" />
+                            <SkeletonBar className="h-9 w-2/3" />
+                        </div>
+                    )}
+                </div>
             </PageShell>
         );
     }
 
-    if (!data || !config) {
-        return <PageSkeleton body="report" maxWidth="narrow" />;
-    }
-
-    const preset = DOCUMENT_NUMBERING_PRESETS.find((p) => sameConfig(p.config, config))?.key ?? CUSTOM;
+    const info = NUMBERING_DOC_TYPE_INFO[docType];
+    const presets = documentNumberingPresets(docType);
+    const preset = presets.find((p) => sameConfig(p.config, config))?.key ?? CUSTOM;
     // A branch with no code yet gets the next S<n> on save; the preview says so.
     const codeFor = (storeId: string) =>
         normalizeStoreCode(codes[storeId]) ?? data.stores.find((s) => s.id === storeId)?.code ?? 'S?';
@@ -146,7 +233,7 @@ export default function DocumentNumberingPage() {
 
         setSaving(true);
         try {
-            const saved = await api.updateDocumentNumbering('SALE', {
+            const saved = await api.updateDocumentNumbering(docType, {
                 ...config,
                 template: config.template.trim(),
                 ...(storeCodes.length > 0 ? { storeCodes } : {}),
@@ -165,7 +252,7 @@ export default function DocumentNumberingPage() {
         <PageShell maxWidth="narrow">
             <PageHeader
                 title={pageTitle}
-                subtitle="Choose how new sales invoices are numbered"
+                subtitle={subtitle}
                 breadcrumbs={breadcrumbs(t, pageTitle)}
                 actions={(
                     <Button onClick={handleSave} disabled={saving} loading={saving}>
@@ -175,19 +262,21 @@ export default function DocumentNumberingPage() {
             />
 
             <div className="mt-4 space-y-4">
-                <CompactSection title="Sales invoice number" titleStyle="heading">
+                {docTypePicker}
+
+                <CompactSection title={`${info.label} number`} titleStyle="heading">
                     <div className="space-y-4">
                         <Field label="Start from" htmlFor="numbering-preset" className="max-w-sm">
                             <Select
                                 id="numbering-preset"
                                 value={preset}
                                 onChange={(e) => {
-                                    const chosen = DOCUMENT_NUMBERING_PRESETS.find((p) => p.key === e.target.value);
+                                    const chosen = presets.find((p) => p.key === e.target.value);
                                     if (chosen) setConfig({ ...chosen.config });
                                 }}
                                 className="w-full"
                             >
-                                {DOCUMENT_NUMBERING_PRESETS.map((p) => (
+                                {presets.map((p) => (
                                     <option key={p.key} value={p.key}>{p.label}</option>
                                 ))}
                                 <option value={CUSTOM} disabled>Custom</option>
@@ -252,10 +341,10 @@ export default function DocumentNumberingPage() {
                                 <Select
                                     id="numbering-scope"
                                     value={config.scope}
-                                    onChange={(e) => update({ scope: e.target.value as NumberingScope })}
+                                    onChange={(e) => update({ scope: e.target.value as DocumentNumberingConfig['scope'] })}
                                     className="w-full"
                                 >
-                                    {NUMBERING_SCOPES.map((scope) => (
+                                    {NUMBERING_SCOPES.filter((scope) => info.scopes.includes(scope)).map((scope) => (
                                         <option key={scope} value={scope}>{NUMBERING_SCOPE_LABELS[scope]}</option>
                                     ))}
                                 </Select>
@@ -275,7 +364,7 @@ export default function DocumentNumberingPage() {
 
                         {formatErrors.length === 0 && rows[0] && (
                             <p className="text-sm text-gray-700">
-                                Next invoice:{' '}
+                                Next number:{' '}
                                 <span className="font-mono font-semibold text-gray-900">
                                     {previewNumber(
                                         config,
@@ -357,13 +446,24 @@ export default function DocumentNumberingPage() {
                 )}
 
                 <Alert tone="info">
-                    Only new invoices change. Invoices already issued keep their numbers, and a parked draft gets its
-                    number when it is completed.
+                    Only new {info.plural} change. {capitalize(info.plural)} already issued keep their numbers
+                    {docType === 'SALE' ? ', and a parked draft gets its number when it is completed.' : '.'}
                     {savedConfigChanged && seriesChanged
                         ? ' A different reset or series starts its counters at 1 unless you set a next number above.'
                         : ''}
                 </Alert>
             </div>
+
+            <ConfirmDialog
+                open={pendingDocType !== null}
+                title="Discard unsaved changes?"
+                prompt="Your changes on this page have not been saved. Switching to another document discards them."
+                confirmLabel="Discard changes"
+                cancelLabel="Keep editing"
+                danger
+                onConfirm={() => pendingDocType && switchTo(pendingDocType)}
+                onCancel={() => setPendingDocType(null)}
+            />
         </PageShell>
     );
 }

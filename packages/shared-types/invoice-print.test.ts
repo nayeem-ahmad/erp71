@@ -3,6 +3,7 @@ import {
   INVOICE_FOOTER_MAX_LENGTH,
   INVOICE_SIGNATURE_SPACE_MM,
   normalizeInvoicePrintPrefs,
+  normalizeInvoicePrintPrefsPartial,
 } from './invoice-print';
 
 describe('normalizeInvoicePrintPrefs', () => {
@@ -105,5 +106,48 @@ describe('normalizeInvoicePrintPrefs', () => {
     expect(normalizeInvoicePrintPrefs({ signature_space_mm: 12.6 }).signature_space_mm).toBe(13);
     expect(normalizeInvoicePrintPrefs({ signature_space_mm: 1 }).signature_space_mm).toBe(min);
     expect(normalizeInvoicePrintPrefs({ signature_space_mm: 500 }).signature_space_mm).toBe(max);
+  });
+});
+
+describe('normalizeInvoicePrintPrefsPartial', () => {
+  it('keeps only the answers that are present and valid', () => {
+    expect(normalizeInvoicePrintPrefsPartial({ table_style: 'grid', layout: 'bogus' })).toEqual({
+      table_style: 'grid',
+    });
+  });
+
+  it('reads nothing as no answers at all', () => {
+    expect(normalizeInvoicePrintPrefsPartial({})).toEqual({});
+    expect(normalizeInvoicePrintPrefsPartial(null)).toEqual({});
+    expect(normalizeInvoicePrintPrefsPartial('garbage')).toEqual({});
+  });
+
+  it('keeps a present null as an answer', () => {
+    const partial = normalizeInvoicePrintPrefsPartial({ footer_text: null, signature_space_mm: null });
+    expect(partial).toEqual({ footer_text: null, signature_space_mm: null });
+    expect(Object.keys(partial).sort()).toEqual(['footer_text', 'signature_space_mm']);
+  });
+
+  it('drops a footer or signature gap that is the wrong type', () => {
+    expect(normalizeInvoicePrintPrefsPartial({ footer_text: 5, signature_space_mm: '20' })).toEqual({});
+    expect(normalizeInvoicePrintPrefsPartial({ signature_space_mm: Number.NaN })).toEqual({});
+  });
+
+  it('clamps like the full reader does', () => {
+    const { max } = INVOICE_SIGNATURE_SPACE_MM;
+    expect(normalizeInvoicePrintPrefsPartial({ signature_space_mm: 500 })).toEqual({ signature_space_mm: max });
+    expect(
+      normalizeInvoicePrintPrefsPartial({ footer_text: 'x'.repeat(INVOICE_FOOTER_MAX_LENGTH + 10) }).footer_text,
+    ).toHaveLength(INVOICE_FOOTER_MAX_LENGTH);
+  });
+
+  it('maps the legacy hide_empty_warranty switch only when warranty_column is absent', () => {
+    expect(normalizeInvoicePrintPrefsPartial({ hide_empty_warranty: true })).toEqual({
+      warranty_column: 'when-used',
+    });
+    expect(normalizeInvoicePrintPrefsPartial({ hide_empty_warranty: true, warranty_column: 'never' })).toEqual({
+      warranty_column: 'never',
+    });
+    expect(normalizeInvoicePrintPrefsPartial({ hide_empty_warranty: false })).toEqual({});
   });
 });

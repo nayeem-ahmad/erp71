@@ -3,6 +3,7 @@ import { paginatedFindMany } from '../common/list-pagination.util';
 import { PaginatedResult } from '../common/pagination.dto';
 import { createdAtRange } from '../common/created-range.util';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { CreatePurchaseQuotationDto, UpdatePurchaseQuotationStatusDto } from './purchase-quotation.dto';
 
 const INCLUDE = {
@@ -27,28 +28,35 @@ export class PurchaseQuotationsService {
         }
 
         const total = dto.items.reduce((sum, i) => sum + i.quantity * i.unitCost, 0);
-        const count = await this.db.purchaseQuotation.count({ where: { tenant_id: tenantId } });
-        const rfqNumber = `RFQ-${String(count + 1).padStart(5, '0')}`;
 
-        return this.db.purchaseQuotation.create({
-            data: {
-                tenant_id: tenantId,
-                store_id: dto.storeId,
-                supplier_id: dto.supplierId ?? null,
-                rfq_number: rfqNumber,
-                valid_until: dto.validUntil ? new Date(dto.validUntil) : null,
-                total_amount: total,
-                notes: dto.notes ?? null,
-                items: {
-                    create: dto.items.map((i) => ({
-                        product_id: i.productId,
-                        quantity: i.quantity,
-                        unit_cost: i.unitCost,
-                        line_total: i.quantity * i.unitCost,
-                    })),
+        return this.db.$transaction(async (tx) => {
+            const rfqNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'RFQ',
+                storeId: dto.storeId,
+                isTaken: numberTakenIn(tx.purchaseQuotation, tenantId, 'rfq_number'),
+            });
+
+            return tx.purchaseQuotation.create({
+                data: {
+                    tenant_id: tenantId,
+                    store_id: dto.storeId,
+                    supplier_id: dto.supplierId ?? null,
+                    rfq_number: rfqNumber,
+                    valid_until: dto.validUntil ? new Date(dto.validUntil) : null,
+                    total_amount: total,
+                    notes: dto.notes ?? null,
+                    items: {
+                        create: dto.items.map((i) => ({
+                            product_id: i.productId,
+                            quantity: i.quantity,
+                            unit_cost: i.unitCost,
+                            line_total: i.quantity * i.unitCost,
+                        })),
+                    },
                 },
-            },
-            include: INCLUDE,
+                include: INCLUDE,
+            });
         });
     }
 
@@ -106,8 +114,13 @@ export class PurchaseQuotationsService {
         if (rfq.status === 'CANCELLED') throw new BadRequestException('Cancelled quotations cannot be converted.');
 
         return this.db.$transaction(async (tx) => {
-            const count = await tx.purchaseOrder.count({ where: { tenant_id: tenantId } });
-            const poNumber = `PO-${String(count + 1).padStart(5, '0')}`;
+            // The same series as a purchase order raised directly.
+            const poNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'PURCHASE_ORDER',
+                storeId: rfq.store_id,
+                isTaken: numberTakenIn(tx.purchaseOrder, tenantId, 'po_number'),
+            });
 
             const po = await tx.purchaseOrder.create({
                 data: {

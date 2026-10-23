@@ -11,6 +11,7 @@ import {
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { costBehaviourFor } from '../database/product-cost.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
 
 jest.mock('../database/inventory.utils', () => ({
     applyInventoryMovement: jest.fn(),
@@ -44,6 +45,10 @@ function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
     (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set<string>());
 }
 
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'PUR-00001'),
+}));
 jest.mock('../accounting/posting.utils', () => ({
     autoPostFromRules: jest.fn(),
     voidAutoPostedVoucher: jest.fn(),
@@ -234,6 +239,20 @@ describe('PurchasesService', () => {
 
         const created = tx.purchase.create.mock.calls[0][0].data;
         expect(created.purchase_date).toEqual(new Date(purchaseDate));
+        // A back-dated bill is numbered in its own period, at its own branch.
+        expect(issueDocumentNumber).toHaveBeenCalledWith(tx, expect.objectContaining({
+            tenantId: 'tenant-1',
+            docType: 'PURCHASE',
+            storeId: 'store-1',
+            on: new Date(purchaseDate),
+        }));
+        const { isTaken } = (issueDocumentNumber as jest.Mock).mock.calls.at(-1)[1];
+        tx.purchase.findFirst.mockResolvedValueOnce({ id: 'other' });
+        await expect(isTaken('PUR-00001')).resolves.toBe(true);
+        expect(tx.purchase.findFirst).toHaveBeenLastCalledWith({
+            where: { tenant_id: 'tenant-1', purchase_number: 'PUR-00001' },
+            select: { id: true },
+        });
         expect(created).not.toHaveProperty('created_at');
         expect(applyInventoryMovement).toHaveBeenCalledWith(
             tx,

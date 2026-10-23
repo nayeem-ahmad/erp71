@@ -1,11 +1,25 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { usePreferencesStore } from '@/lib/preferences/store';
 import { readPrintTypeScale, setPrintTypeScale, subscribePrintTypeScale, type PrintTypeScale } from './type-scale';
 
 /** The server has no storage to read; the client catches up after hydration. */
 function serverScale(): PrintTypeScale {
     return 'normal';
+}
+
+/**
+ * Also re-reads when the member's preferences arrive or change, so a profile's
+ * text size that lands after the page mounted is shown rather than missed.
+ */
+function subscribe(listener: () => void): () => void {
+    const unsubscribeScale = subscribePrintTypeScale(listener);
+    const unsubscribeProfile = usePreferencesStore.subscribe(listener);
+    return () => {
+        unsubscribeScale();
+        unsubscribeProfile();
+    };
 }
 
 /**
@@ -16,6 +30,6 @@ function serverScale(): PrintTypeScale {
  * different answers — changing either re-renders the other.
  */
 export function usePrintTypeScale(): [PrintTypeScale, (scale: PrintTypeScale) => void] {
-    const scale = useSyncExternalStore(subscribePrintTypeScale, readPrintTypeScale, serverScale);
+    const scale = useSyncExternalStore(subscribe, readPrintTypeScale, serverScale);
     return [scale, setPrintTypeScale];
 }

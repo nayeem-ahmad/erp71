@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { ApprovalNotifier } from '../approvals/approval-notifier';
 import { applyInventoryMovement, assertWarehouseBelongsToTenant } from '../database/inventory.utils';
 import {
@@ -36,8 +37,13 @@ export class WarehouseTransfersService {
             const destinationWarehouse = await assertWarehouseBelongsToTenant(tx, tenantId, dto.destinationWarehouseId);
             await this.assertProductsBelongToTenant(tx, tenantId, dto.items.map((item) => item.productId));
 
-            const count = await tx.warehouseTransfer.count({ where: { tenant_id: tenantId } });
-            const transferNumber = `TRF-${String(count + 1).padStart(5, '0')}`;
+            // A per-branch series belongs to the branch the goods leave.
+            const transferNumber = await issueDocumentNumber(tx, {
+                tenantId,
+                docType: 'WAREHOUSE_TRANSFER',
+                storeId: sourceWarehouse.store_id,
+                isTaken: numberTakenIn(tx.warehouseTransfer, tenantId, 'transfer_number'),
+            });
 
             // Cross-branch is derived from the two warehouses, never taken from the
             // request: a client-settable flag would let the caller opt out of the

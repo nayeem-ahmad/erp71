@@ -255,6 +255,7 @@ export class TeamService {
             include: {
                 permissions: { select: { permission: true } },
                 _count: { select: { memberRoles: true } },
+                preferenceProfile: { select: { id: true, name: true } },
             },
             orderBy: { name: 'asc' },
         });
@@ -277,6 +278,9 @@ export class TeamService {
                 // permissions reach it may read. See `TenantRecordScope`.
                 record_scope: role.record_scope,
                 member_count: role._count.memberRoles,
+                preference_profile: role.preferenceProfile
+                    ? { id: role.preferenceProfile.id, name: role.preferenceProfile.name }
+                    : null,
             };
         });
     }
@@ -343,6 +347,22 @@ export class TeamService {
 
     /* ------------------------------- Mutations ------------------------------- */
 
+    /**
+     * PreferencesService follows a role's profile without re-checking whose it
+     * is, so a role may only ever point at a profile of its own workspace.
+     * Null and undefined pass: clearing needs no target, omitting changes nothing.
+     */
+    private async assertProfileInTenant(tenantId: string, profileId: string | null | undefined) {
+        if (!profileId) return;
+        const profile = await this.db.preferenceProfile.findFirst({
+            where: { id: profileId, tenant_id: tenantId },
+            select: { id: true },
+        });
+        if (!profile) {
+            throw new BadRequestException('Preference profile not found.');
+        }
+    }
+
     async createRole(ctx: TenantContext, dto: CreateTenantRoleDto) {
         this.assertOwner(ctx);
 
@@ -351,6 +371,7 @@ export class TeamService {
         if (permissions.length === 0) {
             throw new BadRequestException('At least one valid permission is required.');
         }
+        await this.assertProfileInTenant(ctx.tenantId, dto.preference_profile_id);
 
         const role = await this.db.$transaction(async (tx) => {
             const created = await tx.tenantRole.create({
@@ -360,6 +381,7 @@ export class TeamService {
                     description: dto.description?.trim() || null,
                     is_system: false,
                     ...(dto.recordScope ? { record_scope: dto.recordScope as never } : {}),
+                    ...(dto.preference_profile_id ? { preference_profile_id: dto.preference_profile_id } : {}),
                 },
             });
             await tx.tenantRolePermission.createMany({
@@ -375,6 +397,7 @@ export class TeamService {
             name,
             permissions,
             recordScope: dto.recordScope ?? TenantRecordScope.ALL,
+            preferenceProfileId: dto.preference_profile_id ?? undefined,
         });
         return { message: 'Role created.', roleId: role.id };
     }
@@ -395,6 +418,7 @@ export class TeamService {
         if (nextPermissions !== null && nextPermissions.length === 0) {
             throw new BadRequestException('At least one valid permission is required.');
         }
+        await this.assertProfileInTenant(ctx.tenantId, dto.preference_profile_id);
 
         const permissionsChanged =
             nextPermissions !== null &&
@@ -415,6 +439,11 @@ export class TeamService {
                     // next request without rewriting anybody's grants.
                     ...(dto.recordScope !== undefined
                         ? { record_scope: dto.recordScope as never }
+                        : {}),
+                    // Like the scope, read when a member's preferences resolve —
+                    // nothing is copied to members, so no re-sync. Null clears it.
+                    ...(dto.preference_profile_id !== undefined
+                        ? { preference_profile_id: dto.preference_profile_id }
                         : {}),
                 },
             });
@@ -454,6 +483,7 @@ export class TeamService {
             description: dto.description,
             permissions: nextPermissions ?? undefined,
             recordScope: dto.recordScope,
+            preferenceProfileId: dto.preference_profile_id,
         });
         if (permissionsChanged) {
             await this.audit.log('team.role_permissions_synced', 'TenantRole', this.auditCtx(ctx), roleId, {

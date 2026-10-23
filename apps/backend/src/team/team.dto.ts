@@ -1,4 +1,4 @@
-import { ArrayNotEmpty, IsArray, IsBoolean, IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsEmail, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { StorePermission, TenantRecordScope } from '@erp71/shared-types';
 
 const STORE_PERMISSION_VALUES = Object.values(StorePermission) as string[];
@@ -79,6 +79,15 @@ export class CreateTenantRoleDto {
     @IsOptional()
     @IsIn(RECORD_SCOPE_VALUES)
     recordScope?: TenantRecordScope;
+
+    /**
+     * The preference profile members holding this role fall back to. `null`
+     * clears it; omitted leaves it as it was. `@IsOptional` skips both null and
+     * undefined, so null reaches the service untouched.
+     */
+    @IsOptional()
+    @IsUUID()
+    preference_profile_id?: string | null;
 }
 
 export class UpdateTenantRoleDto {
@@ -98,4 +107,13 @@ export class UpdateTenantRoleDto {
     @IsOptional()
     @IsIn(RECORD_SCOPE_VALUES)
     recordScope?: TenantRecordScope;
+
+    /**
+     * The preference profile members holding this role fall back to. `null`
+     * clears it; omitted leaves it as it was. `@IsOptional` skips both null and
+     * undefined, so null reaches the service untouched.
+     */
+    @IsOptional()
+    @IsUUID()
+    preference_profile_id?: string | null;
 }

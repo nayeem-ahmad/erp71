@@ -10,6 +10,12 @@ import {
     usableWarehouseIds,
 } from '../database/inventory.utils';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
+import { issueDocumentNumber } from '../database/document-number.utils';
+
+jest.mock('../database/document-number.utils', () => ({
+    ...jest.requireActual('../database/document-number.utils'),
+    issueDocumentNumber: jest.fn(async () => 'RET-2627-00001'),
+}));
 
 jest.mock('../database/inventory.utils', () => ({
   applyInventoryMovement: jest.fn(),
@@ -210,9 +216,14 @@ describe('SalesReturnsService', () => {
 
       expect(db.salesReturn.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ warehouse_id: 'wh-main' }),
+          data: expect.objectContaining({ warehouse_id: 'wh-main', return_number: 'RET-2627-00001' }),
         }),
       );
+      expect(issueDocumentNumber).toHaveBeenCalledWith(db, expect.objectContaining({
+        tenantId: 'tenant-1',
+        docType: 'SALES_RETURN',
+        storeId: 'store-1',
+      }));
       expect(applyInventoryMovement).toHaveBeenCalledWith(
         db,
         expect.objectContaining({ productId: 'p-1', warehouseId: 'wh-main' }),

@@ -11,7 +11,7 @@ import {
     UpdateQuotationStatusDto,
     QuotationDocKind,
 } from './sales-quotations.dto';
-import { DocumentSeries, nextDocumentNumber } from '../database/document-number.utils';
+import { issueDocumentNumber, numberTakenIn } from '../database/document-number.utils';
 import { SalesOrdersService } from '../sales-orders/sales-orders.service';
 import { ShortLinksService } from '../short-links/short-links.service';
 import { toPublicLetterhead, toPublicQuotation, type PublicLetterhead } from './public-quotation.dto';
@@ -92,9 +92,13 @@ export class SalesQuotationsService {
                 dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
 
-            const quoteNumber = await nextDocumentNumber(tx, {
+            // Quotations and proformas share `quote_number`, so each series
+            // steps over the other's numbers as well as its own.
+            const quoteNumber = await issueDocumentNumber(tx, {
                 tenantId,
-                series: docKind === 'PROFORMA' ? DocumentSeries.PROFORMA : DocumentSeries.QUOTE,
+                docType: docKind === 'PROFORMA' ? 'PROFORMA' : 'QUOTE',
+                storeId: dto.storeId,
+                isTaken: numberTakenIn(tx.quotation, tenantId, 'quote_number'),
             });
 
             const itemsData = dto.items.map(item => ({
