@@ -35,6 +35,12 @@ describe('CrmContactsService', () => {
                 create: jest.fn().mockImplementation(({ data }: any) => ({ id: 'attachment-1', ...data })),
                 delete: jest.fn().mockResolvedValue({}),
             },
+            organization: {
+                findUnique: jest.fn().mockResolvedValue(null),
+                create: jest.fn().mockResolvedValue({ id: 'org-1' }),
+                update: jest.fn(),
+                delete: jest.fn(),
+            },
         };
         ai = { scanBusinessCard: jest.fn() };
         assets = {
@@ -124,6 +130,181 @@ describe('CrmContactsService', () => {
                 }),
             );
         });
+
+        it('saves the same email on two contacts and stores email_norm on both', async () => {
+            await service.create(TENANT, USER, {
+                name: 'A',
+                email: 'Shared@Shop.com',
+                mobile: '01711111111',
+            });
+            await service.create(TENANT, USER, {
+                name: 'B',
+                email: 'shared@shop.com',
+                mobile: '01822222222',
+            });
+
+            expect(db.crmContact.create).toHaveBeenCalledTimes(2);
+            expect(db.crmContact.create.mock.calls[0][0].data.email).toBe('Shared@Shop.com');
+            expect(db.crmContact.create.mock.calls[0][0].data.email_norm).toBe('shared@shop.com');
+            expect(db.crmContact.create.mock.calls[1][0].data.email_norm).toBe('shared@shop.com');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+        });
+
+        it('trims the company and creates the organization when that name_norm is new', async () => {
+            await service.create(TENANT, USER, { name: 'Rafiq', company: ' Karim Traders ' });
+
+            expect(db.organization.findUnique).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenant_id_name_norm: { tenant_id: TENANT, name_norm: 'karim traders' } },
+                }),
+            );
+            expect(db.organization.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: { tenant_id: TENANT, name: 'Karim Traders', name_norm: 'karim traders' },
+                }),
+            );
+            expect(db.crmContact.create.mock.calls[0][0].data).toEqual(
+                expect.objectContaining({
+                    company: 'Karim Traders',
+                    organization_id: 'org-1',
+                    mobile_norm: null,
+                    email_norm: null,
+                    linkedin_norm: null,
+                }),
+            );
+            expect(db.organization.update).not.toHaveBeenCalled();
+            expect(db.crmContact.update).not.toHaveBeenCalled();
+        });
+
+        it('does not create an organization when the contact has no company', async () => {
+            await service.create(TENANT, USER, { name: 'Solo' });
+
+            expect(db.organization.create).not.toHaveBeenCalled();
+            expect(db.organization.findUnique).not.toHaveBeenCalled();
+            const data = db.crmContact.create.mock.calls[0][0].data;
+            expect(data.organization_id).toBeUndefined();
+            expect(data.mobile_norm).toBeNull();
+            expect(data.email_norm).toBeNull();
+            expect(data.linkedin_norm).toBeNull();
+        });
+
+        it('treats Karim Traders Ltd as a different organization from Karim Traders', async () => {
+            await service.create(TENANT, USER, { name: 'Rafiq', company: 'Karim Traders Ltd' });
+
+            const nameNorm =
+                db.organization.findUnique.mock.calls[0][0].where.tenant_id_name_norm.name_norm;
+            expect(nameNorm).toBe('karim traders ltd');
+            expect(db.organization.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        name: 'Karim Traders Ltd',
+                        name_norm: 'karim traders ltd',
+                    }),
+                }),
+            );
+        });
+
+        it('uses an existing organization and does not rename it', async () => {
+            db.organization.findUnique.mockResolvedValue({ id: 'org-9', name: 'KARIM TRADERS' });
+
+            await service.create(TENANT, USER, { name: 'Rafiq', company: 'karim traders' });
+
+            expect(db.organization.create).not.toHaveBeenCalled();
+            expect(db.organization.update).not.toHaveBeenCalled();
+            expect(db.crmContact.create.mock.calls[0][0].data.organization_id).toBe('org-9');
+            expect(db.crmContact.create.mock.calls[0][0].data.company).toBe('karim traders');
+        });
+
+        it('re-reads the organization after a unique conflict and does not rename it', async () => {
+            const conflict = Object.assign(new Error('unique'), { code: 'P2002' });
+            db.organization.findUnique
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce({ id: 'org-existing', name: 'Karim traders' });
+            db.organization.create.mockRejectedValueOnce(conflict);
+
+            await service.create(TENANT, USER, { name: 'Rafiq', company: ' Karim Traders ' });
+
+            expect(db.organization.findUnique).toHaveBeenCalledTimes(2);
+            expect(db.crmContact.create.mock.calls[0][0].data.organization_id).toBe('org-existing');
+            expect(db.organization.update).not.toHaveBeenCalled();
+        });
+
+        it('rejects a mobile that normalizes to an existing mobile_norm', async () => {
+            db.crmContact.findMany.mockResolvedValue([
+                { id: 'contact-9', mobile: '01712345678', mobile_norm: '+8801712345678' },
+            ]);
+
+            await expect(
+                service.create(TENANT, USER, { name: 'Dup', mobile: '01712-345678' }),
+            ).rejects.toThrow('A contact with this mobile number already exists.');
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+        });
+
+        it('rejects a mobile that matches a raw number whose mobile_norm is null', async () => {
+            db.crmContact.findMany.mockResolvedValue([
+                { id: 'contact-9', mobile: '+8801712345678', mobile_norm: null },
+            ]);
+
+            await expect(
+                service.create(TENANT, USER, { name: 'Dup', mobile: '01712-345678' }),
+            ).rejects.toThrow('A contact with this mobile number already exists.');
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+        });
+
+        it('does not treat a non-normalizing mobile as a normalized match', async () => {
+            db.crmContact.findMany.mockResolvedValue([
+                { id: 'contact-9', mobile: 'N/A', mobile_norm: null },
+            ]);
+
+            await service.create(TENANT, USER, { name: 'Other', mobile: '01712-345678' });
+
+            expect(db.crmContact.create).toHaveBeenCalled();
+            expect(db.crmContact.create.mock.calls[0][0].data.mobile).toBe('01712-345678');
+            expect(db.crmContact.create.mock.calls[0][0].data.mobile_norm).toBe('+8801712345678');
+        });
+
+        it('stores a typed N/A as the raw mobile and a null norm', async () => {
+            await service.create(TENANT, USER, { name: 'Card', mobile: 'N/A' });
+
+            expect(db.crmContact.create.mock.calls[0][0].data.mobile).toBe('N/A');
+            expect(db.crmContact.create.mock.calls[0][0].data.mobile_norm).toBeNull();
+        });
+
+        it('rejects a LinkedIn URL that matches linkedin_norm', async () => {
+            db.crmContact.findMany.mockResolvedValue([
+                {
+                    id: 'contact-9',
+                    linkedin_url: 'linkedin.com/in/jane-doe',
+                    linkedin_norm: 'linkedin.com/in/jane-doe',
+                },
+            ]);
+
+            await expect(
+                service.create(TENANT, USER, {
+                    name: 'Jane',
+                    linkedin_url: 'https://www.LinkedIn.com/in/Jane-Doe/?utm_source=x',
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+        });
+
+        it('rejects a LinkedIn URL that matches a raw profile whose linkedin_norm is null', async () => {
+            db.crmContact.findMany.mockResolvedValue([
+                {
+                    id: 'contact-9',
+                    linkedin_url: 'https://www.LinkedIn.com/in/Jane-Doe/',
+                    linkedin_norm: null,
+                },
+            ]);
+
+            await expect(
+                service.create(TENANT, USER, {
+                    name: 'Jane',
+                    linkedin_url: 'linkedin.com/in/jane-doe',
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(db.crmContact.create).not.toHaveBeenCalled();
+        });
     });
 
     describe('findAll', () => {
@@ -201,7 +382,7 @@ describe('CrmContactsService', () => {
 
             await service.update(TENANT, 'contact-1', { email: '' });
 
-            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({ email: null });
+            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({ email: null, email_norm: null });
         });
 
         it('leaves untouched fields out of the update payload', async () => {
@@ -209,7 +390,10 @@ describe('CrmContactsService', () => {
 
             await service.update(TENANT, 'contact-1', { email: 'new@example.com' });
 
-            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({ email: 'new@example.com' });
+            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({
+                email: 'new@example.com',
+                email_norm: 'new@example.com',
+            });
         });
 
         it('clears a field when the patch sends it empty', async () => {
@@ -217,7 +401,59 @@ describe('CrmContactsService', () => {
 
             await service.update(TENANT, 'contact-1', { company: '' });
 
-            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({ company: null });
+            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({
+                company: null,
+                organization_id: null,
+            });
+            expect(db.organization.delete).not.toHaveBeenCalled();
+            expect(db.crmContact.delete).not.toHaveBeenCalled();
+        });
+
+        it('does not change organization_id or email_norm when the patch omits them', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+
+            await service.update(TENANT, 'contact-1', { designation: 'Manager' });
+
+            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({ designation: 'Manager' });
+            expect(db.organization.findUnique).not.toHaveBeenCalled();
+            expect(db.organization.create).not.toHaveBeenCalled();
+        });
+
+        it('attaches an organization when an update sets a company', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+
+            await service.update(TENANT, 'contact-1', { company: ' Karim Traders ' });
+
+            expect(db.crmContact.update.mock.calls[0][0].data).toEqual({
+                company: 'Karim Traders',
+                organization_id: 'org-1',
+            });
+            expect(db.organization.delete).not.toHaveBeenCalled();
+        });
+
+        it('does not treat the contact being updated as its own normalized mobile', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+            db.crmContact.findUnique.mockResolvedValue(null);
+            db.crmContact.findMany.mockResolvedValue([
+                { id: 'contact-1', mobile: '+8801712345678', mobile_norm: '+8801712345678' },
+            ]);
+
+            await expect(
+                service.update(TENANT, 'contact-1', { mobile: '01712-345678' }),
+            ).resolves.toBeDefined();
+        });
+
+        it('rejects an update whose mobile normalizes to another contact', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+            db.crmContact.findUnique.mockResolvedValue(null);
+            db.crmContact.findMany.mockResolvedValue([
+                { id: 'contact-2', mobile: '+8801712345678', mobile_norm: null },
+            ]);
+
+            await expect(
+                service.update(TENANT, 'contact-1', { mobile: '01712-345678' }),
+            ).rejects.toThrow('A contact with this mobile number already exists.');
+            expect(db.crmContact.update).not.toHaveBeenCalled();
         });
 
         // The contact keeping its own number must not collide with itself.
