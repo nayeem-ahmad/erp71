@@ -1683,7 +1683,6 @@ A CRM-first tenant landed on `RetailDashboard` — sales, stock, top products �
 ---
 
 ## ROADMAP — Post-launch features
-- [ ] **CRM: a contact is the person, and many leads may share one email** — spec `docs/superpowers/specs/2026-10-22-crm-contact-identity-design.md`, plan `docs/superpowers/plans/2026-10-22-crm-contact-identity.md`. Backfill may only insert organizations and contacts and fill new nullable columns. It must not rewrite an existing lead, contact, or customer field. Added 2026-10-22.
 - [ ] **A metered send that the provider rejects still spends the credit.** Added 2026-10-15. SMS, WhatsApp and email all take the credit before calling the gateway (so a shop can never send more than it has paid for), and none refunds it when the gateway then fails. BulkSMSBD reachability from the VPS is confirmed (2026-10-21); a `REFUND` ledger entry on a definite provider rejection is still open.
 - [ ] **Translate the Messaging Credits page and Admin › Credit Top-ups.** Added 2026-10-15. Both are English-only, as the SMS Credits page they replaced was; the sidebar label, the admin sell-credits modal and the ledger event names are in all nine locales.
 - [ ] **Run `sync:nav-layout` for the new admin entry if a platform-admin layout has been saved.** Added 2026-10-15. `admin.tenant-management.credit-topups` is in both default layouts, but a saved layout is served verbatim: `npm run sync:nav-layout --workspace=@erp71/database -- admin.tenant-management.credit-topups`.
@@ -2092,6 +2091,8 @@ at the `ProjectAccessService` choke point. See `## COMPLETED` for what shipped.
 
 
 ## COMPLETED
+
+- [x] **CRM: a contact is the person, and many leads may share one email** — done 2026-10-23. On `crm-contact-identity`. A contact is the person, an organization is the company, and a lead is one deal. Backfill only inserts organizations and contacts and fills new nullable columns. Spec `docs/superpowers/specs/2026-10-22-crm-contact-identity-design.md`. Not clicked through in a browser: this session had no browser tools.
 
 - [x] **Task card files stay in step with the text** — done 2026-10-22. Attachments is the one list. An image pasted or inserted into the description or a comment is that same file, captioned “In the description”, “In a comment”, or both. Taking it out of the text and saving removes the file when nothing else still shows it; cancelling the edit, or leaving before the comment is sent, removes the upload too. A file added on the Attachments tab (button, drop, or paste) stays until it is removed there. Removing a file that the text still shows asks first, then takes it out of the description and any comment as well. The description and both comment boxes have an Insert image button besides paste. The new-task dialog still cannot take a paste — the task does not exist yet (open item above). Tests: RichTextEditor, task-image-refs, TaskDetailPanel (199). Not clicked through in a browser: the local API will not sign in (`User.platform_role` is missing from this database).
 
