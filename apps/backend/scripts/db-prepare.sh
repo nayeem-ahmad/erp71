@@ -353,6 +353,31 @@ step sync:crm-activities \
 step sync:lead-identity \
     npm run sync:lead-identity --workspace=@erp71/database
 
+# sync:contact-identity inserts or fills null columns only. It fills
+# CrmContact.mobile_norm, email_norm, and linkedin_norm where they are still
+# null, and it does not insert rows. A contested mobile or LinkedIn stays null
+# on every contact after the oldest; email_norm is filled wherever there is an
+# email. It must stay before sync:lead-contacts, which reads mobile_norm.
+# See prisma/sync-contact-identity.ts.
+step sync:contact-identity \
+    npm run sync:contact-identity --workspace=@erp71/database
+
+# sync:crm-organizations inserts or fills null columns only. It inserts
+# Organization rows and sets CrmContact.organization_id where that column is
+# still null. The company string is left as stored, and a name_norm that
+# already exists is not inserted again. It must stay before sync:lead-contacts,
+# which reads organization_id. See prisma/sync-crm-organizations.ts.
+step sync:crm-organizations \
+    npm run sync:crm-organizations --workspace=@erp71/database
+
+# sync:lead-contacts inserts or fills null columns only. It inserts a
+# CrmContact when a lead matches no contact by mobile or LinkedIn, and fills
+# null Lead.contact_id, Lead.organization_id, and CrmContact.customer_id. It
+# must stay after sync:contact-identity and sync:crm-organizations because it
+# reads mobile_norm and organization_id. See prisma/sync-lead-contacts.ts.
+step sync:lead-contacts \
+    npm run sync:lead-contacts --workspace=@erp71/database
+
 # sync:role-permissions is the same idea for the permission matrix:
 # ROLE_DEFAULT_PERMISSIONS is read only at tenant creation and role assignment,
 # so a permission added later reaches nobody who already exists — and the OWNER
