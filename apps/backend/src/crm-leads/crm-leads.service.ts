@@ -93,6 +93,8 @@ const leadIncludes = {
     // `is_system` lets a client tell a seeded stage it may translate from a
     // tenant-named one it must show verbatim; `lifecycle` drives its tone.
     statusOption: { select: { id: true, code: true, name: true, lifecycle: true, is_system: true } },
+    contact: { select: { id: true, name: true } },
+    organization: { select: { id: true, name: true } },
 } as const;
 
 // `category`/`source` sort through the relation so the list orders by the label

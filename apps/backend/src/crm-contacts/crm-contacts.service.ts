@@ -45,6 +45,7 @@ const attachmentIncludes = {
 const contactIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
     creator: { select: { id: true, name: true, email: true } },
+    organization: { select: { id: true, name: true } },
     attachments: {
         orderBy: { created_at: 'desc' },
         include: attachmentIncludes,

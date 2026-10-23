@@ -205,3 +205,48 @@ describe('LeadDetailPage — convert and delete', () => {
         expect(push).toHaveBeenCalledWith('/crm/leads');
     });
 });
+
+describe('LeadDetailPage — linked contact and organization', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('shows the lead email and links the contact name', async () => {
+        api.getLead.mockResolvedValue({
+            ...lead,
+            email: 'karim@shop.com',
+            contact: { id: 'contact-9', name: 'Karim Uddin' },
+        });
+        render(<LeadDetailPage />);
+
+        expect(await screen.findByText('karim@shop.com')).toBeInTheDocument();
+        const contactLink = screen.getByRole('link', { name: 'Karim Uddin' });
+        expect(contactLink).toHaveAttribute('href', '/crm/contacts/contact-9');
+    });
+
+    it('shows the organization name', async () => {
+        // The lead's own name is different, so "Karim Traders" can only come from the organization.
+        api.getLead.mockResolvedValue({
+            ...lead,
+            name: 'Shop enquiry',
+            organization: { id: 'org-1', name: 'Karim Traders' },
+        });
+        render(<LeadDetailPage />);
+
+        expect(await screen.findByText('Karim Traders')).toBeInTheDocument();
+    });
+
+    it('shows the lead email and no contact link when contact and organization are null', async () => {
+        api.getLead.mockResolvedValue({
+            ...lead,
+            email: 'karim@shop.com',
+            contact: null,
+            organization: null,
+        });
+        render(<LeadDetailPage />);
+
+        expect(await screen.findByText('karim@shop.com')).toBeInTheDocument();
+        const links = screen.queryAllByRole('link');
+        expect(links.some((link) => (link.getAttribute('href') ?? '').includes('/crm/contacts/'))).toBe(false);
+    });
+});

@@ -2438,4 +2438,20 @@ describe('CrmLeadsService', () => {
             expect(db.lead.update).not.toHaveBeenCalled();
         });
     });
+
+    describe('findOne', () => {
+        it('includes the linked contact and organization id and name', async () => {
+            db.lead.findFirst.mockResolvedValue({ id: 'lead-1' });
+
+            await service.findOne('tenant-1', 'lead-1');
+
+            expect(db.lead.findFirst).toHaveBeenCalledWith({
+                where: { id: 'lead-1', tenant_id: 'tenant-1' },
+                include: expect.objectContaining({
+                    contact: { select: { id: true, name: true } },
+                    organization: { select: { id: true, name: true } },
+                }),
+            });
+        });
+    });
 });

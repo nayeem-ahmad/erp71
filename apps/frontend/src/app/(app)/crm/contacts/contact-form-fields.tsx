@@ -166,6 +166,8 @@ type ContactFormFieldsProps = {
     onChange: (form: ContactFormState) => void;
     teamMembers?: TeamMember[];
     errors?: ContactFormErrors;
+    /** Linked organization, shown read-only. The payload still posts `company` only. */
+    organizationName?: string | null;
 };
 
 export function ContactFormFields({
@@ -173,6 +175,7 @@ export function ContactFormFields({
     onChange,
     teamMembers = [],
     errors = {},
+    organizationName = null,
 }: Readonly<ContactFormFieldsProps>) {
     const { t } = useI18n();
     const m = t.crm.contacts;
@@ -205,6 +208,11 @@ export function ContactFormFields({
             <Field label={m.fields.company}>
                 <Input value={form.company} onChange={(e) => set('company', e.target.value)} />
             </Field>
+            {organizationName ? (
+                <Field label={m.organization}>
+                    <p className="text-sm text-gray-900">{organizationName}</p>
+                </Field>
+            ) : null}
             <Field label={m.fields.designation}>
                 <Input value={form.designation} onChange={(e) => set('designation', e.target.value)} />
             </Field>

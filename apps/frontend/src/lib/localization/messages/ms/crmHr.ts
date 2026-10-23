@@ -351,6 +351,7 @@ export const crmHrMessages = {
                 nameRequired: 'Nama diperlukan.',
                 invalidEmail: 'Sila masukkan alamat e-mel yang sah.',
             },
+            organization: 'Organisasi',
             fields: {
                 name: 'Nama',
                 company: 'Syarikat',
@@ -587,6 +588,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: 'Hubungan',
+                linkedContact: 'Kenalan',
+                organization: 'Organisasi',
                 conversations: 'Perbualan',
                 logConversation: 'Log Perbualan',
                 aiDraft: 'Draf AI',

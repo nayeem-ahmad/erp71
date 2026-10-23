@@ -780,4 +780,19 @@ describe('CrmContactsService', () => {
             expect(assets.deleteFile).toHaveBeenCalledWith(OTHER_KEY);
         });
     });
+
+    describe('findOne', () => {
+        it('includes the organization id and name', async () => {
+            db.crmContact.findFirst.mockResolvedValue({ id: 'contact-1' });
+
+            await service.findOne(TENANT, 'contact-1');
+
+            expect(db.crmContact.findFirst).toHaveBeenCalledWith({
+                where: { id: 'contact-1', tenant_id: TENANT },
+                include: expect.objectContaining({
+                    organization: { select: { id: true, name: true } },
+                }),
+            });
+        });
+    });
 });

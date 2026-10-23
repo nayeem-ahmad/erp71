@@ -351,6 +351,7 @@ export const crmHrMessages = {
                 nameRequired: "Le nom est obligatoire.",
                 invalidEmail: "Veuillez saisir une adresse e-mail valide.",
             },
+            organization: "Organisation",
             fields: {
                 name: "Nom",
                 company: "Entreprise",
@@ -587,6 +588,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: "Contact",
+                linkedContact: "Interlocuteur",
+                organization: "Organisation",
                 conversations: "Échanges",
                 logConversation: "Consigner un échange",
                 aiDraft: "Brouillon IA",
