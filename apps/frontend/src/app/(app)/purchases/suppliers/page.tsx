@@ -4,16 +4,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
 import { Truck, Plus, Pencil, Trash2, Upload } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
-import { BranchFilter, Button, Field, Alert, Input, Select } from '@/components/ui';
+import { BranchFilter, Button, ConfirmDialog, Field, Alert, Select } from '@/components/ui';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 import { useServerList } from '@/hooks/useServerList';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useI18n } from '@/lib/i18n';
+import { toast } from '@/lib/toast';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 
 const IMPORT_FIELDS: ImportField[] = [
@@ -51,6 +53,7 @@ export default function SuppliersPage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     // Every supplier belongs to a branch; the list starts on all of them for
     // those who may see them all, as the customer list does.
@@ -155,12 +158,15 @@ export default function SuppliersPage() {
     };
 
     const handleDelete = async (id: string) => {
+        setDeleting(true);
         try {
             await api.deleteSupplier(id);
+            toast.success(t.common.deleted);
             void load();
-        } catch (err) {
-            console.error('Failed to delete supplier', err);
+        } catch (err: any) {
+            toast.error(err?.message || t.common.deleteFailed);
         } finally {
+            setDeleting(false);
             setDeleteId(null);
         }
     };
@@ -169,33 +175,24 @@ export default function SuppliersPage() {
         () => [
             columnHelper.accessor('supplier_code', {
                 header: t.suppliers.columns.code,
-                cell: (info) => (
-                    <span className="text-sm font-mono text-gray-500">{info.getValue() || '-'}</span>
-                ),
+                cell: (info) => info.getValue() || '-',
                 size: 120,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('name', {
                 header: t.suppliers.columns.supplier,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-900">{info.getValue()}</span>
-                ),
                 size: 220,
             }),
             columnHelper.accessor('phone', {
                 header: t.suppliers.columns.phone,
-                cell: (info) => (
-                    <span className="text-sm text-gray-600">{info.getValue() ?? '-'}</span>
-                ),
+                cell: (info) => info.getValue() ?? '-',
                 size: 150,
             }),
             ...(branch.canSeeAll && !branch.hidden
                 ? [columnHelper.accessor('store_id', {
                     id: 'branch',
                     header: t.common.branch,
-                    cell: (info) => (
-                        <span className="text-sm text-gray-600">{branchName.get(info.getValue()) ?? '—'}</span>
-                    ),
+                    cell: (info) => branchName.get(info.getValue()) ?? '—',
                     enableSorting: false,
                     meta: { hideOnMobile: true },
                     size: 140,
@@ -203,47 +200,36 @@ export default function SuppliersPage() {
                 : []),
             columnHelper.accessor('email', {
                 header: t.suppliers.columns.email,
-                cell: (info) => (
-                    <span className="text-sm text-gray-600">{info.getValue() ?? '-'}</span>
-                ),
+                cell: (info) => info.getValue() ?? '-',
                 size: 200,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('address', {
                 header: t.suppliers.columns.address,
-                cell: (info) => (
-                    <span className="text-sm text-gray-500 truncate max-w-xs block">{info.getValue() ?? '-'}</span>
-                ),
+                cell: (info) => <span className="block truncate">{info.getValue() ?? '-'}</span>,
                 size: 240,
+                meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('created_at', {
                 header: t.suppliers.columns.added,
                 // A timestamp: no typed text the server could match it against.
                 enableColumnFilter: false,
-                cell: (info) => (
-                    <span className="text-sm text-gray-500">{formatDate(info.getValue(), locale)}</span>
-                ),
+                cell: (info) => formatDate(info.getValue(), locale),
                 size: 130,
             }),
             columnHelper.display({
                 id: 'actions',
                 header: t.suppliers.columns.actions,
                 cell: (info) => (
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => openEdit(info.row.original)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={t.common.edit}
-                        >
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
+                    <RowActions>
+                        <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(info.row.original)} />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={t.common.delete}
+                            intent="danger"
                             onClick={() => setDeleteId(info.row.original.id)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title={t.common.delete}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                        />
+                    </RowActions>
                 ),
                 enableSorting: false,
                 enableResizing: false,
@@ -268,7 +254,7 @@ export default function SuppliersPage() {
                         <>
                             <BranchFilter scope={branch} />
                             <Button variant="secondary" onClick={() => { setImportBranch(branch.headerBranchId ?? ''); setImportOpen(true); }} icon={<Upload className="w-4 h-4" />}>
-                                Import
+                                {t.common.import}
                             </Button>
                             <Button onClick={openCreate} icon={<Plus className="w-4 h-4" />}>
                                 {t.suppliers.newSupplier}
@@ -276,15 +262,6 @@ export default function SuppliersPage() {
                         </>
                     )}
                 />
-
-                <div className="bg-white border border-gray-100 rounded-lg p-3">
-                    <Input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={t.suppliers.searchPlaceholder}
-                        className="max-w-xs"
-                    />
-                </div>
 
                 <DataTable<Supplier>
                     tableId="suppliers"
@@ -294,7 +271,9 @@ export default function SuppliersPage() {
                     isLoading={loading}
                     emptyMessage={t.suppliers.emptyMessage}
                     emptyIcon={<Truck className="w-16 h-16 text-gray-200" />}
-                    showSearch={false}
+                    searchPlaceholder={t.suppliers.searchPlaceholder}
+                    onSearchChange={setSearch}
+                    viewOptions
                     serverPagination={serverPagination}
                 />
 
@@ -405,24 +384,17 @@ export default function SuppliersPage() {
                 )}
             />
 
-            {deleteId && (
-                <ModalShell size="sm" onBackdropClick={() => setDeleteId(null)}>
-                    <ModalHeader title={t.suppliers.deleteTitle} onClose={() => setDeleteId(null)} />
-                    <div className="p-6">
-                        <p className="text-sm text-gray-500">
-                            {t.suppliers.deleteDescription}
-                        </p>
-                    </div>
-                    <ModalFooter>
-                        <Button variant="secondary" onClick={() => setDeleteId(null)}>
-                            {t.common.cancel}
-                        </Button>
-                        <Button variant="danger" onClick={() => handleDelete(deleteId)}>
-                            {t.common.delete}
-                        </Button>
-                    </ModalFooter>
-                </ModalShell>
-            )}
+            <ConfirmDialog
+                open={deleteId !== null}
+                title={t.suppliers.deleteTitle}
+                prompt={t.suppliers.deleteDescription}
+                confirmLabel={t.common.delete}
+                cancelLabel={t.common.cancel}
+                loading={deleting}
+                danger
+                onConfirm={() => { if (deleteId) void handleDelete(deleteId); }}
+                onCancel={() => { if (!deleting) setDeleteId(null); }}
+            />
         </PageShell>
     );
 }

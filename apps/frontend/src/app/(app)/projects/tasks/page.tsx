@@ -2,20 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Link2, Pencil, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import { Link2, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import {
     PageShell,
     PageHeader,
     Button,
-    Input,
-    Select,
     ConfirmDialog,
 } from '@/components/ui';
 import DataTable from '@/components/data-table/DataTable';
-import CreatedRangeFilter from '@/components/data-table/CreatedRangeFilter';
 import { createdAtColumn } from '@/components/data-table/created-at-column';
 import { createColumnHelper } from '@tanstack/react-table';
-import type { BulkAction } from '@/components/data-table';
+import type { BulkAction, ListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import { copyTaskLink } from '@/components/projects/task-link';
@@ -274,17 +272,10 @@ export default function TasksPage() {
         || Boolean(priority)
         || !isCreatedRangeEmpty(createdRange);
 
-    const clearFilters = () => {
-        setTyping(false);
-        setFilter('search', '');
-        // "Anyone", not the page's own default: clearing filters means showing
-        // everything, not narrowing back to the signed-in user.
-        setFilter('assignee', 'anyone');
-        setFilter('projectId', '');
-        setFilter('statusCategory', '');
-        setFilter('priority', '');
-        setFilter('createdRange', null);
-    };
+    const typeSearch = useCallback((next: string) => {
+        setTyping(true);
+        setFilter('search', next);
+    }, [setFilter]);
 
     // DataTable owns the selection; bumping this is how a caller clears it.
     const clearSelection = useCallback(() => setSelectionEpoch((epoch) => epoch + 1), []);
@@ -511,7 +502,7 @@ export default function TasksPage() {
             {
                 id: 'remaining',
                 header: m.overview.remaining,
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
                 // The figure, and where it has been. A column of bare numbers
                 // cannot tell a task converging from one stuck at 12h for a
                 // fortnight, which is the whole question somebody scanning this
@@ -553,40 +544,25 @@ export default function TasksPage() {
                 enableResizing: false,
                 size: 130,
                 cell: ({ row }: { row: { original: TaskRow } }) => (
-                    <div className="flex items-center justify-end gap-1">
-                        <button
-                            type="button"
-                            aria-label={t.common.edit}
-                            title={m.task.editTask}
-                            onClick={() => setOpenTaskId(row.original.id)}
-                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-blue-50"
-                        >
-                            <Pencil className="mx-auto h-4 w-4" />
-                        </button>
-                        <button
-                            type="button"
-                            aria-label={m.task.copyLink}
-                            title={m.task.copyLink}
+                    <RowActions>
+                        <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => setOpenTaskId(row.original.id)} />
+                        <RowActionButton
+                            icon={<Link2 />}
+                            label={m.task.copyLink}
                             onClick={() =>
                                 void copyTaskLink(
                                     { id: row.original.id, key: taskKeyOf(row.original.reference, row.original.project) },
                                     m.task,
                                 )
                             }
-                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-                        >
-                            <Link2 className="mx-auto h-4 w-4" />
-                        </button>
-                        <button
-                            type="button"
-                            aria-label={t.common.delete}
-                            title={m.task.deleteTask}
+                        />
+                        <RowActionButton
+                            icon={<Trash2 />}
+                            label={t.common.delete}
+                            intent="danger"
                             onClick={() => setPendingDelete(row.original)}
-                            className="min-h-touch min-w-touch rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-50"
-                        >
-                            <Trash2 className="mx-auto h-4 w-4" />
-                        </button>
-                    </div>
+                        />
+                    </RowActions>
                 ),
             },
         ],
@@ -596,6 +572,61 @@ export default function TasksPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [m, t.common.createdAt, t.common.delete, t.common.edit, busy, projectMeta],
     );
+
+    /**
+     * Page-owned: each goes to the server with the page query. The assignee's
+     * "All" is `anyone`, so Clear all widens to the whole workspace rather than
+     * narrowing back to the signed-in user, the page's own default.
+     */
+    const listFilters = useMemo<ListFilter[]>(() => [
+        ...(ownRecordsOnly
+            ? []
+            : [{
+                id: 'assignee',
+                type: 'select' as const,
+                label: m.fields.assignee,
+                value: assignee === 'anyone' ? null : assignee,
+                onChange: (next: string | null) => setFilter('assignee', next ?? 'anyone'),
+                options: [
+                    { value: 'me', label: m.tasks.mine },
+                    { value: 'unassigned', label: m.task.unassigned },
+                    ...assignees.map((person) => ({
+                        value: person.key,
+                        label: person.noLogin ? `${person.name} (${m.team.noLogin})` : person.name,
+                    })),
+                ],
+            }]),
+        {
+            id: 'project',
+            type: 'select',
+            label: m.fields.project,
+            value: projectId || null,
+            onChange: (next) => setFilter('projectId', next ?? ''),
+            options: projects.map((project) => ({ value: project.id, label: `${project.code} · ${project.name}` })),
+        },
+        {
+            id: 'statusCategory',
+            type: 'select',
+            label: m.fields.status,
+            value: statusCategory || null,
+            onChange: (next) => setFilter('statusCategory', next ?? ''),
+            options: (['TODO', 'IN_PROGRESS', 'DONE'] as const).map((key) => ({ value: key, label: m.statusCategory[key] })),
+        },
+        {
+            id: 'priority',
+            type: 'select',
+            label: m.fields.priority,
+            value: priority || null,
+            onChange: (next) => setFilter('priority', next ?? ''),
+            options: Object.entries(m.priority).map(([key, label]) => ({ value: key, label })),
+        },
+        {
+            id: 'created',
+            type: 'date-range',
+            value: createdRange,
+            onChange: (next) => setFilter('createdRange', next),
+        },
+    ], [m, ownRecordsOnly, assignee, assignees, projectId, projects, statusCategory, priority, createdRange, setFilter]);
 
     const bulkActions: BulkAction<TaskRow>[] = useMemo(
         () => [
@@ -647,86 +678,6 @@ export default function TasksPage() {
                 }
             />
 
-            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
-                <Input
-                    value={search}
-                    onChange={(e) => {
-                        setTyping(true);
-                        setFilter('search', e.target.value);
-                    }}
-                    placeholder={m.tasks.searchPlaceholder}
-                    className="md:max-w-xs"
-                />
-                {!ownRecordsOnly && (
-                    <Select
-                        value={assignee}
-                        onChange={(e) => setFilter('assignee', e.target.value)}
-                        aria-label={m.fields.assignee}
-                        className="md:w-52"
-                    >
-                        <option value="me">{m.tasks.mine}</option>
-                        <option value="anyone">{m.tasks.anyone}</option>
-                        <option value="unassigned">{m.task.unassigned}</option>
-                        {assignees.length > 0 && (
-                            <optgroup label={m.fields.assignee}>
-                                {assignees.map((person) => (
-                                    <option key={person.key} value={person.key}>
-                                        {person.noLogin ? `${person.name} (${m.team.noLogin})` : person.name}
-                                    </option>
-                                ))}
-                            </optgroup>
-                        )}
-                    </Select>
-                )}
-                <Select
-                    value={projectId}
-                    onChange={(e) => setFilter('projectId', e.target.value)}
-                    aria-label={m.fields.project}
-                    className="md:w-52"
-                >
-                    <option value="">{m.tasks.allProjects}</option>
-                    {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                            {project.code} · {project.name}
-                        </option>
-                    ))}
-                </Select>
-                <Select
-                    value={statusCategory}
-                    onChange={(e) => setFilter('statusCategory', e.target.value)}
-                    aria-label={m.fields.status}
-                    className="md:w-44"
-                >
-                    <option value="">{m.tasks.anyStatus}</option>
-                    <option value="TODO">{m.statusCategory.TODO}</option>
-                    <option value="IN_PROGRESS">{m.statusCategory.IN_PROGRESS}</option>
-                    <option value="DONE">{m.statusCategory.DONE}</option>
-                </Select>
-                <Select
-                    value={priority}
-                    onChange={(e) => setFilter('priority', e.target.value)}
-                    aria-label={m.fields.priority}
-                    className="md:w-44"
-                >
-                    <option value="">{m.tasks.anyPriority}</option>
-                    {Object.entries(m.priority).map(([key, label]) => (
-                        <option key={key} value={key}>
-                            {label}
-                        </option>
-                    ))}
-                </Select>
-                <CreatedRangeFilter
-                    value={createdRange}
-                    onChange={(next) => setFilter('createdRange', next)}
-                />
-                {filtered && (
-                    <Button variant="ghost" className="min-h-touch" onClick={clearFilters}>
-                        <X className="h-4 w-4" />
-                        {t.common.clearAll}
-                    </Button>
-                )}
-            </div>
-
             <TaskQuickAdd
                 projects={projects}
                 projectId={quickProject || presetProject}
@@ -762,9 +713,12 @@ export default function TasksPage() {
                 data={items}
                 isLoading={loading}
                 serverPagination={serverPagination}
-                // The search above queries the server; the built-in one would only
-                // sift the page already fetched, which reads as the same control.
-                showSearch={false}
+                // The table's box searches the server; a remembered term shows in it.
+                searchPlaceholder={m.tasks.searchPlaceholder}
+                onSearchChange={typeSearch}
+                searchValue={search}
+                filters={listFilters}
+                viewOptions
                 enableRowSelection
                 getRowId={(row) => row.id}
                 clearSelectionSignal={selectionEpoch}

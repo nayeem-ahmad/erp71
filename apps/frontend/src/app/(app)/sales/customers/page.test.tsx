@@ -1,5 +1,5 @@
 'use client';
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CustomersPage from './page';
 import { formatBDT } from '@/lib/format';
 import { mockBranchScope } from '@/test-utils/branch-scope';
@@ -102,6 +102,50 @@ describe('CustomersPage — Customer Management', () => {
                 expect.objectContaining({ page: 1, filters: { customer_code: 'CUST-9' } }),
             ),
         );
+    });
+
+    it('filters by segment and type from the table toolbar, on the server', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Segment' }), { target: { value: 'At-Risk' } });
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, segment: 'At-Risk' }),
+            ),
+        );
+
+        fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'ORGANIZATION' } });
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, segment: 'At-Risk', customerType: 'ORGANIZATION' }),
+            ),
+        );
+    });
+
+    it('searches the server from the table toolbar box', async () => {
+        const { api } = require('@/lib/api');
+        render(<CustomersPage />);
+        await screen.findByText('Alice Smith');
+
+        expect(screen.getAllByPlaceholderText(/search by code, customer/i)).toHaveLength(1);
+        fireEvent.change(screen.getByPlaceholderText(/search by code, customer/i), { target: { value: 'alice' } });
+
+        await waitFor(() =>
+            expect(api.getCustomersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, search: 'alice' }),
+            ),
+        );
+    });
+
+    it('offers the list view options and right-aligns the money', async () => {
+        render(<CustomersPage />);
+        const row = (await screen.findByText('Alice Smith')).closest('tr')!;
+
+        expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
+        expect(within(row).getByText(formatBDT(250)).closest('td')).toHaveClass('text-end');
+        expect(within(row).getByText(formatBDT(1500)).closest('td')).toHaveClass('text-end');
     });
 
     it('renders the Customers page heading', async () => {
