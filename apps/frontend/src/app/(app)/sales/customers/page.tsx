@@ -6,14 +6,14 @@ import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import CustomerFormModal from './CustomerFormModal';
-import Link from 'next/link';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton } from '@/components/table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
-import { BranchFilter, PageShell, Button, Input, Field, Select } from '@/components/ui';
+import { BranchFilter, PageShell, Button, Field, Select, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { useServerList } from '@/hooks/useServerList';
 import { useBranchForbiddenReset, useBranchScope } from '@/lib/branch-scope';
 
@@ -66,12 +66,12 @@ interface SegmentStats {
     breakdown: SegmentBreakdown[];
 }
 
-const segmentColors: Record<string, string> = {
-    VIP: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'AT-RISK': 'bg-danger-light text-danger-text border-red-200',
-    'At-Risk': 'bg-danger-light text-danger-text border-red-200',
-    NEW: 'bg-blue-50 text-blue-700 border-blue-200',
-    LOYAL: 'bg-amber-50 text-amber-700 border-amber-200',
+const segmentTones: Record<string, StatusBadgeTone> = {
+    VIP: 'success',
+    'AT-RISK': 'danger',
+    'At-Risk': 'danger',
+    NEW: 'info',
+    LOYAL: 'warning',
 };
 
 const columnHelper = createColumnHelper<Customer>();
@@ -84,8 +84,6 @@ export default function CustomersPage() {
     const [importBranch, setImportBranch] = useState('');
     const [segmentStats, setSegmentStats] = useState<SegmentStats | null>(null);
     const [runningSegmentation, setRunningSegmentation] = useState(false);
-    const [evaluating, setEvaluating] = useState(false);
-    const [evalMessage, setEvalMessage] = useState('');
     // The tenant admin's Sales Settings switch: adds each customer's credit
     // limit under their due. Off until it reads true, so the limit never
     // flashes in for a shop that has it off.
@@ -118,8 +116,8 @@ export default function CustomersPage() {
 
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [segment, setSegment] = useState('');
-    const [customerType, setCustomerType] = useState('');
+    const [segment, setSegment] = useState<string | null>(null);
+    const [customerType, setCustomerType] = useState<string | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     useEffect(() => {
@@ -199,27 +197,11 @@ export default function CustomersPage() {
         await loadCustomers();
     };
 
-    const handleEvaluateSegments = async () => {
-        setEvaluating(true);
-        setEvalMessage('');
-        try {
-            const result = await api.evaluateCustomerSegments();
-            setEvalMessage(formatMessage(t.customers.segmentationComplete, { count: String(result.updated) }));
-            await loadCustomers();
-        } catch (error: any) {
-            setEvalMessage(error.message || t.customers.evaluateFailed);
-        } finally {
-            setEvaluating(false);
-        }
-    };
-
     const columns: ColumnDef<Customer, any>[] = useMemo(
         () => [
             columnHelper.accessor('customer_code', {
                 header: t.customers.columns.code,
-                cell: (info) => (
-                    <span className="text-sm font-mono text-gray-500">{info.getValue() || '-'}</span>
-                ),
+                cell: (info) => info.getValue() || '-',
                 size: 120,
                 meta: { hideOnMobile: true },
             }),
@@ -228,36 +210,27 @@ export default function CustomersPage() {
                 cell: (info) => {
                     const customer = info.row.original;
                     return (
-                        <div>
-                            <span className="block text-sm font-bold text-gray-900">{customer.name}</span>
-                            {customer.phone && <span className="block text-xs text-gray-400">{customer.phone}</span>}
-                        </div>
+                        <>
+                            <span className="block">{customer.name}</span>
+                            {customer.phone && <span className="block text-gray-500">{customer.phone}</span>}
+                        </>
                     );
                 },
                 size: 190,
             }),
             columnHelper.accessor('owner_name', {
                 header: t.customers.columns.ownerName,
-                cell: (info) => (
-                    <span className="text-sm font-medium text-gray-700">{info.getValue() || '-'}</span>
-                ),
+                cell: (info) => info.getValue() || '-',
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('customer_type', {
                 header: t.customers.columns.type,
+                // The toolbar select sends an exact type.
+                enableColumnFilter: false,
                 cell: (info) => {
                     const type = info.getValue() || 'INDIVIDUAL';
-                    const classes =
-                        type === 'ORGANIZATION'
-                            ? 'bg-primary-light text-blue-700 border-primary-border'
-                            : 'bg-gray-50 text-gray-700 border-gray-200';
-
-                    return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${classes}`}>
-                            {type}
-                        </span>
-                    );
+                    return <StatusBadge tone={type === 'ORGANIZATION' ? 'info' : 'neutral'}>{type}</StatusBadge>;
                 },
                 size: 120,
                 meta: { hideOnMobile: true },
@@ -265,30 +238,23 @@ export default function CustomersPage() {
             columnHelper.accessor((row) => row.customerGroup?.name ?? '', {
                 id: 'group',
                 header: t.customers.columns.group,
-                cell: (info) => (
-                    <span className="text-sm font-medium text-gray-700">{info.getValue() || '-'}</span>
-                ),
+                cell: (info) => info.getValue() || '-',
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row.territory?.name ?? '', {
                 id: 'territory',
                 header: t.customers.columns.territory,
-                cell: (info) => (
-                    <span className="text-sm font-medium text-gray-700">{info.getValue() || '-'}</span>
-                ),
+                cell: (info) => info.getValue() || '-',
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('total_spent', {
                 header: t.customers.columns.totalSpent,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-blue-600">
-                        {formatBDT(Number(info.getValue() || 0))}
-                    </span>
-                ),
+                cell: (info) => formatBDT(Number(info.getValue() || 0), { locale }),
                 sortingFn: (a, b) => Number(a.getValue('total_spent') || 0) - Number(b.getValue('total_spent') || 0),
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('due_balance', {
                 header: t.customers.columns.due,
@@ -296,41 +262,34 @@ export default function CustomersPage() {
                     const due = Number(info.getValue() || 0);
                     const limit = info.row.original.credit_limit;
                     return (
-                        <div className="text-sm">
-                            <span className={due > 0 ? 'font-semibold text-amber-700' : 'text-gray-500'}>{formatBDT(due)}</span>
+                        <>
+                            <span className={`block ${due > 0 ? 'text-amber-700' : 'text-gray-500'}`}>{formatBDT(due, { locale })}</span>
                             {showCredit && limit != null ? (
-                                <span className="block text-xs text-gray-400">/ {formatBDT(Number(limit))}</span>
+                                <span className="block text-gray-400">/ {formatBDT(Number(limit), { locale })}</span>
                             ) : null}
-                        </div>
+                        </>
                     );
                 },
                 sortingFn: (a, b) => Number(a.original.due_balance || 0) - Number(b.original.due_balance || 0),
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor('loyalty_points', {
                 header: t.customers.columns.points,
                 cell: (info) => {
                     const pts = info.getValue();
-                    if (pts == null) return <span className="text-sm text-gray-400">—</span>;
-                    return (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-xs font-bold text-purple-700">
-                            {Number(pts).toLocaleString()} {t.customers.columns.pointsSuffix}
-                        </span>
-                    );
+                    if (pts == null) return <span className="text-gray-400">—</span>;
+                    return `${Number(pts).toLocaleString()} ${t.customers.columns.pointsSuffix}`;
                 },
                 sortingFn: (a, b) => Number(a.getValue('loyalty_points') || 0) - Number(b.getValue('loyalty_points') || 0),
                 size: 110,
-                meta: { hideOnMobile: true },
+                meta: { hideOnMobile: true, align: 'end' },
             }),
             columnHelper.accessor('segment_category', {
                 header: t.customers.columns.segment,
                 cell: (info) => {
                     const segment = info.getValue() || 'GENERAL';
-                    return (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border ${segmentColors[segment] ?? 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-                            {segment}
-                        </span>
-                    );
+                    return <StatusBadge tone={segmentTones[segment] ?? 'neutral'}>{segment}</StatusBadge>;
                 },
                 size: 130,
                 meta: { hideOnMobile: true },
@@ -340,25 +299,10 @@ export default function CustomersPage() {
                 id: 'actions',
                 header: t.common.actions,
                 cell: (info) => (
-                    <div className="flex items-center justify-end space-x-1 rtl:space-x-reverse">
-                        <Link
-                            href={`/sales/customers/${info.row.original.id}`}
-                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={t.common.view}
-                            aria-label={t.common.view}
-                        >
-                            <Eye className="w-4 h-4" />
-                        </Link>
-                        <button
-                            type="button"
-                            onClick={() => openEdit(info.row.original)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title={t.common.edit}
-                            aria-label={t.common.edit}
-                        >
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <RowActions>
+                        <RowActionButton icon={<Eye />} label={t.common.view} href={`/sales/customers/${info.row.original.id}`} />
+                        <RowActionButton icon={<Pencil />} label={t.common.edit} onClick={() => openEdit(info.row.original)} />
+                    </RowActions>
                 ),
                 enableSorting: false,
                 enableColumnFilter: false,
@@ -369,26 +313,36 @@ export default function CustomersPage() {
         [t, locale, showCredit],
     );
 
-    // Server-side equivalents of the old client-side presets: filtering the loaded rows
-    // would only ever narrow the current page, hiding matches on every other page.
-    const activePreset = segment === 'VIP' ? 'vip'
-        : segment === 'At-Risk' ? 'atRisk'
-        : customerType === 'ORGANIZATION' ? 'organizations'
-        : '';
-    const filterPresets = useMemo(
+    // Page-owned: each goes to the server with the page query. Filtering the
+    // loaded rows would only ever narrow the current page.
+    const filters = useMemo<ListFilter[]>(
         () => [
-            { key: 'vip', label: t.customers.filters.vip, segment: 'VIP', customerType: '' },
-            { key: 'atRisk', label: t.customers.filters.atRisk, segment: 'At-Risk', customerType: '' },
-            { key: 'organizations', label: t.customers.filters.organizations, segment: '', customerType: 'ORGANIZATION' },
+            {
+                id: 'segment',
+                type: 'select',
+                label: t.customers.columns.segment,
+                value: segment,
+                onChange: setSegment,
+                options: [
+                    { value: 'VIP', label: t.customers.filters.vip },
+                    { value: 'At-Risk', label: t.customers.filters.atRisk },
+                ],
+            },
+            {
+                id: 'customerType',
+                type: 'select',
+                label: t.customers.columns.type,
+                value: customerType,
+                onChange: setCustomerType,
+                options: [
+                    { value: 'INDIVIDUAL', label: t.customers.modal.individual },
+                    { value: 'ORGANIZATION', label: t.customers.modal.organization },
+                ],
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange },
         ],
-        [t],
+        [t, segment, customerType, createdRange],
     );
-
-    const applyPreset = (preset: { key: string; segment: string; customerType: string }) => {
-        const clearing = activePreset === preset.key;
-        setSegment(clearing ? '' : preset.segment);
-        setCustomerType(clearing ? '' : preset.customerType);
-    };
 
     return (
         <PageShell>
@@ -404,22 +358,24 @@ export default function CustomersPage() {
                     actions={
                         <>
                             <BranchFilter scope={branch} />
-                            <button
+                            <Button
+                                type="button"
+                                variant="secondary"
                                 onClick={handleRunSegmentation}
                                 disabled={runningSegmentation}
-                                className="flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
                                 title={t.customers.runSegmentationTitle}
+                                icon={<RefreshCw className={`w-4 h-4 ${runningSegmentation ? 'animate-spin' : ''}`} />}
                             >
-                                <RefreshCw className={`w-4 h-4 me-2 ${runningSegmentation ? 'animate-spin' : ''}`} />
                                 {runningSegmentation ? t.customers.running : t.customers.runSegmentation}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
                                 onClick={() => { setImportBranch(branch.headerBranchId ?? ''); setImportOpen(true); }}
-                                className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-all hover:border-blue-300 hover:text-blue-700"
+                                icon={<Upload className="w-4 h-4" />}
                             >
-                                <Upload className="w-4 h-4 me-1.5" />
-                                Import
-                            </button>
+                                {t.common.import}
+                            </Button>
                             <Button type="button" variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>
                                 {t.customers.newCustomer}
                             </Button>
@@ -481,34 +437,6 @@ export default function CustomersPage() {
                     )}
                     onSuccess={() => void loadCustomers()}
                 />
-                {evalMessage && (
-                    <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700">{evalMessage}</div>
-                )}
-
-                <div className="bg-white border border-gray-100 rounded-lg p-3 flex flex-wrap gap-2 items-center">
-                    <Input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={t.customers.searchPlaceholder}
-                        className="max-w-xs"
-                    />
-                    <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                    {filterPresets.map((preset) => (
-                        <button
-                            key={preset.key}
-                            type="button"
-                            onClick={() => applyPreset(preset)}
-                            className={`min-h-touch px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                                activePreset === preset.key
-                                    ? 'bg-blue-600 text-white border-blue-600'
-                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                            }`}
-                        >
-                            {preset.label}
-                        </button>
-                    ))}
-                </div>
-
                 <DataTable<Customer>
                     tableId="customers"
                     columns={columns}
@@ -517,7 +445,10 @@ export default function CustomersPage() {
                     isLoading={loading}
                     emptyMessage={t.customers.emptyMessage}
                     emptyIcon={<Users className="w-16 h-16 text-gray-200" />}
-                    showSearch={false}
+                    searchPlaceholder={t.customers.searchPlaceholder}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    viewOptions
                     serverPagination={serverPagination}
                 />
             

@@ -66,6 +66,42 @@ describe('SuppliersPage', () => {
         );
     });
 
+    it('searches the server from the table toolbar box, with the list view options beside it', async () => {
+        const { api } = require('@/lib/api');
+        render(<SuppliersPage />);
+        await waitFor(() => expect(api.getSuppliersPaged).toHaveBeenCalled());
+
+        expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
+        expect(screen.getAllByPlaceholderText(/search/i)).toHaveLength(1);
+        fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: 'dhaka' } });
+
+        await waitFor(() =>
+            expect(api.getSuppliersPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, search: 'dhaka' }),
+            ),
+        );
+    });
+
+    it('asks in a dialog before deleting a supplier', async () => {
+        const { api } = require('@/lib/api');
+        api.getSuppliersPaged.mockResolvedValue({
+            items: [{ id: 'sup-1', name: 'Fresh Farms', store_id: 'store-1', created_at: '2026-01-01T00:00:00Z' }],
+            total: 1,
+            page: 1,
+            limit: 20,
+            pages: 1,
+        });
+        api.deleteSupplier.mockResolvedValue({});
+        render(<SuppliersPage />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+        expect(api.deleteSupplier).not.toHaveBeenCalled();
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(api.deleteSupplier).toHaveBeenCalledWith('sup-1'));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
     it('renders the page heading', async () => {
         const { api } = require('@/lib/api');
         api.getSuppliersPaged.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pages: 1 });

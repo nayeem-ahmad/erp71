@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import InventoryPage from './page';
 import { removeWorkspaceItem } from '@/lib/session-store';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
@@ -28,6 +28,16 @@ jest.mock('next/navigation', () => ({
     useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
     usePathname: () => '/inventory/products',
     useSearchParams: () => ({ get: jest.fn() }),
+}));
+
+const toastSuccess = jest.fn();
+const toastError = jest.fn();
+jest.mock('@/lib/toast', () => ({
+    toast: {
+        success: (...args: unknown[]) => toastSuccess(...args),
+        error: (...args: unknown[]) => toastError(...args),
+        info: jest.fn(),
+    },
 }));
 
 jest.mock('@/lib/use-tenant-plan-features', () => ({
@@ -102,22 +112,20 @@ jest.mock('../MergeProductModal', () => ({
         ) : null,
 }));
 
+// What the page hands the table — its toolbar filters, search, View options.
+let mockTableProps: any = null;
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({
-        title,
-        emptyMessage,
-        isLoading,
-        data,
-        columns = [],
-        serverPagination,
-    }: {
+    DataTable: (props: {
         title: string;
         emptyMessage: string;
         isLoading: boolean;
         data: any[];
         columns?: any[];
         serverPagination?: { onColumnFiltersChange?: (filters: { id: string; value: string }[]) => void };
-    }) => (
+    }) => {
+        mockTableProps = props;
+        const { title, emptyMessage, isLoading, data, columns = [], serverPagination } = props;
+        return (
         <div>
             <div data-testid="data-table-title">{title}</div>
             {serverPagination?.onColumnFiltersChange && (
@@ -138,10 +146,13 @@ jest.mock('@/components/data-table', () => ({
                 ))}
             </div>
         </div>
-    ),
+        );
+    },
     createdAtColumn: () => ({ id: 'created_at', header: 'Created' }),
-    CreatedRangeFilter: () => <div data-testid="created-range-filter" />,
 }));
+
+/** A toolbar filter the page handed the table, by id. */
+const tableFilter = (id: string) => mockTableProps.filters.find((filter: { id: string }) => filter.id === id);
 
 jest.mock('@/components/ProductImage', () => ({
     __esModule: true,
@@ -277,27 +288,93 @@ describe('InventoryPage', () => {
         expect(screen.getByTestId('add-product-modal-create')).toBeInTheDocument();
     });
 
-    it('renders group filter dropdown', async () => {
+    it('puts the status, group, subgroup, uncategorized and created filters in the table toolbar', async () => {
         render(<InventoryPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Group Filter')).toBeInTheDocument();
-            expect(screen.getByText('All Groups')).toBeInTheDocument();
-        });
+        await screen.findByTestId('data-table-title');
+
+        expect(mockTableProps.filters.map((filter: { id: string }) => filter.id)).toEqual([
+            'stockStatus', 'group', 'subgroup', 'uncategorized', 'created',
+        ]);
+        expect(tableFilter('uncategorized')).toEqual(expect.objectContaining({
+            type: 'toggle',
+            label: 'Show only uncategorized',
+        }));
+        expect(mockTableProps.viewOptions).toBe(true);
+        expect(mockTableProps.showSearch).toBeUndefined();
     });
 
-    it('renders subgroup filter dropdown', async () => {
+    it('sends a toolbar filter to the server, from page 1', async () => {
+        const { api } = require('@/lib/api');
         render(<InventoryPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Subgroup Filter')).toBeInTheDocument();
-            expect(screen.getByText('All Subgroups')).toBeInTheDocument();
-        });
+        await screen.findByTestId('data-table-title');
+
+        act(() => tableFilter('stockStatus').onChange('LOW'));
+
+        await waitFor(() =>
+            expect(api.getProductsPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, stockStatus: 'LOW' }),
+            ),
+        );
     });
 
-    it('renders uncategorized checkbox', async () => {
+    it('searches the server from the table box', async () => {
+        const { api } = require('@/lib/api');
         render(<InventoryPage />);
-        await waitFor(() => {
-            expect(screen.getByLabelText(/show only uncategorized/i)).toBeInTheDocument();
-        });
+        await screen.findByTestId('data-table-title');
+
+        act(() => mockTableProps.onSearchChange('rice'));
+
+        await waitFor(() =>
+            expect(api.getProductsPaged).toHaveBeenLastCalledWith(
+                expect.objectContaining({ page: 1, search: 'rice' }),
+            ),
+        );
+    });
+
+    it('lets "uncategorized" and a group release each other', async () => {
+        render(<InventoryPage />);
+        await waitFor(() => expect(tableFilter('group').options).toEqual([{ value: 'grp-1', label: 'Electronics' }]));
+
+        act(() => tableFilter('group').onChange('grp-1'));
+        act(() => tableFilter('uncategorized').onChange(true));
+        expect(tableFilter('group').value).toBeNull();
+        expect(tableFilter('uncategorized').pressed).toBe(true);
+
+        act(() => tableFilter('group').onChange('grp-1'));
+        expect(tableFilter('uncategorized').pressed).toBe(false);
+    });
+
+    it('right-aligns the price, the stock and its value', async () => {
+        render(<InventoryPage />);
+        await screen.findByTestId('data-table-title');
+
+        const align = (id: string) =>
+            mockTableProps.columns.find((column: any) => (column.id ?? column.accessorKey) === id)?.meta?.align;
+        expect(align('price')).toBe('end');
+        expect(align('stock')).toBe('end');
+        expect(align('stock_value')).toBe('end');
+    });
+
+    it('asks in a dialog before deleting a product, then toasts', async () => {
+        const { api } = require('@/lib/api');
+        api.deleteProduct.mockResolvedValue(undefined);
+        const confirmSpy = jest.spyOn(window, 'confirm').mockImplementation(() => true);
+        try {
+            render(<InventoryPage />);
+            await waitFor(() => expect(screen.getByTestId('row-count')).toHaveTextContent('2'));
+
+            fireEvent.click(screen.getAllByTitle('Delete')[0]);
+            expect(confirmSpy).not.toHaveBeenCalled();
+            expect(api.deleteProduct).not.toHaveBeenCalled();
+
+            fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+
+            await waitFor(() => expect(api.deleteProduct).toHaveBeenCalledWith('prod-1'));
+            await waitFor(() => expect(screen.getByTestId('row-count')).toHaveTextContent('1'));
+            expect(toastSuccess).toHaveBeenCalled();
+        } finally {
+            confirmSpy.mockRestore();
+        }
     });
 
     it('renders DataTable with loaded products', async () => {
@@ -328,8 +405,9 @@ describe('InventoryPage', () => {
     it('populates group filter options from API', async () => {
         render(<InventoryPage />);
         await waitFor(() => {
-            expect(screen.getByText('Electronics')).toBeInTheDocument();
+            expect(tableFilter('group').options).toEqual([{ value: 'grp-1', label: 'Electronics' }]);
         });
+        expect(tableFilter('subgroup').options).toEqual([{ value: 'sub-1', label: 'Gadgets' }]);
     });
 
     it('hides Merge into… for a cashier who only has EDIT_PRODUCTS', async () => {
@@ -370,7 +448,7 @@ describe('InventoryPage', () => {
         await waitFor(() => {
             expect(screen.getByTestId('row-count')).toHaveTextContent('1');
         });
-        expect(screen.getByText('Merged into Widget B')).toBeInTheDocument();
+        expect(toastSuccess).toHaveBeenCalledWith('Merged into Widget B');
     });
 
     it('opens Merge into… from the edit modal for an owner', async () => {

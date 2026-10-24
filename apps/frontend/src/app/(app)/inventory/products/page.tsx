@@ -11,14 +11,15 @@ import AddProductModal from '../AddProductModal';
 import MergeProductModal from '../MergeProductModal';
 import ProductRowActions from './ProductRowActions';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable, createdAtColumn, CreatedRangeFilter } from '@/components/data-table';
+import { DataTable, createdAtColumn, type ListFilter } from '@/components/data-table';
 import { applyCreatedRangeQuery, type CreatedRange } from '@/lib/created-range';
 import ProductImage from '@/components/ProductImage';
 import PageShell from '@/components/ui/compact/PageShell';
 import PageHeader from '@/components/ui/compact/PageHeader';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, ConfirmDialog, StatusBadge, type StatusBadgeTone } from '@/components/ui';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import { useServerList } from '@/hooks/useServerList';
+import { toast } from '@/lib/toast';
 
 interface Product {
     id: string;
@@ -42,13 +43,22 @@ interface Product {
 
 const columnHelper = createColumnHelper<Product>();
 
+type StockStatus = 'IN' | 'LOW' | 'OUT';
+
+const stockTones: Record<StockStatus, StatusBadgeTone> = {
+    IN: 'success',
+    LOW: 'warning',
+    OUT: 'danger',
+};
+
 export default function InventoryPage() {
     const { t, locale, fmt } = useI18n();
     const { role, permissions } = useTenantPlanFeatures();
     const canMerge = isOwner(role) || hasPermission(permissions, 'MANAGE_USERS');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [importStatus, setImportStatus] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const csvInputRef = useRef<HTMLInputElement>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -60,7 +70,7 @@ export default function InventoryPage() {
     const [showUncategorized, setShowUncategorized] = useState(false);
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [stockStatus, setStockStatus] = useState('');
+    const [stockStatus, setStockStatus] = useState<string | null>(null);
     const [createdRange, setCreatedRange] = useState<CreatedRange | null>(null);
 
     // Debounce typing so each keystroke doesn't fire a query
@@ -128,14 +138,18 @@ export default function InventoryPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!window.confirm(t.inventory.deleteConfirm)) return;
-
+    const confirmDelete = async () => {
+        if (!pendingDelete) return;
+        setDeleting(true);
         try {
-            await api.deleteProduct(id);
-            setProducts((prev) => prev.filter((product) => product.id !== id));
+            await api.deleteProduct(pendingDelete.id);
+            setProducts((prev) => prev.filter((product) => product.id !== pendingDelete.id));
+            setPendingDelete(null);
+            toast.success(t.common.deleted);
         } catch (error: any) {
-            alert(error.message || t.inventory.deleteFailed);
+            toast.error(error?.message || t.inventory.deleteFailed);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -151,7 +165,7 @@ export default function InventoryPage() {
     const handleMerged = (result: { targetId: string; targetName: string }) => {
         const keeperName =
             result.targetName || products.find((product) => product.id === result.targetId)?.name || '';
-        setImportStatus(fmt(t.inventory.merge.success, { name: keeperName }));
+        toast.success(fmt(t.inventory.merge.success, { name: keeperName }));
         setMergeSource(null);
         void loadProducts();
     };
@@ -164,7 +178,6 @@ export default function InventoryPage() {
         e.target.value = '';
 
         setIsImporting(true);
-        setImportStatus(null);
 
         try {
             const formData = new FormData();
@@ -180,10 +193,12 @@ export default function InventoryPage() {
             const errorPart = result.errors?.length
                 ? ` ${fmt(t.inventory.importSummaryErrors, { count: result.errors.length })}`
                 : '';
-            setImportStatus(`${imported}, ${skipped}${errorPart}.`);
+            const summary = `${imported}, ${skipped}${errorPart}.`;
+            if (result.errors?.length) toast.info(summary);
+            else toast.success(summary);
             await loadProducts();
         } catch (error: any) {
-            setImportStatus(`${t.inventory.importFailed}${error?.message ?? t.common.error}`);
+            toast.error(`${t.inventory.importFailed}${error?.message ?? t.common.error}`);
         } finally {
             setIsImporting(false);
         }
@@ -196,15 +211,15 @@ export default function InventoryPage() {
                 cell: (info) => {
                     const product = info.row.original;
                     return (
-                        <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                            <div className="w-9 h-9 rounded-xl bg-gray-100 relative overflow-hidden flex items-center justify-center text-[10px] font-bold text-gray-500 uppercase">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 shrink-0 rounded-md bg-gray-100 relative overflow-hidden flex items-center justify-center text-[10px] font-semibold text-gray-500 uppercase">
                                 {product.image_url ? (
                                     <ProductImage src={product.image_url} alt={product.name} fallbackClassName="w-full h-full flex items-center justify-center" />
                                 ) : (
                                     product.name.slice(0, 2)
                                 )}
                             </div>
-                            <span className="text-sm font-bold text-gray-900">{product.name}</span>
+                            <span className="truncate">{product.name}</span>
                         </div>
                     );
                 },
@@ -212,21 +227,16 @@ export default function InventoryPage() {
             }),
             columnHelper.accessor('sku', {
                 header: t.inventory.columns.sku,
-                cell: (info) => (
-                    <span className="text-sm font-mono text-gray-500">{info.getValue() || '-'}</span>
-                ),
+                cell: (info) => info.getValue() || '-',
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor('price', {
                 header: t.inventory.columns.price,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-blue-600">
-                        {formatBDT(Number(info.getValue() || 0))}
-                    </span>
-                ),
+                cell: (info) => formatBDT(Number(info.getValue() || 0), { locale }),
                 sortingFn: (a, b) => Number(a.getValue('price') || 0) - Number(b.getValue('price') || 0),
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor(
                 (row) =>
@@ -238,7 +248,6 @@ export default function InventoryPage() {
                 header: t.inventory.columns.warranty,
                 // A label built from two fields, not one the server could match.
                 enableColumnFilter: false,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
                 size: 120,
                 meta: { hideOnMobile: true },
             }),
@@ -246,13 +255,11 @@ export default function InventoryPage() {
                 id: 'stock',
                 header: t.inventory.columns.currentStock,
                 // Stock, its value and its status are worked out per row; the
-                // stock-status picker above is the filter for them.
+                // stock-status filter in the toolbar is the filter for them.
                 enableColumnFilter: false,
-                cell: (info) => (
-                    <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>
-                ),
                 sortingFn: (a, b) => Number(a.getValue('stock')) - Number(b.getValue('stock')),
                 size: 120,
+                meta: { align: 'end' },
             }),
             columnHelper.accessor(
                 (row) => Number(row.price || 0) * Number(row.stocks?.[0]?.quantity || 0),
@@ -260,18 +267,14 @@ export default function InventoryPage() {
                     id: 'stock_value',
                     header: t.inventory.columns.stockValue,
                     enableColumnFilter: false,
-                    cell: (info) => (
-                        <span className="text-sm font-bold text-gray-700">
-                            {formatBDT(Number(info.getValue() || 0))}
-                        </span>
-                    ),
+                    cell: (info) => formatBDT(Number(info.getValue() || 0), { locale }),
                     sortingFn: (a, b) => Number(a.getValue('stock_value')) - Number(b.getValue('stock_value')),
                     size: 130,
-                    meta: { hideOnMobile: true },
+                    meta: { hideOnMobile: true, align: 'end' },
                 },
             ),
             columnHelper.accessor(
-                (row) => {
+                (row): StockStatus => {
                     const quantity = Number(row.stocks?.[0]?.quantity || 0);
                     if (quantity === 0) return 'OUT';
                     if (quantity <= 10) return 'LOW';
@@ -283,24 +286,13 @@ export default function InventoryPage() {
                     enableColumnFilter: false,
                     cell: (info) => {
                         const status = info.getValue();
-                        const classes =
-                            status === 'OUT'
-                                ? 'bg-danger-light text-danger-text border-red-200'
-                                : status === 'LOW'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200';
                         const label =
                             status === 'OUT'
                                 ? t.inventory.status.outOfStock
                                 : status === 'LOW'
                                   ? t.inventory.status.lowStock
                                   : t.inventory.status.inStock;
-
-                        return (
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${classes}`}>
-                                {label}
-                            </span>
-                        );
+                        return <StatusBadge tone={stockTones[status]}>{label}</StatusBadge>;
                     },
                     size: 130,
                 },
@@ -308,14 +300,12 @@ export default function InventoryPage() {
             columnHelper.accessor((row) => row.group?.name || t.inventory.status.uncategorized, {
                 id: 'group',
                 header: t.inventory.columns.group,
-                cell: (info) => <span className="text-sm font-bold text-gray-700">{info.getValue()}</span>,
                 size: 140,
                 meta: { hideOnMobile: true },
             }),
             columnHelper.accessor((row) => row.subgroup?.name || '-', {
                 id: 'subgroup',
                 header: t.inventory.columns.subgroup,
-                cell: (info) => <span className="text-sm text-gray-500">{info.getValue()}</span>,
                 size: 150,
                 meta: { hideOnMobile: true },
             }),
@@ -329,13 +319,13 @@ export default function InventoryPage() {
                         canMerge={canMerge}
                         onEdit={() => openEditProduct(info.row.original)}
                         onMerge={() => openMergeProduct(info.row.original)}
-                        onDelete={() => handleDelete(info.row.original.id)}
+                        onDelete={() => setPendingDelete(info.row.original)}
                     />
                 ),
                 enableSorting: false,
                 enableColumnFilter: false,
                 enableResizing: false,
-                size: 110,
+                size: 170,
             }),
         ],
         [t, locale, canMerge],
@@ -356,6 +346,60 @@ export default function InventoryPage() {
     const filteredSubgroups = useMemo(
         () => subgroups.filter((subgroup) => !selectedGroupId || subgroup.group_id === selectedGroupId),
         [subgroups, selectedGroupId],
+    );
+
+    // Page-owned: each goes to the server with the page query. "Uncategorized"
+    // and a group exclude each other, so each choice releases the other.
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'stockStatus',
+                type: 'select',
+                label: t.inventory.columns.status,
+                value: stockStatus,
+                onChange: setStockStatus,
+                options: stockStatusOptions,
+            },
+            {
+                id: 'group',
+                type: 'select',
+                label: t.inventory.columns.group,
+                value: selectedGroupId || null,
+                onChange: (next) => {
+                    setSelectedGroupId(next ?? '');
+                    setSelectedSubgroupId('');
+                    if (next) setShowUncategorized(false);
+                },
+                options: groups.map((group) => ({ value: group.id, label: group.name })),
+            },
+            {
+                id: 'subgroup',
+                type: 'select',
+                label: t.inventory.columns.subgroup,
+                value: selectedSubgroupId || null,
+                onChange: (next) => {
+                    setSelectedSubgroupId(next ?? '');
+                    if (next) setShowUncategorized(false);
+                },
+                options: filteredSubgroups.map((subgroup) => ({ value: subgroup.id, label: subgroup.name })),
+            },
+            {
+                id: 'uncategorized',
+                type: 'toggle',
+                control: 'checkbox',
+                label: t.inventory.filters.showUncategorized,
+                pressed: showUncategorized,
+                onChange: (next) => {
+                    setShowUncategorized(next);
+                    if (next) {
+                        setSelectedGroupId('');
+                        setSelectedSubgroupId('');
+                    }
+                },
+            },
+            { id: 'created', type: 'date-range', value: createdRange, onChange: setCreatedRange },
+        ],
+        [t, stockStatus, stockStatusOptions, selectedGroupId, groups, selectedSubgroupId, filteredSubgroups, showUncategorized, createdRange],
     );
 
     return (
@@ -408,100 +452,6 @@ export default function InventoryPage() {
                     )}
                 />
 
-                {importStatus && (
-                    <div
-                        className={`px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-between ${
-                            importStatus.startsWith(t.inventory.importFailed)
-                                ? 'bg-red-50 border border-red-200 text-red-700'
-                                : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                        }`}
-                    >
-                        <span>{importStatus}</span>
-                        <button
-                            onClick={() => setImportStatus(null)}
-                            className="ms-4 text-current opacity-60 hover:opacity-100 font-bold text-base leading-none"
-                            aria-label={t.common.dismiss}
-                        >
-                            ×
-                        </button>
-                    </div>
-                )}
-
-                <div className="bg-white border border-gray-100 rounded-lg p-4 flex flex-wrap gap-3 items-end">
-                    <div className="min-w-[220px] flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.common.search}</label>
-                        <Input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder={t.inventory.dataTable.searchPlaceholder}
-                        />
-                    </div>
-                    <div className="min-w-[180px]">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventory.columns.status}</label>
-                        <Select value={stockStatus} onChange={(e) => setStockStatus(e.target.value)}>
-                            <option value="">{t.common.all}</option>
-                            {stockStatusOptions.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                            ))}
-                        </Select>
-                    </div>
-                    <div className="min-w-[220px] flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventory.filters.groupFilter}</label>
-                        <select
-                            value={selectedGroupId}
-                            onChange={(e) => {
-                                setSelectedGroupId(e.target.value);
-                                setSelectedSubgroupId('');
-                                setShowUncategorized(false);
-                            }}
-                            className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
-                        >
-                            <option value="">{t.inventory.filters.allGroups}</option>
-                            {groups.map((group) => (
-                                <option key={group.id} value={group.id}>
-                                    {group.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="min-w-[220px] flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ms-1">{t.inventory.filters.subgroupFilter}</label>
-                        <select
-                            value={selectedSubgroupId}
-                            onChange={(e) => {
-                                setSelectedSubgroupId(e.target.value);
-                                setShowUncategorized(false);
-                            }}
-                            className="w-full bg-gray-50 border-none rounded-xl py-3 px-4 text-sm font-medium"
-                        >
-                            <option value="">{t.inventory.filters.allSubgroups}</option>
-                            {filteredSubgroups.map((subgroup) => (
-                                <option key={subgroup.id} value={subgroup.id}>
-                                    {subgroup.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 px-2 pb-2">
-                        <input
-                            type="checkbox"
-                            checked={showUncategorized}
-                            onChange={(e) => {
-                                setShowUncategorized(e.target.checked);
-                                if (e.target.checked) {
-                                    setSelectedGroupId('');
-                                    setSelectedSubgroupId('');
-                                }
-                            }}
-                            className="rounded border-gray-300"
-                        />
-                        {t.inventory.filters.showUncategorized}
-                    </label>
-                    <div className="pb-0.5">
-                        <CreatedRangeFilter value={createdRange} onChange={setCreatedRange} />
-                    </div>
-                </div>
-
                 <AddProductModal
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
@@ -543,8 +493,23 @@ export default function InventoryPage() {
                     isLoading={loading}
                     emptyMessage={t.inventory.dataTable.emptyMessage}
                     emptyIcon={<Package className="w-16 h-16 text-gray-200" />}
-                    showSearch={false}
+                    searchPlaceholder={t.inventory.dataTable.searchPlaceholder}
+                    onSearchChange={setSearch}
+                    filters={filters}
+                    viewOptions
                     serverPagination={serverPagination}
+                />
+
+                <ConfirmDialog
+                    open={pendingDelete !== null}
+                    title={t.common.delete}
+                    prompt={t.inventory.deleteConfirm}
+                    confirmLabel={t.common.delete}
+                    cancelLabel={t.common.cancel}
+                    loading={deleting}
+                    danger
+                    onConfirm={() => void confirmDelete()}
+                    onCancel={() => { if (!deleting) setPendingDelete(null); }}
                 />
     </PageShell>
     );
