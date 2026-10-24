@@ -1,9 +1,12 @@
 'use client';
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { NodeViewWrapper } from '@tiptap/react';
 import { useI18n } from '@/lib/i18n';
+import { ImagePreviewModal } from './ImagePreviewModal';
+import { originalImageUrl } from './image-width';
 
 /**
  * An image inside the editor: the picture, a spinner while its bytes are
@@ -56,6 +59,7 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
      * the node is told once, on release.
      */
     const [dragWidth, setDragWidth] = useState<number | null>(null);
+    const [preview, setPreview] = useState(false);
     const { src, alt, uploading } = node.attrs as ImageAttrs;
     const width = dragWidth ?? (node.attrs as ImageAttrs).width;
     const dragging = dragWidth !== null;
@@ -132,8 +136,11 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
                 referrerPolicy="no-referrer"
                 draggable={false}
                 style={width ? { width: `${width}px` } : undefined}
+                onClick={() => {
+                    if (!uploading && src) setPreview(true);
+                }}
                 className={`max-w-full rounded-md border border-gray-200 ${
-                    uploading ? 'opacity-50' : ''
+                    uploading ? 'opacity-50' : 'cursor-zoom-in'
                 } ${selected && !uploading ? 'ring-1 ring-blue-600' : ''}`}
             />
 
@@ -146,6 +153,34 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
                     <Loader2 className="h-5 w-5 animate-spin text-blue-600" aria-hidden />
                 </span>
             )}
+
+            {preview &&
+                src &&
+                createPortal(
+                    <div data-image-preview="" onClick={(event) => event.stopPropagation()}>
+                        <ImagePreviewModal
+                            items={[
+                                {
+                                    url: originalImageUrl(src),
+                                    name: alt || 'image',
+                                    mimeType: 'image/*',
+                                },
+                            ]}
+                            index={0}
+                            onIndexChange={() => {
+                                // One picture: the editor is not a gallery.
+                            }}
+                            onClose={() => {
+                                setPreview(false);
+                                // Closing moves focus off the editor. Putting
+                                // it back keeps a description that saves on
+                                // blur from treating the preview as leaving.
+                                wrapper.current?.closest<HTMLElement>('.ProseMirror')?.focus();
+                            }}
+                        />
+                    </div>,
+                    document.body,
+                )}
 
             {selected && !uploading && (
                 <span
