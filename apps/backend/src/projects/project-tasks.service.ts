@@ -615,6 +615,27 @@ export class ProjectTasksService {
             select: { user: { select: { id: true, name: true, email: true } } },
         });
 
+        const projectIds = projects.map((project) => project.id);
+        const stories = await this.db.projectUserStory.findMany({
+            where: { tenant_id: tenantId, project_id: { in: projectIds } },
+            select: { id: true, project_id: true, code: true, title: true },
+        });
+        const milestones = await this.db.projectMilestone.findMany({
+            where: { tenant_id: tenantId, project_id: { in: projectIds } },
+            select: { id: true, project_id: true, name: true },
+        });
+        // Open sprints first, so a name reused across sprints resolves to the
+        // one a task can still join rather than a finished one.
+        const sprints = await this.db.sprint.findMany({
+            where: { tenant_id: tenantId },
+            select: { id: true, name: true, status: true },
+            orderBy: { start_date: 'desc' },
+        });
+        const labels = await this.db.projectLabel.findMany({
+            where: { tenant_id: tenantId },
+            select: { id: true, name: true },
+        });
+
         const projectIndex = nameIndex(
             projects,
             (project) => [project.code, project.short_name, project.name],
@@ -625,6 +646,32 @@ export class ProjectTasksService {
             ({ user }) => [user.email, user.name],
             ({ user }) => user.id,
         );
+        // A story or a milestone only means anything within its own project,
+        // so those two are indexed per project — the story import's epic rule.
+        const perProject = <T extends { project_id: string }>(
+            records: T[],
+            keysOf: (record: T) => (string | null | undefined)[],
+        ) =>
+            new Map(
+                projects.map((project) => [
+                    project.id,
+                    nameIndex(
+                        records.filter((record) => record.project_id === project.id),
+                        keysOf,
+                        (record) => (record as unknown as { id: string }).id,
+                    ),
+                ]),
+            );
+        const storyIndex = perProject(stories, (story) => [story.code, story.title]);
+        const milestoneIndex = perProject(milestones, (milestone) => [milestone.name]);
+        const sprintIndex = nameIndex(
+            [...sprints].sort(
+                (a, b) => Number(a.status === 'COMPLETED') - Number(b.status === 'COMPLETED'),
+            ),
+            (sprint) => [sprint.name],
+            (sprint) => sprint.id,
+        );
+        const labelIndex = nameIndex(labels, (label) => [label.name], (label) => label.id);
 
         /**
          * A column of that name on that project, or — for the tenant-wide
@@ -654,6 +701,14 @@ export class ProjectTasksService {
                 );
                 const status = importText(raw.status);
                 const assignee = importText(raw.assignee);
+                const story = importText(raw.userStory);
+                const milestone = importText(raw.milestone);
+                const sprint = importText(raw.sprint);
+                const labelText = importText(raw.labels);
+                const remainingHours = importNumber(raw.remainingHours, 'Remaining hours');
+                if (remainingHours !== null && remainingHours < 0) {
+                    throw new Error(`Remaining hours cannot be negative (got "${remainingHours}")`);
+                }
                 return {
                     projectId,
                     title: requiredText(raw.title, 'Title'),
@@ -670,6 +725,30 @@ export class ProjectTasksService {
                     startDate: importDate(raw.startDate, 'Start date'),
                     dueDate: importDate(raw.dueDate, 'Due date'),
                     estimateHours: importNumber(raw.estimateHours, 'Estimate hours'),
+                    remainingHours,
+                    userStoryId: story
+                        ? lookup(storyIndex.get(projectId) ?? new Map(), story, 'no user story in that project matches')
+                        : null,
+                    milestoneId: milestone
+                        ? lookup(
+                              milestoneIndex.get(projectId) ?? new Map(),
+                              milestone,
+                              'no milestone in that project matches',
+                          )
+                        : null,
+                    sprintId: sprint ? lookup(sprintIndex, sprint, 'no sprint matches') : null,
+                    // One cell, several labels: "bug, urgent" or "bug; urgent".
+                    labelIds: labelText
+                        ? [
+                              ...new Set(
+                                  labelText
+                                      .split(/[,;]/)
+                                      .map((name) => name.trim())
+                                      .filter(Boolean)
+                                      .map((name) => lookup(labelIndex, name, 'no label matches')),
+                              ),
+                          ]
+                        : null,
                 };
             },
             dedupeKeys: (row) => [`title:${row.projectId}:${row.title.toLowerCase()}`],
@@ -1737,6 +1816,11 @@ interface TaskImportRow {
     startDate: string | null;
     dueDate: string | null;
     estimateHours: number | null;
+    remainingHours: number | null;
+    userStoryId: string | null;
+    milestoneId: string | null;
+    sprintId: string | null;
+    labelIds: string[] | null;
 }
 
 /**
@@ -1752,6 +1836,11 @@ function taskFieldsFrom(row: TaskImportRow) {
         ...(row.startDate !== null ? { startDate: row.startDate } : {}),
         ...(row.dueDate !== null ? { dueDate: row.dueDate } : {}),
         ...(row.estimateHours !== null ? { estimateHours: row.estimateHours } : {}),
+        ...(row.remainingHours !== null ? { remainingHours: row.remainingHours } : {}),
+        ...(row.userStoryId !== null ? { userStoryId: row.userStoryId } : {}),
+        ...(row.milestoneId !== null ? { milestoneId: row.milestoneId } : {}),
+        ...(row.sprintId !== null ? { sprintId: row.sprintId } : {}),
+        ...(row.labelIds !== null ? { labelIds: row.labelIds } : {}),
     };
 }
 
