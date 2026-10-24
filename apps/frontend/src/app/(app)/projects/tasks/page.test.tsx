@@ -295,21 +295,24 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
+            // The toolbar select's own "All" is "anyone".
+            await waitFor(() => expect(within(assigneeSelect()).getAllByRole('option')).toHaveLength(5));
             const options = within(assigneeSelect()).getAllByRole('option');
             expect(options.map((option) => (option as HTMLOptionElement).value)).toEqual([
+                '',
                 'me',
-                'anyone',
                 'unassigned',
                 'user:user-9',
                 'employee:emp-3',
             ]);
+            expect((assigneeSelect() as HTMLSelectElement).value).toBe('me');
         });
 
         it('marks an employee with no workspace account, who cannot be “me”', async () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            expect(within(assigneeSelect()).getByRole('option', { name: /Rahim Uddin \(no login\)/ }))
+            expect(await within(assigneeSelect()).findByRole('option', { name: /Rahim Uddin \(no login\)/ }))
                 .toBeInTheDocument();
         });
 
@@ -317,6 +320,7 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
+            await within(assigneeSelect()).findByRole('option', { name: 'Karim' });
             fireEvent.change(assigneeSelect(), { target: { value: 'user:user-9' } });
 
             await waitFor(() => expect(lastQuery()).toMatchObject({ assigneeId: 'user-9' }));
@@ -329,6 +333,7 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
+            await within(assigneeSelect()).findByRole('option', { name: /Rahim Uddin/ });
             fireEvent.change(assigneeSelect(), { target: { value: 'employee:emp-3' } });
 
             await waitFor(() => expect(lastQuery()).toMatchObject({ assigneeEmployeeId: 'emp-3' }));
@@ -349,7 +354,7 @@ describe('Tasks page', () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
 
-            fireEvent.change(assigneeSelect(), { target: { value: 'anyone' } });
+            fireEvent.change(assigneeSelect(), { target: { value: '' } });
 
             await waitFor(() => expect(lastQuery().assigneeId).toBeUndefined());
             expect(lastQuery().unassigned).toBeUndefined();
@@ -416,6 +421,19 @@ describe('Tasks page', () => {
     });
 
     describe('the rest of the standard list toolbar', () => {
+        it('puts the search box and every filter in the table toolbar, with View options', async () => {
+            render(<TasksPage />);
+            await screen.findByText('Wire the meter');
+
+            expect(screen.getAllByPlaceholderText(/search task title/i)).toHaveLength(1);
+            expect(screen.getByRole('combobox', { name: 'Project' })).toBeInTheDocument();
+            // Rows carry a status picker of the same name.
+            expect(screen.getAllByRole('combobox', { name: 'Status' }).filter(isFilter)).toHaveLength(1);
+            expect(screen.getByRole('button', { name: 'View options' })).toBeInTheDocument();
+            const remaining = screen.getByRole('columnheader', { name: /remaining/i });
+            expect(remaining.className).toContain('text-end');
+        });
+
         it('narrows by priority', async () => {
             render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
@@ -440,6 +458,7 @@ describe('Tasks page', () => {
         it('remembers the slice for the next visit to the page', async () => {
             const { unmount } = render(<TasksPage />);
             await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+            await within(assigneeSelect()).findByRole('option', { name: 'Karim' });
             fireEvent.change(assigneeSelect(), { target: { value: 'user:user-9' } });
             await waitFor(() => expect(lastQuery()).toMatchObject({ assigneeId: 'user-9' }));
             unmount();
