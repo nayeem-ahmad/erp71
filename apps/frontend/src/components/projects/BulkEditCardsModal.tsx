@@ -7,16 +7,18 @@ import { Button, Field, Input, Select } from '@/components/ui';
 import { api, type BulkTaskChanges } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { labelClass, type BoardSprint, type ProjectLabel } from './board-tasks';
+import type { StoryOption } from './task-card/model';
 import type { ProjectMeta } from './use-project-meta';
 
-/** The "clear it" choice in the sprint and assignee selects; `''` is "leave it". */
+/** The "clear it" choice in the sprint, story and assignee selects; `''` is "leave it". */
 const NONE = 'none';
 const PRIORITIES = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as const;
 
 type DueMode = '' | 'set' | 'clear';
 
 /**
- * One change set over the cards picked out on a board.
+ * One change set over the cards picked out on a board, or the rows picked on
+ * the task list.
  *
  * Every field opens on "Leave unchanged" and only the ones moved off it are
  * sent, so editing the sprint of five cards from three projects cannot quietly
@@ -24,8 +26,14 @@ type DueMode = '' | 'set' | 'clear';
  * removed rather than replaced for the same reason: a selection rarely shares
  * one label set, and "tag these Blocked" must not strip what else each carries.
  *
- * The dialog only gathers the change. The board sends it, in one request, and
- * reports what the server could and could not apply.
+ * Status goes by column *name*, since each project has columns of its own: the
+ * choices are every name the cards' projects use, and the server moves each
+ * card to its own project's column of that name. A story is one project's, so
+ * one can be picked only when the cards share a project (or are moving to
+ * one); across several, "No story" is all that applies.
+ *
+ * The dialog only gathers the change. The page that opened it sends it, in one
+ * request, and reports what the server could and could not apply.
  */
 export default function BulkEditCardsModal({
     count,
@@ -35,6 +43,7 @@ export default function BulkEditCardsModal({
     assignees,
     projectMeta,
     busy,
+    noun = 'card',
     onSubmit,
     onClose,
 }: {
@@ -51,15 +60,35 @@ export default function BulkEditCardsModal({
         peek: (projectId: string) => ProjectMeta | undefined;
     };
     busy: boolean;
+    /** What the selection is called where the dialog opens: cards on a board, tasks on the list. */
+    noun?: 'card' | 'task';
     onSubmit: (changes: BulkTaskChanges) => void;
     onClose: () => void;
 }) {
-    const { t } = useI18n();
+    const { t, fmt } = useI18n();
     const m = t.projects.boards;
     const f = t.projects.board.filters;
+    const tm = t.projects.tasks;
     const id = useId();
+    const words =
+        noun === 'task'
+            ? {
+                  title: fmt(tm.bulkEditTitle, { count }),
+                  hint: tm.bulkEditHint,
+                  projectHint: tm.bulkProjectHint,
+                  apply: fmt(tm.bulkApply, { count }),
+              }
+            : {
+                  title: count === 1 ? m.bulkEditTitleOne : m.bulkEditTitle.replace('{count}', String(count)),
+                  hint: m.bulkEditHint,
+                  projectHint: m.bulkProjectHint,
+                  apply: count === 1 ? m.bulkApplyOne : m.bulkApply.replace('{count}', String(count)),
+              };
 
     const [projectId, setProjectId] = useState('');
+    const [status, setStatus] = useState('');
+    const [storyId, setStoryId] = useState('');
+    const [stories, setStories] = useState<StoryOption[]>([]);
     const [sprintId, setSprintId] = useState('');
     const [assignee, setAssignee] = useState('');
     const [priority, setPriority] = useState('');
@@ -96,6 +125,47 @@ export default function BulkEditCardsModal({
         for (const rosterId of rosterIds) void load(rosterId);
     }, [rosterIds, load]);
 
+    // Where the cards will be once this applies: the project they are moving
+    // to, or the ones they are in now.
+    const columnProjectIds = projectId ? [projectId] : projectIds;
+    /** Every column name those projects use, once each, in board order. */
+    const statusNames = (() => {
+        const byName = new Map<string, string>();
+        for (const columnProjectId of columnProjectIds) {
+            for (const column of projectMeta.peek(columnProjectId)?.columns ?? []) {
+                const key = column.name.trim().toLowerCase();
+                if (!byName.has(key)) byName.set(key, column.name);
+            }
+        }
+        return [...byName.values()];
+    })();
+
+    /** The one project whose stories apply to every card, if there is one. */
+    const storyProjectId = projectId || (projectIds.length === 1 ? projectIds[0] : '');
+    // A failure only empties the list — "No story" still works.
+    useEffect(() => {
+        setStories([]);
+        if (!storyProjectId) return;
+        let live = true;
+        api.getProjectStories({ projectId: storyProjectId })
+            .then((rows: unknown) => {
+                if (live) setStories((Array.isArray(rows) ? rows : []) as StoryOption[]);
+            })
+            .catch(() => {
+                if (live) setStories([]);
+            });
+        return () => {
+            live = false;
+        };
+    }, [storyProjectId]);
+
+    /** A move changes which columns and stories exist, so a status or story picked before it goes. */
+    const changeProject = (next: string) => {
+        setProjectId(next);
+        setStatus('');
+        setStoryId('');
+    };
+
     const assigneeOptions = (() => {
         const byKey = new Map(assignees.map((option) => [option.key, option.label]));
         for (const rosterId of rosterIds) {
@@ -110,7 +180,9 @@ export default function BulkEditCardsModal({
 
     const changes: BulkTaskChanges = {
         ...(projectId ? { projectId } : {}),
+        ...(status ? { status } : {}),
         ...(sprintId ? { sprintId: sprintId === NONE ? null : sprintId } : {}),
+        ...(storyId ? { userStoryId: storyId === NONE ? null : storyId } : {}),
         ...(assignee ? { assignee: assignee === NONE ? null : assignee } : {}),
         ...(priority ? { priority } : {}),
         ...(dueMode === 'clear' ? { dueDate: null } : {}),
@@ -160,27 +232,47 @@ export default function BulkEditCardsModal({
     return (
         <ModalShell size="sm" onBackdropClick={busy ? undefined : onClose} dismissOnBackdrop={!changed}>
             <ModalHeader
-                title={count === 1 ? m.bulkEditTitleOne : m.bulkEditTitle.replace('{count}', String(count))}
-                subtitle={m.bulkEditHint}
+                title={words.title}
+                subtitle={words.hint}
                 onClose={busy ? undefined : onClose}
             />
             <div className="grid gap-3 overflow-y-auto p-4 sm:grid-cols-2">
                 <Field
                     label={m.bulkProject}
                     htmlFor={`${id}-project`}
-                    hint={projectId ? m.bulkProjectHint : undefined}
+                    hint={projectId ? words.projectHint : undefined}
                     className="sm:col-span-2"
                 >
                     <Select
                         id={`${id}-project`}
                         value={projectId}
                         disabled={busy}
-                        onChange={(e) => setProjectId(e.target.value)}
+                        onChange={(e) => changeProject(e.target.value)}
                     >
                         <option value="">{m.bulkLeave}</option>
                         {projects.map((project) => (
                             <option key={project.id} value={project.id}>
                                 {project.code} · {project.name}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+
+                <Field
+                    label={t.projects.fields.status}
+                    htmlFor={`${id}-status`}
+                    hint={columnProjectIds.length > 1 ? m.bulkStatusMixed : undefined}
+                >
+                    <Select
+                        id={`${id}-status`}
+                        value={status}
+                        disabled={busy}
+                        onChange={(e) => setStatus(e.target.value)}
+                    >
+                        <option value="">{m.bulkLeave}</option>
+                        {statusNames.map((name) => (
+                            <option key={name} value={name}>
+                                {name}
                             </option>
                         ))}
                     </Select>
@@ -200,6 +292,28 @@ export default function BulkEditCardsModal({
                                 {sprint.status === 'ACTIVE'
                                     ? f.sprintActive.replace('{name}', sprint.name)
                                     : sprint.name}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+
+                <Field
+                    label={t.projects.stories.field}
+                    htmlFor={`${id}-story`}
+                    hint={storyProjectId ? undefined : m.bulkStoryMixed}
+                    className="sm:col-span-2"
+                >
+                    <Select
+                        id={`${id}-story`}
+                        value={storyId}
+                        disabled={busy}
+                        onChange={(e) => setStoryId(e.target.value)}
+                    >
+                        <option value="">{m.bulkLeave}</option>
+                        <option value={NONE}>{t.projects.stories.none}</option>
+                        {stories.map((story) => (
+                            <option key={story.id} value={story.id}>
+                                {story.code} · {story.title}
                             </option>
                         ))}
                     </Select>
@@ -275,7 +389,7 @@ export default function BulkEditCardsModal({
                     {t.common.cancel}
                 </Button>
                 <Button onClick={() => onSubmit(changes)} loading={busy} disabled={busy || !changed}>
-                    {count === 1 ? m.bulkApplyOne : m.bulkApply.replace('{count}', String(count))}
+                    {words.apply}
                 </Button>
             </ModalFooter>
         </ModalShell>

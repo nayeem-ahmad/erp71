@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "{count, plural, one {# منتخب ٹاسک} other {# منتخب ٹاسک}} حذف کریں؟\n\nیہ ہر فہرست، بورڈ اور اسپرنٹ سے ہٹ جائیں گے۔ اسے واپس نہیں لیا جا سکتا۔",
         deletedCount: "{count, plural, one {# ٹاسک حذف ہوا} other {# ٹاسک حذف ہوئے}}",
         deleteFailedCount: "{count, plural, one {# ٹاسک حذف نہیں ہو سکا} other {# ٹاسک حذف نہیں ہو سکے}}",
+        bulkEditTitle: "{count, plural, one {# ٹاسک میں ترمیم کریں} other {# ٹاسک میں ترمیم کریں}}",
+        bulkEditHint: "صرف وہی فیلڈ لاگو ہوں گے جو آپ بدلیں گے۔ ہر ٹاسک کی باقی ہر چیز جیسی ہے ویسی رہے گی۔",
+        bulkProjectHint: "ہر ٹاسک کو اس پروجیکٹ میں نئی کلید ملتی ہے اور وہ اپنی اسٹوری سے نکل جاتا ہے۔ ذیلی ٹاسک اپنے بنیادی ٹاسک کے ساتھ جاتے ہیں۔",
+        bulkApply: "{count, plural, one {# ٹاسک پر لاگو کریں} other {# ٹاسک پر لاگو کریں}}",
+        updatedCount: "{count, plural, one {# ٹاسک اپ ڈیٹ ہو گیا} other {# ٹاسک اپ ڈیٹ ہو گئے}}",
+        updateFailedCount: "{count, plural, one {# ٹاسک اپ ڈیٹ نہیں ہو سکا} other {# ٹاسک اپ ڈیٹ نہیں ہو سکے}}: {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: "نئی مقررہ تاریخ",
         bulkAddLabels: "لیبل شامل کریں",
         bulkRemoveLabels: "لیبل ہٹائیں",
+        bulkStatusMixed: "ہر ایک اپنے پروجیکٹ میں اسی نام کے کالم میں جاتا ہے۔",
+        bulkStoryMixed: "اسٹوری ایک ہی پروجیکٹ کی ہوتی ہے، اس لیے کئی پروجیکٹس میں آپ صرف اسٹوری ہٹا سکتے ہیں۔",
         bulkApply: "{count} کارڈز پر لاگو کریں",
         bulkApplyOne: "1 کارڈ پر لاگو کریں",
         bulkUpdated: "{count} کارڈ اپ ڈیٹ ہوئے",

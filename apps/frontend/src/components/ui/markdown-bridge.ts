@@ -25,7 +25,7 @@ import { urlWithWidth, widthFromUrl } from './image-width';
  * ProseMirror schema and a markdown-it tokenizer at import time, and reaching
  * a URL helper through it shipped both to pages that never edit anything.
  */
-export { sizedImageUrl, urlWithWidth, widthFromUrl } from './image-width';
+export { originalImageUrl, sizedImageUrl, urlWithWidth, widthFromUrl } from './image-width';
 
 /* ------------------------------------------------------------------ *
  * The document shape

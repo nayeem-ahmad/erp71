@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "حذف {count, plural, zero {# مهام محددة} one {مهمة واحدة محددة} two {مهمتين محددتين} few {# مهام محددة} many {# مهمة محددة} other {# مهمة محددة}}؟\n\nستختفي من كل قائمة ولوحة ودورة. لا يمكن التراجع عن ذلك.",
         deletedCount: "{count, plural, zero {لم تُحذف مهام} one {حُذفت مهمة واحدة} two {حُذفت مهمتان} few {حُذفت # مهام} many {حُذفت # مهمة} other {حُذفت # مهمة}}",
         deleteFailedCount: "{count, plural, zero {لم يتعذّر حذف أي مهمة} one {تعذّر حذف مهمة واحدة} two {تعذّر حذف مهمتين} few {تعذّر حذف # مهام} many {تعذّر حذف # مهمة} other {تعذّر حذف # مهمة}}",
+        bulkEditTitle: "{count, plural, zero {تعديل # مهمة} one {تعديل مهمة واحدة} two {تعديل مهمتين} few {تعديل # مهام} many {تعديل # مهمة} other {تعديل # مهمة}}",
+        bulkEditHint: "تُطبَّق الحقول التي تغيّرها فقط. يبقى كل ما عداها في كل مهمة كما هو.",
+        bulkProjectHint: "تحصل كل مهمة على مفتاح جديد في ذلك المشروع وتخرج من قصتها. تنتقل المهام الفرعية مع المهمة الأم.",
+        bulkApply: "{count, plural, zero {تطبيق على # مهمة} one {تطبيق على مهمة واحدة} two {تطبيق على مهمتين} few {تطبيق على # مهام} many {تطبيق على # مهمة} other {تطبيق على # مهمة}}",
+        updatedCount: "{count, plural, zero {لم تُحدَّث أي مهمة} one {تم تحديث مهمة واحدة} two {تم تحديث مهمتين} few {تم تحديث # مهام} many {تم تحديث # مهمة} other {تم تحديث # مهمة}}",
+        updateFailedCount: "{count, plural, zero {لم يتعذّر تحديث أي مهمة} one {تعذّر تحديث مهمة واحدة} two {تعذّر تحديث مهمتين} few {تعذّر تحديث # مهام} many {تعذّر تحديث # مهمة} other {تعذّر تحديث # مهمة}}: {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: "تاريخ الاستحقاق الجديد",
         bulkAddLabels: "إضافة تسميات",
         bulkRemoveLabels: "إزالة تسميات",
+        bulkStatusMixed: "تنتقل كل منها إلى العمود الذي يحمل هذا الاسم في مشروعها.",
+        bulkStoryMixed: "تنتمي القصص إلى مشروع واحد، لذا لا يمكن عبر عدة مشاريع إلا إزالة القصة.",
         bulkApply: "تطبيق على {count} بطاقات",
         bulkApplyOne: "تطبيق على بطاقة واحدة",
         bulkUpdated: "تم تحديث {count} بطاقة",

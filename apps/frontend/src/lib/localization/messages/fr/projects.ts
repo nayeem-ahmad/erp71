@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "Supprimer {count, plural, one {# tâche sélectionnée} other {# tâches sélectionnées}} ?\n\nElles disparaissent de toutes les listes, de tous les tableaux et de tous les sprints. Cette action est irréversible.",
         deletedCount: "{count, plural, one {# tâche supprimée} other {# tâches supprimées}}",
         deleteFailedCount: "{count, plural, one {# tâche n'a pas pu être supprimée} other {# tâches n'ont pas pu être supprimées}}",
+        bulkEditTitle: "{count, plural, one {Modifier # tâche} other {Modifier # tâches}}",
+        bulkEditHint: "Seuls les champs que vous modifiez sont appliqués. Tout le reste de chaque tâche reste inchangé.",
+        bulkProjectHint: "Chaque tâche reçoit une nouvelle clé dans ce projet et quitte sa story. Les sous-tâches suivent leur tâche parente.",
+        bulkApply: "{count, plural, one {Appliquer à # tâche} other {Appliquer à # tâches}}",
+        updatedCount: "{count, plural, one {# tâche mise à jour} other {# tâches mises à jour}}",
+        updateFailedCount: "{count, plural, one {# tâche n'a pas pu être mise à jour} other {# tâches n'ont pas pu être mises à jour}} : {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: "Nouvelle échéance",
         bulkAddLabels: "Ajouter des étiquettes",
         bulkRemoveLabels: "Retirer des étiquettes",
+        bulkStatusMixed: "Chacune passe dans la colonne de ce nom de son propre projet.",
+        bulkStoryMixed: "Une story appartient à un seul projet : sur plusieurs projets, on peut seulement retirer la story.",
         bulkApply: "Appliquer à {count} cartes",
         bulkApplyOne: "Appliquer à 1 carte",
         bulkUpdated: "{count} carte(s) mise(s) à jour",

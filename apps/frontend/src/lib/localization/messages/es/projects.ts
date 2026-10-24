@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "¿Eliminar {count, plural, one {# tarea seleccionada} other {# tareas seleccionadas}}?\n\nDesaparecen de todas las listas, tableros y sprints. Esto no se puede deshacer.",
         deletedCount: "{count, plural, one {# tarea eliminada} other {# tareas eliminadas}}",
         deleteFailedCount: "{count, plural, one {No se pudo eliminar # tarea} other {No se pudieron eliminar # tareas}}",
+        bulkEditTitle: "{count, plural, one {Editar # tarea} other {Editar # tareas}}",
+        bulkEditHint: "Solo se aplican los campos que cambies. Todo lo demás de cada tarea queda como está.",
+        bulkProjectHint: "Cada tarea recibe una clave nueva en ese proyecto y sale de su historia. Las subtareas se mueven con su tarea principal.",
+        bulkApply: "{count, plural, one {Aplicar a # tarea} other {Aplicar a # tareas}}",
+        updatedCount: "{count, plural, one {# tarea actualizada} other {# tareas actualizadas}}",
+        updateFailedCount: "{count, plural, one {No se pudo actualizar # tarea} other {No se pudieron actualizar # tareas}}: {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: "Nueva fecha de vencimiento",
         bulkAddLabels: "Añadir etiquetas",
         bulkRemoveLabels: "Quitar etiquetas",
+        bulkStatusMixed: "Cada una pasa a la columna con ese nombre de su propio proyecto.",
+        bulkStoryMixed: "Las historias pertenecen a un solo proyecto, así que entre varios proyectos solo se puede quitar la historia.",
         bulkApply: "Aplicar a {count} tarjetas",
         bulkApplyOne: "Aplicar a 1 tarjeta",
         bulkUpdated: "{count} tarjeta(s) actualizada(s)",

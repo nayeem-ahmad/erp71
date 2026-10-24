@@ -1,5 +1,5 @@
 import type React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ResizableImage } from './ResizableImage';
 
@@ -110,6 +110,34 @@ describe('ResizableImage', () => {
         fireEvent.keyDown(screen.getByRole('slider'), { key: 'ArrowLeft' });
 
         expect(updateAttributes).toHaveBeenCalledWith(expect.objectContaining({ width: 380 }));
+    });
+
+    it('opens the stored file when the image is clicked', () => {
+        inEditor(
+            <ResizableImage
+                {...props({
+                    src: 'https://res.cloudinary.com/demo/image/upload/w_200,c_limit/v1/x.png?w=200',
+                })}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole('img', { name: 'shot' }));
+
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByRole('img', { name: 'shot' })).toHaveAttribute(
+            'src',
+            'https://res.cloudinary.com/demo/image/upload/v1/x.png',
+        );
+        expect(within(dialog).getByLabelText('Zoom in')).toBeInTheDocument();
+        expect(within(dialog).getByLabelText('Zoom out')).toBeInTheDocument();
+    });
+
+    it('does not open a preview while the upload is still in flight', () => {
+        inEditor(<ResizableImage {...props({ src: 'blob:x', uploading: true })} />);
+
+        fireEvent.click(screen.getByRole('img'));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     it('renders the image itself', () => {

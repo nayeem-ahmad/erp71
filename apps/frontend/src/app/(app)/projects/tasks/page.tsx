@@ -16,6 +16,8 @@ import type { BulkAction, ListFilter } from '@/components/data-table';
 import { RowActions, RowActionButton } from '@/components/table';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
+import BulkEditCardsModal from '@/components/projects/BulkEditCardsModal';
+import type { ProjectLabel } from '@/components/projects/board-tasks';
 import { copyTaskLink } from '@/components/projects/task-link';
 import { taskKeyOf } from '@/components/projects/task-card/model';
 import TaskQuickAdd from '@/components/projects/TaskQuickAdd';
@@ -34,7 +36,7 @@ import {
 } from '@/components/projects/task-assignee';
 import { Sparkline } from '@/components/dashboard/Sparkline';
 import { useServerList } from '@/hooks/useServerList';
-import { api } from '@/lib/api';
+import { api, type BulkTaskChanges } from '@/lib/api';
 import { fetchMe } from '@/hooks/use-me';
 import { toast } from '@/lib/toast';
 import { useI18n } from '@/lib/i18n';
@@ -167,12 +169,14 @@ export default function TasksPage() {
     const [importOpen, setImportOpen] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<TaskRow | null>(null);
     const [pendingBulkDelete, setPendingBulkDelete] = useState<TaskRow[] | null>(null);
+    /** The rows the bulk edit dialog is open over; null while it is closed. */
+    const [bulkEditing, setBulkEditing] = useState<TaskRow[] | null>(null);
     const [selectionEpoch, setSelectionEpoch] = useState(0);
     const [busy, setBusy] = useState(false);
     // The composer's own project, held across saves so a run of tasks for one
     // project is one choice rather than one per task.
     const [quickProject, setQuickProject] = useState('');
-    const [allLabels, setAllLabels] = useState<{ id: string; name: string }[]>([]);
+    const [allLabels, setAllLabels] = useState<ProjectLabel[]>([]);
     const projectMeta = useProjectMeta();
 
     // Debounced only while somebody is actually typing, so a remembered search
@@ -209,9 +213,7 @@ export default function TasksPage() {
         // For the composer's `#label` tokens. A tenant with no labels simply has
         // no `#` grammar; nothing else depends on this.
         api.getProjectLabels()
-            .then((rows: unknown) =>
-                setAllLabels(Array.isArray(rows) ? (rows as { id: string; name: string }[]) : []),
-            )
+            .then((rows: unknown) => setAllLabels(Array.isArray(rows) ? (rows as ProjectLabel[]) : []))
             .catch(() => setAllLabels([]));
     }, []);
 
@@ -403,6 +405,47 @@ export default function TasksPage() {
             setBusy(false);
         }
     };
+
+    /**
+     * The bulk edit dialog's change set, in one request for the rate-limit
+     * reason the bulk delete gives. The server runs each task through the same
+     * update a single edit does and skips, rather than fails on, one that
+     * refuses — a status name its project has no column for, say.
+     */
+    const confirmBulkEdit = async (changes: BulkTaskChanges) => {
+        const rows = bulkEditing;
+        if (!rows?.length) return;
+        setBusy(true);
+        try {
+            const { updated, skipped } = await api.bulkUpdateProjectTasks({
+                ids: rows.map((row) => row.id),
+                ...changes,
+            });
+            if (updated > 0) toast.success(fmt(m.tasks.updatedCount, { count: updated }));
+            if (skipped.length > 0) {
+                toast.error(fmt(m.tasks.updateFailedCount, { count: skipped.length, reason: skipped[0].reason }));
+            }
+            setBulkEditing(null);
+            clearSelection();
+            await reload();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : m.task.saveFailed);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    /** The projects the rows being edited come from, whose teams and columns the dialog offers. */
+    const bulkProjectIds = useMemo(
+        () => [
+            ...new Set(
+                (bulkEditing ?? [])
+                    .map((row) => row.project?.id)
+                    .filter((id): id is string => Boolean(id)),
+            ),
+        ],
+        [bulkEditing],
+    );
 
     const columns = useMemo(
         () => [
@@ -631,13 +674,18 @@ export default function TasksPage() {
     const bulkActions: BulkAction<TaskRow>[] = useMemo(
         () => [
             {
+                label: t.common.edit,
+                icon: <Pencil className="h-4 w-4" />,
+                onClick: (rows) => setBulkEditing(rows),
+            },
+            {
                 label: t.common.delete,
                 tone: 'danger',
                 icon: <Trash2 className="h-4 w-4" />,
                 onClick: (rows) => setPendingBulkDelete(rows),
             },
         ],
-        [t.common.delete],
+        [t.common.edit, t.common.delete],
     );
 
     return (
@@ -744,6 +792,23 @@ export default function TasksPage() {
                     assigneeName={(key) => assignees.find((a) => a.key === key)?.name}
                     onSubmit={createTask}
                     onClose={() => setCreating(null)}
+                />
+            )}
+
+            {bulkEditing && bulkEditing.length > 0 && (
+                <BulkEditCardsModal
+                    noun="task"
+                    count={bulkEditing.length}
+                    projectIds={bulkProjectIds}
+                    projects={projects}
+                    labels={allLabels}
+                    assignees={assignees
+                        .filter((option) => option.key.includes(':'))
+                        .map((option) => ({ key: option.key, label: option.name }))}
+                    projectMeta={projectMeta}
+                    busy={busy}
+                    onSubmit={(changes) => void confirmBulkEdit(changes)}
+                    onClose={() => setBulkEditing(null)}
                 />
             )}
 

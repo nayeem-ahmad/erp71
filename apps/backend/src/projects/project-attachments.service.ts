@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import {
     Injectable,
     NotFoundException,
@@ -21,6 +22,35 @@ export {
 const ATTACHMENT_INCLUDE = {
     creator: { select: { id: true, name: true, email: true } },
 } as const;
+
+/**
+ * A clipboard screenshot is always `image.png`. Those names, and a file the
+ * caller did not name, must not be the stored id: `uploadBuffer` uses it as
+ * the Cloudinary public_id and will not overwrite, so a second paste comes
+ * back as the first file.
+ */
+const GENERIC_STEM = /^(image|pasted-image|attachment)$/i;
+
+/**
+ * Where an attachment is stored, and the name shown for it.
+ *
+ * The public id always carries a suffix. The name a person chose (`plan.png`)
+ * stays that name on the row; a generic clipboard name takes the suffix too,
+ * or every paste is listed as `image.png`.
+ */
+export function attachmentStorageName(
+    fileName: string | undefined,
+    mimeType: string,
+): { publicId: string; fileName: string } {
+    const stem = (fileName ?? 'attachment').replace(/\.[^.]+$/, '').slice(0, 80);
+    const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
+    const extension = mimeType === 'application/pdf' ? 'pdf' : (mimeType.split('/')[1] ?? 'jpg');
+    const publicId = `${safeStem}-${randomBytes(4).toString('hex')}`;
+    return {
+        publicId,
+        fileName: `${GENERIC_STEM.test(safeStem) ? publicId : safeStem}.${extension}`,
+    };
+}
 
 /**
  * `ProjectAttachment` has had a model since Phase 1 and no API at all. This is
@@ -61,17 +91,14 @@ export class ProjectAttachmentsService {
             );
         }
 
-        const stem = (dto.fileName ?? 'attachment').replace(/\.[^.]+$/, '').slice(0, 100);
-        const safeStem =
-            stem.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
-        const extension = mimeType === 'application/pdf' ? 'pdf' : (mimeType.split('/')[1] ?? 'jpg');
+        const storedName = attachmentStorageName(dto.fileName, mimeType);
 
         let stored: { url: string; publicId: string; bytes: number };
         try {
             stored = await this.assets.uploadBuffer(
                 buffer,
                 `${tenantId}/project-tasks`,
-                safeStem,
+                storedName.publicId,
                 resourceTypeFor(mimeType),
             );
         } catch {
@@ -84,7 +111,7 @@ export class ProjectAttachmentsService {
                 task_id: taskId,
                 project_id: task.project_id,
                 file_url: stored.url,
-                file_name: `${safeStem}.${extension}`,
+                file_name: storedName.fileName,
                 mime_type: mimeType,
                 file_size: stored.bytes ?? buffer.byteLength,
                 storage_key: stored.publicId,

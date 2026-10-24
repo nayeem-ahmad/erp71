@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "{count, plural, one {# चयनित कार्य} other {# चयनित कार्य}} हटाएँ?\n\nये हर सूची, बोर्ड और स्प्रिंट से हट जाएँगे। इसे वापस नहीं लिया जा सकता।",
         deletedCount: "{count, plural, one {# कार्य हटाया गया} other {# कार्य हटाए गए}}",
         deleteFailedCount: "{count, plural, one {# कार्य नहीं हटाया जा सका} other {# कार्य नहीं हटाए जा सके}}",
+        bulkEditTitle: "{count, plural, one {# कार्य संपादित करें} other {# कार्य संपादित करें}}",
+        bulkEditHint: "केवल वही फ़ील्ड लागू होंगे जिन्हें आप बदलते हैं। हर कार्य की बाकी सब चीज़ें जैसी हैं वैसी रहेंगी।",
+        bulkProjectHint: "हर कार्य को उस प्रोजेक्ट में नई कुंजी मिलती है और वह अपनी स्टोरी से हट जाता है। सबटास्क अपने मूल कार्य के साथ जाते हैं।",
+        bulkApply: "{count, plural, one {# कार्य पर लागू करें} other {# कार्यों पर लागू करें}}",
+        updatedCount: "{count, plural, one {# कार्य अपडेट हुआ} other {# कार्य अपडेट हुए}}",
+        updateFailedCount: "{count, plural, one {# कार्य अपडेट नहीं हो सका} other {# कार्य अपडेट नहीं हो सके}}: {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: "नई नियत तारीख",
         bulkAddLabels: "लेबल जोड़ें",
         bulkRemoveLabels: "लेबल हटाएँ",
+        bulkStatusMixed: "हर एक अपने प्रोजेक्ट में उसी नाम के कॉलम में जाता है।",
+        bulkStoryMixed: "स्टोरी एक ही प्रोजेक्ट की होती है, इसलिए कई प्रोजेक्ट में आप केवल स्टोरी हटा सकते हैं।",
         bulkApply: "{count} कार्डों पर लागू करें",
         bulkApplyOne: "1 कार्ड पर लागू करें",
         bulkUpdated: "{count} कार्ड अपडेट हुए",

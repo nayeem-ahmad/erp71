@@ -527,6 +527,20 @@ export class BulkUpdateTasksDto {
     @IsOptional() @IsUUID()
     sprintId?: string | null;
 
+    /**
+     * A board column's *name*, not its id: every project has columns of its
+     * own, so a selection from three projects is three different "In
+     * Progress" rows. Each task takes the column of this name in its own
+     * project (the one it is moving to, with `projectId`); a task whose
+     * project has none is skipped.
+     */
+    @IsOptional() @IsString() @MinLength(1) @MaxLength(100)
+    status?: string;
+
+    /** A story of the tasks' own project — see `assertUserStory`; `null` takes them out of theirs. */
+    @IsOptional() @IsUUID()
+    userStoryId?: string | null;
+
     /** `user:<id>` / `employee:<id>`, the key the task list uses; `null` unassigns. */
     @IsOptional() @IsString() @MaxLength(80)
     assignee?: string | null;

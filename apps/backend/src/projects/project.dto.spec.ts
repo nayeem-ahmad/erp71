@@ -265,7 +265,13 @@ describe('BulkUpdateTasksDto', () => {
     it('takes null for the fields a bulk edit can clear', () => {
         // `null`, not `''`: this DTO is a change set, so an absent field is
         // "leave alone" and null is "clear" without the PATCH spelling.
-        expect(bulkErrors({ sprintId: null, assignee: null, dueDate: null })).toEqual([]);
+        expect(bulkErrors({ sprintId: null, userStoryId: null, assignee: null, dueDate: null })).toEqual([]);
+    });
+
+    it('takes a status by column name and a story by id', () => {
+        expect(bulkErrors({ status: 'In Progress', userStoryId: UUID })).toEqual([]);
+        // A blank name would match nothing in any project: refused up front.
+        expect(bulkErrors({ status: '', userStoryId: 'US-4' }).sort()).toEqual(['status', 'userStoryId']);
     });
 
     it('takes a full change set', () => {

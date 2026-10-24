@@ -506,6 +506,16 @@ describe('ProjectTasksService', () => {
             });
         });
 
+        it('takes the column a bulk edit names, looked up in the new project', async () => {
+            const statusNamed = jest.fn().mockResolvedValue(target.done.id);
+            db.projectTaskStatus.findFirst.mockResolvedValue({ ...target.done, project_id: 'project-2' });
+
+            await service.update(OWNER, 'task-1', { projectId: 'project-2' } as never, { statusNamed });
+
+            expect(statusNamed).toHaveBeenCalledWith('project-2');
+            expect(updateOf('task-1')).toMatchObject({ status_id: target.done.id });
+        });
+
         it('lands in the column of the same name on the new board', async () => {
             lookups(moving({ status: named.review, status_id: named.review.id }));
 
@@ -1985,6 +1995,98 @@ describe('ProjectTasksService', () => {
             await expect(
                 service.bulkUpdate(OWNER, { ids: ['task-1'], assignee: 'robot:42' } as never),
             ).rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        describe('status, by column name', () => {
+            // Every project has columns of its own, so "In Progress" is a
+            // different row in each.
+            const columns: Record<string, { id: string; name: string; category: string }[]> = {
+                'project-1': [
+                    { id: 'p1-todo', name: 'To Do', category: 'TODO' },
+                    { id: 'p1-doing', name: 'In Progress', category: 'IN_PROGRESS' },
+                ],
+                'project-2': [
+                    { id: 'p2-doing', name: 'In progress', category: 'IN_PROGRESS' },
+                    { id: 'p2-review', name: 'Review', category: 'IN_PROGRESS' },
+                ],
+            };
+            const projectOfTask: Record<string, string> = {
+                'task-1': 'project-1',
+                'task-2': 'project-2',
+                'task-3': 'project-1',
+            };
+
+            beforeEach(() => {
+                db.projectTask.findFirst.mockImplementation(({ where }: any) =>
+                    Promise.resolve(
+                        projectOfTask[where.id] ? task({ id: where.id, project_id: projectOfTask[where.id] }) : null,
+                    ),
+                );
+                db.projectTaskStatus.findFirst.mockImplementation(({ where }: any) => {
+                    const [projectId, column] =
+                        Object.entries(columns)
+                            .map(([owner, list]) => [owner, list.find((row) => row.id === where.id)] as const)
+                            .find(([, row]) => row) ?? [];
+                    return Promise.resolve(column ? { ...column, project_id: projectId } : null);
+                });
+                settings.listTaskStatuses.mockImplementation((_tenant: string, _inactive: boolean, projectId: string) =>
+                    Promise.resolve(columns[projectId] ?? []),
+                );
+            });
+
+            const statusWritten = () =>
+                Object.fromEntries(
+                    db.projectTask.update.mock.calls.map(([{ where, data }]: any[]) => [where.id, data.status_id]),
+                );
+
+            it('moves each task to the column of that name in its own project', async () => {
+                const result = await service.bulkUpdate(OWNER, {
+                    ids: ['task-1', 'task-2'],
+                    status: 'In Progress',
+                } as never);
+
+                // Project 2 spells it "In progress": a name typed twice by two
+                // people is the same column to whoever is moving the work.
+                expect(statusWritten()).toEqual({ 'task-1': 'p1-doing', 'task-2': 'p2-doing' });
+                expect(result).toEqual({ updated: 2, skipped: [] });
+            });
+
+            it('reads each project’s columns once, however many of its tasks are picked', async () => {
+                await service.bulkUpdate(OWNER, { ids: ['task-1', 'task-3'], status: 'In Progress' } as never);
+
+                expect(settings.listTaskStatuses).toHaveBeenCalledTimes(1);
+                expect(statusWritten()).toEqual({ 'task-1': 'p1-doing', 'task-3': 'p1-doing' });
+            });
+
+            it('skips a task whose project has no column of that name, and moves the rest', async () => {
+                const result = await service.bulkUpdate(OWNER, {
+                    ids: ['task-1', 'task-2'],
+                    status: 'Review',
+                } as never);
+
+                expect(statusWritten()).toEqual({ 'task-2': 'p2-review' });
+                expect(result.updated).toBe(1);
+                expect(result.skipped).toEqual([{ id: 'task-1', reason: expect.stringContaining('Review') }]);
+            });
+
+            it('reports a task it cannot find as not found, without reading any columns for it', async () => {
+                // Not "no Review column": that would tell a caller the id is a
+                // task in a project they cannot see.
+                const result = await service.bulkUpdate(OWNER, { ids: ['task-9'], status: 'Review' } as never);
+
+                expect(result.skipped).toEqual([{ id: 'task-9', reason: expect.stringMatching(/not found/i) }]);
+                expect(settings.listTaskStatuses).not.toHaveBeenCalled();
+            });
+        });
+
+        it('files the tasks under a story, and takes them out of it when sent null', async () => {
+            const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], userStoryId: 'story-1' } as never);
+            await service.bulkUpdate(OWNER, { ids: ['task-1'], userStoryId: null } as never);
+
+            // `''` is the single-task update's spelling of "no story".
+            expect(update.mock.calls.map(([, , dto]) => (dto as any).userStoryId)).toEqual(['story-1', '']);
         });
     });
 

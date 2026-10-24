@@ -4,6 +4,7 @@ import {
     urlWithWidth,
     markdownToDoc,
     docToMarkdown,
+    originalImageUrl,
     sizedImageUrl,
 } from './markdown-bridge';
 
@@ -155,5 +156,12 @@ describe('asking the asset host for a narrower copy', () => {
 
     it('leaves the URL alone when no width is wanted', () => {
         expect(sizedImageUrl(cloudinary, null)).toBe(cloudinary);
+    });
+
+    it('asks for the stored file, not the thumbnail, when an image is opened', () => {
+        const thumb = `${sizedImageUrl(cloudinary, 320)}?w=320`;
+        expect(originalImageUrl(thumb)).toBe(cloudinary);
+        // An unknown host has no transform to strip. The width note still goes.
+        expect(originalImageUrl('https://cdn/x.png?w=160')).toBe('https://cdn/x.png');
     });
 });
