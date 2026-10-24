@@ -25,7 +25,7 @@ type StorefrontHeaderProps = {
     logoUrl?: string | null;
     /** Whether the store name sits beside the logo. Ignored without a logo. */
     showStoreName?: boolean;
-    activeNav: 'home' | 'shop' | 'page';
+    activeNav: 'home' | 'shop' | 'page' | 'account';
     /**
      * Links the shop added itself, appended after Home and Shop. Home, Shop and
      * Contact are not in this list and are not removable: they are the
@@ -169,6 +169,14 @@ export default function StorefrontHeader({
                                     <div className="absolute end-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
                                         <p className="px-4 py-2 text-xs text-gray-400 truncate">{session.customer.email}</p>
                                         <hr className="border-gray-100" />
+                                        <Link
+                                            href={`/store/${slug}/account`}
+                                            className={`block px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${
+                                                activeNav === 'account' ? 'font-semibold text-gray-900' : 'text-gray-700'
+                                            }`}
+                                        >
+                                            {m.myAccount}
+                                        </Link>
                                         <button
                                             type="button"
                                             onClick={onSignOut}

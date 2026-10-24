@@ -20,6 +20,8 @@ import {
     CustomerTwoFactorLoginDto,
     CustomerGoogleSignInDto,
     CustomerMobileSignInDto,
+    CustomerForgotPasswordDto,
+    UpdateCustomerProfileDto,
 } from './storefront.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
@@ -107,7 +109,14 @@ export class StorefrontController {
         return this.storefrontService.getPublicProduct(slug, productId);
     }
 
-    /** Public (optional auth): place an order — attaches customerUserId if signed in */
+    /**
+     * Public (optional auth): place an order — attaches customerUserId if signed in.
+     *
+     * Throttled harder than the platform default because each order emails the
+     * address it was given, billed to the shop: without a limit this is a way
+     * to point a shop's email credits at someone else's inbox.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 10 } })
     @Post(':slug/orders')
     @UseGuards(OptionalJwtAuthGuard)
     async placeOrder(
@@ -175,6 +184,16 @@ export class StorefrontController {
         return this.storefrontService.customerMobileSignIn(slug, dto);
     }
 
+    /**
+     * Public: email a reset link that lands back on this shop. Answers the
+     * same whether or not the address has an account here.
+     */
+    @Throttle({ default: { ttl: 60_000, limit: 5 } })
+    @Post(':slug/auth/forgot-password')
+    async customerForgotPassword(@Param('slug') slug: string, @Body() dto: CustomerForgotPasswordDto) {
+        return this.storefrontService.customerForgotPassword(slug, dto.email);
+    }
+
     /** Public: second leg of a 2FA storefront sign-in */
     @Throttle({ default: { ttl: 60_000, limit: 20 } })
     @Post(':slug/auth/2fa/verify')
@@ -194,6 +213,17 @@ export class StorefrontController {
     @UseGuards(StorefrontCustomerGuard)
     async getCustomerProfile(@Param('slug') slug: string, @Req() req: any) {
         return this.storefrontService.getCustomerProfile(slug, req.user.userId, req.user.storefrontTenantId);
+    }
+
+    /** Protected: the signed-in customer edits their name, phone and address at this shop */
+    @Patch(':slug/customer/me')
+    @UseGuards(StorefrontCustomerGuard)
+    async updateCustomerProfile(
+        @Param('slug') slug: string,
+        @Req() req: any,
+        @Body() dto: UpdateCustomerProfileDto,
+    ) {
+        return this.storefrontService.updateCustomerProfile(slug, req.user.userId, dto, req.user.storefrontTenantId);
     }
 
     /** Protected: get signed-in customer's order history */

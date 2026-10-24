@@ -7,6 +7,7 @@ function meta(overrides: Partial<StorefrontMeta> = {}): StorefrontMeta {
         storefront_hero_image: 'https://cdn.example/hero.jpg',
         storefront_hero_headline: 'Tools that outlast the job',
         storefront_logo: 'https://cdn.example/logo.png',
+        storefront_logo_show_name: true,
         brand_primary_color: '#1d4ed8',
         ...overrides,
     };

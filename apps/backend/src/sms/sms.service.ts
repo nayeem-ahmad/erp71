@@ -196,6 +196,11 @@ export class SmsService {
         return this.sendToCustomer(phone, message, tenantId, 'Sale receipt');
     }
 
+    /** A web order's status update — the text is built by `renderStorefrontOrderSms`. */
+    async sendStorefrontOrderUpdate(phone: string, message: string, tenantId: string): Promise<SendSmsResult> {
+        return this.sendToCustomer(phone, message, tenantId, 'Storefront order update');
+    }
+
     /** One text for a sale that left a balance due, naming what was paid and what is still owed. */
     async sendCreditSaleNotice(input: CreditSaleSms): Promise<SendSmsResult> {
         return this.sendToCustomer(

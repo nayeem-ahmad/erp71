@@ -833,6 +833,11 @@ model Tenant {
   /// header. Only meaningful once a logo exists — with no logo the name is the
   /// only thing there is to show, so it is rendered regardless.
   storefront_logo_show_name Boolean  @default(true)
+  /// Text the shopper when staff confirm, ship, deliver or cancel a web order.
+  /// Off by default because every text is billed to the shop's SMS credits;
+  /// the matching emails are always sent (and billed per email the same way a
+  /// sale receipt is).
+  storefront_order_sms      Boolean  @default(false)
   brand_primary_color       String?
   brand_logo_url            String?
   brand_favicon_url         String?
@@ -5514,20 +5519,27 @@ model ApiKey {
 }
 
 model StorefrontOrder {
-  id             String                @id @default(cuid())
-  tenantId       String
-  customerName   String
-  customerEmail  String
-  customerPhone  String?
-  items          StorefrontOrderItem[]
-  totalAmount    Decimal               @db.Decimal(12, 2)
-  status         String                @default("PENDING")
-  notes          String?
-  customerUserId String?
+  id              String                @id @default(cuid())
+  tenantId        String
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  items           StorefrontOrderItem[]
+  totalAmount     Decimal               @db.Decimal(12, 2)
+  /// One of `STOREFRONT_ORDER_STATUSES` in `@erp71/shared-types`.
+  status          String                @default("PENDING")
+  notes           String?
+  /// Where to deliver: house, road and area as the shopper wrote them. Null on
+  /// orders placed before checkout asked for it.
+  deliveryAddress String?
+  /// City or district, kept apart from the street address so staff can tell
+  /// inside-Dhaka from outside-Dhaka deliveries at a glance.
+  deliveryArea    String?
+  customerUserId  String?
   /// Always the tenant's online branch (`Tenant.online_store_id`).
-  store_id       String
-  created_at     DateTime              @default(now())
-  updated_at     DateTime              @updatedAt
+  store_id        String
+  created_at      DateTime              @default(now())
+  updated_at      DateTime              @updatedAt
 
   tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customerUser User?  @relation(fields: [customerUserId], references: [id], onDelete: SetNull)

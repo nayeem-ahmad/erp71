@@ -25,6 +25,7 @@ export type StorefrontMeta = {
     storefront_hero_image: string | null;
     storefront_hero_headline: string | null;
     storefront_logo: string | null;
+    storefront_logo_show_name: boolean;
     brand_primary_color: string | null;
 };
 

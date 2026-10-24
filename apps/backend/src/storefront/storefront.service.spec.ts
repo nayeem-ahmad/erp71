@@ -9,6 +9,9 @@ import { StorefrontPagesService } from '../storefront-pages/storefront-pages.ser
 import { GoogleTokenService } from '../auth/google-token.service';
 import { FirebaseTokenService } from '../auth/firebase-token.service';
 import { OnlineBranchService } from '../stores/online-branch.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
+import { EmailService } from '../email/email.service';
+import { SmsService } from '../sms/sms.service';
 import { JwtService } from '@nestjs/jwt';
 import {
     BadRequestException,
@@ -46,6 +49,9 @@ describe('StorefrontService', () => {
     let storefrontPagesService: any;
     let googleTokenService: any;
     let firebaseTokenService: any;
+    let passwordResetService: { requestReset: jest.Mock };
+    let emailService: { sendStorefrontOrderUpdate: jest.Mock };
+    let smsService: { sendStorefrontOrderUpdate: jest.Mock };
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -160,6 +166,9 @@ describe('StorefrontService', () => {
         };
 
         onlineBranch = { ensure: jest.fn().mockResolvedValue('online-store') };
+        passwordResetService = { requestReset: jest.fn().mockResolvedValue(undefined) };
+        emailService = { sendStorefrontOrderUpdate: jest.fn().mockResolvedValue(undefined) };
+        smsService = { sendStorefrontOrderUpdate: jest.fn().mockResolvedValue({ sent: true }) };
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 StorefrontService,
@@ -173,6 +182,9 @@ describe('StorefrontService', () => {
                 { provide: GoogleTokenService, useValue: googleTokenService },
                 { provide: FirebaseTokenService, useValue: firebaseTokenService },
                 { provide: OnlineBranchService, useValue: onlineBranch },
+                { provide: PasswordResetService, useValue: passwordResetService },
+                { provide: EmailService, useValue: emailService },
+                { provide: SmsService, useValue: smsService },
             ],
         }).compile();
 
@@ -839,7 +851,7 @@ describe('StorefrontService', () => {
 
     describe('updateOrderStatus', () => {
         it('throws BadRequestException for invalid status', async () => {
-            const promise = service.updateOrderStatus('tenant-1', 'order-1', 'SHIPPED');
+            const promise = service.updateOrderStatus('tenant-1', 'order-1', 'REFUNDED');
             await expect(promise).rejects.toThrow(BadRequestException);
             await expect(promise).rejects.toThrow('Invalid status');
         });
@@ -1273,9 +1285,33 @@ describe('StorefrontService', () => {
                 name: 'Alice',
                 email: 'alice@example.com',
                 phone: '01700000001',
+                address: null,
                 loyalty_points: 100,
                 total_spent: 2000,
+                last_delivery: null,
             });
+        });
+
+        it('offers the last order\'s delivery address for checkout to prefill', async () => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.customer.findFirst.mockResolvedValue({
+                id: 'cust-1',
+                name: 'Alice',
+                address: 'Old shop-typed address',
+                loyalty_points: 0,
+                total_spent: 0,
+            });
+            db.storefrontOrder.findFirst.mockResolvedValue({ deliveryAddress: 'House 5, Road 2', deliveryArea: 'Dhanmondi' });
+
+            const result = await service.getCustomerProfile(slug, userId);
+
+            expect(result.address).toBe('Old shop-typed address');
+            expect(result.last_delivery).toEqual({ address: 'House 5, Road 2', area: 'Dhanmondi' });
+            expect(db.storefrontOrder.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { tenantId: 'tenant-1', customerUserId: userId, deliveryAddress: { not: null } },
+                }),
+            );
         });
 
         it('rejects a session minted for a different store', async () => {
@@ -1687,6 +1723,271 @@ describe('StorefrontService', () => {
             // unverified address can never take over a record the shop holds.
             expect(db.customer.findFirst).toHaveBeenCalledTimes(2);
             expect(db.customer.create).toHaveBeenCalled();
+        });
+    });
+
+    // ── order notifications and delivery address ──────────────────────────────
+
+    describe('order delivery address and notifications', () => {
+        const slug = 'my-store';
+        const products = [{ id: 'prod-1', name: 'Phone', price: 500, stocks: [{ quantity: 10 }] }];
+        const createdOrder = {
+            id: 'clorder0000000000abcd1234',
+            customerName: 'John Doe',
+            customerEmail: 'john@example.com',
+            customerPhone: '01700000000',
+            totalAmount: 1000,
+            deliveryAddress: 'House 5, Road 2',
+            deliveryArea: 'Dhanmondi',
+            status: 'PENDING',
+            items: [{ quantity: 2, priceAtOrder: 500, product: { id: 'prod-1', name: 'Phone' } }],
+        };
+        const dto = {
+            customerName: 'John Doe',
+            customerEmail: 'john@example.com',
+            customerPhone: '01700000000',
+            deliveryAddress: 'House 5, Road 2',
+            deliveryArea: 'Dhanmondi',
+            items: [{ productId: 'prod-1', quantity: 2 }],
+        };
+
+        beforeEach(() => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.product.findMany.mockResolvedValue(products);
+            db.storefrontOrder.create.mockResolvedValue(createdOrder);
+        });
+
+        it('stores the delivery address on the order', async () => {
+            await service.placeOrder(slug, dto as any);
+
+            expect(db.storefrontOrder.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ deliveryAddress: 'House 5, Road 2', deliveryArea: 'Dhanmondi' }),
+                }),
+            );
+        });
+
+        it('emails the shopper a confirmation billed to the shop, and sends no text', async () => {
+            await service.placeOrder(slug, dto as any);
+
+            expect(emailService.sendStorefrontOrderUpdate).toHaveBeenCalledWith(
+                'john@example.com',
+                expect.objectContaining({
+                    event: 'PLACED',
+                    orderId: createdOrder.id,
+                    storeName: 'Test Store',
+                    storeSlug: slug,
+                    totalAmount: 1000,
+                    items: [{ name: 'Phone', quantity: 2, unitPrice: 500 }],
+                    deliveryAddress: 'House 5, Road 2',
+                    deliveryArea: 'Dhanmondi',
+                }),
+                { tenantId: 'tenant-1' },
+            );
+            expect(smsService.sendStorefrontOrderUpdate).not.toHaveBeenCalled();
+        });
+
+        it('still places the order when the confirmation email fails', async () => {
+            emailService.sendStorefrontOrderUpdate.mockRejectedValue(new Error('SMTP down'));
+
+            await expect(service.placeOrder(slug, dto as any)).resolves.toEqual(createdOrder);
+        });
+
+        it('gives a signed-in shopper\'s record the address when it has none', async () => {
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1', loyalty_points: 0, customer_group_id: null, address: null });
+
+            await service.placeOrder(slug, dto as any, 'user-1');
+
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'cust-1' },
+                data: { address: 'House 5, Road 2, Dhanmondi' },
+            });
+        });
+
+        it('never overwrites an address the shop already keeps', async () => {
+            db.customer.findFirst.mockResolvedValue({
+                id: 'cust-1',
+                loyalty_points: 0,
+                customer_group_id: null,
+                address: 'Corrected by staff',
+            });
+
+            await service.placeOrder(slug, dto as any, 'user-1');
+
+            expect(db.customer.update).not.toHaveBeenCalled();
+        });
+
+        describe('status changes', () => {
+            beforeEach(() => {
+                db.storefrontOrder.findFirst.mockResolvedValue({ id: createdOrder.id, status: 'CONFIRMED' });
+                db.storefrontOrder.update.mockImplementation(async ({ data }: any) => ({ ...createdOrder, ...data }));
+                db.tenant.findUnique.mockResolvedValue({
+                    name: 'Test Store',
+                    storefront_slug: slug,
+                    storefront_order_sms: false,
+                });
+            });
+
+            it.each(['SHIPPED', 'DELIVERED'])('accepts %s', async (status) => {
+                const result = await service.updateOrderStatus('tenant-1', createdOrder.id, status);
+                expect(result.status).toBe(status);
+            });
+
+            it('emails the shopper when the status moves', async () => {
+                await service.updateOrderStatus('tenant-1', createdOrder.id, 'SHIPPED');
+
+                expect(emailService.sendStorefrontOrderUpdate).toHaveBeenCalledWith(
+                    'john@example.com',
+                    expect.objectContaining({ event: 'SHIPPED', storeSlug: slug }),
+                    { tenantId: 'tenant-1' },
+                );
+                expect(smsService.sendStorefrontOrderUpdate).not.toHaveBeenCalled();
+            });
+
+            it('texts the shopper too when the shop has opted in', async () => {
+                db.tenant.findUnique.mockResolvedValue({
+                    name: 'Test Store',
+                    storefront_slug: slug,
+                    storefront_order_sms: true,
+                });
+
+                await service.updateOrderStatus('tenant-1', createdOrder.id, 'DELIVERED');
+
+                expect(smsService.sendStorefrontOrderUpdate).toHaveBeenCalledWith(
+                    '01700000000',
+                    'Dear John Doe, your order #ABCD1234 (BDT 1000.00) has been delivered. - Test Store',
+                    'tenant-1',
+                );
+            });
+
+            it('sends nothing when the status did not actually change', async () => {
+                await service.updateOrderStatus('tenant-1', createdOrder.id, 'CONFIRMED');
+
+                expect(emailService.sendStorefrontOrderUpdate).not.toHaveBeenCalled();
+            });
+
+            it('sends nothing when an order is moved back to PENDING', async () => {
+                await service.updateOrderStatus('tenant-1', createdOrder.id, 'PENDING');
+
+                expect(emailService.sendStorefrontOrderUpdate).not.toHaveBeenCalled();
+                expect(db.tenant.findUnique).not.toHaveBeenCalled();
+            });
+        });
+    });
+
+    // ── updateCustomerProfile ──────────────────────────────────────────────────
+
+    describe('updateCustomerProfile', () => {
+        const slug = 'my-store';
+        const userId = 'user-1';
+        const customer = {
+            id: 'cust-1',
+            name: 'Alice',
+            email: 'alice@example.com',
+            phone: '01700000001',
+            address: null,
+            loyalty_points: 10,
+            total_spent: 500,
+        };
+
+        beforeEach(() => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+            db.customer.findFirst.mockResolvedValueOnce(customer);
+            db.customer.update.mockImplementation(async ({ data }: any) => ({ ...customer, ...data }));
+        });
+
+        it('writes name, phone and address to this shop\'s record', async () => {
+            db.customer.findFirst.mockResolvedValueOnce(null); // nobody else holds the number
+
+            const result = await service.updateCustomerProfile(slug, userId, {
+                name: 'Alice Rahman',
+                phone: '01800000002',
+                address: 'House 1, Gulshan',
+            });
+
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'cust-1' },
+                data: { name: 'Alice Rahman', phone: '01800000002', address: 'House 1, Gulshan' },
+            });
+            expect(result).toEqual(expect.objectContaining({ name: 'Alice Rahman', phone: '01800000002' }));
+            expect(db.user.update).not.toHaveBeenCalled();
+        });
+
+        it('clears the phone and address when sent empty', async () => {
+            await service.updateCustomerProfile(slug, userId, { phone: '', address: '' });
+
+            expect(db.customer.update).toHaveBeenCalledWith({
+                where: { id: 'cust-1' },
+                data: { phone: null, address: null },
+            });
+        });
+
+        it('refuses a number another customer of this shop already has, in any spelling', async () => {
+            db.customer.findFirst.mockResolvedValueOnce({ id: 'cust-other' });
+
+            const promise = service.updateCustomerProfile(slug, userId, { phone: '+8801800000002' });
+
+            await expect(promise).rejects.toThrow(ConflictException);
+            expect(db.customer.findFirst).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        phone: { in: expect.arrayContaining(['+8801800000002', '01800000002']) },
+                        id: { not: 'cust-1' },
+                    }),
+                }),
+            );
+            expect(db.customer.update).not.toHaveBeenCalled();
+        });
+
+        it('does not re-check an unchanged phone', async () => {
+            await service.updateCustomerProfile(slug, userId, { phone: '01700000001', name: 'Alice' });
+
+            expect(db.customer.findFirst).toHaveBeenCalledTimes(1);
+            expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 'cust-1' }, data: { name: 'Alice' } });
+        });
+
+        it('rejects a session minted for a different store', async () => {
+            const promise = service.updateCustomerProfile(slug, userId, { name: 'X' }, 'tenant-other');
+
+            await expect(promise).rejects.toThrow(UnauthorizedException);
+            expect(db.customer.update).not.toHaveBeenCalled();
+        });
+    });
+
+    // ── customerForgotPassword ─────────────────────────────────────────────────
+
+    describe('customerForgotPassword', () => {
+        const slug = 'my-store';
+        const generic = { message: 'If that email has an account at this store, a reset link has been sent.' };
+
+        beforeEach(() => {
+            db.tenant.findFirst.mockResolvedValue(mockTenant);
+        });
+
+        it('sends a shop-branded reset to an account that shops here', async () => {
+            db.user.findUnique.mockResolvedValue({ id: 'user-1' });
+            db.customer.findFirst.mockResolvedValue({ id: 'cust-1' });
+
+            await expect(service.customerForgotPassword(slug, 'alice@example.com')).resolves.toEqual(generic);
+            expect(passwordResetService.requestReset).toHaveBeenCalledWith('alice@example.com', {
+                name: 'Test Store',
+                slug,
+            });
+        });
+
+        it('sends nothing to an account with no customer record at this shop', async () => {
+            db.user.findUnique.mockResolvedValue({ id: 'user-1' });
+            db.customer.findFirst.mockResolvedValue(null);
+
+            await expect(service.customerForgotPassword(slug, 'owner@example.com')).resolves.toEqual(generic);
+            expect(passwordResetService.requestReset).not.toHaveBeenCalled();
+        });
+
+        it('answers the same for an unknown address', async () => {
+            db.user.findUnique.mockResolvedValue(null);
+
+            await expect(service.customerForgotPassword(slug, 'nobody@example.com')).resolves.toEqual(generic);
+            expect(passwordResetService.requestReset).not.toHaveBeenCalled();
         });
     });
 });
