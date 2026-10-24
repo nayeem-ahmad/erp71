@@ -88,10 +88,10 @@ const CATEGORY_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'info'> 
 };
 
 /**
- * The columns an import file may carry. Project, board column and assignee are
- * named the way a person writes them — a project code, the column's name, an
- * email — and the server resolves each one, so nobody has to paste an id into a
- * spreadsheet.
+ * The columns an import file may carry. Project, board column, assignee, story,
+ * milestone, sprint and labels are named the way a person writes them — a
+ * project code, the column's name, an email, a story ID — and the server
+ * resolves each one, so nobody has to paste an id into a spreadsheet.
  */
 const IMPORT_FIELDS: ImportField[] = [
     { key: 'project', label: 'Project (code or name)', required: true },
@@ -103,6 +103,11 @@ const IMPORT_FIELDS: ImportField[] = [
     { key: 'startDate', label: 'Start date', required: false },
     { key: 'dueDate', label: 'Due date', required: false },
     { key: 'estimateHours', label: 'Estimate hours', required: false },
+    { key: 'remainingHours', label: 'Remaining hours', required: false },
+    { key: 'userStory', label: 'User story (ID or title)', required: false },
+    { key: 'milestone', label: 'Milestone', required: false },
+    { key: 'sprint', label: 'Sprint', required: false },
+    { key: 'labels', label: 'Labels (comma-separated)', required: false },
 ];
 
 /**
