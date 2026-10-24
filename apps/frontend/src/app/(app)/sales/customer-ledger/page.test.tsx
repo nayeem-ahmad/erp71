@@ -13,7 +13,8 @@ jest.mock('@/lib/i18n', () => {
     };
 }, { virtual: true });
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createdRangeFromPreset } from '@/lib/created-range';
 import CustomerLedgerPage from './page';
 import { api } from '@/lib/api';
 import { mockBranchScope } from '@/test-utils/branch-scope';
@@ -31,8 +32,13 @@ jest.mock('@/lib/api', () => ({
     },
 }));
 
+// What the page hands the table: its columns, the toolbar filters, View options.
+let mockTableProps: any = null;
 jest.mock('@/components/data-table', () => ({
-    DataTable: ({ title }: { title: string }) => <div data-testid="ledger-table">{title}</div>,
+    DataTable: (props: { title: string }) => {
+        mockTableProps = props;
+        return <div data-testid="ledger-table">{props.title}</div>;
+    },
 }));
 
 const ALICE = { id: 'cust-alice', name: 'Alice Corp', phone: '01700000001', due_balance: 100 };
@@ -123,5 +129,58 @@ describe('CustomerLedgerPage branch', () => {
         await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: 'store-1' }));
         expect(await screen.findByText('Karim Electronics')).toBeInTheDocument();
         expect(api.getCustomerGlLedger).not.toHaveBeenCalledWith('cust-alice', expect.any(Object));
+    });
+});
+
+describe('CustomerLedgerPage list UI', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockTableProps = null;
+        searchParams = {};
+        mockBranchScope();
+        (api.getCustomers as jest.Mock).mockResolvedValue([ALICE]);
+        (api.getCustomerGlLedger as jest.Mock).mockResolvedValue(EMPTY_LEDGER);
+    });
+
+    it('opens on this month, on the workspace calendar', async () => {
+        render(<CustomerLedgerPage />);
+
+        const month = createdRangeFromPreset('thisMonth');
+        await waitFor(() =>
+            expect(api.getCustomerGlLedger).toHaveBeenCalledWith('cust-alice', { from: month.from, to: month.to }),
+        );
+    });
+
+    it('draws the ledger with View options and its date range in the table toolbar', async () => {
+        render(<CustomerLedgerPage />);
+        await screen.findByTestId('ledger-table');
+
+        expect(mockTableProps.viewOptions).toBe(true);
+        expect(mockTableProps.filters).toEqual([
+            expect.objectContaining({ id: 'date', type: 'date-range', label: 'Date' }),
+        ]);
+        // No date boxes of its own above the table any more.
+        expect(screen.queryByText('Date (from)')).not.toBeInTheDocument();
+    });
+
+    it('reads the whole history once the range is cleared', async () => {
+        render(<CustomerLedgerPage />);
+        await screen.findByTestId('ledger-table');
+
+        act(() => mockTableProps.filters[0].onChange(null));
+
+        await waitFor(() =>
+            expect(api.getCustomerGlLedger).toHaveBeenLastCalledWith('cust-alice', { from: undefined, to: undefined }),
+        );
+    });
+
+    it('right-aligns the amount and the balance', async () => {
+        render(<CustomerLedgerPage />);
+        await screen.findByTestId('ledger-table');
+
+        const align = (id: string) =>
+            mockTableProps.columns.find((column: any) => (column.id ?? column.accessorKey) === id)?.meta?.align;
+        expect(align('amount')).toBe('end');
+        expect(align('balance_after')).toBe('end');
     });
 });

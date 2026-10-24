@@ -85,8 +85,8 @@ describe('countExtraActivityFilters', () => {
 describe('activity layout preference', () => {
     beforeEach(() => localStorage.removeItem(ACTIVITY_LAYOUT_KEY));
 
-    it('opens on standard until a layout has been chosen', () => {
-        expect(readActivityLayout()).toBe('standard');
+    it('opens on the list until a layout has been chosen', () => {
+        expect(readActivityLayout()).toBe('list');
     });
 
     it('remembers the layout that was chosen', () => {
@@ -96,6 +96,13 @@ describe('activity layout preference', () => {
 
     it('ignores a stored value it does not know', () => {
         localStorage.setItem(ACTIVITY_LAYOUT_KEY, 'dense');
-        expect(readActivityLayout()).toBe('standard');
+        expect(readActivityLayout()).toBe('list');
+    });
+
+    it('reads the old standard and compact layouts as the list', () => {
+        localStorage.setItem(ACTIVITY_LAYOUT_KEY, 'compact');
+        expect(readActivityLayout()).toBe('list');
+        localStorage.setItem(ACTIVITY_LAYOUT_KEY, 'standard');
+        expect(readActivityLayout()).toBe('list');
     });
 });

@@ -135,8 +135,7 @@ export const crmHrMessages = {
             },
             layout: {
                 group: 'Susun atur',
-                standard: 'Standard',
-                compact: 'Padat',
+                list: 'Senarai',
                 agenda: 'Agenda',
             },
             moreFilters: 'Lagi penapis',

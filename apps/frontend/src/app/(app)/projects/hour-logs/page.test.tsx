@@ -1,6 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
 import HourLogsPage from './page';
+
+// A desktop: the toolbar filters sit inline rather than in the phone's sheet.
+jest.mock('@/hooks/useMediaQuery', () => ({
+    useMediaQuery: () => true,
+    useIsMdUp: () => true,
+}));
 
 const getProjectTimeEntries = jest.fn();
 const getProjectTimeReport = jest.fn();
@@ -78,6 +84,8 @@ const summary = {
     avgHoursPerDay: 4.17,
 };
 
+const optionValues = (select: HTMLSelectElement) => Array.from(select.options).map((o) => o.value);
+
 const listOf = (items: unknown[]) => ({
     items,
     total: items.length,
@@ -138,6 +146,21 @@ beforeEach(() => {
 const isoDay = (date: Date): string =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
+/** Toolbar filters are named by their label. */
+const filterByName = (name: string) => screen.getByRole('combobox', { name }) as HTMLSelectElement;
+
+/** The date chip reads "Date · <range>". */
+const rangeChip = () => screen.getByRole('button', { name: /^Date ·/ });
+
+/** Picks the day ledger or the flat list in View options, then closes the menu. */
+const chooseView = (name: 'Day view' | 'List view') => {
+    fireEvent.click(screen.getByRole('button', { name: 'View options' }));
+    const menu = screen.getByRole('dialog', { name: 'View options' });
+    fireEvent.click(within(menu).getByRole('button', { name }));
+    const toggle = screen.queryByRole('button', { name: 'View options', expanded: true });
+    if (toggle) fireEvent.click(toggle);
+};
+
 /** The first day of an N-day window ending today. */
 const expectedFrom = (days: number): string => {
     const start = new Date();
@@ -179,7 +202,7 @@ describe('Hour logs page', () => {
         render(<HourLogsPage />);
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('Person'), { target: { value: 'me' } });
+        fireEvent.change(filterByName('Person'), { target: { value: 'me' } });
 
         await waitFor(() =>
             expect(getProjectTimeEntries).toHaveBeenCalledWith(
@@ -263,6 +286,69 @@ describe('Hour logs page', () => {
         });
     });
 
+    describe('the list toolbar', () => {
+        it('puts search, filters, View options and export in one toolbar, with no switch above it', async () => {
+            render(<HourLogsPage />);
+            await screen.findByText('Wire the meter');
+
+            expect(screen.queryByRole('group', { name: 'View' })).not.toBeInTheDocument();
+            expect(filterByName('Project')).toBeInTheDocument();
+            expect(rangeChip()).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /^export$/i })).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'View options' }));
+            const menu = screen.getByRole('dialog', { name: 'View options' });
+            expect(within(menu).getByRole('button', { name: 'Day view' })).toHaveAttribute('aria-pressed', 'true');
+        });
+
+        it('offers the page\'s own presets on the date chip', async () => {
+            render(<HourLogsPage />);
+            await screen.findByText('Wire the meter');
+
+            fireEvent.click(rangeChip());
+            const presets = within(screen.getByRole('dialog', { name: 'Date' }));
+            expect(presets.getByRole('button', { name: 'Last 7 days' })).toBeInTheDocument();
+            expect(presets.getByRole('button', { name: 'Last 30 days' })).toBeInTheDocument();
+            expect(presets.getByRole('button', { name: 'This month' })).toBeInTheDocument();
+            expect(presets.queryByRole('button', { name: 'Yesterday' })).not.toBeInTheDocument();
+        });
+
+        /** The totals need a window, so "clear" means the default one, never every hour ever logged. */
+        it('goes back to the last 30 days when the range is cleared', async () => {
+            render(<HourLogsPage />);
+            await screen.findByText('Wire the meter');
+            fireEvent.click(rangeChip());
+            fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }));
+            await waitFor(() => expect(getProjectTimeEntries.mock.calls.at(-1)![0].from).toBe(expectedFrom(7)));
+
+            fireEvent.click(screen.getByRole('button', { name: /^clear all$/i }));
+
+            await waitFor(() => expect(getProjectTimeEntries.mock.calls.at(-1)![0]).toMatchObject({
+                from: expectedFrom(30),
+                to: isoDay(new Date()),
+            }));
+        });
+
+        it('pages, searches and filters the flat list from the table\'s own toolbar', async () => {
+            render(<HourLogsPage />);
+            await screen.findByText('Wire the meter');
+            chooseView('List view');
+            await screen.findByRole('columnheader', { name: 'Duration' });
+
+            // One toolbar: the ledger's is gone, the table's holds the same controls.
+            expect(screen.getAllByPlaceholderText(/search a task title or a note/i)).toHaveLength(1);
+            expect(filterByName('Project')).toBeInTheDocument();
+
+            fireEvent.change(screen.getByPlaceholderText(/search a task title or a note/i), {
+                target: { value: 'meter' },
+            });
+            await waitFor(() => expect(getProjectTimeEntries.mock.calls.at(-1)![0].search).toBe('meter'));
+
+            const duration = (await screen.findByText('3h 30m')).closest('td');
+            expect(duration).toHaveClass('text-end');
+        });
+    });
+
     describe('the view switcher', () => {
         const spanned = entry({
             start_time: '09:15',
@@ -279,7 +365,7 @@ describe('Hour logs page', () => {
             await screen.findByText('Wire the meter');
             expect(screen.queryByRole('columnheader', { name: 'Duration' })).toBeNull();
 
-            fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+            chooseView('List view');
 
             expect(
                 await screen.findByRole('columnheader', { name: 'Duration' }),
@@ -289,7 +375,8 @@ describe('Hour logs page', () => {
         it('gives the list a column for every field on the entry', async () => {
             getProjectTimeEntries.mockResolvedValue(listOf([spanned]));
             render(<HourLogsPage />);
-            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+            await screen.findByText('Wire the meter');
+            chooseView('List view');
 
             for (const heading of [
                 'Date',
@@ -328,7 +415,8 @@ describe('Hour logs page', () => {
                 listOf([entry({ start_time: '22:00', end_time: '02:00' })]),
             );
             render(<HourLogsPage />);
-            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+            await screen.findByText('Wire the meter');
+            chooseView('List view');
 
             const row = (await screen.findByText('Wire the meter')).closest('tr')!;
             expect(row).toHaveTextContent(/4 Aug|Aug 4/);
@@ -336,7 +424,8 @@ describe('Hour logs page', () => {
 
         it('keeps the three row actions the day ledger has', async () => {
             render(<HourLogsPage />);
-            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+            await screen.findByText('Wire the meter');
+            chooseView('List view');
 
             expect(
                 await screen.findByRole('button', { name: 'Start a timer on this again' }),
@@ -348,9 +437,12 @@ describe('Hour logs page', () => {
         it('edits a description in place from the list, as the ledger does', async () => {
             const { api } = jest.requireMock('@/lib/api');
             render(<HourLogsPage />);
-            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+            await screen.findByText('Wire the meter');
+            chooseView('List view');
 
-            fireEvent.click(await screen.findByRole('button', { name: 'Description' }));
+            // The column heading is a button too: it sorts.
+            const row = (await screen.findByText('Ran the conduit')).closest('tr')!;
+            fireEvent.click(within(row).getByRole('button', { name: 'Description' }));
             const box = screen.getByRole('textbox', { name: 'Description' });
             fireEvent.change(box, { target: { value: 'Pulled the cable' } });
             fireEvent.blur(box);
@@ -364,7 +456,8 @@ describe('Hour logs page', () => {
 
         it('remembers the view rather than asking for it again every visit', async () => {
             const first = render(<HourLogsPage />);
-            fireEvent.click(await screen.findByRole('button', { name: 'List view' }));
+            await screen.findByText('Wire the meter');
+            chooseView('List view');
             await screen.findByRole('columnheader', { name: 'Duration' });
             first.unmount();
 
@@ -567,8 +660,9 @@ describe('Hour logs page — remembered filters', () => {
         const first = render(<HourLogsPage />);
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('Person'), { target: { value: 'me' } });
-        fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'p1' } });
+        await waitFor(() => expect(optionValues(filterByName('Project'))).toContain('p1'));
+        fireEvent.change(filterByName('Person'), { target: { value: 'me' } });
+        fireEvent.change(filterByName('Project'), { target: { value: 'p1' } });
         await waitFor(() => expect(lastCall()).toMatchObject({ userId: 'me', projectId: 'p1' }));
         first.unmount();
 
@@ -577,7 +671,7 @@ describe('Hour logs page — remembered filters', () => {
         render(<HourLogsPage />);
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
 
-        expect((screen.getByLabelText('Person') as HTMLSelectElement).value).toBe('me');
+        expect(filterByName('Person').value).toBe('me');
         // Never everybody's hours on the way, in the list or in the totals above it.
         for (const call of getProjectTimeEntries.mock.calls) {
             expect(call[0]).toMatchObject({ userId: 'me', projectId: 'p1' });
@@ -619,7 +713,8 @@ describe('Hour logs page — remembered filters', () => {
         const first = render(<HourLogsPage />);
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
 
-        fireEvent.change(screen.getByLabelText('Custom range'), { target: { value: '7' } });
+        fireEvent.click(rangeChip());
+        fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }));
         await waitFor(() => expect(lastCall().from).toBe(expectedFrom(7)));
         first.unmount();
 
@@ -630,7 +725,6 @@ describe('Hour logs page — remembered filters', () => {
             render(<HourLogsPage />);
             await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
 
-            expect((screen.getByLabelText('Custom range') as HTMLSelectElement).value).toBe('7');
             expect(lastCall().from).toBe(expectedFrom(7));
             expect(lastCall().to).toBe(isoDay(new Date()));
         } finally {
@@ -642,8 +736,10 @@ describe('Hour logs page — remembered filters', () => {
         const first = render(<HourLogsPage />);
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
 
+        fireEvent.click(rangeChip());
         fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-05' } });
         fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-01-19' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
         await waitFor(() => expect(lastCall()).toMatchObject({ from: '2026-01-05', to: '2026-01-19' }));
         first.unmount();
 
@@ -651,7 +747,7 @@ describe('Hour logs page — remembered filters', () => {
         render(<HourLogsPage />);
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
 
-        expect((screen.getByLabelText('Custom range') as HTMLSelectElement).value).toBe('custom');
+        expect(rangeChip()).toHaveTextContent('5 Jan');
         for (const call of getProjectTimeEntries.mock.calls) {
             expect(call[0]).toMatchObject({ from: '2026-01-05', to: '2026-01-19' });
         }
@@ -684,13 +780,13 @@ describe('Hour logs page — remembered filters', () => {
         render(<HourLogsPage />);
 
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
-        expect(screen.queryByLabelText('Person')).not.toBeInTheDocument();
+        expect(screen.queryByRole('combobox', { name: 'Person' })).not.toBeInTheDocument();
     });
 
     it('keeps the person filter for everybody else', async () => {
         render(<HourLogsPage />);
 
         await waitFor(() => expect(getProjectTimeEntries).toHaveBeenCalled());
-        expect(screen.getByLabelText('Person')).toBeInTheDocument();
+        expect(filterByName('Person')).toBeInTheDocument();
     });
 });

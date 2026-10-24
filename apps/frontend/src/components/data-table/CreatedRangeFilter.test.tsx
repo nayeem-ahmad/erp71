@@ -22,7 +22,7 @@ describe('CreatedRangeFilter', () => {
         fireEvent.click(screen.getByRole('button', { name: /created · any time/i }));
         fireEvent.click(screen.getByRole('button', { name: 'Today' }));
 
-        expect(onChange).toHaveBeenCalledWith(createdRangeFromPreset('today', new Date('2026-08-19T04:00:00.000Z')));
+        expect(onChange).toHaveBeenCalledWith(createdRangeFromPreset('today', new Date('2026-08-19T04:00:00.000Z')), 'today');
     });
 
     it('applies a custom from/to pair on Apply', () => {

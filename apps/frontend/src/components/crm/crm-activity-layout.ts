@@ -1,8 +1,12 @@
 import { routes } from '@/lib/routes';
 import { tenantDateOnly } from '@/lib/created-range';
 
-/** How the activities page lays its rows out. Remembered across visits. */
-export type ActivityLayout = 'standard' | 'compact' | 'agenda';
+/**
+ * How the activities page lays its rows out: the table, or the agenda grouped
+ * by when work is due. Chosen in View options and remembered across visits.
+ * How tight the table is comes from that menu's row spacing, not from here.
+ */
+export type ActivityLayout = 'list' | 'agenda';
 
 /**
  * A display preference, so it lives in `localStorage` rather than with the
@@ -13,14 +17,14 @@ export type ActivityLayout = 'standard' | 'compact' | 'agenda';
 export const ACTIVITY_LAYOUT_KEY = 'erp71:crm-activities:layout';
 
 export function readActivityLayout(): ActivityLayout {
-    if (typeof window === 'undefined') return 'standard';
+    if (typeof window === 'undefined') return 'list';
     try {
-        const raw = localStorage.getItem(ACTIVITY_LAYOUT_KEY);
-        if (raw === 'compact' || raw === 'agenda' || raw === 'standard') return raw;
+        // `standard` and `compact` were layouts once; both are the table now.
+        if (localStorage.getItem(ACTIVITY_LAYOUT_KEY) === 'agenda') return 'agenda';
     } catch {
-        // Storage blocked. Standard is the page the rest of the app already knows.
+        // Storage blocked. The table is the page the rest of the app already knows.
     }
-    return 'standard';
+    return 'list';
 }
 
 export function writeActivityLayout(layout: ActivityLayout): void {

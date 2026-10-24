@@ -79,6 +79,7 @@ export const coreMessages = {
             today: 'آج',
             yesterday: 'کل',
             last7Days: 'پچھلے 7 دن',
+            last30Days: 'پچھلے 30 دن',
             thisMonth: 'اس مہینے',
             custom: 'مخصوص',
             apply: 'لاگو کریں',

@@ -1,6 +1,7 @@
 export { RowActions, RowActionButton, rowActionButtonClass } from './RowActions';
 export type { RowActionButtonProps, RowActionIntent } from './RowActions';
 export { TableViewOptions } from './TableViewOptions';
+export type { TableViewLayout } from './TableViewOptions';
 export { useTableViewSettings, useTableViewStore } from './useTableViewSettings';
 export {
     DEFAULT_TABLE_VIEW,

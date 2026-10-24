@@ -16,4 +16,5 @@ export {
     PINNED_LAST_COLUMN_ID,
 } from './column-order';
 export { default as FilterBar } from './FilterBar';
+export { default as ListToolbar } from './ListToolbar';
 export type { ListFilter, ResolvedListFilter } from './FilterBar';

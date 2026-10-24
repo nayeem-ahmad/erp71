@@ -57,7 +57,7 @@ import { dataTableDensity, type UiDensity } from '@/lib/ui/compact-density';
 import { stripedRowClass } from '@/lib/ui/striped-row';
 import { useTablePreferences } from './useTablePreferences';
 import FilterBar, { type ListFilter, type ResolvedListFilter } from './FilterBar';
-import { TableViewOptions, useTableViewSettings, TABLE_DENSITY_CLASSES, TABLE_FONT_PX, TABLE_ROW_CLASSES } from '@/components/table';
+import { TableViewOptions, useTableViewSettings, TABLE_DENSITY_CLASSES, TABLE_FONT_PX, TABLE_ROW_CLASSES, type TableViewLayout } from '@/components/table';
 import {
     columnDefId,
     isPinnedColumnId,
@@ -169,6 +169,8 @@ export interface DataTableProps<T> {
      * takes it.
      */
     viewOptions?: boolean;
+    /** Another way to read the same rows, chosen at the top of View options. Needs `viewOptions`. */
+    viewLayout?: TableViewLayout;
     /**
      * The list's filters, drawn in the toolbar beside the search box (and in a
      * bottom sheet on a phone). See `ListFilter`.
@@ -415,6 +417,7 @@ export default function DataTable<T>({
     rowClassName,
     striped: stripedProp = false,
     viewOptions = false,
+    viewLayout,
     filters,
 }: DataTableProps<T>) {
     const { t } = useI18n();
@@ -1110,7 +1113,7 @@ export default function DataTable<T>({
                         </div>
 
                         {viewOptions && (
-                            <TableViewOptions tableId={tableId} buttonClassName={toolbarBtnBase} iconOnly={isCompact} />
+                            <TableViewOptions tableId={tableId} buttonClassName={toolbarBtnBase} iconOnly={isCompact} layout={viewLayout} />
                         )}
 
                         {/* Export */}

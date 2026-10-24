@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Pencil, Play, Trash2 } from 'lucide-react';
+import { RowActionButton } from '@/components/table';
 import { formatDuration, type HourLogEntry } from './hour-log-day';
 
 /**
@@ -210,33 +211,9 @@ export function RowActions({
 }) {
     return (
         <div className="flex items-center gap-0.5">
-            <button
-                type="button"
-                onClick={() => onLogAgain(entry)}
-                aria-label={labels.logAgain}
-                title={labels.logAgain}
-                className="min-h-touch min-w-touch rounded-md p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-            >
-                <Play className="mx-auto h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-                type="button"
-                onClick={() => onEdit(entry)}
-                aria-label={labels.editEntry}
-                title={labels.editEntry}
-                className="min-h-touch min-w-touch rounded-md p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-            >
-                <Pencil className="mx-auto h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-                type="button"
-                onClick={() => onDelete(entry)}
-                aria-label={labels.deleteEntry}
-                title={labels.deleteEntry}
-                className="min-h-touch min-w-touch rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
-            >
-                <Trash2 className="mx-auto h-4 w-4" aria-hidden="true" />
-            </button>
+            <RowActionButton icon={<Play />} label={labels.logAgain} onClick={() => onLogAgain(entry)} />
+            <RowActionButton icon={<Pencil />} label={labels.editEntry} onClick={() => onEdit(entry)} />
+            <RowActionButton icon={<Trash2 />} label={labels.deleteEntry} intent="danger" onClick={() => onDelete(entry)} />
         </div>
     );
 }
