@@ -351,6 +351,7 @@ export const crmHrMessages = {
                 nameRequired: "নাম আবশ্যক।",
                 invalidEmail: "সঠিক ইমেইল ঠিকানা দিন।",
             },
+            organization: "সংস্থা",
             fields: {
                 name: "নাম",
                 company: "প্রতিষ্ঠান",
@@ -587,6 +588,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: "যোগাযোগ",
+                linkedContact: "কন্টাক্ট",
+                organization: "সংস্থা",
                 conversations: "কথোপকথন",
                 logConversation: "কথোপকথন লগ করুন",
                 aiDraft: "এআই খসড়া",

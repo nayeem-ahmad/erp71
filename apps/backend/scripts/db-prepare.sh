@@ -351,17 +351,42 @@ step sync:lead-taxonomy \
 step sync:crm-activities \
     npm run sync:crm-activities --workspace=@erp71/database
 
-# sync:lead-identity backfills Lead.mobile_norm/email_norm/linkedin_norm, the
-# normalized columns carrying the per-tenant unique indexes that stop duplicate
-# leads. It is REQUIRED, not a nicety: production applies schema with `db push`
-# above, never `prisma migrate deploy`, so the migration that backfills these
-# columns never runs here. Without this step the columns stay NULL on every
-# existing lead, the indexes guard nothing, and the old raw-mobile unique that
-# db push drops is not replaced. Only the oldest lead claiming a value is filled
-# in, so pre-existing duplicates cannot make it throw. See
-# prisma/sync-lead-identity.ts.
+# sync:lead-identity fills Lead.mobile_norm/email_norm/linkedin_norm from the
+# raw columns, including when several leads share one mobile, email, or LinkedIn
+# profile. The unique indexes on those columns are gone. Leaving a shared norm
+# null would hide an email the user can already see. It writes only the norm
+# columns — never email, mobile, or linkedin_url — and a lead whose norms are
+# already set is left alone. REQUIRED, and it must stay AFTER `prisma db push`
+# above: production never runs `prisma migrate deploy`, and filling a second
+# lead's email_norm before that drop would throw on the old unique index and
+# abort boot. See prisma/sync-lead-identity.ts.
 step sync:lead-identity \
     npm run sync:lead-identity --workspace=@erp71/database
+
+# sync:contact-identity inserts or fills null columns only. It fills
+# CrmContact.mobile_norm, email_norm, and linkedin_norm where they are still
+# null, and it does not insert rows. A contested mobile or LinkedIn stays null
+# on every contact after the oldest; email_norm is filled wherever there is an
+# email. It must stay before sync:lead-contacts, which reads mobile_norm.
+# See prisma/sync-contact-identity.ts.
+step sync:contact-identity \
+    npm run sync:contact-identity --workspace=@erp71/database
+
+# sync:crm-organizations inserts or fills null columns only. It inserts
+# Organization rows and sets CrmContact.organization_id where that column is
+# still null. The company string is left as stored, and a name_norm that
+# already exists is not inserted again. It must stay before sync:lead-contacts,
+# which reads organization_id. See prisma/sync-crm-organizations.ts.
+step sync:crm-organizations \
+    npm run sync:crm-organizations --workspace=@erp71/database
+
+# sync:lead-contacts inserts or fills null columns only. It inserts a
+# CrmContact when a lead matches no contact by mobile or LinkedIn, and fills
+# null Lead.contact_id, Lead.organization_id, and CrmContact.customer_id. It
+# must stay after sync:contact-identity and sync:crm-organizations because it
+# reads mobile_norm and organization_id. See prisma/sync-lead-contacts.ts.
+step sync:lead-contacts \
+    npm run sync:lead-contacts --workspace=@erp71/database
 
 # sync:role-permissions is the same idea for the permission matrix:
 # ROLE_DEFAULT_PERMISSIONS is read only at tenant creation and role assignment,

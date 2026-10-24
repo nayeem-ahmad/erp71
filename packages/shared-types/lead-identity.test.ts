@@ -7,6 +7,7 @@ import {
     normalizeLeadEmail,
     normalizeLeadMobile,
     normalizeProfileUrl,
+    organizationNameNorm,
 } from './lead-identity';
 
 describe('normalizeLeadMobile', () => {
@@ -72,6 +73,14 @@ describe('normalizeProfileUrl', () => {
     it('maps blank to null', () => {
         expect(normalizeProfileUrl('')).toBeNull();
         expect(normalizeProfileUrl('https://')).toBeNull();
+    });
+});
+
+describe('organizationNameNorm', () => {
+    it('trims, lowercases, and collapses internal whitespace', () => {
+        expect(organizationNameNorm(' Karim Traders ')).toBe('karim traders');
+        expect(organizationNameNorm('Karim   Traders')).toBe('karim traders');
+        expect(organizationNameNorm('Karim Traders Ltd')).toBe('karim traders ltd');
     });
 });
 

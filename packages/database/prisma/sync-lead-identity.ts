@@ -1,43 +1,30 @@
 /**
- * Backfills `Lead.mobile_norm` / `email_norm` / `linkedin_norm` — the normalized
- * identity columns that carry the per-tenant unique indexes stopping duplicate
- * leads.
+ * Backfills `Lead.mobile_norm` / `email_norm` / `linkedin_norm` from the raw
+ * `mobile`, `email`, and `linkedin_url` columns.
  *
  * Why this exists
  * ---------------
  * Production does not run `prisma migrate deploy`. The container boots with
- * `prisma db push` (see apps/backend/Dockerfile), which syncs the *shape* of the
- * schema and nothing else. So migration `20260831120000_lead_identity_dedupe_keys`
- * — which adds these columns, backfills them and resolves the collisions already
- * in the data — only ever runs on a developer's machine.
- *
- * Without this script, a production deploy would add the three columns as all
- * NULL, create the three unique indexes (which succeeds precisely *because* the
- * columns are empty), and drop the old raw-string `@@unique([tenant_id, mobile])`.
- * Every existing lead would end up with no identity keys at all: duplicate
- * detection would match only leads created after the deploy, and the raw-mobile
- * protection that was there before would be gone. Silently — new leads would
- * look fine.
+ * `prisma db push` (see apps/backend/Dockerfile and
+ * apps/backend/scripts/db-prepare.sh), which syncs the *shape* of the schema
+ * and nothing else. The migration that first added these columns only ever runs
+ * on a developer's machine. Without this script a production deploy would leave
+ * every existing lead's norms NULL.
  *
  * It runs on every container start, so it must be idempotent. It is: a lead
  * whose normalized column is already set is never touched, so a second run is a
- * no-op.
+ * no-op, and a lead whose norms are already set is absent from the updates.
  *
- * Collisions
- * ----------
- * The data already holds duplicates — that is the whole reason for the indexes.
- * A blind backfill would throw on the first collision, and this sits inside the
- * `&&` chain ahead of `node main.js` in the container CMD, where that means the
- * backend never boots. So for each identity value, only the OLDEST lead claiming
- * it is filled in; the later ones keep a NULL normalized column, exactly as the
- * migration leaves them. Nothing is deleted and nothing a user can see changes —
- * those leads simply hold no index entry until someone merges them.
- * `scripts/lead-duplicates.ts` (or `scripts/sql/lead-duplicates.sql`) reports
- * and clears them.
+ * Shared values
+ * -------------
+ * The per-tenant unique indexes on these columns are gone. Several leads may
+ * share one mobile, one email, or one LinkedIn profile. Leaving a shared norm
+ * null would hide an email the user can already see on the raw column — and the
+ * same for a mobile or a LinkedIn URL. The sync writes that normalized value
+ * onto every lead whose norm is still null.
  *
- * A consequence worth knowing: if the keeper is later deleted, the next boot
- * promotes the next-oldest duplicate into the index. That is the behaviour we
- * want — the value stays protected by whichever lead still holds it.
+ * It does not write `email`, `mobile`, or `linkedin_url`. Nothing a user can
+ * see changes, and nothing is deleted.
  *
  * The normalization is imported from @erp71/shared-types rather than reimplemented
  * in SQL, so this and the application can never disagree about what counts as the
@@ -71,21 +58,26 @@ interface Row {
 export interface SyncResult {
     scanned: number;
     filled: number;
-    /** Leads left unindexed because an older lead already holds the value. */
-    collisions: number;
 }
 
 /**
- * Decides what to write, given the leads in `created_at` order and the values
- * already claimed. Pure, so the rule is testable without a database.
+ * Decides what to write. Pure, so the rule is testable without a database.
  *
- * `claimed` is seeded with the values already present in the columns and is
- * mutated as the pass proceeds, which is what makes the oldest lead win: a value
- * is claimed once, by the first lead to reach it.
+ * Every still-null `mobile_norm`, `email_norm`, and `linkedin_norm` is filled
+ * from the raw column, including when another lead already holds that value.
+ * A column that is already set is left alone, and a lead whose norms are
+ * already set is absent from `updates`.
+ *
+ * `claimed` stays so existing callers compile. It no longer causes a shared
+ * lead norm to be skipped: the unique indexes that made a second write throw
+ * are gone.
+ *
+ * `data` holds only norm keys. `email`, `mobile`, and `linkedin_url` are never
+ * written.
  */
 export function planBackfill(rows: Row[], claimed: Set<string>) {
+    void claimed;
     const updates: { id: string; data: Partial<LeadIdentity> }[] = [];
-    let collisions = 0;
 
     for (const row of rows) {
         const identity = leadIdentityOf(row);
@@ -100,19 +92,13 @@ export function planBackfill(rows: Row[], claimed: Set<string>) {
             const value = identity[field];
             if (value == null) continue;
 
-            const key = `${row.tenant_id} ${field} ${value}`;
-            if (claimed.has(key)) {
-                collisions++;
-                continue;
-            }
-            claimed.add(key);
             data[field] = value;
         }
 
         if (Object.keys(data).length) updates.push({ id: row.id, data });
     }
 
-    return { updates, collisions };
+    return { updates, collisions: 0 };
 }
 
 async function main() {
@@ -121,30 +107,16 @@ async function main() {
     const tenantArg = argv.find((a) => a.startsWith('--tenant='))?.split('=')[1];
     const where = tenantArg ? { tenant_id: tenantArg } : {};
 
-    // Values already in the columns, so a re-run cannot hand a value to a second
-    // lead. Loaded up front rather than queried per row: one pass over the
-    // indexed columns beats one round trip per lead.
+    // `claimed` no longer withholds a shared norm. An empty set keeps the
+    // planner signature the callers already compile against.
     const claimed = new Set<string>();
-    const existing = await prisma.lead.findMany({
-        where: {
-            ...where,
-            OR: LEAD_IDENTITY_FIELDS.map((field) => ({ [field]: { not: null } })),
-        },
-        select: { tenant_id: true, mobile_norm: true, email_norm: true, linkedin_norm: true },
-    });
-    for (const row of existing) {
-        for (const field of LEAD_IDENTITY_FIELDS) {
-            const value = row[field];
-            if (value != null) claimed.add(`${row.tenant_id} ${field} ${value}`);
-        }
-    }
 
-    const result: SyncResult = { scanned: 0, filled: 0, collisions: 0 };
+    const result: SyncResult = { scanned: 0, filled: 0 };
     let cursor: string | undefined;
 
     for (;;) {
-        // Ordered oldest first, because the oldest lead is the one that keeps a
-        // contested value. `id` breaks ties so paging is stable.
+        // `id` breaks ties so paging is stable. Oldest-first no longer decides
+        // who keeps a shared value: every still-null norm is filled.
         const page: Row[] = await prisma.lead.findMany({
             where,
             select: {
@@ -164,8 +136,7 @@ async function main() {
         if (page.length === 0) break;
 
         result.scanned += page.length;
-        const { updates, collisions } = planBackfill(page, claimed);
-        result.collisions += collisions;
+        const { updates } = planBackfill(page, claimed);
 
         if (!dryRun) {
             // Sequential, not a transaction: a partial backfill is safe (the rest
@@ -184,15 +155,8 @@ async function main() {
     const prefix = dryRun ? '[dry run] ' : '';
     console.log(
         `${prefix}sync-lead-identity: scanned ${result.scanned} lead(s), ` +
-            `filled ${result.filled} identity key set(s), ` +
-            `left ${result.collisions} duplicate key(s) unindexed.`,
+            `filled ${result.filled} identity key set(s).`,
     );
-    if (result.collisions > 0) {
-        console.log(
-            '  Those leads are duplicates of an older lead and hold no index entry. ' +
-                'Run scripts/lead-duplicates.ts to review or clear them.',
-        );
-    }
 }
 
 // Only run the driver when invoked as a script, so `planBackfill` can be
@@ -200,11 +164,11 @@ async function main() {
 if (require.main === module) {
     main()
         .catch((error) => {
-            // Warn, never exit non-zero. This runs in an && chain ahead of
-            // `node main.js` in the container CMD, where a non-zero exit is a
-            // full outage rather than a failed script.
+            // Non-zero on purpose. `db-prepare.sh` treats a failed step as
+            // fatal and does not boot the new process; the old one keeps
+            // serving. A thrown error must not look like a finished backfill.
             console.error('sync-lead-identity failed:', error);
-            process.exitCode = 0;
+            process.exitCode = 1;
         })
         .finally(() => prisma.$disconnect());
 }
