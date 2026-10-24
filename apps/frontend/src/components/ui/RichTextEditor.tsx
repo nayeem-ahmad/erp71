@@ -100,8 +100,43 @@ let pasteSequence = 0;
  * from another page; anything without a file (plain text, HTML) leaves it
  * empty and the paste goes through untouched.
  */
+/** What a screenshot is called when the clipboard did not name it. */
+const GENERIC_CLIPBOARD_NAME = /^(image|pasted-image)(\.[a-z0-9]+)?$/i;
+
+function extensionFor(file: File): string {
+    if (file.type === 'image/jpeg') return 'jpg';
+    if (file.type === 'image/webp') return 'webp';
+    if (file.type === 'image/gif') return 'gif';
+    if (file.type === 'image/png') return 'png';
+    return /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase() || 'png';
+}
+
+/**
+ * A new file, when the clipboard's own name is the one every screenshot
+ * shares. `image.png` is not a name — two pastes under it are the same file
+ * to anything that stores by name, including the browser's own cache of the
+ * last one.
+ */
+function nameClipboardImage(file: File): File {
+    if (file.name && !GENERIC_CLIPBOARD_NAME.test(file.name)) return file;
+    const name = `image-${crypto.randomUUID().slice(0, 8)}.${extensionFor(file)}`;
+    return new File([file], name, { type: file.type, lastModified: file.lastModified });
+}
+
 function imagesOnClipboard(data: DataTransfer | null): File[] {
-    return Array.from(data?.files ?? []).filter((file) => file.type.startsWith('image/'));
+    if (!data) return [];
+    // `items` is the image the paste actually carries. `files` is consulted
+    // only when that list is empty: on some browsers it still holds the
+    // previous screenshot, under the same name.
+    const fromItems = Array.from(data.items ?? [])
+        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null);
+    const files =
+        fromItems.length > 0
+            ? fromItems
+            : Array.from(data.files ?? []).filter((file) => file.type.startsWith('image/'));
+    return files.map(nameClipboardImage);
 }
 
 /**

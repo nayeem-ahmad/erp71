@@ -33,8 +33,8 @@ const DESCRIPTION_MAX = 5000;
  *
  * Stored as the text the user typed rather than as HTML: it stays legible
  * everywhere else the field surfaces (exports, the API, a notification email)
- * and there is nothing to sanitise on the way out — `Markdown` renders it with
- * raw HTML and images disallowed.
+ * and there is nothing to sanitise on the way out. `Markdown` renders it, and
+ * a click on an image opens the file over the page rather than the editor.
  */
 export default function DescriptionSection({
     description,
@@ -139,9 +139,23 @@ export default function DescriptionSection({
                     )
                 }
             >
-                <button
-                    type="button"
-                    onClick={() => setEditing(true)}
+                {/* A div, not a button, once there is text: the images inside
+                    are buttons of their own, and a button cannot contain one.
+                    Clicking the words still edits. Clicking a picture does not. */}
+                <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                        const target = event.target as HTMLElement;
+                        if (target.closest('[data-markdown-image], [data-image-preview]')) return;
+                        setEditing(true);
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        setEditing(true);
+                    }}
                     aria-label={m.title}
                     // Empty, a dashed prompt one line high with a word on what
                     // belongs here. It used to be a grey 10rem box with its
@@ -168,7 +182,7 @@ export default function DescriptionSection({
                             </Suspense>
                         </span>
                     )}
-                </button>
+                </div>
             </CompactSection>
         );
     }
@@ -180,6 +194,10 @@ export default function DescriptionSection({
                     // Focus moving to the toolbar, or tabbing to the tick and
                     // the cross, is not focus leaving the editor.
                     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    // The image preview is drawn on the body, outside this
+                    // box. Opening it is not leaving the edit.
+                    const next = event.relatedTarget as HTMLElement | null;
+                    if (next?.closest?.('[data-image-preview]')) return;
                     // Switching tabs or apps blurs with no related target too,
                     // the same as a click on empty page. The difference is that
                     // the editor stays the active element and gets focus back

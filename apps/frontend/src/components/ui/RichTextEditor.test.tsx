@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { RichTextEditor } from './RichTextEditor';
 
@@ -130,6 +130,42 @@ describe('RichTextEditor image paste', () => {
         );
         expect(uploadImage).toHaveBeenCalledTimes(1);
         expect((uploadImage.mock.calls[0][0] as File).type).toBe('image/png');
+    });
+
+    it('renames a clipboard screenshot so it is not another image.png', async () => {
+        const uploadImage = jest.fn().mockResolvedValue({ url: 'https://cdn/a.png', name: 'kept.png' });
+        render(<Host uploadImage={uploadImage} />);
+
+        paste([image('image.png'), image('image.png')]);
+
+        await waitFor(() => expect(uploadImage).toHaveBeenCalledTimes(2));
+        const names = uploadImage.mock.calls.map((call) => (call[0] as File).name);
+        expect(names[0]).toMatch(/^image-[a-z0-9]+\.png$/);
+        expect(names[1]).toMatch(/^image-[a-z0-9]+\.png$/);
+        expect(names[0]).not.toBe(names[1]);
+        expect(names).not.toContain('image.png');
+    });
+
+    it('opens a full-size preview when the pasted image is clicked', async () => {
+        const { uploadImage, land } = heldUpload();
+        render(<Host uploadImage={uploadImage} initial="Before" />);
+
+        paste([image()]);
+        await screen.findByRole('img');
+        await act(async () => {
+            land({
+                url: 'https://res.cloudinary.com/demo/image/upload/w_80,c_limit/v1/shot.png?w=80',
+                name: 'shot.png',
+            });
+        });
+
+        fireEvent.click(await screen.findByRole('img', { name: 'shot.png' }));
+
+        expect(within(screen.getByRole('dialog')).getByRole('img', { name: 'shot.png' })).toHaveAttribute(
+            'src',
+            'https://res.cloudinary.com/demo/image/upload/v1/shot.png',
+        );
+        expect(screen.getByLabelText('Zoom out')).toBeInTheDocument();
     });
 
     it('never reports a blob URL as the value', async () => {

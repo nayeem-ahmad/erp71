@@ -1106,6 +1106,37 @@ describe('TaskDetailPanel description', () => {
      * happens to be referenced from the text — and lands in the markdown as a
      * link to wherever that put it.
      */
+    it('opens an image full size, and does not start editing', async () => {
+        getProjectTask.mockResolvedValue(
+            withDescription(
+                '![shot.png](https://res.cloudinary.com/demo/image/upload/w_320,c_limit/v1/shot.png?w=320)',
+            ),
+        );
+        panel();
+
+        fireEvent.click(await screen.findByRole('img', { name: 'shot.png' }));
+
+        // The task card is itself a dialog, so the preview is the one with zoom.
+        const dialog = screen.getByRole('button', { name: 'Zoom in' }).closest('[role="dialog"]') as HTMLElement;
+        expect(within(dialog).getByRole('img', { name: 'shot.png' })).toHaveAttribute(
+            'src',
+            'https://res.cloudinary.com/demo/image/upload/v1/shot.png',
+        );
+        expect(within(dialog).getByRole('button', { name: 'Zoom out' })).toBeInTheDocument();
+        expect(screen.queryByLabelText('Description', { selector: '[contenteditable]' })).not.toBeInTheDocument();
+    });
+
+    it('still opens the editor when the words around an image are clicked', async () => {
+        getProjectTask.mockResolvedValue(
+            withDescription('See this\n\n![shot.png](https://cdn/shot.png)'),
+        );
+        panel();
+
+        fireEvent.click(await screen.findByText('See this'));
+
+        expect(screen.getByLabelText('Description', { selector: '[contenteditable]' })).toBeInTheDocument();
+    });
+
     it('attaches an image pasted into the description and links to it', async () => {
         getProjectTask.mockResolvedValue(withDescription(null));
         addTaskAttachment.mockResolvedValue({

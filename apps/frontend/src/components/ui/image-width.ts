@@ -88,3 +88,19 @@ export function sizedImageUrl(url: string, width: number | null): string {
     if (TRANSFORM_SEGMENT.test(rest)) return url;
     return `${delivery}w_${Math.round(width)},c_limit,q_auto,f_auto/${rest}`;
 }
+
+/**
+ * The image at the size it was stored, for a preview.
+ *
+ * The description draws a thumbnail. A click has to fetch the file itself,
+ * or zooming only enlarges that thumbnail.
+ */
+export function originalImageUrl(url: string): string {
+    const plain = urlWithWidth(url, null);
+    const match = CLOUDINARY_DELIVERY.exec(plain);
+    if (!match) return plain;
+    const [, delivery, rest] = match;
+    let path = rest;
+    while (TRANSFORM_SEGMENT.test(path)) path = path.replace(TRANSFORM_SEGMENT, '');
+    return `${delivery}${path}`;
+}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import Markdown from './Markdown';
 
 // next/link needs the App Router runtime to navigate; a plain anchor keeps the
@@ -161,6 +161,38 @@ describe('Markdown images', () => {
 
         fireEvent.click(screen.getByRole('img', { name: 'shot' }));
 
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByLabelText('Zoom in')).toBeInTheDocument();
+        expect(within(dialog).getByLabelText('Zoom out')).toBeInTheDocument();
+    });
+
+    it('opens the stored file, not the thumbnail', () => {
+        render(
+            <Markdown
+                content="![shot](https://res.cloudinary.com/demo/image/upload/w_320,c_limit,q_auto,f_auto/v1/erp71/shot.png?w=320)"
+                allowImages
+            />,
+        );
+
+        fireEvent.click(screen.getByRole('img', { name: 'shot' }));
+
+        expect(within(screen.getByRole('dialog')).getByRole('img', { name: 'shot' })).toHaveAttribute(
+            'src',
+            'https://res.cloudinary.com/demo/image/upload/v1/erp71/shot.png',
+        );
+    });
+
+    it('does not let the click reach whatever the image sits in', () => {
+        const onAround = jest.fn();
+        render(
+            <div onClick={onAround}>
+                <Markdown content="![shot](https://cdn/x.png)" allowImages />
+            </div>,
+        );
+
+        fireEvent.click(screen.getByRole('img', { name: 'shot' }));
+
+        expect(onAround).not.toHaveBeenCalled();
         expect(screen.getByLabelText('Zoom in')).toBeInTheDocument();
     });
 

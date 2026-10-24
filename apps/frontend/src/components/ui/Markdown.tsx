@@ -5,7 +5,7 @@ import Link from 'next/link';
 import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ImagePreviewModal } from './ImagePreviewModal';
-import { sizedImageUrl, widthFromUrl } from './image-width';
+import { originalImageUrl, sizedImageUrl, widthFromUrl } from './image-width';
 
 /**
  * Markdown for model-generated answers (the AI chat panel) and for the text
@@ -144,8 +144,20 @@ export default function Markdown({
                 return (
                     <button
                         type="button"
-                        className="mt-2 block max-w-full"
-                        onClick={() => setPreview({ url, name: alt || 'image', mimeType: 'image/*' })}
+                        data-markdown-image=""
+                        className="mt-2 block max-w-full cursor-zoom-in"
+                        onClick={(event) => {
+                            // A description edits when its text is clicked. The
+                            // image is inside that control, and the click has
+                            // to open the picture instead of the editor.
+                            event.stopPropagation();
+                            event.preventDefault();
+                            setPreview({
+                                url: originalImageUrl(url),
+                                name: alt || 'image',
+                                mimeType: 'image/*',
+                            });
+                        }}
                     >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -194,15 +206,21 @@ export default function Markdown({
             </ReactMarkdown>
 
             {preview && (
-                <ImagePreviewModal
-                    items={[preview]}
-                    index={0}
-                    onIndexChange={() => {
-                        // One image at a time here — the description's images
-                        // are not a gallery the way a task's attachments are.
-                    }}
-                    onClose={() => setPreview(null)}
-                />
+                <div
+                    data-image-preview=""
+                    className="contents"
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <ImagePreviewModal
+                        items={[preview]}
+                        index={0}
+                        onIndexChange={() => {
+                            // One image at a time here — the description's images
+                            // are not a gallery the way a task's attachments are.
+                        }}
+                        onClose={() => setPreview(null)}
+                    />
+                </div>
             )}
         </>
     );

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
     ProjectAttachmentsService,
+    attachmentStorageName,
     parseAttachmentUpload,
     resourceTypeFor,
 } from './project-attachments.service';
@@ -62,6 +63,33 @@ describe('resourceTypeFor', () => {
         expect(resourceTypeFor('application/pdf')).toBe('raw');
         expect(resourceTypeFor('image/png')).toBe('image');
         expect(resourceTypeFor('')).toBe('image');
+    });
+});
+
+describe('attachmentStorageName', () => {
+    it('gives two clipboard screenshots different files', () => {
+        const a = attachmentStorageName('image.png', 'image/png');
+        const b = attachmentStorageName('image.png', 'image/png');
+
+        expect(a.publicId).not.toBe(b.publicId);
+        expect(a.publicId).toMatch(/^image-[a-f0-9]{8}$/);
+        // The shared name is how a second paste was listed as the first one.
+        expect(a.fileName).toBe(`${a.publicId}.png`);
+        expect(b.fileName).not.toBe('image.png');
+    });
+
+    it('keeps a chosen name and still stores a new id', () => {
+        const named = attachmentStorageName('plan.png', 'image/png');
+
+        expect(named.fileName).toBe('plan.png');
+        expect(named.publicId).toMatch(/^plan-[a-f0-9]{8}$/);
+    });
+
+    it('strips a path out of the name', () => {
+        const named = attachmentStorageName('../../etc/passwd.png', 'image/png');
+
+        expect(named.publicId).toMatch(/^etc-passwd-[a-f0-9]{8}$/);
+        expect(named.fileName).toBe('etc-passwd.png');
     });
 });
 
@@ -142,9 +170,33 @@ describe('ProjectAttachmentsService', () => {
         expect(assets.uploadBuffer).toHaveBeenCalledWith(
             expect.anything(),
             'tenant-1/project-tasks',
-            'spec',
+            expect.stringMatching(/^spec-[a-f0-9]{8}$/),
             'raw',
         );
+    });
+
+    it('stores a second image.png as its own file', async () => {
+        await service.create(OWNER, 'task-1', {
+            fileBase64: png,
+            fileName: 'image.png',
+            mimeType: 'image/png',
+        } as never);
+        await service.create(OWNER, 'task-1', {
+            fileBase64: png,
+            fileName: 'image.png',
+            mimeType: 'image/png',
+        } as never);
+
+        const ids = assets.uploadBuffer.mock.calls.map((call) => call[2]);
+        expect(ids[0]).toMatch(/^image-[a-f0-9]{8}$/);
+        expect(ids[1]).toMatch(/^image-[a-f0-9]{8}$/);
+        expect(ids[0]).not.toBe(ids[1]);
+
+        const names = db.projectAttachment.create.mock.calls.map(
+            (call: [{ data: { file_name: string } }]) => call[0].data.file_name,
+        );
+        expect(names[0]).not.toBe('image.png');
+        expect(names[0]).not.toBe(names[1]);
     });
 
     it('sanitises the file name rather than trusting it', async () => {
@@ -157,7 +209,7 @@ describe('ProjectAttachmentsService', () => {
         expect(assets.uploadBuffer).toHaveBeenCalledWith(
             expect.anything(),
             expect.any(String),
-            'etc-passwd',
+            expect.stringMatching(/^etc-passwd-[a-f0-9]{8}$/),
             'image',
         );
     });
