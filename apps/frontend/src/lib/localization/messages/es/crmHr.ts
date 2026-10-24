@@ -135,8 +135,7 @@ export const crmHrMessages = {
             },
             layout: {
                 group: "Diseño",
-                standard: "Estándar",
-                compact: "Compacta",
+                list: "Lista",
                 agenda: "Agenda",
             },
             moreFilters: "Más filtros",

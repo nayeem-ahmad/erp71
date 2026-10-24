@@ -1,8 +1,9 @@
 'use client';
-import { screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '@/test-utils/query-client';
 import ActivitiesPage from './page';
 import { tenantDateOnly } from '@/lib/created-range';
+import { useTableViewStore } from '@/components/table';
 
 jest.mock('next/link', () => {
     const MockLink = ({ children, href }: any) => <a href={href}>{children}</a>;
@@ -628,11 +629,12 @@ describe('CrmActivitiesPage — the lead timeline drawer', () => {
 });
 
 /**
- * Three ways to read the same list. Standard is what the page has always been.
- * Compact keeps the table and tucks the rarely used filters away. Agenda groups
- * the loaded rows by when they are due. The choice is a preference, so it is
- * stored in localStorage and read back on the next visit — unlike the filters,
- * which die with the tab.
+ * Two ways to read the same list, both chosen in View options rather than by a
+ * switch above the page: the table, and the agenda, which groups the loaded
+ * rows by when they are due. Compact row spacing in the same menu is the
+ * table's compact layout. The layout is a preference, so it is stored in
+ * localStorage and read back on the next visit — unlike the filters, which die
+ * with the tab.
  */
 describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => {
     const { ACTIVITY_LAYOUT_KEY } = jest.requireActual('@/components/crm/crm-activity-layout') as typeof import('@/components/crm/crm-activity-layout');
@@ -649,11 +651,27 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
     };
 
-    const radio = (name: string) => screen.getByRole('radio', { name });
+    const openViewOptions = () => {
+        fireEvent.click(screen.getByRole('button', { name: 'View options' }));
+        return screen.getByRole('dialog', { name: 'View options' });
+    };
+
+    /** Picks one choice in View options and closes the menu again. */
+    const chooseView = (name: string) => {
+        fireEvent.click(within(openViewOptions()).getByRole('button', { name }));
+        const toggle = screen.queryByRole('button', { name: 'View options', expanded: true });
+        if (toggle) fireEvent.click(toggle);
+    };
+
+    // Row spacing is a setting of every list, kept in this browser here.
+    const resetView = () => {
+        localStorage.clear();
+        act(() => useTableViewStore.getState().load('anon'));
+    };
 
     beforeEach(() => {
         jest.clearAllMocks();
-        localStorage.removeItem(ACTIVITY_LAYOUT_KEY);
+        resetView();
         sessionStorage.clear();
         api.getAllCrmActivities.mockResolvedValue([withPurpose]);
         api.getCrmActivitySummary.mockResolvedValue({ dueToday: 4, overdue: 2, total: 18 });
@@ -664,9 +682,7 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         api.getMe.mockResolvedValue({ id: 'user-1', name: 'Nayeem' });
     });
 
-    afterEach(() => {
-        localStorage.removeItem(ACTIVITY_LAYOUT_KEY);
-    });
+    afterEach(resetView);
 
     it('opens on the standard table, with stripes and every filter in the row', async () => {
         renderWithQueryClient(<ActivitiesPage />);
@@ -676,8 +692,6 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         expect(screen.getByRole('columnheader', { name: 'Purpose / channel' })).toBeInTheDocument();
         expect(screen.getByRole('columnheader', { name: 'Created' })).toBeInTheDocument();
         expect(screen.getByRole('combobox', { name: 'Lead Owner' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /view options/i })).toBeInTheDocument();
-        expect(radio('Standard')).toHaveAttribute('aria-checked', 'true');
 
         const row = screen.getByText('Call about pricing').closest('tr');
         expect(row?.className).toContain('even:bg-gray-100/70');
@@ -685,11 +699,24 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         expect(screen.getByRole('button', { name: 'View activities' }).className).toContain('h-7');
     });
 
-    it('hides the long columns in compact and keeps the filters in the toolbar', async () => {
+    it('chooses the layout in View options, with no switch of its own above the page', async () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
-        fireEvent.click(radio('Compact'));
+        expect(screen.queryByRole('radiogroup', { name: 'Layout' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+
+        const menu = openViewOptions();
+        expect(within(menu).getByRole('group', { name: 'Layout' })).toBeInTheDocument();
+        expect(within(menu).getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+        expect(within(menu).getByRole('button', { name: 'Agenda' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('hides the long columns under compact row spacing and keeps the filters in the toolbar', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+
+        chooseView('Compact');
 
         expect(screen.queryByText('Everything planned and everything logged, across leads and customers.')).not.toBeInTheDocument();
         expect(screen.queryByRole('columnheader', { name: 'Purpose / channel' })).not.toBeInTheDocument();
@@ -705,7 +732,7 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
     it('sends an approval filter from the toolbar', async () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
-        fireEvent.click(radio('Compact'));
+        chooseView('Compact');
 
         fireEvent.change(selectByName('Approved'), { target: { value: 'pending' } });
 
@@ -727,7 +754,7 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
 
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call today');
-        fireEvent.click(radio('Agenda'));
+        chooseView('Agenda');
 
         const names = ['Overdue', 'Today', 'Later', 'Earlier', 'No due date'];
         const regions = names.map((name) => screen.getByRole('region', { name }));
@@ -748,10 +775,26 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         expect(screen.queryByText('Call today')).not.toBeInTheDocument();
     });
 
+    it('keeps the filters and the way back to the table on the agenda', async () => {
+        renderWithQueryClient(<ActivitiesPage />);
+        await screen.findByText('Call about pricing');
+        chooseView('Agenda');
+
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(selectByName('Lead Owner')).toBeInTheDocument();
+
+        // Row spacing and text size draw nothing on the agenda's cards.
+        const menu = openViewOptions();
+        expect(within(menu).queryByRole('group', { name: 'Row spacing' })).not.toBeInTheDocument();
+        fireEvent.click(within(menu).getByRole('button', { name: 'List' }));
+
+        expect(await screen.findByRole('table')).toBeInTheDocument();
+    });
+
     it('lets the strip set overdue, and planned, without the tall cards', async () => {
         renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
-        fireEvent.click(radio('Compact'));
+        chooseView('Compact');
 
         fireEvent.click(screen.getByRole('button', { name: 'Overdue' }));
         await waitFor(() => {
@@ -770,14 +813,12 @@ describe('CrmActivitiesPage — layout, stripes and a remembered choice', () => 
         const first = renderWithQueryClient(<ActivitiesPage />);
         await screen.findByText('Call about pricing');
 
-        fireEvent.click(radio('Compact'));
-        expect(localStorage.getItem(ACTIVITY_LAYOUT_KEY)).toBe('compact');
+        chooseView('Agenda');
+        expect(localStorage.getItem(ACTIVITY_LAYOUT_KEY)).toBe('agenda');
         first.unmount();
 
         renderWithQueryClient(<ActivitiesPage />);
-        await screen.findByText('Call about pricing');
-
-        expect(radio('Compact')).toHaveAttribute('aria-checked', 'true');
-        expect(screen.queryByRole('columnheader', { name: 'Created' })).not.toBeInTheDocument();
+        expect(await screen.findByRole('region', { name: 'Overdue' })).toBeInTheDocument();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
 });

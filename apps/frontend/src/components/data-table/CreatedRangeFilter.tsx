@@ -16,7 +16,8 @@ import {
 
 type CreatedRangeFilterProps = {
     value: CreatedRange | null;
-    onChange: (next: CreatedRange | null) => void;
+    /** A preset choice also names the preset, for a list that keeps "last 7 days" rolling. */
+    onChange: (next: CreatedRange | null, preset?: CreatedRangePreset) => void;
     /** Injected in tests so "Today" is a known Dhaka day. */
     now?: Date;
     /**
@@ -30,9 +31,11 @@ type CreatedRangeFilterProps = {
      * read `YYYY-MM-DDTHH:mm`; a bound left without a time is still the whole day.
      */
     withTime?: boolean;
+    /** The shortcuts offered above the dates. */
+    presets?: readonly CreatedRangePreset[];
 };
 
-const PRESETS: CreatedRangePreset[] = ['today', 'yesterday', 'last7', 'thisMonth'];
+const DEFAULT_PRESETS: readonly CreatedRangePreset[] = ['today', 'yesterday', 'last7', 'thisMonth'];
 
 /** Must match the popover's `w-64`. */
 const PANEL_WIDTH = 256;
@@ -41,7 +44,14 @@ const VIEWPORT_MARGIN = 8;
 /** SSR has no layout to measure, and useLayoutEffect warns there. */
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export default function CreatedRangeFilter({ value, onChange, now, label, withTime = false }: CreatedRangeFilterProps) {
+export default function CreatedRangeFilter({
+    value,
+    onChange,
+    now,
+    label,
+    withTime = false,
+    presets = DEFAULT_PRESETS,
+}: CreatedRangeFilterProps) {
     const { t } = useI18n();
     const copy = t.common.createdRange;
     const [open, setOpen] = useState(false);
@@ -94,6 +104,7 @@ export default function CreatedRangeFilter({ value, onChange, now, label, withTi
         today: copy.today,
         yesterday: copy.yesterday,
         last7: copy.last7Days,
+        last30: copy.last30Days,
         thisMonth: copy.thisMonth,
     };
 
@@ -101,7 +112,7 @@ export default function CreatedRangeFilter({ value, onChange, now, label, withTi
     const chip = `${fieldLabel} · ${formatCreatedRangeLabel(value, copy.anyTime)}`;
 
     const applyPreset = (preset: CreatedRangePreset) => {
-        onChange(createdRangeFromPreset(preset, now));
+        onChange(createdRangeFromPreset(preset, now), preset);
         setOpen(false);
     };
 
@@ -154,7 +165,7 @@ export default function CreatedRangeFilter({ value, onChange, now, label, withTi
                     }`}
                 >
                     <div className="grid grid-cols-2 gap-1.5">
-                        {PRESETS.map((preset) => (
+                        {presets.map((preset) => (
                             <Button
                                 key={preset}
                                 type="button"

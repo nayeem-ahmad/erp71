@@ -3,17 +3,18 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Loader2 } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/data-table';
+import { DataTable, type ListFilter } from '@/components/data-table';
 import { api } from '@/lib/api';
 import { formatBDT } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
-import { BranchFilter, PageShell } from '@/components/ui';
+import { BranchFilter, PageShell, StatusBadge, buttonClassName, type StatusBadgeTone } from '@/components/ui';
 import PartySearchSelect from '@/components/document-entry/PartySearchSelect';
 import { handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { createdRangeFromPreset, type CreatedRange } from '@/lib/created-range';
 
 type CustomerOption = {
     id: string;
@@ -36,16 +37,6 @@ type LedgerRow = {
 };
 
 const columnHelper = createColumnHelper<LedgerRow>();
-
-function defaultFrom() {
-    const d = new Date();
-    d.setDate(1);
-    return d.toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-    return new Date().toISOString().slice(0, 10);
-}
 
 function formatDateTime(value: string, locale: string) {
     const d = new Date(value);
@@ -77,6 +68,22 @@ function directionLabel(type: string | undefined, copy: { directionReceive: stri
     return type?.replace(/_/g, ' ') ?? '—';
 }
 
+/** Money in is good news on a due ledger; money paid out to the customer is the one to look at. */
+function directionTone(type: string | undefined): StatusBadgeTone {
+    if (type === 'PAYMENT') return 'success';
+    if (type === 'PAYOUT') return 'danger';
+    return 'neutral';
+}
+
+/** Red while the customer owes, green when the shop owes them. */
+function balanceClass(value: number): string | undefined {
+    if (value > 0) return 'text-danger';
+    if (value < 0) return 'text-emerald-600';
+    return undefined;
+}
+
+const dash = <span className="text-gray-400">—</span>;
+
 function CustomerLedgerContent() {
     const { t, locale } = useI18n();
     const copy = t.customerLedger;
@@ -87,8 +94,11 @@ function CustomerLedgerContent() {
     const [customers, setCustomers] = useState<CustomerOption[]>([]);
     const [loadingCustomers, setLoadingCustomers] = useState(true);
     const [customerId, setCustomerId] = useState(preselectedId ?? '');
-    const [fromDate, setFromDate] = useState(defaultFrom());
-    const [toDate, setToDate] = useState(defaultTo());
+    // This month by default, on the workspace's own calendar. Cleared, the
+    // ledger runs from the customer's first entry.
+    const [dateRange, setDateRange] = useState<CreatedRange | null>(() => createdRangeFromPreset('thisMonth'));
+    const fromDate = dateRange?.from ?? '';
+    const toDate = dateRange?.to ?? '';
     const [ledgerLoading, setLedgerLoading] = useState(false);
     const [dueBalance, setDueBalance] = useState(0);
     const [openingBalance, setOpeningBalance] = useState(0);
@@ -188,223 +198,183 @@ function CustomerLedgerContent() {
     const columns = useMemo<ColumnDef<LedgerRow, unknown>[]>(() => [
         columnHelper.accessor('created_at', {
             header: copy.columns.dateTime,
-            cell: (info) => {
-                const row = info.row.original;
-                if (row.rowType === 'opening') {
-                    return (
-                        <span className="text-sm font-bold text-gray-800">
-                            {formatOpeningDate(info.getValue(), locale)}
-                        </span>
-                    );
-                }
-                return <span className="text-sm text-gray-700">{formatDateTime(info.getValue(), locale)}</span>;
-            },
+            cell: (info) =>
+                info.row.original.rowType === 'opening'
+                    ? formatOpeningDate(info.getValue(), locale)
+                    : formatDateTime(info.getValue(), locale),
             sortingFn: 'datetime',
             size: 150,
         }),
         columnHelper.accessor('payment_number', {
             header: copy.columns.serial,
-            cell: (info) => {
-                if (info.row.original.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                return (
-                    <span className="text-xs font-mono font-bold text-gray-700">{info.getValue() || '—'}</span>
-                );
-            },
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : info.getValue() || dash),
             size: 110,
         }),
         columnHelper.accessor('type', {
             header: copy.columns.direction,
             cell: (info) => {
-                const row = info.row.original;
-                if (row.rowType === 'opening') {
-                    return (
-                        <span className="text-[10px] font-semibold text-primary">
-                            {copy.openingBalance}
-                        </span>
-                    );
+                if (info.row.original.rowType === 'opening') {
+                    return <StatusBadge tone="info">{copy.openingBalance}</StatusBadge>;
                 }
-                const isPayout = info.getValue() === 'PAYOUT';
-                const isPayment = info.getValue() === 'PAYMENT';
                 return (
-                    <span className={`text-[10px] font-semibold ${
-                        isPayout ? 'text-danger' : isPayment ? 'text-emerald-700' : 'text-gray-600'
-                    }`}>
+                    <StatusBadge tone={directionTone(info.getValue())}>
                         {directionLabel(info.getValue(), copy)}
-                    </span>
+                    </StatusBadge>
                 );
             },
-            size: 140,
+            size: 150,
         }),
         columnHelper.accessor((row) => row.creator?.name ?? '—', {
             id: 'recordedBy',
             header: copy.columns.recordedBy,
-            cell: (info) => {
-                if (info.row.original.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                return <span className="text-sm text-gray-600">{info.getValue()}</span>;
-            },
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : info.getValue()),
             size: 140,
+            meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('amount', {
             header: copy.columns.amount,
             cell: (info) => {
                 const row = info.row.original;
-                if (row.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                const isPayout = row.type === 'PAYOUT';
+                if (row.rowType === 'opening') return dash;
                 const isPayment = row.type === 'PAYMENT';
+                const signed = row.type === 'PAYOUT' || row.type === 'CREDIT_SALE';
                 const amt = Number(info.getValue() ?? 0);
-                const signed = isPayout || row.type === 'CREDIT_SALE';
                 return (
-                    <span className={`text-sm font-bold ${
-                        isPayout || row.type === 'CREDIT_SALE'
-                            ? 'text-danger'
-                            : isPayment
-                              ? 'text-emerald-600'
-                              : 'text-gray-700'
-                    }`}>
-                        {signed && amt > 0 ? '+' : isPayment ? '−' : ''}{formatBDT(amt)}
+                    <span className={signed ? 'text-danger' : isPayment ? 'text-emerald-600' : undefined}>
+                        {signed && amt > 0 ? '+' : isPayment ? '−' : ''}{formatBDT(amt, { locale })}
                     </span>
                 );
             },
             size: 120,
+            meta: { align: 'end' },
         }),
         columnHelper.accessor('notes', {
             header: copy.columns.notes,
-            cell: (info) => {
-                if (info.row.original.rowType === 'opening') return <span className="text-gray-300">—</span>;
-                return <span className="text-sm text-gray-500 line-clamp-2">{info.getValue() || '—'}</span>;
-            },
+            cell: (info) => (info.row.original.rowType === 'opening' ? dash : info.getValue() || dash),
             size: 180,
+            meta: { hideOnMobile: true },
         }),
         columnHelper.accessor('balance_after', {
             header: copy.columns.balance,
             cell: (info) => {
                 const v = Number(info.getValue());
-                return (
-                    <span className={`text-sm font-bold ${v > 0 ? 'text-danger' : v < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                        {formatBDT(v)}
-                    </span>
-                );
+                return <span className={balanceClass(v)}>{formatBDT(v, { locale })}</span>;
             },
             size: 120,
+            meta: { align: 'end' },
         }),
     ], [copy, locale]);
+
+    // Page-owned: the range goes to the ledger query, and the opening balance
+    // is read at its start.
+    const filters = useMemo<ListFilter[]>(
+        () => [
+            {
+                id: 'date',
+                type: 'date-range',
+                label: t.common.date,
+                value: dateRange,
+                onChange: setDateRange,
+            },
+        ],
+        [t, dateRange],
+    );
 
     const selectedCustomer = customers.find((c) => c.id === customerId)
         ?? (ledgerCustomer?.id === customerId ? ledgerCustomer : null);
 
     return (
         <PageShell>
-                <PageHeader
-                    title={
-                        <span className="inline-flex items-center gap-2">
-                            <BookOpen className="w-7 h-7 text-primary" />
-                            {copy.title}
-                        </span>
-                    }
-                    subtitle={copy.subtitle}
-                    breadcrumbs={modulePageBreadcrumbs(
-                        t.dashboardHome.breadcrumbHome,
-                        t.sidebar.modules.sales,
-                        copy.title,
-                        'sales',
-                    )}
-                    actions={
-                        <>
-                            <BranchFilter scope={branch} />
-                            {customerId ? (
-                                <Link
-                                    href={`/sales/customer-payments?customerId=${customerId}&new=1`}
-                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover"
-                                >
-                                    {copy.recordPayment}
-                                </Link>
-                            ) : null}
-                        </>
-                    }
-                />
+            <PageHeader
+                title={copy.title}
+                subtitle={copy.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    copy.title,
+                    'sales',
+                )}
+                actions={
+                    <>
+                        <BranchFilter scope={branch} />
+                        {customerId ? (
+                            <Link
+                                href={`/sales/customer-payments?customerId=${customerId}&new=1`}
+                                className={buttonClassName()}
+                            >
+                                {copy.recordPayment}
+                            </Link>
+                        ) : null}
+                    </>
+                }
+            />
 
-                <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1">
-                            <PartySearchSelect
-                                parties={customers}
-                                loading={loadingCustomers}
-                                selected={selectedCustomer}
-                                onSelect={(party) => setCustomerId(party?.id ?? '')}
-                                label={copy.pickCustomer}
-                                placeholder={copy.searchPlaceholder}
-                                emptyLabel={copy.noCustomers}
-                                noMatchLabel={copy.noCustomers}
-                                clearLabel={copy.clearCustomer}
-                            />
-                        </div>
-                        <label className="space-y-1">
-                            <span className="text-xs font-medium text-gray-500">{copy.dateFrom}</span>
-                            <input
-                                type="date"
-                                value={fromDate}
-                                onChange={(e) => setFromDate(e.target.value)}
-                                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                            />
-                        </label>
-                        <label className="space-y-1">
-                            <span className="text-xs font-medium text-gray-500">{copy.dateTo}</span>
-                            <input
-                                type="date"
-                                value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
-                                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
-                            />
-                        </label>
-                    </div>
+            {/* Which ledger to read, rather than a filter on one: the table
+                below is always one customer's. */}
+            <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+                <div className="max-w-md">
+                    <PartySearchSelect
+                        parties={customers}
+                        loading={loadingCustomers}
+                        selected={selectedCustomer}
+                        onSelect={(party) => setCustomerId(party?.id ?? '')}
+                        label={copy.pickCustomer}
+                        placeholder={copy.searchPlaceholder}
+                        emptyLabel={copy.noCustomers}
+                        noMatchLabel={copy.noCustomers}
+                        clearLabel={copy.clearCustomer}
+                    />
                 </div>
+            </div>
 
-                {customerId ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                            <p className="text-xs font-medium text-gray-500">{copy.openingBalance}</p>
-                            <p className={`text-2xl font-bold mt-1 ${openingBalance > 0 ? 'text-danger' : openingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                                {formatBDT(openingBalance)}
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                            <p className="text-xs font-medium text-gray-500">{copy.closingBalance}</p>
-                            <p className={`text-2xl font-bold mt-1 ${closingBalance > 0 ? 'text-danger' : closingBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                                {formatBDT(closingBalance)}
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
-                            <p className="text-xs font-medium text-gray-500">{copy.currentDue}</p>
-                            <p className={`text-2xl font-bold mt-1 ${dueBalance > 0 ? 'text-danger' : dueBalance < 0 ? 'text-emerald-600' : 'text-gray-700'}`}>
-                                {formatBDT(dueBalance)}
-                            </p>
-                            {selectedCustomer ? (
-                                <p className="text-xs text-gray-400 mt-1">{selectedCustomer.name}</p>
-                            ) : null}
-                        </div>
+            {customerId ? (
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <BalanceTile label={copy.openingBalance} value={openingBalance} locale={locale} />
+                        <BalanceTile label={copy.closingBalance} value={closingBalance} locale={locale} />
+                        <BalanceTile
+                            label={copy.currentDue}
+                            value={dueBalance}
+                            locale={locale}
+                            note={selectedCustomer?.name}
+                        />
                     </div>
-                ) : null}
 
-                {!customerId ? (
-                    <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
-                        {copy.selectCustomer}
-                    </div>
-                ) : ledgerLoading ? (
-                    <div className="flex items-center justify-center py-20 text-gray-400">
-                        <Loader2 className="w-6 h-6 animate-spin me-2" />
-                        {copy.loading}
-                    </div>
-                ) : (
                     <DataTable
                         tableId="customer-ledger-entries"
                         title={copy.ledgerTitle}
                         data={tableData}
                         columns={columns}
+                        isLoading={ledgerLoading}
                         emptyMessage={copy.noTransactions}
+                        emptyIcon={<BookOpen className="w-16 h-16 text-gray-200" />}
+                        filters={filters}
+                        viewOptions
                     />
-                )}
-            
+                </>
+            ) : (
+                <div className="rounded-lg border border-gray-100 bg-white py-16 text-center text-sm text-gray-500">
+                    {copy.selectCustomer}
+                </div>
+            )}
         </PageShell>
+    );
+}
+
+function BalanceTile({
+    label,
+    value,
+    locale,
+    note,
+}: Readonly<{ label: string; value: number; locale: string; note?: string }>) {
+    return (
+        <div className="rounded-lg border border-gray-200 bg-white p-3 md:p-4">
+            <p className="text-xs font-medium text-gray-500">{label}</p>
+            <p className={`mt-1 text-xl font-semibold tabular-nums ${balanceClass(value) ?? 'text-gray-900'}`}>
+                {formatBDT(value, { locale })}
+            </p>
+            {note ? <p className="mt-1 text-xs text-gray-400">{note}</p> : null}
+        </div>
     );
 }
 

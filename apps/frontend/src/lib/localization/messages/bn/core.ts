@@ -79,6 +79,7 @@ export const coreMessages = {
                 today: "আজ",
                 yesterday: "গতকাল",
                 last7Days: "গত ৭ দিন",
+                last30Days: "গত ৩০ দিন",
                 thisMonth: "এই মাস",
                 custom: "কাস্টম",
                 apply: "প্রয়োগ",

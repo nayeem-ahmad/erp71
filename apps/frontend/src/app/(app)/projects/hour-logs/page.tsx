@@ -4,11 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
     BarChart3,
-    CalendarDays,
     ChevronLeft,
     ChevronRight,
-    Download,
-    Rows3,
+    Clock,
     Timer,
     Upload,
 } from 'lucide-react';
@@ -20,6 +18,7 @@ import {
     Select,
     Field,
     ConfirmDialog,
+    buttonClassName,
 } from '@/components/ui';
 import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
 import { ImportDialog, type ImportField } from '@/components/import-dialog';
@@ -34,9 +33,11 @@ import {
     exportToPDF,
     type ExportColumnSpec,
 } from '@/components/data-table/export-utils';
+import { DataTable, ListToolbar, type ResolvedListFilter } from '@/components/data-table';
+import type { TableViewLayout } from '@/components/table';
 import TaskDetailPanel from '@/components/projects/TaskDetailPanel';
 import HourLogDayList, { type DayTotal } from '@/components/projects/HourLogDayList';
-import HourLogList from '@/components/projects/HourLogList';
+import { hourLogColumns, type HourLogRowHandlers } from '@/components/projects/HourLogList';
 import { groupByDay, hoursOf, type HourLogEntry, type HourLogTag } from '@/components/projects/hour-log-day';
 import { useProjectTimerActions } from '@/components/projects/use-project-timer';
 import { useProjectTimerStore } from '@/lib/project-timer-store';
@@ -53,11 +54,11 @@ import { formatDate } from '@/lib/format';
 import { routes } from '@/lib/routes';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import {
-    HourLogRangeFilter,
     hourLogPresetRange,
     type HourLogRange,
     type HourLogRangePreset,
 } from '@/components/projects/HourLogRangeFilter';
+import type { CreatedRange, CreatedRangePreset } from '@/lib/created-range';
 
 interface ProjectOption {
     id: string;
@@ -149,6 +150,20 @@ function exportColumnsFor(labels: {
 type HourLogView = 'day' | 'list';
 
 const VIEW_STORAGE_KEY = 'hour-log-view';
+
+/** Shared by the list's page size, its View options and its column layout. */
+const TABLE_ID = 'project-hour-logs';
+
+/**
+ * The date chip's shortcuts are this page's presets. The preset is what gets
+ * remembered, so "last 30 days" still ends today when the page is reopened.
+ */
+const RANGE_PRESETS: readonly CreatedRangePreset[] = ['last7', 'last30', 'thisMonth'];
+const PRESET_FROM_CHIP: Partial<Record<CreatedRangePreset, HourLogRangePreset>> = {
+    last7: '7',
+    last30: '30',
+    thisMonth: 'month',
+};
 
 /**
  * Remembered between visits, because a switcher that resets on every
@@ -338,7 +353,7 @@ export default function HourLogsPage() {
 
     const { items, loading, total, page, pageSize, serverPagination, reload } =
         useServerList<HourLogEntry>({
-            tableId: 'project-hour-logs',
+            tableId: TABLE_ID,
             // Nothing is fetched until the remembered filters are in, so a return
             // visit does not request the default window and then replace it.
             enabled: valid && filtersReady,
@@ -486,6 +501,85 @@ export default function HourLogsPage() {
     const days = useMemo(() => groupByDay(items), [items]);
     // Only worth a column when there is more than one person to tell apart.
     const showPerson = !personId && (summary?.people ?? 0) > 1;
+
+    // ── The toolbar ────────────────────────────────────────────────────────
+
+    const typeSearch = useCallback((next: string) => {
+        setTyping(true);
+        setFilter('search', next);
+    }, [setFilter]);
+
+    /**
+     * The window is never unbounded — the totals above the list need one — so
+     * clearing the chip goes back to the default 30 days rather than to "any
+     * time". A half-open custom range keeps the end it was not given.
+     */
+    const chooseRange = useCallback((next: CreatedRange | null, chosen?: CreatedRangePreset) => {
+        const mapped = chosen ? PRESET_FROM_CHIP[chosen] : undefined;
+        if (mapped) {
+            setFilter('preset', mapped);
+            return;
+        }
+        if (!next || (!next.from && !next.to)) {
+            setFilter('preset', '30');
+            return;
+        }
+        setFilter('customRange', { from: next.from ?? range.from, to: next.to ?? range.to });
+        setFilter('preset', 'custom');
+    }, [setFilter, range.from, range.to]);
+
+    const listFilters = useMemo<ResolvedListFilter[]>(() => [
+        {
+            id: 'range',
+            type: 'date-range',
+            label: m.time.workDate,
+            value: range,
+            onChange: chooseRange,
+            presets: RANGE_PRESETS,
+        },
+        {
+            id: 'project',
+            type: 'select',
+            label: m.fields.project,
+            value: projectId || null,
+            onChange: (next) => setFilter('projectId', next ?? ''),
+            options: projects.map((project) => ({ value: project.id, label: `${project.code} · ${project.name}` })),
+        },
+        ...(ownRecordsOnly
+            ? []
+            : [{
+                id: 'person',
+                type: 'select' as const,
+                label: hl.person,
+                value: personId || null,
+                onChange: (next: string | null) => setFilter('personId', next ?? ''),
+                options: [
+                    { value: 'me', label: hl.mine },
+                    ...people.map((person) => ({ value: person.id, label: person.name || person.email || person.id })),
+                ],
+            }]),
+        ...(tags.length > 0
+            ? [{
+                id: 'tag',
+                type: 'select' as const,
+                label: hl.tags,
+                value: tagId || null,
+                onChange: (next: string | null) => setFilter('tagId', next ?? ''),
+                options: tags.map((tag) => ({ value: tag.id, label: tag.name })),
+            }]
+            : []),
+    ], [m, hl, range, chooseRange, projectId, projects, ownRecordsOnly, personId, people, tags, tagId, setFilter]);
+
+    // Day ledger or flat list, chosen in View options on either one.
+    const viewLayout = useMemo<TableViewLayout>(() => ({
+        label: hl.view,
+        options: [
+            { key: 'day', label: hl.viewDay },
+            { key: 'list', label: hl.viewList },
+        ],
+        value: view,
+        onChange: (next) => setView(next as HourLogView),
+    }), [hl, view, setView]);
 
     // ── The running clock ──────────────────────────────────────────────────
 
@@ -675,6 +769,49 @@ export default function HourLogsPage() {
 
     const lastPage = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
 
+    // Read when a row acts, so the columns need not be rebuilt on every render.
+    const handlersNow: HourLogRowHandlers = {
+        onLogAgain: logAgain,
+        onEdit: openEdit,
+        onDelete: setPendingDelete,
+        onPatch: patchEntry,
+        onOpenTask: setOpenTaskId,
+    };
+    const rowHandlers = useRef(handlersNow);
+    rowHandlers.current = handlersNow;
+
+    const listColumns = useMemo(
+        () =>
+            hourLogColumns({
+                labels: {
+                    date: m.time.workDate,
+                    project: m.fields.project,
+                    task: m.task.title,
+                    person: hl.person,
+                    tags: hl.tags,
+                    description: m.fields.description,
+                    startTime: hl.startTime,
+                    endTime: hl.endTime,
+                    duration: hl.duration,
+                    actions: m.fields.actions,
+                    addDescription: hl.addDescription,
+                    // The cell's accessible name matches the column above
+                    // it: a screen read column by column and a screen read
+                    // control by control should not disagree about what the
+                    // field is called.
+                    note: m.fields.description,
+                    hours: hl.duration,
+                    logAgain: hl.logAgain,
+                    editEntry: hl.editEntry,
+                    deleteEntry: hl.deleteEntry,
+                },
+                showPerson,
+                showTags: tags.length > 0,
+                handlers: rowHandlers,
+            }),
+        [m, hl, showPerson, tags.length],
+    );
+
     return (
         <PageShell>
             <PageHeader
@@ -706,19 +843,12 @@ export default function HourLogsPage() {
                             <Upload className="h-4 w-4" />
                             {t.common.import}
                         </Button>
-                        <Button
-                            variant="secondary"
-                            className="min-h-touch"
-                            onClick={() => setExportOpen(true)}
+                        <Link
+                            href={routes.projects.hourLogReport}
+                            className={`${buttonClassName({ variant: 'secondary' })} min-h-touch`}
                         >
-                            <Download className="h-4 w-4" />
-                            {t.common.export}
-                        </Button>
-                        <Link href={routes.projects.hourLogReport}>
-                            <Button variant="secondary" className="min-h-touch">
-                                <BarChart3 className="h-4 w-4" />
-                                {hl.openReport}
-                            </Button>
+                            <BarChart3 className="h-4 w-4" />
+                            {hl.openReport}
                         </Link>
                     </>
                 }
@@ -731,163 +861,73 @@ export default function HourLogsPage() {
                 <SummaryTile label={m.hourLogReport.people} value={String(summary?.people ?? 0)} />
             </div>
 
-            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
-                <HourLogRangeFilter
-                    preset={preset}
-                    range={range}
-                    onPresetChange={(next) => setFilter('preset', next)}
-                    onRangeChange={(next) => setFilter('customRange', next)}
-                    labels={{
-                        from: hl.from,
-                        to: hl.to,
-                        preset7: hl.preset7,
-                        preset30: hl.preset30,
-                        presetMonth: hl.presetMonth,
-                        presetCustom: hl.presetCustom,
-                    }}
-                />
-                <Input
-                    value={search}
-                    onChange={(e) => {
-                        setTyping(true);
-                        setFilter('search', e.target.value);
-                    }}
-                    placeholder={hl.searchPlaceholder}
-                    className="md:max-w-xs"
-                />
-                <Select
-                    value={projectId}
-                    onChange={(e) => setFilter('projectId', e.target.value)}
-                    className="md:w-52"
-                    aria-label={m.fields.project}
-                >
-                    <option value="">{hl.allProjects}</option>
-                    {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                            {project.code} · {project.name}
-                        </option>
-                    ))}
-                </Select>
-                {!ownRecordsOnly && (
-                    <Select
-                        value={personId}
-                        onChange={(e) => setFilter('personId', e.target.value)}
-                        className="md:w-48"
-                        aria-label={hl.person}
-                    >
-                        <option value="">{hl.allPeople}</option>
-                        <option value="me">{hl.mine}</option>
-                        {people.map((person) => (
-                            <option key={person.id} value={person.id}>
-                                {person.name || person.email}
-                            </option>
-                        ))}
-                    </Select>
-                )}
-                {tags.length > 0 ? (
-                    <Select
-                        value={tagId}
-                        onChange={(e) => setFilter('tagId', e.target.value)}
-                        className="md:w-40"
-                        aria-label={hl.tags}
-                    >
-                        <option value="">{hl.allTags}</option>
-                        {tags.map((tag) => (
-                            <option key={tag.id} value={tag.id}>
-                                {tag.name}
-                            </option>
-                        ))}
-                    </Select>
-                ) : null}
-
-                <div
-                    role="group"
-                    aria-label={hl.view}
-                    className="flex overflow-hidden rounded-md border border-gray-200 bg-white md:ms-auto"
-                >
-                    <ViewButton
-                        active={view === 'day'}
-                        label={hl.viewDay}
-                        onClick={() => setView('day')}
-                        icon={<CalendarDays className="h-4 w-4" aria-hidden="true" />}
-                    />
-                    <ViewButton
-                        active={view === 'list'}
-                        label={hl.viewList}
-                        onClick={() => setView('list')}
-                        icon={<Rows3 className="h-4 w-4" aria-hidden="true" />}
-                    />
-                </div>
-            </div>
-
             {!valid && <p className="text-sm text-red-600">{hl.rangeInvalid}</p>}
 
             {view === 'day' ? (
-                <HourLogDayList
-                    days={days}
-                    dayTotals={dayTotals}
-                    showPerson={showPerson}
-                    loading={listLoading}
-                    labels={{
-                        today: hl.today,
-                        yesterday: hl.yesterday,
-                        total: hl.total,
-                        addDescription: hl.addDescription,
-                        logAgain: hl.logAgain,
-                        editEntry: hl.editEntry,
-                        deleteEntry: hl.deleteEntry,
-                        expand: hl.expandGroup,
-                        collapse: hl.collapseGroup,
-                        // "Duration", not "Hours": the capture bar above already
-                        // owns that name for the box you type a figure into, and two
-                        // controls with one accessible name is a screen nobody can
-                        // navigate by label.
-                        hours: hl.duration,
-                        note: m.time.note,
-                        unattributed: hl.unattributed,
-                        empty: hl.empty,
-                        partialDay: hl.partialDay,
-                    }}
-                    onLogAgain={logAgain}
-                    onEdit={openEdit}
-                    onDelete={setPendingDelete}
-                    onPatch={patchEntry}
-                    onOpenTask={setOpenTaskId}
-                />
+                <>
+                    <ListToolbar
+                        tableId={TABLE_ID}
+                        filters={listFilters}
+                        search={{ value: search, onChange: typeSearch, placeholder: hl.searchPlaceholder }}
+                        layout={viewLayout}
+                        onExport={() => setExportOpen(true)}
+                    />
+                    <HourLogDayList
+                        days={days}
+                        dayTotals={dayTotals}
+                        showPerson={showPerson}
+                        loading={listLoading}
+                        labels={{
+                            today: hl.today,
+                            yesterday: hl.yesterday,
+                            total: hl.total,
+                            addDescription: hl.addDescription,
+                            logAgain: hl.logAgain,
+                            editEntry: hl.editEntry,
+                            deleteEntry: hl.deleteEntry,
+                            expand: hl.expandGroup,
+                            collapse: hl.collapseGroup,
+                            // "Duration", not "Hours": the capture bar above already
+                            // owns that name for the box you type a figure into, and two
+                            // controls with one accessible name is a screen nobody can
+                            // navigate by label.
+                            hours: hl.duration,
+                            note: m.time.note,
+                            unattributed: hl.unattributed,
+                            empty: hl.empty,
+                            partialDay: hl.partialDay,
+                        }}
+                        onLogAgain={logAgain}
+                        onEdit={openEdit}
+                        onDelete={setPendingDelete}
+                        onPatch={patchEntry}
+                        onOpenTask={setOpenTaskId}
+                    />
+                </>
             ) : (
-                <HourLogList
-                    entries={items}
-                    loading={listLoading}
-                    labels={{
-                        date: m.time.workDate,
-                        project: m.fields.project,
-                        task: m.task.title,
-                        description: m.fields.description,
-                        startTime: hl.startTime,
-                        endTime: hl.endTime,
-                        duration: hl.duration,
-                        actions: m.fields.actions,
-                        empty: hl.empty,
-                        addDescription: hl.addDescription,
-                        // The cell's accessible name matches the column above
-                        // it: a screen read column by column and a screen read
-                        // control by control should not disagree about what the
-                        // field is called.
-                        note: m.fields.description,
-                        hours: hl.duration,
-                        logAgain: hl.logAgain,
-                        editEntry: hl.editEntry,
-                        deleteEntry: hl.deleteEntry,
-                    }}
-                    onLogAgain={logAgain}
-                    onEdit={openEdit}
-                    onDelete={setPendingDelete}
-                    onPatch={patchEntry}
-                    onOpenTask={setOpenTaskId}
+                <DataTable<HourLogEntry>
+                    tableId={TABLE_ID}
+                    title={hl.title}
+                    columns={listColumns}
+                    data={items}
+                    isLoading={listLoading}
+                    emptyMessage={hl.empty}
+                    emptyIcon={<Clock className="w-16 h-16 text-gray-200" />}
+                    getRowId={(entry) => entry.id}
+                    searchPlaceholder={hl.searchPlaceholder}
+                    onSearchChange={typeSearch}
+                    searchValue={search}
+                    filters={listFilters}
+                    // The server filters by the toolbar, not by column.
+                    enableColumnFilters={false}
+                    viewOptions
+                    viewLayout={viewLayout}
+                    serverPagination={serverPagination}
                 />
             )}
 
-            {lastPage > 1 ? (
+            {/* The table pages itself; the ledger has no footer of its own. */}
+            {view === 'day' && lastPage > 1 ? (
                 <nav className="flex items-center justify-between gap-3" aria-label={hl.title}>
                     <p className="text-xs text-gray-500">
                         {hl.pageOf.replace('{page}', String(page)).replace('{pages}', String(lastPage))}
@@ -1159,36 +1199,5 @@ function SummaryTile({ label, value, accent }: { label: string; value: string; a
                 {value}
             </div>
         </div>
-    );
-}
-
-/**
- * One segment of the view switcher. Icon and word together: the icons alone
- * would be a guess, and the words alone would take a third of the filter row.
- */
-function ViewButton({
-    active,
-    label,
-    icon,
-    onClick,
-}: {
-    active: boolean;
-    label: string;
-    icon: React.ReactNode;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-pressed={active}
-            title={label}
-            className={`flex min-h-touch items-center gap-1.5 px-3 text-sm font-medium transition-colors md:min-h-0 md:py-1.5 ${
-                active ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'
-            }`}
-        >
-            {icon}
-            {label}
-        </button>
     );
 }

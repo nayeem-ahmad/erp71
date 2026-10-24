@@ -79,6 +79,7 @@ export const coreMessages = {
                 today: "Hari ini",
                 yesterday: "Semalam",
                 last7Days: "7 hari lepas",
+                last30Days: "30 hari lepas",
                 thisMonth: "Bulan ini",
                 custom: "Tersuai",
                 apply: "Guna",

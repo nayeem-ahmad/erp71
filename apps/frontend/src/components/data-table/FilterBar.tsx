@@ -5,7 +5,7 @@ import { ListFilter as ListFilterIcon, X } from 'lucide-react';
 import ModalShell from '@/components/ModalShell';
 import { Button } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
-import { formatCreatedRangeLabel, isCreatedRangeEmpty, type CreatedRange } from '@/lib/created-range';
+import { formatCreatedRangeLabel, isCreatedRangeEmpty, type CreatedRange, type CreatedRangePreset } from '@/lib/created-range';
 import CreatedRangeFilter from './CreatedRangeFilter';
 
 /**
@@ -37,8 +37,11 @@ export type ListFilter =
           /** Names the date; defaults to "Created". */
           label?: string;
           value: CreatedRange | null;
-          onChange: (next: CreatedRange | null) => void;
+          /** A preset choice also names the preset — see `CreatedRangeFilter`. */
+          onChange: (next: CreatedRange | null, preset?: CreatedRangePreset) => void;
           withTime?: boolean;
+          /** The shortcuts the chip offers; defaults to today, yesterday, last 7 days, this month. */
+          presets?: readonly CreatedRangePreset[];
       }
     | {
           id: string;
@@ -141,7 +144,15 @@ function ToggleControl({ filter }: { filter: Extract<ResolvedListFilter, { type:
 function FilterControl({ filter, block = false }: { filter: ResolvedListFilter; block?: boolean }) {
     if (filter.type === 'select') return <SelectChip filter={filter} block={block} />;
     if (filter.type === 'toggle') return <ToggleControl filter={filter} />;
-    const range = <CreatedRangeFilter value={filter.value} onChange={filter.onChange} label={filter.label} withTime={filter.withTime} />;
+    const range = (
+        <CreatedRangeFilter
+            value={filter.value}
+            onChange={filter.onChange}
+            label={filter.label}
+            withTime={filter.withTime}
+            presets={filter.presets}
+        />
+    );
     // In the phone sheet the trigger spans the sheet like the selects above it.
     return block ? <div className="[&>div>button]:w-full">{range}</div> : range;
 }

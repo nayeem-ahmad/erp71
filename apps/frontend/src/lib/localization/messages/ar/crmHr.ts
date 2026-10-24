@@ -135,8 +135,7 @@ export const crmHrMessages = {
             },
             layout: {
                 group: 'التخطيط',
-                standard: 'قياسي',
-                compact: 'مضغوط',
+                list: 'قائمة',
                 agenda: 'الأجندة',
             },
             moreFilters: 'مزيد من عوامل التصفية',

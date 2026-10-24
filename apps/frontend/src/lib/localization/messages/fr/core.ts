@@ -79,6 +79,7 @@ export const coreMessages = {
             today: "Aujourd'hui",
             yesterday: "Hier",
             last7Days: "7 derniers jours",
+            last30Days: "30 derniers jours",
             thisMonth: "Ce mois-ci",
             custom: "Personnalisé",
             apply: "Appliquer",

@@ -24,9 +24,8 @@ import {
     type ActivityTarget,
     type CrmActivityListRow as CrmActivityRow,
 } from '@/components/crm/crm-activity-layout';
-import { DataTable, FilterBar, createdAtColumn, type ResolvedListFilter } from '@/components/data-table';
-import { RowActions, RowActionButton } from '@/components/table';
-import { useIsMdUp } from '@/hooks/useMediaQuery';
+import { DataTable, ListToolbar, createdAtColumn, type ResolvedListFilter } from '@/components/data-table';
+import { RowActions, RowActionButton, useTableViewSettings, type TableViewLayout } from '@/components/table';
 import {
     applyCreatedRangeQuery,
     applyDueRangeQuery,
@@ -60,6 +59,8 @@ const statusTone: Record<string, StatusBadgeTone> = {
 
 const columnHelper = createColumnHelper<CrmActivityRow>();
 
+const ACTIVITIES_TABLE_ID = 'crm-activities';
+
 /**
  * Every CRM activity across the tenant — the merged replacement for the separate
  * follow-ups and conversations lists, both of which now redirect here.
@@ -71,7 +72,6 @@ export default function CrmActivitiesPage() {
     const { t } = useI18n();
     const m = t.crm.activitiesPage;
     const scopeCopy = t.crm.scope;
-    const isMdUp = useIsMdUp();
 
     const { options: purposes } = useLeadTaxonomy('purposes');
     const { options: channels } = useLeadTaxonomy('channels');
@@ -127,13 +127,29 @@ export default function CrmActivitiesPage() {
     const [viewing, setViewing] = useState<ActivityTarget | null>(null);
 
     // Read after mount: the server has no localStorage, so the first paint is
-    // Standard and the remembered layout replaces it on the next one.
-    const [layout, setLayoutState] = useState<ActivityLayout>('standard');
+    // the table and the remembered layout replaces it on the next one.
+    const [layout, setLayoutState] = useState<ActivityLayout>('list');
     useEffect(() => { setLayoutState(readActivityLayout()); }, []);
     const setLayout = useCallback((next: ActivityLayout) => {
         setLayoutState(next);
         writeActivityLayout(next);
     }, []);
+    // Offered in View options, on the table's toolbar and on the agenda's.
+    const viewLayout = useMemo<TableViewLayout>(() => ({
+        label: m.layout.group,
+        options: [
+            { key: 'list', label: m.layout.list },
+            { key: 'agenda', label: m.layout.agenda },
+        ],
+        value: layout,
+        onChange: (next) => setLayout(next as ActivityLayout),
+    }), [m.layout, layout, setLayout]);
+
+    // Compact row spacing in View options is this page's compact layout: the
+    // strip instead of the tall cards, no subtitle, and the purpose folded
+    // into the subject so the table loses two columns.
+    const { settings: view } = useTableViewSettings(ACTIVITIES_TABLE_ID);
+    const compact = view.density === 'compact';
 
     // Everyone sees who has been signed off; only a reviewer can change it. The
     // switch is rendered disabled rather than hidden for the rest, so a rep can
@@ -457,7 +473,7 @@ export default function CrmActivitiesPage() {
         <PageShell>
             <PageHeader
                 title={m.title}
-                subtitle={layout === 'standard' ? m.subtitle : undefined}
+                subtitle={compact ? undefined : m.subtitle}
                 breadcrumbs={modulePageBreadcrumbs(
                     t.dashboardHome.breadcrumbHome,
                     t.sidebar.modules.crm,
@@ -471,13 +487,7 @@ export default function CrmActivitiesPage() {
                             onChange={setMineOnly}
                             label={scopeCopy.mineOnly}
                             title={scopeCopy.mineOnlyHint}
-                            size={layout === 'standard' ? 'md' : 'sm'}
-                        />
-                        <LayoutSwitch
-                            value={layout}
-                            onChange={setLayout}
-                            groupLabel={m.layout.group}
-                            labels={m.layout}
+                            size={compact ? 'sm' : 'md'}
                         />
                         <Button
                             variant="secondary"
@@ -502,7 +512,7 @@ export default function CrmActivitiesPage() {
                 }
             />
 
-            {layout === 'standard' ? (
+            {!compact ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <StatCard label={m.dueToday} value={summary?.dueToday ?? 0} tone={summary && summary.dueToday > 0 ? 'warn' : 'ok'} />
                     <StatCard label={m.overdue} value={summary?.overdue ?? 0} tone={summary && summary.overdue > 0 ? 'bad' : 'ok'} />
@@ -533,7 +543,7 @@ export default function CrmActivitiesPage() {
 
             {layout === 'agenda' ? (
                 <>
-                    <FilterBar filters={activityFilters} compact={!isMdUp} />
+                    <ListToolbar tableId={ACTIVITIES_TABLE_ID} filters={activityFilters} layout={viewLayout} />
                     {isLoading ? (
                         <div className="rounded-lg border border-gray-100 bg-white p-8 text-sm text-gray-500">{t.common.loading}</div>
                     ) : (
@@ -552,10 +562,14 @@ export default function CrmActivitiesPage() {
             ) : (
                 <DataTable
                     viewOptions
+                    viewLayout={viewLayout}
                     filters={activityFilters}
                     isLoading={isLoading}
-                    tableId={layout === 'compact' ? 'crm-activities-compact' : 'crm-activities'}
-                    columns={layout === 'compact' ? compactColumns : standardColumns}
+                    // One id for both column sets: the row spacing that picks
+                    // the set is read under this id, so switching ids with it
+                    // could read a different spacing and switch straight back.
+                    tableId={ACTIVITIES_TABLE_ID}
+                    columns={compact ? compactColumns : standardColumns}
                     data={rows}
                     title={m.title}
                     emptyMessage={m.emptyMessage}
@@ -646,34 +660,3 @@ function StatStrip({
         </div>
     );
 }
-
-function LayoutSwitch({
-    value, onChange, groupLabel, labels,
-}: Readonly<{
-    value: ActivityLayout;
-    onChange: (next: ActivityLayout) => void;
-    groupLabel: string;
-    labels: Record<ActivityLayout, string>;
-}>) {
-    const options: ActivityLayout[] = ['standard', 'compact', 'agenda'];
-    return (
-        <div role="radiogroup" aria-label={groupLabel} className="inline-flex overflow-hidden rounded-lg border border-gray-200 bg-white">
-            {options.map((id) => {
-                const on = value === id;
-                return (
-                    <button
-                        key={id}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        onClick={() => onChange(id)}
-                        className={`px-2.5 py-1.5 text-xs font-semibold max-md:min-h-touch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${on ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                    >
-                        {labels[id]}
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-

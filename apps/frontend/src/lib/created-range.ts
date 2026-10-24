@@ -6,7 +6,7 @@ import { getActiveTimeZone } from '@/lib/format';
  * `YYYY-MM-DDTHH:mm` — both on the workspace's own wall clock.
  */
 export type CreatedRange = { from?: string; to?: string };
-export type CreatedRangePreset = 'today' | 'yesterday' | 'last7' | 'thisMonth';
+export type CreatedRangePreset = 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth';
 
 /**
  * Today, as the workspace's own calendar reads it.
@@ -41,6 +41,7 @@ export function createdRangeFromPreset(
         return { from: yesterday, to: yesterday };
     }
     if (preset === 'last7') return { from: addCalendarDays(today, -6), to: today };
+    if (preset === 'last30') return { from: addCalendarDays(today, -29), to: today };
     return { from: `${today.slice(0, 8)}01`, to: today };
 }
 

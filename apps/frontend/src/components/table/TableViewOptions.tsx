@@ -61,6 +61,18 @@ function ToggleRow({ label, hint, checked, onChange }: { label: string; hint?: s
 }
 
 /**
+ * A list that can also be read in another shape — a day ledger, an agenda —
+ * offers the choice at the top of its View options rather than as a switch of
+ * its own above the list.
+ */
+export interface TableViewLayout {
+    label: string;
+    options: readonly { key: string; label: string }[];
+    value: string;
+    onChange: (next: string) => void;
+}
+
+/**
  * The toolbar button that opens a list's view settings: row spacing, text
  * size, striping and fit-to-width. Changes apply to every list unless the
  * person sets this one apart with "This list only".
@@ -69,10 +81,15 @@ export function TableViewOptions({
     tableId,
     buttonClassName,
     iconOnly = true,
+    layout,
+    showTableSettings = true,
 }: {
     tableId: string;
     buttonClassName: string;
     iconOnly?: boolean;
+    layout?: TableViewLayout;
+    /** False under a layout that is not a table, where row spacing and text size draw nothing. */
+    showTableSettings?: boolean;
 }) {
     const { t } = useI18n();
     const copy = t.common.dataTable.view;
@@ -108,28 +125,35 @@ export function TableViewOptions({
                     aria-label={copy.title}
                     className="absolute end-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-1rem)] space-y-3 rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
                 >
-                    <Segmented label={copy.density} options={densityOptions} value={settings.density} onChange={(density) => update({ density })} />
-                    <Segmented label={copy.fontSize} options={fontOptions} value={settings.fontSize} onChange={(fontSize) => update({ fontSize })} />
-                    <div className="space-y-2.5 border-t border-gray-100 pt-3">
-                        <ToggleRow label={copy.striped} checked={settings.striped} onChange={(striped) => update({ striped })} />
-                        <ToggleRow
-                            label={copy.fitWidth}
-                            hint={copy.fitWidthHint}
-                            checked={settings.fitWidth}
-                            onChange={(fitWidth) => update({ fitWidth })}
-                        />
-                    </div>
-                    <div className="space-y-2.5 border-t border-gray-100 pt-3">
-                        <ToggleRow
-                            label={copy.thisListOnly}
-                            hint={isOverridden ? copy.thisListOnlyOn : copy.thisListOnlyOff}
-                            checked={isOverridden}
-                            onChange={setOverride}
-                        />
-                        <button type="button" onClick={reset} className="text-xs font-medium text-blue-600 hover:underline">
-                            {copy.reset}
-                        </button>
-                    </div>
+                    {layout ? (
+                        <Segmented label={layout.label} options={layout.options} value={layout.value} onChange={layout.onChange} />
+                    ) : null}
+                    {showTableSettings ? (
+                        <>
+                            <Segmented label={copy.density} options={densityOptions} value={settings.density} onChange={(density) => update({ density })} />
+                            <Segmented label={copy.fontSize} options={fontOptions} value={settings.fontSize} onChange={(fontSize) => update({ fontSize })} />
+                            <div className="space-y-2.5 border-t border-gray-100 pt-3">
+                                <ToggleRow label={copy.striped} checked={settings.striped} onChange={(striped) => update({ striped })} />
+                                <ToggleRow
+                                    label={copy.fitWidth}
+                                    hint={copy.fitWidthHint}
+                                    checked={settings.fitWidth}
+                                    onChange={(fitWidth) => update({ fitWidth })}
+                                />
+                            </div>
+                            <div className="space-y-2.5 border-t border-gray-100 pt-3">
+                                <ToggleRow
+                                    label={copy.thisListOnly}
+                                    hint={isOverridden ? copy.thisListOnlyOn : copy.thisListOnlyOff}
+                                    checked={isOverridden}
+                                    onChange={setOverride}
+                                />
+                                <button type="button" onClick={reset} className="text-xs font-medium text-blue-600 hover:underline">
+                                    {copy.reset}
+                                </button>
+                            </div>
+                        </>
+                    ) : null}
                 </div>
             ) : null}
         </div>

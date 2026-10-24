@@ -135,8 +135,7 @@ export const crmHrMessages = {
             },
             layout: {
                 group: 'خاکہ',
-                standard: 'معیاری',
-                compact: 'مختصر',
+                list: 'فہرست',
                 agenda: 'ایجنڈا',
             },
             moreFilters: 'مزید فلٹر',
