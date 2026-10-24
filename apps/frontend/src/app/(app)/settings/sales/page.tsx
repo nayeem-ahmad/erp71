@@ -9,11 +9,14 @@ import { useI18n } from '@/lib/i18n';
 import PageHeader from '@/components/ui/compact/PageHeader';
 import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
 import type { PaperSize } from '@/lib/sales-invoice-printer';
-import { isOwner } from '@/lib/permissions';
+import { hasPermission, isOwner } from '@/lib/permissions';
 import { toast } from '@/lib/toast';
 import { Button, Checkbox, Field, PageShell, Select } from '@/components/ui';
 import { getWorkspaceItem } from '@/lib/session-store';
 import { routes } from '@/lib/routes';
+
+/** Who may PATCH sales settings besides an owner — the server's `SETTINGS_ADMIN`. */
+const SETTINGS_ADMIN_PERMISSIONS = ['MANAGE_USERS', 'MANAGE_STORES', 'MANAGE_COUNTERS'];
 
 const PAPER_SIZE_OPTIONS: { value: PaperSize; label: string }[] = [
     { value: 'A4', label: 'A4 (210 × 297 mm)' },
@@ -33,7 +36,9 @@ export default function SalesSettingsPage() {
     const [posEnabled, setPosEnabled] = useState(true);
     const [requireCashierSession, setRequireCashierSession] = useState(false);
     const [showCustomerCredit, setShowCustomerCredit] = useState(false);
+    const [branchCustomersOnly, setBranchCustomersOnly] = useState(true);
     const [isShopOwner, setIsShopOwner] = useState(false);
+    const [isSettingsAdmin, setIsSettingsAdmin] = useState(false);
 
     const loadSettings = useCallback(async () => {
         try {
@@ -41,12 +46,15 @@ export default function SalesSettingsPage() {
             const tenantId = getWorkspaceItem('tenant_id');
             const tenant = me?.tenants?.find((entry: { id: string }) => entry.id === tenantId) || me?.tenants?.[0];
             setIsShopOwner(isOwner(tenant?.role));
+            setIsSettingsAdmin(isOwner(tenant?.role)
+                || SETTINGS_ADMIN_PERMISSIONS.some((perm) => hasPermission(tenant?.permissions, perm)));
 
             if (data?.default_paper_size) setPaperSize(data.default_paper_size as PaperSize);
             if (data?.paper_size) setPaperSize(data.paper_size as PaperSize);
             setPosEnabled(data?.pos_enabled !== false);
             setRequireCashierSession(Boolean(data?.require_cashier_session));
             setShowCustomerCredit(Boolean(data?.show_customer_credit));
+            setBranchCustomersOnly(data?.branch_customers_only !== false);
         } catch (err: any) {
             toast.error(err?.message || 'Failed to load settings');
         } finally {
@@ -65,6 +73,7 @@ export default function SalesSettingsPage() {
             await api.updateSalesSettings({
                 paper_size: paperSize,
                 ...(isShopOwner ? { pos_enabled: posEnabled, require_cashier_session: requireCashierSession, show_customer_credit: showCustomerCredit } : {}),
+                ...(isSettingsAdmin ? { branch_customers_only: branchCustomersOnly } : {}),
             });
             window.dispatchEvent(new Event('erp71:sales-settings-updated'));
             toast.success('Sales settings saved');
@@ -159,6 +168,28 @@ export default function SalesSettingsPage() {
                                     <span className="block text-sm font-semibold text-gray-700">Show credit limits in Customers</span>
                                     <span className="block mt-1 text-xs text-gray-400">
                                         Shows each customer&apos;s credit limit under their due on the Customers list.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                    ) : null}
+
+                    {isSettingsAdmin ? (
+                        <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
+                            <h2 className="text-sm font-semibold text-gray-700">Customers</h2>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <Checkbox
+                                    checked={branchCustomersOnly}
+                                    onChange={(e) => setBranchCustomersOnly(e.target.checked)}
+                                    className="mt-0.5"
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-gray-700">Sell only to the branch&apos;s own customers</span>
+                                    <span className="block mt-1 text-xs text-gray-400">
+                                        Sales entry and POS list only the branch&apos;s customers, and a sale to a
+                                        customer of another branch is refused. Turned off, any branch may sell to
+                                        any customer — but the due and later payments stay with the customer&apos;s
+                                        own branch, so each branch&apos;s receivables and cash stop matching its sales.
                                     </span>
                                 </span>
                             </label>

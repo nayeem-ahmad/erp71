@@ -15,6 +15,7 @@ import {
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { issueDocumentNumber } from '../database/document-number.utils';
 import { computeEntryTax } from '@erp71/shared-types';
+import { assertSaleCustomerBranch } from './sale-customer-branch.util';
 
 jest.mock('../database/inventory.utils', () => ({
   applyInventoryMovement: jest.fn(),
@@ -47,6 +48,11 @@ function stubWarehouseResolution(defaultWarehouseId = 'wh-1') {
   );
   (usableWarehouseIds as jest.Mock).mockResolvedValue(new Set<string>());
 }
+
+// The branch rule has its own spec; here it only matters where the service asks it.
+jest.mock('./sale-customer-branch.util', () => ({
+  assertSaleCustomerBranch: jest.fn(),
+}));
 
 jest.mock('../accounting/posting.utils', () => ({
   autoPostFromRules: jest.fn(),
@@ -247,6 +253,118 @@ describe('SalesService', () => {
     db.postingEvent.findMany.mockResolvedValue([]);
     (issueDocumentNumber as jest.Mock).mockReset();
     (issueDocumentNumber as jest.Mock).mockResolvedValue('INV-2627-00001');
+    (assertSaleCustomerBranch as jest.Mock).mockReset();
+    (assertSaleCustomerBranch as jest.Mock).mockResolvedValue(undefined);
+  });
+
+  describe("the customer must belong to the sale's branch", () => {
+    const otherBranch = () => new BadRequestException('Rahim is a customer of Main.');
+    const saleDto = {
+      storeId: 'store-1',
+      customerId: 'cust-1',
+      totalAmount: 50,
+      amountPaid: 50,
+      items: [{ productId: 'prod-1', quantity: 1, priceAtSale: 50 }],
+    };
+
+    beforeEach(() => {
+      tx.sale.create.mockResolvedValue({ id: 'sale-1', total_amount: 50 });
+      tx.saleItem.create.mockResolvedValue({});
+      tx.productStock.updateMany.mockResolvedValue({ count: 1 });
+      tx.customer.update.mockResolvedValue({});
+    });
+
+    it('checks the picked customer against the branch the sale posts to', async () => {
+      await service.create('tenant-1', 'user-1', saleDto);
+
+      expect(assertSaleCustomerBranch).toHaveBeenCalledWith(tx, 'tenant-1', 'cust-1', 'store-1');
+    });
+
+    it('records nothing when the customer is refused', async () => {
+      (assertSaleCustomerBranch as jest.Mock).mockRejectedValueOnce(otherBranch());
+
+      await expect(service.create('tenant-1', 'user-1', saleDto)).rejects.toThrow('Rahim is a customer of Main.');
+      expect(tx.sale.create).not.toHaveBeenCalled();
+      expect(issueDocumentNumber).not.toHaveBeenCalled();
+    });
+
+    it('checks a typed-in customer whose phone is already on file', async () => {
+      // The phone belongs to an existing customer, so the inline draft resolves to them.
+      tx.customer.findUnique.mockResolvedValueOnce({ id: 'cust-main', deleted_at: null });
+      (assertSaleCustomerBranch as jest.Mock).mockRejectedValueOnce(otherBranch());
+
+      const { customerId, ...withoutCustomer } = saleDto;
+      await expect(service.create('tenant-1', 'user-1', {
+        ...withoutCustomer,
+        newCustomer: { name: 'Rahim', phone: '01711111111' },
+      })).rejects.toThrow(BadRequestException);
+
+      expect(assertSaleCustomerBranch).toHaveBeenCalledWith(tx, 'tenant-1', 'cust-main', 'store-1');
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to park a draft for another branch\'s customer', async () => {
+      tx.product.count = jest.fn().mockResolvedValue(1);
+      (assertSaleCustomerBranch as jest.Mock).mockRejectedValueOnce(otherBranch());
+
+      await expect(service.create('tenant-1', 'user-1', { ...saleDto, isDraft: true }))
+        .rejects.toThrow(BadRequestException);
+
+      expect(assertSaleCustomerBranch).toHaveBeenCalledWith(tx, 'tenant-1', 'cust-1', 'store-1');
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('checks a draft again when it is completed, against the customer it posts with', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 'draft-1',
+        tenant_id: 'tenant-1',
+        store_id: 'store-1',
+        counter_id: null,
+        customer_id: 'cust-1',
+        status: 'DRAFT',
+        total_amount: 50,
+        amount_paid: 50,
+        items: [{ product_id: 'prod-1', quantity: 1, price_at_sale: 50 }],
+        payments: [{ payment_method: 'Cash', amount: 50, account_id: null }],
+      });
+      (assertSaleCustomerBranch as jest.Mock).mockRejectedValue(otherBranch());
+
+      await expect(service.finalizeDraft('tenant-1', 'user-1', 'draft-1')).rejects.toThrow(BadRequestException);
+      expect(assertSaleCustomerBranch).toHaveBeenLastCalledWith(tx, 'tenant-1', 'cust-1', 'store-1');
+
+      await expect(service.finalizeDraft('tenant-1', 'user-1', 'draft-1', { customerId: 'cust-2' }))
+        .rejects.toThrow(BadRequestException);
+      expect(assertSaleCustomerBranch).toHaveBeenLastCalledWith(tx, 'tenant-1', 'cust-2', 'store-1');
+
+      expect(tx.saleItem.deleteMany).not.toHaveBeenCalled();
+      expect(tx.sale.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses an edit that moves the sale to another branch's customer", async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 20, customer_id: 'cust-1',
+      });
+      (assertSaleCustomerBranch as jest.Mock).mockRejectedValueOnce(otherBranch());
+
+      await expect(service.update('tenant-1', 'user-1', 's1', { customerId: 'cust-2' }))
+        .rejects.toThrow(BadRequestException);
+
+      expect(assertSaleCustomerBranch).toHaveBeenCalledWith(tx, 'tenant-1', 'cust-2', 'store-1');
+      expect(tx.customer.update).not.toHaveBeenCalled();
+      expect(tx.sale.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves an edit that keeps the customer alone, so older cross-branch sales stay editable', async () => {
+      tx.sale.findFirst.mockResolvedValue({
+        id: 's1', store_id: 'store-1', status: 'COMPLETED', items: [], payments: [], total_amount: 20, customer_id: 'cust-1',
+      });
+      tx.sale.update.mockResolvedValue({ id: 's1' });
+
+      await service.update('tenant-1', 'user-1', 's1', { note: 'fixed a typo' });
+      await service.update('tenant-1', 'user-1', 's1', { customerId: 'cust-1', note: 'same customer' });
+
+      expect(assertSaleCustomerBranch).not.toHaveBeenCalled();
+    });
   });
 
   describe('invoice numbering', () => {

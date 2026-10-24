@@ -2094,9 +2094,14 @@ export const api = {
         if (params?.storeId) query.set('storeId', params.storeId);
         return fetchAllPages(`/customers${query.toString() ? `?${query.toString()}` : ''}`);
     },
-    /** Bounded typeahead lookup — deliberately capped, unlike `getCustomers`. */
-    searchCustomers: (search: string, limit = 8) =>
-        fetchPaginated(`/customers?search=${encodeURIComponent(search)}&limit=${limit}`).then((r) => r.items),
+    /**
+     * Bounded typeahead lookup — deliberately capped, unlike `getCustomers`.
+     * `storeId` narrows it to one branch's customers.
+     */
+    searchCustomers: (search: string, limit = 8, storeId?: string) =>
+        fetchPaginated(
+            `/customers?search=${encodeURIComponent(search)}&limit=${limit}${storeId ? `&storeId=${encodeURIComponent(storeId)}` : ''}`,
+        ).then((r) => r.items),
     getCustomersPaged: (params?: {
         page?: number;
         limit?: number;

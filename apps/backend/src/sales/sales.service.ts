@@ -87,6 +87,7 @@ import {
     requiresCashierSession,
 } from '../cashier-sessions/active-session.util';
 import { customerBranchId } from '../customers/customer-branch.util';
+import { assertSaleCustomerBranch } from './sale-customer-branch.util';
 
 /**
  * What a parked draft carries in `serial_number` until it is finalised. Random
@@ -281,6 +282,9 @@ export class SalesService {
             if (dto.newCustomer) {
                 dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
+            // After the inline draft resolves: a phone already on file may
+            // have resolved to another branch's customer.
+            await assertSaleCustomerBranch(tx, tenantId, dto.customerId, dto.storeId);
 
             const prep = await this.prepareSale(tx, tenantId, dto);
             const source = await this.resolveSourceDocuments(tx, tenantId, dto);
@@ -1230,6 +1234,7 @@ export class SalesService {
             if (dto.newCustomer) {
                 dto.customerId = await resolveInlineCustomer(tx, tenantId, dto.newCustomer, dto.storeId);
             }
+            await assertSaleCustomerBranch(tx, tenantId, dto.customerId, dto.storeId);
 
             const referenceNumber = await this.validateReferenceNumber(tenantId, dto.referenceNumber);
 
@@ -1410,7 +1415,9 @@ export class SalesService {
                 saleDate: dto.saleDate,
             };
 
-            // Validate everything before a single row changes.
+            // Validate everything before a single row changes. The branch rule
+            // runs again here: the draft may have been parked before it was on.
+            await assertSaleCustomerBranch(tx, tenantId, saleDto.customerId, draft.store_id);
             const prep = await this.prepareSale(tx, tenantId, saleDto, draft.payments);
             const finalizeSession = await this.resolveCashierSession(tx, tenantId, userId, saleDto, {
                 enforce: false,
@@ -1759,6 +1766,11 @@ export class SalesService {
             }
             if (dto.status === 'CANCELLED') {
                 throw new BadRequestException('Use the cancel action to cancel a sale, so its impacts are reversed.');
+            }
+            // Only a change of customer is checked, so a sale recorded before the
+            // branch rule can still be corrected without first being moved.
+            if (dto.customerId && dto.customerId !== sale.customer_id) {
+                await assertSaleCustomerBranch(tx, tenantId, dto.customerId, sale.store_id);
             }
 
             // A draft holds no stock and has posted nothing, so editing it must

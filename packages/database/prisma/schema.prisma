@@ -1533,6 +1533,12 @@ model SalesSettings {
   /// against their limit). Off by default so an upgrade changes no existing
   /// tenant's screens; a tenant admin turns it on under Sales Settings.
   show_customer_credit Boolean @default(false)
+  /// When on, a sale may only be made to a customer of the sale's branch:
+  /// the pickers list that branch's customers and the server refuses any other
+  /// (see `sales/sale-customer-branch.util.ts`). On by default — a sale to
+  /// another branch's customer splits its receivable across two branches.
+  /// A tenant admin turns it off under Sales Settings.
+  branch_customers_only Boolean @default(true)
 
   /// Beneficiary bank details printed on a proforma invoice, so a buyer (or a
   /// buyer's bank opening an LC) knows where to remit. Held on the tenant

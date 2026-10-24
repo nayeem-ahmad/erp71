@@ -46,6 +46,11 @@ interface CustomerSelectionProps {
     setDraft?: (draft: NewCustomerDraft | null) => void;
     /** Highlight the name box when a submit was rejected for missing it. */
     draftNameInvalid?: boolean;
+    /**
+     * The document's branch: only its customers are offered. Omitted, every
+     * customer the member may see.
+     */
+    storeId?: string;
 }
 
 const FIELD_CLASS = 'w-full border rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-transparent min-h-touch sm:min-h-0';
@@ -67,6 +72,7 @@ export default function CustomerSelection({
     draft = null,
     setDraft,
     draftNameInvalid = false,
+    storeId,
 }: CustomerSelectionProps) {
     const { t, fmt, locale } = useI18n();
     const [customers, setCustomers] = useState<PartyOption[]>([]);
@@ -85,13 +91,13 @@ export default function CustomerSelection({
 
         let cancelled = false;
         setLoading(true);
-        api.getCustomers()
+        api.getCustomers({ storeId: storeId || undefined })
             .then((data: PartyOption[]) => { if (!cancelled) setCustomers(data ?? []); })
             .catch((error: unknown) => console.error('Failed to load customers', error))
             .finally(() => { if (!cancelled) setLoading(false); });
 
         return () => { cancelled = true; };
-    }, [readOnly]);
+    }, [readOnly, storeId]);
 
     const updateDraft = (patch: Partial<NewCustomerDraft>) => {
         if (patch.name !== undefined) setSaveNameInvalid(false);

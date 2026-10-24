@@ -63,6 +63,9 @@ export class SalesSettingsService {
           ...(dto.show_customer_credit !== undefined
             ? { show_customer_credit: dto.show_customer_credit }
             : {}),
+          ...(dto.branch_customers_only !== undefined
+            ? { branch_customers_only: dto.branch_customers_only }
+            : {}),
         },
       });
     }
@@ -112,6 +115,9 @@ export class SalesSettingsService {
       // Off until a tenant admin turns it on: an upgrade must not change the
       // Customers list for a shop that never asked for a Credit column.
       show_customer_credit: settings.show_customer_credit ?? false,
+      // On unless a tenant admin turns it off: a sale to another branch's
+      // customer splits its receivable across two branches.
+      branch_customers_only: settings.branch_customers_only ?? true,
       created_at: settings.created_at,
       updated_at: settings.updated_at,
     };

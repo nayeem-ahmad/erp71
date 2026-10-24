@@ -209,3 +209,25 @@ describe('SalesSettingsService — show_customer_credit', () => {
         await expect(service.update('t1', { show_customer_credit: true })).resolves.toMatchObject({ show_customer_credit: true });
     });
 });
+
+describe('SalesSettingsService — branch_customers_only', () => {
+    const db = { salesSettings: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() } };
+    const service = new SalesSettingsService(db as any);
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it('is on for a tenant whose row predates the flag', async () => {
+        db.salesSettings.findUnique.mockResolvedValue({ id: 's1', tenant_id: 't1' });
+        await expect(service.get('t1')).resolves.toMatchObject({ branch_customers_only: true });
+    });
+
+    it('is written only when the request carries it', async () => {
+        db.salesSettings.findUnique.mockResolvedValue({ id: 's1', tenant_id: 't1', paper_size: 'A4', reference_number_format: 'YYMM-#' });
+        db.salesSettings.update.mockImplementation(({ data }) => Promise.resolve({ id: 's1', tenant_id: 't1', ...data }));
+
+        await service.update('t1', { paper_size: 'A4' as any });
+        expect(db.salesSettings.update.mock.calls[0][0].data).not.toHaveProperty('branch_customers_only');
+
+        await expect(service.update('t1', { branch_customers_only: false })).resolves.toMatchObject({ branch_customers_only: false });
+    });
+});
