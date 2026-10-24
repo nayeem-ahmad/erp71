@@ -351,6 +351,7 @@ export const crmHrMessages = {
                 nameRequired: 'الاسم مطلوب.',
                 invalidEmail: 'الرجاء إدخال بريد إلكتروني صالح.',
             },
+            organization: 'المنظمة',
             fields: {
                 name: 'الاسم',
                 company: 'الشركة',
@@ -587,6 +588,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: 'معلومات الاتصال',
+                linkedContact: 'جهة الاتصال',
+                organization: 'المنظمة',
                 conversations: 'المحادثات',
                 logConversation: 'تسجيل محادثة',
                 aiDraft: 'مسودة بالذكاء الاصطناعي',

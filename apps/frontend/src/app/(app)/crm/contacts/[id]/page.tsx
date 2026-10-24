@@ -39,6 +39,7 @@ interface ContactRecord {
     capture_source: string;
     created_at: string;
     creator: { id: string; name: string } | null;
+    organization?: { id: string; name: string } | null;
     attachments?: ContactAttachment[];
 }
 
@@ -194,6 +195,7 @@ export default function ContactDetailPage() {
                     onChange={setForm}
                     teamMembers={teamMembers}
                     errors={errors}
+                    organizationName={contact.organization?.name ?? null}
                 />
 
                 {saveError && <p role="alert" className="text-xs text-danger mt-3">{saveError}</p>}

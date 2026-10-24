@@ -30,6 +30,13 @@ import {
 } from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
 import { parseImageUpload } from '../common/image-upload.util';
+import {
+    leadIdentityOf,
+    leadIdentityPatch,
+    normalizeLeadMobile,
+    normalizeProfileUrl,
+    organizationNameNorm,
+} from '@erp71/shared-types';
 
 const attachmentIncludes = {
     creator: { select: { id: true, name: true, email: true } },
@@ -38,6 +45,7 @@ const attachmentIncludes = {
 const contactIncludes = {
     assignee: { select: { id: true, name: true, email: true } },
     creator: { select: { id: true, name: true, email: true } },
+    organization: { select: { id: true, name: true } },
     attachments: {
         orderBy: { created_at: 'desc' },
         include: attachmentIncludes,
@@ -112,6 +120,83 @@ export class CrmContactsService {
         }
     }
 
+    /**
+     * Email is not an identity key. A null norm still matches when the raw
+     * value normalizes to the same mobile or LinkedIn profile. A value that
+     * does not normalize (`N/A`, blank) is not a match.
+     */
+    private async assertNormalizedFree(
+        tenantId: string,
+        kind: 'mobile' | 'linkedin',
+        norm: string | null,
+        exceptId?: string,
+    ) {
+        if (!norm) return;
+
+        const normField = kind === 'mobile' ? 'mobile_norm' : 'linkedin_norm';
+        const rawField = kind === 'mobile' ? 'mobile' : 'linkedin_url';
+        const rows = await this.db.crmContact.findMany({
+            where: {
+                tenant_id: tenantId,
+                ...(exceptId ? { id: { not: exceptId } } : {}),
+                OR: [{ [normField]: norm }, { [normField]: null, [rawField]: { not: null } }],
+            },
+            select: { id: true, mobile: true, mobile_norm: true, linkedin_url: true, linkedin_norm: true },
+        });
+
+        const clash = rows.some((row) => {
+            if (exceptId && row.id === exceptId) return false;
+            const stored = row[normField];
+            if (stored) return stored === norm;
+            const raw =
+                kind === 'mobile' ? normalizeLeadMobile(row.mobile) : normalizeProfileUrl(row.linkedin_url);
+            return raw === norm;
+        });
+        if (!clash) return;
+
+        throw new BadRequestException(
+            kind === 'mobile'
+                ? 'A contact with this mobile number already exists.'
+                : 'A contact with this LinkedIn profile already exists.',
+        );
+    }
+
+    /**
+     * The company string stays on the contact. A non-empty value finds or
+     * creates the organization by `name_norm` and never renames an existing
+     * row. Blank clears the link and leaves the organization in place.
+     * `undefined` means the patch did not mention company.
+     */
+    private async organizationIdForCompany(
+        tenantId: string,
+        company: string | null | undefined,
+    ): Promise<string | null | undefined> {
+        if (company === undefined) return undefined;
+        if (!company) return null;
+
+        const nameNorm = organizationNameNorm(company);
+        if (!nameNorm) return null;
+
+        const where = { tenant_id_name_norm: { tenant_id: tenantId, name_norm: nameNorm } };
+        const existing = await this.db.organization.findUnique({ where, select: { id: true } });
+        if (existing) return existing.id;
+
+        try {
+            const created = await this.db.organization.create({
+                data: { tenant_id: tenantId, name: company, name_norm: nameNorm },
+                select: { id: true },
+            });
+            return created.id;
+        } catch (error) {
+            // Two saves can insert the same name_norm together. The row that
+            // won keeps its display name; this save only borrows the id.
+            if ((error as { code?: string } | null)?.code !== 'P2002') throw error;
+            const raced = await this.db.organization.findUnique({ where, select: { id: true } });
+            if (!raced) throw error;
+            return raced.id;
+        }
+    }
+
     /** Trim the optional text fields present in a patch, mapping blanks to NULL. */
     private mapTextFields(dto: CreateContactDto | UpdateContactDto): Record<string, string | null> {
         const data: Record<string, string | null> = {};
@@ -128,9 +213,16 @@ export class CrmContactsService {
         const name = dto.name?.trim();
         if (!name) throw new BadRequestException('Name is required.');
 
+        const text = this.mapTextFields(dto);
         const mobile = this.normalizeMobile(dto.mobile);
         if (mobile) await this.assertMobileFree(tenantId, mobile);
+        await this.assertNormalizedFree(tenantId, 'mobile', normalizeLeadMobile(dto.mobile));
+        await this.assertNormalizedFree(tenantId, 'linkedin', normalizeProfileUrl(dto.linkedin_url));
 
+        const organizationId = await this.organizationIdForCompany(
+            tenantId,
+            Object.prototype.hasOwnProperty.call(text, 'company') ? text.company : undefined,
+        );
         const photoKey = this.resolvePhotoKey(tenantId, dto.photo_storage_key);
 
         return this.db.crmContact.create({
@@ -138,7 +230,9 @@ export class CrmContactsService {
                 tenant_id: tenantId,
                 name,
                 mobile: mobile ?? null,
-                ...this.mapTextFields(dto),
+                ...text,
+                ...leadIdentityOf(dto),
+                ...(organizationId !== undefined ? { organization_id: organizationId } : {}),
                 capture_source: dto.capture_source ?? CrmContactCaptureSource.MANUAL,
                 // `|| null`, not `?? null`: the form posts an empty string for
                 // "unassigned", and an empty string in an FK column is a
@@ -349,7 +443,10 @@ export class CrmContactsService {
         });
         if (!existing) throw new NotFoundException('Contact not found');
 
-        const data: Record<string, unknown> = this.mapTextFields(dto);
+        const data: Record<string, unknown> = {
+            ...this.mapTextFields(dto),
+            ...leadIdentityPatch(dto),
+        };
 
         if (dto.name !== undefined) {
             const name = dto.name.trim();
@@ -360,7 +457,24 @@ export class CrmContactsService {
         const mobile = this.normalizeMobile(dto.mobile);
         if (mobile !== undefined) {
             if (mobile) await this.assertMobileFree(tenantId, mobile, id);
+            await this.assertNormalizedFree(tenantId, 'mobile', normalizeLeadMobile(mobile), id);
             data.mobile = mobile;
+        }
+
+        if (dto.linkedin_url !== undefined) {
+            await this.assertNormalizedFree(
+                tenantId,
+                'linkedin',
+                normalizeProfileUrl(dto.linkedin_url),
+                id,
+            );
+        }
+
+        if (dto.company !== undefined) {
+            data.organization_id = await this.organizationIdForCompany(
+                tenantId,
+                (data.company as string | null) ?? null,
+            );
         }
 
         if (dto.assigned_to !== undefined) {
@@ -499,17 +613,33 @@ export class CrmContactsService {
                 update: async (id, row) => {
                     // A blank cell means "not supplied", not "erase what is there":
                     // a spreadsheet re-import that only fills in emails must not
-                    // wipe every other column it left empty.
-                    await this.db.crmContact.update({
-                        where: { id },
-                        data: {
-                            name: row.name,
-                            ...OPTIONAL_TEXT_FIELDS.reduce<Record<string, string>>((acc, field) => {
-                                if (row[field]) acc[field] = row[field] as string;
-                                return acc;
-                            }, {}),
-                        },
-                    });
+                    // wipe every other column it left empty. A supplied mobile,
+                    // email, LinkedIn URL, or company updates the norm or
+                    // organization in the same write. A later boot will not
+                    // repair a column that is already set.
+                    const data: Record<string, string | null> = { name: row.name };
+                    for (const field of OPTIONAL_TEXT_FIELDS) {
+                        if (row[field]) data[field] = row[field];
+                    }
+                    if (row.mobile) {
+                        await this.assertMobileFree(tenantId, row.mobile, id);
+                        const mobileNorm = normalizeLeadMobile(row.mobile);
+                        await this.assertNormalizedFree(tenantId, 'mobile', mobileNorm, id);
+                        data.mobile_norm = mobileNorm;
+                    }
+                    if (row.email) {
+                        data.email_norm = leadIdentityPatch({ email: row.email }).email_norm ?? null;
+                    }
+                    if (row.linkedin_url) {
+                        const linkedinNorm = normalizeProfileUrl(row.linkedin_url);
+                        await this.assertNormalizedFree(tenantId, 'linkedin', linkedinNorm, id);
+                        data.linkedin_norm = linkedinNorm;
+                    }
+                    if (row.company) {
+                        const organizationId = await this.organizationIdForCompany(tenantId, row.company);
+                        if (organizationId) data.organization_id = organizationId;
+                    }
+                    await this.db.crmContact.update({ where: { id }, data });
                 },
             },
         );

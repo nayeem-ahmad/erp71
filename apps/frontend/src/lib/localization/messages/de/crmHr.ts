@@ -351,6 +351,7 @@ export const crmHrMessages = {
                 nameRequired: "Name ist erforderlich.",
                 invalidEmail: "Bitte geben Sie eine gültige E-Mail-Adresse ein.",
             },
+            organization: "Organisation",
             fields: {
                 name: "Name",
                 company: "Firma",
@@ -587,6 +588,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: "Kontakt",
+                linkedContact: "Kontakt",
+                organization: "Organisation",
                 conversations: "Gespräche",
                 logConversation: "Gespräch erfassen",
                 aiDraft: "KI-Entwurf",

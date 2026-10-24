@@ -351,6 +351,7 @@ export const crmHrMessages = {
                 nameRequired: 'نام لازمی ہے۔',
                 invalidEmail: 'براہِ کرم درست ای میل پتہ درج کریں۔',
             },
+            organization: 'تنظیم',
             fields: {
                 name: 'نام',
                 company: 'کمپنی',
@@ -587,6 +588,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: 'رابطہ',
+                linkedContact: 'رابطہ',
+                organization: 'تنظیم',
                 conversations: 'گفتگو',
                 logConversation: 'گفتگو درج کریں',
                 aiDraft: 'اے آئی مسودہ',

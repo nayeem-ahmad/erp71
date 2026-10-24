@@ -351,6 +351,7 @@ export const crmHrMessages = {
                 nameRequired: "नाम आवश्यक है।",
                 invalidEmail: "कृपया वैध ईमेल पता दर्ज करें।",
             },
+            organization: "संगठन",
             fields: {
                 name: "नाम",
                 company: "कंपनी",
@@ -587,6 +588,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: "संपर्क",
+                linkedContact: "संपर्क",
+                organization: "संगठन",
                 conversations: "बातचीत",
                 logConversation: "बातचीत दर्ज करें",
                 aiDraft: "AI ड्राफ़्ट",

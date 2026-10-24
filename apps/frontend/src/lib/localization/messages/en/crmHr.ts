@@ -355,6 +355,7 @@ export const crmHrMessages = {
                 nameRequired: 'Name is required.',
                 invalidEmail: 'Please enter a valid email address.',
             },
+            organization: 'Organization',
             fields: {
                 name: 'Name',
                 company: 'Company',
@@ -591,6 +592,8 @@ export const crmHrMessages = {
             },
             detail: {
                 contactSection: 'Contact',
+                linkedContact: 'Contact',
+                organization: 'Organization',
                 conversations: 'Conversations',
                 logConversation: 'Log Conversation',
                 aiDraft: 'AI Draft',

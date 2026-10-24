@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { LeadStatus } from '@prisma/client';
-import { identityMatchArms, leadIdentityOf } from '@erp71/shared-types';
+import { leadIdentityOf, normalizeLeadMobile } from '@erp71/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { CrmLeadTaxonomyService } from '../crm-lead-taxonomy/crm-lead-taxonomy.service';
 import { coerceLegacySource } from '../crm-lead-taxonomy/lead-taxonomy.util';
@@ -23,6 +23,37 @@ const WEBSITE_SOURCE_CODE = 'WEBSITE';
  */
 const ENQUIRY_CHANNEL_CODE = 'NOTE';
 
+const CONTACT_SELECT = {
+    id: true,
+    organization_id: true,
+    mobile: true,
+    mobile_norm: true,
+    created_at: true,
+} as const;
+
+type EnquiryContact = {
+    id: string;
+    organization_id: string | null;
+    mobile: string | null;
+    mobile_norm: string | null;
+    created_at: Date | string;
+};
+
+function compareCreatedAtThenId(a: EnquiryContact, b: EnquiryContact): number {
+    const at = new Date(a.created_at).getTime();
+    const bt = new Date(b.created_at).getTime();
+    if (at !== bt) return at - bt;
+    if (a.id < b.id) return -1;
+    if (a.id > b.id) return 1;
+    return 0;
+}
+
+/** A set norm wins. A null norm falls through to the raw value. */
+function mobileMatches(row: { mobile: string | null; mobile_norm: string | null }, norm: string): boolean {
+    if (row.mobile_norm) return row.mobile_norm === norm;
+    return normalizeLeadMobile(row.mobile) === norm;
+}
+
 @Injectable()
 export class StorefrontEnquiriesService {
     constructor(
@@ -33,25 +64,28 @@ export class StorefrontEnquiriesService {
     /**
      * File an enquiry from a shop's public storefront against that shop's CRM.
      *
-     * Two paths, and which one runs is never disclosed to the sender:
+     * Match a person, not a lead. A normalized mobile selects the oldest contact
+     * in the tenant with that `mobile_norm`, or with a null `mobile_norm` whose
+     * raw mobile normalizes to the same number (`created_at`, then `id`). Two
+     * spellings of one number are one person, and the email on the form is
+     * ignored. When the mobile matches nobody, an email that matches exactly
+     * one contact — the raw address, case-insensitive, or `email_norm` — is
+     * that person. Two or more email matches are not a person we can name, so
+     * the enquiry starts a new contact. Nothing matching does the same. The
+     * new contact stores the enquiry email and norms, and stores the mobile
+     * only when it normalizes.
      *
-     *  - **Nobody we know** — a new `Lead`, source WEBSITE, status NEW, with the
-     *    message on the timeline.
-     *  - **Somebody we already have** — a `LeadConversation` on the lead that
-     *    already carries this email or mobile, and nothing else touched.
+     * The message is logged on that contact's newest open lead. Open means
+     * `status` is not CONVERTED or LOST; newest is `updated_at`, then `id`.
+     * When none is open, a new lead is created pointing at the contact, and
+     * `organization_id` is copied from the contact. An existing lead is not
+     * updated, and neither is an existing contact.
      *
-     * The second path is the whole reason this does not call
-     * `CrmLeadsService.create`. That method's `assertIdentityFree` answers a
-     * repeat enquirer with `400 A lead with this email already exists.` — an
-     * accurate sentence about the tenant's CRM, and one no shop wants shown to a
-     * customer asking a second question. It would also leak which addresses a
-     * shop already holds to anyone willing to probe the form.
-     *
-     * Nothing about an existing lead is rewritten — not its status, not its
-     * owner, not its priority. A rep who has worked a lead to NEGOTIATION does
-     * not want it dragged back to NEW because the customer used the web form
-     * instead of replying to an email; the enquiry is new information on the
-     * timeline, not a new beginning.
+     * This does not call `CrmLeadsService.create`. That path files a deal the
+     * way a member of staff would. A public enquiry has to land on the open
+     * lead the matched person already has, or on a new lead for the contact,
+     * and the response is `{ success: true }` either way. The sender is never
+     * told which branch ran.
      */
     async submit(slug: string, dto: StorefrontEnquiryDto) {
         const email = dto.email?.trim() || undefined;
@@ -71,30 +105,103 @@ export class StorefrontEnquiriesService {
         if (!tenant) throw new NotFoundException('Storefront not found or not available');
 
         const identity = leadIdentityOf({ mobile, email });
-        const existing = await this.findExistingLead(tenant.id, identity);
+        // A number that does not normalize is not stored. `(tenant_id, mobile)`
+        // is unique, so a second `---` would collide, and it is not a person.
+        const storedMobile = identity.mobile_norm ? (mobile ?? null) : null;
+        const person = await this.findPerson(tenant.id, identity, email);
 
-        if (existing) {
-            await this.logConversation(tenant.id, existing.id, dto.name, dto.message);
+        if (person) {
+            const openLead = await this.findNewestOpenLead(tenant.id, person.id);
+            if (openLead) {
+                await this.logConversation(tenant.id, openLead.id, dto.name, dto.message);
+                return { success: true as const };
+            }
+
+            await this.createLead(tenant.id, dto, {
+                email,
+                mobile: storedMobile,
+                identity,
+                contactId: person.id,
+                organizationId: person.organization_id,
+            });
             return { success: true as const };
         }
 
-        await this.createLead(tenant.id, dto, { email, mobile, identity });
+        const created = await this.db.crmContact.create({
+            data: {
+                tenant_id: tenant.id,
+                name: dto.name,
+                email: email ?? null,
+                mobile: storedMobile,
+                mobile_norm: identity.mobile_norm,
+                email_norm: identity.email_norm,
+                linkedin_norm: identity.linkedin_norm,
+            },
+            select: { id: true, organization_id: true },
+        });
+
+        await this.createLead(tenant.id, dto, {
+            email,
+            mobile: storedMobile,
+            identity,
+            contactId: created.id,
+            organizationId: created.organization_id,
+        });
         return { success: true as const };
     }
 
-    /** The lead already holding this mobile or email, if the shop has one. */
-    private async findExistingLead(
+    /**
+     * The person this enquiry is about, or null when we must start a new
+     * contact. Null covers both "nobody" and "the email is shared", which
+     * are the same write: do not log on either existing contact.
+     */
+    private async findPerson(
         tenantId: string,
         identity: ReturnType<typeof leadIdentityOf>,
-    ) {
-        const arms = identityMatchArms(identity);
-        // `submit` refuses an enquiry with neither, so this is belt and braces:
-        // `OR: []` matches no rows, which would read as "nobody we know" and
-        // create a lead per submission.
-        if (!arms.length) return null;
+        email: string | undefined,
+    ): Promise<EnquiryContact | null> {
+        if (identity.mobile_norm) {
+            const rows = await this.db.crmContact.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    OR: [
+                        { mobile_norm: identity.mobile_norm },
+                        { mobile_norm: null, mobile: { not: null } },
+                    ],
+                },
+                orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+                select: CONTACT_SELECT,
+            });
+            const match = rows
+                .filter((row) => mobileMatches(row, identity.mobile_norm!))
+                .sort(compareCreatedAtThenId)[0];
+            if (match) return match;
+        }
 
+        if (!identity.email_norm || !email) return null;
+
+        const rows = await this.db.crmContact.findMany({
+            where: {
+                tenant_id: tenantId,
+                OR: [
+                    { email: { equals: email, mode: 'insensitive' } },
+                    { email_norm: identity.email_norm },
+                ],
+            },
+            select: CONTACT_SELECT,
+        });
+        return rows.length === 1 ? rows[0] : null;
+    }
+
+    /** Newest open lead for this contact. Open means not CONVERTED or LOST. */
+    private async findNewestOpenLead(tenantId: string, contactId: string) {
         return this.db.lead.findFirst({
-            where: { tenant_id: tenantId, OR: arms },
+            where: {
+                tenant_id: tenantId,
+                contact_id: contactId,
+                status: { notIn: [LeadStatus.CONVERTED, LeadStatus.LOST] },
+            },
+            orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
             select: { id: true },
         });
     }
@@ -138,8 +245,10 @@ export class StorefrontEnquiriesService {
         dto: StorefrontEnquiryDto,
         contact: {
             email?: string;
-            mobile?: string;
+            mobile: string | null;
             identity: ReturnType<typeof leadIdentityOf>;
+            contactId: string;
+            organizationId: string | null;
         },
     ) {
         const source =
@@ -171,6 +280,8 @@ export class StorefrontEnquiriesService {
                 email: contact.email,
                 mobile: contact.mobile,
                 ...contact.identity,
+                contact_id: contact.contactId,
+                organization_id: contact.organizationId,
                 source_id: source?.id ?? null,
                 source: coerceLegacySource(source?.code),
                 status: LeadStatus.NEW,

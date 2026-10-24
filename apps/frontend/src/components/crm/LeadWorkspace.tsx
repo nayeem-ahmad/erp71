@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-    Phone, Mail, MessageSquare, UserCheck, Sparkles, Pencil, ExternalLink, Trash2, User, MapPin, } from 'lucide-react';
+    Phone, Mail, MessageSquare, UserCheck, Sparkles, Pencil, ExternalLink, Trash2, User, MapPin, Building2,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { routes } from '@/lib/routes';
@@ -317,6 +318,18 @@ export default function LeadWorkspace({ leadId, onLoaded, onChanged, onConvertRe
                             {lead.email && (
                                 <DetailRow icon={<Mail className="w-3.5 h-3.5" />} label={m.fields.email}>
                                     {lead.email}
+                                </DetailRow>
+                            )}
+                            {lead.contact && (
+                                <DetailRow icon={<User className="w-3.5 h-3.5" />} label={m.detail.linkedContact}>
+                                    <Link href={routes.crm.contactDetail(lead.contact.id)} className="text-blue-600 hover:underline">
+                                        {lead.contact.name}
+                                    </Link>
+                                </DetailRow>
+                            )}
+                            {lead.organization?.name && (
+                                <DetailRow icon={<Building2 className="w-3.5 h-3.5" />} label={m.detail.organization}>
+                                    {lead.organization.name}
                                 </DetailRow>
                             )}
                             {lead.address && (

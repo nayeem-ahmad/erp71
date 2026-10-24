@@ -34,9 +34,10 @@ import {
     labelForDedupeKey,
     LeadIdentity,
     LEAD_IDENTITY_FIELDS,
-    LEAD_IDENTITY_LABELS,
     leadIdentityOf,
     leadIdentityPatch,
+    normalizeLeadMobile,
+    normalizeProfileUrl,
 } from '@erp71/shared-types';
 import { resolveOrderBy, SortableMap } from '../common/sort.util';
 import {
@@ -92,6 +93,8 @@ const leadIncludes = {
     // `is_system` lets a client tell a seeded stage it may translate from a
     // tenant-named one it must show verbatim; `lifecycle` drives its tone.
     statusOption: { select: { id: true, code: true, name: true, lifecycle: true, is_system: true } },
+    contact: { select: { id: true, name: true } },
+    organization: { select: { id: true, name: true } },
 } as const;
 
 // `category`/`source` sort through the relation so the list orders by the label
@@ -171,6 +174,73 @@ const LEAD_FILTERABLE: FilterableMap<Prisma.LeadWhereInput> = {
  * what counts as an email.
  */
 const EMPTY_EMAIL_WHERE: Prisma.LeadWhereInput = { OR: [{ email: null }, { email: '' }] };
+
+const CONTACT_LINK_SELECT = {
+    id: true,
+    mobile: true,
+    mobile_norm: true,
+    linkedin_url: true,
+    linkedin_norm: true,
+    organization_id: true,
+    created_at: true,
+} as const;
+
+type ContactCandidate = {
+    id: string;
+    mobile: string | null;
+    mobile_norm: string | null;
+    linkedin_url: string | null;
+    linkedin_norm: string | null;
+    organization_id: string | null;
+    created_at: Date | string;
+};
+
+type ContactSnapshot = {
+    name: string;
+    mobile?: string | null;
+    email?: string | null;
+    address?: string | null;
+    linkedin_url?: string | null;
+    identity: LeadIdentity;
+};
+
+function compareCreatedAtThenId(a: ContactCandidate, b: ContactCandidate): number {
+    const at = new Date(a.created_at).getTime();
+    const bt = new Date(b.created_at).getTime();
+    if (at !== bt) return at - bt;
+    if (a.id < b.id) return -1;
+    if (a.id > b.id) return 1;
+    return 0;
+}
+
+/** A set norm wins. A null norm falls through to the raw value. Email is not a key. */
+function mobileMatches(row: ContactCandidate, norm: string): boolean {
+    if (row.mobile_norm) return row.mobile_norm === norm;
+    return normalizeLeadMobile(row.mobile) === norm;
+}
+
+function linkedinMatches(row: ContactCandidate, norm: string): boolean {
+    if (row.linkedin_norm) return row.linkedin_norm === norm;
+    return normalizeProfileUrl(row.linkedin_url) === norm;
+}
+
+/**
+ * The contact's `organization_id` when the lead has none, otherwise null
+ * ("do not write", so a set value is never cleared).
+ */
+function organizationToCopy(
+    leadOrganizationId: string | null | undefined,
+    contactOrganizationId: string | null | undefined,
+): string | null {
+    if (leadOrganizationId) return null;
+    return contactOrganizationId || null;
+}
+
+function leadLinkFields(link: { contact_id: string; organization_id: string | null }) {
+    return link.organization_id
+        ? { contact_id: link.contact_id, organization_id: link.organization_id }
+        : { contact_id: link.contact_id };
+}
 
 @Injectable()
 export class CrmLeadsService {
@@ -320,11 +390,9 @@ export class CrmLeadsService {
     }
 
     /**
-     * The lead already holding any of this one's identity keys, and which key it
-     * was — or null when this lead is nobody else.
-     *
-     * One query across all three keys, rather than one per key: an import runs
-     * this for every row of a file that may hold 5000 of them.
+     * The lead already holding this mobile or LinkedIn, for import skip/upsert.
+     * The caller omits `email_norm`: a shared inbox is not the same deal.
+     * One query across the keys it was given. An import runs this per row.
      */
     private async findIdentityMatch(
         tenantId: string,
@@ -354,22 +422,144 @@ export class CrmLeadsService {
         return { id: existing.id, field: field ?? 'mobile_norm' };
     }
 
-    private async assertIdentityFree(
+    /**
+     * Mobile, then LinkedIn. Oldest `created_at`, then `id`. A null norm matches
+     * only when the raw value normalizes to the same string — never the raw
+     * junk itself, and never an email.
+     */
+    private async findContact(
+        tx: Prisma.TransactionClient,
         tenantId: string,
-        identity: Partial<LeadIdentity>,
-        exceptId?: string,
-    ) {
-        const match = await this.findIdentityMatch(tenantId, identity, exceptId);
-        if (match) {
-            throw new BadRequestException(
-                `A lead with this ${LEAD_IDENTITY_LABELS[match.field]} already exists.`,
-            );
+        identity: LeadIdentity,
+    ): Promise<ContactCandidate | null> {
+        if (identity.mobile_norm) {
+            const rows = await tx.crmContact.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    OR: [
+                        { mobile_norm: identity.mobile_norm },
+                        { mobile_norm: null, mobile: { not: null } },
+                    ],
+                },
+                orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+                select: CONTACT_LINK_SELECT,
+            });
+            const match = rows
+                .filter((row) => mobileMatches(row, identity.mobile_norm!))
+                .sort(compareCreatedAtThenId)[0];
+            if (match) return match;
         }
+
+        if (identity.linkedin_norm) {
+            const rows = await tx.crmContact.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    OR: [
+                        { linkedin_norm: identity.linkedin_norm },
+                        { linkedin_norm: null, linkedin_url: { not: null } },
+                    ],
+                },
+                orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+                select: CONTACT_LINK_SELECT,
+            });
+            const match = rows
+                .filter((row) => linkedinMatches(row, identity.linkedin_norm!))
+                .sort(compareCreatedAtThenId)[0];
+            if (match) return match;
+        }
+
+        return null;
+    }
+
+    /**
+     * One new person from the lead snapshot. The raw mobile is stored only when
+     * it normalizes: `(tenant_id, mobile)` is unique, so a second `N/A` would
+     * collide. An existing contact is not updated.
+     */
+    private async insertContact(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        snapshot: ContactSnapshot,
+    ): Promise<{ id: string; organization_id: string | null }> {
+        const storedMobile = snapshot.identity.mobile_norm ? (snapshot.mobile ?? null) : null;
+        return tx.crmContact.create({
+            data: {
+                tenant_id: tenantId,
+                name: snapshot.name,
+                mobile: storedMobile,
+                email: snapshot.email ?? null,
+                address: snapshot.address ?? null,
+                linkedin_url: snapshot.linkedin_url ?? null,
+                mobile_norm: snapshot.identity.mobile_norm,
+                email_norm: snapshot.identity.email_norm,
+                linkedin_norm: snapshot.identity.linkedin_norm,
+            },
+            select: { id: true, organization_id: true },
+        });
+    }
+
+    private async linkContact(
+        tx: Prisma.TransactionClient,
+        tenantId: string,
+        snapshot: ContactSnapshot,
+        leadOrganizationId: string | null | undefined,
+    ): Promise<{ contact_id: string; organization_id: string | null }> {
+        const found = await this.findContact(tx, tenantId, snapshot.identity);
+        const contact = found ?? (await this.insertContact(tx, tenantId, snapshot));
+        return {
+            contact_id: contact.id,
+            organization_id: organizationToCopy(leadOrganizationId, contact.organization_id),
+        };
+    }
+
+    private contactIdentityChanged(
+        existing: {
+            mobile?: string | null;
+            mobile_norm?: string | null;
+            linkedin_url?: string | null;
+            linkedin_norm?: string | null;
+        },
+        dto: UpdateLeadDto,
+    ): boolean {
+        if (dto.mobile !== undefined) {
+            const current = existing.mobile_norm ?? normalizeLeadMobile(existing.mobile);
+            if (normalizeLeadMobile(dto.mobile) !== current) return true;
+        }
+        if (dto.linkedin_url !== undefined) {
+            const current = existing.linkedin_norm ?? normalizeProfileUrl(existing.linkedin_url);
+            if (normalizeProfileUrl(dto.linkedin_url) !== current) return true;
+        }
+        return false;
+    }
+
+    /** The lead after this edit, so a mobile change still matches on the LinkedIn it kept. */
+    private mergedContactSnapshot(
+        existing: {
+            name?: string | null;
+            mobile?: string | null;
+            email?: string | null;
+            address?: string | null;
+            linkedin_url?: string | null;
+        },
+        dto: UpdateLeadDto,
+    ): ContactSnapshot {
+        const mobile = dto.mobile !== undefined ? dto.mobile : existing.mobile;
+        const email = dto.email !== undefined ? dto.email : existing.email;
+        const address = dto.address !== undefined ? dto.address : existing.address;
+        const linkedin_url = dto.linkedin_url !== undefined ? dto.linkedin_url : existing.linkedin_url;
+        const name = dto.name !== undefined ? dto.name : existing.name;
+        return {
+            name: name || '',
+            mobile,
+            email,
+            address,
+            linkedin_url,
+            identity: leadIdentityOf({ mobile, email, linkedin_url }),
+        };
     }
 
     async create(tenantId: string, userId: string, dto: CreateLeadDto, timezone: string) {
         const identity = leadIdentityOf(dto);
-        await this.assertIdentityFree(tenantId, identity);
 
         const stage = await this.statuses.forCreate(tenantId, dto);
         const status = stage.lifecycle;
@@ -413,43 +603,59 @@ export class CrmLeadsService {
 
         const photo = this.resolvePhoto(tenantId, dto);
 
-        const lead = await this.db.lead.create({
-            data: {
-                tenant_id: tenantId,
-                name: dto.name,
-                mobile: dto.mobile,
-                email: dto.email,
-                address: dto.address,
-                ...identity,
-                category_id: categoryRow?.id ?? null,
-                category: coerceLegacyCategory(categoryRow?.code),
-                priority,
-                remarks: dto.remarks,
-                source_id: sourceRow?.id ?? null,
-                source: coerceLegacySource(sourceRow?.code),
-                status,
-                status_id: stage.id,
-                lost_reason: status === LeadStatus.LOST ? dto.lost_reason : undefined,
-                // A lead can be filed already-lost (a walk-in who bought elsewhere),
-                // in which case it closed the moment it was created.
-                closed_at: isClosedStatus(status) ? new Date() : undefined,
-                score,
-                linkedin_url: dto.linkedin_url,
-                fb_url: dto.fb_url,
-                x_url: dto.x_url,
-                website_url: dto.website_url,
-                // A lead is always owned by somebody: whoever files it, unless the
-                // payload names someone else. An unowned lead is invisible to the
-                // `assignedTo` filter and to "my leads", which is how every lead
-                // created through the UI used to end up.
-                assigned_to: dto.assigned_to ?? userId,
-                store_id: dto.store_id,
-                photo_url: photo.url ?? null,
-                photo_storage_key: photo.key ?? null,
-                created_by: userId,
-                custom_fields: customFields ?? undefined,
-            },
-            include: leadIncludes,
+        const lead = await this.db.$transaction(async (tx) => {
+            const link = await this.linkContact(
+                tx,
+                tenantId,
+                {
+                    name: dto.name,
+                    mobile: dto.mobile,
+                    email: dto.email,
+                    address: dto.address,
+                    linkedin_url: dto.linkedin_url,
+                    identity,
+                },
+                null,
+            );
+            return tx.lead.create({
+                data: {
+                    tenant_id: tenantId,
+                    name: dto.name,
+                    mobile: dto.mobile,
+                    email: dto.email,
+                    address: dto.address,
+                    ...identity,
+                    ...leadLinkFields(link),
+                    category_id: categoryRow?.id ?? null,
+                    category: coerceLegacyCategory(categoryRow?.code),
+                    priority,
+                    remarks: dto.remarks,
+                    source_id: sourceRow?.id ?? null,
+                    source: coerceLegacySource(sourceRow?.code),
+                    status,
+                    status_id: stage.id,
+                    lost_reason: status === LeadStatus.LOST ? dto.lost_reason : undefined,
+                    // A lead can be filed already-lost (a walk-in who bought elsewhere),
+                    // in which case it closed the moment it was created.
+                    closed_at: isClosedStatus(status) ? new Date() : undefined,
+                    score,
+                    linkedin_url: dto.linkedin_url,
+                    fb_url: dto.fb_url,
+                    x_url: dto.x_url,
+                    website_url: dto.website_url,
+                    // A lead is always owned by somebody: whoever files it, unless the
+                    // payload names someone else. An unowned lead is invisible to the
+                    // `assignedTo` filter and to "my leads", which is how every lead
+                    // created through the UI used to end up.
+                    assigned_to: dto.assigned_to ?? userId,
+                    store_id: dto.store_id,
+                    photo_url: photo.url ?? null,
+                    photo_storage_key: photo.key ?? null,
+                    created_by: userId,
+                    custom_fields: customFields ?? undefined,
+                },
+                include: leadIncludes,
+            });
         });
 
         // The opening next step becomes a PLANNED activity, and the rollup
@@ -674,10 +880,9 @@ export class CrmLeadsService {
         }
 
         // Only the identity fields the patch actually names — an edit that never
-        // mentions the email must not clear `email_norm`, which would strip the
-        // lead of its protection against a later duplicate.
+        // mentions the email must not clear `email_norm`.
         const identity = leadIdentityPatch(dto);
-        await this.assertIdentityFree(tenantId, identity, id);
+        const relink = this.contactIdentityChanged(existing, dto);
 
         const data = this.mapLeadData(dto);
         Object.assign(data, identity);
@@ -746,10 +951,21 @@ export class CrmLeadsService {
             conversationCount,
         );
 
-        const updated = await this.db.lead.update({
-            where: { id },
-            data,
-            include: leadIncludes,
+        const updated = await this.db.$transaction(async (tx) => {
+            if (relink) {
+                const link = await this.linkContact(
+                    tx,
+                    tenantId,
+                    this.mergedContactSnapshot(existing, dto),
+                    existing.organization_id,
+                );
+                Object.assign(data, leadLinkFields(link));
+            }
+            return tx.lead.update({
+                where: { id },
+                data,
+                include: leadIncludes,
+            });
         });
 
         // After the row, not before: a failed delete here leaves a stray file,
@@ -1036,10 +1252,13 @@ export class CrmLeadsService {
             },
             // Two rows of the same file describing one lead: the database cannot
             // see it in `skip` mode, because the first row was never written.
-            dedupeKeys: (row) => identityDedupeKeys(row.identity),
+            // Email is not that lead. Drop it here; do not change identityDedupeKeys.
+            dedupeKeys: (row) =>
+                identityDedupeKeys(row.identity).filter((key) => !key.startsWith('email_norm:')),
             describeDedupeKey: labelForDedupeKey,
             findDuplicate: async (row) => {
-                const match = await this.findIdentityMatch(tenantId, row.identity);
+                const { mobile_norm, linkedin_norm } = row.identity;
+                const match = await this.findIdentityMatch(tenantId, { mobile_norm, linkedin_norm });
                 return match?.id ?? null;
             },
             create: async (row) => {
@@ -1115,13 +1334,12 @@ export class CrmLeadsService {
                     data: {
                         name: row.name,
                         // Each normalized column is written under exactly the
-                        // condition its raw column is, or the two would drift and
-                        // the unique indexes would guard a stale value.
+                        // condition its raw column is, or the two would drift.
+                        // Matching trusts a set norm and ignores the raw value.
                         //
-                        // An upsert whose email belongs to a *different* lead than
-                        // the one matched here still trips the unique index; that
-                        // surfaces as a row error ("duplicate value for …") rather
-                        // than one lead quietly absorbing another's identity.
+                        // A shared email does not conflict. `Lead_tenant_id_email_norm_key`
+                        // is gone, so another lead already holding this address is
+                        // not a row error and this lead does not absorb that one.
                         mobile: row.mobile,
                         mobile_norm: row.identity.mobile_norm,
                         ...(row.email    !== null      ? { email: row.email, email_norm: row.identity.email_norm } : {}),
@@ -1246,6 +1464,21 @@ export class CrmLeadsService {
             },
             include: leadIncludes,
         });
+
+        // The person behind the deal, and only when they are not already a customer.
+        // Name, phone, email, and company stay as they are.
+        if (lead.contact_id) {
+            const contact = await this.db.crmContact.findFirst({
+                where: { id: lead.contact_id, tenant_id: tenantId },
+                select: { customer_id: true },
+            });
+            if (contact && contact.customer_id == null) {
+                await this.db.crmContact.update({
+                    where: { id: lead.contact_id },
+                    data: { customer_id: customer.id },
+                });
+            }
+        }
 
         return { lead: updatedLead, customer };
     }
