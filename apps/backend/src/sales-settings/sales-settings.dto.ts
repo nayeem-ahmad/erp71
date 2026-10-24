@@ -44,6 +44,10 @@ export class UpdateSalesSettingsDto {
   @IsOptional()
   @IsBoolean()
   show_customer_credit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  branch_customers_only?: boolean;
 }
 
 export class SalesSettingsResponseDto {
@@ -54,6 +58,7 @@ export class SalesSettingsResponseDto {
   pos_enabled: boolean;
   require_cashier_session: boolean;
   show_customer_credit: boolean;
+  branch_customers_only: boolean;
   created_at: Date;
   updated_at: Date;
 }

@@ -348,3 +348,43 @@ describe('POSPage — Story 10.3 & 10.4: Checkout & Advanced Payments', () => {
     (fetchWithAuth as jest.Mock).mockResolvedValue(null);
   });
 });
+
+describe("POSPage — customer search follows the shop's branch rule", () => {
+  beforeEach(() => {
+    const { api } = require('@/lib/api');
+    jest.clearAllMocks();
+    api.getProducts.mockResolvedValue(mockProducts);
+    api.getInventorySettings.mockResolvedValue({ default_sales_warehouse_id: 'wh-sales' });
+    api.getOpenCashierSession = jest.fn().mockResolvedValue(null);
+    api.searchCustomers = jest.fn().mockResolvedValue([]);
+    setWorkspaceItem('store_id', 'store-test');
+  });
+
+  async function searchAtCheckout() {
+    const { api } = require('@/lib/api');
+    render(<POSPage />);
+    await waitFor(() => screen.getByText('Coffee Beans'));
+    await waitFor(() => expect(api.getSalesSettings).toHaveBeenCalled());
+    fireEvent.click(screen.getByText('Coffee Beans').closest('div[class*="cursor-pointer"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /complete checkout/i }));
+    fireEvent.change(screen.getByPlaceholderText('Search by name or phone…'), { target: { value: 'Rahim' } });
+  }
+
+  it("searches only the till's branch while the rule is on", async () => {
+    const { api } = require('@/lib/api');
+    api.getSalesSettings = jest.fn().mockResolvedValue({ branch_customers_only: true });
+
+    await searchAtCheckout();
+
+    await waitFor(() => expect(api.searchCustomers).toHaveBeenCalledWith('Rahim', 8, 'store-test'));
+  });
+
+  it('searches every customer once the shop turns the rule off', async () => {
+    const { api } = require('@/lib/api');
+    api.getSalesSettings = jest.fn().mockResolvedValue({ branch_customers_only: false });
+
+    await searchAtCheckout();
+
+    await waitFor(() => expect(api.searchCustomers).toHaveBeenCalledWith('Rahim', 8, undefined));
+  });
+});

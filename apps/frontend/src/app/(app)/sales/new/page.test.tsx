@@ -125,6 +125,24 @@ describe('NewSalePage — editable sale date', () => {
         window.sessionStorage.setItem('store_id', 'store-1');
     });
 
+    it("lists only the branch's customers while the shop keeps sales to its own branch", async () => {
+        await act(async () => {
+            render(<NewSalePage />);
+        });
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenLastCalledWith({ storeId: 'store-1' }));
+    });
+
+    it('lists every customer once the shop turns that rule off', async () => {
+        (api.getSalesSettings as jest.Mock).mockResolvedValue({ tenant: { default_vat_rate: 0 }, branch_customers_only: false });
+
+        await act(async () => {
+            render(<NewSalePage />);
+        });
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenLastCalledWith({ storeId: undefined }));
+    });
+
     it('renders an editable datetime-local input seeded to now', async () => {
         await act(async () => {
             render(<NewSalePage />);

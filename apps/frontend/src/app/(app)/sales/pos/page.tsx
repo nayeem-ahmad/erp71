@@ -134,6 +134,9 @@ export default function POSPage() {
     const [cashierSession, setCashierSession] = useState<any>(null);
     const [sessionRequired, setSessionRequired] = useState(false);
     const [sessionChecked, setSessionChecked] = useState(false);
+    // `SalesSettings.branch_customers_only` — on until the settings say
+    // otherwise, matching the server's default.
+    const [branchCustomersOnly, setBranchCustomersOnly] = useState(true);
 
     const loadRecentSales = useCallback(async () => {
         if (!isOnline) return;
@@ -219,6 +222,7 @@ export default function POSPage() {
             ]);
             setCashierSession(session ?? null);
             setSessionRequired(Boolean(settings?.require_cashier_session));
+            setBranchCustomersOnly(settings?.branch_customers_only !== false);
         } catch {
             // Offline or a 5xx: fall through to the pre-existing behaviour
             // rather than locking the till out of selling. The backend applies
@@ -421,7 +425,10 @@ export default function POSPage() {
             return;
         }
         try {
-            setCustomerResults(await api.searchCustomers(query.trim()));
+            // The server refuses another branch's customer while the rule is on,
+            // so the search offers only the till's own.
+            const branch = branchCustomersOnly ? getWorkspaceItem('store_id') || undefined : undefined;
+            setCustomerResults(await api.searchCustomers(query.trim(), 8, branch));
         } catch {
             setCustomerResults([]);
         }

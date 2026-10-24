@@ -14,6 +14,7 @@ import VoiceEntryInput from '@/components/VoiceEntryInput';
 import type { VoiceEntryResult } from '@/lib/voice-entry';
 import type { LineItem, Payment } from '@/lib/hooks/useNewSaleCart';
 import type { SalesRepOption } from '@/lib/hooks/useSalesReps';
+import { useBranchCustomersOnly } from '@/lib/hooks/useBranchCustomersOnly';
 import { useI18n } from '@/lib/i18n';
 import {
     computeEntryTax,
@@ -266,7 +267,9 @@ interface SaleEntryLayoutProps {
 
     /**
      * The branch the sale posts to: the header branch on a new sale, the
-     * sale's own when editing. The payment strip offers that branch's methods.
+     * sale's own when editing. The payment strip offers that branch's methods,
+     * and the customer picker that branch's customers unless the shop has
+     * turned `branch_customers_only` off.
      */
     storeId: string;
     payments: Payment[];
@@ -357,6 +360,7 @@ export default function SaleEntryLayout({
     salesRepName,
 }: SaleEntryLayoutProps) {
     const { t } = useI18n();
+    const branchCustomersOnly = useBranchCustomersOnly(!readOnly);
     const repOptions = salesRepId && !salesReps.some((rep) => rep.id === salesRepId)
         ? [...salesReps, { id: salesRepId, name: salesRepName ?? salesRepId }]
         : salesReps;
@@ -431,6 +435,7 @@ export default function SaleEntryLayout({
                     draft={customerDraft}
                     setDraft={setCustomerDraft}
                     draftNameInvalid={customerDraftNameInvalid}
+                    storeId={branchCustomersOnly ? storeId : undefined}
                 />
             }
             picker={

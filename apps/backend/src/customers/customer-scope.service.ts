@@ -13,10 +13,11 @@ import type { CustomerScope } from './customer-visibility';
  * | `all`         | whole tenant; 403 unless owner / consolidated                 |
  * | a branch id   | that branch, once the member is checked against it            |
  *
- * Omitted is what every customer picker sends, which is why it differs from
+ * Omitted is what most customer pickers send, which is why it differs from
  * `BranchScopeService.resolveStoreId`: there a limited member's omitted id is
  * the header branch alone, which would hide the customers of their other
- * branches from the sale screen.
+ * branches. The sale screen is the exception: it names the sale's branch, so
+ * only that branch's customers are offered.
  */
 @Injectable()
 export class CustomerScopeService {

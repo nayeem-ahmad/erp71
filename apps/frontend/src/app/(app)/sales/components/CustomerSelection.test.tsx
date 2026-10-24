@@ -149,3 +149,33 @@ describe('CustomerSelection new-customer draft', () => {
         expect(screen.getByLabelText('Customer name')).toHaveValue(emptyCustomerDraft.name);
     });
 });
+
+describe('CustomerSelection branch', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (api.getCustomers as jest.Mock).mockResolvedValue([EXISTING_CUSTOMER]);
+    });
+
+    it("lists only the document branch's customers", async () => {
+        render(<CustomerSelection customer={null} setCustomer={jest.fn()} storeId="store-a" />);
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: 'store-a' }));
+    });
+
+    it('reloads the list when the branch changes', async () => {
+        const { rerender } = render(
+            <CustomerSelection customer={null} setCustomer={jest.fn()} storeId="store-a" />,
+        );
+        await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: 'store-a' }));
+
+        rerender(<CustomerSelection customer={null} setCustomer={jest.fn()} storeId="store-b" />);
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: 'store-b' }));
+    });
+
+    it('lists every customer the member may see when no branch is given', async () => {
+        render(<CustomerSelection customer={null} setCustomer={jest.fn()} />);
+
+        await waitFor(() => expect(api.getCustomers).toHaveBeenCalledWith({ storeId: undefined }));
+    });
+});
