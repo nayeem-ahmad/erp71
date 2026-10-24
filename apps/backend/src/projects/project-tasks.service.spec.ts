@@ -1564,6 +1564,28 @@ describe('ProjectTasksService', () => {
                     { user: { id: 'user-9', name: 'Karim', email: 'karim@acme.test' } },
                 ]),
             };
+            db.projectUserStory.findMany.mockResolvedValue([
+                { id: 'story-3', project_id: 'project-1', code: 'ACME-3', title: 'Pay at the till' },
+                { id: 'story-elsewhere', project_id: 'project-2', code: 'OTB-1', title: 'Elsewhere' },
+            ]);
+            db.projectMilestone = {
+                findMany: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'milestone-1', project_id: 'project-1', name: 'Beta' }]),
+            };
+            db.sprint.findMany = jest.fn().mockResolvedValue([
+                { id: 'sprint-old', name: 'Sprint 4', status: 'COMPLETED' },
+                { id: 'sprint-4', name: 'Sprint 4', status: 'ACTIVE' },
+            ]);
+            db.sprint.findFirst.mockImplementation(async (args: any) => ({
+                id: args.where.id,
+                status: 'ACTIVE',
+            }));
+            db.projectLabel.findMany.mockResolvedValue([
+                { id: 'label-bug', name: 'Bug' },
+                { id: 'label-pos', name: 'POS' },
+            ]);
+            db.projectLabel.count.mockImplementation(({ where }: any) => Promise.resolve(where.id.in.length));
             // `create` re-reads whatever status id it is handed. Echoing the id
             // back is what lets the assertions below see the column the import
             // resolved, rather than the module-level default.
@@ -1612,6 +1634,69 @@ describe('ProjectTasksService', () => {
                     }),
                 }),
             );
+        });
+
+        it('resolves the story, milestone, sprint and labels a row names', async () => {
+            const result = await run([
+                {
+                    project: 'ACME',
+                    title: 'Wire the till',
+                    userStory: 'acme-3',
+                    milestone: 'beta',
+                    sprint: 'Sprint 4',
+                    labels: 'bug; pos, Bug',
+                    estimateHours: '6',
+                    remainingHours: '2',
+                },
+            ]);
+
+            expect(result).toMatchObject({ created: 1, errors: [] });
+            expect(db.projectTask.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        user_story_id: 'story-3',
+                        milestone_id: 'milestone-1',
+                        estimate_hours: 6,
+                    }),
+                }),
+            );
+            // The open sprint of that name, not the finished one.
+            expect(membership.moveTasks).toHaveBeenCalledWith(
+                db,
+                'tenant-1',
+                ['task-new'],
+                'sprint-4',
+                'REMOVED',
+            );
+            expect(db.projectTaskLabel.createMany).toHaveBeenCalledWith({
+                data: [
+                    { tenant_id: 'tenant-1', task_id: 'task-new', label_id: 'label-bug' },
+                    { tenant_id: 'tenant-1', task_id: 'task-new', label_id: 'label-pos' },
+                ],
+            });
+        });
+
+        it('also finds a story by its title', async () => {
+            await run([{ project: 'ACME', title: 'Wire the till', userStory: 'pay at the till' }]);
+
+            expect(db.projectTask.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({ user_story_id: 'story-3' }),
+                }),
+            );
+        });
+
+        it("fails a row naming another project's story, or a label nobody made", async () => {
+            const result = await run([
+                { project: 'ACME', title: 'One', userStory: 'OTB-1' },
+                { project: 'ACME', title: 'Two', labels: 'Bug, Nope' },
+            ]);
+
+            expect(result.created).toBe(0);
+            expect(result.errors).toEqual([
+                'Row 2: no user story in that project matches "OTB-1"',
+                'Row 3: no label matches "Nope"',
+            ]);
         });
 
         it('fails only the row whose project is unknown', async () => {
