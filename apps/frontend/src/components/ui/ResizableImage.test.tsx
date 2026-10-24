@@ -43,24 +43,32 @@ const stubContentWidth = (px: number) => {
 const inEditor = (ui: React.ReactElement) =>
     render(<div className="ProseMirror">{ui}</div>);
 
+/** The grip on one side. Both stay up whether or not the node is selected. */
+const edgeHandle = (edge: 'start' | 'end') => {
+    const handle = screen.getAllByRole('slider').find((el) => el.getAttribute('data-resize-edge') === edge);
+    if (!handle) throw new Error(`no ${edge} handle`);
+    return handle;
+};
+
 describe('ResizableImage', () => {
     beforeEach(() => stubContentWidth(800));
 
-    it('shows no handle when the image is not selected', () => {
+    it('shows a handle on each side even when the image is not selected', () => {
         inEditor(<ResizableImage {...props({}, jest.fn(), false)} />);
-        expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+        expect(edgeHandle('start')).toBeInTheDocument();
+        expect(edgeHandle('end')).toBeInTheDocument();
     });
 
-    it('shows a handle when it is selected', () => {
+    it('shows a handle on each side when it is selected', () => {
         inEditor(<ResizableImage {...props()} />);
-        expect(screen.getByRole('slider')).toBeInTheDocument();
+        expect(screen.getAllByRole('slider')).toHaveLength(2);
     });
 
     it('writes the dragged width back to the node', () => {
         const updateAttributes = jest.fn();
         inEditor(<ResizableImage {...props({ width: 400 }, updateAttributes)} />);
 
-        const handle = screen.getByRole('slider');
+        const handle = edgeHandle('end');
         fireEvent.pointerDown(handle, { clientX: 400 });
         fireEvent.pointerMove(window, { clientX: 300 });
         fireEvent.pointerUp(window, { clientX: 300 });
@@ -69,11 +77,31 @@ describe('ResizableImage', () => {
         expect(updateAttributes.mock.calls.at(-1)?.[0].width).toBeLessThan(400);
     });
 
+    it('grows from the start side when the pointer moves toward the start', () => {
+        const updateAttributes = jest.fn();
+        inEditor(<ResizableImage {...props({ width: 400 }, updateAttributes)} />);
+
+        const handle = edgeHandle('start');
+        fireEvent.pointerDown(handle, { clientX: 200 });
+        fireEvent.pointerMove(window, { clientX: 100 });
+        fireEvent.pointerUp(window, { clientX: 100 });
+
+        expect(updateAttributes.mock.calls.at(-1)?.[0].width).toBeGreaterThan(400);
+    });
+
+    it('does not open the preview when a handle is clicked', () => {
+        inEditor(<ResizableImage {...props()} />);
+
+        fireEvent.click(edgeHandle('end'));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
     it('never goes below the minimum width', () => {
         const updateAttributes = jest.fn();
         inEditor(<ResizableImage {...props({ width: 100 }, updateAttributes)} />);
 
-        const handle = screen.getByRole('slider');
+        const handle = edgeHandle('end');
         fireEvent.pointerDown(handle, { clientX: 100 });
         fireEvent.pointerMove(window, { clientX: -500 });
         fireEvent.pointerUp(window, { clientX: -500 });
@@ -85,7 +113,7 @@ describe('ResizableImage', () => {
         const updateAttributes = jest.fn();
         inEditor(<ResizableImage {...props({ width: 700 }, updateAttributes)} />);
 
-        const handle = screen.getByRole('slider');
+        const handle = edgeHandle('end');
         fireEvent.pointerDown(handle, { clientX: 700 });
         fireEvent.pointerMove(window, { clientX: 5000 });
         fireEvent.pointerUp(window, { clientX: 5000 });
@@ -107,7 +135,7 @@ describe('ResizableImage', () => {
         const updateAttributes = jest.fn();
         inEditor(<ResizableImage {...props({ width: 400 }, updateAttributes)} />);
 
-        fireEvent.keyDown(screen.getByRole('slider'), { key: 'ArrowLeft' });
+        fireEvent.keyDown(edgeHandle('end'), { key: 'ArrowLeft' });
 
         expect(updateAttributes).toHaveBeenCalledWith(expect.objectContaining({ width: 380 }));
     });
