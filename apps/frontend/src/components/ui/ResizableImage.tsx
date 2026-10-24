@@ -10,19 +10,26 @@ import { originalImageUrl } from './image-width';
 
 /**
  * An image inside the editor: the picture, a spinner while its bytes are
- * still going up, and a handle to drag it to a width.
+ * still going up, and a handle on each side to drag it to a width.
  *
  * The width is the point. A pasted screenshot arrives at whatever size the
  * display it was taken from happened to be, which is nearly always wider than
  * the column it lands in — so the first thing anyone wants to do with it is
  * make it smaller. `markdown-bridge` writes that width onto the URL, so it
  * survives a save and a reader sees the size the author chose.
+ *
+ * The handles stay on the picture the whole time it can be edited. Clicking
+ * the picture opens it full size, and that used to be the same click that
+ * selected the node — the only moment the old handle was drawn. The two
+ * actions no longer share a click.
  */
 
 /** Small enough to be a thumbnail, large enough to still be an image. */
 const MIN_WIDTH = 80;
 /** One arrow key press. */
 const STEP = 20;
+/** Which side of the picture the pointer took hold of. */
+type Edge = 'start' | 'end';
 
 type ImageAttrs = {
     src: string;
@@ -59,10 +66,10 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
      * the node is told once, on release.
      */
     const [dragWidth, setDragWidth] = useState<number | null>(null);
+    const [dragEdge, setDragEdge] = useState<Edge | null>(null);
     const [preview, setPreview] = useState(false);
     const { src, alt, uploading } = node.attrs as ImageAttrs;
     const width = dragWidth ?? (node.attrs as ImageAttrs).width;
-    const dragging = dragWidth !== null;
 
     /**
      * The column the image sits in — it may not grow past it.
@@ -81,27 +88,35 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
     const currentWidth = () =>
         width ?? wrapper.current?.querySelector('img')?.offsetWidth ?? MIN_WIDTH;
 
-    const startDrag = (event: PointerEvent) => {
+    const startDrag = (event: PointerEvent, edge: Edge) => {
+        // The picture's own click opens the preview. A drag must not become
+        // that click, and must not become a ProseMirror node drag either.
         event.preventDefault();
+        event.stopPropagation();
         const startX = event.clientX;
         const startWidth = currentWidth();
 
         // In Arabic and Urdu the inline end is on the left, so dragging left
-        // is what grows the image. `clientX` is physical and knows nothing
-        // about that (docs/rtl-guidelines.md).
+        // is what grows the image from that side. `clientX` is physical and
+        // knows nothing about that (docs/rtl-guidelines.md). The start side
+        // grows the other way.
         const rtl = document.documentElement.dir === 'rtl';
+        const endSign = rtl ? -1 : 1;
+        const sign = edge === 'end' ? endSign : -endSign;
 
         // The last width the pointer asked for, so the release can commit it
         // without waiting for a state update it will not see.
         let latest = startWidth;
+        setDragEdge(edge);
 
         const move = (e: globalThis.PointerEvent) => {
-            const delta = (e.clientX - startX) * (rtl ? -1 : 1);
+            const delta = (e.clientX - startX) * sign;
             latest = clamp(startWidth + delta);
             setDragWidth(latest);
         };
         const stop = () => {
             setDragWidth(null);
+            setDragEdge(null);
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', stop);
             // Once, at the end: this is the transaction that re-renders the
@@ -182,23 +197,36 @@ export function ResizableImage({ node, updateAttributes, selected }: ResizableIm
                     document.body,
                 )}
 
-            {selected && !uploading && (
-                <span
-                    role="slider"
-                    tabIndex={0}
-                    aria-label={m.resizeImage}
-                    aria-valuenow={width ?? 0}
-                    aria-valuemin={MIN_WIDTH}
-                    aria-orientation="horizontal"
-                    onPointerDown={startDrag}
-                    onKeyDown={onKeyDown}
-                    className={`absolute inset-y-0 end-0 flex w-3 cursor-ew-resize items-center justify-center rounded-e-md ${
-                        dragging ? 'bg-blue-600' : 'bg-blue-600/70'
-                    }`}
-                >
-                    <span className="h-6 w-0.5 rounded bg-white" aria-hidden />
-                </span>
-            )}
+            {!uploading &&
+                (['start', 'end'] as const).map((edge) => {
+                    const held = dragEdge === edge;
+                    return (
+                        <span
+                            key={edge}
+                            role="slider"
+                            tabIndex={0}
+                            data-resize-edge={edge}
+                            aria-label={m.resizeImage}
+                            aria-valuenow={width ?? 0}
+                            aria-valuemin={MIN_WIDTH}
+                            aria-orientation="horizontal"
+                            onPointerDown={(event) => startDrag(event, edge)}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                            }}
+                            onKeyDown={onKeyDown}
+                            className={`absolute top-1/2 z-10 flex h-11 w-4 -translate-y-1/2 cursor-ew-resize touch-none select-none items-center justify-center rounded-sm border-2 border-blue-600 shadow-sm ${
+                                edge === 'end' ? 'end-1' : 'start-1'
+                            } ${held ? 'bg-blue-600' : 'bg-white'}`}
+                        >
+                            <span
+                                className={`h-4 w-0.5 rounded ${held ? 'bg-white' : 'bg-blue-600'}`}
+                                aria-hidden
+                            />
+                        </span>
+                    );
+                })}
         </NodeViewWrapper>
     );
 }
