@@ -784,7 +784,18 @@ export class ProjectTasksService {
         });
     }
 
-    async update(viewer: ProjectViewer, taskId: string, dto: UpdateTaskDto) {
+    async update(
+        viewer: ProjectViewer,
+        taskId: string,
+        dto: UpdateTaskDto,
+        opts: {
+            /**
+             * A bulk edit's status, which names a column rather than picking
+             * one: resolved to an id in the project the task ends up in.
+             */
+            statusNamed?: (projectId: string) => Promise<string>;
+        } = {},
+    ) {
         const tenantId = viewer.tenantId;
         const userId = viewer.userId;
         const task = await this.assertTask(viewer, taskId);
@@ -792,6 +803,7 @@ export class ProjectTasksService {
         // task is already in.
         const move = await this.planMove(viewer, task, dto);
         const projectId = move?.projectId ?? task.project_id;
+        if (opts.statusNamed) dto = { ...dto, statusId: await opts.statusNamed(projectId) };
 
         let statusId = task.status_id;
         let completedAt = task.completed_at;
@@ -1370,14 +1382,16 @@ export class ProjectTasksService {
         const patch: Partial<UpdateTaskDto> = {
             ...(dto.projectId ? { projectId: dto.projectId } : {}),
             ...(dto.sprintId !== undefined ? { sprintId: dto.sprintId ?? '' } : {}),
+            ...(dto.userStoryId !== undefined ? { userStoryId: dto.userStoryId ?? '' } : {}),
             ...(dto.assignee !== undefined ? assigneePatch(dto.assignee) : {}),
             ...(dto.priority ? { priority: dto.priority } : {}),
             ...(dto.dueDate !== undefined ? { dueDate: dto.dueDate ?? '' } : {}),
         };
+        const statusName = dto.status?.trim() ?? '';
         const adding = [...new Set(dto.addLabelIds ?? [])];
         const removing = new Set(dto.removeLabelIds ?? []);
         const relabel = adding.length > 0 || removing.size > 0;
-        if (Object.keys(patch).length === 0 && !relabel) {
+        if (Object.keys(patch).length === 0 && !relabel && !statusName) {
             throw new BadRequestException('Choose something to change.');
         }
 
@@ -1391,6 +1405,31 @@ export class ProjectTasksService {
         });
         const subtasks = new Set(rows.filter((row) => row.parent_task_id).map((row) => row.id));
         const ordered = [...ids.filter((id) => !subtasks.has(id)), ...ids.filter((id) => subtasks.has(id))];
+        const columnsOf = new Map<string, Promise<{ id: string; name: string }[]>>();
+
+        /**
+         * The column named `statusName` in the project the task ends up in,
+         * read once per project. An exact match wins; otherwise one spelled
+         * with different case, since two projects' "In progress" and "In
+         * Progress" are the same step to whoever is moving the work.
+         *
+         * Called by `update` once the task and any move have passed their
+         * checks, so a task the caller cannot see is reported as not found
+         * rather than as missing a column.
+         */
+        const statusNamed = async (projectId: string): Promise<string> => {
+            let columns = columnsOf.get(projectId);
+            if (!columns) {
+                columns = this.settings.listTaskStatuses(viewer.tenantId, false, projectId);
+                columnsOf.set(projectId, columns);
+            }
+            const list = await columns;
+            const column =
+                list.find((candidate) => candidate.name === statusName) ??
+                list.find((candidate) => candidate.name.trim().toLowerCase() === statusName.toLowerCase());
+            if (!column) throw new BadRequestException(`Its project has no “${statusName}” column.`);
+            return column.id;
+        };
 
         const outcome: BulkTaskOutcome = { updated: 0, skipped: [] };
         for (const id of ordered) {
@@ -1408,7 +1447,12 @@ export class ProjectTasksService {
                         ]),
                     ];
                 }
-                await this.update(viewer, id, { ...patch, ...(labelIds ? { labelIds } : {}) } as UpdateTaskDto);
+                await this.update(
+                    viewer,
+                    id,
+                    { ...patch, ...(labelIds ? { labelIds } : {}) } as UpdateTaskDto,
+                    statusName ? { statusNamed } : {},
+                );
                 outcome.updated += 1;
             } catch (error) {
                 outcome.skipped.push({

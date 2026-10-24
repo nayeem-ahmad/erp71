@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "{count, plural, one {# টি নির্বাচিত কাজ} other {# টি নির্বাচিত কাজ}} মুছবেন?\n\nএগুলো সব তালিকা, বোর্ড ও স্প্রিন্ট থেকে সরে যাবে। এটি ফেরানো যাবে না।",
         deletedCount: "{count, plural, one {# টি কাজ মোছা হয়েছে} other {# টি কাজ মোছা হয়েছে}}",
         deleteFailedCount: "{count, plural, one {# টি কাজ মোছা যায়নি} other {# টি কাজ মোছা যায়নি}}",
+        bulkEditTitle: "{count, plural, one {# টি কাজ সম্পাদনা} other {# টি কাজ সম্পাদনা}}",
+        bulkEditHint: "শুধু যে ঘরগুলো বদলাবেন সেগুলোই প্রয়োগ হবে। প্রতিটি কাজের বাকি সব যেমন আছে তেমনই থাকবে।",
+        bulkProjectHint: "প্রতিটি কাজ ওই প্রকল্পে নতুন কী পাবে এবং তার স্টোরি থেকে বেরিয়ে যাবে। সাবটাস্ক তার মূল কাজের সঙ্গে যাবে।",
+        bulkApply: "{count, plural, one {# টি কাজে প্রয়োগ করুন} other {# টি কাজে প্রয়োগ করুন}}",
+        updatedCount: "{count, plural, one {# টি কাজ হালনাগাদ হয়েছে} other {# টি কাজ হালনাগাদ হয়েছে}}",
+        updateFailedCount: "{count, plural, one {# টি কাজ হালনাগাদ করা যায়নি} other {# টি কাজ হালনাগাদ করা যায়নি}}: {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: 'নতুন নির্ধারিত তারিখ',
         bulkAddLabels: 'লেবেল যোগ করুন',
         bulkRemoveLabels: 'লেবেল সরান',
+        bulkStatusMixed: "প্রতিটি তার নিজের প্রকল্পে ওই নামের কলামে যাবে।",
+        bulkStoryMixed: "স্টোরি একটি প্রকল্পেরই হয়, তাই একাধিক প্রকল্পে শুধু স্টোরি সরানো যায়।",
         bulkApply: '{count}টি কার্ডে প্রয়োগ করুন',
         bulkApplyOne: '১টি কার্ডে প্রয়োগ করুন',
         bulkUpdated: '{count}টি কার্ড হালনাগাদ হয়েছে',

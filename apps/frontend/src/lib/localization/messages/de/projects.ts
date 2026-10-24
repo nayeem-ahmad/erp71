@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "{count, plural, one {# ausgewählte Aufgabe} other {# ausgewählte Aufgaben}} löschen?\n\nSie verschwinden aus jeder Liste, jedem Board und jedem Sprint. Das lässt sich nicht rückgängig machen.",
         deletedCount: "{count, plural, one {# Aufgabe gelöscht} other {# Aufgaben gelöscht}}",
         deleteFailedCount: "{count, plural, one {# Aufgabe konnte nicht gelöscht werden} other {# Aufgaben konnten nicht gelöscht werden}}",
+        bulkEditTitle: "{count, plural, one {# Aufgabe bearbeiten} other {# Aufgaben bearbeiten}}",
+        bulkEditHint: "Nur die Felder, die Sie ändern, werden übernommen. Alles andere an jeder Aufgabe bleibt, wie es ist.",
+        bulkProjectHint: "Jede Aufgabe erhält in diesem Projekt einen neuen Schlüssel und verlässt ihre Story. Unteraufgaben ziehen mit ihrer übergeordneten Aufgabe um.",
+        bulkApply: "{count, plural, one {Auf # Aufgabe anwenden} other {Auf # Aufgaben anwenden}}",
+        updatedCount: "{count, plural, one {# Aufgabe aktualisiert} other {# Aufgaben aktualisiert}}",
+        updateFailedCount: "{count, plural, one {# Aufgabe konnte nicht aktualisiert werden} other {# Aufgaben konnten nicht aktualisiert werden}}: {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: "Neues Fälligkeitsdatum",
         bulkAddLabels: "Labels hinzufügen",
         bulkRemoveLabels: "Labels entfernen",
+        bulkStatusMixed: "Jede wechselt in die gleichnamige Spalte ihres eigenen Projekts.",
+        bulkStoryMixed: "Stories gehören zu genau einem Projekt – über mehrere Projekte hinweg lässt sich die Story nur entfernen.",
         bulkApply: "Auf {count} Karten anwenden",
         bulkApplyOne: "Auf 1 Karte anwenden",
         bulkUpdated: "{count} Karte(n) aktualisiert",

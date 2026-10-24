@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: 'Delete {count, plural, one {# selected task} other {# selected tasks}}?\n\nThey go from every list, board and sprint. This cannot be undone.',
         deletedCount: '{count, plural, one {# task deleted} other {# tasks deleted}}',
         deleteFailedCount: '{count, plural, one {# task could not be deleted} other {# tasks could not be deleted}}',
+        bulkEditTitle: '{count, plural, one {Edit # task} other {Edit # tasks}}',
+        bulkEditHint: 'Only the fields you change are applied. Everything else on each task stays as it is.',
+        bulkProjectHint: 'Each task gets a new key in that project and leaves its story. Subtasks move with their parent.',
+        bulkApply: '{count, plural, one {Apply to # task} other {Apply to # tasks}}',
+        updatedCount: '{count, plural, one {# task updated} other {# tasks updated}}',
+        updateFailedCount: '{count, plural, one {# task could not be updated} other {# tasks could not be updated}}: {reason}',
     },
 
     tabs: {
@@ -1072,6 +1078,8 @@ export const projectsMessages = {
         bulkDueDate: 'New due date',
         bulkAddLabels: 'Add labels',
         bulkRemoveLabels: 'Remove labels',
+        bulkStatusMixed: 'Each one moves to the column of that name in its own project.',
+        bulkStoryMixed: 'Stories belong to one project, so across several projects only “No story” applies.',
         bulkApply: 'Apply to {count} cards',
         bulkApplyOne: 'Apply to 1 card',
         bulkUpdated: '{count} card(s) updated',

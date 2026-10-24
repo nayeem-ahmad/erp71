@@ -91,6 +91,12 @@ export const projectsMessages = {
         bulkDeletePrompt: "Padam {count, plural, other {# tugasan dipilih}}?\n\nIa hilang daripada setiap senarai, papan dan sprint. Tindakan ini tidak boleh dibatalkan.",
         deletedCount: "{count, plural, other {# tugasan dipadam}}",
         deleteFailedCount: "{count, plural, other {# tugasan tidak dapat dipadam}}",
+        bulkEditTitle: "{count, plural, other {Sunting # tugasan}}",
+        bulkEditHint: "Hanya medan yang anda ubah akan digunakan. Selebihnya pada setiap tugasan kekal seperti sedia ada.",
+        bulkProjectHint: "Setiap tugasan mendapat kunci baharu dalam projek itu dan keluar dari ceritanya. Subtugasan berpindah bersama induknya.",
+        bulkApply: "{count, plural, other {Guna pada # tugasan}}",
+        updatedCount: "{count, plural, other {# tugasan dikemas kini}}",
+        updateFailedCount: "{count, plural, other {# tugasan tidak dapat dikemas kini}}: {reason}",
     },
 
     tabs: {
@@ -1065,6 +1071,8 @@ export const projectsMessages = {
         bulkDueDate: 'Tarikh akhir baharu',
         bulkAddLabels: 'Tambah label',
         bulkRemoveLabels: 'Buang label',
+        bulkStatusMixed: "Setiap satu berpindah ke lajur dengan nama itu dalam projeknya sendiri.",
+        bulkStoryMixed: "Cerita milik satu projek sahaja, jadi merentas beberapa projek anda hanya boleh membuang cerita.",
         bulkApply: 'Guna pada {count} kad',
         bulkApplyOne: 'Guna pada 1 kad',
         bulkUpdated: '{count} kad dikemas kini',

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TasksPage from './page';
+import { toast } from '@/lib/toast';
 
 const getProjectTasks = jest.fn();
 
@@ -35,6 +36,9 @@ jest.mock('@/lib/api', () => ({
         updateProjectTask: jest.fn(),
         deleteProjectTask: jest.fn(),
         bulkDeleteProjectTasks: jest.fn(),
+        bulkUpdateProjectTasks: jest.fn(),
+        getSprints: jest.fn(),
+        getProjectStories: jest.fn(),
         importProjectTasks: jest.fn(),
     },
 }));
@@ -100,6 +104,9 @@ beforeEach(() => {
     api.updateProjectTask.mockReset().mockResolvedValue({ id: 't1' });
     api.deleteProjectTask.mockReset().mockResolvedValue({ success: true });
     api.bulkDeleteProjectTasks.mockReset().mockResolvedValue({ deleted: 1, skipped: 0 });
+    api.bulkUpdateProjectTasks.mockReset().mockResolvedValue({ updated: 2, skipped: [] });
+    api.getSprints.mockReset().mockResolvedValue([{ id: 'sp5', name: 'Sprint 5', status: 'PLANNED' }]);
+    api.getProjectStories.mockReset().mockResolvedValue([]);
     api.importProjectTasks.mockReset().mockResolvedValue({
         created: 0, updated: 0, skipped: 0, errors: [],
     });
@@ -490,6 +497,102 @@ describe('Tasks page', () => {
             // real selection comes back 429 on everything past the twentieth.
             await waitFor(() => expect(api.bulkDeleteProjectTasks).toHaveBeenCalledWith(['t1']));
             expect(api.deleteProjectTask).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('bulk edit', () => {
+        beforeEach(() => {
+            getProjectTasks.mockResolvedValue({
+                items: [
+                    task(),
+                    task({
+                        id: 't2',
+                        title: 'Count the stock',
+                        project: { id: 'p2', code: 'PRJ-0002', name: 'P2' },
+                    }),
+                ],
+                total: 2,
+                page: 1,
+                limit: 25,
+                pages: 1,
+            });
+        });
+
+        /** Both rows picked with the header's select-all, and the bar's Edit opened. */
+        const editBoth = async () => {
+            render(<TasksPage />);
+            await screen.findByText('Count the stock');
+            fireEvent.click(screen.getAllByRole('checkbox')[0]);
+            const bar = (await screen.findByText(/2 selected/)).closest('div') as HTMLElement;
+            fireEvent.click(within(bar).getByRole('button', { name: /^edit$/i }));
+            return screen.findByRole('dialog');
+        };
+
+        it('applies one change set to the whole selection in one request', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            const success = jest.spyOn(toast, 'success').mockImplementation(() => '');
+            const dialog = await editBoth();
+            expect(within(dialog).getByRole('heading', { name: 'Edit 2 tasks' })).toBeInTheDocument();
+
+            const sprint = within(dialog).getByLabelText('Sprint');
+            await within(sprint).findByRole('option', { name: 'Sprint 5' });
+            fireEvent.change(sprint, { target: { value: 'sp5' } });
+            fireEvent.change(within(dialog).getByLabelText('Status'), { target: { value: 'Done' } });
+            getProjectTasks.mockClear();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to 2 tasks' }));
+
+            await waitFor(() =>
+                expect(api.bulkUpdateProjectTasks).toHaveBeenCalledWith({
+                    ids: ['t1', 't2'],
+                    sprintId: 'sp5',
+                    status: 'Done',
+                }),
+            );
+            await waitFor(() => expect(getProjectTasks).toHaveBeenCalled());
+            expect(success).toHaveBeenCalledWith('2 tasks updated');
+            await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+            expect(screen.queryByText(/2 selected/)).not.toBeInTheDocument();
+            success.mockRestore();
+        });
+
+        it('knows the selection spans two projects, so no single story applies', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            const dialog = await editBoth();
+
+            expect(within(dialog).getByText(/stories belong to one project/i)).toBeInTheDocument();
+            // Both projects' teams and columns, for the assignee and status pickers.
+            await waitFor(() => expect(api.getProjectColumns).toHaveBeenCalledWith('p2'));
+            expect(api.getProjectColumns).toHaveBeenCalledWith('p1');
+        });
+
+        it('says which tasks the server could not change, and why', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            api.bulkUpdateProjectTasks.mockResolvedValue({
+                updated: 1,
+                skipped: [{ id: 't2', reason: 'Its project has no “Review” column.' }],
+            });
+            const error = jest.spyOn(toast, 'error').mockImplementation(() => '');
+            jest.spyOn(toast, 'success').mockImplementation(() => '');
+            const dialog = await editBoth();
+
+            fireEvent.change(within(dialog).getByLabelText('Priority'), { target: { value: 'HIGH' } });
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to 2 tasks' }));
+
+            await waitFor(() =>
+                expect(error).toHaveBeenCalledWith('1 task could not be updated: Its project has no “Review” column.'),
+            );
+            jest.restoreAllMocks();
+        });
+
+        it('keeps the selection when the dialog is cancelled', async () => {
+            const { api } = jest.requireMock('@/lib/api');
+            const dialog = await editBoth();
+
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            expect(api.bulkUpdateProjectTasks).not.toHaveBeenCalled();
+            expect(screen.getByText(/2 selected/)).toBeInTheDocument();
         });
     });
     /**

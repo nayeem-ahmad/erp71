@@ -54,6 +54,7 @@ jest.mock('@/lib/api', () => {
             bulkDeleteProjectTasks: jest.fn(),
             bulkUpdateProjectTasks: jest.fn(),
             getSprints: jest.fn(),
+            getProjectStories: jest.fn(),
             setBoardColumnCardOrder: jest.fn(),
             getMe: jest.fn(),
             getProject: jest.fn(),
@@ -141,6 +142,7 @@ describe('BoardPage', () => {
         });
         (api.bulkDeleteProjectTasks as jest.Mock).mockReset().mockResolvedValue({ deleted: 1, skipped: 0 });
         (api.bulkUpdateProjectTasks as jest.Mock).mockReset().mockResolvedValue({ updated: 2, skipped: [] });
+        (api.getProjectStories as jest.Mock).mockReset().mockResolvedValue([]);
         (api.getSprints as jest.Mock).mockReset().mockResolvedValue([
             { id: 's4', name: 'Sprint 4', status: 'ACTIVE' },
             { id: 's5', name: 'Sprint 5', status: 'PLANNED' },

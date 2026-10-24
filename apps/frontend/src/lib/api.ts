@@ -839,7 +839,11 @@ export type EmployeeLoginState = {
  */
 export interface BulkTaskChanges {
     projectId?: string;
+    /** A column name; each task takes its own project's column of that name. */
+    status?: string;
     sprintId?: string | null;
+    /** A story of the tasks' one project; `null` takes them out of theirs. */
+    userStoryId?: string | null;
     /** `user:<id>` / `employee:<id>`; `null` unassigns. */
     assignee?: string | null;
     priority?: string;
