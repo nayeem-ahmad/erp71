@@ -897,6 +897,27 @@ export interface CustomerDuesSummary {
     rows: CustomerDuesRow[];
 }
 
+export interface CustomerDueAgingRow {
+    customer: { id: string; name: string; phone: string | null; customer_code: string | null };
+    store: { id: string; name: string } | null;
+    sales_rep: { id: string; name: string } | null;
+    customer_group: { id: string; name: string } | null;
+    territory: { id: string; name: string } | null;
+    /** The latest payment up to the report date; null when the customer has never paid. */
+    last_payment: { date: string; amount: number; days_ago: number } | null;
+    bucket_0_30: number;
+    bucket_31_60: number;
+    bucket_61_90: number;
+    bucket_90_plus: number;
+    total: number;
+}
+
+export interface CustomerDueAging {
+    /** The viewer's own employee record; null when their login is linked to none. */
+    me: { id: string; name: string } | null;
+    rows: CustomerDueAgingRow[];
+}
+
 export interface Paginated<T = any> {
     items: T[];
     total: number;
@@ -2258,7 +2279,13 @@ export const api = {
     },
     reverseCustomerWriteOff: (writeOffId: string) =>
         fetchWithAuth(`/customers/credit/write-offs/${writeOffId}/reverse`, { method: 'POST' }),
-    getDueAgingReport: () => fetchWithAuth('/customers/reports/due-aging'),
+    /** `asOf` is a `YYYY-MM-DD` to age the ledger as it stood that day; omitted, today. */
+    getDueAgingReport: (params?: { storeId?: string; asOf?: string }): Promise<CustomerDueAging> => {
+        const query = new URLSearchParams();
+        if (params?.storeId) query.set('storeId', params.storeId);
+        if (params?.asOf) query.set('asOf', params.asOf);
+        return fetchWithAuth(`/customers/reports/due-aging${query.toString() ? `?${query.toString()}` : ''}`);
+    },
     /** Every customer of the branch (`storeId`, or `all`) with their current due. */
     getCustomerDuesSummary: (params?: { storeId?: string }): Promise<CustomerDuesSummary> => {
         const query = new URLSearchParams();

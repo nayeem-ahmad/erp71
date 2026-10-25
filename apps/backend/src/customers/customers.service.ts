@@ -7,7 +7,7 @@ import { EncryptionService } from '../common/encryption.service';
 import { autoPostFromRules, voidAutoPostedVoucher } from '../accounting/posting.utils';
 import { cashLegOverride, resolveCreditPaymentMethod, storedPaymentMethodAccountId } from '../accounting/payment-account.util';
 import { buildPartyLedger } from '../accounting/party-ledger.util';
-import { ageBalance, type AgingEntry } from '../accounting/aging.utils';
+import { ageBalance, ageInDays, type AgingEntry } from '../accounting/aging.utils';
 import {
     CreateCustomerDto,
     UpdateCustomerDto,
@@ -30,6 +30,7 @@ import {
     numberEquals,
 } from '../common/column-filter.util';
 import { createdAtRange } from '../common/created-range.util';
+import { zonedDayRange } from '../common/tenant-time.util';
 import {
     assertNotAheadOfSeries,
     assertSerialFree,
@@ -1411,16 +1412,11 @@ export class CustomersService {
                 },
                 orderBy: [{ due_balance: 'desc' }, { name: 'asc' }],
             }),
-            userId
-                ? this.db.employee.findFirst({
-                    where: { tenant_id: tenantId, user_id: userId, deleted_at: null },
-                    select: SALES_REP_SELECT,
-                })
-                : null,
+            this.ownEmployee(tenantId, userId),
         ]);
 
         return {
-            me: me ?? null,
+            me,
             rows: customers.map(({ salesRep, due_balance, ...customer }) => ({
                 ...customer,
                 due_balance: Number(due_balance),
@@ -1442,56 +1438,114 @@ export class CustomersService {
      * `customerLedgerDueDelta` is the single place that knows which transaction types
      * raise a due and which settle one, so this report cannot disagree with the
      * customer's own statement about what a row means.
+     *
+     * `asOf` (a `YYYY-MM-DD` in the tenant's zone) ages the ledger as it stood
+     * at the end of that day: later rows are not read, and every charge is aged
+     * from that day rather than from today. Each row carries the customer's
+     * branch, sales rep, group and territory for the page to filter on, and
+     * `me` is the caller's own employee record, as in `getDuesSummary`.
      */
-    async getDueAgingReport(tenantId: string, scope: CustomerScope = null) {
+    async getDueAgingReport(
+        tenantId: string,
+        scope: CustomerScope = null,
+        opts: { userId?: string; asOf?: string; timezone?: string } = {},
+    ) {
         const now = new Date();
+        const upTo = opts.asOf ? zonedDayRange(undefined, opts.asOf, opts.timezone)?.lte : undefined;
+        const asOf = upTo && upTo < now ? upTo : now;
 
-        const transactions = await this.db.customerCreditTransaction.findMany({
-            where: { tenant_id: tenantId, ...this.creditRowScopeWhere(scope) },
-            select: {
-                customer_id: true,
-                type: true,
-                amount: true,
-                discount_amount: true,
-                created_at: true,
-                customer: { select: { id: true, name: true, phone: true } },
-            },
-            orderBy: { created_at: 'asc' },
-        });
+        const [transactions, me] = await Promise.all([
+            this.db.customerCreditTransaction.findMany({
+                where: {
+                    tenant_id: tenantId,
+                    ...this.creditRowScopeWhere(scope),
+                    ...(upTo ? { created_at: { lte: upTo } } : {}),
+                },
+                select: {
+                    customer_id: true,
+                    type: true,
+                    amount: true,
+                    discount_amount: true,
+                    created_at: true,
+                },
+                orderBy: { created_at: 'asc' },
+            }),
+            this.ownEmployee(tenantId, opts.userId),
+        ]);
 
         const byCustomer = new Map<string, {
-            customer: { id: string; name: string; phone: string };
             entries: AgingEntry[];
+            lastPayment: { date: Date; amount: number } | null;
         }>();
 
         for (const tx of transactions) {
-            let bucket = byCustomer.get(tx.customer_id);
-            if (!bucket) {
-                bucket = { customer: tx.customer as any, entries: [] };
-                byCustomer.set(tx.customer_id, bucket);
+            let ledger = byCustomer.get(tx.customer_id);
+            if (!ledger) {
+                ledger = { entries: [], lastPayment: null };
+                byCustomer.set(tx.customer_id, ledger);
             }
-            bucket.entries.push({
+            ledger.entries.push({
                 date: tx.created_at,
                 delta: customerLedgerDueDelta(tx.type, Number(tx.amount), Number(tx.discount_amount ?? 0)),
             });
+            // Rows come oldest first, so the last payment seen is the latest.
+            if (tx.type === 'PAYMENT') ledger.lastPayment = { date: tx.created_at, amount: Number(tx.amount) };
         }
 
-        const rows = [];
-        for (const { customer, entries } of byCustomer.values()) {
-            const aged = ageBalance(entries, now);
+        const owing = [];
+        for (const [customerId, { entries, lastPayment }] of byCustomer) {
+            const aged = ageBalance(entries, asOf);
             if (aged.outstanding <= 0) continue;
+            owing.push({ customerId, aged, lastPayment });
+        }
+        if (owing.length === 0) return { me, rows: [] };
 
-            rows.push({
+        const customers = await this.db.customer.findMany({
+            where: { tenant_id: tenantId, id: { in: owing.map((o) => o.customerId) } },
+            select: {
+                id: true,
+                name: true,
+                phone: true,
+                customer_code: true,
+                store: { select: { id: true, name: true } },
+                salesRep: { select: SALES_REP_SELECT },
+                customerGroup: { select: { id: true, name: true } },
+                territory: { select: { id: true, name: true } },
+            },
+        });
+        const customerById = new Map(customers.map((c) => [c.id, c]));
+
+        const rows = owing.flatMap(({ customerId, aged, lastPayment }) => {
+            const found = customerById.get(customerId);
+            if (!found) return [];
+            const { store, salesRep, customerGroup, territory, ...customer } = found;
+            return [{
                 customer,
+                store,
+                sales_rep: salesRep ?? null,
+                customer_group: customerGroup ?? null,
+                territory: territory ?? null,
+                last_payment: lastPayment && { ...lastPayment, days_ago: ageInDays(lastPayment.date, asOf) },
                 bucket_0_30: aged.buckets.current,
                 bucket_31_60: aged.buckets.overdue_31_60,
                 bucket_61_90: aged.buckets.overdue_61_90,
                 bucket_90_plus: aged.buckets.overdue_90_plus,
                 total: aged.outstanding,
-            });
-        }
+            }];
+        });
+        rows.sort((a, b) => b.total - a.total);
 
-        return rows;
+        return { me, rows };
+    }
+
+    /** The caller's own employee record; null without a user or when their login is linked to none. */
+    private async ownEmployee(tenantId: string, userId: string | undefined) {
+        if (!userId) return null;
+        const employee = await this.db.employee.findFirst({
+            where: { tenant_id: tenantId, user_id: userId, deleted_at: null },
+            select: SALES_REP_SELECT,
+        });
+        return employee ?? null;
     }
 
     async importRows(

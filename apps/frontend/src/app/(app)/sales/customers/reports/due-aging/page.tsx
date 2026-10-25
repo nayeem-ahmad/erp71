@@ -1,144 +1,294 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Clock, RefreshCw, AlertTriangle, Download } from 'lucide-react';
-import { api } from '@/lib/api';
-import { formatBDT } from '@/lib/format';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useI18n } from '@/lib/i18n';
-import { PageShell } from '@/components/ui';
+import { createColumnHelper, type ColumnDef } from '@tanstack/react-table';
+import { Clock } from 'lucide-react';
+import { DataTable, type ListFilter } from '@/components/data-table';
+import { api, type CustomerDueAging, type CustomerDueAgingRow } from '@/lib/api';
+import { formatBDT, formatDate } from '@/lib/format';
+import { formatMessage, useI18n } from '@/lib/i18n';
+import { modulePageBreadcrumbs } from '@/lib/page-breadcrumbs';
+import { routes } from '@/lib/routes';
+import { todayInTenantZone } from '@/lib/dashboard-range';
+import { ALL_BRANCHES, handleBranchForbidden, useBranchScope } from '@/lib/branch-scope';
+import { BranchFilter, CompactStat, Input, PageHeader, PageShell } from '@/components/ui';
 
-interface AgingRow {
-    customer: { id: string; name: string; phone: string };
-    bucket_0_30: number;
-    bucket_31_60: number;
-    bucket_61_90: number;
-    bucket_90_plus: number;
-    total: number;
+/** Sales-rep filter values that are not an employee id. */
+const MY_CUSTOMERS = 'me';
+const NO_REP = 'none';
+
+/** What a row owes past each "Overdue" choice: every bracket from that age on. */
+const OVERDUE_FROM: Record<string, (row: CustomerDueAgingRow) => number> = {
+    '31': (row) => row.bucket_31_60 + row.bucket_61_90 + row.bucket_90_plus,
+    '61': (row) => row.bucket_61_90 + row.bucket_90_plus,
+    '91': (row) => row.bucket_90_plus,
+};
+
+type Named = { id: string; name: string };
+
+/** The distinct `pick` of the rows, by name — the options a filter offers. */
+function distinctByName(rows: CustomerDueAgingRow[], pick: (row: CustomerDueAgingRow) => Named | null) {
+    const byId = new Map<string, string>();
+    for (const row of rows) {
+        const value = pick(row);
+        if (value) byId.set(value.id, value.name);
+    }
+    return [...byId].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
 }
 
+const columnHelper = createColumnHelper<CustomerDueAgingRow>();
+
+/**
+ * Sales › Reports › Due Aging: who owes money, and how long each unpaid taka
+ * has been owed.
+ *
+ * The branch and the "as of" day are the server's; the sales rep, overdue age,
+ * group and territory are the page's own, over the rows already loaded, so the
+ * tiles always total exactly the customers on screen. As on the Dues Summary, a
+ * viewer who is the sales rep of any customer listed opens on their own.
+ */
 export default function DueAgingReportPage() {
-    const { t } = useI18n();
-    const [rows, setRows] = useState<AgingRow[]>([]);
+    const { t, locale } = useI18n();
+    const copy = t.salesReports.dueAging;
+    const branch = useBranchScope({ startOnAll: true });
+    const today = useMemo(() => todayInTenantZone(), []);
+    const [asOf, setAsOf] = useState(today);
+    const [data, setData] = useState<CustomerDueAging>({ me: null, rows: [] });
     const [loading, setLoading] = useState(true);
+    const [rep, setRep] = useState<string | null>(null);
+    const [overdue, setOverdue] = useState<string | null>(null);
+    const [group, setGroup] = useState<string | null>(null);
+    const [territory, setTerritory] = useState<string | null>(null);
+    // The "my customers" default is applied once, on the first load: after
+    // that the filter is the viewer's, and a reload keeps it.
+    const repDefaulted = useRef(false);
 
-    const load = async () => {
+    // An empty or today's date is "now": only a past day goes to the server.
+    const apiAsOf = asOf && asOf !== today ? asOf : undefined;
+
+    useEffect(() => {
+        if (!branch.ready) return;
+        let cancelled = false;
         setLoading(true);
-        try {
-            const data = await api.getDueAgingReport();
-            setRows(Array.isArray(data) ? data : []);
-        } finally {
-            setLoading(false);
-        }
-    };
+        api.getDueAgingReport({ storeId: branch.apiStoreId, asOf: apiAsOf })
+            .then((result) => {
+                if (cancelled) return;
+                setData(result);
+                if (!repDefaulted.current) {
+                    repDefaulted.current = true;
+                    const me = result.me;
+                    if (me && result.rows.some((row) => row.sales_rep?.id === me.id)) setRep(MY_CUSTOMERS);
+                }
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                setData({ me: null, rows: [] });
+                if (handleBranchForbidden(err, branch, t.dashboardLayout.branchFilterForbidden)) return;
+                console.error('Failed to load the due aging report', err);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch.ready, branch.apiStoreId, apiAsOf]);
 
-    useEffect(() => { void load(); }, []);
+    const options = useMemo(() => ({
+        reps: distinctByName(data.rows, (row) => row.sales_rep),
+        groups: distinctByName(data.rows, (row) => row.customer_group),
+        territories: distinctByName(data.rows, (row) => row.territory),
+    }), [data.rows]);
 
-    const totals = rows.reduce(
-        (acc, r) => ({
-            b0_30: acc.b0_30 + r.bucket_0_30,
-            b31_60: acc.b31_60 + r.bucket_31_60,
-            b61_90: acc.b61_90 + r.bucket_61_90,
-            b90plus: acc.b90plus + r.bucket_90_plus,
-            total: acc.total + r.total,
+    const rows = useMemo(() => {
+        const repId = rep === MY_CUSTOMERS ? data.me?.id : rep;
+        const overdueAmount = overdue ? OVERDUE_FROM[overdue] : null;
+        return data.rows.filter((row) => {
+            if (overdueAmount && overdueAmount(row) <= 0) return false;
+            if (group && row.customer_group?.id !== group) return false;
+            if (territory && row.territory?.id !== territory) return false;
+            if (!rep) return true;
+            if (rep === NO_REP) return !row.sales_rep;
+            return row.sales_rep?.id === repId;
+        });
+    }, [data, rep, overdue, group, territory]);
+
+    const totals = useMemo(() => rows.reduce(
+        (acc, row) => ({
+            b0_30: acc.b0_30 + row.bucket_0_30,
+            b31_60: acc.b31_60 + row.bucket_31_60,
+            b61_90: acc.b61_90 + row.bucket_61_90,
+            b90plus: acc.b90plus + row.bucket_90_plus,
+            total: acc.total + row.total,
         }),
         { b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 },
-    );
+    ), [rows]);
+
+    const filters = useMemo<ListFilter[]>(() => [
+        {
+            id: 'salesRep',
+            type: 'select',
+            label: copy.salesRep,
+            value: rep,
+            onChange: setRep,
+            options: [
+                ...(data.me ? [{ value: MY_CUSTOMERS, label: copy.myCustomers }] : []),
+                ...options.reps,
+                { value: NO_REP, label: copy.noSalesRep },
+            ],
+        },
+        {
+            id: 'overdue',
+            type: 'select',
+            label: copy.overdue,
+            value: overdue,
+            onChange: setOverdue,
+            options: [
+                { value: '31', label: copy.overdue31 },
+                { value: '61', label: copy.overdue61 },
+                { value: '91', label: copy.overdue90 },
+            ],
+        },
+        // Offered only where the tenant uses them, so a shop without groups or
+        // territories is not handed two filters that can only empty the list.
+        ...(options.groups.length > 0 ? [{
+            id: 'group', type: 'select' as const, label: copy.group, value: group, onChange: setGroup, options: options.groups,
+        }] : []),
+        ...(options.territories.length > 0 ? [{
+            id: 'territory', type: 'select' as const, label: copy.territory, value: territory, onChange: setTerritory, options: options.territories,
+        }] : []),
+    ], [copy, data.me, options, rep, overdue, group, territory]);
+
+    const showBranch = branch.value === ALL_BRANCHES;
+
+    const columns = useMemo(() => {
+        const money = (value: number, className = 'text-gray-900') =>
+            value > 0 ? <span className={className}>{formatBDT(value, { locale })}</span> : <span className="text-gray-300">{t.shared.dash}</span>;
+        const bucket = (id: keyof CustomerDueAgingRow, header: string, className?: string) =>
+            columnHelper.accessor((row) => row[id] as number, {
+                id,
+                header,
+                cell: (info) => money(info.getValue(), className),
+                size: 105,
+                meta: { align: 'end', hideOnMobile: true },
+            });
+        const paidAgo = (days: number) => {
+            if (days <= 0) return copy.paidToday;
+            if (days === 1) return copy.paidDayAgo;
+            return formatMessage(copy.paidDaysAgo, { days });
+        };
+
+        return [
+            columnHelper.accessor((row) => row.customer.name, {
+                id: 'customer',
+                header: t.salesReports.common.customer,
+                cell: (info) => {
+                    const { customer } = info.row.original;
+                    return (
+                        <Link href={routes.sales.customerDetail(customer.id)} className="hover:text-blue-600">
+                            <div className="font-medium text-gray-900">{customer.name}</div>
+                            {customer.phone ? <div className="text-xs text-gray-400">{customer.phone}</div> : null}
+                        </Link>
+                    );
+                },
+                size: 180,
+            }),
+            bucket('bucket_0_30', copy.bucket0to30),
+            bucket('bucket_31_60', copy.bucket31to60, 'text-amber-700'),
+            bucket('bucket_61_90', copy.bucket61to90, 'text-amber-700'),
+            bucket('bucket_90_plus', copy.bucket90plus, 'font-semibold text-red-600'),
+            columnHelper.accessor('total', {
+                header: copy.totalDue,
+                cell: (info) => <span className="font-semibold text-gray-900">{formatBDT(info.getValue(), { locale })}</span>,
+                size: 120,
+                meta: { align: 'end' },
+            }),
+            columnHelper.accessor((row) => row.last_payment?.date ?? '', {
+                id: 'lastPayment',
+                header: copy.lastPayment,
+                cell: (info) => {
+                    const payment = info.row.original.last_payment;
+                    if (!payment) return <span className="text-xs text-gray-400">{copy.neverPaid}</span>;
+                    return (
+                        <div>
+                            <div className="text-gray-900">{formatDate(payment.date, locale)}</div>
+                            <div className="whitespace-nowrap text-xs text-gray-400">
+                                {formatBDT(payment.amount, { locale })} · {paidAgo(payment.days_ago)}
+                            </div>
+                        </div>
+                    );
+                },
+                size: 170,
+                meta: { hideOnMobile: true },
+            }),
+            // One branch picked: every row would repeat it.
+            ...(showBranch ? [columnHelper.accessor((row) => row.store?.name ?? t.shared.dash, {
+                id: 'branch', header: copy.branch, size: 130, meta: { hideOnMobile: true },
+            })] : []),
+            columnHelper.accessor((row) => row.sales_rep?.name ?? t.shared.dash, {
+                id: 'salesRep', header: copy.salesRep, size: 130, meta: { hideOnMobile: true },
+            }),
+            ...(options.groups.length > 0 ? [columnHelper.accessor((row) => row.customer_group?.name ?? t.shared.dash, {
+                id: 'group', header: copy.group, size: 110, meta: { hideOnMobile: true },
+            })] : []),
+            ...(options.territories.length > 0 ? [columnHelper.accessor((row) => row.territory?.name ?? t.shared.dash, {
+                id: 'territory', header: copy.territory, size: 120, meta: { hideOnMobile: true },
+            })] : []),
+        ] as ColumnDef<CustomerDueAgingRow, any>[];
+    }, [t, copy, locale, showBranch, options.groups.length, options.territories.length]);
 
     return (
         <PageShell>
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <Clock className="w-6 h-6 text-amber-600" /> Due Aging Report
-                    </h1>
-                    <p className="text-gray-500 text-sm mt-1">Customer credit balances bucketed by age of debt</p>
-                </div>
-                <button onClick={load} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
-                    <RefreshCw className="w-4 h-4" /> Refresh
-                </button>
+            <PageHeader
+                title={copy.title}
+                subtitle={copy.subtitle}
+                breadcrumbs={modulePageBreadcrumbs(
+                    t.dashboardHome.breadcrumbHome,
+                    t.sidebar.modules.sales,
+                    copy.title,
+                    'sales',
+                )}
+                actions={(
+                    <>
+                        <BranchFilter scope={branch} />
+                        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                            {copy.asOf}
+                            <Input
+                                type="date"
+                                value={asOf}
+                                max={today}
+                                onChange={(event) => setAsOf(event.target.value)}
+                                className="w-auto"
+                            />
+                        </label>
+                    </>
+                )}
+            />
+
+            {/* A bracket is tinted only while it holds money: an amber ৳0.00 reads as a problem. */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                <CompactStat label={copy.bucket0to30} value={formatBDT(totals.b0_30, { locale })} />
+                <CompactStat label={copy.bucket31to60} value={formatBDT(totals.b31_60, { locale })} tone={totals.b31_60 > 0 ? 'warning' : 'default'} />
+                <CompactStat label={copy.bucket61to90} value={formatBDT(totals.b61_90, { locale })} tone={totals.b61_90 > 0 ? 'warning' : 'default'} />
+                <CompactStat label={copy.bucket90plus} value={formatBDT(totals.b90plus, { locale })} tone={totals.b90plus > 0 ? 'negative' : 'default'} />
+                <CompactStat label={copy.totalDue} value={formatBDT(totals.total, { locale })} className="col-span-2 md:col-span-1" />
             </div>
 
-            {/* Summary cards */}
-            {!loading && rows.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                    {[
-                        { label: '0–30 days', value: totals.b0_30, color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
-                        { label: '31–60 days', value: totals.b31_60, color: 'bg-yellow-50 border-yellow-200 text-yellow-700' },
-                        { label: '61–90 days', value: totals.b61_90, color: 'bg-orange-50 border-orange-200 text-orange-700' },
-                        { label: '90+ days', value: totals.b90plus, color: 'bg-danger-light border-red-200 text-danger-text' },
-                        { label: 'Total Due', value: totals.total, color: 'bg-gray-50 border-gray-200 text-gray-800' },
-                    ].map(({ label, value, color }) => (
-                        <div key={label} className={`rounded-xl border p-4 ${color}`}>
-                            <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">{label}</p>
-                            <p className="text-xl font-bold">{formatBDT(value)}</p>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {loading ? (
-                <div className="py-16 text-center text-gray-400 text-sm uppercase tracking-widest">Loading...</div>
-            ) : rows.length === 0 ? (
-                <div className="py-20 text-center">
-                    <Clock className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                    <p className="text-gray-400 font-medium">No outstanding dues</p>
-                </div>
-            ) : (
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                            <tr>
-                                <th className="text-start px-4 py-3">Customer</th>
-                                <th className="text-end px-4 py-3">0–30 days</th>
-                                <th className="text-end px-4 py-3">31–60 days</th>
-                                <th className="text-end px-4 py-3">61–90 days</th>
-                                <th className="text-end px-4 py-3">90+ days</th>
-                                <th className="text-end px-4 py-3 text-gray-700">Total Due</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {rows.map((row) => (
-                                <tr key={row.customer.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                        <Link href={`/sales/customers/${row.customer.id}`} className="hover:text-blue-600">
-                                            <div className="font-medium text-gray-900">{row.customer.name}</div>
-                                            <div className="text-xs text-gray-400">{row.customer.phone}</div>
-                                        </Link>
-                                    </td>
-                                    <td className="px-4 py-3 text-end">
-                                        {row.bucket_0_30 > 0 ? <span className="text-emerald-700 font-medium">{formatBDT(row.bucket_0_30)}</span> : <span className="text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-4 py-3 text-end">
-                                        {row.bucket_31_60 > 0 ? <span className="text-yellow-700 font-medium">{formatBDT(row.bucket_31_60)}</span> : <span className="text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-4 py-3 text-end">
-                                        {row.bucket_61_90 > 0 ? <span className="text-orange-700 font-medium">{formatBDT(row.bucket_61_90)}</span> : <span className="text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-4 py-3 text-end">
-                                        {row.bucket_90_plus > 0 ? (
-                                            <span className="flex items-center justify-end gap-1 text-danger font-bold">
-                                                <AlertTriangle className="w-3 h-3" />{formatBDT(row.bucket_90_plus)}
-                                            </span>
-                                        ) : <span className="text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-4 py-3 text-end font-bold text-gray-900">{formatBDT(row.total)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                        <tfoot className="bg-gray-50 border-t border-gray-200 font-bold text-gray-700">
-                            <tr>
-                                <td className="px-4 py-3 text-xs uppercase tracking-wider">Total ({rows.length} customers)</td>
-                                <td className="px-4 py-3 text-end">{formatBDT(totals.b0_30)}</td>
-                                <td className="px-4 py-3 text-end">{formatBDT(totals.b31_60)}</td>
-                                <td className="px-4 py-3 text-end">{formatBDT(totals.b61_90)}</td>
-                                <td className="px-4 py-3 text-end text-danger">{formatBDT(totals.b90plus)}</td>
-                                <td className="px-4 py-3 text-end">{formatBDT(totals.total)}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            )}
+            <DataTable<CustomerDueAgingRow>
+                tableId="customer-due-aging"
+                columns={columns}
+                data={rows}
+                title={copy.tableTitle}
+                isLoading={loading}
+                emptyMessage={copy.empty}
+                emptyIcon={<Clock className="h-16 w-16 text-gray-200" />}
+                searchPlaceholder={copy.searchPlaceholder}
+                getRowId={(row) => row.customer.id}
+                filters={filters}
+                viewOptions
+            />
         </PageShell>
     );
 }

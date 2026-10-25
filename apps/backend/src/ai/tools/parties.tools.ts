@@ -97,7 +97,7 @@ export const PARTY_TOOLS: ChatTool[] = [
             'Use for "who owes us money", receivables, dues and overdue questions.',
         parameters: { type: 'object', properties: { ...PAGING_PROPS } },
         handler: async (ctx, args, deps) => {
-            const rows = await deps.customers.getDueAgingReport(ctx.tenantId);
+            const { rows } = await deps.customers.getDueAgingReport(ctx.tenantId);
             const totals = rows.reduce(
                 (acc: any, r: any) => ({
                     total: acc.total + r.total,
