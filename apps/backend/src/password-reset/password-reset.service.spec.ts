@@ -27,6 +27,7 @@ const db = {
 };
 const emailService = {
     sendPasswordReset: jest.fn().mockResolvedValue(undefined),
+    sendStorefrontPasswordReset: jest.fn().mockResolvedValue(undefined),
     sendRefereeLoginInvite: jest.fn().mockResolvedValue(undefined),
     getFrontendUrl: jest.fn().mockResolvedValue('https://app.erp71.com'),
 };
@@ -78,6 +79,22 @@ describe('PasswordResetService', () => {
         db.passwordResetToken.create.mockResolvedValue({});
         await service.requestReset('user@example.com');
         expect(emailService.sendPasswordReset).toHaveBeenCalledWith('user@example.com', expect.any(String));
+    });
+
+    it('sends a shop-branded email when the reset was asked for from a storefront', async () => {
+        db.user.findUnique.mockResolvedValue({ id: 'u1', email: 'shopper@example.com' });
+        db.passwordResetToken.deleteMany.mockResolvedValue({ count: 0 });
+        db.passwordResetToken.create.mockResolvedValue({});
+        emailService.sendPasswordReset.mockClear();
+
+        await service.requestReset('shopper@example.com', { name: 'Rahim Store', slug: 'rahim' });
+
+        expect(emailService.sendStorefrontPasswordReset).toHaveBeenCalledWith(
+            'shopper@example.com',
+            expect.any(String),
+            { name: 'Rahim Store', slug: 'rahim' },
+        );
+        expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
     });
 
     it('rejects expired token', async () => {

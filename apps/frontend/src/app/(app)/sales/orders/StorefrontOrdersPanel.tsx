@@ -7,6 +7,7 @@ import { formatBDT, formatDate } from '@/lib/format';
 import { useI18n, formatMessage } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { Alert } from '@/components/ui';
+import { STOREFRONT_ORDER_STATUSES, storefrontOrderRef } from '@erp71/shared-types';
 
 interface StorefrontOrder {
     id: string;
@@ -16,6 +17,8 @@ interface StorefrontOrder {
     totalAmount: string | number;
     status: string;
     notes: string | null;
+    deliveryAddress: string | null;
+    deliveryArea: string | null;
     created_at: string;
     items: {
         id: string;
@@ -36,6 +39,8 @@ interface PaginatedOrders {
 const STATUS_COLORS: Record<string, string> = {
     PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
     CONFIRMED: 'bg-blue-50 text-blue-700 border-blue-200',
+    SHIPPED: 'bg-blue-50 text-blue-700 border-blue-200',
+    DELIVERED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     CANCELLED: 'bg-red-50 text-red-700 border-red-200',
 };
 
@@ -125,14 +130,25 @@ export default function StorefrontOrdersPanel({ storeId, onShopBranch = false }:
                             <tbody className="divide-y divide-gray-50">
                                 {data.items.map((order) => (
                                     <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-5 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                                            {order.id.slice(0, 12)}...
+                                        <td className="px-5 py-3 font-mono text-xs text-gray-500 whitespace-nowrap" title={order.id}>
+                                            #{storefrontOrderRef(order.id)}
                                         </td>
                                         <td className="px-5 py-3">
                                             <p className="font-semibold text-gray-900">{order.customerName}</p>
                                             <p className="text-xs text-gray-500">{order.customerEmail}</p>
                                             {order.customerPhone ? (
                                                 <p className="text-xs text-gray-400">{order.customerPhone}</p>
+                                            ) : null}
+                                            {order.deliveryAddress || order.deliveryArea ? (
+                                                <p className="text-xs text-gray-600 mt-1">
+                                                    <span className="font-medium">{m.deliverTo}:</span>{' '}
+                                                    {[order.deliveryAddress, order.deliveryArea].filter(Boolean).join(', ')}
+                                                </p>
+                                            ) : null}
+                                            {order.notes ? (
+                                                <p className="text-xs text-gray-500 mt-0.5">
+                                                    <span className="font-medium">{m.notes}:</span> {order.notes}
+                                                </p>
                                             ) : null}
                                         </td>
                                         <td className="px-5 py-3">
@@ -159,9 +175,11 @@ export default function StorefrontOrdersPanel({ storeId, onShopBranch = false }:
                                                     STATUS_COLORS[order.status] || 'bg-gray-50 text-gray-700 border-gray-200'
                                                 }`}
                                             >
-                                                <option value="PENDING">{m.status.pending}</option>
-                                                <option value="CONFIRMED">{m.status.confirmed}</option>
-                                                <option value="CANCELLED">{m.status.cancelled}</option>
+                                                {STOREFRONT_ORDER_STATUSES.map((status) => (
+                                                    <option key={status} value={status}>
+                                                        {m.status[status.toLowerCase() as keyof typeof m.status]}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </td>
                                     </tr>

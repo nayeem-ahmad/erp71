@@ -1370,9 +1370,25 @@ export const crmHrMessages = {
             linkDescription: "Pautkan pekerja ini ke akaun pengguna sistem supaya mereka boleh log masuk.",
             linkTip: "Petua: cari ID pengguna dari Tetapan > Pengguna, kemudian tampal di sini.",
         },
-        filterPresets: {
-            active: "Aktif",
-            inactive: "Tidak aktif",
+        editEmployee: "Sunting Pekerja",
+        statuses: {
+            ACTIVE: "Aktif",
+            PROBATION: "Dalam percubaan",
+            RESIGNED: "Meletak jawatan",
+            TERMINATED: "Ditamatkan",
+            CONTRACT_ENDED: "Kontrak tamat",
+            INACTIVE: "Tidak aktif",
+        },
+        statusChange: {
+            activate: "Aktifkan",
+            deactivate: "Nyahaktifkan",
+            activateTitle: "Aktifkan pekerja ini?",
+            deactivateTitle: "Nyahaktifkan pekerja ini?",
+            activatePrompt: "{name} kembali dalam larian gaji, dan dalam portal pekerja jika mempunyai akses.",
+            deactivatePrompt: "{name} kekal dalam rekod bersama semua sejarahnya, tetapi larian gaji dan portal pekerja mengecualikannya sehingga diaktifkan semula.",
+            activated: "{name} aktif semula.",
+            deactivated: "{name} kini tidak aktif.",
+            failed: "Tidak dapat menukar status pekerja.",
         },
     },
     attendance: {

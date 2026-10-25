@@ -1,5 +1,6 @@
 import {
     Injectable,
+    Logger,
     NotFoundException,
     BadRequestException,
     ConflictException,
@@ -15,6 +16,7 @@ import {
     CustomerLoginDto,
     CustomerGoogleSignInDto,
     CustomerMobileSignInDto,
+    UpdateCustomerProfileDto,
 } from './storefront.dto';
 import { paginate } from '../common/pagination.dto';
 import { AuditService } from '../audit/audit.service';
@@ -24,10 +26,16 @@ import { FirebasePhoneProfile, FirebaseTokenService } from '../auth/firebase-tok
 import { applyVerifiedMobileIdentity } from '../auth/verified-mobile.util';
 import { AUTH_SCOPE_STOREFRONT } from '../auth/token-scope';
 import { StorefrontPagesService } from '../storefront-pages/storefront-pages.service';
+import { PasswordResetService } from '../password-reset/password-reset.service';
+import { EmailService } from '../email/email.service';
+import { SmsService } from '../sms/sms.service';
+import { renderStorefrontOrderSms, type StorefrontOrderEvent } from '../email/templates/storefront-order';
 import {
     countryCodeFromE164,
     DEFAULT_MOBILE_COUNTRY_CODE,
     getMobileCountryOption,
+    isStorefrontOrderStatus,
+    STOREFRONT_ORDER_STATUSES,
 } from '@erp71/shared-types';
 import * as bcrypt from 'bcrypt';
 
@@ -66,8 +74,22 @@ export function generateWebCustomerCode(): string {
 }
 
 import { OnlineBranchService } from '../stores/online-branch.service';
+/** An order as the notifications read it: its own row plus each line's product name. */
+type NotifiableOrder = {
+    id: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string | null;
+    totalAmount: unknown;
+    deliveryAddress: string | null;
+    deliveryArea: string | null;
+    items: { quantity: number; priceAtOrder: unknown; product: { name: string } | null }[];
+};
+
 @Injectable()
 export class StorefrontService {
+    private readonly logger = new Logger(StorefrontService.name);
+
     constructor(
         private readonly db: DatabaseService,
         private readonly jwtService: JwtService,
@@ -79,6 +101,9 @@ export class StorefrontService {
         private readonly firebase: FirebaseTokenService,
         private readonly authCache: AuthCacheService,
         private readonly onlineBranch: OnlineBranchService,
+        private readonly passwordReset: PasswordResetService,
+        private readonly email: EmailService,
+        private readonly sms: SmsService,
     ) {}
 
     async getStorefront(slug: string, userId?: string) {
@@ -261,6 +286,7 @@ export class StorefrontService {
             storefront_hero_image: tenant.storefront_hero_image,
             storefront_hero_headline: tenant.storefront_hero_headline,
             storefront_logo: tenant.storefront_logo,
+            storefront_logo_show_name: tenant.storefront_logo_show_name,
             brand_primary_color: tenant.brand_primary_color,
         };
     }
@@ -384,14 +410,19 @@ export class StorefrontService {
         }
 
         // Resolve customer record and price list
-        let customer: { id: string; loyalty_points: number; customer_group_id: string | null } | null = null;
+        let customer: {
+            id: string;
+            loyalty_points: number;
+            customer_group_id: string | null;
+            address: string | null;
+        } | null = null;
         let pointsToRedeem = 0;
         let pointsDiscount = 0;
 
         if (userId) {
             customer = await this.db.customer.findFirst({
                 where: { user_id: userId, tenant_id: tenant.id, deleted_at: null },
-                select: { id: true, loyalty_points: true, customer_group_id: true },
+                select: { id: true, loyalty_points: true, customer_group_id: true, address: true },
             });
         }
 
@@ -450,6 +481,8 @@ export class StorefrontService {
                     customerEmail: dto.customerEmail,
                     customerPhone: dto.customerPhone ?? null,
                     notes: dto.notes ?? null,
+                    deliveryAddress: dto.deliveryAddress ?? null,
+                    deliveryArea: dto.deliveryArea ?? null,
                     totalAmount,
                     status: 'PENDING',
                     customerUserId: userId ?? null,
@@ -475,6 +508,17 @@ export class StorefrontService {
             });
 
             if (customer) {
+                // Give the shop's record an address when it has none. Never
+                // overwrite one: staff may have corrected it, and the shopper's
+                // next checkout is prefilled from their last order anyway.
+                if (dto.deliveryAddress && !customer.address) {
+                    const fullAddress = [dto.deliveryAddress, dto.deliveryArea].filter(Boolean).join(', ');
+                    await tx.customer.update({
+                        where: { id: customer.id },
+                        data: { address: fullAddress },
+                    });
+                }
+
                 // Redeem points if requested
                 if (pointsToRedeem > 0) {
                     await tx.loyaltyTransaction.create({
@@ -516,6 +560,12 @@ export class StorefrontService {
 
             return created;
         });
+
+        this.notifyOrder(
+            { id: tenant.id, name: tenant.name, slug, smsEnabled: false },
+            order,
+            'PLACED',
+        );
 
         return order;
     }
@@ -559,9 +609,8 @@ export class StorefrontService {
     }
 
     async updateOrderStatus(tenantId: string, orderId: string, status: string) {
-        const validStatuses = ['PENDING', 'CONFIRMED', 'CANCELLED'];
-        if (!validStatuses.includes(status)) {
-            throw new BadRequestException(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+        if (!isStorefrontOrderStatus(status)) {
+            throw new BadRequestException(`Invalid status. Must be one of: ${STOREFRONT_ORDER_STATUSES.join(', ')}`);
         }
 
         const order = await this.db.storefrontOrder.findFirst({
@@ -572,10 +621,82 @@ export class StorefrontService {
             throw new NotFoundException('Order not found');
         }
 
-        return this.db.storefrontOrder.update({
+        const updated = await this.db.storefrontOrder.update({
             where: { id: orderId },
             data: { status },
+            include: { items: { include: { product: { select: { id: true, name: true } } } } },
         });
+
+        // Only a real move is news to the shopper — re-saving the same status
+        // must not send a second "confirmed". Moving an order back to PENDING
+        // is staff undoing a slip, which the customer has nothing to act on.
+        if (order.status !== status && status !== 'PENDING') {
+            const tenant = await this.db.tenant.findUnique({
+                where: { id: tenantId },
+                select: { name: true, storefront_slug: true, storefront_order_sms: true },
+            });
+            if (tenant) {
+                this.notifyOrder(
+                    {
+                        id: tenantId,
+                        name: tenant.name,
+                        slug: tenant.storefront_slug,
+                        smsEnabled: tenant.storefront_order_sms,
+                    },
+                    updated,
+                    status,
+                );
+            }
+        }
+
+        return updated;
+    }
+
+    /**
+     * Tell the shopper where their order stands: an email every time, billed to
+     * the shop's email credits like a sale receipt, and a text when the shop has
+     * opted in. Fire-and-forget — a mail outage must never fail the order or the
+     * status change that triggered it.
+     */
+    private notifyOrder(
+        tenant: { id: string; name: string; slug: string | null; smsEnabled: boolean },
+        order: NotifiableOrder,
+        event: StorefrontOrderEvent,
+    ) {
+        const totalAmount = Number(order.totalAmount);
+        const vars = {
+            event,
+            orderId: order.id,
+            customerName: order.customerName,
+            storeName: tenant.name,
+            totalAmount,
+        };
+
+        this.email
+            .sendStorefrontOrderUpdate(
+                order.customerEmail,
+                {
+                    ...vars,
+                    storeSlug: tenant.slug,
+                    items: order.items.map((item) => ({
+                        name: item.product?.name ?? 'Item',
+                        quantity: item.quantity,
+                        unitPrice: Number(item.priceAtOrder),
+                    })),
+                    deliveryAddress: order.deliveryAddress,
+                    deliveryArea: order.deliveryArea,
+                },
+                { tenantId: tenant.id },
+            )
+            .catch((err) => this.logger.warn(`Order email for ${order.id} failed: ${err}`));
+
+        // Texts go out for status changes only: the shopper who just pressed
+        // "place order" is looking at the confirmation already.
+        if (tenant.smsEnabled && event !== 'PLACED' && order.customerPhone?.trim()) {
+            this.sms
+                .sendStorefrontOrderUpdate(order.customerPhone.trim(), renderStorefrontOrderSms(vars), tenant.id)
+                .catch((err) => this.logger.warn(`Order SMS for ${order.id} failed: ${err}`));
+        }
     }
 
     // ── Customer Auth ────────────────────────────────────────────────────────
@@ -881,14 +1002,88 @@ export class StorefrontService {
         });
         if (!customer) throw new NotFoundException('Customer profile not found');
 
-        return {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            phone: customer.phone,
-            loyalty_points: customer.loyalty_points,
-            total_spent: customer.total_spent,
-        };
+        return this.toCustomerProfile(customer, userId, tenant.id);
+    }
+
+    /**
+     * The shopper edits their own record at this shop. Only the shop's
+     * `Customer` row changes; the `User` behind it is shared with every other
+     * shop they buy from.
+     */
+    async updateCustomerProfile(
+        slug: string,
+        userId: string,
+        dto: UpdateCustomerProfileDto,
+        tokenTenantId?: string | null,
+    ) {
+        const tenant = await this.findEnabledTenant(slug);
+        this.assertTokenMatchesTenant(tenant.id, tokenTenantId);
+        const customer = await this.db.customer.findFirst({
+            where: { user_id: userId, tenant_id: tenant.id, deleted_at: null },
+        });
+        if (!customer) throw new NotFoundException('Customer profile not found');
+
+        const patch: { name?: string; phone?: string | null; address?: string | null } = {};
+        if (dto.name !== undefined) patch.name = dto.name;
+        if (dto.address !== undefined) patch.address = dto.address || null;
+        if (dto.phone !== undefined && dto.phone !== (customer.phone ?? '')) {
+            if (dto.phone) {
+                // `[tenant_id, phone]` is unique, and the number may be written
+                // another way on someone else's record — the same check sign-up
+                // makes, so this cannot be a way around it.
+                const taken = await this.db.customer.findFirst({
+                    where: {
+                        tenant_id: tenant.id,
+                        phone: { in: phoneSpellings(dto.phone) },
+                        deleted_at: null,
+                        id: { not: customer.id },
+                    },
+                    select: { id: true },
+                });
+                if (taken) throw new ConflictException('Phone number already registered for this store');
+            }
+            patch.phone = dto.phone || null;
+        }
+
+        const updated = Object.keys(patch).length
+            ? await this.db.customer.update({ where: { id: customer.id }, data: patch })
+            : customer;
+
+        if (Object.keys(patch).length) {
+            this.audit
+                .log(
+                    'STOREFRONT_CUSTOMER_PROFILE_UPDATED',
+                    'Customer',
+                    { userId, tenantId: tenant.id },
+                    customer.id,
+                    { fields: Object.keys(patch), slug },
+                )
+                .catch(() => {});
+        }
+
+        return this.toCustomerProfile(updated, userId, tenant.id);
+    }
+
+    /**
+     * Ask for a reset link from a shop's sign-in page. Only an account that
+     * shops here gets one — the email names this shop and links back to it, so
+     * sending it to an ERP user who has never bought here would be a
+     * shop-branded email about an account the shop has nothing to do with.
+     * The answer is the same either way, so it reveals nothing about who does.
+     */
+    async customerForgotPassword(slug: string, email: string) {
+        const tenant = await this.findEnabledTenant(slug);
+        const user = await this.db.user.findUnique({ where: { email }, select: { id: true } });
+        if (user) {
+            const customer = await this.db.customer.findFirst({
+                where: { user_id: user.id, tenant_id: tenant.id, deleted_at: null },
+                select: { id: true },
+            });
+            if (customer) {
+                await this.passwordReset.requestReset(email, { name: tenant.name, slug });
+            }
+        }
+        return { message: 'If that email has an account at this store, a reset link has been sent.' };
     }
 
     async getCustomerOrders(
@@ -913,7 +1108,7 @@ export class StorefrontService {
                 include: {
                     items: {
                         include: {
-                            product: { select: { id: true, name: true } },
+                            product: { select: { id: true, name: true, image_url: true } },
                         },
                     },
                 },
@@ -1230,6 +1425,32 @@ export class StorefrontService {
         if (tokenTenantId && tokenTenantId !== tenantId) {
             throw new UnauthorizedException('Sign in to this store to continue');
         }
+    }
+
+    /**
+     * The profile the account page and checkout read. `last_delivery` is where
+     * the previous order went — what checkout prefills, since the shop's own
+     * `address` may be one staff typed and the shopper never saw.
+     */
+    private async toCustomerProfile(customer: any, userId: string, tenantId: string) {
+        const lastOrder = await this.db.storefrontOrder.findFirst({
+            where: { tenantId, customerUserId: userId, deliveryAddress: { not: null } },
+            orderBy: { created_at: 'desc' },
+            select: { deliveryAddress: true, deliveryArea: true },
+        });
+
+        return {
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            phone: customer.phone,
+            address: customer.address ?? null,
+            loyalty_points: customer.loyalty_points,
+            total_spent: customer.total_spent,
+            last_delivery: lastOrder
+                ? { address: lastOrder.deliveryAddress, area: lastOrder.deliveryArea }
+                : null,
+        };
     }
 
     private issueCustomerAuthResponse(user: any, customer: any, tenantId: string) {

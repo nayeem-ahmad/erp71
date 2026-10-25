@@ -1374,9 +1374,25 @@ export const crmHrMessages = {
             "linkDescription": "Link this employee to a system user account so they can log in.",
             "linkTip": "Tip: find the user ID from Settings > Users, then paste it here."
         },
-        "filterPresets": {
-            "active": "Active",
-            "inactive": "Inactive"
+        "editEmployee": "Edit Employee",
+        "statuses": {
+            "ACTIVE": "Active",
+            "PROBATION": "On probation",
+            "RESIGNED": "Resigned",
+            "TERMINATED": "Terminated",
+            "CONTRACT_ENDED": "Contract ended",
+            "INACTIVE": "Inactive"
+        },
+        "statusChange": {
+            "activate": "Activate",
+            "deactivate": "Deactivate",
+            "activateTitle": "Activate this employee?",
+            "deactivateTitle": "Deactivate this employee?",
+            "activatePrompt": "{name} goes back into payroll runs, and into the employee portal if they have access.",
+            "deactivatePrompt": "{name} stays on record with all their history, but payroll runs and the employee portal leave them out until they are activated again.",
+            "activated": "{name} is active again.",
+            "deactivated": "{name} is now inactive.",
+            "failed": "Could not change the employee's status."
         }
     },
     "attendance": {

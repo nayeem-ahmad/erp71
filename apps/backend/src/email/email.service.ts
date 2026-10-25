@@ -13,6 +13,7 @@ import {
     resolveEmailLocale,
     type EmailLocale,
 } from './templates/referee-invite';
+import { renderStorefrontOrderEmail, type StorefrontOrderMessageVars } from './templates/storefront-order';
 
 interface TransportConfig {
     from: string;
@@ -166,6 +167,52 @@ export class EmailService {
 <p><a href="${link}">Reset Password</a></p>
 <p>If you did not request this, you can ignore this email.</p>`,
         });
+    }
+
+    /**
+     * A reset asked for from a shop's sign-in page. Same token and same expiry
+     * as `sendPasswordReset`, but the link lands on that shop's own reset page
+     * and the copy names the shop: the shopper never chose ERP71, and an email
+     * from a brand they have not heard of reads as phishing.
+     */
+    async sendStorefrontPasswordReset(
+        to: string,
+        token: string,
+        store: { name: string; slug: string },
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const link = `${frontendUrl}/store/${encodeURIComponent(store.slug)}/auth/reset-password?token=${token}`;
+        const storeName = escapeHtml(store.name);
+        await this.send({
+            to,
+            subject: `Reset your ${store.name} password`,
+            html: `<h2>Reset your password</h2>
+<p>Someone asked to reset the password you use to shop at <strong>${storeName}</strong>. Click the link below to choose a new one. This link expires in 1 hour.</p>
+<p><a href="${link}">Reset password</a></p>
+<p>If you did not ask for this, you can ignore this email — your password stays as it is.</p>`,
+        });
+    }
+
+    /**
+     * A web order's confirmation or status update, sent by the shop to its
+     * customer. Metered against the shop's email credits exactly as a sale
+     * receipt is, and skipped without one.
+     */
+    async sendStorefrontOrderUpdate(
+        to: string,
+        vars: Omit<StorefrontOrderMessageVars, 'accountLink'> & { storeSlug: string | null },
+        options: { tenantId: string },
+    ): Promise<void> {
+        const { frontendUrl } = await this.getTransportConfig();
+        const { storeSlug, ...rest } = vars;
+        const { subject, html } = renderStorefrontOrderEmail({
+            ...rest,
+            accountLink: storeSlug ? `${frontendUrl}/store/${encodeURIComponent(storeSlug)}/account` : null,
+        });
+        await this.send(
+            { to, subject, html },
+            { billTenantId: options.tenantId, purpose: 'Storefront order update' },
+        );
     }
 
     /**
