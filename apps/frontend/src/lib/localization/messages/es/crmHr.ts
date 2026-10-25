@@ -1370,9 +1370,25 @@ export const crmHrMessages = {
             "linkDescription": "Vincula a este empleado con una cuenta de usuario del sistema para que pueda iniciar sesión.",
             "linkTip": "Consejo: busca el ID de usuario en Ajustes > Usuarios y pégalo aquí."
         },
-        "filterPresets": {
-            "active": "Activos",
-            "inactive": "Inactivos"
+        "editEmployee": "Editar empleado",
+        "statuses": {
+            "ACTIVE": "Activo",
+            "PROBATION": "En período de prueba",
+            "RESIGNED": "Renunció",
+            "TERMINATED": "Despedido",
+            "CONTRACT_ENDED": "Contrato finalizado",
+            "INACTIVE": "Inactivo"
+        },
+        "statusChange": {
+            "activate": "Activar",
+            "deactivate": "Desactivar",
+            "activateTitle": "¿Activar a este empleado?",
+            "deactivateTitle": "¿Desactivar a este empleado?",
+            "activatePrompt": "{name} vuelve a las nóminas y, si tiene acceso, al portal del empleado.",
+            "deactivatePrompt": "{name} se conserva con todo su historial, pero las nóminas y el portal del empleado lo excluyen hasta que se active de nuevo.",
+            "activated": "{name} vuelve a estar activo.",
+            "deactivated": "{name} ahora está inactivo.",
+            "failed": "No se pudo cambiar el estado del empleado."
         }
     },
     "attendance": {

@@ -1370,9 +1370,25 @@ export const crmHrMessages = {
             linkDescription: 'اس ملازم کو کسی سسٹم صارف اکاؤنٹ سے منسلک کریں تاکہ وہ لاگ اِن کر سکے۔',
             linkTip: 'تجویز: صارف آئی ڈی ترتیبات > صارفین سے حاصل کریں، پھر یہاں چسپاں کریں۔',
         },
-        filterPresets: {
-            active: 'فعال',
-            inactive: 'غیر فعال',
+        editEmployee: 'ملازم میں ترمیم',
+        statuses: {
+            ACTIVE: 'فعال',
+            PROBATION: 'پروبیشن پر',
+            RESIGNED: 'مستعفی',
+            TERMINATED: 'برطرف',
+            CONTRACT_ENDED: 'معاہدہ ختم',
+            INACTIVE: 'غیر فعال',
+        },
+        statusChange: {
+            activate: 'فعال کریں',
+            deactivate: 'غیر فعال کریں',
+            activateTitle: 'اس ملازم کو فعال کریں؟',
+            deactivateTitle: 'اس ملازم کو غیر فعال کریں؟',
+            activatePrompt: '{name} دوبارہ پے رول رن میں شامل ہوں گے، اور رسائی ہو تو ملازم پورٹل میں بھی۔',
+            deactivatePrompt: '{name} کا ریکارڈ پوری تاریخ کے ساتھ برقرار رہے گا، لیکن دوبارہ فعال ہونے تک پے رول رن اور ملازم پورٹل انہیں شامل نہیں کریں گے۔',
+            activated: '{name} دوبارہ فعال ہیں۔',
+            deactivated: '{name} اب غیر فعال ہیں۔',
+            failed: 'ملازم کی حیثیت تبدیل نہیں ہو سکی۔',
         },
     },
     attendance: {

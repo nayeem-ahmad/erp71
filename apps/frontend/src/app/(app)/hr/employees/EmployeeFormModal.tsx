@@ -2,17 +2,33 @@
 
 import { useState, useEffect } from 'react';
 import { User, Phone, Mail, Calendar, Briefcase } from 'lucide-react';
-import ModalShell, { ModalHeader, ModalFooter } from '@/components/ModalShell';
+import ModalShell, { ModalHeader } from '@/components/ModalShell';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useTenantPlanFeatures } from '@/lib/use-tenant-plan-features';
 import { hasPermission, isOwner } from '@/lib/permissions';
 import { Button, Field, Input, Select, FormGrid, Alert } from '@/components/ui';
 
-interface AddEmployeeModalProps {
+/** The fields of a list row the edit form fills from. */
+export interface EditableEmployee {
+    id: string;
+    employee_code: string;
+    name: string;
+    phone: string;
+    email?: string | null;
+    nid?: string | null;
+    date_of_joining?: string | null;
+    department_id?: string | null;
+    designation_id?: string | null;
+    basic_salary?: string | number | null;
+}
+
+interface EmployeeFormModalProps {
     isOpen: boolean;
+    /** The employee being edited; without one the form adds a new employee. */
+    employee?: EditableEmployee | null;
     onClose: () => void;
-    onAdd: (data: any) => Promise<void>;
+    onSubmit: (data: any) => Promise<void>;
 }
 
 const emptyForm = {
@@ -21,12 +37,30 @@ const emptyForm = {
     basic_salary: '', status: 'ACTIVE',
 };
 
-export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployeeModalProps) {
+function formFor(employee: EditableEmployee) {
+    return {
+        name: employee.name ?? '',
+        phone: employee.phone ?? '',
+        email: employee.email ?? '',
+        nid: employee.nid ?? '',
+        date_of_joining: employee.date_of_joining ? employee.date_of_joining.split('T')[0] : '',
+        department_id: employee.department_id ?? '',
+        designation_id: employee.designation_id ?? '',
+        basic_salary: employee.basic_salary != null ? String(employee.basic_salary) : '',
+        status: 'ACTIVE',
+    };
+}
+
+export default function EmployeeFormModal({ isOpen, employee, onClose, onSubmit }: EmployeeFormModalProps) {
     const { t } = useI18n();
+    const editing = Boolean(employee);
     // The server drops `basic_salary` from a caller without VIEW_PAYROLL, so
-    // showing the field to one would silently discard whatever they typed.
+    // showing the field to one would silently discard whatever they typed. An
+    // edited row says it outright: the server leaves the key off for them.
     const { permissions, role } = useTenantPlanFeatures();
-    const canSeeSalary = isOwner(role) || hasPermission(permissions, 'VIEW_PAYROLL');
+    const canSeeSalary = employee
+        ? 'basic_salary' in employee
+        : isOwner(role) || hasPermission(permissions, 'VIEW_PAYROLL');
     const [formData, setFormData] = useState({ ...emptyForm });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -35,10 +69,12 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
 
     useEffect(() => {
         if (isOpen) {
+            setFormData(employee ? formFor(employee) : { ...emptyForm });
+            setError('');
             api.getDepartments().then(setDepartments).catch(() => {});
             api.getDesignations().then(setDesignations).catch(() => {});
         }
-    }, [isOpen]);
+    }, [isOpen, employee]);
 
     if (!isOpen) return null;
 
@@ -47,19 +83,28 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
         setError('');
         setLoading(true);
         try {
-            const payload: any = { name: formData.name, phone: formData.phone, status: formData.status };
+            const payload: any = { name: formData.name, phone: formData.phone };
             if (formData.email) payload.email = formData.email;
             if (formData.nid) payload.nid = formData.nid;
             if (formData.date_of_joining) payload.date_of_joining = formData.date_of_joining;
-            if (formData.department_id) payload.department_id = formData.department_id;
-            if (formData.designation_id) payload.designation_id = formData.designation_id;
-            if (canSeeSalary && formData.basic_salary) payload.basic_salary = Number(formData.basic_salary);
+            if (editing) {
+                // Status is left alone: it moves through the list's Activate /
+                // Deactivate. Emptied pickers clear, as on the detail page.
+                payload.department_id = formData.department_id || null;
+                payload.designation_id = formData.designation_id || null;
+                if (canSeeSalary) payload.basic_salary = formData.basic_salary !== '' ? Number(formData.basic_salary) : null;
+            } else {
+                payload.status = formData.status;
+                if (formData.department_id) payload.department_id = formData.department_id;
+                if (formData.designation_id) payload.designation_id = formData.designation_id;
+                if (canSeeSalary && formData.basic_salary) payload.basic_salary = Number(formData.basic_salary);
+            }
 
-            await onAdd(payload);
+            await onSubmit(payload);
             setFormData({ ...emptyForm });
             onClose();
         } catch (err: any) {
-            setError(err.message || t.employees.modal.addFailed);
+            setError(err.message || (editing ? t.employees.detail.updateFailed : t.employees.modal.addFailed));
         } finally {
             setLoading(false);
         }
@@ -68,9 +113,17 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
     const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setFormData({ ...formData, [field]: e.target.value });
 
+    const submitLabel = editing
+        ? (loading ? t.employees.detail.saving : t.common.saveChanges)
+        : (loading ? t.employees.modal.adding : t.employees.modal.addEmployee);
+
     return (
         <ModalShell size="sm" onBackdropClick={onClose}>
-                <ModalHeader title={t.employees.modal.title} subtitle={t.employees.modal.subtitle} onClose={onClose} />
+                <ModalHeader
+                    title={editing ? t.employees.editEmployee : t.employees.modal.title}
+                    subtitle={employee ? employee.employee_code : t.employees.modal.subtitle}
+                    onClose={onClose}
+                />
 
                 <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
                     {error && <Alert tone="danger">{error}</Alert>}
@@ -141,17 +194,19 @@ export default function AddEmployeeModal({ isOpen, onClose, onAdd }: AddEmployee
                         </Field>
                         )}
 
+                        {!editing && (
                         <Field label={t.employees.modal.status}>
                             <Select value={formData.status} onChange={set('status')}>
                                 <option value="ACTIVE">{t.employees.detail.active}</option>
                                 <option value="INACTIVE">{t.employees.detail.inactive}</option>
                             </Select>
                         </Field>
+                        )}
                     </FormGrid>
 
                     <div className="pt-2">
                         <Button disabled={loading} loading={loading} type="submit" variant="primary" className="w-full justify-center">
-                            {loading ? t.employees.modal.adding : t.employees.modal.addEmployee}
+                            {submitLabel}
                         </Button>
                     </div>
                 </form>
