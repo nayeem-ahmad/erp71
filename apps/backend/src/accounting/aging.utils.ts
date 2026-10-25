@@ -84,6 +84,11 @@ export function addToAgingBucket(buckets: AgingBuckets, ageDays: number, amount:
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Whole days from `date` to `asOf` — the age `ageBalance` buckets a charge by. */
+export function ageInDays(date: Date, asOf: Date): number {
+    return Math.floor((asOf.getTime() - date.getTime()) / DAY_MS);
+}
+
 /**
  * Applies every settlement to the oldest open charge first, then ages whatever
  * is left by the date of the charge it belongs to.
@@ -95,7 +100,7 @@ export function ageBalance(entries: AgingEntry[], asOf: Date): AgedBalance {
     const ordered = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
 
     /** Open charges, oldest first — the queue a receipt eats from the front of. */
-    const open: Array<{ dateMs: number; remaining: number }> = [];
+    const open: Array<{ date: Date; remaining: number }> = [];
     /** Credit received before the charge it pays for; offsets the next one. */
     let unapplied = 0;
 
@@ -107,7 +112,7 @@ export function ageBalance(entries: AgingEntry[], asOf: Date): AgedBalance {
             const offset = Math.min(unapplied, charge);
             unapplied -= offset;
             charge -= offset;
-            if (charge > EPSILON) open.push({ dateMs: entry.date.getTime(), remaining: charge });
+            if (charge > EPSILON) open.push({ date: entry.date, remaining: charge });
             continue;
         }
 
@@ -126,10 +131,8 @@ export function ageBalance(entries: AgingEntry[], asOf: Date): AgedBalance {
     }
 
     const buckets = emptyAgingBuckets();
-    const asOfMs = asOf.getTime();
     for (const charge of open) {
-        const ageDays = Math.floor((asOfMs - charge.dateMs) / DAY_MS);
-        addToAgingBucket(buckets, ageDays, charge.remaining);
+        addToAgingBucket(buckets, ageInDays(charge.date, asOf), charge.remaining);
     }
 
     buckets.current = round2(buckets.current);

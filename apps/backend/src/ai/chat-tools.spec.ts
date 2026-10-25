@@ -591,16 +591,19 @@ describe('receivables_aging', () => {
     it('totals the buckets across customers and ranks by amount owed', async () => {
         const deps = makeDeps({
             customers: {
-                getDueAgingReport: jest.fn().mockResolvedValue([
-                    {
-                        customer: { name: 'Small', phone: '1' },
-                        bucket_0_30: 100, bucket_31_60: 0, bucket_61_90: 0, bucket_90_plus: 0, total: 100,
-                    },
-                    {
-                        customer: { name: 'Big', phone: '2' },
-                        bucket_0_30: 0, bucket_31_60: 0, bucket_61_90: 0, bucket_90_plus: 900, total: 900,
-                    },
-                ]),
+                getDueAgingReport: jest.fn().mockResolvedValue({
+                    me: null,
+                    rows: [
+                        {
+                            customer: { name: 'Small', phone: '1' },
+                            bucket_0_30: 100, bucket_31_60: 0, bucket_61_90: 0, bucket_90_plus: 0, total: 100,
+                        },
+                        {
+                            customer: { name: 'Big', phone: '2' },
+                            bucket_0_30: 0, bucket_31_60: 0, bucket_61_90: 0, bucket_90_plus: 900, total: 900,
+                        },
+                    ],
+                }),
             },
         });
 

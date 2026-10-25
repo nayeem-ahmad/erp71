@@ -224,6 +224,35 @@ describe('DataTable filters', () => {
         expect(onChange).toHaveBeenCalledWith(null);
     });
 
+    /**
+     * A toolbar panel hangs below its button, and on a list of one row that is
+     * well past the card's bottom edge. Any clipping box between the panel and
+     * the page cuts it off there: the Customer Ledger's date chip showed its
+     * presets and the word "From", and nothing a date could be typed into.
+     */
+    it('lets a toolbar panel hang past the bottom of a short table', () => {
+        const clipping = /(^|\s)overflow-(hidden|clip|auto|scroll|y-hidden|y-auto|y-scroll|y-clip)(\s|$)/;
+        const clippedBy = (panel: HTMLElement) => {
+            for (let node = panel.parentElement; node; node = node.parentElement) {
+                if (clipping.test(node.className)) return node.className;
+            }
+            return null;
+        };
+        render(
+            <DataTable
+                {...props}
+                data={data.slice(0, 1)}
+                viewOptions
+                filters={[{ id: 'date', type: 'date-range', label: 'Date', value: null, onChange: jest.fn() }]}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /^Date · / }));
+        expect(clippedBy(screen.getByRole('dialog', { name: 'Date' }))).toBeNull();
+
+        expect(clippedBy(openViewOptions())).toBeNull();
+    });
+
     it('folds the filters into a sheet on a phone and lists the active ones as chips', () => {
         mockMdUp = false;
         render(<DataTable {...props} filters={[statusFilter]} />);

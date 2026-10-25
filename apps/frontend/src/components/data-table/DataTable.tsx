@@ -1013,8 +1013,13 @@ export default function DataTable<T>({
         }
     };
 
+    // No `overflow-hidden` on the card: the toolbar's panels (a date range,
+    // Columns, View options) hang below their buttons, and on a short list
+    // that is past the card's bottom edge, where it would cut them off.
+    // Nothing inside paints into the rounded corners (the table scrolls in
+    // its own box, the toolbar and footer have no fill), so nothing needs it.
     return (
-        <div className={`bg-white ${d.wrapper} shadow-sm border border-gray-100 overflow-hidden`}>
+        <div className={`bg-white ${d.wrapper} shadow-sm border border-gray-100`}>
             {/* ── Toolbar ─────────────────────────────────────────── */}
             <div className={d.toolbar}>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
