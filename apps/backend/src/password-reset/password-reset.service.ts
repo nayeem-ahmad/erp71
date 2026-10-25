@@ -75,7 +75,11 @@ export class PasswordResetService {
         return crypto.createHash('sha256').update(rawToken).digest('hex');
     }
 
-    async requestReset(emailAddress: string): Promise<void> {
+    /**
+     * Issue a reset link. With `storefront`, the link and the copy belong to
+     * that shop — the caller has already checked the account shops there.
+     */
+    async requestReset(emailAddress: string, storefront?: { name: string; slug: string }): Promise<void> {
         const user = await this.db.user.findUnique({ where: { email: emailAddress } });
         // Always return success to avoid user enumeration
         if (!user) return;
@@ -95,7 +99,13 @@ export class PasswordResetService {
         });
 
         // Fire-and-forget — don't block the HTTP response on SMTP delivery
-        this.email.sendPasswordReset(user.email, rawToken);
+        if (storefront) {
+            this.email
+                .sendStorefrontPasswordReset(user.email, rawToken, storefront)
+                .catch((err) => this.logger.warn(`Storefront reset email to ${user.email} failed: ${err}`));
+        } else {
+            this.email.sendPasswordReset(user.email, rawToken);
+        }
         this.audit
             .logForUserTenants('PASSWORD_RESET_REQUESTED', 'User', { userId: user.id }, user.id)
             .catch(() => {});

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle, Minus, Package, Plus, ShoppingCart, X } from 'lucide-react';
 import Link from 'next/link';
+import { storefrontOrderRef } from '@erp71/shared-types';
+import DeliveryAddressFields, { deliveryPrefill } from '@/components/storefront/DeliveryAddressFields';
 import StorefrontHeader, { type StorefrontMenuLink } from '@/components/storefront/StorefrontHeader';
 import StorefrontEnquiryForm from '@/components/storefront/StorefrontEnquiryForm';
 import { storefrontTheme, storefrontThemeStyle } from '@/lib/storefront/storefront-theme';
@@ -101,6 +103,8 @@ export default function StorefrontHome({ slug }: { slug: string }) {
     const [customerEmail, setCustomerEmail] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
     const [notes, setNotes] = useState('');
+    const [deliveryAddress, setDeliveryAddress] = useState('');
+    const [deliveryArea, setDeliveryArea] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
     const [orderError, setOrderError] = useState<string | null>(null);
@@ -155,6 +159,9 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                     if (typeof profile?.loyalty_points === 'number') {
                         setLoyaltyPoints(profile.loyalty_points);
                     }
+                    const prefill = deliveryPrefill(profile);
+                    setDeliveryAddress(prefill.address);
+                    setDeliveryArea(prefill.area);
                 })
                 .catch(() => {});
         }
@@ -176,6 +183,8 @@ export default function StorefrontHome({ slug }: { slug: string }) {
         setCustomerName('');
         setCustomerEmail('');
         setCustomerPhone('');
+        setDeliveryAddress('');
+        setDeliveryArea('');
         setLoyaltyPoints(0);
         setApplyPoints(false);
         setAccountMenuOpen(false);
@@ -245,6 +254,8 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                     customerEmail,
                     customerPhone: customerPhone || undefined,
                     notes: notes || undefined,
+                    deliveryAddress: deliveryAddress.trim() || undefined,
+                    deliveryArea: deliveryArea.trim() || undefined,
                     pointsToRedeem: applyPoints && loyaltyEligible ? loyaltyPoints : undefined,
                     items: cart.map((item) => ({
                         productId: item.product.id,
@@ -267,6 +278,8 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                 setCustomerName('');
                 setCustomerEmail('');
                 setCustomerPhone('');
+                setDeliveryAddress('');
+                setDeliveryArea('');
             }
             setNotes('');
             // Refresh loyalty balance after order
@@ -357,8 +370,16 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                         <div>
                             <p className="font-semibold text-green-800">{m.orderSuccess}</p>
                             <p className="text-green-700 text-sm mt-0.5">
-                                {m.orderIdLabel} <span className="font-mono font-bold">{orderSuccess}</span>
+                                {m.orderIdLabel} <span className="font-mono font-bold">#{storefrontOrderRef(orderSuccess)}</span>
                             </p>
+                            {session ? (
+                                <Link
+                                    href={`/store/${slug}/account`}
+                                    className="inline-block text-sm text-green-700 underline mt-1 me-3 font-medium hover:text-green-800"
+                                >
+                                    {m.account.ordersTitle}
+                                </Link>
+                            ) : null}
                             <button
                                 type="button"
                                 onClick={() => setOrderSuccess(null)}
@@ -817,6 +838,12 @@ export default function StorefrontHome({ slug }: { slug: string }) {
                                             className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
                                         />
                                     </div>
+                                    <DeliveryAddressFields
+                                        address={deliveryAddress}
+                                        area={deliveryArea}
+                                        onAddressChange={setDeliveryAddress}
+                                        onAreaChange={setDeliveryArea}
+                                    />
                                     <div>
                                         <label htmlFor="delivery-notes" className="block text-sm font-semibold text-gray-700 mb-1.5">{m.deliveryNotesOptional}</label>
                                         <textarea

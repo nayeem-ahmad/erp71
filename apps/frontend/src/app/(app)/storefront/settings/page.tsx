@@ -34,6 +34,7 @@ interface StorefrontSettings {
     storefront_hero_headline: string | null;
     storefront_logo: string | null;
     storefront_logo_show_name: boolean;
+    storefront_order_sms: boolean;
 }
 
 export default function StorefrontSettingsPage() {
@@ -48,6 +49,7 @@ export default function StorefrontSettingsPage() {
     const [heroHeadline, setHeroHeadline] = useState('');
     const [logo, setLogo] = useState('');
     const [logoShowName, setLogoShowName] = useState(true);
+    const [orderSms, setOrderSms] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
@@ -62,6 +64,7 @@ export default function StorefrontSettingsPage() {
                 setHeroHeadline(data.storefront_hero_headline || '');
                 setLogo(data.storefront_logo || '');
                 setLogoShowName(data.storefront_logo_show_name ?? true);
+                setOrderSms(data.storefront_order_sms ?? false);
             })
             .catch((err) => console.error('Failed to load settings', err))
             .finally(() => setLoading(false));
@@ -85,6 +88,7 @@ export default function StorefrontSettingsPage() {
                     storefront_hero_headline: heroHeadline.trim() || null,
                     storefront_logo: logo.trim() || null,
                     storefront_logo_show_name: logoShowName,
+                    storefront_order_sms: orderSms,
                 }),
             });
             setSlug(updated.storefront_slug || '');
@@ -94,6 +98,7 @@ export default function StorefrontSettingsPage() {
             setHeroHeadline(updated.storefront_hero_headline || '');
             setLogo(updated.storefront_logo || '');
             setLogoShowName(updated.storefront_logo_show_name ?? true);
+            setOrderSms(updated.storefront_order_sms ?? false);
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 3000);
         } catch (err: any) {
@@ -318,6 +323,21 @@ export default function StorefrontSettingsPage() {
                                         </div>
                                     )}
                                 </div>
+                            </CompactSection>
+
+                            <CompactSection title={m.sections.orderUpdates} className="space-y-2">
+                                <label
+                                    htmlFor="store-order-sms"
+                                    className="flex items-center gap-2 text-sm text-gray-700"
+                                >
+                                    <Checkbox
+                                        id="store-order-sms"
+                                        checked={orderSms}
+                                        onChange={(e) => setOrderSms(e.target.checked)}
+                                    />
+                                    {m.orderSms.label}
+                                </label>
+                                <p className="text-xs text-gray-400 ms-6">{m.orderSms.hint}</p>
                             </CompactSection>
                         </div>
                     </>

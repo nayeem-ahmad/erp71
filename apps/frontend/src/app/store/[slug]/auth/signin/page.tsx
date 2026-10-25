@@ -262,6 +262,14 @@ export default function StorefrontSignInPage() {
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
+                            <div className="mt-1.5 text-end">
+                                <Link
+                                    href={`/store/${slug}/auth/forgot-password`}
+                                    className="text-sm font-medium text-gray-600 hover:text-black hover:underline"
+                                >
+                                    {a.forgotPassword}
+                                </Link>
+                            </div>
                         </div>
 
                         <button

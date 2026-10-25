@@ -13,9 +13,17 @@ import {
     MinLength,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { STOREFRONT_ORDER_STATUSES, type StorefrontOrderStatus } from '@erp71/shared-types';
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value;
+
+/** Trimmed, with a blank answer treated as no answer. */
+const trimToUndefined = ({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return value ?? undefined;
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+};
 
 export class PlaceOrderItemDto {
     @IsString()
@@ -43,6 +51,22 @@ export class PlaceOrderDto {
     @IsString()
     notes?: string;
 
+    /**
+     * Optional on the wire so a checkout page cached from before this field
+     * existed can still place its order; the checkout form itself requires it.
+     */
+    @IsOptional()
+    @Transform(trimToUndefined)
+    @IsString()
+    @MaxLength(500)
+    deliveryAddress?: string;
+
+    @IsOptional()
+    @Transform(trimToUndefined)
+    @IsString()
+    @MaxLength(100)
+    deliveryArea?: string;
+
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => PlaceOrderItemDto)
@@ -55,9 +79,42 @@ export class PlaceOrderDto {
 }
 
 export class UpdateOrderStatusDto {
+    @IsIn(STOREFRONT_ORDER_STATUSES, {
+        message: `Invalid status. Must be one of: ${STOREFRONT_ORDER_STATUSES.join(', ')}`,
+    })
+    status: StorefrontOrderStatus;
+}
+
+/**
+ * What a signed-in shopper may change about themselves at one shop. Only the
+ * shop's `Customer` row is written — the `User` behind it is shared with every
+ * other shop they buy from, and with the ERP if they run one.
+ */
+export class UpdateCustomerProfileDto {
+    @IsOptional()
+    @Transform(trimToUndefined)
     @IsString()
-    @IsNotEmpty()
-    status: string;
+    @MaxLength(120)
+    name?: string;
+
+    /** Empty string clears the number; omitted leaves it alone. */
+    @IsOptional()
+    @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+    @IsString()
+    @MaxLength(30)
+    phone?: string;
+
+    /** Empty string clears the address; omitted leaves it alone. */
+    @IsOptional()
+    @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+    @IsString()
+    @MaxLength(500)
+    address?: string;
+}
+
+export class CustomerForgotPasswordDto {
+    @IsEmail()
+    email: string;
 }
 
 export class CustomerSignupDto {
@@ -168,6 +225,10 @@ export class StorefrontSettingsDto {
     @IsOptional()
     @IsBoolean()
     storefront_logo_show_name?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    storefront_order_sms?: boolean;
 }
 
 /** What the storefront settings page can hang an uploaded image on. */

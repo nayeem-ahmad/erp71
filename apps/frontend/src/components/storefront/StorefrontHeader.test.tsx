@@ -117,3 +117,19 @@ describe('StorefrontHeader shop-authored menu links', () => {
         expect(screen.queryByRole('link', { name: 'About us' })).not.toBeInTheDocument();
     });
 });
+
+describe('StorefrontHeader account menu', () => {
+    const session = { customer: { name: 'Karim Uddin', email: 'karim@example.com' } };
+
+    it('links a signed-in shopper to their account page', () => {
+        renderHeader({ session, accountMenuOpen: true });
+
+        expect(screen.getByRole('link', { name: 'My account' })).toHaveAttribute('href', '/store/my-store/account');
+    });
+
+    it('offers no account link to a guest', () => {
+        renderHeader();
+
+        expect(screen.queryByRole('link', { name: 'My account' })).not.toBeInTheDocument();
+    });
+});
